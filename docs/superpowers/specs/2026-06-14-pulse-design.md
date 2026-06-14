@@ -6,7 +6,7 @@
 ## 1. Product vision
 
 Build **Pulse** — a cloud-native "Work OS" in the spirit of Monday.com, folding in the
-best ideas from ClickUp and Asana into one coherent product. Not a clone: the *ultimate*
+best ideas from ClickUp and Asana into one coherent product. Not a clone: the _ultimate_
 version. Monday's visual, color-coded board experience as the foundation; ClickUp's depth
 (nested hierarchy, docs, native time tracking); Asana's polish (goals/OKRs tied to work,
 workload/capacity, portfolios).
@@ -46,6 +46,7 @@ typography, subtle motion. Linear-grade restraint applied to a colorful category
 ## 4. Feature set
 
 ### 4.1 Foundation (Monday core)
+
 - Hierarchy: Workspaces → Folders → Boards → Groups → Items → Subitems (multi-level depth).
 - Rich column-type system: Text, Long text, Status, Dropdown (multi), People/Owner, Date,
   Timeline, Numbers, Rating, Checkbox, Priority, Tags, Progress, Files, Link, Email, Phone,
@@ -60,20 +61,23 @@ typography, subtle motion. Linear-grade restraint applied to a colorful category
 - Notifications: in-app inbox + email digests; granular subscription, mute/snooze, batching.
 
 ### 4.2 ClickUp depth
+
 - Docs/Wiki (rich text, slash commands, embeds, reference items); native time tracking
   (timer, manual entries, timesheets, billable); custom statuses/fields; saved filters/view
   configs; multiple assignees; checklists; relationships/dependencies with blocking logic;
   Everything/zoom-out roll-up view.
 
 ### 4.3 Asana polish
+
 - Goals/OKRs (company→team→individual) with contributing work auto-rolling up; Portfolios
   (exec grid: status/owner/timeline/priority/health/budget); Workload/capacity with
   over-allocation flags; clean, reliable Rules UX over the deeper engine.
 
 ### 4.4 Cross-cutting
+
 - Performance: virtualize tables, paginate, index, stream — smooth 10k-item boards.
 - Multi-tenant (org-scoped RLS) from day one, no artificial seat minimums in the model.
-- Command palette (⌘K). AI assist *seams* only (no build yet). Templates. Mobile-responsive
+- Command palette (⌘K). AI assist _seams_ only (no build yet). Templates. Mobile-responsive
   PWA-ready layout.
 
 ## 5. Data model & Supabase conventions

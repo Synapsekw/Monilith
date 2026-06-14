@@ -1,0 +1,10 @@
+.next
+node_modules
+pnpm-lock.yaml
+public
+coverage
+test-results
+playwright-report
+supabase/.branches
+supabase/.temp
+src/components/ui
