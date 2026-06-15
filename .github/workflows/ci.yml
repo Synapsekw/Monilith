@@ -50,7 +50,8 @@ jobs:
   commitlint:
     name: commitlint (PR)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    # Skip for Dependabot — its generated "Bump …" subjects aren't Conventional Commits.
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v6
         with:
