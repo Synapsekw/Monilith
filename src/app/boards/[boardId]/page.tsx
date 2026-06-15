@@ -1,24 +1,32 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BoardTable } from "@/components/boards/BoardTable";
+import { KanbanBoard } from "@/components/boards/KanbanBoard";
 import {
   getBoardPayload,
   listBoards,
   listOrgMembers,
 } from "@/lib/boards/queries";
+import { resolveSelectedView } from "@/lib/boards/views";
 import { requireUser, getUserOrgs } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function BoardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ boardId: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { boardId } = await params;
   const user = await requireUser();
 
   const payload = await getBoardPayload(boardId);
   if (!payload) notFound();
+
+  const { view } = await searchParams;
+  const selected = resolveSelectedView(payload.views, view);
+  const selectedViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
   const supabase = await createClient();
   const [orgs, boards, { data: workspaces }, members] = await Promise.all([
@@ -42,8 +50,19 @@ export default async function BoardPage({
       boards={boards}
       activeBoardId={boardId}
     >
-      {/* TODO(task 9): supply the resolved selectedViewId */}
-      <BoardTable payload={payload} members={members} selectedViewId="" />
+      {selected?.kind === "kanban" ? (
+        <KanbanBoard
+          payload={payload}
+          members={members}
+          selectedViewId={selectedViewId}
+        />
+      ) : (
+        <BoardTable
+          payload={payload}
+          members={members}
+          selectedViewId={selectedViewId}
+        />
+      )}
     </AppShell>
   );
 }
