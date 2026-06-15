@@ -36,8 +36,9 @@ run tests + advisors + regenerate types before moving on.**
 - **1 — Auth & tenancy** — <span style="color:#22c55e">**[Done]**</span>
   Email/password auth, org creation + membership, protected routes, RLS baseline.
   _Done 2026-06-15 (commits `d9fc02c` → `31336e5`). RLS isolation proven by integration test; 32 unit tests + e2e green. See [[2026-06-15-phase1-auth-tenancy]]._
-- **2 — Boards core** — **[Not started]**
+- **2 — Boards core** — <span style="color:#eab308">**[In progress]**</span>
   Workspaces→boards→groups→items, Table view (Text/Status/People/Date/Numbers/Dropdown), inline editing, optimistic updates, realtime.
+  _Sliced 2a/2b. **2a done** 2026-06-15 (PR #9 `abb8e4e`): schema+RLS+RPCs, queries/actions, live sidebar + `/boards/[boardId]`, read-only virtualized Table + cell renderers; RLS integration (live 8/8) + e2e green. **2b next**: inline cell editing, optimistic, realtime. See [[2026-06-15-1053-phase2a-boards-core]]._
 - **3 — Views** — **[Not started]**
   Kanban + Calendar + Timeline/Gantt with dependencies; view switcher + saved config.
 - **4 — Collaboration** — **[Not started]**
@@ -52,13 +53,13 @@ run tests + advisors + regenerate types before moving on.**
 - **9 — Hardening** — **[Not started]**
   Performance (virtualization, indexes), advisors clean, tests, a11y audit, Vercel deploy.
 
-**Where we are:** Phases 0 and 1 done. Phase 2 (boards core) is next, on `main`.
+**Where we are:** Phases 0 and 1 done; Phase 2 in progress — **2a (data layer + read-only Table) merged to `main`**, 2b (interactive) next.
 
 ## 3. Now
 
-- **Phase:** 1 done → starting 2 — Boards core
+- **Phase:** 2 in progress — 2a done, 2b next
 - **Branch:** `main`
-- **Latest:** Phase 1 complete (`d9fc02c` → `31336e5`): RLS-backed multi-tenant schema, `@supabase/ssr` clients + `src/proxy.ts` session refresh, email/password auth, onboarding (org + workspace) + authed shell, and tests (32 unit + RLS isolation integration + e2e). Since then, the dev-memory `vault/` is git-tracked (`7a1771d`, `6e9fc1f`) and `/wrapup` is installed — see [[2026-06-15-0742-dev-memory-vault-and-wrapup]]. Side chore on `chore/supabase-type-guards` (`d75140a`, not yet merged): `pnpm db:types` + pinned `no-explicit-any` to stop Supabase type-drift `any`-creep — see [[2026-06-15-1009-supabase-type-guards]]. **Next:** Phase 2 — boards/groups/items hierarchy + EAV cell-values, Table view with core column types, inline editing + optimistic updates, Realtime.
+- **Latest:** Phase 2a merged (PR #9, `abb8e4e`): boards EAV schema (`boards/groups/items/columns/cell_values`) with org-scoped RLS + parent-org `WITH CHECK` hardening, `create_board`/`create_item` RPCs, realtime publication; Zod validators, batched queries + create/rename/delete actions; live Boards sidebar + `/boards/[boardId]`; virtualized read-only Table + 6 cell renderers; RLS integration (live 8/8) + Playwright e2e (4/4) green. Also fixed a latent Phase-1 auth-redirect bug (dispatch must be inside `startTransition` — [[2026-06-15-gotcha-04-action-dispatch-needs-transition]]) and absorbed the `no-explicit-any` type-guard (#8). See [[2026-06-15-1053-phase2a-boards-core]]. **Next:** Phase 2b — inline cell editing (`upsertCell` + `cellValueSchema`), optimistic updates (TanStack Query), per-board realtime; first squash the 3 boards migrations.
 - **🧑 Manual gates (Danijel):** Supabase project + keys done. MCP authed (read-only); migrations applied via `supabase db push` (CLI linked). For the official `get_advisors`, add `debugging` to `.mcp.json` features + re-auth (optional).
 
 ### Last session
@@ -66,7 +67,7 @@ run tests + advisors + regenerate types before moving on.**
 ```dataviewjs
 const latest = dv.pages('"vault/sessions"')
   .where(p => p.type === "session" && p.status === "complete")
-  .sort(p => p.file.name, "desc")[0];
+  .sort(p => p.date, "desc")[0];
 
 if (!latest) {
   dv.paragraph("_No finalized session notes yet — capture one at the end of a working session._");
@@ -82,7 +83,7 @@ if (!latest) {
 TABLE branch, date as "Session"
 FROM "vault/sessions"
 WHERE type = "session"
-SORT file.name DESC
+SORT date DESC
 LIMIT 10
 ```
 
