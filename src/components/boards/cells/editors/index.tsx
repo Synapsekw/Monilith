@@ -21,6 +21,8 @@ type EditorProps<V> = {
   settings: Settings;
   onCommit: (value: V) => void;
   onCancel: () => void;
+  /** Clear the cell entirely (deletes the row). Falls back to onCancel. */
+  onClear?: () => void;
 };
 
 /** Shared key handling: Enter commits, Escape cancels. */
@@ -82,11 +84,15 @@ export function NumbersEditor({
   value,
   onCommit,
   onCancel,
+  onClear,
 }: EditorProps<{ n: number }>) {
   const [raw, setRaw] = useState(value ? String(value.n) : "");
   function commit() {
-    const n = Number(raw);
-    if (raw.trim() === "" || Number.isNaN(n)) return onCancel();
+    const trimmed = raw.trim();
+    // Emptying a previously-set cell clears it (deletes the row).
+    if (trimmed === "") return (onClear ?? onCancel)();
+    const n = Number(trimmed);
+    if (Number.isNaN(n)) return onCancel();
     onCommit({ n });
   }
   const onKey = useCommitKeys(commit, onCancel);
@@ -108,6 +114,7 @@ export function StatusEditor({
   settings,
   onCommit,
   onCancel,
+  onClear,
 }: EditorProps<{ optionId: string | null }>) {
   const options = settings.options ?? [];
   const selected = value?.optionId ?? null;
@@ -128,7 +135,7 @@ export function StatusEditor({
       ))}
       <button
         type="button"
-        onClick={() => onCommit({ optionId: null })}
+        onClick={() => (onClear ?? onCancel)()}
         onKeyDown={(e) => {
           if (e.key === "Escape") onCancel();
         }}
@@ -145,6 +152,7 @@ export function DropdownEditor({
   settings,
   onCommit,
   onCancel,
+  onClear,
 }: EditorProps<{ optionIds: string[] }>) {
   const options = settings.options ?? [];
   const [selected, setSelected] = useState<string[]>(value?.optionIds ?? []);
@@ -153,6 +161,8 @@ export function DropdownEditor({
       ? selected.filter((x) => x !== id)
       : [...selected, id];
     setSelected(next);
+    // An empty selection clears the cell (deletes the row).
+    if (next.length === 0) return (onClear ?? onCancel)();
     onCommit({ optionIds: next });
   }
   return (
@@ -187,6 +197,7 @@ export function PeopleEditor({
   value,
   onCommit,
   onCancel,
+  onClear,
   members = [],
 }: EditorProps<{ userIds: string[] }> & { members?: EditorMember[] }) {
   const [selected, setSelected] = useState<string[]>(value?.userIds ?? []);
@@ -195,6 +206,8 @@ export function PeopleEditor({
       ? selected.filter((x) => x !== id)
       : [...selected, id];
     setSelected(next);
+    // No assignees clears the cell (deletes the row).
+    if (next.length === 0) return (onClear ?? onCancel)();
     onCommit({ userIds: next });
   }
   return (
@@ -242,9 +255,12 @@ export function DateEditor({
   value,
   onCommit,
   onCancel,
+  onClear,
 }: EditorProps<{ date: string; end?: string }>) {
   const [date, setDate] = useState(value?.date ?? "");
   function commit() {
+    // Emptying a previously-set date clears it (deletes the row).
+    if (date.trim() === "") return (onClear ?? onCancel)();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return onCancel();
     onCommit({ date });
   }
@@ -271,6 +287,7 @@ export function CellEditor({
   members,
   onCommit,
   onCancel,
+  onClear,
 }: {
   kind: string;
   value: unknown;
@@ -278,6 +295,7 @@ export function CellEditor({
   members?: EditorMember[];
   onCommit: (value: unknown) => void;
   onCancel: () => void;
+  onClear?: () => void;
 }) {
   switch (kind) {
     case "text":
@@ -287,6 +305,7 @@ export function CellEditor({
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
+          onClear={onClear}
         />
       );
     case "numbers":
@@ -296,6 +315,7 @@ export function CellEditor({
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
+          onClear={onClear}
         />
       );
     case "status":
@@ -305,6 +325,7 @@ export function CellEditor({
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
+          onClear={onClear}
         />
       );
     case "dropdown":
@@ -314,6 +335,7 @@ export function CellEditor({
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
+          onClear={onClear}
         />
       );
     case "people":
@@ -324,6 +346,7 @@ export function CellEditor({
           members={members}
           onCommit={onCommit}
           onCancel={onCancel}
+          onClear={onClear}
         />
       );
     case "date":
@@ -333,6 +356,7 @@ export function CellEditor({
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
+          onClear={onClear}
         />
       );
     default:

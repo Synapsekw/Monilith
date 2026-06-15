@@ -84,18 +84,21 @@ describe("StatusEditor", () => {
     expect(onCommit).toHaveBeenCalledWith({ optionId: "o1" });
   });
 
-  it("commits a null option id when cleared", async () => {
+  it("routes Clear through onClear (deletes the row), not a null upsert", async () => {
     const onCommit = vi.fn();
+    const onClear = vi.fn();
     render(
       <StatusEditor
         value={{ optionId: "o1" }}
         settings={statusSettings}
         onCommit={onCommit}
         onCancel={vi.fn()}
+        onClear={onClear}
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: /clear/i }));
-    expect(onCommit).toHaveBeenCalledWith({ optionId: null });
+    expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 
@@ -112,6 +115,23 @@ describe("DropdownEditor", () => {
     );
     await userEvent.click(screen.getByRole("option", { name: /done/i }));
     expect(onCommit).toHaveBeenCalledWith({ optionIds: ["o1"] });
+  });
+
+  it("clears via onClear when the last option is deselected", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <DropdownEditor
+        value={{ optionIds: ["o1"] }}
+        settings={statusSettings}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByRole("option", { name: /done/i }));
+    expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 
@@ -149,5 +169,24 @@ describe("DateEditor", () => {
     await userEvent.type(input, "2026-06-15");
     await userEvent.type(input, "{Enter}");
     expect(onCommit).toHaveBeenCalledWith({ date: "2026-06-15" });
+  });
+
+  it("clears via onClear when an existing date is emptied", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <DateEditor
+        value={{ date: "2026-06-15" }}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    const input = screen.getByLabelText(/date/i);
+    await userEvent.clear(input);
+    await userEvent.type(input, "{Enter}");
+    expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });

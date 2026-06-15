@@ -12,8 +12,9 @@ import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { Json } from "@/types/database.types";
 import type { ColumnOption } from "@/lib/validations/boards";
-import { createItem } from "@/lib/boards/actions";
+import { createItem, renameItem } from "@/lib/boards/actions";
 import { CellRenderer } from "@/components/boards/cells";
+import { Input } from "@/components/ui/input";
 import {
   CellEditor,
   type EditorMember,
@@ -32,6 +33,7 @@ type CellControls = {
   editing: EditingCell | null;
   setEditing: (cell: EditingCell | null) => void;
   setCell: (vars: { itemId: string; columnId: string; value: unknown }) => void;
+  clearCellValue: (vars: { itemId: string; columnId: string }) => void;
   members: EditorMember[];
 };
 
@@ -60,7 +62,7 @@ export function BoardTable({
   const { board, groups, columns, items, cellValues } = cache;
 
   const [editing, setEditing] = useState<EditingCell | null>(null);
-  const { setCell } = useBoardMutations(payload.board.id);
+  const { setCell, clearCellValue } = useBoardMutations(payload.board.id);
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = new Map<string, Json>(
@@ -91,7 +93,13 @@ export function BoardTable({
 
   const template = gridTemplate(columns.length);
 
-  const controls: CellControls = { editing, setEditing, setCell, members };
+  const controls: CellControls = {
+    editing,
+    setEditing,
+    setCell,
+    clearCellValue,
+    members,
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -218,9 +226,7 @@ function GroupSection({
                         gridTemplateColumns: template,
                       }}
                     >
-                      <div className="bg-surface sticky left-0 z-10 flex items-center truncate px-4 text-sm">
-                        {item.name}
-                      </div>
+                      <NameCell item={item} />
                       {columns.map((col) => (
                         <EditableCell
                           key={col.id}
@@ -247,8 +253,8 @@ function GroupSection({
  * One configurable-column cell. Resting state renders the read-only
  * `CellRenderer` wrapped in a click/Enter-to-edit affordance; when active it
  * swaps to the kind's `CellEditor`. Commits write through `setCell`
- * (optimistically). Empty text/number values are committed as empty shapes —
- * `clearCellValue` handling is reserved for explicit clears in the editor.
+ * (optimistically); an explicit clear (Status "Clear", emptied number/date,
+ * empty multi-select) routes through `clearCellValue`, which deletes the row.
  */
 function EditableCell({
   item,
@@ -261,7 +267,7 @@ function EditableCell({
   value: Json;
   controls: CellControls;
 }) {
-  const { editing, setEditing, setCell, members } = controls;
+  const { editing, setEditing, setCell, clearCellValue, members } = controls;
   const isEditing =
     editing?.itemId === item.id && editing.columnId === column.id;
   const settings = (column.settings ?? {}) as Settings;
@@ -277,6 +283,10 @@ function EditableCell({
           members={members}
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
+            setEditing(null);
+          }}
+          onClear={() => {
+            clearCellValue({ itemId: item.id, columnId: column.id });
             setEditing(null);
           }}
           onCancel={() => setEditing(null)}
@@ -300,6 +310,78 @@ function EditableCell({
       className="hover:bg-accent/60 focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
     >
       <CellRenderer kind={column.kind} value={value} settings={settings} />
+    </div>
+  );
+}
+
+/**
+ * The built-in primary "Name" cell. Click/Enter opens an inline rename input
+ * (Enter or blur commits via the `renameItem` action, Esc cancels). An empty
+ * name is rejected — it reverts to the current name. The board route revalidates
+ * on success, so the new name flows back through the server payload.
+ */
+function NameCell({ item }: { item: Item }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(item.name);
+  const [isPending, startTransition] = useTransition();
+
+  function open() {
+    setName(item.name);
+    setEditing(true);
+  }
+
+  function commit() {
+    const trimmed = name.trim();
+    setEditing(false);
+    if (!trimmed || trimmed === item.name) return;
+    startTransition(async () => {
+      const res = await renameItem({ itemId: item.id, name: trimmed });
+      if (res.ok) router.refresh();
+      else setName(item.name);
+    });
+  }
+
+  if (editing) {
+    return (
+      <div className="bg-surface sticky left-0 z-10 flex items-center px-4">
+        <Input
+          autoFocus
+          value={name}
+          disabled={isPending}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setEditing(false);
+            }
+          }}
+          aria-label={`Rename ${item.name}`}
+          className="h-7"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${item.name} name`}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          open();
+        }
+      }}
+      className="bg-surface hover:bg-accent/60 focus-visible:ring-ring sticky left-0 z-10 flex h-full cursor-pointer items-center truncate px-4 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+    >
+      {item.name}
     </div>
   );
 }
