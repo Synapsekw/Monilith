@@ -211,40 +211,52 @@ function GroupSection({
 function AddItemRow({ groupId }: { groupId: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function commit() {
     const trimmed = name.trim();
     if (!trimmed) return;
+    setError(null);
     startTransition(async () => {
       const res = await createItem({ groupId, name: trimmed });
-      if (res.ok) {
-        setName("");
-        router.refresh();
+      if (!res.ok) {
+        setError(res.error);
+        return;
       }
+      setName("");
+      setError(null);
+      router.refresh();
     });
   }
 
   return (
     <div
-      className="bg-surface sticky left-0 flex items-center gap-2 border-b px-4 py-1.5"
+      className="bg-surface sticky left-0 flex flex-col border-b px-4 py-1.5"
       style={{ width: NAME_COL_WIDTH }}
     >
-      <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit();
-          }
-        }}
-        disabled={isPending}
-        placeholder="Item name"
-        aria-label="Add item"
-        className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
-      />
+      <div className="flex items-center gap-2">
+        <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+          }}
+          disabled={isPending}
+          placeholder="Item name"
+          aria-label="Add item"
+          className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
+        />
+      </div>
+      {error ? (
+        <p role="alert" className="text-destructive text-xs">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
