@@ -156,6 +156,9 @@ export async function renameItem(input: {
     .select("board_id")
     .maybeSingle();
   if (error) return fail(error.message);
-  if (data) revalidatePath(`/boards/${data.board_id}`);
+  // maybeSingle() returns null data with no error when the item is missing or
+  // hidden by RLS — treat that as a failure rather than a silent no-op success.
+  if (!data) return fail("Item not found.");
+  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
