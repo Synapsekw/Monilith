@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pulse
 
-## Getting Started
+A cloud-native **"Work OS"** — a flexible, visual platform for teams to plan, track, and run any
+kind of work. Monday.com's color-coded board experience as the foundation, ClickUp's depth folded
+in on demand, Asana's polish on top — one coherent product, with Linear-grade restraint applied to
+a colorful category. Multi-tenant (org-scoped RLS) from day one; built to stay smooth at
+10k-item boards.
 
-First, run the development server:
+**Calm. Capable. Crisp.** — monochrome by default, color carries meaning (status & labels),
+depth is progressive.
+
+> 📖 New here? Read the **[documentation index](docs/README.md)**, the
+> **[PRD](docs/prd.md)**, and the **[north-star](vault/00-north-star.md)** (current status).
+
+## Tech stack
+
+- **Framework:** Next.js 16 (App Router, RSC, Server Actions) · React 19 · TypeScript (strict)
+- **UI:** Tailwind CSS v4 · shadcn/ui (Radix) · Lucide · Framer Motion
+- **Backend:** Supabase — Postgres, Auth, RLS, Realtime, Storage, Edge Functions
+- **Data layer:** `@supabase/ssr` · TanStack Query · Zod · react-hook-form · TanStack Table + Virtual · dnd-kit
+- **Tooling:** pnpm · ESLint + Prettier · Vitest · Playwright · Husky
+- **Deploy:** Vercel + Supabase Cloud
+
+> ⚠️ **This is Next.js 16, not the version in your training data.** APIs and conventions differ —
+> read `node_modules/next/dist/docs/` before writing framework code. See [`AGENTS.md`](AGENTS.md).
+
+## Quickstart
+
+**Prerequisites:** Node 24 (`nvm use` reads `.nvmrc`) and pnpm 10 (`corepack enable`).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install                 # also installs Husky git hooks
+cp .env.example .env.local   # then fill in your Supabase keys
+pnpm dev                     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Required environment variables (see `.env.example`):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable                        | Notes                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL (public)                                                        |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon / publishable key (public)                                                      |
+| `SUPABASE_SERVICE_ROLE_KEY`     | **Server-only secret** — never prefix with `NEXT_PUBLIC_`, never reaches the browser |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+| Script           | Purpose                       |
+| ---------------- | ----------------------------- |
+| `pnpm dev`       | Run the dev server            |
+| `pnpm build`     | Production build              |
+| `pnpm start`     | Serve the production build    |
+| `pnpm typecheck` | `tsc --noEmit`                |
+| `pnpm lint`      | ESLint                        |
+| `pnpm test`      | Vitest unit/integration tests |
+| `pnpm e2e`       | Playwright end-to-end tests   |
+| `pnpm format`    | Prettier write                |
 
-To learn more about Next.js, take a look at the following resources:
+## Documentation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **[docs/](docs/README.md)** — documentation index (start here)
+- **[docs/prd.md](docs/prd.md)** — product requirements (what & why)
+- **[Master design spec](docs/superpowers/specs/2026-06-14-pulse-design.md)** — engineering source-of-truth
+- **[vault/](vault/README.md)** — dev-memory: north-star, decisions, session notes
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — how to contribute (branching, commits, tests)
+- **[AGENTS.md](AGENTS.md)** — the working agreement
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Status
 
-## Deploy on Vercel
+Early, phased build (0 → 9). Phases 0 (Setup) and 1 (Auth & tenancy) are done; Phase 2 (Boards
+core) is in progress. See the [north-star](vault/00-north-star.md) for live status.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [LICENSE](LICENSE).
