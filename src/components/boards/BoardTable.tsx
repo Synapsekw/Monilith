@@ -12,6 +12,7 @@ import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { Json } from "@/types/database.types";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { BoardHeader } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
 import {
   CellEditor,
@@ -54,9 +55,11 @@ function gridTemplate(columnCount: number) {
 export function BoardTable({
   payload,
   members = [],
+  selectedViewId,
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
+  selectedViewId: string;
 }) {
   // Hydrate the ["board", boardId] cache once from the server payload; read all
   // board data from the cache so optimistic + realtime patches re-render.
@@ -117,9 +120,12 @@ export function BoardTable({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b px-6 py-4">
-        <h1 className="text-xl font-semibold tracking-tight">{board.name}</h1>
-      </header>
+      <BoardHeader
+        boardId={board.id}
+        boardName={board.name}
+        views={payload.views}
+        selectedViewId={selectedViewId}
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="min-w-fit">

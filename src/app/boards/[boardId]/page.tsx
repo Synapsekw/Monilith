@@ -42,7 +42,8 @@ export default async function BoardPage({
       boards={boards}
       activeBoardId={boardId}
     >
-      <BoardTable payload={payload} members={members} />
+      {/* TODO(task 9): supply the resolved selectedViewId */}
+      <BoardTable payload={payload} members={members} selectedViewId="" />
     </AppShell>
   );
 }
