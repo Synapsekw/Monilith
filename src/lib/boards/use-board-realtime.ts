@@ -22,11 +22,13 @@ import { boardKey } from "@/lib/boards/use-board-cache";
  */
 export function useBoardRealtime(boardId: string) {
   const qc = useQueryClient();
-  const key = boardKey(boardId);
 
   useEffect(() => {
     const supabase = createClient();
     const filter = `board_id=eq.${boardId}`;
+    // Computed inside the effect: boardKey() returns a fresh array each render,
+    // so keeping it out of the dep list avoids resubscribing on every render.
+    const key = boardKey(boardId);
 
     function patch(fn: (prev: BoardCache) => BoardCache) {
       qc.setQueryData<BoardCache>(key, (prev) => (prev ? fn(prev) : prev));
@@ -91,5 +93,5 @@ export function useBoardRealtime(boardId: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [boardId, qc, key]);
+  }, [boardId, qc]);
 }
