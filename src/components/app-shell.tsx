@@ -6,8 +6,17 @@ import {
   LayoutGrid,
   Target,
 } from "lucide-react";
+import { signOut } from "@/app/auth/actions";
 import { CommandTrigger } from "@/components/command-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const nav = [
   { label: "Boards", icon: FolderKanban },
@@ -17,23 +26,82 @@ const nav = [
   { label: "Inbox", icon: Inbox },
 ] as const;
 
-function Brand() {
+export type AppShellUser = {
+  email?: string | null;
+  full_name?: string | null;
+};
+
+export type AppShellOrg = {
+  name: string;
+};
+
+export type AppShellWorkspace = {
+  id: string;
+  name: string;
+};
+
+type AppShellProps = {
+  children: ReactNode;
+  user?: AppShellUser;
+  org?: AppShellOrg;
+  workspaces?: AppShellWorkspace[];
+};
+
+function Brand({ org }: { org?: AppShellOrg }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md text-sm font-semibold">
-        P
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <div className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md text-sm font-semibold">
+          P
+        </div>
+        <span className="text-sm font-semibold tracking-tight">Pulse</span>
       </div>
-      <span className="text-sm font-semibold tracking-tight">Pulse</span>
+      {org ? (
+        <span className="text-muted-foreground truncate pl-9 text-xs">
+          {org.name}
+        </span>
+      ) : null}
     </div>
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+function initialFor(user: AppShellUser): string {
+  const source = user.full_name?.trim() || user.email?.trim() || "";
+  return source ? source.charAt(0).toUpperCase() : "?";
+}
+
+function UserMenu({ user }: { user: AppShellUser }) {
+  const label = user.full_name?.trim() || user.email || "Account";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label="Open user menu"
+        className="bg-surface text-foreground hover:bg-accent flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        {initialFor(user)}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild variant="destructive">
+          <form action={signOut}>
+            <button type="submit" className="w-full text-left">
+              Sign out
+            </button>
+          </form>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function AppShell({ children, user, org, workspaces }: AppShellProps) {
   return (
     <div className="flex h-svh w-full overflow-hidden">
       <aside className="bg-sidebar hidden w-60 shrink-0 flex-col border-r md:flex">
-        <div className="flex h-14 items-center px-4">
-          <Brand />
+        <div className="flex min-h-14 items-center px-4 py-2">
+          <Brand org={org} />
         </div>
         <nav className="flex flex-col gap-0.5 px-2 py-2">
           {nav.map((item) => (
@@ -48,16 +116,32 @@ export function AppShell({ children }: { children: ReactNode }) {
             </button>
           ))}
         </nav>
+        {workspaces && workspaces.length > 0 ? (
+          <div className="mt-2 flex flex-col gap-0.5 px-2">
+            <p className="text-muted-foreground px-3 py-1 text-xs font-medium">
+              Workspaces
+            </p>
+            {workspaces.map((workspace) => (
+              <span
+                key={workspace.id}
+                className="text-muted-foreground truncate rounded-md px-3 py-1.5 text-sm"
+              >
+                {workspace.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
           <div className="md:hidden">
-            <Brand />
+            <Brand org={org} />
           </div>
           <div className="flex flex-1 items-center justify-end gap-2">
             <CommandTrigger />
             <ThemeToggle />
+            {user ? <UserMenu user={user} /> : null}
           </div>
         </header>
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>

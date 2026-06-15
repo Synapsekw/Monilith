@@ -1,23 +1,41 @@
+import { redirect } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { getUserOrgs, requireUser } from "@/lib/auth/session";
 
-export default function Home() {
+export default async function Home() {
+  const user = await requireUser();
+
+  const orgs = await getUserOrgs();
+  if (orgs.length === 0) redirect("/onboarding");
+
+  const org = orgs[0];
+
   return (
-    <AppShell>
+    <AppShell
+      user={{
+        email: user.email,
+        full_name:
+          typeof user.user_metadata?.full_name === "string"
+            ? user.user_metadata.full_name
+            : null,
+      }}
+      org={{ name: org.name }}
+    >
       <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="bg-surface flex size-12 items-center justify-center rounded-xl border">
           <Sparkles className="text-primary size-6" />
         </div>
         <div className="space-y-1.5">
           <h1 className="text-xl font-semibold tracking-tight">
-            Welcome to Pulse
+            Welcome to {org.name}
           </h1>
           <p className="text-muted-foreground max-w-md text-sm text-pretty">
-            Your Work OS shell is ready. Press{" "}
+            Your workspace is ready. Press{" "}
             <kbd className="bg-muted rounded border px-1.5 font-mono text-xs">
               ⌘K
             </kbd>{" "}
-            to open the command palette. Auth, workspaces, and boards come next.
+            to open the command palette. Boards arrive in Phase 2.
           </p>
         </div>
       </div>
