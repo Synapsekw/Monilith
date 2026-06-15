@@ -32,8 +32,10 @@ pnpm dev            # start the app
 
 1. Branch from `main`: `git switch -c feat/<short-slug>`.
 2. Commit using **Conventional Commits** (enforced by a `commit-msg` hook).
-3. Open a PR; fill in the template. CI (`typecheck · lint · test · build` + commit lint) must be green.
-4. Squash/merge once checks pass.
+3. Open a PR; fill in the template. The required `verify` check (typecheck · lint · test · build)
+   must be green.
+4. **Squash-merge** once checks pass (linear history is required; merge commits are disabled).
+5. The branch is **deleted automatically on merge** — don't leave stale branches around.
 
 ## Commit messages (Conventional Commits)
 
