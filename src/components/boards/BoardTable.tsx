@@ -14,8 +14,26 @@ import type { Json } from "@/types/database.types";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { createItem } from "@/lib/boards/actions";
 import { CellRenderer } from "@/components/boards/cells";
+import {
+  CellEditor,
+  type EditorMember,
+} from "@/components/boards/cells/editors";
+import type { BoardCache } from "@/lib/boards/cache";
+import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
+
+/** The cell currently in edit mode, keyed by row + column. */
+type EditingCell = { itemId: string; columnId: string };
+
+/** Props threaded down to each editable cell. */
+type CellControls = {
+  editing: EditingCell | null;
+  setEditing: (cell: EditingCell | null) => void;
+  setCell: (vars: { itemId: string; columnId: string; value: unknown }) => void;
+  members: EditorMember[];
+};
 
 const ROW_HEIGHT = 40;
 const NAME_COL_WIDTH = 280;
@@ -26,8 +44,23 @@ function gridTemplate(columnCount: number) {
   return `${NAME_COL_WIDTH}px repeat(${columnCount}, minmax(${VALUE_COL_WIDTH}px, 1fr))`;
 }
 
-export function BoardTable({ payload }: { payload: BoardPayload }) {
-  const { board, groups, columns, items, cellValues } = payload;
+export function BoardTable({
+  payload,
+  members = [],
+}: {
+  payload: BoardPayload;
+  members?: EditorMember[];
+}) {
+  // Hydrate the ["board", boardId] cache once from the server payload; read all
+  // board data from the cache so optimistic + realtime patches re-render.
+  const { data: cache } = useBoardCache(
+    payload.board.id,
+    payload as unknown as BoardCache,
+  );
+  const { board, groups, columns, items, cellValues } = cache;
+
+  const [editing, setEditing] = useState<EditingCell | null>(null);
+  const { setCell } = useBoardMutations(payload.board.id);
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = new Map<string, Json>(
@@ -57,6 +90,8 @@ export function BoardTable({ payload }: { payload: BoardPayload }) {
   const headerGroups = table.getHeaderGroups();
 
   const template = gridTemplate(columns.length);
+
+  const controls: CellControls = { editing, setEditing, setCell, members };
 
   return (
     <div className="flex h-full flex-col">
@@ -94,6 +129,7 @@ export function BoardTable({ payload }: { payload: BoardPayload }) {
                 columns={columns}
                 cellMap={cellMap}
                 template={template}
+                controls={controls}
               />
             ))
           )}
@@ -109,12 +145,14 @@ function GroupSection({
   columns,
   cellMap,
   template,
+  controls,
 }: {
   group: Group;
   items: Item[];
   columns: Column[];
   cellMap: Map<string, Json>;
   template: string;
+  controls: CellControls;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -184,16 +222,13 @@ function GroupSection({
                         {item.name}
                       </div>
                       {columns.map((col) => (
-                        <div
+                        <EditableCell
                           key={col.id}
-                          className="flex items-center truncate border-l px-3"
-                        >
-                          <CellRenderer
-                            kind={col.kind}
-                            value={cellMap.get(`${item.id}:${col.id}`) ?? null}
-                            settings={(col.settings ?? {}) as Settings}
-                          />
-                        </div>
+                          item={item}
+                          column={col}
+                          value={cellMap.get(`${item.id}:${col.id}`) ?? null}
+                          controls={controls}
+                        />
                       ))}
                     </div>
                   );
@@ -205,6 +240,67 @@ function GroupSection({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * One configurable-column cell. Resting state renders the read-only
+ * `CellRenderer` wrapped in a click/Enter-to-edit affordance; when active it
+ * swaps to the kind's `CellEditor`. Commits write through `setCell`
+ * (optimistically). Empty text/number values are committed as empty shapes —
+ * `clearCellValue` handling is reserved for explicit clears in the editor.
+ */
+function EditableCell({
+  item,
+  column,
+  value,
+  controls,
+}: {
+  item: Item;
+  column: Column;
+  value: Json;
+  controls: CellControls;
+}) {
+  const { editing, setEditing, setCell, members } = controls;
+  const isEditing =
+    editing?.itemId === item.id && editing.columnId === column.id;
+  const settings = (column.settings ?? {}) as Settings;
+  const accessibleName = `${item.name} ${column.name}`;
+
+  if (isEditing) {
+    return (
+      <div className="relative flex items-center border-l px-3">
+        <CellEditor
+          kind={column.kind}
+          value={value}
+          settings={settings}
+          members={members}
+          onCommit={(v) => {
+            setCell({ itemId: item.id, columnId: column.id, value: v });
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={accessibleName}
+      onClick={() => setEditing({ itemId: item.id, columnId: column.id })}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setEditing({ itemId: item.id, columnId: column.id });
+        }
+      }}
+      className="hover:bg-accent/60 focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+    >
+      <CellRenderer kind={column.kind} value={value} settings={settings} />
+    </div>
   );
 }
 
