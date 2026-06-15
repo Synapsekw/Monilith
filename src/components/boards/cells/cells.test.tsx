@@ -153,6 +153,9 @@ function statusPayload(): BoardPayload {
         value: { optionId: "o2" },
       } as never,
     ],
+    views: [
+      { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
+    ],
   };
 }
 
