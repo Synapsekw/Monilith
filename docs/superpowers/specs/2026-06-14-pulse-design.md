@@ -1,3 +1,11 @@
+---
+type: spec
+status: approved
+date: 2026-06-14
+tags: [project/pulse, spec]
+related: ["[[00-north-star]]"]
+---
+
 # Pulse — Master Design Spec
 
 > Status: Approved (source brief by Danijel, 2026-06-14). This document is the master

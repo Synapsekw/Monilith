@@ -54,7 +54,13 @@ supabase/.env
 *.tsbuildinfo
 next-env.d.ts
 
-# stray editor/vault artifacts (Obsidian) created inside the repo
+# Obsidian dev-memory vault — TRACKED (vault/ notes + stable .obsidian config,
+# incl. community-plugins.json so the plugin set is reproducible). Volatile
+# per-machine state and installed plugin binaries are ignored.
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.obsidian/plugins/
+
+# Stale old vault location (vault now lives at repo-root vault/). Keep on disk, never commit.
 /Monolith/
-/vault/
-.obsidian/
