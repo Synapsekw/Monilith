@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Stray Obsidian vault artifacts created inside the repo (not source).
+    "Monolith/**",
+    "vault/**",
+    "**/.obsidian/**",
   ]),
 ]);
 
