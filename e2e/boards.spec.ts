@@ -86,39 +86,24 @@ test.describe("Boards happy path", () => {
     test.setTimeout(120_000);
 
     // ── 1. Log in via the UI (confirmed user — no email verification needed) ─
-    //
-    // NOTE: the auth-form calls formAction() outside startTransition (a React 19
-    // warning). Supabase's signInWithPassword DOES succeed and sets the session
-    // cookie, but the RSC redirect from redirect("/") is not processed by the
-    // React client. We therefore wait for the auth cookie to be set, then
-    // navigate to "/" ourselves — this correctly exercises the authenticated
-    // session without modifying app source.
     await page.goto("/login");
     await page.getByLabel(/email/i).fill(testEmail);
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    // Wait for the Supabase auth cookie to be set (sign-in completed).
-    await page.waitForFunction(
-      () =>
-        document.cookie.includes("sb-") &&
-        document.cookie.includes("-auth-token"),
-      { timeout: 15_000 },
-    );
-    // Navigate to / manually since the RSC redirect is not processed by the client.
-    await page.goto("/");
+    // The server action dispatched inside startTransition now processes the
+    // redirect() as a client navigation. A confirmed user with no org is
+    // redirected / → /onboarding.
+    await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
 
     // ── 2. Onboarding (new user has no org) ───────────────────────────────────
-    // / redirects to /onboarding for users without an org.
-    await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
     await page.getByLabel(/organization name/i).fill(unique("Org"));
     await page.getByLabel(/workspace name/i).fill("Engineering");
     await page.getByRole("button", { name: /create organization/i }).click();
 
-    // Same React 19 / formAction issue as login: the server action's redirect()
-    // is not processed by the client. The org IS created; we navigate manually.
-    await page.waitForTimeout(2_000); // let the server action complete
-    await page.goto("/");
+    // After onboarding completes the server action redirects to /. The app
+    // now navigates on its own — no manual goto needed.
+    await page.waitForURL(/localhost:3000\/$/, { timeout: 30_000 });
 
     // ── 3. Home — no boards yet ───────────────────────────────────────────────
     // / stays at / (not redirecting to onboarding because org now exists, and
