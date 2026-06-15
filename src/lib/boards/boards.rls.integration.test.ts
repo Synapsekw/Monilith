@@ -273,4 +273,66 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: boards tenant isolation", () => {
     });
     expect(error).not.toBeNull(); // board_in_org(B_board, A_org) is false → rejected
   });
+
+  describe("board_views RLS", () => {
+    it("a member can read their org's board_views", async () => {
+      const { data, error } = await userA.anon
+        .from("board_views")
+        .select("*")
+        .eq("board_id", userA.boardId);
+      expect(error).toBeNull();
+      expect(data ?? []).toHaveLength(1);
+    });
+
+    it("a non-member's read of another org's board_views returns 0 rows", async () => {
+      const { data } = await userA.anon
+        .from("board_views")
+        .select("*")
+        .eq("board_id", userB.boardId);
+      expect(data ?? []).toHaveLength(0);
+    });
+
+    it("a non-member insert into another org's board is rejected by RLS", async () => {
+      // A forges B's org_id + board_id; is_org_member(B_org) fails for A.
+      const { error } = await userA.anon.from("board_views").insert({
+        org_id: userB.orgId,
+        board_id: userB.boardId,
+        kind: "kanban",
+        name: "intruder",
+      });
+      expect(error).not.toBeNull();
+    });
+
+    it("create_board seeds exactly one table view (Main Table, position 0)", async () => {
+      const { data } = await admin
+        .from("board_views")
+        .select("*")
+        .eq("board_id", userA.boardId);
+      expect(data).toHaveLength(1);
+      expect(data![0]).toMatchObject({
+        kind: "table",
+        name: "Main Table",
+        position: 0,
+      });
+    });
+
+    it("create_board_view appends at max+1 for members and rejects non-members", async () => {
+      const { data, error } = await userA.anon.rpc("create_board_view", {
+        p_board_id: userA.boardId,
+        p_kind: "kanban",
+        p_name: "Kanban",
+        p_config: {},
+      });
+      expect(error).toBeNull();
+      expect(data).toMatchObject({ kind: "kanban", position: 1 });
+
+      const denied = await userB.anon.rpc("create_board_view", {
+        p_board_id: userA.boardId,
+        p_kind: "kanban",
+        p_name: "Kanban",
+        p_config: {},
+      });
+      expect(denied.error).not.toBeNull();
+    });
+  });
 });
