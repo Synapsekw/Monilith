@@ -2,6 +2,11 @@
   "name": "pulse",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.22.0",
+  "engines": {
+    "node": ">=20.9.0",
+    "pnpm": ">=10"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

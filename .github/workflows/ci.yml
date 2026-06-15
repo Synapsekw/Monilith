@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   verify:
-    name: typecheck · lint · test · build
+    name: verify
     runs-on: ubuntu-latest
     env:
       # Placeholder public env so env validation + build pass without real secrets.
@@ -25,8 +25,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -60,8 +58,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4

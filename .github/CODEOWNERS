@@ -1,0 +1,8 @@
+# Default owner for everything in the repo.
+* @Synapsekw
+
+# Security-sensitive surfaces — flag for extra scrutiny.
+/supabase/                @Synapsekw
+/src/lib/supabase/        @Synapsekw
+/src/proxy.ts             @Synapsekw
+/.github/                 @Synapsekw

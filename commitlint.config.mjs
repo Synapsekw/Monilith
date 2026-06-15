@@ -5,7 +5,7 @@
  *   feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
  * Scopes are free-form (auth, db, tenancy, ci, vault, …). Merge commits are ignored.
  */
-export default {
+const config = {
   extends: ["@commitlint/config-conventional"],
   rules: {
     // Allow longer wrapped body/footer lines (our commit bodies + Co-Authored-By trailer).
@@ -13,3 +13,5 @@ export default {
     "footer-max-line-length": [0, "always", Infinity],
   },
 };
+
+export default config;
