@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getUserOrgs, requireUser } from "@/lib/auth/session";
+import { listBoards } from "@/lib/boards/queries";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function Home() {
   const user = await requireUser();
@@ -10,6 +12,14 @@ export default async function Home() {
   if (orgs.length === 0) redirect("/onboarding");
 
   const org = orgs[0];
+
+  const boards = await listBoards();
+  if (boards.length > 0) redirect(`/boards/${boards[0].id}`);
+
+  const supabase = await createClient();
+  const { data: workspaces } = await supabase
+    .from("workspaces")
+    .select("id, name");
 
   return (
     <AppShell
@@ -21,6 +31,8 @@ export default async function Home() {
             : null,
       }}
       org={{ name: org.name }}
+      workspaces={workspaces ?? []}
+      boards={[]}
     >
       <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="bg-surface flex size-12 items-center justify-center rounded-xl border">
@@ -35,7 +47,8 @@ export default async function Home() {
             <kbd className="bg-muted rounded border px-1.5 font-mono text-xs">
               ⌘K
             </kbd>{" "}
-            to open the command palette. Boards arrive in Phase 2.
+            to open the command palette, or create your first board using the
+            sidebar.
           </p>
         </div>
       </div>

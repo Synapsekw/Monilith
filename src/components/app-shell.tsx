@@ -1,11 +1,5 @@
 import type { ReactNode } from "react";
-import {
-  BarChart3,
-  FolderKanban,
-  Inbox,
-  LayoutGrid,
-  Target,
-} from "lucide-react";
+import { BarChart3, Inbox, LayoutGrid, Target } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { CommandTrigger } from "@/components/command-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -17,9 +11,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BoardsNav } from "@/components/boards/BoardsNav";
+import type { BoardListEntry } from "@/lib/boards/queries";
 
 const nav = [
-  { label: "Boards", icon: FolderKanban },
   { label: "Dashboards", icon: LayoutGrid },
   { label: "Goals", icon: Target },
   { label: "Portfolios", icon: BarChart3 },
@@ -45,6 +40,8 @@ type AppShellProps = {
   user?: AppShellUser;
   org?: AppShellOrg;
   workspaces?: AppShellWorkspace[];
+  boards?: BoardListEntry[];
+  activeBoardId?: string;
 };
 
 function Brand({ org }: { org?: AppShellOrg }) {
@@ -96,13 +93,25 @@ function UserMenu({ user }: { user: AppShellUser }) {
   );
 }
 
-export function AppShell({ children, user, org, workspaces }: AppShellProps) {
+export function AppShell({
+  children,
+  user,
+  org,
+  workspaces,
+  boards,
+  activeBoardId,
+}: AppShellProps) {
   return (
     <div className="flex h-svh w-full overflow-hidden">
       <aside className="bg-sidebar hidden w-60 shrink-0 flex-col border-r md:flex">
         <div className="flex min-h-14 items-center px-4 py-2">
           <Brand org={org} />
         </div>
+        <BoardsNav
+          boards={boards ?? []}
+          workspaces={workspaces ?? []}
+          activeBoardId={activeBoardId}
+        />
         <nav className="flex flex-col gap-0.5 px-2 py-2">
           {nav.map((item) => (
             <button
