@@ -56,7 +56,9 @@ type(optional-scope): short imperative summary
 ## Database & RLS
 
 - All schema changes are **versioned migrations** in `supabase/migrations/` (never dashboard click-ops).
-- After a migration: regenerate `src/types/database.types.ts` and review advisors.
+- After a migration: regenerate `src/types/database.types.ts` with `pnpm db:types` (or the
+  Supabase MCP `generate_typescript_types` tool) and review advisors. Commit the regenerated
+  types in the same PR as the migration — stale types are the main source of `any` creep.
 - **RLS is the security boundary**: default-deny, org-scoped, no cross-tenant access. Never trust the client.
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach the browser.
 
