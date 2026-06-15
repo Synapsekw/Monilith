@@ -93,6 +93,19 @@ describe("ViewSwitcher", () => {
     expect(push).toHaveBeenCalledWith("/boards/b1?view=v1");
   });
 
+  it("deletes a non-selected view in place without navigating away", async () => {
+    deleteBoardView.mockResolvedValue({ ok: true, data: undefined });
+    // Selected = v1 (Main Table); delete the other tab (v2/Kanban).
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /view options for kanban/i }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+    expect(deleteBoardView).toHaveBeenCalledWith({ viewId: "v2" });
+    expect(refresh).toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("hides delete when only one view remains", async () => {
     render(
       <ViewSwitcher

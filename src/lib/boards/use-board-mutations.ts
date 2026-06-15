@@ -138,12 +138,12 @@ export function useBoardMutations(boardId: string) {
     addItem: (
       vars: AddItemVars,
       callbacks?: {
-        onSuccess?: () => void;
+        onSuccess?: (item: CacheItem) => void;
         onError?: (err: Error) => void;
       },
     ) =>
       addItemMutation.mutate(vars, {
-        onSuccess: () => callbacks?.onSuccess?.(),
+        onSuccess: (data) => callbacks?.onSuccess?.(data.item),
         onError: (err) => callbacks?.onError?.(err),
       }),
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),

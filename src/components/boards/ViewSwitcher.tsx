@@ -120,8 +120,14 @@ function ViewTab({
   function handleDelete() {
     startTransition(async () => {
       const res = await deleteBoardView({ viewId: view.id });
-      if (res.ok && firstOtherViewId)
+      if (!res.ok) return;
+      // Only navigate away when deleting the currently selected view; deleting a
+      // non-selected tab drops it in place and keeps the user where they are.
+      if (selected && firstOtherViewId) {
         router.push(`/boards/${boardId}?view=${firstOtherViewId}`);
+      } else {
+        router.refresh();
+      }
     });
   }
 

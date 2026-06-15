@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KanbanBoard, onCardDropped } from "@/components/boards/KanbanBoard";
 
@@ -93,6 +93,43 @@ describe("KanbanBoard", () => {
     // Card A (o1=Working) and Card B (No status)
     expect(screen.getByText("Card A")).toBeInTheDocument();
     expect(screen.getByText("Card B")).toBeInTheDocument();
+  });
+
+  it("sets the column's status when adding via an option column's + Add", () => {
+    // addItem resolves by invoking onSuccess with the created item.
+    addItem.mockImplementation(
+      (
+        _vars: { groupId: string; name: string },
+        cb?: { onSuccess?: (item: { id: string }) => void },
+      ) => cb?.onSuccess?.({ id: "new-item" }),
+    );
+
+    renderKanban();
+    const input = screen.getByLabelText("Add item to Working");
+    fireEvent.change(input, { target: { value: "Fresh task" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "new-item",
+      columnId: "status",
+      value: { optionId: "o1" },
+    });
+  });
+
+  it("does not set a status when adding via the No-status column", () => {
+    addItem.mockImplementation(
+      (
+        _vars: { groupId: string; name: string },
+        cb?: { onSuccess?: (item: { id: string }) => void },
+      ) => cb?.onSuccess?.({ id: "new-item" }),
+    );
+
+    renderKanban();
+    const input = screen.getByLabelText("Add item to No status");
+    fireEvent.change(input, { target: { value: "Fresh task" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(setCell).not.toHaveBeenCalled();
   });
 });
 

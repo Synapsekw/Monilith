@@ -207,7 +207,9 @@ export function KanbanBoard({
               cellValues={cache.cellValues}
               summaryColumns={summaryColumns}
               firstGroupId={firstGroupId}
+              groupColumnId={groupColumn.id}
               addItem={addItem}
+              setCell={setCell}
             />
           ))}
         </div>
@@ -221,16 +223,23 @@ function KanbanColumnView({
   cellValues,
   summaryColumns,
   firstGroupId,
+  groupColumnId,
   addItem,
+  setCell,
 }: {
   column: KanbanColumn;
   cellValues: CacheCellValue[];
   summaryColumns: CacheColumn[];
   firstGroupId: string | undefined;
+  groupColumnId: string;
   addItem: (
     vars: { groupId: string; name: string },
-    callbacks?: { onSuccess?: () => void; onError?: (err: Error) => void },
+    callbacks?: {
+      onSuccess?: (item: CacheItem) => void;
+      onError?: (err: Error) => void;
+    },
   ) => void;
+  setCell: SetCell;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
@@ -276,7 +285,10 @@ function KanbanColumnView({
       <AddCardInput
         groupId={firstGroupId}
         columnLabel={column.label}
+        optionId={column.optionId}
+        groupColumnId={groupColumnId}
         addItem={addItem}
+        setCell={setCell}
       />
     </section>
   );
@@ -339,14 +351,24 @@ function KanbanCard({
 function AddCardInput({
   groupId,
   columnLabel,
+  optionId,
+  groupColumnId,
   addItem,
+  setCell,
 }: {
   groupId: string | undefined;
   columnLabel: string;
+  /** The status option this column represents; null for the No-status column. */
+  optionId: string | null;
+  groupColumnId: string;
   addItem: (
     vars: { groupId: string; name: string },
-    callbacks?: { onSuccess?: () => void; onError?: (err: Error) => void },
+    callbacks?: {
+      onSuccess?: (item: CacheItem) => void;
+      onError?: (err: Error) => void;
+    },
   ) => void;
+  setCell: SetCell;
 }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -357,15 +379,21 @@ function AddCardInput({
     if (!trimmed || !groupId) return;
     setError(null);
     startTransition(() => {
-      // 3a decision: quick-add always creates the item in the first group, so
-      // it lands in the No-status column regardless of which column's "+ Add"
-      // was used. We intentionally do NOT auto-set the status — the user drags
-      // the new card to the desired column. (Option-column quick-add with
-      // auto-status is a follow-up.)
+      // Quick-add creates the item in the first group, then — for an option
+      // column — sets its status to that column's option so the new card lands
+      // where the user added it. The No-status column (optionId === null) leaves
+      // the status unset.
       addItem(
         { groupId, name: trimmed },
         {
-          onSuccess: () => {
+          onSuccess: (item) => {
+            if (optionId !== null) {
+              setCell({
+                itemId: item.id,
+                columnId: groupColumnId,
+                value: { optionId },
+              });
+            }
             setName("");
             setError(null);
           },
