@@ -409,6 +409,14 @@ export type Database = {
     };
     Functions: {
       auth_user_orgs: { Args: never; Returns: string[] };
+      board_in_org: {
+        Args: { p_board_id: string; p_org_id: string };
+        Returns: boolean;
+      };
+      column_in_org: {
+        Args: { p_column_id: string; p_org_id: string };
+        Returns: boolean;
+      };
       create_board: {
         Args: { p_name: string; p_workspace_id: string };
         Returns: {
@@ -466,6 +474,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      group_in_org: {
+        Args: { p_group_id: string; p_org_id: string };
+        Returns: boolean;
+      };
       has_org_role: {
         Args: {
           p_org_id: string;
@@ -474,6 +486,10 @@ export type Database = {
         Returns: boolean;
       };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
+      item_in_org: {
+        Args: { p_item_id: string; p_org_id: string };
+        Returns: boolean;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
     };
     Enums: {
