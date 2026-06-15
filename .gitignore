@@ -53,3 +53,6 @@ supabase/.env
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# stray nested editor vault (Obsidian) created inside the repo
+/Monolith/
