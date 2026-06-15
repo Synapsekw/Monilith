@@ -54,5 +54,7 @@ supabase/.env
 *.tsbuildinfo
 next-env.d.ts
 
-# stray nested editor vault (Obsidian) created inside the repo
+# stray editor/vault artifacts (Obsidian) created inside the repo
 /Monolith/
+/vault/
+.obsidian/
