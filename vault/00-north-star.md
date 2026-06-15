@@ -39,8 +39,12 @@ run tests + advisors + regenerate types before moving on.**
 - **2 — Boards core** — <span style="color:#22c55e">**[Done]**</span>
   Workspaces→boards→groups→items, Table view (Text/Status/People/Date/Numbers/Dropdown), inline editing, optimistic updates, realtime.
   _Done 2026-06-15. **2a** (PR #9 `abb8e4e`): schema+RLS+RPCs, queries/actions, live sidebar + `/boards/[boardId]`, read-only virtualized Table. **2b** (PR #12 `3620c69`): inline editors for all 6 kinds, optimistic TanStack-Query board cache, Supabase realtime reconciliation, migration squash + default Status seed. 110 tests + live RLS + e2e green. See [[2026-06-15-1053-phase2a-boards-core]], [[2026-06-15-1259-phase2b-boards-interactive]]._
-- **3 — Views** — **[Not started]**
+- **3 — Views** — <span style="color:#eab308">**[In progress]**</span>
   Kanban + Calendar + Timeline/Gantt with dependencies; view switcher + saved config.
+  _**3a** (PR #15, open): `board_views` + RLS + create/delete RPCs, view switcher (`?view=` routing,
+  Table fallback), Kanban (group-by-Status, dnd drag-to-restatus, per-column add, grouping picker) on
+  the 2b cache/realtime layer. 155 tests + e2e green. See [[2026-06-15-1946-phase3a-views-kanban]].
+  **3b** next: Calendar + Timeline/Gantt + dependencies._
 - **4 — Collaboration** — **[Not started]**
   Item detail panel, updates/comments/@mentions, attachments, activity log, notifications inbox.
 - **5 — Automations + Rules** — **[Not started]**
@@ -53,14 +57,14 @@ run tests + advisors + regenerate types before moving on.**
 - **9 — Hardening** — **[Not started]**
   Performance (virtualization, indexes), advisors clean, tests, a11y audit, Vercel deploy.
 
-**Where we are:** Phases 0, 1, and **2 (Boards core — 2a + 2b) done** on `main`. Phase 3 (Views) is next.
+**Where we are:** Phases 0, 1, 2 done on `main`. **Phase 3a (Views infra + Kanban) built — PR #15 open**, pending CI/merge. Phase 3b (Calendar + Timeline/Gantt + dependencies) is next.
 
 ## 3. Now
 
-- **Phase:** 2 done → starting 3 — Views
-- **Branch:** `main`
-- **Latest:** Phase 2 complete. **2b merged** (PR #12, `3620c69`): inline cell editors for all 6 kinds + edit-mode switching, optimistic updates on a `["board", boardId]` TanStack Query cache with pure patch helpers, one Supabase realtime channel reconciling into the same cache (echo-deduped), `upsertCell`/`clearCell` actions (parent-org guarded), `listOrgMembers`, and the 3 boards migrations squashed into one canonical file with default Status options seeded. 110 tests + live RLS suite + e2e (4/4) green. Cache-coherence rule captured in [[2026-06-15-gotcha-05-board-cache-coherence]]. See [[2026-06-15-1259-phase2b-boards-interactive]]. **Next:** Phase 3 — Views (Kanban + Calendar + Timeline/Gantt, view switcher + saved config), reusing the board cache/realtime layer.
-- **🧑 Manual gates (Danijel):** Supabase project + keys done. MCP authed (read-only); migrations applied via `supabase db push` (CLI linked). For the official `get_advisors`, add `debugging` to `.mcp.json` features + re-auth (optional).
+- **Phase:** 3 in progress — 3a built (PR open) → 3b next
+- **Branch:** `feat/phase-3a-views-kanban` (PR #15 → `main`)
+- **Latest:** **Phase 3a built — PR #15 open** (16 commits, off `main`). `board_views` table + org-scoped RLS + `create_board_view`/`delete_board_view` RPCs (last-view delete blocked transactionally via `FOR UPDATE`); `create_board` seeds a default Table view, existing boards backfilled. View switcher (`ViewSwitcher` + shared `BoardHeader`) with `?view=<id>` routing + Table fallback (`resolveSelectedView`). Kanban view (`KanbanBoard` + pure `buildKanbanColumns`/`onCardDropped`): group-by-Status, "No status" bucket, dnd-kit drag-to-restatus through the existing `setCell` mutation, per-column add that sets the column's status, grouping-column picker. Built subagent-driven (10 tasks + final review + 2 fixes). typecheck/lint/build + **155** tests + Kanban e2e green. New gotchas: [[2026-06-15-gotcha-06-commitlint-subject-case]], [[2026-06-15-gotcha-07-shared-worktree-subagents]]. See [[2026-06-15-1946-phase3a-views-kanban]]. **Next:** merge PR #15 (rebase if `fix/status-cell-popover` lands first), then Phase 3b — Calendar + Timeline/Gantt + dependencies, reusing the switcher + cache/realtime layer.
+- **🧑 Manual gates (Danijel):** Supabase project + keys done. MCP authed (read-only); migrations applied via `supabase db push` (CLI linked). For the official `get_advisors`, add `debugging` to `.mcp.json` features + re-auth (optional). **PR #15 awaits review/CI + merge.** Note: `fix/status-cell-popover` PR is also in flight; its uncommitted files sit untouched in this branch's working tree — rebase 3a onto `main` after it merges.
 
 ### Last session
 
