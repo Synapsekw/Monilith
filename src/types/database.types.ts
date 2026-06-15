@@ -14,6 +14,277 @@ export type Database = {
   };
   public: {
     Tables: {
+      boards: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          description?: string | null;
+          id?: string;
+          name: string;
+          org_id: string;
+          position?: number;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          description?: string | null;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          position?: number;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "boards_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "boards_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      cell_values: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          item_id: string;
+          org_id: string;
+          updated_at: string;
+          value: Json;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          item_id: string;
+          org_id: string;
+          updated_at?: string;
+          value: Json;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          item_id?: string;
+          org_id?: string;
+          updated_at?: string;
+          value?: Json;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "cell_values_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cell_values_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cell_values_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cell_values_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      columns: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          id: string;
+          kind: Database["public"]["Enums"]["column_kind"];
+          name: string;
+          org_id: string;
+          position: number;
+          settings: Json;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["column_kind"];
+          name: string;
+          org_id: string;
+          position?: number;
+          settings?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["column_kind"];
+          name?: string;
+          org_id?: string;
+          position?: number;
+          settings?: Json;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "columns_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "columns_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      groups: {
+        Row: {
+          board_id: string;
+          color: string;
+          created_at: string;
+          id: string;
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          color?: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          org_id: string;
+          position?: number;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          color?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          position?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "groups_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "groups_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      items: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          group_id: string;
+          id: string;
+          name: string;
+          org_id: string;
+          parent_id: string | null;
+          position: number;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          group_id: string;
+          id?: string;
+          name: string;
+          org_id: string;
+          parent_id?: string | null;
+          position?: number;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          group_id?: string;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          parent_id?: string | null;
+          position?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "items_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_group_id_fkey";
+            columns: ["group_id"];
+            isOneToOne: false;
+            referencedRelation: "groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "items_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       org_members: {
         Row: {
           created_at: string;
@@ -138,6 +409,54 @@ export type Database = {
     };
     Functions: {
       auth_user_orgs: { Args: never; Returns: string[] };
+      board_in_org: {
+        Args: { p_board_id: string; p_org_id: string };
+        Returns: boolean;
+      };
+      column_in_org: {
+        Args: { p_column_id: string; p_org_id: string };
+        Returns: boolean;
+      };
+      create_board: {
+        Args: { p_name: string; p_workspace_id: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "boards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_item: {
+        Args: { p_group_id: string; p_name: string };
+        Returns: {
+          board_id: string;
+          created_at: string;
+          group_id: string;
+          id: string;
+          name: string;
+          org_id: string;
+          parent_id: string | null;
+          position: number;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "items";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_organization: {
         Args: { p_name: string; p_slug: string };
         Returns: {
@@ -155,6 +474,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      group_in_org: {
+        Args: { p_group_id: string; p_org_id: string };
+        Returns: boolean;
+      };
       has_org_role: {
         Args: {
           p_org_id: string;
@@ -163,9 +486,20 @@ export type Database = {
         Returns: boolean;
       };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
+      item_in_org: {
+        Args: { p_item_id: string; p_org_id: string };
+        Returns: boolean;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
     };
     Enums: {
+      column_kind:
+        | "text"
+        | "status"
+        | "people"
+        | "date"
+        | "numbers"
+        | "dropdown";
       org_role: "owner" | "admin" | "member" | "guest";
     };
     CompositeTypes: {
@@ -297,6 +631,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
       org_role: ["owner", "admin", "member", "guest"],
     },
   },

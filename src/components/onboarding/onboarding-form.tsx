@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { startTransition, useActionState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -52,7 +52,9 @@ export function OnboardingForm() {
             const formData = new FormData();
             formData.set("orgName", values.orgName);
             formData.set("workspaceName", values.workspaceName);
-            formAction(formData);
+            startTransition(() => {
+              formAction(formData);
+            });
           })}
           className="flex flex-col gap-4"
         >

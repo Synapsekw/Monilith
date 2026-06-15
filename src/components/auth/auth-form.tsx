@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useActionState } from "react";
+import { type ReactNode, startTransition, useActionState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Loader2 } from "lucide-react";
@@ -91,7 +91,9 @@ export function AuthForm({ mode, footer }: AuthFormProps) {
             if (isSignup && "fullName" in values && values.fullName) {
               formData.set("fullName", values.fullName);
             }
-            formAction(formData);
+            startTransition(() => {
+              formAction(formData);
+            });
           })}
           className="flex flex-col gap-4"
         >
