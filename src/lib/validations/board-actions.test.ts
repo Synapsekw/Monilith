@@ -7,6 +7,7 @@ import {
   renameBoardSchema,
   renameItemSchema,
 } from "./board-actions";
+import { upsertCellSchema, clearCellSchema } from "./board-actions";
 
 // Zod 4 enforces strict RFC 4122 UUID format (version + variant bits).
 // "11111111-1111-1111-1111-111111111111" fails because the variant nibble
@@ -70,5 +71,55 @@ describe("board action schemas", () => {
     expect(
       renameItemSchema.safeParse({ itemId: uuid, name: "Renamed" }).success,
     ).toBe(true);
+  });
+});
+
+describe("cell action schemas", () => {
+  // Zod 4 enforces strict RFC 4122 UUID format — variant nibble must be [89abAB].
+  const itemId = "11111111-1111-4111-8111-111111111111";
+  const columnId = "22222222-2222-4222-8222-222222222222";
+
+  it("upsertCell requires itemId + columnId uuids and a value", () => {
+    expect(
+      upsertCellSchema.safeParse({ itemId, columnId, value: { text: "hi" } })
+        .success,
+    ).toBe(true);
+  });
+
+  it("upsertCell rejects a non-uuid itemId", () => {
+    expect(
+      upsertCellSchema.safeParse({
+        itemId: "nope",
+        columnId,
+        value: { text: "hi" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("upsertCell accepts any json-shaped value (kind-validated later)", () => {
+    expect(
+      upsertCellSchema.safeParse({ itemId, columnId, value: { n: 42 } })
+        .success,
+    ).toBe(true);
+    expect(
+      upsertCellSchema.safeParse({
+        itemId,
+        columnId,
+        value: { optionId: null },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("upsertCell rejects a missing value", () => {
+    expect(upsertCellSchema.safeParse({ itemId, columnId }).success).toBe(
+      false,
+    );
+  });
+
+  it("clearCell requires itemId + columnId uuids", () => {
+    expect(clearCellSchema.safeParse({ itemId, columnId }).success).toBe(true);
+    expect(clearCellSchema.safeParse({ itemId: "x", columnId }).success).toBe(
+      false,
+    );
   });
 });
