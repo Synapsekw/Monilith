@@ -18,7 +18,22 @@ vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCellMock(...a),
   clearCell: vi.fn().mockResolvedValue({ ok: true, data: undefined }),
   renameItem: (...a: unknown[]) => renameItemMock(...a),
-  createItem: vi.fn().mockResolvedValue({ ok: true, data: { itemId: "x" } }),
+  createItem: vi.fn().mockResolvedValue({
+    ok: true,
+    data: {
+      item: {
+        id: "x",
+        board_id: "b1",
+        group_id: "g1",
+        org_id: "o1",
+        name: "New Item",
+        position: 1,
+        parent_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    },
+  }),
 }));
 
 vi.mock("next/navigation", () => ({

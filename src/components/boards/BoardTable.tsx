@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import {
   getCoreRowModel,
   useReactTable,
@@ -12,7 +11,6 @@ import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { Json } from "@/types/database.types";
 import type { ColumnOption } from "@/lib/validations/boards";
-import { createItem, renameItem } from "@/lib/boards/actions";
 import { CellRenderer } from "@/components/boards/cells";
 import { Input } from "@/components/ui/input";
 import {
@@ -36,6 +34,12 @@ type CellControls = {
   setCell: (vars: { itemId: string; columnId: string; value: unknown }) => void;
   clearCellValue: (vars: { itemId: string; columnId: string }) => void;
   members: EditorMember[];
+  boardId: string;
+  addItem: (
+    vars: { groupId: string; name: string },
+    callbacks?: { onSuccess?: () => void; onError?: (err: Error) => void },
+  ) => void;
+  renameItemInCache: (vars: { itemId: string; name: string }) => void;
 };
 
 const ROW_HEIGHT = 40;
@@ -63,7 +67,12 @@ export function BoardTable({
   const { board, groups, columns, items, cellValues } = cache;
 
   const [editing, setEditing] = useState<EditingCell | null>(null);
-  const { setCell, clearCellValue } = useBoardMutations(payload.board.id);
+  const {
+    setCell,
+    clearCellValue,
+    addItem,
+    renameItem: renameItemMutation,
+  } = useBoardMutations(payload.board.id);
   useBoardRealtime(payload.board.id);
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
@@ -101,6 +110,9 @@ export function BoardTable({
     setCell,
     clearCellValue,
     members,
+    boardId: payload.board.id,
+    addItem,
+    renameItemInCache: renameItemMutation,
   };
 
   return (
@@ -228,7 +240,7 @@ function GroupSection({
                         gridTemplateColumns: template,
                       }}
                     >
-                      <NameCell item={item} />
+                      <NameCell item={item} controls={controls} />
                       {columns.map((col) => (
                         <EditableCell
                           key={col.id}
@@ -244,7 +256,7 @@ function GroupSection({
               </div>
             </div>
           )}
-          <AddItemRow groupId={group.id} />
+          <AddItemRow groupId={group.id} controls={controls} />
         </>
       )}
     </section>
@@ -318,12 +330,11 @@ function EditableCell({
 
 /**
  * The built-in primary "Name" cell. Click/Enter opens an inline rename input
- * (Enter or blur commits via the `renameItem` action, Esc cancels). An empty
- * name is rejected — it reverts to the current name. The board route revalidates
- * on success, so the new name flows back through the server payload.
+ * (Enter or blur commits optimistically via the cache-patching rename mutation,
+ * Esc cancels). An empty name is rejected — it reverts to the current name.
+ * On error the mutation rolls back the cache automatically.
  */
-function NameCell({ item }: { item: Item }) {
-  const router = useRouter();
+function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(item.name);
   const [isPending, startTransition] = useTransition();
@@ -338,9 +349,7 @@ function NameCell({ item }: { item: Item }) {
     setEditing(false);
     if (!trimmed || trimmed === item.name) return;
     startTransition(async () => {
-      const res = await renameItem({ itemId: item.id, name: trimmed });
-      if (res.ok) router.refresh();
-      else setName(item.name);
+      controls.renameItemInCache({ itemId: item.id, name: trimmed });
     });
   }
 
@@ -388,8 +397,13 @@ function NameCell({ item }: { item: Item }) {
   );
 }
 
-function AddItemRow({ groupId }: { groupId: string }) {
-  const router = useRouter();
+function AddItemRow({
+  groupId,
+  controls,
+}: {
+  groupId: string;
+  controls: CellControls;
+}) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -399,14 +413,18 @@ function AddItemRow({ groupId }: { groupId: string }) {
     if (!trimmed) return;
     setError(null);
     startTransition(async () => {
-      const res = await createItem({ groupId, name: trimmed });
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setName("");
-      setError(null);
-      router.refresh();
+      controls.addItem(
+        { groupId, name: trimmed },
+        {
+          onSuccess: () => {
+            setName("");
+            setError(null);
+          },
+          onError: (err) => {
+            setError(err.message);
+          },
+        },
+      );
     });
   }
 

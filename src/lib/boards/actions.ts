@@ -14,7 +14,7 @@ import {
   upsertCellSchema,
 } from "@/lib/validations/board-actions";
 import { cellValueSchema } from "@/lib/validations/boards";
-import type { Json } from "@/types/database.types";
+import type { Json, Tables } from "@/types/database.types";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -124,11 +124,11 @@ export async function createGroup(input: {
   return { ok: true, data: { groupId: data.id } };
 }
 
-/** Create an item via RPC (server derives org_id/board_id and position). */
+/** Create an item via RPC (server derives org_id/board_id and position). Returns the full created item row. */
 export async function createItem(input: {
   groupId: string;
   name: string;
-}): Promise<ActionResult<{ itemId: string }>> {
+}): Promise<ActionResult<{ item: Tables<"items"> }>> {
   const parsed = createItemSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -141,7 +141,7 @@ export async function createItem(input: {
   if (error || !data) return fail(error?.message ?? "Could not create item.");
 
   revalidatePath(`/boards/${data.board_id}`);
-  return { ok: true, data: { itemId: data.id } };
+  return { ok: true, data: { item: data as Tables<"items"> } };
 }
 
 export async function renameItem(input: {

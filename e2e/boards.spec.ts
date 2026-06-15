@@ -123,10 +123,7 @@ test.describe("Boards happy path", () => {
     const itemName = unique("Task");
     await page.getByLabel("Add item").fill(itemName);
     await page.keyboard.press("Enter");
-    // The AddItemRow calls router.refresh() after insert, which re-sends the
-    // server payload with the new item. Reload to flush the TanStack Query cache
-    // and re-hydrate from the fresh server payload.
-    await page.reload();
+    // The cache is patched directly on success (no reload needed).
     await expect(page.getByText(itemName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Group 1")).toBeVisible();
 
@@ -163,9 +160,9 @@ test.describe("Boards happy path", () => {
       .getByLabel(new RegExp(`rename ${itemName}`, "i"))
       .fill(renamedItem);
     await page.keyboard.press("Enter");
-    // The rename goes through renameItem → router.refresh(). Wait for all
-    // in-flight network requests (upsertCell for Status/Date + renameItem) to
-    // settle before reloading, so the DB is fully updated.
+    // The rename patches the cache optimistically. Wait for all in-flight
+    // network requests (upsertCell for Status/Date + renameItem) to settle
+    // before reloading, so the DB is fully updated.
     await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
     // ── 9. Reload → Status + Date + renamed Name all persist ─────────────────
