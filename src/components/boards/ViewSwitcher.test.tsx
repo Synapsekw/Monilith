@@ -1,0 +1,115 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
+
+const push = vi.fn();
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
+
+const createBoardView = vi.fn();
+const deleteBoardView = vi.fn();
+const updateBoardView = vi.fn();
+vi.mock("@/lib/boards/view-actions", () => ({
+  createBoardView: (...a: unknown[]) => createBoardView(...a),
+  deleteBoardView: (...a: unknown[]) => deleteBoardView(...a),
+  updateBoardView: (...a: unknown[]) => updateBoardView(...a),
+}));
+
+const views = [
+  { id: "v1", kind: "table", name: "Main Table" },
+  { id: "v2", kind: "kanban", name: "Kanban" },
+] as never;
+
+beforeEach(() => {
+  push.mockReset();
+  refresh.mockReset();
+  createBoardView.mockReset();
+  deleteBoardView.mockReset();
+  updateBoardView.mockReset();
+});
+
+describe("ViewSwitcher", () => {
+  it("renders a tab per view and marks the selected one", () => {
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v2" />);
+    expect(screen.getByRole("tab", { name: /Main Table/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(screen.getByRole("tab", { name: /Kanban/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("links each tab to its ?view= URL", () => {
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    expect(screen.getByRole("tab", { name: /Main Table/ })).toHaveAttribute(
+      "href",
+      "/boards/b1?view=v1",
+    );
+    expect(screen.getByRole("tab", { name: /Kanban/ })).toHaveAttribute(
+      "href",
+      "/boards/b1?view=v2",
+    );
+  });
+
+  it("creates a Kanban view and navigates to it", async () => {
+    createBoardView.mockResolvedValue({ ok: true, data: { viewId: "v3" } });
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    await userEvent.click(screen.getByRole("button", { name: /add view/i }));
+    expect(createBoardView).toHaveBeenCalledWith({
+      boardId: "b1",
+      kind: "kanban",
+    });
+    expect(push).toHaveBeenCalledWith("/boards/b1?view=v3");
+  });
+
+  it("renames a view via the tab menu and refreshes", async () => {
+    updateBoardView.mockResolvedValue({ ok: true, data: undefined });
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /view options for main table/i }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: /rename/i }));
+    const input = screen.getByRole("textbox", { name: /view name/i });
+    await userEvent.clear(input);
+    await userEvent.type(input, "Renamed{Enter}");
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: "v1",
+      name: "Renamed",
+    });
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("deletes a view and navigates to the first remaining view", async () => {
+    deleteBoardView.mockResolvedValue({ ok: true, data: undefined });
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v2" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /view options for kanban/i }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+    expect(deleteBoardView).toHaveBeenCalledWith({ viewId: "v2" });
+    expect(push).toHaveBeenCalledWith("/boards/b1?view=v1");
+  });
+
+  it("hides delete when only one view remains", async () => {
+    render(
+      <ViewSwitcher
+        boardId="b1"
+        views={[views[0]] as never}
+        selectedViewId="v1"
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /view options for main table/i }),
+    );
+    // Rename is still available; Delete must be absent when there's one view.
+    expect(
+      screen.getByRole("menuitem", { name: /rename/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /delete/i }),
+    ).not.toBeInTheDocument();
+  });
+});
