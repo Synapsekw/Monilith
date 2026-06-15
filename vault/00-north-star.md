@@ -36,9 +36,9 @@ run tests + advisors + regenerate types before moving on.**
 - **1 — Auth & tenancy** — <span style="color:#22c55e">**[Done]**</span>
   Email/password auth, org creation + membership, protected routes, RLS baseline.
   _Done 2026-06-15 (commits `d9fc02c` → `31336e5`). RLS isolation proven by integration test; 32 unit tests + e2e green. See [[2026-06-15-phase1-auth-tenancy]]._
-- **2 — Boards core** — <span style="color:#eab308">**[In progress]**</span>
+- **2 — Boards core** — <span style="color:#22c55e">**[Done]**</span>
   Workspaces→boards→groups→items, Table view (Text/Status/People/Date/Numbers/Dropdown), inline editing, optimistic updates, realtime.
-  _Sliced 2a/2b. **2a done** 2026-06-15 (PR #9 `abb8e4e`): schema+RLS+RPCs, queries/actions, live sidebar + `/boards/[boardId]`, read-only virtualized Table + cell renderers; RLS integration (live 8/8) + e2e green. **2b next**: inline cell editing, optimistic, realtime. See [[2026-06-15-1053-phase2a-boards-core]]._
+  _Done 2026-06-15. **2a** (PR #9 `abb8e4e`): schema+RLS+RPCs, queries/actions, live sidebar + `/boards/[boardId]`, read-only virtualized Table. **2b** (PR #12 `3620c69`): inline editors for all 6 kinds, optimistic TanStack-Query board cache, Supabase realtime reconciliation, migration squash + default Status seed. 110 tests + live RLS + e2e green. See [[2026-06-15-1053-phase2a-boards-core]], [[2026-06-15-1259-phase2b-boards-interactive]]._
 - **3 — Views** — **[Not started]**
   Kanban + Calendar + Timeline/Gantt with dependencies; view switcher + saved config.
 - **4 — Collaboration** — **[Not started]**
@@ -53,13 +53,13 @@ run tests + advisors + regenerate types before moving on.**
 - **9 — Hardening** — **[Not started]**
   Performance (virtualization, indexes), advisors clean, tests, a11y audit, Vercel deploy.
 
-**Where we are:** Phases 0 and 1 done; Phase 2 in progress — **2a (data layer + read-only Table) merged to `main`**, 2b (interactive) next.
+**Where we are:** Phases 0, 1, and **2 (Boards core — 2a + 2b) done** on `main`. Phase 3 (Views) is next.
 
 ## 3. Now
 
-- **Phase:** 2 in progress — 2a done, 2b next
+- **Phase:** 2 done → starting 3 — Views
 - **Branch:** `main`
-- **Latest:** Phase 2a merged (PR #9, `abb8e4e`): boards EAV schema (`boards/groups/items/columns/cell_values`) with org-scoped RLS + parent-org `WITH CHECK` hardening, `create_board`/`create_item` RPCs, realtime publication; Zod validators, batched queries + create/rename/delete actions; live Boards sidebar + `/boards/[boardId]`; virtualized read-only Table + 6 cell renderers; RLS integration (live 8/8) + Playwright e2e (4/4) green. Also fixed a latent Phase-1 auth-redirect bug (dispatch must be inside `startTransition` — [[2026-06-15-gotcha-04-action-dispatch-needs-transition]]) and absorbed the `no-explicit-any` type-guard (#8). See [[2026-06-15-1053-phase2a-boards-core]]. **Next:** Phase 2b — inline cell editing (`upsertCell` + `cellValueSchema`), optimistic updates (TanStack Query), per-board realtime; first squash the 3 boards migrations.
+- **Latest:** Phase 2 complete. **2b merged** (PR #12, `3620c69`): inline cell editors for all 6 kinds + edit-mode switching, optimistic updates on a `["board", boardId]` TanStack Query cache with pure patch helpers, one Supabase realtime channel reconciling into the same cache (echo-deduped), `upsertCell`/`clearCell` actions (parent-org guarded), `listOrgMembers`, and the 3 boards migrations squashed into one canonical file with default Status options seeded. 110 tests + live RLS suite + e2e (4/4) green. Cache-coherence rule captured in [[2026-06-15-gotcha-05-board-cache-coherence]]. See [[2026-06-15-1259-phase2b-boards-interactive]]. **Next:** Phase 3 — Views (Kanban + Calendar + Timeline/Gantt, view switcher + saved config), reusing the board cache/realtime layer.
 - **🧑 Manual gates (Danijel):** Supabase project + keys done. MCP authed (read-only); migrations applied via `supabase db push` (CLI linked). For the official `get_advisors`, add `debugging` to `.mcp.json` features + re-auth (optional).
 
 ### Last session
