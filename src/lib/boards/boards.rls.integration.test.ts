@@ -111,6 +111,71 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: boards tenant isolation", () => {
     ]);
   });
 
+  it("create_board seeds three default Status options", async () => {
+    const { data: status } = await userA.anon
+      .from("columns")
+      .select("settings")
+      .eq("board_id", userA.boardId)
+      .eq("kind", "status")
+      .single();
+    const options = (
+      status as {
+        settings: { options: { id: string; label: string; color: string }[] };
+      }
+    ).settings.options;
+    expect(options).toHaveLength(3);
+    expect(options.map((o) => o.label)).toEqual([
+      "Working on it",
+      "Stuck",
+      "Done",
+    ]);
+    // Each option must have id, label, and color.
+    for (const o of options) {
+      expect(o.id).toBeTruthy();
+      expect(o.label).toBeTruthy();
+      expect(o.color).toBeTruthy();
+    }
+  });
+
+  it("a member can upsert a cell on their own board's item/column", async () => {
+    const { data: col } = await userA.anon
+      .from("columns")
+      .select("id")
+      .eq("board_id", userA.boardId)
+      .eq("kind", "status")
+      .single();
+    const columnId = (col as { id: string }).id;
+
+    const { error } = await userA.anon.from("cell_values").insert({
+      org_id: userA.orgId,
+      board_id: userA.boardId,
+      item_id: userA.itemId,
+      column_id: columnId,
+      value: { optionId: null },
+    });
+    expect(error).toBeNull();
+  });
+
+  it("org A cannot upsert a cell on org B's item/column", async () => {
+    const { data: colB } = await userB.anon
+      .from("columns")
+      .select("id")
+      .eq("board_id", userB.boardId)
+      .eq("kind", "status")
+      .single();
+    const columnIdB = (colB as { id: string }).id;
+
+    // Even with A's own org_id, the parent-org WITH CHECK rejects B's item/column.
+    const { error } = await userA.anon.from("cell_values").insert({
+      org_id: userA.orgId,
+      board_id: userB.boardId,
+      item_id: userB.itemId,
+      column_id: columnIdB,
+      value: { optionId: null },
+    });
+    expect(error).not.toBeNull();
+  });
+
   it("org A cannot read org B's boards/groups/items/columns", async () => {
     const { data: bData } = await userA.anon
       .from("boards")

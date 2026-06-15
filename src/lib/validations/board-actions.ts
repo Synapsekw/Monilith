@@ -10,3 +10,14 @@ export const deleteBoardSchema = z.object({ boardId: uuid });
 export const createGroupSchema = z.object({ boardId: uuid, name });
 export const createItemSchema = z.object({ groupId: uuid, name: itemName });
 export const renameItemSchema = z.object({ itemId: uuid, name: itemName });
+
+// Cell value is validated structurally here (must be a JSON object); the
+// kind-specific shape is enforced server-side with cellValueSchema(kind).
+const cellValue = z.record(z.string(), z.unknown());
+
+export const upsertCellSchema = z.object({
+  itemId: uuid,
+  columnId: uuid,
+  value: cellValue,
+});
+export const clearCellSchema = z.object({ itemId: uuid, columnId: uuid });

@@ -79,11 +79,13 @@ test.describe("Boards happy path", () => {
     await admin.auth.admin.deleteUser(createdUserId);
   });
 
-  test("create board → auto-seed → add item → reload persists", async ({
+  test("create board → add item → edit cells → reload persists", async ({
     page,
   }) => {
-    // This test drives sign-in + onboarding + board creation — allow 2 minutes.
-    test.setTimeout(120_000);
+    // Covers: login, onboarding, create board, add item, cell editing, reload
+    // persistence. All steps in one test so they share the same page session
+    // (avoids user/session conflicts from parallel tests on the same account).
+    test.setTimeout(180_000);
 
     // ── 1. Log in via the UI (confirmed user — no email verification needed) ─
     await page.goto("/login");
@@ -91,9 +93,7 @@ test.describe("Boards happy path", () => {
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    // The server action dispatched inside startTransition now processes the
-    // redirect() as a client navigation. A confirmed user with no org is
-    // redirected / → /onboarding.
+    // A confirmed user with no org is redirected → /onboarding.
     await page.waitForURL(/\/onboarding/, { timeout: 30_000 });
 
     // ── 2. Onboarding (new user has no org) ───────────────────────────────────
@@ -101,39 +101,74 @@ test.describe("Boards happy path", () => {
     await page.getByLabel(/workspace name/i).fill("Engineering");
     await page.getByRole("button", { name: /create organization/i }).click();
 
-    // After onboarding completes the server action redirects to /. The app
-    // now navigates on its own — no manual goto needed.
     await page.waitForURL(/localhost:3000\/$/, { timeout: 30_000 });
-
-    // ── 3. Home — no boards yet ───────────────────────────────────────────────
-    // / stays at / (not redirecting to onboarding because org now exists, and
-    // not to /boards/ because there are no boards yet).
     await expect(page.getByText(/no boards yet/i)).toBeVisible({
       timeout: 15_000,
     });
 
-    // ── 4. Create a board via the sidebar dialog ──────────────────────────────
+    // ── 3. Create a board via the sidebar dialog ──────────────────────────────
     const boardName = unique("Sprint");
     await page.getByRole("button", { name: "New board" }).click();
     await page.getByLabel(/board name/i).fill(boardName);
     await page.getByRole("button", { name: /create board/i }).click();
 
-    // ── 5. Routed to /boards/[id] — auto-seed assertions ─────────────────────
+    // ── 4. Routed to /boards/[id] — auto-seed assertions ─────────────────────
     await page.waitForURL(/\/boards\//);
     await expect(page.getByText("Group 1")).toBeVisible();
     await expect(page.getByText("Status")).toBeVisible();
     await expect(page.getByText("Owner")).toBeVisible();
     await expect(page.getByText("Date")).toBeVisible();
 
-    // ── 6. Add an item via the inline Add-item input (Enter to commit) ────────
+    // ── 5. Add an item ────────────────────────────────────────────────────────
     const itemName = unique("Task");
     await page.getByLabel("Add item").fill(itemName);
     await page.keyboard.press("Enter");
-    await expect(page.getByText(itemName)).toBeVisible();
-
-    // ── 7. Reload → item and Group 1 persist ─────────────────────────────────
-    await page.reload();
-    await expect(page.getByText(itemName)).toBeVisible();
+    // The cache is patched directly on success (no reload needed).
+    await expect(page.getByText(itemName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Group 1")).toBeVisible();
+
+    // ── 6. Edit the Status cell: open → pick "Working on it" ─────────────────
+    // Resting cell: div[role="button"][aria-label="${itemName} Status"].
+    await page.getByRole("button", { name: `${itemName} Status` }).click();
+    // StatusEditor renders option pills with role="option" and the label text.
+    // The PopoverSurface is absolute-positioned within the virtualizer scroll
+    // container. The sticky group-section header sits above it in the z-stack
+    // and can intercept mouse events at that screen position. Dispatch the click
+    // event directly on the element (bypasses the hit-test entirely).
+    await page
+      .getByRole("option", { name: /working on it/i })
+      .dispatchEvent("click");
+    // After commit the OptionPill shows the label (optimistic update).
+    await expect(page.getByText(/working on it/i)).toBeVisible();
+
+    // ── 7. Edit the Date cell: open → fill date → commit with Enter ───────────
+    // Resting cell: div[role="button"][aria-label="${itemName} Date"].
+    await page.getByRole("button", { name: `${itemName} Date` }).click();
+    // DateEditor: <input type="date" aria-label="Date">
+    await page.getByLabel(/^date$/i).fill("2026-06-15");
+    await page.keyboard.press("Enter");
+    // DateCell formats via toLocaleDateString({year:"numeric",month:"short",day:"numeric"}).
+    // In Chromium en-US: "Jun 15, 2026". Assert the year is visible.
+    await expect(page.getByText(/2026/)).toBeVisible();
+
+    // ── 8. Rename the item (built-in Name / primary column) ───────────────────
+    // NameCell resting: div[role="button"][aria-label="${itemName} name"]
+    const renamedItem = `${itemName}-renamed`;
+    await page.getByRole("button", { name: `${itemName} name` }).click();
+    // NameCell edit: <Input aria-label="Rename ${itemName}">
+    await page
+      .getByLabel(new RegExp(`rename ${itemName}`, "i"))
+      .fill(renamedItem);
+    await page.keyboard.press("Enter");
+    // The rename patches the cache optimistically. Wait for all in-flight
+    // network requests (upsertCell for Status/Date + renameItem) to settle
+    // before reloading, so the DB is fully updated.
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // ── 9. Reload → Status + Date + renamed Name all persist ─────────────────
+    await page.reload();
+    await expect(page.getByText(renamedItem)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/working on it/i)).toBeVisible();
+    await expect(page.getByText(/2026/)).toBeVisible();
   });
 });

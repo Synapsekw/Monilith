@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BoardTable } from "@/components/boards/BoardTable";
-import { getBoardPayload, listBoards } from "@/lib/boards/queries";
+import {
+  getBoardPayload,
+  listBoards,
+  listOrgMembers,
+} from "@/lib/boards/queries";
 import { requireUser, getUserOrgs } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,10 +21,11 @@ export default async function BoardPage({
   if (!payload) notFound();
 
   const supabase = await createClient();
-  const [orgs, boards, { data: workspaces }] = await Promise.all([
+  const [orgs, boards, { data: workspaces }, members] = await Promise.all([
     getUserOrgs(),
     listBoards(),
     supabase.from("workspaces").select("id, name"),
+    listOrgMembers(payload.board.org_id),
   ]);
 
   return (
@@ -37,7 +42,7 @@ export default async function BoardPage({
       boards={boards}
       activeBoardId={boardId}
     >
-      <BoardTable payload={payload} />
+      <BoardTable payload={payload} members={members} />
     </AppShell>
   );
 }

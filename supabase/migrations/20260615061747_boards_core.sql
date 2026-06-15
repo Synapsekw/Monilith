@@ -1,9 +1,11 @@
--- Phase 2a — Boards core
+-- Phase 2 — Boards core (canonical, squashed)
 -- boards → groups → items → columns → cell_values (EAV).
 -- org_id is DENORMALIZED on every table so each RLS policy is a single
 -- is_org_member(org_id) check — no joins, no recursion. Ordering uses
 -- position float8 (midpoint reorder). Reuses the Phase 1 SECURITY DEFINER
--- helpers (is_org_member / has_org_role) verbatim — they are NOT redefined here.
+-- helpers (is_org_member / has_org_role / set_updated_at) verbatim — they are
+-- NOT redefined here. Direct table writes are additionally constrained by
+-- parent-org-consistency *_in_org() helpers in WITH CHECK.
 
 -- ============================================================================
 -- Enums
@@ -87,8 +89,10 @@ create table public.cell_values (
   updated_at timestamptz not null default now(),
   primary key (item_id, column_id)
 );
-create index cell_values_item_id_idx on public.cell_values (item_id);
+-- The PK (item_id, column_id) covers item_id lookups; index column_id for
+-- cascade deletes + by-column queries. org_id index drives RLS.
 create index cell_values_org_id_idx on public.cell_values (org_id);
+create index cell_values_column_id_idx on public.cell_values (column_id);
 
 -- ============================================================================
 -- Triggers — keep updated_at fresh (reuses Phase 1 public.set_updated_at).
@@ -110,7 +114,29 @@ create trigger cell_values_set_updated_at
   for each row execute function public.set_updated_at();
 
 -- ============================================================================
+-- Parent-org-consistency helpers: does parent row X belong to org O?
+-- SECURITY DEFINER (bypass RLS, no recursion), stable, set search_path = ''.
+-- ============================================================================
+create or replace function public.board_in_org(p_board_id uuid, p_org_id uuid)
+returns boolean language sql security definer stable set search_path = '' as $$
+  select exists (select 1 from public.boards where id = p_board_id and org_id = p_org_id);
+$$;
+create or replace function public.group_in_org(p_group_id uuid, p_org_id uuid)
+returns boolean language sql security definer stable set search_path = '' as $$
+  select exists (select 1 from public.groups where id = p_group_id and org_id = p_org_id);
+$$;
+create or replace function public.item_in_org(p_item_id uuid, p_org_id uuid)
+returns boolean language sql security definer stable set search_path = '' as $$
+  select exists (select 1 from public.items where id = p_item_id and org_id = p_org_id);
+$$;
+create or replace function public.column_in_org(p_column_id uuid, p_org_id uuid)
+returns boolean language sql security definer stable set search_path = '' as $$
+  select exists (select 1 from public.columns where id = p_column_id and org_id = p_org_id);
+$$;
+
+-- ============================================================================
 -- RPC: create_board — atomic auto-seed (board + Group 1 + Status/Owner/Date).
+-- Status seeds with three default options (Working on it / Stuck / Done).
 -- Derives org_id from the workspace (membership-checked). Mirrors
 -- create_organization (SECURITY DEFINER, set search_path = '').
 -- ============================================================================
@@ -124,7 +150,6 @@ declare
   v_uid    uuid := (select auth.uid());
   v_org_id uuid;
   v_board  public.boards;
-  v_group  public.groups;
 begin
   if v_uid is null then
     raise exception 'not authenticated' using errcode = '42501';
@@ -147,14 +172,21 @@ begin
   returning * into v_board;
 
   insert into public.groups (org_id, board_id, name, color, position)
-  values (v_org_id, v_board.id, 'Group 1', '#0073ea', 0)
-  returning * into v_group;
+  values (v_org_id, v_board.id, 'Group 1', '#0073ea', 0);
 
   insert into public.columns (org_id, board_id, kind, name, settings, position)
   values
-    (v_org_id, v_board.id, 'status', 'Status', '{"options": []}'::jsonb, 0),
-    (v_org_id, v_board.id, 'people', 'Owner',  '{}'::jsonb,              1),
-    (v_org_id, v_board.id, 'date',   'Date',   '{}'::jsonb,              2);
+    (
+      v_org_id, v_board.id, 'status', 'Status',
+      jsonb_build_object('options', jsonb_build_array(
+        jsonb_build_object('id', gen_random_uuid()::text, 'label', 'Working on it', 'color', '#fdab3d'),
+        jsonb_build_object('id', gen_random_uuid()::text, 'label', 'Stuck',         'color', '#e2445c'),
+        jsonb_build_object('id', gen_random_uuid()::text, 'label', 'Done',          'color', '#00c875')
+      )),
+      0
+    ),
+    (v_org_id, v_board.id, 'people', 'Owner', '{}'::jsonb, 1),
+    (v_org_id, v_board.id, 'date',   'Date',  '{}'::jsonb, 2);
 
   return v_board;
 end;
@@ -233,11 +265,11 @@ create policy "groups: read if member"
   using (public.is_org_member(org_id));
 create policy "groups: insert if member"
   on public.groups for insert to authenticated
-  with check (public.is_org_member(org_id));
+  with check (public.is_org_member(org_id) and public.board_in_org(board_id, org_id));
 create policy "groups: update if member"
   on public.groups for update to authenticated
   using (public.is_org_member(org_id))
-  with check (public.is_org_member(org_id));
+  with check (public.is_org_member(org_id) and public.board_in_org(board_id, org_id));
 create policy "groups: delete if member"
   on public.groups for delete to authenticated
   using (public.is_org_member(org_id));
@@ -248,11 +280,19 @@ create policy "items: read if member"
   using (public.is_org_member(org_id));
 create policy "items: insert if member"
   on public.items for insert to authenticated
-  with check (public.is_org_member(org_id));
+  with check (
+    public.is_org_member(org_id)
+    and public.board_in_org(board_id, org_id)
+    and public.group_in_org(group_id, org_id)
+  );
 create policy "items: update if member"
   on public.items for update to authenticated
   using (public.is_org_member(org_id))
-  with check (public.is_org_member(org_id));
+  with check (
+    public.is_org_member(org_id)
+    and public.board_in_org(board_id, org_id)
+    and public.group_in_org(group_id, org_id)
+  );
 create policy "items: delete if member"
   on public.items for delete to authenticated
   using (public.is_org_member(org_id));
@@ -263,11 +303,11 @@ create policy "columns: read if member"
   using (public.is_org_member(org_id));
 create policy "columns: insert if member"
   on public.columns for insert to authenticated
-  with check (public.is_org_member(org_id));
+  with check (public.is_org_member(org_id) and public.board_in_org(board_id, org_id));
 create policy "columns: update if member"
   on public.columns for update to authenticated
   using (public.is_org_member(org_id))
-  with check (public.is_org_member(org_id));
+  with check (public.is_org_member(org_id) and public.board_in_org(board_id, org_id));
 create policy "columns: delete if member"
   on public.columns for delete to authenticated
   using (public.is_org_member(org_id));
@@ -278,17 +318,27 @@ create policy "cell_values: read if member"
   using (public.is_org_member(org_id));
 create policy "cell_values: insert if member"
   on public.cell_values for insert to authenticated
-  with check (public.is_org_member(org_id));
+  with check (
+    public.is_org_member(org_id)
+    and public.board_in_org(board_id, org_id)
+    and public.item_in_org(item_id, org_id)
+    and public.column_in_org(column_id, org_id)
+  );
 create policy "cell_values: update if member"
   on public.cell_values for update to authenticated
   using (public.is_org_member(org_id))
-  with check (public.is_org_member(org_id));
+  with check (
+    public.is_org_member(org_id)
+    and public.board_in_org(board_id, org_id)
+    and public.item_in_org(item_id, org_id)
+    and public.column_in_org(column_id, org_id)
+  );
 create policy "cell_values: delete if member"
   on public.cell_values for delete to authenticated
   using (public.is_org_member(org_id));
 
 -- ============================================================================
--- Grants — RLS is the boundary; grant DML + RPC execute to authenticated.
+-- Grants — RLS is the boundary; grant DML + function execute to authenticated.
 -- ============================================================================
 grant select, insert, update, delete
   on public.boards, public.groups, public.items,
@@ -297,10 +347,14 @@ grant select, insert, update, delete
 
 grant execute on function public.create_board(uuid, text) to authenticated;
 grant execute on function public.create_item(uuid, text) to authenticated;
+grant execute on function public.board_in_org(uuid, uuid)  to authenticated;
+grant execute on function public.group_in_org(uuid, uuid)  to authenticated;
+grant execute on function public.item_in_org(uuid, uuid)   to authenticated;
+grant execute on function public.column_in_org(uuid, uuid) to authenticated;
 
 -- ============================================================================
 -- Realtime — add the five tables to the supabase_realtime publication
--- (slice 2b subscribes; provisioning now keeps the migration history clean).
+-- (slice 2b subscribes per-board, filtered board_id=eq.<id>).
 -- ============================================================================
 alter publication supabase_realtime add table public.boards;
 alter publication supabase_realtime add table public.groups;
