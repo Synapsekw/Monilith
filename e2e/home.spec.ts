@@ -1,16 +1,25 @@
 import { expect, test } from "@playwright/test";
 
-test("home renders the welcome shell", async ({ page }) => {
+test("unauthenticated visit to / redirects to /login", async ({ page }) => {
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Welcome to Pulse" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByText("Welcome back")).toBeVisible();
 });
 
-test("command palette opens via keyboard shortcut", async ({ page }) => {
-  await page.goto("/");
-  await page.keyboard.press("ControlOrMeta+k");
+test("/login shows the sign-in form", async ({ page }) => {
+  await page.goto("/login");
+  await expect(page.getByText("Welcome back")).toBeVisible();
+  await expect(page.getByLabel(/email/i)).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+});
+
+test("/signup shows the create-account form", async ({ page }) => {
+  await page.goto("/signup");
+  await expect(page.getByText("Create your account")).toBeVisible();
+  await expect(page.getByLabel(/full name/i)).toBeVisible();
+  await expect(page.getByLabel(/email/i)).toBeVisible();
   await expect(
-    page.getByPlaceholder("Type a command or search…"),
+    page.getByRole("button", { name: /create account/i }),
   ).toBeVisible();
 });
