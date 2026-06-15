@@ -44,9 +44,19 @@ ADRs in `vault/decisions/`.
 
 These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the full workflow.
 
-1. **Branch lifecycle.** Work on a `feat/…` or `chore/…` branch off `main`; open a PR; merge once
-   CI is green. Branches are **deleted on merge** (GitHub auto-deletes them — never leave stale
-   branches around). `main` is protected: no direct pushes.
+1. **Two long-lived branches: `develop` (integration) and `main` (production).** All day-to-day
+   work — features, fixes, debugging, every session — happens on **`develop`**. Do **not** create
+   per-feature branches. Commit and push to `develop`; CI runs there. When `develop` is green and
+   you're happy with it, **promote to `main`** (open a `develop → main` PR, merge once CI passes) —
+   that, and only that, deploys production on Vercel. `develop` never deploys to production.
+
+   - **One working directory, one branch.** A git branch belongs to the checkout, not to a
+     terminal/agent — two sessions in the same folder share one branch and one set of files. So:
+     **never `git checkout` to a different branch or `git stash`-and-switch in a shared checkout**
+     (it clobbers other live sessions). All sessions simply stay on `develop`. If you genuinely
+     need isolation for parallel work, use a **git worktree** (a separate folder per branch), not a
+     branch switch in the shared checkout.
+   - `main` is protected: no direct pushes — it only advances via the promotion PR.
 
 2. **Use Superpowers skills for non-trivial work — but don't overthink trivial changes.** For
    anything beyond a simple/obvious edit (new features, components, behavior changes, debugging,
