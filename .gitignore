@@ -68,3 +68,6 @@ next-env.d.ts
 
 # Stale old vault location (vault now lives at repo-root vault/). Keep on disk, never commit.
 /Monolith/
+
+# Claude Code — share project settings + commands/hooks, but never machine-local settings.
+.claude/settings.local.json

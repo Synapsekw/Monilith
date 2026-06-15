@@ -58,7 +58,7 @@ run tests + advisors + regenerate types before moving on.**
 
 - **Phase:** 1 done → starting 2 — Boards core
 - **Branch:** `main`
-- **Latest:** Phase 1 complete (`d9fc02c` → `31336e5`): RLS-backed multi-tenant schema, `@supabase/ssr` clients + `src/proxy.ts` session refresh, email/password auth, onboarding (org + workspace) + authed shell, and tests (32 unit + RLS isolation integration + e2e). **Next:** Phase 2 — boards/groups/items hierarchy + EAV cell-values, Table view with core column types, inline editing + optimistic updates, Realtime.
+- **Latest:** Phase 1 complete (`d9fc02c` → `31336e5`): RLS-backed multi-tenant schema, `@supabase/ssr` clients + `src/proxy.ts` session refresh, email/password auth, onboarding (org + workspace) + authed shell, and tests (32 unit + RLS isolation integration + e2e). Since then, the dev-memory `vault/` is git-tracked (`7a1771d`, `6e9fc1f`) and `/wrapup` is installed — see [[2026-06-15-0742-dev-memory-vault-and-wrapup]]. **Next:** Phase 2 — boards/groups/items hierarchy + EAV cell-values, Table view with core column types, inline editing + optimistic updates, Realtime.
 - **🧑 Manual gates (Danijel):** Supabase project + keys done. MCP authed (read-only); migrations applied via `supabase db push` (CLI linked). For the official `get_advisors`, add `debugging` to `.mcp.json` features + re-auth (optional).
 
 ### Last session
