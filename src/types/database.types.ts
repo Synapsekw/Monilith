@@ -550,6 +550,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
       group_in_org: {
         Args: { p_group_id: string; p_org_id: string };
         Returns: boolean;

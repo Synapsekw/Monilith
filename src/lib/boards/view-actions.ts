@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   createBoardViewSchema,
   deleteBoardViewSchema,
+  kanbanConfigSchema,
   updateBoardViewSchema,
 } from "@/lib/validations/view-actions";
 import type { ActionResult } from "@/lib/boards/actions";
@@ -50,23 +51,39 @@ export async function updateBoardView(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const patch: TablesUpdate<"board_views"> = {};
-  if (parsed.data.name !== undefined) patch.name = parsed.data.name;
-  if (parsed.data.config !== undefined)
-    patch.config = parsed.data.config as Json;
-  if (Object.keys(patch).length === 0) return { ok: true, data: undefined };
+  if (parsed.data.name === undefined && parsed.data.config === undefined)
+    return { ok: true, data: undefined };
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  // Load the view's kind so config can be validated per-kind, and reuse
+  // board_id for the targeted revalidate.
+  const { data: view, error: viewErr } = await supabase
+    .from("board_views")
+    .select("kind, board_id")
+    .eq("id", parsed.data.viewId)
+    .maybeSingle();
+  if (viewErr) return fail(viewErr.message);
+  if (!view) return fail("View not found.");
+
+  const patch: TablesUpdate<"board_views"> = {};
+  if (parsed.data.name !== undefined) patch.name = parsed.data.name;
+  if (parsed.data.config !== undefined) {
+    // config is kanban-only. Reject a config patch on any other kind.
+    if (view.kind !== "kanban")
+      return fail("config is only valid for kanban views");
+    const cfg = kanbanConfigSchema.safeParse(parsed.data.config);
+    if (!cfg.success) return fail(cfg.error.issues[0]?.message ?? "Invalid");
+    patch.config = cfg.data as Json;
+  }
+
+  const { error } = await supabase
     .from("board_views")
     .update(patch)
-    .eq("id", parsed.data.viewId)
-    .select("board_id")
-    .maybeSingle();
+    .eq("id", parsed.data.viewId);
   if (error) return fail(error.message);
-  if (!data) return fail("View not found.");
 
-  revalidatePath(`/boards/${data.board_id}`);
+  revalidatePath(`/boards/${view.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -78,27 +95,22 @@ export async function deleteBoardView(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { data: view, error: viewErr } = await supabase
+
+  // Fetch board_id for a targeted revalidate (read-only).
+  const { data: view } = await supabase
     .from("board_views")
     .select("board_id")
     .eq("id", parsed.data.viewId)
     .maybeSingle();
-  if (viewErr || !view) return fail("View not found.");
 
-  // Refuse to delete the board's last view (RLS-scoped count).
-  const { count, error: countErr } = await supabase
-    .from("board_views")
-    .select("id", { count: "exact", head: true })
-    .eq("board_id", view.board_id);
-  if (countErr) return fail(countErr.message);
-  if ((count ?? 0) <= 1) return fail("A board must keep at least one view.");
-
-  const { error } = await supabase
-    .from("board_views")
-    .delete()
-    .eq("id", parsed.data.viewId);
+  // The "board keeps >=1 view" invariant is enforced transactionally in the
+  // delete_board_view RPC (locks the board's view rows so concurrent deletes
+  // serialize). It raises 'a board must keep at least one view' when violated.
+  const { error } = await supabase.rpc("delete_board_view", {
+    p_view_id: parsed.data.viewId,
+  });
   if (error) return fail(error.message);
 
-  revalidatePath(`/boards/${view.board_id}`);
+  if (view) revalidatePath(`/boards/${view.board_id}`);
   return { ok: true, data: undefined };
 }

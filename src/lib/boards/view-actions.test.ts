@@ -17,35 +17,15 @@ const BOARD_ID = "11111111-1111-4111-8111-111111111111";
 const VIEW_ID = "22222222-2222-4222-8222-222222222222";
 
 /**
- * Build a `from("board_views")` mock that distinguishes the two query chains the
- * delete guard issues by inspecting the args passed to `.select(...)`:
- *  - `.select("board_id").eq("id", …).maybeSingle()`        → the view read
- *  - `.select("id", { count, head }).eq("board_id", …)`     → the count probe
- *  - `.delete().eq("id", …)`                                → the delete itself
+ * Build a `from("board_views")` mock whose `.select(...).eq(...).maybeSingle()`
+ * chain resolves to `view`. Used by both updateBoardView (kind + board_id read)
+ * and deleteBoardView (board_id read for revalidate).
  */
-function boardViewsClient(opts: {
-  view: { data: unknown; error: unknown };
-  count: { count: number | null; error: unknown };
-  del?: { error: unknown };
-  onDelete?: () => void;
-}) {
+function boardViewsRead(view: { data: unknown; error: unknown }) {
   return (table: string) => {
     if (table !== "board_views") return {} as never;
     return {
-      select: (_cols: string, options?: { count?: string; head?: boolean }) => {
-        if (options?.count) {
-          // Count probe: terminal is `.eq(...)` (awaited directly).
-          return { eq: async () => opts.count };
-        }
-        // View read: `.eq(...).maybeSingle()`.
-        return { eq: () => ({ maybeSingle: async () => opts.view }) };
-      },
-      delete: () => ({
-        eq: async () => {
-          opts.onDelete?.();
-          return opts.del ?? { error: null };
-        },
-      }),
+      select: () => ({ eq: () => ({ maybeSingle: async () => view }) }),
     } as never;
   };
 }
@@ -105,26 +85,85 @@ describe("updateBoardView", () => {
     expect(from).not.toHaveBeenCalled();
   });
 
-  it("updates and returns ok when the view exists", async () => {
+  /**
+   * Mock the view read (`.select("kind, board_id").eq(...).maybeSingle()`) and
+   * the terminal `.update(...).eq(...)`.
+   */
+  function updateClient(opts: {
+    view: { data: unknown; error: unknown };
+    onUpdate?: (patch: unknown) => void;
+    updateErr?: unknown;
+  }) {
+    return (table: string) => {
+      if (table !== "board_views") return {} as never;
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => opts.view }) }),
+        update: (patch: unknown) => ({
+          eq: async () => {
+            opts.onUpdate?.(patch);
+            return { error: opts.updateErr ?? null };
+          },
+        }),
+      } as never;
+    };
+  }
+
+  it("updates the name and returns ok when the view exists", async () => {
+    const onUpdate = vi.fn();
     from.mockImplementation(
-      (table: string) =>
-        (table === "board_views"
-          ? {
-              update: () => ({
-                eq: () => ({
-                  select: () => ({
-                    maybeSingle: async () => ({
-                      data: { board_id: BOARD_ID },
-                      error: null,
-                    }),
-                  }),
-                }),
-              }),
-            }
-          : {}) as never,
+      updateClient({
+        view: { data: { kind: "table", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
     );
     const res = await updateBoardView({ viewId: VIEW_ID, name: "Renamed" });
     expect(res).toEqual({ ok: true, data: undefined });
+    expect(onUpdate).toHaveBeenCalledWith({ name: "Renamed" });
+  });
+
+  it("fails when the view does not exist", async () => {
+    from.mockImplementation(
+      updateClient({ view: { data: null, error: null } }),
+    );
+    const res = await updateBoardView({ viewId: VIEW_ID, name: "X" });
+    expect(res).toEqual({ ok: false, error: "View not found." });
+  });
+
+  it("applies a config patch on a kanban view", async () => {
+    const onUpdate = vi.fn();
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "kanban", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { group_column_id: null },
+    });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(onUpdate).toHaveBeenCalledWith({
+      config: { group_column_id: null },
+    });
+  });
+
+  it("rejects a config patch on a non-kanban view", async () => {
+    const onUpdate = vi.fn();
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "table", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { group_column_id: null },
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "config is only valid for kanban views",
+    });
+    expect(onUpdate).not.toHaveBeenCalled();
   });
 });
 
@@ -135,44 +174,32 @@ describe("deleteBoardView", () => {
     expect(from).not.toHaveBeenCalled();
   });
 
-  it("refuses to delete the board's last view", async () => {
-    const onDelete = vi.fn();
+  it("surfaces the friendly invariant error from the RPC", async () => {
     from.mockImplementation(
-      boardViewsClient({
-        view: { data: { board_id: BOARD_ID }, error: null },
-        count: { count: 1, error: null },
-        onDelete,
-      }),
+      boardViewsRead({ data: { board_id: BOARD_ID }, error: null }),
     );
+    rpc.mockResolvedValue({
+      error: { message: "a board must keep at least one view" },
+    });
     const res = await deleteBoardView({ viewId: VIEW_ID });
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/at least one view/i);
-    // Guard must short-circuit before issuing the delete.
-    expect(onDelete).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("delete_board_view", {
+      p_view_id: VIEW_ID,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "a board must keep at least one view",
+    });
   });
 
-  it("deletes when more than one view remains", async () => {
-    const onDelete = vi.fn();
+  it("calls the delete_board_view RPC and returns ok", async () => {
     from.mockImplementation(
-      boardViewsClient({
-        view: { data: { board_id: BOARD_ID }, error: null },
-        count: { count: 2, error: null },
-        onDelete,
-      }),
+      boardViewsRead({ data: { board_id: BOARD_ID }, error: null }),
     );
+    rpc.mockResolvedValue({ error: null });
     const res = await deleteBoardView({ viewId: VIEW_ID });
+    expect(rpc).toHaveBeenCalledWith("delete_board_view", {
+      p_view_id: VIEW_ID,
+    });
     expect(res).toEqual({ ok: true, data: undefined });
-    expect(onDelete).toHaveBeenCalledTimes(1);
-  });
-
-  it("fails when the view does not exist", async () => {
-    from.mockImplementation(
-      boardViewsClient({
-        view: { data: null, error: null },
-        count: { count: 0, error: null },
-      }),
-    );
-    const res = await deleteBoardView({ viewId: VIEW_ID });
-    expect(res).toEqual({ ok: false, error: "View not found." });
   });
 });
