@@ -3,6 +3,11 @@
 import { useState } from "react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -40,24 +45,43 @@ function useCommitKeys(commit: () => void, cancel: () => void) {
 
 /**
  * A floating popover surface for selector editors (Status/Dropdown/People).
- * Monochrome chrome: raised surface + hairline border + shadow; color is
- * earned only by the option pills inside.
+ * Built on Radix Popover so it portals to the body — escaping the board's
+ * `overflow-auto` scroll containers — and flips/shifts to stay on screen, so
+ * every option is reachable however near the viewport edge the cell sits
+ * (Monday-style). Monochrome chrome; color is earned only by the pills inside.
+ *
+ * `--radix-popover-content-available-height` caps the surface to the space the
+ * collision detector measured, and the inner list scrolls beyond that.
  */
 function PopoverSurface({
   label,
+  onCancel,
   children,
 }: {
   label: string;
+  /** Fired when the popover is dismissed (Escape or outside click). */
+  onCancel: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <div
-      role="listbox"
-      aria-label={label}
-      className="bg-popover text-popover-foreground absolute z-30 mt-1 flex max-h-64 min-w-[12rem] flex-col gap-0.5 overflow-auto rounded-md border p-1 shadow-md"
+    <Popover
+      open
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
     >
-      {children}
-    </div>
+      {/* Anchors the floating surface to the cell it edits. */}
+      <PopoverAnchor className="absolute inset-0" aria-hidden />
+      <PopoverContent
+        role="listbox"
+        aria-label={label}
+        align="start"
+        sideOffset={4}
+        className="flex max-h-[min(20rem,var(--radix-popover-content-available-height))] min-w-[12rem] flex-col gap-0.5 overflow-auto p-1"
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -119,7 +143,7 @@ export function StatusEditor({
   const options = settings.options ?? [];
   const selected = value?.optionId ?? null;
   return (
-    <PopoverSurface label="Select status">
+    <PopoverSurface label="Select status" onCancel={onCancel}>
       {options.map((o) => (
         <button
           key={o.id}
@@ -136,9 +160,6 @@ export function StatusEditor({
       <button
         type="button"
         onClick={() => (onClear ?? onCancel)()}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-        }}
         className="text-muted-foreground hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         Clear
@@ -166,7 +187,7 @@ export function DropdownEditor({
     onCommit({ optionIds: next });
   }
   return (
-    <PopoverSurface label="Select options">
+    <PopoverSurface label="Select options" onCancel={onCancel}>
       {options.map((o) => {
         const isSelected = selected.includes(o.id);
         return (
@@ -176,9 +197,6 @@ export function DropdownEditor({
             role="option"
             aria-selected={isSelected}
             onClick={() => toggle(o.id)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") onCancel();
-            }}
             className={cn(
               "focus-visible:ring-ring inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-white transition-opacity focus-visible:ring-2 focus-visible:outline-none",
               isSelected ? "opacity-100" : "opacity-60 hover:opacity-90",
@@ -211,7 +229,7 @@ export function PeopleEditor({
     onCommit({ userIds: next });
   }
   return (
-    <PopoverSurface label="Assign people">
+    <PopoverSurface label="Assign people" onCancel={onCancel}>
       {members.length === 0 ? (
         <span className="text-muted-foreground px-2 py-1 text-sm">
           No members
@@ -227,9 +245,6 @@ export function PeopleEditor({
               role="option"
               aria-selected={isSelected}
               onClick={() => toggle(m.userId)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") onCancel();
-              }}
               className={cn(
                 "hover:bg-accent focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
                 isSelected && "bg-accent",
