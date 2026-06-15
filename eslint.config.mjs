@@ -9,9 +9,12 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    "**/.next/**", // nested build output (e.g. git worktrees under .claude/)
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent/tooling scratch dirs — worktrees, caches; never source.
+    ".claude/**",
     // Stray Obsidian vault artifacts created inside the repo (not source).
     "Monolith/**",
     "vault/**",
