@@ -16,11 +16,12 @@ export default async function BoardPage({
   const payload = await getBoardPayload(boardId);
   if (!payload) notFound();
 
-  const [orgs, boards] = await Promise.all([getUserOrgs(), listBoards()]);
   const supabase = await createClient();
-  const { data: workspaces } = await supabase
-    .from("workspaces")
-    .select("id, name");
+  const [orgs, boards, { data: workspaces }] = await Promise.all([
+    getUserOrgs(),
+    listBoards(),
+    supabase.from("workspaces").select("id, name"),
+  ]);
 
   return (
     <AppShell
