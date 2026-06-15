@@ -14,6 +14,57 @@ export type Database = {
   };
   public: {
     Tables: {
+      board_views: {
+        Row: {
+          board_id: string;
+          config: Json;
+          created_at: string;
+          id: string;
+          kind: Database["public"]["Enums"]["view_kind"];
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          config?: Json;
+          created_at?: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["view_kind"];
+          name: string;
+          org_id: string;
+          position?: number;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          config?: Json;
+          created_at?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["view_kind"];
+          name?: string;
+          org_id?: string;
+          position?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_views_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_views_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       boards: {
         Row: {
           created_at: string;
@@ -437,6 +488,31 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_board_view: {
+        Args: {
+          p_board_id: string;
+          p_config?: Json;
+          p_kind: Database["public"]["Enums"]["view_kind"];
+          p_name: string;
+        };
+        Returns: {
+          board_id: string;
+          config: Json;
+          created_at: string;
+          id: string;
+          kind: Database["public"]["Enums"]["view_kind"];
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "board_views";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_item: {
         Args: { p_group_id: string; p_name: string };
         Returns: {
@@ -501,6 +577,7 @@ export type Database = {
         | "numbers"
         | "dropdown";
       org_role: "owner" | "admin" | "member" | "guest";
+      view_kind: "table" | "kanban";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -633,6 +710,7 @@ export const Constants = {
     Enums: {
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
       org_role: ["owner", "admin", "member", "guest"],
+      view_kind: ["table", "kanban"],
     },
   },
 } as const;
