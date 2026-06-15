@@ -60,7 +60,11 @@ next-env.d.ts
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/cache
-.obsidian/plugins/
+# Ignore plugin binaries, but TRACK the homepage choice so it survives a clone.
+.obsidian/plugins/*
+!.obsidian/plugins/homepage/
+.obsidian/plugins/homepage/*
+!.obsidian/plugins/homepage/data.json
 
 # Stale old vault location (vault now lives at repo-root vault/). Keep on disk, never commit.
 /Monolith/
