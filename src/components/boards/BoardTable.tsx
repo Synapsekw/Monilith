@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   getCoreRowModel,
   useReactTable,
@@ -9,7 +9,6 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
-import type { Json } from "@/types/database.types";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { BoardHeader } from "@/components/boards/BoardHeader";
@@ -18,7 +17,8 @@ import {
   CellEditor,
   type EditorMember,
 } from "@/components/boards/cells/editors";
-import type { BoardCache } from "@/lib/boards/cache";
+import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
+import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
@@ -79,25 +79,30 @@ export function BoardTable({
   useBoardRealtime(payload.board.id);
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
-  const cellMap = new Map<string, Json>(
-    cellValues.map((c) => [`${c.item_id}:${c.column_id}`, c.value]),
-  );
+  const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
 
   // Items grouped by group_id, kept in position order (query already sorts).
-  const itemsByGroup = new Map<string, Item[]>();
-  for (const g of groups) itemsByGroup.set(g.id, []);
-  for (const it of items) {
-    const bucket = itemsByGroup.get(it.group_id);
-    if (bucket) bucket.push(it);
-    else itemsByGroup.set(it.group_id, [it]);
-  }
+  const itemsByGroup = useMemo(() => {
+    const byGroup = new Map<string, Item[]>();
+    for (const g of groups) byGroup.set(g.id, []);
+    for (const it of items) {
+      const bucket = byGroup.get(it.group_id);
+      if (bucket) bucket.push(it);
+      else byGroup.set(it.group_id, [it]);
+    }
+    return byGroup;
+  }, [groups, items]);
 
   // TanStack Table models the column/header structure (read-only here).
-  const tableColumns: ColumnDef<Item>[] = columns.map((col) => ({
-    id: col.id,
-    header: col.name,
-    accessorFn: (row) => cellMap.get(`${row.id}:${col.id}`) ?? null,
-  }));
+  const tableColumns = useMemo<ColumnDef<Item>[]>(
+    () =>
+      columns.map((col) => ({
+        id: col.id,
+        header: col.name,
+        accessorFn: (row) => cellMap.get(cellKey(row.id, col.id)) ?? null,
+      })),
+    [columns, cellMap],
+  );
   const table = useReactTable({
     data: items,
     columns: tableColumns,
@@ -178,7 +183,7 @@ function GroupSection({
   group: Group;
   items: Item[];
   columns: Column[];
-  cellMap: Map<string, Json>;
+  cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
 }) {
@@ -252,7 +257,7 @@ function GroupSection({
                           key={col.id}
                           item={item}
                           column={col}
-                          value={cellMap.get(`${item.id}:${col.id}`) ?? null}
+                          value={cellMap.get(cellKey(item.id, col.id)) ?? null}
                           controls={controls}
                         />
                       ))}
@@ -284,7 +289,7 @@ function EditableCell({
 }: {
   item: Item;
   column: Column;
-  value: Json;
+  value: CacheCellValue["value"];
   controls: CellControls;
 }) {
   const { editing, setEditing, setCell, clearCellValue, members } = controls;
