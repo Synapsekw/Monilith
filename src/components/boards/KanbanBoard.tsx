@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -31,6 +31,7 @@ import {
   NO_STATUS_ID,
   type KanbanColumn,
 } from "@/lib/boards/kanban";
+import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import { CellRenderer } from "@/components/boards/cells";
@@ -115,6 +116,25 @@ export function KanbanBoard({
   // Status columns available to group by (drives the picker).
   const statusColumns = cache.columns.filter((c) => c.kind === "status");
 
+  // These memos must be unconditional (above the early return) to keep hook
+  // order stable. When groupColumn is null, kanbanColumns is an empty array
+  // and neither it nor cellMap is rendered.
+  const kanbanColumns = useMemo(
+    () => (groupColumn ? buildKanbanColumns(cache, groupColumn) : []),
+    [cache, groupColumn],
+  );
+
+  // People/Date columns surfaced read-only on each card.
+  const summaryColumns = useMemo(
+    () => cache.columns.filter((c) => c.kind === "people" || c.kind === "date"),
+    [cache.columns],
+  );
+
+  const cellMap = useMemo(
+    () => buildCellMap(cache.cellValues),
+    [cache.cellValues],
+  );
+
   if (!groupColumn) {
     return (
       <div className="flex h-full flex-col">
@@ -133,15 +153,8 @@ export function KanbanBoard({
     );
   }
 
-  const kanbanColumns = buildKanbanColumns(cache, groupColumn);
-
   // Cards land in the first group (No-status); the user drags to set status.
   const firstGroupId = cache.groups[0]?.id;
-
-  // People/Date columns surfaced read-only on each card.
-  const summaryColumns = cache.columns.filter(
-    (c) => c.kind === "people" || c.kind === "date",
-  );
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -204,7 +217,7 @@ export function KanbanBoard({
             <KanbanColumnView
               key={col.id}
               column={col}
-              cellValues={cache.cellValues}
+              cellMap={cellMap}
               summaryColumns={summaryColumns}
               firstGroupId={firstGroupId}
               groupColumnId={groupColumn.id}
@@ -220,7 +233,7 @@ export function KanbanBoard({
 
 function KanbanColumnView({
   column,
-  cellValues,
+  cellMap,
   summaryColumns,
   firstGroupId,
   groupColumnId,
@@ -228,7 +241,7 @@ function KanbanColumnView({
   setCell,
 }: {
   column: KanbanColumn;
-  cellValues: CacheCellValue[];
+  cellMap: Map<string, CacheCellValue["value"]>;
   summaryColumns: CacheColumn[];
   firstGroupId: string | undefined;
   groupColumnId: string;
@@ -276,7 +289,7 @@ function KanbanColumnView({
             key={card.id}
             item={card}
             fromColId={column.id}
-            cellValues={cellValues}
+            cellMap={cellMap}
             summaryColumns={summaryColumns}
           />
         ))}
@@ -297,12 +310,12 @@ function KanbanColumnView({
 function KanbanCard({
   item,
   fromColId,
-  cellValues,
+  cellMap,
   summaryColumns,
 }: {
   item: CacheItem;
   fromColId: string;
-  cellValues: CacheCellValue[];
+  cellMap: Map<string, CacheCellValue["value"]>;
   summaryColumns: CacheColumn[];
 }) {
   const dragData: CardDragData = { itemId: item.id, fromColId };
@@ -328,10 +341,8 @@ function KanbanCard({
       {summaryColumns.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {summaryColumns.map((col) => {
-            const cell = cellValues.find(
-              (c) => c.item_id === item.id && c.column_id === col.id,
-            );
-            const value = (cell?.value ?? null) as Json;
+            const value = (cellMap.get(cellKey(item.id, col.id)) ??
+              null) as Json;
             // No-op for empty cells: CellRenderer renders an empty span.
             return (
               <CellRenderer
