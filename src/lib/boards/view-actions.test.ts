@@ -197,6 +197,41 @@ describe("updateBoardView", () => {
     expect(res.ok).toBe(false);
     expect(onUpdate).not.toHaveBeenCalled();
   });
+
+  it("applies a date_column_id + zoom config patch on a timeline view", async () => {
+    const onUpdate = vi.fn();
+    const DATE_COL_ID = "44444444-4444-4444-8444-444444444444";
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "timeline", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { date_column_id: DATE_COL_ID, zoom: "month" },
+    });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(onUpdate).toHaveBeenCalledWith({
+      config: { date_column_id: DATE_COL_ID, zoom: "month" },
+    });
+  });
+
+  it("rejects an invalid zoom value on a timeline view", async () => {
+    const onUpdate = vi.fn();
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "timeline", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { zoom: "day" },
+    });
+    expect(res.ok).toBe(false);
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe("deleteBoardView", () => {

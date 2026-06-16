@@ -8,6 +8,7 @@ export type Item = Tables<"items">;
 export type Column = Tables<"columns">;
 export type CellValue = Tables<"cell_values">;
 export type BoardView = Tables<"board_views">;
+export type ItemDependency = Tables<"item_dependencies">;
 
 export type BoardPayload = {
   board: Board;
@@ -16,6 +17,7 @@ export type BoardPayload = {
   items: Item[];
   cellValues: CellValue[];
   views: BoardView[];
+  dependencies: ItemDependency[];
 };
 
 export type BoardListEntry = Pick<
@@ -51,7 +53,7 @@ export async function getBoardPayload(
     .maybeSingle();
   if (boardErr || !board) return null;
 
-  const [groupsRes, columnsRes, itemsRes, cellsRes, viewsRes] =
+  const [groupsRes, columnsRes, itemsRes, cellsRes, viewsRes, depsRes] =
     await Promise.all([
       supabase
         .from("groups")
@@ -74,6 +76,11 @@ export async function getBoardPayload(
         .select("*")
         .eq("board_id", boardId)
         .order("position", { ascending: true }),
+      supabase
+        .from("item_dependencies")
+        .select("*")
+        .eq("board_id", boardId)
+        .order("created_at", { ascending: true }),
     ]);
 
   return {
@@ -83,6 +90,7 @@ export async function getBoardPayload(
     items: itemsRes.data ?? [],
     cellValues: cellsRes.data ?? [],
     views: viewsRes.data ?? [],
+    dependencies: depsRes.data ?? [],
   };
 }
 

@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  addDependency,
   buildCellMap,
   cellKey,
   insertItem,
   removeCellValue,
+  removeDependency,
   replaceItem,
   upsertCellValue,
   type BoardCache,
+  type CacheDependency,
 } from "./cache";
 
 function baseCache(): BoardCache {
@@ -27,6 +30,7 @@ function baseCache(): BoardCache {
         value: { text: "old" },
       } as never,
     ],
+    dependencies: [],
   };
 }
 
@@ -132,5 +136,48 @@ describe("buildCellMap", () => {
 
   it("uses a colon-delimited key", () => {
     expect(cellKey("i1", "c2")).toBe("i1:c2");
+  });
+});
+
+const dep1: CacheDependency = {
+  id: "dep1",
+  org_id: "o1",
+  board_id: "b1",
+  predecessor_id: "i1",
+  successor_id: "i2",
+  type: "FS",
+  created_at: "2026-06-16T00:00:00Z",
+};
+
+describe("addDependency", () => {
+  it("appends a new dependency", () => {
+    const next = addDependency(baseCache(), dep1);
+    expect(next.dependencies).toHaveLength(1);
+    expect(next.dependencies[0].id).toBe("dep1");
+  });
+
+  it("is idempotent — does not duplicate an existing dep id", () => {
+    const withOne = addDependency(baseCache(), dep1);
+    const withTwo = addDependency(withOne, dep1);
+    expect(withTwo.dependencies).toHaveLength(1);
+  });
+
+  it("does not mutate the input cache (immutable)", () => {
+    const input = baseCache();
+    addDependency(input, dep1);
+    expect(input.dependencies).toHaveLength(0);
+  });
+});
+
+describe("removeDependency", () => {
+  it("removes a dependency by id", () => {
+    const withOne = addDependency(baseCache(), dep1);
+    const next = removeDependency(withOne, "dep1");
+    expect(next.dependencies).toHaveLength(0);
+  });
+
+  it("is a no-op when the dependency is absent", () => {
+    const next = removeDependency(baseCache(), "nonexistent");
+    expect(next.dependencies).toHaveLength(0);
   });
 });

@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 
 import { BoardTable } from "@/components/boards/BoardTable";
 import { CalendarBoard } from "@/components/boards/CalendarBoard";
+import { GanttBoard } from "@/components/boards/GanttBoard";
 import { KanbanBoard } from "@/components/boards/KanbanBoard";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardPayload } from "@/lib/boards/queries";
@@ -45,6 +46,16 @@ export function BoardViews({
   if (selected?.kind === "calendar") {
     return (
       <CalendarBoard
+        payload={payload}
+        members={members}
+        selectedViewId={activeViewId}
+      />
+    );
+  }
+
+  if (selected?.kind === "timeline") {
+    return (
+      <GanttBoard
         payload={payload}
         members={members}
         selectedViewId={activeViewId}

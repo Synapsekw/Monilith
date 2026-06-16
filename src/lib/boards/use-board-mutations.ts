@@ -8,8 +8,13 @@ import {
   upsertCell,
 } from "@/lib/boards/actions";
 import {
+  createDependency,
+  deleteDependency,
+} from "@/lib/boards/dependency-actions";
+import {
   insertItem,
   removeCellValue,
+  removeDependency,
   replaceItem,
   upsertCellValue,
   type BoardCache,
@@ -22,6 +27,8 @@ type SetCellVars = { itemId: string; columnId: string; value: unknown };
 type ClearCellVars = { itemId: string; columnId: string };
 type AddItemVars = { groupId: string; name: string };
 type RenameItemVars = { itemId: string; name: string };
+type AddDependencyVars = { predecessorId: string; successorId: string };
+type RemoveDependencyVars = { dependencyId: string };
 type Ctx = { previous?: BoardCache };
 
 export function useBoardMutations(boardId: string) {
@@ -132,6 +139,50 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
+  /**
+   * Add a dependency. Non-optimistic: we do NOT insert into the cache here.
+   * The Realtime INSERT echo will arrive in ms and `addDependency` is idempotent,
+   * so we let realtime own the cache update. This avoids needing to reconstruct
+   * the full CacheDependency row client-side (the server assigns id/org_id/etc).
+   */
+  const addDependencyMutation = useMutation<void, Error, AddDependencyVars>({
+    mutationFn: async (vars) => {
+      const res = await createDependency(vars);
+      if (!res.ok) throw new Error(res.error);
+    },
+  });
+
+  /**
+   * Remove a dependency. Optimistic: remove from cache immediately, roll back
+   * on error. Mirror of clearCellMutation.
+   */
+  const removeDependencyMutation = useMutation<
+    unknown,
+    Error,
+    RemoveDependencyVars,
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await deleteDependency(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        qc.setQueryData<BoardCache>(
+          key,
+          removeDependency(previous, vars.dependencyId),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
   return {
     setCell: (vars: SetCellVars) => setCellMutation.mutate(vars),
     clearCellValue: (vars: ClearCellVars) => clearCellMutation.mutate(vars),
@@ -147,5 +198,14 @@ export function useBoardMutations(boardId: string) {
         onError: (err) => callbacks?.onError?.(err),
       }),
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),
+    addDependency: (
+      vars: AddDependencyVars,
+      callbacks?: { onError?: (err: Error) => void },
+    ) =>
+      addDependencyMutation.mutate(vars, {
+        onError: (e) => callbacks?.onError?.(e),
+      }),
+    removeDependency: (vars: RemoveDependencyVars) =>
+      removeDependencyMutation.mutate(vars),
   };
 }

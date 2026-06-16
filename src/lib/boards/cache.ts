@@ -5,6 +5,7 @@ export type CacheGroup = Tables<"groups">;
 export type CacheItem = Tables<"items">;
 export type CacheColumn = Tables<"columns">;
 export type CacheCellValue = Tables<"cell_values">;
+export type CacheDependency = Tables<"item_dependencies">;
 
 /** Client-side mirror of the server BoardPayload shape (no server-only deps). */
 export type BoardCache = {
@@ -13,6 +14,7 @@ export type BoardCache = {
   columns: CacheColumn[];
   items: CacheItem[];
   cellValues: CacheCellValue[];
+  dependencies: CacheDependency[];
 };
 
 /** Stable lookup key for a cell value (item + column). */
@@ -70,4 +72,21 @@ export function replaceItem(cache: BoardCache, item: CacheItem): BoardCache {
 export function insertItem(cache: BoardCache, item: CacheItem): BoardCache {
   if (cache.items.some((i) => i.id === item.id)) return cache;
   return { ...cache, items: [...cache.items, item] };
+}
+
+/** Append a dependency; idempotent on id. Immutable. */
+export function addDependency(
+  cache: BoardCache,
+  dep: CacheDependency,
+): BoardCache {
+  if (cache.dependencies.some((d) => d.id === dep.id)) return cache;
+  return { ...cache, dependencies: [...cache.dependencies, dep] };
+}
+
+/** Remove a dependency by id. No-op if absent. Immutable. */
+export function removeDependency(cache: BoardCache, id: string): BoardCache {
+  return {
+    ...cache,
+    dependencies: cache.dependencies.filter((d) => d.id !== id),
+  };
 }

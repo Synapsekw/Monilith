@@ -156,6 +156,7 @@ function statusPayload(): BoardPayload {
     views: [
       { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
     ],
+    dependencies: [],
   };
 }
 

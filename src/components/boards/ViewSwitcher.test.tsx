@@ -84,6 +84,18 @@ describe("ViewSwitcher", () => {
     expect(push).toHaveBeenCalledWith("/boards/b1?view=v4");
   });
 
+  it("opens the add-view menu and creates a Timeline view", async () => {
+    createBoardView.mockResolvedValue({ ok: true, data: { viewId: "v5" } });
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    await userEvent.click(screen.getByRole("button", { name: /add view/i }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /timeline/i }));
+    expect(createBoardView).toHaveBeenCalledWith({
+      boardId: "b1",
+      kind: "timeline",
+    });
+    expect(push).toHaveBeenCalledWith("/boards/b1?view=v5");
+  });
+
   it("renames a view via the tab menu and refreshes", async () => {
     updateBoardView.mockResolvedValue({ ok: true, data: undefined });
     render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);

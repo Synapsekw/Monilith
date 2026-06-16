@@ -19,11 +19,12 @@ const DEFAULT_NAME: Record<string, string> = {
   table: "Main Table",
   kanban: "Kanban",
   calendar: "Calendar",
+  timeline: "Timeline",
 };
 
 export async function createBoardView(input: {
   boardId: string;
-  kind: "table" | "kanban" | "calendar";
+  kind: "table" | "kanban" | "calendar" | "timeline";
   name?: string;
 }): Promise<ActionResult<{ viewId: string }>> {
   const parsed = createBoardViewSchema.safeParse(input);

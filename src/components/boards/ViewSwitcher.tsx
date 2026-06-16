@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
+  GanttChartSquare,
   Kanban,
   LayoutGrid,
   MoreHorizontal,
@@ -34,6 +35,7 @@ const KIND_ICON: Record<string, typeof Table> = {
   table: Table,
   kanban: Kanban,
   calendar: CalendarDays,
+  timeline: GanttChartSquare,
 };
 
 function KindIcon({ kind }: { kind: string }) {
@@ -53,7 +55,7 @@ export function ViewSwitcher({
   const router = useRouter();
   const [adding, startAdding] = React.useTransition();
 
-  function handleAddView(kind: "kanban" | "calendar") {
+  function handleAddView(kind: "kanban" | "calendar" | "timeline") {
     startAdding(async () => {
       const res = await createBoardView({ boardId, kind });
       if (res.ok) router.push(`/boards/${boardId}?view=${res.data.viewId}`);
@@ -97,6 +99,10 @@ export function ViewSwitcher({
           <DropdownMenuItem onSelect={() => handleAddView("calendar")}>
             <CalendarDays aria-hidden className="size-3.5" />
             Calendar
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleAddView("timeline")}>
+            <GanttChartSquare aria-hidden className="size-3.5" />
+            Timeline
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
