@@ -19,11 +19,12 @@ related:
 ClickUp (nested hierarchy, docs, native time tracking) and Asana (goals/OKRs, workload, portfolios)
 into one coherent product. Not a clone: the _ultimate_ version. Monday's visual, color-coded board
 experience as the foundation; ClickUp's depth; Asana's polish. Design language: modern monochromatic
-(neutral grayscale) with a single configurable accent, full dark/light themes, Linear-grade restraint
-applied to a colorful category. Built on **Next.js 16 + React 19 + Tailwind v4 + Supabase**,
-multi-tenant (org-scoped RLS) from day one.
+(neutral grayscale) with a single configurable accent, **dark-first** (layered near-black surfaces +
+indigo accent; light supported but secondary), Linear-grade restraint applied to a colorful category.
+Built on **Next.js 16 + React 19 + Tailwind v4 + Supabase**, multi-tenant (org-scoped RLS) from day one.
 
 Master spec: [[2026-06-14-pulse-design]] (`docs/superpowers/specs/2026-06-14-pulse-design.md`).
+Visual reskin target + prototype reuse map: [[2026-06-16-decision-08-dark-first-monday-reskin]].
 
 ## 2. Product north star — phased build (0 → 9)
 
@@ -57,7 +58,15 @@ run tests + advisors + regenerate types before moving on.**
 - **9 — Hardening** — **[Not started]**
   Performance (virtualization, indexes), advisors clean, tests, a11y audit, Vercel deploy.
 
-**Where we are:** Phases 0, 1, 2 done on `main`. **Phase 3a (Views infra + Kanban) built — PR #15 open**, pending CI/merge. Phase 3b (Calendar + Timeline/Gantt + dependencies) is next.
+**RS — Design refresh (dark-first reskin)** — <span style="color:#eab308">**[Queued — next]**</span>
+Cross-cutting workstream (not a renumber of 0–9): align shipped surfaces (app shell, sidebar, board
+Table/Kanban, cells + editors) to the dark-first near-black look, translating the in-repo prototype's
+palette/density/animations into `@theme`/OKLch tokens; reuse the prototype's portable code (exporters,
+templates, filter/formula logic) and port its views (Calendar/Timeline/Dashboard, item panel, filter
+builder, label editor) onto Pulse's Supabase + Server-Actions + cache/realtime spine. Sequenced first
+among near-term work. Target + reuse map: [[2026-06-16-decision-08-dark-first-monday-reskin]].
+
+**Where we are:** Phases 0, 1, 2 done; Phase 3a (Views infra + Kanban) integrated on `develop`. **Dark-first reskin (RS) queued as the immediate near-term pass.** Phase 3b (Calendar + Timeline/Gantt + dependencies) follows, landing on the reskinned surface.
 
 ## 3. Now
 

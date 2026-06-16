@@ -110,10 +110,21 @@ Semantic CSS variables in `globals.css` for both themes: `--background`, `--surf
 user-configurable `--accent` (+`--accent-foreground`). Everything chromatic derives from
 neutrals + accent. Status/label colors are the one controlled multi-color palette; chrome
 stays strictly monochrome. next-themes, class-based dark mode, no flash, respect system pref +
-manual toggle. One clean sans (Geist/Inter), 4px grid, rounded-md, subtle shadows in light /
-hairline borders in dark. Framer Motion 150–250ms, respect prefers-reduced-motion. App-level
-primitives: BoardTable, StatusCell, PersonCell, ItemPanel, ViewSwitcher, CommandPalette.
-Accessibility: WCAG AA contrast, keyboard nav, focus rings, SR labels.
+manual toggle.
+
+**Dark-first.** The dark theme is the primary, reference look: layered near-black surfaces
+(`background` → `surface` → `surface-muted`/elevated), hairline borders, a single indigo accent
+(`~oklch(0.62 0.19 263)` ≈ `#6366f1`) for active/primary affordances, and elevation via soft
+panel/card shadows. Light mode is fully supported but secondary. The concrete reference palette,
+density, and animations are the in-repo prototype reskin — its hex tokens are translated into the
+`@theme`/OKLch variables here (do **not** hardcode hex). See the reuse map in
+[`2026-06-16-decision-08-dark-first-monday-reskin`](../../../vault/decisions/2026-06-16-decision-08-dark-first-monday-reskin.md).
+
+One clean sans (Geist/Inter), 4px grid, rounded-md, soft shadows for elevation /
+hairline borders for separation. Framer Motion 150–250ms, respect prefers-reduced-motion.
+App-level primitives: BoardTable, StatusCell, PersonCell, ItemPanel, ViewSwitcher, CommandPalette.
+Accessibility: WCAG AA contrast (verify accent-on-near-black and status pills), keyboard nav,
+focus rings, SR labels.
 
 ## 7. Phased build plan (commit + checkpoint after each)
 
@@ -133,6 +144,15 @@ Accessibility: WCAG AA contrast, keyboard nav, focus rings, SR labels.
 8. **Dashboards + templates + command palette polish.**
 9. **Hardening** — performance (virtualization, indexes), advisors clean, tests, a11y audit,
    Vercel deploy.
+
+**RS — Design refresh (dark-first reskin).** A cross-cutting workstream (not a renumber of 0–9),
+sequenced first among current near-term work: align the shipped surfaces (app shell, sidebar,
+board Table/Kanban, cells + editors) to the dark-first near-black look in §6, translating the
+in-repo prototype's palette/density/animations into the `@theme`/OKLch tokens. Reuse the
+prototype's portable, framework-agnostic code (exporters, templates, filter/sort/group + formula
+logic) and port its view rendering (Calendar/Timeline/Dashboard, item panel, filter builder, label
+editor) onto Pulse's Supabase + Server-Actions + cache/realtime spine — never its Zustand/
+localStorage architecture. Reuse map: [`2026-06-16-decision-08-dark-first-monday-reskin`](../../../vault/decisions/2026-06-16-decision-08-dark-first-monday-reskin.md).
 
 After each phase: run tests, run advisors, regenerate types, write a CHANGELOG entry, pause
 for review.

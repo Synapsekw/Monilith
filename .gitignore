@@ -74,3 +74,6 @@ next-env.d.ts
 
 # Volatile Obsidian graph view-state (not knowledge)
 .obsidian/graph.json
+
+# Brainstorming visual companion (local mockups)
+.superpowers/
