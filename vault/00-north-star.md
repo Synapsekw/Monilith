@@ -46,8 +46,14 @@ run tests + advisors + regenerate types before moving on.**
   Kanban. **3b** (2026-06-16): Calendar (`CalendarBoard` + `dates.ts`/`calendar.ts`) and Timeline/Gantt
   (`GanttBoard` + `gantt.ts`) with the `item_dependencies` model (cycle-safe RPC + RLS, 23 integration
   tests). Per-kind view config; ViewSwitcher add-view menu. See [[2026-06-16-2009-dark-reskin-calendar-timeline]]._
-- **4 — Collaboration** — **[Not started]**
+- **4 — Collaboration** — <span style="color:#fdab3d">**[Spec'd — 4a next]**</span>
   Item detail panel, updates/comments/@mentions, attachments, activity log, notifications inbox.
+  _Design done 2026-06-16: [[2026-06-16-phase-4-collaboration-design]]
+  (`docs/superpowers/specs/2026-06-16-phase-4-collaboration-design.md`). One spec, three sliced PRs:
+  **4a** panel (`?item=` drawer, 0 RSC refetch) + Updates + trigger-driven Activity Log →
+  **4b** @mentions + per-user Notifications inbox → **4c** attachments (Supabase Storage). Informed by a
+  study of the `idandavid1/My-Day` Monday clone — UX taxonomy reused, data architecture rejected; see
+  [[2026-06-16-decision-11-myday-clone-donor]]._
 - **5 — Automations + Rules** — **[Not started]**
   Trigger/condition/action builder; Postgres triggers + Edge Functions; common recipes.
 - **6 — ClickUp depth** — **[Not started]**
