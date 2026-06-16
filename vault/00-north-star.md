@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-15
+last-updated: 2026-06-16
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -40,12 +40,12 @@ run tests + advisors + regenerate types before moving on.**
 - **2 — Boards core** — <span style="color:#22c55e">**[Done]**</span>
   Workspaces→boards→groups→items, Table view (Text/Status/People/Date/Numbers/Dropdown), inline editing, optimistic updates, realtime.
   _Done 2026-06-15. **2a** (PR #9 `abb8e4e`): schema+RLS+RPCs, queries/actions, live sidebar + `/boards/[boardId]`, read-only virtualized Table. **2b** (PR #12 `3620c69`): inline editors for all 6 kinds, optimistic TanStack-Query board cache, Supabase realtime reconciliation, migration squash + default Status seed. 110 tests + live RLS + e2e green. See [[2026-06-15-1053-phase2a-boards-core]], [[2026-06-15-1259-phase2b-boards-interactive]]._
-- **3 — Views** — <span style="color:#eab308">**[In progress]**</span>
+- **3 — Views** — <span style="color:#22c55e">**[Done]**</span>
   Kanban + Calendar + Timeline/Gantt with dependencies; view switcher + saved config.
-  _**3a** (PR #15, open): `board_views` + RLS + create/delete RPCs, view switcher (`?view=` routing,
-  Table fallback), Kanban (group-by-Status, dnd drag-to-restatus, per-column add, grouping picker) on
-  the 2b cache/realtime layer. 155 tests + e2e green. See [[2026-06-15-1946-phase3a-views-kanban]].
-  **3b** next: Calendar + Timeline/Gantt + dependencies._
+  _**3a**: `board_views` + RLS + RPCs, view switcher (client-side `?view=` switching, no RSC refetch),
+  Kanban. **3b** (2026-06-16): Calendar (`CalendarBoard` + `dates.ts`/`calendar.ts`) and Timeline/Gantt
+  (`GanttBoard` + `gantt.ts`) with the `item_dependencies` model (cycle-safe RPC + RLS, 23 integration
+  tests). Per-kind view config; ViewSwitcher add-view menu. See [[2026-06-16-2009-dark-reskin-calendar-timeline]]._
 - **4 — Collaboration** — **[Not started]**
   Item detail panel, updates/comments/@mentions, attachments, activity log, notifications inbox.
 - **5 — Automations + Rules** — **[Not started]**
@@ -58,22 +58,20 @@ run tests + advisors + regenerate types before moving on.**
 - **9 — Hardening** — **[Not started]**
   Performance (virtualization, indexes), advisors clean, tests, a11y audit, Vercel deploy.
 
-**RS — Design refresh (dark-first reskin)** — <span style="color:#eab308">**[Queued — next]**</span>
-Cross-cutting workstream (not a renumber of 0–9): align shipped surfaces (app shell, sidebar, board
-Table/Kanban, cells + editors) to the dark-first near-black look, translating the in-repo prototype's
-palette/density/animations into `@theme`/OKLch tokens; reuse the prototype's portable code (exporters,
-templates, filter/formula logic) and port its views (Calendar/Timeline/Dashboard, item panel, filter
-builder, label editor) onto Pulse's Supabase + Server-Actions + cache/realtime spine. Sequenced first
-among near-term work. Target + reuse map: [[2026-06-16-decision-08-dark-first-monday-reskin]].
+**RS — Design refresh (dark-first reskin)** — <span style="color:#22c55e">**[Shipped — dark; light pending]**</span>
+Dark-first near-black palette translated into `.dark` `@theme`/OKLch tokens (+ elevation, scrollbar,
+animations), dark set as default, and "direction C" density applied to the board surfaces (table, pills,
+kanban, chrome). User-verified. **Light-mode pass still pending.** Target + reuse map:
+[[2026-06-16-decision-08-dark-first-monday-reskin]].
 
-**Where we are:** Phases 0, 1, 2 done; Phase 3a (Views infra + Kanban) integrated on `develop`. **Dark-first reskin (RS) queued as the immediate near-term pass.** Phase 3b (Calendar + Timeline/Gantt + dependencies) follows, landing on the reskinned surface.
+**Where we are:** Phases 0–3 done on `develop` (3b Calendar + Timeline/Gantt + dependencies shipped + user-verified). Dark reskin shipped. Remaining near-term: Dashboard view (needs `dashboard` view_kind migration + `recharts`), ItemPanel (needs updates/comments schema), light-mode reskin.
 
 ## 3. Now
 
-- **Phase:** 3 in progress — 3a built (PR open) → 3b next
-- **Branch:** `feat/phase-3a-views-kanban` (PR #15 → `main`)
-- **Latest:** **Phase 3a built — PR #15 open** (16 commits, off `main`). `board_views` table + org-scoped RLS + `create_board_view`/`delete_board_view` RPCs (last-view delete blocked transactionally via `FOR UPDATE`); `create_board` seeds a default Table view, existing boards backfilled. View switcher (`ViewSwitcher` + shared `BoardHeader`) with `?view=<id>` routing + Table fallback (`resolveSelectedView`). Kanban view (`KanbanBoard` + pure `buildKanbanColumns`/`onCardDropped`): group-by-Status, "No status" bucket, dnd-kit drag-to-restatus through the existing `setCell` mutation, per-column add that sets the column's status, grouping-column picker. Built subagent-driven (10 tasks + final review + 2 fixes). typecheck/lint/build + **155** tests + Kanban e2e green. New gotchas: [[2026-06-15-gotcha-06-commitlint-subject-case]], [[2026-06-15-gotcha-07-shared-worktree-subagents]]. See [[2026-06-15-1946-phase3a-views-kanban]]. **Next:** merge PR #15 (rebase if `fix/status-cell-popover` lands first), then Phase 3b — Calendar + Timeline/Gantt + dependencies, reusing the switcher + cache/realtime layer.
-- **🧑 Manual gates (Danijel):** Supabase project + keys done. MCP authed (read-only); migrations applied via `supabase db push` (CLI linked). For the official `get_advisors`, add `debugging` to `.mcp.json` features + re-auth (optional). **PR #15 awaits review/CI + merge.** Note: `fix/status-cell-popover` PR is also in flight; its uncommitted files sit untouched in this branch's working tree — rebase 3a onto `main` after it merges.
+- **Phase:** 3 done (incl. 3b) + dark reskin shipped → pick next from {light-mode, Dashboard, ItemPanel}
+- **Branch:** `develop` (pushed through `a74b71a`)
+- **Latest (2026-06-16):** Dark-first reskin + Calendar + Timeline/Gantt all shipped on `develop` and user-verified. Reskin: prototype near-black palette → `.dark` `@theme`/OKLch tokens, dark default, direction-C density on board surfaces. Calendar: `CalendarBoard` + `dates.ts`/`calendar.ts` (month grid, drag-reschedule, add-on-day). Timeline: `GanttBoard` + `gantt.ts` + `item_dependencies` (cycle-safe RPC + RLS, 23 integration tests); milestone markers fixed. Two enum migrations applied by Danijel (MCP read-only). Built brainstorm→spec→plan→subagent-driven. typecheck/lint/build + tests green. New gotcha: [[2026-06-16-gotcha-10-stage-untracked-subagent-files]] (committed a component without its untracked import → caught + fixed in `a74b71a`). See [[2026-06-16-2009-dark-reskin-calendar-timeline]]. **Next:** light-mode reskin (no prereq), or Dashboard (`dashboard` view_kind migration + `recharts`), or ItemPanel (updates/comments schema).
+- **🧑 Manual gates (Danijel):** Supabase keys done. **MCP is read-only** — schema migrations are applied by Danijel (`supabase db push --linked` or the SQL editor); agents prep the migration file + regenerate types after (note: `pnpm db:types` can leak a PostHog telemetry line into the file — filter `'"_tag"'` before prettier). Untracked `docs/superpowers/plans/2026-06-16-board-view-perf-amplifiers.md` left as-is for the owner.
 
 ### Last session
 
