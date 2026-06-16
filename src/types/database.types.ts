@@ -271,6 +271,65 @@ export type Database = {
           },
         ];
       };
+      item_dependencies: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          predecessor_id: string;
+          successor_id: string;
+          type: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          predecessor_id: string;
+          successor_id: string;
+          type?: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          predecessor_id?: string;
+          successor_id?: string;
+          type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_dependencies_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_predecessor_id_fkey";
+            columns: ["predecessor_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_successor_id_fkey";
+            columns: ["successor_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       items: {
         Row: {
           board_id: string;
@@ -533,6 +592,24 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_item_dependency: {
+        Args: { p_predecessor: string; p_successor: string };
+        Returns: {
+          board_id: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          predecessor_id: string;
+          successor_id: string;
+          type: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "item_dependencies";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_organization: {
         Args: { p_name: string; p_slug: string };
         Returns: {
@@ -578,7 +655,7 @@ export type Database = {
         | "numbers"
         | "dropdown";
       org_role: "owner" | "admin" | "member" | "guest";
-      view_kind: "table" | "kanban" | "calendar";
+      view_kind: "table" | "kanban" | "calendar" | "timeline";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -711,7 +788,7 @@ export const Constants = {
     Enums: {
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
       org_role: ["owner", "admin", "member", "guest"],
-      view_kind: ["table", "kanban", "calendar"],
+      view_kind: ["table", "kanban", "calendar", "timeline"],
     },
   },
 } as const;
