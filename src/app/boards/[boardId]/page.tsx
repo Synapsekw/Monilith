@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { BoardTable } from "@/components/boards/BoardTable";
-import { KanbanBoard } from "@/components/boards/KanbanBoard";
+import { BoardViews } from "@/components/boards/BoardViews";
 import {
   getBoardPayload,
   listBoards,
@@ -50,19 +49,11 @@ export default async function BoardPage({
       boards={boards}
       activeBoardId={boardId}
     >
-      {selected?.kind === "kanban" ? (
-        <KanbanBoard
-          payload={payload}
-          members={members}
-          selectedViewId={selectedViewId}
-        />
-      ) : (
-        <BoardTable
-          payload={payload}
-          members={members}
-          selectedViewId={selectedViewId}
-        />
-      )}
+      <BoardViews
+        payload={payload}
+        members={members}
+        initialViewId={selectedViewId}
+      />
     </AppShell>
   );
 }

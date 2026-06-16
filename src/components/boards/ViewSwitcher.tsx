@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Kanban, LayoutGrid, MoreHorizontal, Plus, Table } from "lucide-react";
 
@@ -102,6 +101,15 @@ function ViewTab({
   const [draft, setDraft] = React.useState(view.name);
   const [pending, startTransition] = React.useTransition();
 
+  // Switching views is in-page state over already-loaded data: update the URL
+  // with the History API (Next syncs it into useSearchParams) so BoardViews
+  // re-renders the chosen view WITHOUT re-running the server component. A
+  // <Link>/router.push here would refetch the whole board + shell every switch.
+  function selectView() {
+    if (selected) return;
+    window.history.pushState(null, "", `/boards/${boardId}?view=${view.id}`);
+  }
+
   function startRenaming() {
     setDraft(view.name);
     setRenaming(true);
@@ -161,10 +169,11 @@ function ViewTab({
         selected && "bg-primary text-primary-foreground",
       )}
     >
-      <Link
-        href={`/boards/${boardId}?view=${view.id}`}
+      <button
+        type="button"
         role="tab"
         aria-selected={selected}
+        onClick={selectView}
         className={cn(
           "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors",
           selected
@@ -175,7 +184,7 @@ function ViewTab({
       >
         <KindIcon kind={view.kind} />
         <span className="truncate">{view.name}</span>
-      </Link>
+      </button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

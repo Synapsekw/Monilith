@@ -42,16 +42,22 @@ describe("ViewSwitcher", () => {
     );
   });
 
-  it("links each tab to its ?view= URL", () => {
+  it("switches view via the History API (no RSC navigation)", async () => {
+    const pushState = vi.spyOn(window.history, "pushState");
     render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
-    expect(screen.getByRole("tab", { name: /Main Table/ })).toHaveAttribute(
-      "href",
-      "/boards/b1?view=v1",
-    );
-    expect(screen.getByRole("tab", { name: /Kanban/ })).toHaveAttribute(
-      "href",
-      "/boards/b1?view=v2",
-    );
+    await userEvent.click(screen.getByRole("tab", { name: /Kanban/ }));
+    expect(pushState).toHaveBeenCalledWith(null, "", "/boards/b1?view=v2");
+    // Switching must NOT trigger a router navigation (which would refetch).
+    expect(push).not.toHaveBeenCalled();
+    pushState.mockRestore();
+  });
+
+  it("does not push history when clicking the already-selected tab", async () => {
+    const pushState = vi.spyOn(window.history, "pushState");
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v2" />);
+    await userEvent.click(screen.getByRole("tab", { name: /Kanban/ }));
+    expect(pushState).not.toHaveBeenCalled();
+    pushState.mockRestore();
   });
 
   it("creates a Kanban view and navigates to it", async () => {
