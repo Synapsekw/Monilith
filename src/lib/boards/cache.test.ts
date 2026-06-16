@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCellMap,
+  cellKey,
   insertItem,
   removeCellValue,
   replaceItem,
@@ -111,5 +113,24 @@ describe("insertItem", () => {
       name: "One",
     } as never);
     expect(next.items).toHaveLength(2);
+  });
+});
+
+describe("buildCellMap", () => {
+  const cells = [
+    { item_id: "i1", column_id: "c1", value: { optionId: "o1" } },
+    { item_id: "i1", column_id: "c2", value: 5 },
+    { item_id: "i2", column_id: "c1", value: null },
+  ] as never[];
+
+  it("keys values by item:column for O(1) lookup", () => {
+    const map = buildCellMap(cells);
+    expect(map.get(cellKey("i1", "c2"))).toBe(5);
+    expect(map.get(cellKey("i1", "c1"))).toEqual({ optionId: "o1" });
+    expect(map.get(cellKey("i2", "c9"))).toBeUndefined();
+  });
+
+  it("uses a colon-delimited key", () => {
+    expect(cellKey("i1", "c2")).toBe("i1:c2");
   });
 });

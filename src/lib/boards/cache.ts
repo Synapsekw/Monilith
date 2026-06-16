@@ -15,6 +15,20 @@ export type BoardCache = {
   cellValues: CacheCellValue[];
 };
 
+/** Stable lookup key for a cell value (item + column). */
+export function cellKey(itemId: string, columnId: string): string {
+  return `${itemId}:${columnId}`;
+}
+
+/** Build an O(1) `${item_id}:${column_id}` → value map from cell values. */
+export function buildCellMap(
+  cellValues: readonly CacheCellValue[],
+): Map<string, CacheCellValue["value"]> {
+  const map = new Map<string, CacheCellValue["value"]>();
+  for (const c of cellValues) map.set(cellKey(c.item_id, c.column_id), c.value);
+  return map;
+}
+
 /** Insert or replace a cell value keyed by (item_id, column_id). Immutable. */
 export function upsertCellValue(
   cache: BoardCache,
