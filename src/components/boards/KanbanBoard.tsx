@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   DndContext,
   useDraggable,
@@ -35,6 +36,13 @@ import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import { CellRenderer } from "@/components/boards/cells";
 import type { EditorMember } from "@/components/boards/cells/editors";
+
+/**
+ * Estimated per-slot height for virtualizing Kanban card lists.
+ * Breakdown: p-2 vertical padding (16 px) + name line (~20 px) + optional
+ * summary row (~20 px) + gap-2 between cards (8 px) = 64 px.
+ */
+const CARD_HEIGHT = 64;
 
 type Settings = Record<string, unknown>;
 
@@ -254,6 +262,15 @@ function KanbanColumnView({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
+  // Virtualize the card list so large columns don't render every card to the DOM.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: column.cards.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => CARD_HEIGHT,
+    overscan: 8,
+  });
+
   return (
     <section
       ref={setNodeRef}
@@ -263,6 +280,7 @@ function KanbanColumnView({
         isOver && "ring-ring ring-2",
       )}
     >
+      {/* Column header — outside the scroll container */}
       <header className="flex items-center gap-2 px-3 py-2">
         {column.color ? (
           <span
@@ -281,18 +299,34 @@ function KanbanColumnView({
         </span>
       </header>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-        {column.cards.map((card) => (
-          <KanbanCard
-            key={card.id}
-            item={card}
-            fromColId={column.id}
-            cellMap={cellMap}
-            summaryColumns={summaryColumns}
-          />
-        ))}
+      {/* Virtualized card scroll area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-2">
+        {/* Sizer div — sets the total scrollable height for the virtualizer */}
+        <div
+          className="relative"
+          style={{ height: virtualizer.getTotalSize() }}
+        >
+          {virtualizer.getVirtualItems().map((vc) => {
+            const card = column.cards[vc.index];
+            return (
+              <div
+                key={card.id}
+                className="absolute top-0 left-0 w-full pb-2"
+                style={{ transform: `translateY(${vc.start}px)` }}
+              >
+                <KanbanCard
+                  item={card}
+                  fromColId={column.id}
+                  cellMap={cellMap}
+                  summaryColumns={summaryColumns}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
+      {/* Quick-add control — outside the scroll container */}
       <AddCardInput
         groupId={firstGroupId}
         columnLabel={column.label}

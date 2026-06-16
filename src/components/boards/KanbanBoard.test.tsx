@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KanbanBoard, onCardDropped } from "@/components/boards/KanbanBoard";
@@ -22,6 +22,32 @@ const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
 }));
+
+// @tanstack/react-virtual reads offsetHeight to measure the scroll container.
+// jsdom always returns 0, so the virtualizer would render no cards. Stub it to
+// return a realistic value so every card falls within the visible viewport.
+let originalOffsetHeight: PropertyDescriptor | undefined;
+beforeEach(() => {
+  originalOffsetHeight = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "offsetHeight",
+  );
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get() {
+      return 600;
+    },
+  });
+});
+afterEach(() => {
+  if (originalOffsetHeight) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "offsetHeight",
+      originalOffsetHeight,
+    );
+  }
+});
 
 function payloadFixture() {
   const status = {
