@@ -43,7 +43,7 @@ type CellControls = {
   renameItemInCache: (vars: { itemId: string; name: string }) => void;
 };
 
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 36; // direction C density
 const NAME_COL_WIDTH = 280;
 const VALUE_COL_WIDTH = 180;
 
@@ -134,11 +134,11 @@ export function BoardTable({
             className="bg-surface-muted text-muted-foreground sticky top-0 z-20 grid border-b text-xs font-medium"
             style={{ gridTemplateColumns: template }}
           >
-            <div className="bg-surface-muted sticky left-0 z-10 truncate px-4 py-2">
+            <div className="bg-surface-muted sticky left-0 z-10 truncate px-4 py-1.5">
               Name
             </div>
             {headerGroups[0]?.headers.map((header) => (
-              <div key={header.id} className="truncate border-l px-3 py-2">
+              <div key={header.id} className="truncate border-l px-3 py-1.5">
                 {String(header.column.columnDef.header ?? "")}
               </div>
             ))}
@@ -203,7 +203,7 @@ function GroupSection({
         type="button"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
-        className="bg-surface hover:bg-accent focus-visible:ring-ring sticky left-0 flex w-full items-center gap-2 border-b px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-surface hover:bg-accent focus-visible:ring-ring sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-left text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none"
         style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
       >
         {collapsed ? (
@@ -239,7 +239,7 @@ function GroupSection({
                   return (
                     <div
                       key={item.id}
-                      className="hover:bg-accent/50 absolute top-0 left-0 grid w-full border-b transition-colors"
+                      className="hover:bg-surface absolute top-0 left-0 grid w-full border-b transition-colors"
                       style={{
                         height: ROW_HEIGHT,
                         transform: `translateY(${vr.start}px)`,
@@ -327,7 +327,7 @@ function EditableCell({
           setEditing({ itemId: item.id, columnId: column.id });
         }
       }}
-      className="hover:bg-accent/60 focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      className="hover:bg-surface-muted focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
     >
       <CellRenderer kind={column.kind} value={value} settings={settings} />
     </div>
@@ -396,7 +396,7 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
           open();
         }
       }}
-      className="bg-surface hover:bg-accent/60 focus-visible:ring-ring sticky left-0 z-10 flex h-full cursor-pointer items-center truncate px-4 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      className="bg-surface hover:bg-surface-muted focus-visible:ring-ring sticky left-0 z-10 flex h-full cursor-pointer items-center truncate px-4 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
     >
       {item.name}
     </div>

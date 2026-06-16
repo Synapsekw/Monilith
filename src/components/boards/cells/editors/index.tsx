@@ -151,7 +151,7 @@ export function StatusEditor({
           role="option"
           aria-selected={selected === o.id}
           onClick={() => onCommit({ optionId: o.id })}
-          className="focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+          className="focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
           style={{ backgroundColor: o.color }}
         >
           {o.label}
@@ -198,7 +198,7 @@ export function DropdownEditor({
             aria-selected={isSelected}
             onClick={() => toggle(o.id)}
             className={cn(
-              "focus-visible:ring-ring inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-white transition-opacity focus-visible:ring-2 focus-visible:outline-none",
+              "focus-visible:ring-ring inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium text-white transition-opacity focus-visible:ring-2 focus-visible:outline-none",
               isSelected ? "opacity-100" : "opacity-60 hover:opacity-90",
             )}
             style={{ backgroundColor: o.color }}

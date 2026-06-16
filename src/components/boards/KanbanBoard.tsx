@@ -320,13 +320,13 @@ function KanbanCard({
       {...listeners}
       {...attributes}
       className={cn(
-        "bg-surface focus-visible:ring-ring cursor-grab rounded-md border p-2.5 text-left shadow-sm transition-shadow focus-visible:ring-2 focus-visible:outline-none",
+        "bg-surface focus-visible:ring-ring shadow-card cursor-grab rounded-md border p-2 text-left transition-shadow focus-visible:ring-2 focus-visible:outline-none",
         isDragging && "opacity-50",
       )}
     >
       <p className="truncate text-sm font-medium">{item.name}</p>
       {summaryColumns.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           {summaryColumns.map((col) => {
             const cell = cellValues.find(
               (c) => c.item_id === item.id && c.column_id === col.id,

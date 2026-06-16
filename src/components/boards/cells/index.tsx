@@ -20,7 +20,7 @@ function optionById(settings: Settings, id: string | null) {
 function OptionPill({ option }: { option: ColumnOption }) {
   return (
     <span
-      className="inline-flex max-w-full items-center truncate rounded-md px-2 py-0.5 text-xs font-medium text-white"
+      className="inline-flex max-w-full items-center truncate rounded-md px-2.5 py-0.5 text-xs font-medium text-white"
       style={{ backgroundColor: option.color }}
     >
       {option.label}
