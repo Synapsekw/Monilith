@@ -19,7 +19,6 @@ import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import type { Json } from "@/types/database.types";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
-import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import {
   buildCalendarMonth,
   onEventDropped,
@@ -98,7 +97,6 @@ export function CalendarBoard({
     payload as unknown as BoardCache,
   );
   const { setCell, addItem } = useBoardMutations(payload.board.id);
-  useBoardRealtime(payload.board.id);
 
   const router = useRouter();
 

@@ -22,7 +22,6 @@ import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardCache, CacheDependency } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
-import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import {
   buildGanttRows,
   detectViolations,
@@ -147,7 +146,6 @@ export function GanttBoard({
     payload as unknown as BoardCache,
   );
   const mutations = useBoardMutations(payload.board.id);
-  useBoardRealtime(payload.board.id);
 
   const router = useRouter();
   const [, startTransition] = useTransition();

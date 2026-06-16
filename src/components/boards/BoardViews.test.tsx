@@ -11,6 +11,11 @@ vi.mock("next/navigation", () => ({
     new URLSearchParams(viewParam ? `view=${viewParam}` : ""),
 }));
 
+vi.mock("@/lib/boards/use-board-cache", () => ({ useBoardCache: vi.fn() }));
+vi.mock("@/lib/boards/use-board-realtime", () => ({
+  useBoardRealtime: vi.fn(),
+}));
+
 // Stub the heavy view components so this test isolates the routing decision
 // (which view renders) from cache/realtime/render concerns.
 vi.mock("@/components/boards/KanbanBoard", () => ({

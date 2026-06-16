@@ -24,7 +24,6 @@ import type {
 import type { Json } from "@/types/database.types";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
-import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import { resolveKanbanGroupColumn } from "@/lib/boards/views";
 import {
   buildKanbanColumns,
@@ -96,7 +95,6 @@ export function KanbanBoard({
   const { setCell, clearCellValue, addItem } = useBoardMutations(
     payload.board.id,
   );
-  useBoardRealtime(payload.board.id);
 
   const router = useRouter();
 

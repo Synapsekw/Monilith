@@ -7,7 +7,10 @@ import { CalendarBoard } from "@/components/boards/CalendarBoard";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import { KanbanBoard } from "@/components/boards/KanbanBoard";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import type { BoardCache } from "@/lib/boards/cache";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import { resolveSelectedView } from "@/lib/boards/views";
 
 /**
@@ -18,6 +21,9 @@ import { resolveSelectedView } from "@/lib/boards/views";
  *
  * `initialViewId` is the server-resolved default and is only used as a fallback
  * when the URL carries no `?view=` param (e.g. a bare `/boards/[id]` link).
+ *
+ * The realtime channel is owned here so that switching view kinds does not
+ * tear down and re-subscribe the `board:<id>` channel.
  */
 export function BoardViews({
   payload,
@@ -28,6 +34,8 @@ export function BoardViews({
   members: EditorMember[];
   initialViewId: string;
 }) {
+  useBoardCache(payload.board.id, payload as unknown as BoardCache);
+  useBoardRealtime(payload.board.id);
   const searchParams = useSearchParams();
   const requested = searchParams.get("view") ?? initialViewId;
   const selected = resolveSelectedView(payload.views, requested || undefined);

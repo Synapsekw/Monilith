@@ -21,7 +21,6 @@ import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
-import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -76,7 +75,6 @@ export function BoardTable({
     addItem,
     renameItem: renameItemMutation,
   } = useBoardMutations(payload.board.id);
-  useBoardRealtime(payload.board.id);
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
