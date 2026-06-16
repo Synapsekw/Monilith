@@ -51,6 +51,7 @@ const DAY_W = 28; // px per day column
 const LABEL_W = 200; // px for the left name rail
 const ROW_H = 40; // px per row
 const BAR_H = 24; // px bar height
+const MILESTONE = 13; // px milestone diamond (pre-rotation); centered in its day column
 
 // Week → ~28 days, Month → ~90 days
 const ZOOM_DAY_COUNT: Record<"week" | "month", number> = {
@@ -680,10 +681,12 @@ function GanttRowItem({
           <div
             ref={setNodeRef}
             style={{
-              left: barLeft,
-              top: ROW_H / 2 - BAR_H / 2,
-              width: BAR_H,
-              height: BAR_H,
+              // Center the diamond within its day column so the rotated tips of
+              // the earliest marker (barLeft = 0) don't get clipped at the edge.
+              left: barLeft + DAY_W / 2 - MILESTONE / 2,
+              top: ROW_H / 2 - MILESTONE / 2,
+              width: MILESTONE,
+              height: MILESTONE,
               ...barStyle,
             }}
             {...listeners}
