@@ -26,16 +26,28 @@ pnpm dev            # start the app
 | `pnpm e2e`       | Playwright end-to-end tests   |
 | `pnpm format`    | Prettier write                |
 
-## Branching & PR workflow
+## Branching & promotion workflow
 
-`main` is protected — **no direct pushes**. All changes go through a PR:
+Two long-lived branches, **no per-feature branches**:
 
-1. Branch from `main`: `git switch -c feat/<short-slug>`.
-2. Commit using **Conventional Commits** (enforced by a `commit-msg` hook).
-3. Open a PR; fill in the template. The required `verify` check (typecheck · lint · test · build)
-   must be green.
-4. **Squash-merge** once checks pass (linear history is required; merge commits are disabled).
-5. The branch is **deleted automatically on merge** — don't leave stale branches around.
+- **`develop`** — the integration branch. All day-to-day work (features, fixes, debugging, every
+  session) is committed and pushed here. CI (typecheck · lint · test · build) runs on every push.
+  `develop` never deploys to production.
+- **`main`** — production. Protected, **no direct pushes**. Only Vercel's production branch; every
+  merge to `main` deploys live.
+
+Day-to-day:
+
+1. Stay on `develop` (`git switch develop`). Don't create `feat/…` or `fix/…` branches.
+2. Commit using **Conventional Commits** (enforced by a `commit-msg` hook) and push to `develop`.
+3. When `develop` is green and you're happy with it, **promote**: open a `develop → main` PR and
+   merge once CI passes. That, and only that, ships production.
+
+> **One checkout = one branch.** A branch belongs to the working directory, not to a
+> terminal/agent — two sessions in the same folder share one branch and one set of files. Never
+> `git checkout` to another branch (or `git stash`-and-switch) in a shared checkout; it clobbers
+> other live sessions. For genuinely parallel, isolated work use a **git worktree** (a separate
+> folder per branch), not a branch switch.
 
 ## Commit messages (Conventional Commits)
 
