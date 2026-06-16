@@ -76,6 +76,34 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Elevation — ported from the prototype (shadow-panel for popovers/modals, shadow-card for cards) */
+  --shadow-panel: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  /* Signature motion (150–250ms, ease-out) — usable as animate-fadein / animate-slidein */
+  --animate-fadein: fadein 0.15s ease-out;
+  --animate-slidein: slidein 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slidein {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 :root {
@@ -136,30 +164,40 @@
 }
 
 .dark {
-  --brand: oklch(0.62 0.19 263);
+  /*
+   * Dark-first reference palette — near-black monochromatic surfaces with a faint cool-violet
+   * cast, ported from the in-repo Monday-style prototype (hex → OKLch). See
+   * vault/decisions/2026-06-16-decision-08-dark-first-monday-reskin.md for the source mapping.
+   *   base #0d0d0f · surface #16161a · elevated #1f1f24 · hover #26262c
+   *   border #2a2a30 · border-light #34343c · accent #6366f1
+   *   txt #e7e7ea · txt-dim #a1a1aa
+   */
+  --brand: oklch(0.585 0.204 277); /* #6366f1 indigo accent */
   --brand-foreground: oklch(0.985 0 0);
 
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --surface: oklch(0.205 0 0);
-  --surface-muted: oklch(0.269 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --background: oklch(0.16 0.004 289); /* #0d0d0f near-black base */
+  --foreground: oklch(0.925 0.003 286); /* #e7e7ea */
+  --surface: oklch(0.205 0.005 286); /* #16161a primary panel */
+  --surface-muted: oklch(0.245 0.006 286); /* #1f1f24 elevated */
+  --card: oklch(0.205 0.005 286);
+  --card-foreground: oklch(0.925 0.003 286);
+  --popover: oklch(
+    0.245 0.006 286
+  ); /* prototype popovers sit on elevated surface */
+  --popover-foreground: oklch(0.925 0.003 286);
 
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
 
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.275 0.007 286); /* #26262c */
+  --secondary-foreground: oklch(0.925 0.003 286);
+  --muted: oklch(0.245 0.006 286);
+  --muted-foreground: oklch(0.7 0.008 286); /* #a1a1aa */
+  --accent: oklch(0.275 0.007 286); /* #26262c subtle monochrome hover */
+  --accent-foreground: oklch(0.925 0.003 286);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(0.3 0.008 286); /* #2a2a30 solid hairline */
+  --input: oklch(0.34 0.009 286); /* #34343c */
   --ring: var(--brand);
 
   --status-gray: oklch(0.7 0 0);
@@ -177,13 +215,13 @@
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
 
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.205 0.005 286); /* #16161a, raised from the base canvas */
+  --sidebar-foreground: oklch(0.925 0.003 286);
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--brand-foreground);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-accent: oklch(0.275 0.007 286);
+  --sidebar-accent-foreground: oklch(0.925 0.003 286);
+  --sidebar-border: oklch(0.3 0.008 286);
   --sidebar-ring: var(--brand);
 }
 
@@ -196,6 +234,25 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Subtle themed scrollbar (ported from the prototype) — track blends into the canvas. */
+  .dark * {
+    scrollbar-color: var(--border) transparent;
+  }
+  .dark ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border: 2px solid var(--background);
+    border-radius: 6px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: var(--input);
   }
   /* Respect reduced-motion globally */
   @media (prefers-reduced-motion: reduce) {
