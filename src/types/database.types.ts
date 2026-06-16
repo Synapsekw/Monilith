@@ -578,7 +578,7 @@ export type Database = {
         | "numbers"
         | "dropdown";
       org_role: "owner" | "admin" | "member" | "guest";
-      view_kind: "table" | "kanban";
+      view_kind: "table" | "kanban" | "calendar";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -711,7 +711,7 @@ export const Constants = {
     Enums: {
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
       org_role: ["owner", "admin", "member", "guest"],
-      view_kind: ["table", "kanban"],
+      view_kind: ["table", "kanban", "calendar"],
     },
   },
 } as const;
