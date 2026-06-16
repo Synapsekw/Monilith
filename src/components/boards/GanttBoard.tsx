@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -166,6 +166,111 @@ export function GanttBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
+  const dayCount = ZOOM_DAY_COUNT[zoom];
+
+  // Earliest scheduled item start date for range anchoring.
+  // Guard: returns "" when no dateColumn (we'll be in the early-return path).
+  const rangeStartISO = useMemo(() => {
+    if (!dateColumn) return "";
+    const sorted = cache.cellValues
+      .filter(
+        (cv) =>
+          cv.column_id === dateColumn.id &&
+          typeof (cv.value as Record<string, unknown>)?.date === "string",
+      )
+      .map((cv) => (cv.value as { date: string }).date)
+      .sort();
+    if (sorted.length > 0) return sorted[0];
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
+  }, [dateColumn, cache.cellValues]);
+
+  // Build Gantt row layout (positions all items on the timeline).
+  const ganttResult = useMemo(() => {
+    if (!dateColumn || !rangeStartISO) return null;
+    return buildGanttRows(
+      cache.items,
+      cache.cellValues,
+      dateColumn.id,
+      rangeStartISO,
+      dayCount,
+      zoom,
+    );
+  }, [
+    dateColumn,
+    rangeStartISO,
+    cache.items,
+    cache.cellValues,
+    dayCount,
+    zoom,
+  ]);
+
+  const rows = ganttResult?.rows ?? [];
+
+  // Detect dependency violations (finish-to-start constraint check).
+  const violations = useMemo(
+    () => detectViolations(rows, cache.dependencies),
+    [rows, cache.dependencies],
+  );
+
+  const scheduledRows = useMemo(() => rows.filter((r) => r.scheduled), [rows]);
+  const unscheduledRows = useMemo(
+    () => rows.filter((r) => !r.scheduled),
+    [rows],
+  );
+
+  // Month tick labels for the timeline header.
+  const monthTicks = useMemo(
+    () => (rangeStartISO ? buildMonthTicks(rangeStartISO, dayCount) : []),
+    [rangeStartISO, dayCount],
+  );
+
+  const totalW = dayCount * DAY_W;
+
+  // Row index lookup for SVG arrow geometry.
+  const rowIndexMap = useMemo(
+    () => new Map(scheduledRows.map((r, i) => [r.itemId, i])),
+    [scheduledRows],
+  );
+
+  // Build dependency arrow geometry data.
+  const arrowLines = useMemo(
+    () =>
+      cache.dependencies
+        .map((dep) => {
+          const predIdx = rowIndexMap.get(dep.predecessor_id);
+          const succIdx = rowIndexMap.get(dep.successor_id);
+          const predRow = scheduledRows[predIdx ?? -1];
+          const succRow = scheduledRows[succIdx ?? -1];
+          if (
+            predIdx === undefined ||
+            succIdx === undefined ||
+            (!predRow?.startCol !== undefined &&
+              predRow.spanCols !== undefined &&
+              succRow.startCol !== undefined)
+          ) {
+            return null;
+          }
+          if (predRow?.startCol === undefined || predRow.spanCols === undefined)
+            return null;
+          if (succRow?.startCol === undefined) return null;
+          return { dep, predIdx, succIdx, predRow, succRow };
+        })
+        .filter(Boolean) as {
+        dep: CacheDependency;
+        predIdx: number;
+        succIdx: number;
+        predRow: GanttRow;
+        succRow: GanttRow;
+      }[],
+    [cache.dependencies, rowIndexMap, scheduledRows],
+  );
+
+  const today = todayISO();
+  const todayOffset = rangeStartISO
+    ? Math.round((parseISO(today) - parseISO(rangeStartISO)) / 86_400_000)
+    : -1;
+
   // Empty state: no date column
   if (!dateColumn) {
     return (
@@ -192,49 +297,6 @@ export function GanttBoard({
   }
 
   const resolvedDateColumn = dateColumn;
-  const dayCount = ZOOM_DAY_COUNT[zoom];
-
-  // Compute range start: earliest scheduled item start, else start of current month
-  const scheduledDates = cache.cellValues
-    .filter(
-      (cv) =>
-        cv.column_id === resolvedDateColumn.id &&
-        typeof (cv.value as Record<string, unknown>)?.date === "string",
-    )
-    .map((cv) => (cv.value as { date: string }).date)
-    .sort();
-
-  const rangeStartISO =
-    scheduledDates.length > 0
-      ? scheduledDates[0]
-      : (() => {
-          const t = new Date();
-          return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
-        })();
-
-  const { rows } = buildGanttRows(
-    cache.items,
-    cache.cellValues,
-    resolvedDateColumn.id,
-    rangeStartISO,
-    dayCount,
-    zoom,
-  );
-
-  const violations = detectViolations(rows, cache.dependencies);
-
-  const scheduledRows = rows.filter((r) => r.scheduled);
-  const unscheduledRows = rows.filter((r) => !r.scheduled);
-
-  const today = todayISO();
-  const todayOffset = Math.round(
-    (parseISO(today) - parseISO(rangeStartISO)) / 86_400_000,
-  );
-  const monthTicks = buildMonthTicks(rangeStartISO, dayCount);
-  const totalW = dayCount * DAY_W;
-
-  // Row index lookup for SVG arrow geometry
-  const rowIndexMap = new Map(scheduledRows.map((r, i) => [r.itemId, i]));
 
   function handleZoomChange(newZoom: "week" | "month") {
     startTransition(async () => {
@@ -276,35 +338,6 @@ export function GanttBoard({
       mutations.setCell as Parameters<typeof onBarMoved>[4],
     );
   }
-
-  // Build arrow data for dependency overlay
-  const arrowLines = cache.dependencies
-    .map((dep) => {
-      const predIdx = rowIndexMap.get(dep.predecessor_id);
-      const succIdx = rowIndexMap.get(dep.successor_id);
-      const predRow = scheduledRows[predIdx ?? -1];
-      const succRow = scheduledRows[succIdx ?? -1];
-      if (
-        predIdx === undefined ||
-        succIdx === undefined ||
-        (!predRow?.startCol !== undefined &&
-          predRow.spanCols !== undefined &&
-          succRow.startCol !== undefined)
-      ) {
-        return null;
-      }
-      if (predRow?.startCol === undefined || predRow.spanCols === undefined)
-        return null;
-      if (succRow?.startCol === undefined) return null;
-      return { dep, predIdx, succIdx, predRow, succRow };
-    })
-    .filter(Boolean) as {
-    dep: CacheDependency;
-    predIdx: number;
-    succIdx: number;
-    predRow: GanttRow;
-    succRow: GanttRow;
-  }[];
 
   return (
     <div className="flex h-full flex-col">
@@ -560,10 +593,14 @@ function GanttRowItem({
     : Math.max(DAY_W, (row.spanCols ?? 1) * DAY_W);
 
   // Predecessors of this item (items that must finish before this starts)
-  const predecessorDeps = dependencies.filter(
-    (d) => d.successor_id === row.itemId,
+  const predecessorDeps = useMemo(
+    () => dependencies.filter((d) => d.successor_id === row.itemId),
+    [dependencies, row.itemId],
   );
-  const otherItems = allRows.filter((r) => r.itemId !== row.itemId);
+  const otherItems = useMemo(
+    () => allRows.filter((r) => r.itemId !== row.itemId),
+    [allRows, row.itemId],
+  );
 
   // Resize state
   const resizeStartXRef = useRef<number | null>(null);

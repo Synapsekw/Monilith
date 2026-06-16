@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -16,6 +16,7 @@ import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
+import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import type { Json } from "@/types/database.types";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
@@ -135,6 +136,38 @@ export function CalendarBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
+  // O(1) lookup map for cell values — built once per cellValues reference change.
+  // Placed before early return so hook ordering is unconditional.
+  const cellMap = useMemo(
+    () => buildCellMap(cache.cellValues),
+    [cache.cellValues],
+  );
+
+  // Month grid: bucket items into calendar days. Only valid when dateColumn exists.
+  const calendarMonth = useMemo(() => {
+    if (!dateColumn) return null;
+    return buildCalendarMonth(
+      monthISO,
+      cache.items,
+      cache.cellValues,
+      dateColumn.id,
+    );
+  }, [dateColumn, monthISO, cache.items, cache.cellValues]);
+
+  // Unscheduled items: those with no date cell for the active date column.
+  const unscheduledItems = useMemo(() => {
+    if (!dateColumn) return [];
+    return cache.items.filter((item) => {
+      const range = itemDateRange(item.id, cache.cellValues, dateColumn.id);
+      return range === null;
+    });
+  }, [dateColumn, cache.items, cache.cellValues]);
+
+  const statusColumn = useMemo(
+    () => cache.columns.find((c) => c.kind === "status"),
+    [cache.columns],
+  );
+
   // Empty state: no date column.
   if (!dateColumn) {
     return (
@@ -157,26 +190,8 @@ export function CalendarBoard({
   // dateColumn is non-null past this point (early return above).
   const resolvedDateColumn = dateColumn;
 
-  const calendarMonth = buildCalendarMonth(
-    monthISO,
-    cache.items,
-    cache.cellValues,
-    resolvedDateColumn.id,
-  );
-
-  // Unscheduled: items with no cell value for the date column.
-  const unscheduledItems = cache.items.filter((item) => {
-    const range = itemDateRange(
-      item.id,
-      cache.cellValues,
-      resolvedDateColumn.id,
-    );
-    return range === null;
-  });
-
   const today = todayISO();
   const firstGroupId = cache.groups[0]?.id;
-  const statusColumn = cache.columns.find((c) => c.kind === "status");
 
   function handleDateColumnChange(columnId: string) {
     startTransition(async () => {
@@ -314,7 +329,7 @@ export function CalendarBoard({
 
           {/* 6-week grid */}
           <div className="grid flex-1 grid-cols-7 grid-rows-6 gap-1">
-            {calendarMonth.weeks.flatMap((week) =>
+            {calendarMonth!.weeks.flatMap((week) =>
               week.map((day) => (
                 <CalendarDayCell
                   key={day.dateISO}
@@ -324,7 +339,7 @@ export function CalendarBoard({
                   events={day.events}
                   dateColumnId={resolvedDateColumn.id}
                   statusColumn={statusColumn}
-                  cellValues={cache.cellValues}
+                  cellMap={cellMap}
                   onDayClick={handleDayClick}
                 />
               )),
@@ -352,7 +367,7 @@ function CalendarDayCell({
   events,
   dateColumnId,
   statusColumn,
-  cellValues,
+  cellMap,
   onDayClick,
 }: {
   dateISO: string;
@@ -361,7 +376,7 @@ function CalendarDayCell({
   events: CalendarEvent[];
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
-  cellValues: BoardCache["cellValues"];
+  cellMap: Map<string, BoardCache["cellValues"][number]["value"]>;
   onDayClick: (dayISO: string) => void;
 }) {
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: dateISO });
@@ -410,7 +425,7 @@ function CalendarDayCell({
             fromDayISO={dateISO}
             dateColumnId={dateColumnId}
             statusColumn={statusColumn}
-            cellValues={cellValues}
+            cellMap={cellMap}
           />
         ))}
         {overflow > 0 && (
@@ -432,13 +447,13 @@ function EventChip({
   fromDayISO,
   dateColumnId,
   statusColumn,
-  cellValues,
+  cellMap,
 }: {
   event: CalendarEvent;
   fromDayISO: string;
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
-  cellValues: BoardCache["cellValues"];
+  cellMap: Map<string, BoardCache["cellValues"][number]["value"]>;
 }) {
   const dragData: ChipDragData = {
     itemId: event.itemId,
@@ -452,11 +467,9 @@ function EventChip({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
 
-  const statusCell = statusColumn
-    ? cellValues.find(
-        (cv) => cv.item_id === event.itemId && cv.column_id === statusColumn.id,
-      )
-    : undefined;
+  const statusValue = statusColumn
+    ? (cellMap.get(cellKey(event.itemId, statusColumn.id)) ?? null)
+    : null;
 
   return (
     <div
@@ -476,7 +489,7 @@ function EventChip({
         <span className="shrink-0">
           <CellRenderer
             kind={statusColumn.kind}
-            value={(statusCell?.value ?? null) as Json}
+            value={statusValue as Json}
             settings={(statusColumn.settings ?? {}) as Settings}
           />
         </span>
