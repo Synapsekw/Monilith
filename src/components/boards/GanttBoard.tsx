@@ -205,7 +205,7 @@ export function GanttBoard({
     zoom,
   ]);
 
-  const rows = ganttResult?.rows ?? [];
+  const rows = useMemo(() => ganttResult?.rows ?? [], [ganttResult]);
 
   // Detect dependency violations (finish-to-start constraint check).
   const violations = useMemo(
