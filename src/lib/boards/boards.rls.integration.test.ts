@@ -274,6 +274,132 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: boards tenant isolation", () => {
     expect(error).not.toBeNull(); // board_in_org(B_board, A_org) is false → rejected
   });
 
+  describe("item_dependencies RLS", () => {
+    // Two items on userA's board, created fresh for these tests.
+    let itemA1: string;
+    let itemA2: string;
+    // An item on a second board (same org as userA) for the same-board guard test.
+    let itemA3OnBoard2: string;
+
+    beforeAll(async () => {
+      // Create two items on userA's existing board.
+      const { data: ia1 } = await userA.anon.rpc("create_item", {
+        p_group_id: userA.groupId,
+        p_name: "Dep Item 1",
+      });
+      itemA1 = (ia1 as { id: string }).id;
+
+      const { data: ia2 } = await userA.anon.rpc("create_item", {
+        p_group_id: userA.groupId,
+        p_name: "Dep Item 2",
+      });
+      itemA2 = (ia2 as { id: string }).id;
+
+      // Create a second board in userA's org to test the same-board guard.
+      const { data: board2 } = await userA.anon.rpc("create_board", {
+        p_workspace_id: userA.workspaceId,
+        p_name: "Board a2",
+      });
+      const board2Id = (board2 as { id: string }).id;
+
+      const { data: group2 } = await userA.anon
+        .from("groups")
+        .select("id")
+        .eq("board_id", board2Id)
+        .single();
+      const group2Id = (group2 as { id: string }).id;
+
+      const { data: ia3 } = await userA.anon.rpc("create_item", {
+        p_group_id: group2Id,
+        p_name: "Dep Item 3 (board2)",
+      });
+      itemA3OnBoard2 = (ia3 as { id: string }).id;
+    }, 30_000);
+
+    it("a member can read own-org dependencies", async () => {
+      // Seed a dependency as userA so the select has something to find.
+      const { error: seedErr } = await userA.anon.rpc(
+        "create_item_dependency",
+        { p_predecessor: itemA1, p_successor: itemA2 },
+      );
+      expect(seedErr).toBeNull();
+
+      const { data, error } = await userA.anon
+        .from("item_dependencies")
+        .select("*")
+        .eq("board_id", userA.boardId);
+      expect(error).toBeNull();
+      expect((data ?? []).length).toBeGreaterThan(0);
+    });
+
+    it("a cross-org read of item_dependencies returns []", async () => {
+      const { data } = await userB.anon
+        .from("item_dependencies")
+        .select("*")
+        .eq("board_id", userA.boardId);
+      expect(data ?? []).toHaveLength(0);
+    });
+
+    it("create_item_dependency returns a row with type FS", async () => {
+      // Create two fresh items so we have a clean pair with no existing dep.
+      const { data: iX } = await userA.anon.rpc("create_item", {
+        p_group_id: userA.groupId,
+        p_name: "Dep FS X",
+      });
+      const { data: iY } = await userA.anon.rpc("create_item", {
+        p_group_id: userA.groupId,
+        p_name: "Dep FS Y",
+      });
+      const idX = (iX as { id: string }).id;
+      const idY = (iY as { id: string }).id;
+
+      const { data, error } = await userA.anon.rpc("create_item_dependency", {
+        p_predecessor: idX,
+        p_successor: idY,
+      });
+      expect(error).toBeNull();
+      expect(data).toMatchObject({ type: "FS" });
+    });
+
+    it("create_item_dependency(a, a) raises a self-link error", async () => {
+      const { error } = await userA.anon.rpc("create_item_dependency", {
+        p_predecessor: itemA1,
+        p_successor: itemA1,
+      });
+      expect(error).not.toBeNull();
+    });
+
+    it("create_item_dependency(b, a) raises a cycle error after (a, b) exists", async () => {
+      // itemA1 → itemA2 was created in the first test above; b→a would cycle.
+      const { error } = await userA.anon.rpc("create_item_dependency", {
+        p_predecessor: itemA2,
+        p_successor: itemA1,
+      });
+      expect(error).not.toBeNull();
+    });
+
+    it("a non-member / forged direct insert into item_dependencies is rejected by RLS", async () => {
+      // userA tries to insert directly into item_dependencies on userB's board.
+      // is_org_member(userB.orgId) is false for userA → RLS WITH CHECK rejects.
+      const { error } = await userA.anon.from("item_dependencies").insert({
+        org_id: userB.orgId,
+        board_id: userB.boardId,
+        predecessor_id: userB.itemId,
+        successor_id: userB.itemId,
+      });
+      expect(error).not.toBeNull();
+    });
+
+    it("create_item_dependency with items from two different boards raises a same-board error", async () => {
+      // itemA1 is on userA.boardId; itemA3OnBoard2 is on a second board in the same org.
+      const { error } = await userA.anon.rpc("create_item_dependency", {
+        p_predecessor: itemA1,
+        p_successor: itemA3OnBoard2,
+      });
+      expect(error).not.toBeNull();
+    });
+  });
+
   describe("board_views RLS", () => {
     it("a member can read their org's board_views", async () => {
       const { data, error } = await userA.anon
