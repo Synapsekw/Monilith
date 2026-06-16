@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   createBoardViewSchema,
   deleteBoardViewSchema,
-  kanbanConfigSchema,
+  configSchemaForKind,
   updateBoardViewSchema,
 } from "@/lib/validations/view-actions";
 import type { ActionResult } from "@/lib/boards/actions";
@@ -18,11 +18,12 @@ function fail(message: string): { ok: false; error: string } {
 const DEFAULT_NAME: Record<string, string> = {
   table: "Main Table",
   kanban: "Kanban",
+  calendar: "Calendar",
 };
 
 export async function createBoardView(input: {
   boardId: string;
-  kind: "table" | "kanban";
+  kind: "table" | "kanban" | "calendar";
   name?: string;
 }): Promise<ActionResult<{ viewId: string }>> {
   const parsed = createBoardViewSchema.safeParse(input);
@@ -45,7 +46,7 @@ export async function createBoardView(input: {
 export async function updateBoardView(input: {
   viewId: string;
   name?: string;
-  config?: { group_column_id?: string | null };
+  config?: Record<string, unknown>;
 }): Promise<ActionResult> {
   const parsed = updateBoardViewSchema.safeParse(input);
   if (!parsed.success)
@@ -69,10 +70,9 @@ export async function updateBoardView(input: {
   const patch: TablesUpdate<"board_views"> = {};
   if (parsed.data.name !== undefined) patch.name = parsed.data.name;
   if (parsed.data.config !== undefined) {
-    // config is kanban-only. Reject a config patch on any other kind.
-    if (view.kind !== "kanban")
-      return fail("config is only valid for kanban views");
-    const cfg = kanbanConfigSchema.safeParse(parsed.data.config);
+    // Validate config against the per-kind schema.
+    const kindSchema = configSchemaForKind(view.kind);
+    const cfg = kindSchema.safeParse(parsed.data.config);
     if (!cfg.success) return fail(cfg.error.issues[0]?.message ?? "Invalid");
     patch.config = cfg.data as Json;
   }

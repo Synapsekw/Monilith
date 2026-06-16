@@ -60,15 +60,28 @@ describe("ViewSwitcher", () => {
     pushState.mockRestore();
   });
 
-  it("creates a Kanban view and navigates to it", async () => {
+  it("opens the add-view menu and creates a Kanban view", async () => {
     createBoardView.mockResolvedValue({ ok: true, data: { viewId: "v3" } });
     render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
     await userEvent.click(screen.getByRole("button", { name: /add view/i }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /kanban/i }));
     expect(createBoardView).toHaveBeenCalledWith({
       boardId: "b1",
       kind: "kanban",
     });
     expect(push).toHaveBeenCalledWith("/boards/b1?view=v3");
+  });
+
+  it("opens the add-view menu and creates a Calendar view", async () => {
+    createBoardView.mockResolvedValue({ ok: true, data: { viewId: "v4" } });
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    await userEvent.click(screen.getByRole("button", { name: /add view/i }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /calendar/i }));
+    expect(createBoardView).toHaveBeenCalledWith({
+      boardId: "b1",
+      kind: "calendar",
+    });
+    expect(push).toHaveBeenCalledWith("/boards/b1?view=v4");
   });
 
   it("renames a view via the tab menu and refreshes", async () => {

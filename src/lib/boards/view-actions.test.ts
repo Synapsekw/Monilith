@@ -147,7 +147,7 @@ describe("updateBoardView", () => {
     });
   });
 
-  it("rejects a config patch on a non-kanban view", async () => {
+  it("rejects a non-empty config on a table view", async () => {
     const onUpdate = vi.fn();
     from.mockImplementation(
       updateClient({
@@ -159,10 +159,42 @@ describe("updateBoardView", () => {
       viewId: VIEW_ID,
       config: { group_column_id: null },
     });
-    expect(res).toEqual({
-      ok: false,
-      error: "config is only valid for kanban views",
+    expect(res.ok).toBe(false);
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it("applies a date_column_id config patch on a calendar view", async () => {
+    const onUpdate = vi.fn();
+    const DATE_COL_ID = "33333333-3333-4333-8333-333333333333";
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "calendar", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { date_column_id: DATE_COL_ID },
     });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(onUpdate).toHaveBeenCalledWith({
+      config: { date_column_id: DATE_COL_ID },
+    });
+  });
+
+  it("rejects a group_column_id config on a calendar view", async () => {
+    const onUpdate = vi.fn();
+    from.mockImplementation(
+      updateClient({
+        view: { data: { kind: "calendar", board_id: BOARD_ID }, error: null },
+        onUpdate,
+      }),
+    );
+    const res = await updateBoardView({
+      viewId: VIEW_ID,
+      config: { group_column_id: "some-id" },
+    });
+    expect(res.ok).toBe(false);
     expect(onUpdate).not.toHaveBeenCalled();
   });
 });

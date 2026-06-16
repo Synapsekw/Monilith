@@ -23,12 +23,18 @@ vi.mock("@/components/boards/BoardTable", () => ({
     <div data-testid="table">table:{selectedViewId}</div>
   ),
 }));
+vi.mock("@/components/boards/CalendarBoard", () => ({
+  CalendarBoard: ({ selectedViewId }: { selectedViewId: string }) => (
+    <div data-testid="calendar">calendar:{selectedViewId}</div>
+  ),
+}));
 
 const payload = {
   board: { id: "b1", name: "Board", org_id: "o1" },
   views: [
     { id: "v1", kind: "table", name: "Main Table" },
     { id: "v2", kind: "kanban", name: "Kanban" },
+    { id: "v3", kind: "calendar", name: "Calendar" },
   ],
   groups: [],
   columns: [],
@@ -55,5 +61,13 @@ describe("BoardViews", () => {
     viewParam = null;
     render(<BoardViews payload={payload} members={[]} initialViewId="v2" />);
     expect(screen.getByTestId("kanban")).toHaveTextContent("kanban:v2");
+  });
+
+  it("renders the calendar view when the URL selects a calendar view", () => {
+    viewParam = "v3";
+    render(<BoardViews payload={payload} members={[]} initialViewId="v1" />);
+    expect(screen.getByTestId("calendar")).toHaveTextContent("calendar:v3");
+    expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("table")).not.toBeInTheDocument();
   });
 });

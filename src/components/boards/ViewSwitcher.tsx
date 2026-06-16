@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Kanban, LayoutGrid, MoreHorizontal, Plus, Table } from "lucide-react";
+import {
+  CalendarDays,
+  Kanban,
+  LayoutGrid,
+  MoreHorizontal,
+  Plus,
+  Table,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,6 +33,7 @@ type ViewTabData = Pick<BoardView, "id" | "kind" | "name">;
 const KIND_ICON: Record<string, typeof Table> = {
   table: Table,
   kanban: Kanban,
+  calendar: CalendarDays,
 };
 
 function KindIcon({ kind }: { kind: string }) {
@@ -45,9 +53,9 @@ export function ViewSwitcher({
   const router = useRouter();
   const [adding, startAdding] = React.useTransition();
 
-  function handleAddView() {
+  function handleAddView(kind: "kanban" | "calendar") {
     startAdding(async () => {
-      const res = await createBoardView({ boardId, kind: "kanban" });
+      const res = await createBoardView({ boardId, kind });
       if (res.ok) router.push(`/boards/${boardId}?view=${res.data.viewId}`);
     });
   }
@@ -69,16 +77,29 @@ export function ViewSwitcher({
         />
       ))}
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Add view"
-        disabled={adding}
-        onClick={handleAddView}
-      >
-        <Plus aria-hidden />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Add view"
+            disabled={adding}
+          >
+            <Plus aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-36">
+          <DropdownMenuItem onSelect={() => handleAddView("kanban")}>
+            <Kanban aria-hidden className="size-3.5" />
+            Kanban
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleAddView("calendar")}>
+            <CalendarDays aria-hidden className="size-3.5" />
+            Calendar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
