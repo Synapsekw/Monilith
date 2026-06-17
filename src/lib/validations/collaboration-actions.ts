@@ -5,6 +5,11 @@ const TEXT = z.string().trim().min(1, "Update cannot be empty").max(10_000);
 export const addUpdateSchema = z.object({
   itemId: z.string().uuid(),
   text: TEXT,
+  mentions: z.array(z.string().uuid()).default([]),
+});
+
+export const markNotificationReadSchema = z.object({
+  notificationId: z.string().uuid(),
 });
 
 export const editUpdateSchema = z.object({
