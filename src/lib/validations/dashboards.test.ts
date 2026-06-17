@@ -67,3 +67,58 @@ describe("createDashboardSchema", () => {
     ).toBe(false);
   });
 });
+
+import {
+  batteryConfigSchema,
+  chartConfigSchema,
+  configSchemaForKind,
+} from "./dashboards";
+
+describe("chartConfigSchema", () => {
+  const col = "11111111-1111-4111-8111-111111111111";
+  it("requires a groupColumnId and a valid chartStyle", () => {
+    expect(
+      chartConfigSchema.safeParse({ groupColumnId: col, chartStyle: "bar" })
+        .success,
+    ).toBe(true);
+    expect(
+      chartConfigSchema.safeParse({ groupColumnId: col, chartStyle: "pie" })
+        .success,
+    ).toBe(true);
+    expect(
+      chartConfigSchema.safeParse({ groupColumnId: col, chartStyle: "line" })
+        .success,
+    ).toBe(false);
+    expect(chartConfigSchema.safeParse({ chartStyle: "bar" }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("batteryConfigSchema", () => {
+  it("requires a groupColumnId", () => {
+    expect(
+      batteryConfigSchema.safeParse({
+        groupColumnId: "11111111-1111-4111-8111-111111111111",
+      }).success,
+    ).toBe(true);
+    expect(batteryConfigSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("configSchemaForKind (D2)", () => {
+  it("routes chart and battery to their schemas", () => {
+    const col = "11111111-1111-4111-8111-111111111111";
+    expect(
+      configSchemaForKind("chart").safeParse({
+        groupColumnId: col,
+        chartStyle: "bar",
+      }).success,
+    ).toBe(true);
+    expect(
+      configSchemaForKind("battery").safeParse({ groupColumnId: col }).success,
+    ).toBe(true);
+    // chart without a group column is rejected (no longer the permissive default)
+    expect(configSchemaForKind("chart").safeParse({}).success).toBe(false);
+  });
+});
