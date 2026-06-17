@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { BarChart3, Inbox, LayoutGrid, PanelLeft, Target } from "lucide-react";
+import {
+  BarChart3,
+  ChevronsLeft,
+  ChevronsRight,
+  Inbox,
+  LayoutGrid,
+  Target,
+} from "lucide-react";
 import { Brand } from "@/components/brand/brand";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { Button } from "@/components/ui/button";
@@ -60,11 +67,35 @@ export function Sidebar({
       >
         <div
           className={cn(
-            "flex min-h-14 items-center px-4 py-2",
-            isCollapsed && "justify-center px-0",
+            "flex min-h-14 gap-1 px-3 py-2",
+            isCollapsed
+              ? "flex-col items-center px-0"
+              : "items-center justify-between",
           )}
         >
           <Brand collapsed={isCollapsed} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-expanded={!isCollapsed}
+                onClick={toggleSidebar}
+                className="text-muted-foreground hover:text-foreground size-8 shrink-0"
+              >
+                {isCollapsed ? (
+                  <ChevronsRight className="size-4" />
+                ) : (
+                  <ChevronsLeft className="size-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {isCollapsed ? "Expand sidebar" : "Collapse sidebar"} (⌘\)
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <BoardsNav
@@ -123,32 +154,6 @@ export function Sidebar({
             ))}
           </div>
         ) : null}
-
-        <div
-          className={cn(
-            "mt-auto flex p-2",
-            isCollapsed ? "justify-center" : "justify-end",
-          )}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                aria-expanded={!isCollapsed}
-                onClick={toggleSidebar}
-                className="size-8"
-              >
-                <PanelLeft className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {isCollapsed ? "Expand sidebar" : "Collapse sidebar"} (⌘\)
-            </TooltipContent>
-          </Tooltip>
-        </div>
       </aside>
     </TooltipProvider>
   );
