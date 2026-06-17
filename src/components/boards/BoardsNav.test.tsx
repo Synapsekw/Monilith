@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BoardsNav } from "./BoardsNav";
 
+const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/",
+  useParams: () => mockUseParams(),
 }));
 
 const noWorkspaces: { id: string; name: string }[] = [];
@@ -34,5 +37,35 @@ describe("BoardsNav", () => {
     const link = screen.getByRole("link", { name: "My Board" });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/boards/board-123");
+  });
+
+  it("marks the board matching the route param as active", () => {
+    mockUseParams.mockReturnValue({ boardId: "board-123" });
+    render(
+      <BoardsNav
+        boards={[
+          {
+            id: "board-123",
+            name: "Active Board",
+            workspace_id: "w1",
+            position: 0,
+          },
+          {
+            id: "board-456",
+            name: "Other Board",
+            workspace_id: "w1",
+            position: 1,
+          },
+        ]}
+        workspaces={noWorkspaces}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Active Board" })).toHaveClass(
+      "bg-surface",
+    );
+    expect(screen.getByRole("link", { name: "Other Board" })).not.toHaveClass(
+      "bg-surface",
+    );
   });
 });

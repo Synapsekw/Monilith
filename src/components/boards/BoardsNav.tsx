@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
 import { createBoard } from "@/lib/boards/actions";
 import type { BoardListEntry } from "@/lib/boards/queries";
@@ -23,13 +23,12 @@ import { cn } from "@/lib/utils";
 export function BoardsNav({
   boards,
   workspaces,
-  activeBoardId,
 }: {
   boards: BoardListEntry[];
   workspaces: { id: string; name: string }[];
-  activeBoardId?: string;
 }) {
   const router = useRouter();
+  const { boardId: activeBoardId } = useParams<{ boardId: string }>();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
