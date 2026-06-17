@@ -49,30 +49,23 @@ type AppShellProps = {
   boards?: BoardListEntry[];
 };
 
-function Brand({ org }: { org?: AppShellOrg }) {
+function Brand() {
   return (
-    <div className="flex flex-col gap-1">
-      <Link
-        href="/landing"
-        aria-label="MONOLITH — landing"
-        className="focus-visible:ring-ring -ml-1 flex w-fit items-center gap-2 rounded-md px-1 py-0.5 focus-visible:ring-2 focus-visible:outline-none"
+    <Link
+      href="/landing"
+      aria-label="MONOLITH — landing"
+      className="focus-visible:ring-ring -ml-1 flex w-fit items-center gap-2 rounded-md px-1 py-0.5 focus-visible:ring-2 focus-visible:outline-none"
+    >
+      <MonolithMark className="text-foreground size-6" />
+      <span
+        className={cn(
+          archivo.className,
+          "text-sm font-extrabold tracking-wide",
+        )}
       >
-        <MonolithMark className="text-foreground size-6" />
-        <span
-          className={cn(
-            archivo.className,
-            "text-sm font-extrabold tracking-wide",
-          )}
-        >
-          MONOLITH
-        </span>
-      </Link>
-      {org ? (
-        <span className="text-muted-foreground truncate pl-8 text-xs">
-          {org.name}
-        </span>
-      ) : null}
-    </div>
+        MONOLITH
+      </span>
+    </Link>
   );
 }
 
@@ -111,7 +104,6 @@ export function AppShell({
   children,
   user,
   currentUserId,
-  org,
   workspaces,
   boards,
 }: AppShellProps) {
@@ -119,7 +111,7 @@ export function AppShell({
     <div className="flex h-svh w-full overflow-hidden">
       <aside className="bg-sidebar hidden w-60 shrink-0 flex-col border-r md:flex">
         <div className="flex min-h-14 items-center px-4 py-2">
-          <Brand org={org} />
+          <Brand />
         </div>
         <BoardsNav boards={boards ?? []} workspaces={workspaces ?? []} />
         <nav className="flex flex-col gap-0.5 px-2 py-2">
@@ -155,7 +147,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
           <div className="md:hidden">
-            <Brand org={org} />
+            <Brand />
           </div>
           <div className="flex flex-1 items-center justify-end gap-2">
             <CommandTrigger />
