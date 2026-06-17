@@ -15,6 +15,17 @@ test("unauthenticated visit to / shows the MONOLITH landing linking to /login", 
   await expect(page.getByText("Welcome back")).toBeVisible();
 });
 
+test("unauthenticated visit to /landing shows the splash (proxy lets it through)", async ({
+  page,
+}) => {
+  await page.goto("/landing");
+  await expect(page).toHaveURL(/\/landing$/);
+
+  const hero = page.getByRole("link", { name: "MONOLITH" });
+  await expect(hero).toBeVisible();
+  await expect(hero).toHaveAttribute("href", "/login");
+});
+
 test("/login shows the sign-in form", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByText("Welcome back")).toBeVisible();

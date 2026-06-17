@@ -20,7 +20,7 @@ describe("AppShell", () => {
     expect(screen.getByText("Board content")).toBeInTheDocument();
   });
 
-  it("links the brand back to the home route", () => {
+  it("links the brand to the landing splash", () => {
     render(
       <AppShell>
         <div>content</div>
@@ -29,7 +29,7 @@ describe("AppShell", () => {
 
     const brandLinks = screen.getAllByRole("link", { name: /monolith/i });
     expect(brandLinks.length).toBeGreaterThan(0);
-    expect(brandLinks[0]).toHaveAttribute("href", "/");
+    expect(brandLinks[0]).toHaveAttribute("href", "/landing");
   });
 
   it("exposes the command palette trigger", () => {

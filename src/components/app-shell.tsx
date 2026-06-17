@@ -53,8 +53,8 @@ function Brand({ org }: { org?: AppShellOrg }) {
   return (
     <div className="flex flex-col gap-1">
       <Link
-        href="/"
-        aria-label="MONOLITH — home"
+        href="/landing"
+        aria-label="MONOLITH — landing"
         className="focus-visible:ring-ring -ml-1 flex w-fit items-center gap-2 rounded-md px-1 py-0.5 focus-visible:ring-2 focus-visible:outline-none"
       >
         <MonolithMark className="text-foreground size-6" />

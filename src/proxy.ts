@@ -6,9 +6,10 @@ import { env } from "@/lib/env";
 import type { Database } from "@/types/database.types";
 
 const AUTH_ROUTES = ["/login", "/signup", "/auth"];
-// Public routes an unauthenticated visitor may view (exact match). The root is
-// the MONOLITH landing page; the page itself redirects authenticated users on.
-const PUBLIC_ROUTES = ["/"];
+// Public routes an unauthenticated visitor may view (exact match). `/` is the
+// MONOLITH landing for logged-out visitors (the page redirects authenticated
+// users on); `/landing` is the always-on splash the nav logo points to.
+const PUBLIC_ROUTES = ["/", "/landing"];
 
 export async function proxy(request: NextRequest) {
   // Standard @supabase/ssr session-refresh pattern adapted to proxy.

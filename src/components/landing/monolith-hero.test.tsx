@@ -27,9 +27,14 @@ describe("MonolithHero", () => {
     expect(screen.getByText("MONOLITH")).toBeInTheDocument();
   });
 
-  it("links the hero to /login", () => {
+  it("links the hero to /login by default", () => {
     render(<MonolithHero />);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/login");
+  });
+
+  it("links the hero to a custom href when provided", () => {
+    render(<MonolithHero href="/" />);
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/");
   });
 
   it("shows the click-to-enter cue", () => {
