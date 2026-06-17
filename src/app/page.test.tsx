@@ -60,4 +60,31 @@ describe("Home (root route)", () => {
     await expect(Home()).rejects.toThrow("REDIRECT:/boards/b1");
     expect(redirect).toHaveBeenCalledWith("/boards/b1");
   });
+
+  it("redirects a logged-in user with no orgs to onboarding", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    getUserOrgs.mockResolvedValue([]);
+
+    await expect(Home()).rejects.toThrow("REDIRECT:/onboarding");
+    expect(redirect).toHaveBeenCalledWith("/onboarding");
+  });
+
+  it("renders the welcome shell for a logged-in user with no boards", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
+    listBoards.mockResolvedValue([]);
+
+    render(await Home());
+
+    expect(screen.getByText("Welcome to Acme")).toBeInTheDocument();
+    expect(redirect).not.toHaveBeenCalled();
+  });
 });
