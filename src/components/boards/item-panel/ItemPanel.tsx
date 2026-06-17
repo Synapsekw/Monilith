@@ -10,11 +10,14 @@ import {
 } from "@/components/ui/sheet";
 import { useItemCollab } from "@/lib/collaboration/use-item-collab";
 import { useUpdateMutations } from "@/lib/collaboration/use-update-mutations";
+import { useItemAttachments } from "@/lib/collaboration/use-item-attachments";
+import { useAttachmentMutations } from "@/lib/collaboration/use-attachment-mutations";
 import type { Column, Member } from "@/lib/collaboration/activity";
 import { ActivityTab } from "./ActivityTab";
 import { UpdatesTab } from "./UpdatesTab";
+import { FilesTab } from "./FilesTab";
 
-type Tab = "fields" | "updates" | "activity";
+type Tab = "fields" | "updates" | "activity" | "files";
 
 export function ItemPanel({
   itemId,
@@ -41,6 +44,18 @@ export function ItemPanel({
     orgId,
     boardId,
   });
+  // Files query is lazy — enabled only once the Files tab has been opened, so
+  // opening the panel itself stays 0 round-trips (gotcha-09).
+  const filesOpened = tab === "files";
+  const { list: attachments, previewUrls } = useItemAttachments(
+    itemId,
+    filesOpened,
+  );
+  const attachmentMutations = useAttachmentMutations(
+    itemId ?? "none",
+    currentUserId,
+    { orgId, boardId },
+  );
 
   return (
     <Sheet open={!!itemId} onOpenChange={(o) => !o && onClose()}>
@@ -53,7 +68,7 @@ export function ItemPanel({
         </SheetHeader>
 
         <div className="flex gap-1 border-b">
-          {(["fields", "updates", "activity"] as const).map((t) => (
+          {(["fields", "updates", "activity", "files"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -88,6 +103,18 @@ export function ItemPanel({
               cache={activity.data}
               columns={columns}
               members={members}
+            />
+          )}
+          {tab === "files" && (
+            <FilesTab
+              cache={attachments.data}
+              previewUrls={previewUrls}
+              members={members}
+              currentUserId={currentUserId}
+              isUploading={attachmentMutations.isUploading}
+              uploadError={attachmentMutations.uploadError}
+              onUpload={attachmentMutations.uploadFile}
+              onDelete={attachmentMutations.deleteAttachment}
             />
           )}
         </div>
