@@ -303,4 +303,87 @@ test.describe("Dashboards: create → add Number widget → drag → persist", (
       timeout: 15_000,
     });
   });
+
+  test("add a List widget shows item rows with the chosen column", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    // ── 1. Log in ─────────────────────────────────────────────────────────────
+    await page.goto("/login");
+    await page.getByLabel(/email/i).fill(testEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: /sign in/i }).click();
+
+    // Shared user: this serial test may land on onboarding (first run) or the app
+    // root. Branch on whichever UI appears, mirroring the chart test.
+    const orgNameField = page.getByLabel(/organization name/i);
+    const newBoardButton = page.getByRole("button", { name: "New board" });
+    await expect(orgNameField.or(newBoardButton).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    if (await orgNameField.isVisible().catch(() => false)) {
+      await orgNameField.fill(unique("Org"));
+      await page.getByLabel(/workspace name/i).fill("Engineering");
+      await page.getByRole("button", { name: /create organization/i }).click();
+      await page.waitForURL(/localhost:3000\/$/, { timeout: 30_000 });
+    }
+    await expect(newBoardButton).toBeVisible({ timeout: 30_000 });
+
+    // ── 2. Create a board with one item (the seeded board has a Status column) ─
+    const boardName = unique("ListBoard");
+    await page.getByRole("button", { name: "New board" }).click();
+    await page.getByLabel(/board name/i).fill(boardName);
+    await page.getByRole("button", { name: /create board/i }).click();
+    await page.waitForURL(/\/boards\//);
+    await expect(page.getByText("Group 1")).toBeVisible();
+
+    const itemName = unique("Task");
+    await page.getByLabel("Add item").fill(itemName);
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(itemName)).toBeVisible({ timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // ── 3. Create a dashboard ─────────────────────────────────────────────────
+    await page.getByRole("button", { name: /new dashboard/i }).click();
+    await page.getByLabel(/dashboard name/i).fill("List Dash");
+    await page.getByRole("button", { name: /create dashboard/i }).click();
+    await expect(page).toHaveURL(/\/dashboards\/[0-9a-f-]+/, {
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("heading", { name: "List Dash" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // ── 4. Enter Edit, open Add-widget, pick List + check the first column ────
+    await page.getByRole("button", { name: /^edit$/i }).click();
+    await page.getByRole("button", { name: /add widget/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /add a widget/i }),
+    ).toBeVisible();
+
+    // Widget type → List (the "Widget type" select is the one in that label).
+    await page
+      .locator("label", { hasText: "Widget type" })
+      .locator("select")
+      .selectOption("list");
+
+    // Check the first column to show (the seeded board's columns appear as
+    // checkboxes in the "Columns to show" fieldset).
+    const firstColumn = page.getByRole("checkbox").first();
+    await expect(firstColumn).toBeVisible();
+    await firstColumn.check();
+
+    // Submit via the dialog footer button (the last "Add widget" button).
+    await page
+      .getByRole("button", { name: /add widget/i })
+      .last()
+      .click();
+
+    // ── 5. The list renders an HTML table: "Item" header + ≥1 item row ────────
+    await expect(page.locator("table thead").getByText("Item")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator("table tbody tr").first()).toBeVisible();
+  });
 });
