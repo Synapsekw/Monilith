@@ -1,11 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import {
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronRight, Maximize2, Plus } from "lucide-react";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
@@ -21,6 +16,8 @@ import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+import { ColumnHeader } from "@/components/boards/ColumnHeader";
+import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -57,10 +54,17 @@ function openItemPanel(itemId: string) {
 }
 const NAME_COL_WIDTH = 280;
 const VALUE_COL_WIDTH = 180;
+const ADD_COL_WIDTH = 44;
 
-/** CSS grid template: pinned Name column + one track per configurable column. */
-function gridTemplate(columnCount: number) {
-  return `${NAME_COL_WIDTH}px repeat(${columnCount}, minmax(${VALUE_COL_WIDTH}px, 1fr))`;
+/** CSS grid template: pinned Name + one fixed px track per column + the add-column slot. */
+function gridTemplate(
+  columns: { id: string; width: number | null }[],
+  liveWidths: Record<string, number>,
+): string {
+  const tracks = columns
+    .map((c) => `${liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}px`)
+    .join(" ");
+  return `${NAME_COL_WIDTH}px ${tracks} ${ADD_COL_WIDTH}px`;
 }
 
 export function BoardTable({
@@ -81,12 +85,13 @@ export function BoardTable({
   const { board, groups, columns, items, cellValues } = cache;
 
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  const mutations = useBoardMutations(payload.board.id);
   const {
     setCell,
     clearCellValue,
     addItem,
     renameItem: renameItemMutation,
-  } = useBoardMutations(payload.board.id);
+  } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
@@ -103,24 +108,11 @@ export function BoardTable({
     return byGroup;
   }, [groups, items]);
 
-  // TanStack Table models the column/header structure (read-only here).
-  const tableColumns = useMemo<ColumnDef<Item>[]>(
-    () =>
-      columns.map((col) => ({
-        id: col.id,
-        header: col.name,
-        accessorFn: (row) => cellMap.get(cellKey(row.id, col.id)) ?? null,
-      })),
-    [columns, cellMap],
+  const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
+  const template = useMemo(
+    () => gridTemplate(columns, liveWidths),
+    [columns, liveWidths],
   );
-  const table = useReactTable({
-    data: items,
-    columns: tableColumns,
-    getCoreRowModel: getCoreRowModel(),
-  });
-  const headerGroups = table.getHeaderGroups();
-
-  const template = gridTemplate(columns.length);
 
   const controls: CellControls = {
     editing,
@@ -152,11 +144,18 @@ export function BoardTable({
             <div className="bg-surface-muted sticky left-0 z-10 truncate px-4 py-1.5">
               Name
             </div>
-            {headerGroups[0]?.headers.map((header) => (
-              <div key={header.id} className="truncate border-l px-3 py-1.5">
-                {String(header.column.columnDef.header ?? "")}
-              </div>
+            {columns.map((col) => (
+              <ColumnHeader
+                key={col.id}
+                column={col}
+                width={liveWidths[col.id] ?? col.width ?? VALUE_COL_WIDTH}
+                onRename={(name) => mutations.renameColumn(col.id, name)}
+                onDelete={() => mutations.deleteColumn(col.id)}
+                onResize={(w) => setLiveWidths((m) => ({ ...m, [col.id]: w }))}
+                onResizeEnd={(w) => mutations.resizeColumn(col.id, w)}
+              />
             ))}
+            <AddColumnMenu onAdd={(kind) => mutations.addColumn(kind)} />
           </div>
 
           {groups.length === 0 ? (
@@ -271,6 +270,7 @@ function GroupSection({
                           controls={controls}
                         />
                       ))}
+                      <div aria-hidden /> {/* add-column track spacer */}
                     </div>
                   );
                 })}

@@ -22,6 +22,34 @@ Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.setPointerCapture ??= () => {};
 Element.prototype.releasePointerCapture ??= () => {};
 
+// Radix menu triggers open on `pointerdown` (button 0), not on `click`. In a
+// real browser a click is always preceded by pointer events; jsdom's synthetic
+// `fireEvent.click` is a bare click, so the menu never opens. Bridge it: when a
+// click reaches a Radix dropdown-menu trigger that hasn't already seen a
+// pointerdown, synthesize the `pointerdown`/`pointerup` Radix listens for. This
+// completes the Radix jsdom shim so component tests can drive the menu via
+// `fireEvent.click` without simulating raw pointer sequences.
+if (typeof globalThis.PointerEvent === "undefined") {
+  // jsdom may lack PointerEvent; fall back to MouseEvent which carries `button`.
+  globalThis.PointerEvent = globalThis.MouseEvent as typeof PointerEvent;
+}
+document.addEventListener(
+  "click",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const trigger = target.closest('[data-slot="dropdown-menu-trigger"]');
+    if (!trigger || trigger.getAttribute("data-state") !== "closed") return;
+    trigger.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+    );
+    trigger.dispatchEvent(
+      new MouseEvent("pointerup", { bubbles: true, button: 0 }),
+    );
+  },
+  true,
+);
+
 // Provide placeholder public env vars so modules that import the validated env
 // (e.g. the Supabase server client pulled in transitively by server actions)
 // can be loaded in the test environment. These are not real credentials.
