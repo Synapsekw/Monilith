@@ -2,6 +2,14 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+// next/font/google requires the Next build loader and throws under jsdom. Stub
+// the font factories the app uses so components importing a font render in
+// tests without per-file mocks.
+vi.mock("next/font/google", () => {
+  const font = () => ({ className: "font-mock", variable: "", style: {} });
+  return { Archivo: font, Geist: font, Geist_Mono: font };
+});
+
 // jsdom lacks the layout/observer APIs Radix (Popover/DismissableLayer + Floating
 // UI) relies on. Provide minimal stubs so portaled floating surfaces can mount.
 globalThis.ResizeObserver ??= class {

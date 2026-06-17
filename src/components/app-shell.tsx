@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { BarChart3, Inbox, LayoutGrid, Target } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
+import { cn } from "@/lib/utils";
+import { archivo } from "@/lib/fonts";
+import { MonolithMark } from "@/components/brand/monolith-mark";
 import { CommandTrigger } from "@/components/command-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
@@ -48,14 +52,23 @@ type AppShellProps = {
 function Brand({ org }: { org?: AppShellOrg }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <div className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md text-sm font-semibold">
-          P
-        </div>
-        <span className="text-sm font-semibold tracking-tight">Pulse</span>
-      </div>
+      <Link
+        href="/"
+        aria-label="MONOLITH — home"
+        className="focus-visible:ring-ring -ml-1 flex w-fit items-center gap-2 rounded-md px-1 py-0.5 focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <MonolithMark className="text-foreground size-6" />
+        <span
+          className={cn(
+            archivo.className,
+            "text-sm font-extrabold tracking-wide",
+          )}
+        >
+          MONOLITH
+        </span>
+      </Link>
       {org ? (
-        <span className="text-muted-foreground truncate pl-9 text-xs">
+        <span className="text-muted-foreground truncate pl-8 text-xs">
           {org.name}
         </span>
       ) : null}

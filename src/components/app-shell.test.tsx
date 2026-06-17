@@ -9,15 +9,27 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("AppShell", () => {
-  it("renders the Pulse brand and its children", () => {
+  it("renders the MONOLITH brand and its children", () => {
     render(
       <AppShell>
         <div>Board content</div>
       </AppShell>,
     );
 
-    expect(screen.getAllByText("Pulse").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("MONOLITH").length).toBeGreaterThan(0);
     expect(screen.getByText("Board content")).toBeInTheDocument();
+  });
+
+  it("links the brand back to the home route", () => {
+    render(
+      <AppShell>
+        <div>content</div>
+      </AppShell>,
+    );
+
+    const brandLinks = screen.getAllByRole("link", { name: /monolith/i });
+    expect(brandLinks.length).toBeGreaterThan(0);
+    expect(brandLinks[0]).toHaveAttribute("href", "/");
   });
 
   it("exposes the command palette trigger", () => {
