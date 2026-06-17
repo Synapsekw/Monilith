@@ -31,11 +31,19 @@ export default async function DashboardPage({
     .select("id, name, board_id")
     .eq("kind", "numbers")
     .in("board_id", boardIds);
+  const { data: statusCols } = await supabase
+    .from("columns")
+    .select("id, name, board_id")
+    .eq("kind", "status")
+    .in("board_id", boardIds);
 
   const boards: BoardOption[] = (boardRows ?? []).map((b) => ({
     id: b.id,
     name: b.name,
     numbersColumns: (numberCols ?? [])
+      .filter((c) => c.board_id === b.id)
+      .map((c) => ({ id: c.id, name: c.name })),
+    statusColumns: (statusCols ?? [])
       .filter((c) => c.board_id === b.id)
       .map((c) => ({ id: c.id, name: c.name })),
   }));

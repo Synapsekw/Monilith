@@ -19,7 +19,13 @@ export type BoardOption = {
   id: string;
   name: string;
   numbersColumns: { id: string; name: string }[];
+  statusColumns: { id: string; name: string }[];
 };
+
+type Kind = "number" | "chart" | "battery";
+
+const selectClass =
+  "bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm";
 
 export function AddWidgetDialog({
   dashboardId,
@@ -30,30 +36,50 @@ export function AddWidgetDialog({
 }) {
   const { addWidget } = useDashboardMutations(dashboardId);
   const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<Kind>("number");
   const [boardId, setBoardId] = useState(boards[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [agg, setAgg] = useState<"count" | "sum" | "avg">("count");
   const [valueColumnId, setValueColumnId] = useState("");
+  const [groupColumnId, setGroupColumnId] = useState("");
+  const [chartStyle, setChartStyle] = useState<"bar" | "pie">("bar");
   const [error, setError] = useState<string | null>(null);
 
-  const numbersCols =
-    boards.find((b) => b.id === boardId)?.numbersColumns ?? [];
+  const board = boards.find((b) => b.id === boardId);
+  const numbersCols = board?.numbersColumns ?? [];
+  const statusCols = board?.statusColumns ?? [];
+
+  function reset() {
+    setTitle("");
+    setAgg("count");
+    setValueColumnId("");
+    setGroupColumnId("");
+    setChartStyle("bar");
+    setKind("number");
+  }
 
   function submit() {
     setError(null);
     if (!boardId) return setError("Pick a source board.");
-    const config: Record<string, unknown> =
-      agg === "count" ? { agg } : { agg, valueColumnId };
-    if (agg !== "count" && !valueColumnId)
-      return setError("Pick a numbers column for sum/average.");
+
+    let config: Record<string, unknown>;
+    if (kind === "number") {
+      if (agg !== "count" && !valueColumnId)
+        return setError("Pick a numbers column for sum/average.");
+      config = agg === "count" ? { agg } : { agg, valueColumnId };
+    } else {
+      // chart + battery both group by a status column
+      if (!groupColumnId) return setError("Pick a status column to group by.");
+      config =
+        kind === "chart" ? { groupColumnId, chartStyle } : { groupColumnId };
+    }
+
     addWidget.mutate(
-      { kind: "number", sourceBoardId: boardId, title, config },
+      { kind, sourceBoardId: boardId, title, config },
       {
         onSuccess: () => {
           setOpen(false);
-          setTitle("");
-          setAgg("count");
-          setValueColumnId("");
+          reset();
         },
         onError: (e) => setError(e.message),
       },
@@ -69,13 +95,26 @@ export function AddWidgetDialog({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a Number widget</DialogTitle>
+          <DialogTitle>Add a widget</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <label className="text-sm">
+            Widget type
+            <select
+              className={selectClass}
+              value={kind}
+              onChange={(e) => setKind(e.target.value as Kind)}
+            >
+              <option value="number">Number</option>
+              <option value="chart">Chart</option>
+              <option value="battery">Battery</option>
+            </select>
+          </label>
+
+          <label className="text-sm">
             Source board
             <select
-              className="bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+              className={selectClass}
               value={boardId}
               onChange={(e) => setBoardId(e.target.value)}
             >
@@ -86,46 +125,86 @@ export function AddWidgetDialog({
               ))}
             </select>
           </label>
+
           <label className="text-sm">
             Title
             <Input
               className="mt-1"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Open items"
+              placeholder="e.g. By status"
             />
           </label>
-          <label className="text-sm">
-            Metric
-            <select
-              className="bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-              value={agg}
-              onChange={(e) =>
-                setAgg(e.target.value as "count" | "sum" | "avg")
-              }
-            >
-              <option value="count">Count of items</option>
-              <option value="sum">Sum of a number column</option>
-              <option value="avg">Average of a number column</option>
-            </select>
-          </label>
-          {agg !== "count" ? (
-            <label className="text-sm">
-              Number column
-              <select
-                className="bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-                value={valueColumnId}
-                onChange={(e) => setValueColumnId(e.target.value)}
-              >
-                <option value="">Select…</option>
-                {numbersCols.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
+
+          {kind === "number" ? (
+            <>
+              <label className="text-sm">
+                Metric
+                <select
+                  className={selectClass}
+                  value={agg}
+                  onChange={(e) =>
+                    setAgg(e.target.value as "count" | "sum" | "avg")
+                  }
+                >
+                  <option value="count">Count of items</option>
+                  <option value="sum">Sum of a number column</option>
+                  <option value="avg">Average of a number column</option>
+                </select>
+              </label>
+              {agg !== "count" ? (
+                <label className="text-sm">
+                  Number column
+                  <select
+                    className={selectClass}
+                    value={valueColumnId}
+                    onChange={(e) => setValueColumnId(e.target.value)}
+                  >
+                    <option value="">Select…</option>
+                    {numbersCols.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <label className="text-sm">
+                Group by (status column)
+                <select
+                  className={selectClass}
+                  value={groupColumnId}
+                  onChange={(e) => setGroupColumnId(e.target.value)}
+                >
+                  <option value="">Select…</option>
+                  {statusCols.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {kind === "chart" ? (
+                <label className="text-sm">
+                  Chart style
+                  <select
+                    className={selectClass}
+                    value={chartStyle}
+                    onChange={(e) =>
+                      setChartStyle(e.target.value as "bar" | "pie")
+                    }
+                  >
+                    <option value="bar">Bar</option>
+                    <option value="pie">Pie</option>
+                  </select>
+                </label>
+              ) : null}
+            </>
+          )}
+
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
         </div>
         <DialogFooter>
