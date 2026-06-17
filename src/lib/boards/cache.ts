@@ -90,3 +90,32 @@ export function removeDependency(cache: BoardCache, id: string): BoardCache {
     dependencies: cache.dependencies.filter((d) => d.id !== id),
   };
 }
+
+function byPosition(a: CacheColumn, b: CacheColumn) {
+  return a.position - b.position;
+}
+
+/** Insert a column, keeping position order. No-op if the id already exists. */
+export function insertColumn(cache: BoardCache, col: CacheColumn): BoardCache {
+  if (cache.columns.some((c) => c.id === col.id)) return cache;
+  return { ...cache, columns: [...cache.columns, col].sort(byPosition) };
+}
+
+/** Replace a column by id (rename/width/settings), keeping position order. */
+export function replaceColumn(cache: BoardCache, col: CacheColumn): BoardCache {
+  return {
+    ...cache,
+    columns: cache.columns
+      .map((c) => (c.id === col.id ? col : c))
+      .sort(byPosition),
+  };
+}
+
+/** Remove a column and its cell values (mirrors the DB cascade). Immutable. */
+export function removeColumn(cache: BoardCache, columnId: string): BoardCache {
+  return {
+    ...cache,
+    columns: cache.columns.filter((c) => c.id !== columnId),
+    cellValues: cache.cellValues.filter((c) => c.column_id !== columnId),
+  };
+}

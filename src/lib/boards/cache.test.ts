@@ -3,12 +3,16 @@ import {
   addDependency,
   buildCellMap,
   cellKey,
+  insertColumn,
   insertItem,
   removeCellValue,
+  removeColumn,
   removeDependency,
+  replaceColumn,
   replaceItem,
   upsertCellValue,
   type BoardCache,
+  type CacheColumn,
   type CacheDependency,
 } from "./cache";
 
@@ -179,5 +183,61 @@ describe("removeDependency", () => {
   it("is a no-op when the dependency is absent", () => {
     const next = removeDependency(baseCache(), "nonexistent");
     expect(next.dependencies).toHaveLength(0);
+  });
+});
+
+function col(
+  id: string,
+  position: number,
+  over: Partial<CacheColumn> = {},
+): CacheColumn {
+  return {
+    id,
+    org_id: "o",
+    board_id: "b",
+    kind: "text",
+    name: id,
+    settings: {},
+    position,
+    width: null,
+    created_at: "2026-06-17T00:00:00Z",
+    updated_at: "2026-06-17T00:00:00Z",
+    ...over,
+  } as CacheColumn;
+}
+function cache(columns: CacheColumn[]): BoardCache {
+  return {
+    board: { id: "b", org_id: "o" } as BoardCache["board"],
+    groups: [],
+    columns,
+    items: [],
+    cellValues: [
+      { item_id: "i", column_id: "a" } as BoardCache["cellValues"][number],
+    ],
+    dependencies: [],
+  };
+}
+
+describe("column cache mutators", () => {
+  it("insertColumn appends + keeps position order + de-dupes by id", () => {
+    let c = insertColumn(cache([col("a", 0)]), col("b", 1));
+    expect(c.columns.map((x) => x.id)).toEqual(["a", "b"]);
+    c = insertColumn(c, col("z", -1));
+    expect(c.columns.map((x) => x.id)).toEqual(["z", "a", "b"]); // re-sorted
+    c = insertColumn(c, col("a", 0));
+    expect(c.columns).toHaveLength(3); // de-dupe
+  });
+  it("replaceColumn swaps by id (covers rename + width) and re-sorts", () => {
+    const c = replaceColumn(
+      cache([col("a", 0)]),
+      col("a", 0, { name: "Renamed", width: 300 }),
+    );
+    expect(c.columns[0].name).toBe("Renamed");
+    expect(c.columns[0].width).toBe(300);
+  });
+  it("removeColumn drops the column AND its cell values", () => {
+    const c = removeColumn(cache([col("a", 0)]), "a");
+    expect(c.columns).toHaveLength(0);
+    expect(c.cellValues).toHaveLength(0); // 'a' cell removed
   });
 });
