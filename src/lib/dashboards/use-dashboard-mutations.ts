@@ -82,16 +82,27 @@ export function useDashboardMutations(dashboardId: string) {
   });
 
   // Layout: patch cache immediately, persist debounced (caller debounces).
-  const persistLayout = useMutation({
-    mutationFn: async (layouts: ({ id: string } & GridRect)[]) => {
+  // Roll back the optimistic layout if the persist fails (else the cache would
+  // drift ahead of the DB and a reload would snap widgets back).
+  const persistLayout = useMutation<
+    unknown,
+    Error,
+    ({ id: string } & GridRect)[],
+    { previous?: DashboardCache }
+  >({
+    mutationFn: async (layouts) => {
       const res = await saveLayout({ dashboardId, layouts });
       if (!res.ok) throw new Error(res.error);
       return res.data;
     },
-    onMutate: (layouts) => {
-      qc.setQueryData<DashboardCache>(key, (prev) =>
-        prev ? applyLayouts(prev, layouts) : prev,
-      );
+    onMutate: async (layouts) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<DashboardCache>(key);
+      if (previous) qc.setQueryData(key, applyLayouts(previous, layouts));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
     },
   });
 

@@ -25,10 +25,12 @@ export default async function DashboardPage({
     .select("id, name")
     .eq("workspace_id", payload.dashboard.workspace_id)
     .order("position", { ascending: true });
+  const boardIds = (boardRows ?? []).map((b) => b.id);
   const { data: numberCols } = await supabase
     .from("columns")
     .select("id, name, board_id")
-    .eq("kind", "numbers");
+    .eq("kind", "numbers")
+    .in("board_id", boardIds);
 
   const boards: BoardOption[] = (boardRows ?? []).map((b) => ({
     id: b.id,
