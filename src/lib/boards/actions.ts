@@ -207,6 +207,20 @@ export async function upsertCell(input: {
   if (!valueParsed.success)
     return fail(valueParsed.error.issues[0]?.message ?? "Invalid value");
 
+  // For People cells, read the prior assignees so we can fan out 'assigned'
+  // notifications to only the newly-added members after the write.
+  let priorPeople: string[] = [];
+  if (column.kind === "people") {
+    const { data: prior } = await supabase
+      .from("cell_values")
+      .select("value")
+      .eq("item_id", parsed.data.itemId)
+      .eq("column_id", parsed.data.columnId)
+      .maybeSingle();
+    priorPeople =
+      (prior?.value as { userIds?: string[] } | null)?.userIds ?? [];
+  }
+
   const { error } = await supabase.from("cell_values").upsert(
     {
       org_id: column.org_id,
@@ -218,6 +232,28 @@ export async function upsertCell(input: {
     { onConflict: "item_id,column_id" },
   );
   if (error) return fail(error.message);
+
+  if (column.kind === "people") {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const next = (valueParsed.data as { userIds: string[] }).userIds;
+    const added = next.filter(
+      (id) => !priorPeople.includes(id) && id !== user?.id,
+    );
+    if (added.length > 0) {
+      await supabase.from("notifications").insert(
+        added.map((rid) => ({
+          org_id: column.org_id,
+          recipient_id: rid,
+          actor_id: user?.id ?? null,
+          kind: "assigned" as const,
+          board_id: column.board_id,
+          item_id: parsed.data.itemId,
+        })),
+      );
+    }
+  }
 
   revalidatePath(`/boards/${column.board_id}`);
   return { ok: true, data: undefined };
