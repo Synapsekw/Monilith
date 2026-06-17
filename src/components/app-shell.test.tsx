@@ -1,12 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AppShell } from "./app-shell";
+import { useUIStore } from "@/stores/ui";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/",
   useParams: () => ({}),
 }));
+
+beforeEach(() => {
+  useUIStore.setState({ sidebarCollapsed: false, hasHydrated: true });
+});
 
 describe("AppShell", () => {
   it("renders the MONOLITH brand and its children", () => {
