@@ -1,0 +1,125 @@
+.hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0d0d0f;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(
+    120% 90% at 50% 45%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+}
+
+.glow {
+  position: absolute;
+  z-index: 1;
+  width: min(15vh, 150px);
+  height: min(70vh, 620px);
+  filter: blur(40px);
+  background: linear-gradient(
+    to top,
+    rgba(186, 200, 255, 0),
+    rgba(186, 200, 255, 0.55) 45%,
+    rgba(224, 231, 255, 0.2)
+  );
+  animation: shaft 7s ease-in-out infinite;
+}
+
+.slab {
+  position: absolute;
+  z-index: 2;
+  width: min(15vh, 140px);
+  height: min(52vh, 470px);
+  border-radius: 3px;
+  background: linear-gradient(160deg, #1c1c22, #0a0a0c);
+  box-shadow:
+    inset 1.5px 0 0 rgba(255, 255, 255, 0.1),
+    inset -1.5px 0 0 rgba(0, 0, 0, 0.6),
+    0 40px 90px rgba(0, 0, 0, 0.65);
+  clip-path: polygon(0 11%, 100% 0, 100% 100%, 0 100%);
+  animation: float 6.5s ease-in-out infinite;
+}
+
+.wordmark {
+  position: relative;
+  z-index: 5;
+  font-size: clamp(40px, 9vw, 124px);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #f4f4f6;
+  text-shadow: 0 4px 50px rgba(0, 0, 0, 0.7);
+  transition:
+    letter-spacing 0.6s ease,
+    text-shadow 0.6s ease;
+}
+
+.enter {
+  position: absolute;
+  z-index: 5;
+  bottom: 13%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.hero:hover .enter,
+.hero:focus-visible .enter {
+  opacity: 0.85;
+}
+
+.hero:hover .wordmark {
+  letter-spacing: 0.05em;
+  text-shadow: 0 4px 60px rgba(99, 102, 241, 0.35);
+}
+
+.hero:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: -4px;
+}
+
+@keyframes shaft {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translateY(8px) scaleY(0.96);
+  }
+  50% {
+    opacity: 0.92;
+    transform: translateY(-6px) scaleY(1.04);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(6px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow,
+  .slab {
+    animation: none;
+  }
+}
