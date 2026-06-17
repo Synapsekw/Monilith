@@ -1,14 +1,8 @@
 import { notFound } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
 import { BoardViews } from "@/components/boards/BoardViews";
-import {
-  getBoardPayload,
-  listBoards,
-  listOrgMembers,
-} from "@/lib/boards/queries";
+import { getBoardPayload, listOrgMembers } from "@/lib/boards/queries";
 import { resolveSelectedView } from "@/lib/boards/views";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/session";
 
 export default async function BoardPage({
   params,
@@ -27,35 +21,14 @@ export default async function BoardPage({
   const selected = resolveSelectedView(payload.views, view);
   const selectedViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
-  const supabase = await createClient();
-  const [orgs, boards, { data: workspaces }, members] = await Promise.all([
-    getUserOrgs(),
-    listBoards(),
-    supabase.from("workspaces").select("id, name"),
-    listOrgMembers(payload.board.org_id),
-  ]);
+  const members = await listOrgMembers(payload.board.org_id);
 
   return (
-    <AppShell
+    <BoardViews
+      payload={payload}
+      members={members}
+      initialViewId={selectedViewId}
       currentUserId={user.id}
-      user={{
-        email: user.email,
-        full_name:
-          typeof user.user_metadata?.full_name === "string"
-            ? user.user_metadata.full_name
-            : null,
-      }}
-      org={{ name: orgs[0]?.name ?? "Pulse" }}
-      workspaces={workspaces ?? []}
-      boards={boards}
-      activeBoardId={boardId}
-    >
-      <BoardViews
-        payload={payload}
-        members={members}
-        initialViewId={selectedViewId}
-        currentUserId={user.id}
-      />
-    </AppShell>
+    />
   );
 }
