@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -73,6 +74,9 @@ export function BoardsNav({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>New board</DialogTitle>
+              <DialogDescription>
+                Give your board a name to get started.
+              </DialogDescription>
             </DialogHeader>
             <form
               className="flex flex-col gap-3"
