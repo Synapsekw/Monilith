@@ -20,9 +20,10 @@ export type BoardOption = {
   name: string;
   numbersColumns: { id: string; name: string }[];
   statusColumns: { id: string; name: string }[];
+  allColumns: { id: string; name: string; kind: string }[];
 };
 
-type Kind = "number" | "chart" | "battery";
+type Kind = "number" | "chart" | "battery" | "list";
 
 const selectClass =
   "bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm";
@@ -43,6 +44,8 @@ export function AddWidgetDialog({
   const [valueColumnId, setValueColumnId] = useState("");
   const [groupColumnId, setGroupColumnId] = useState("");
   const [chartStyle, setChartStyle] = useState<"bar" | "pie">("bar");
+  const [columnIds, setColumnIds] = useState<string[]>([]);
+  const [limit, setLimit] = useState(25);
   const [error, setError] = useState<string | null>(null);
 
   const board = boards.find((b) => b.id === boardId);
@@ -55,6 +58,8 @@ export function AddWidgetDialog({
     setValueColumnId("");
     setGroupColumnId("");
     setChartStyle("bar");
+    setColumnIds([]);
+    setLimit(25);
     setKind("number");
   }
 
@@ -67,6 +72,8 @@ export function AddWidgetDialog({
       if (agg !== "count" && !valueColumnId)
         return setError("Pick a numbers column for sum/average.");
       config = agg === "count" ? { agg } : { agg, valueColumnId };
+    } else if (kind === "list") {
+      config = { columnIds, limit };
     } else {
       // chart + battery both group by a status column
       if (!groupColumnId) return setError("Pick a status column to group by.");
@@ -108,6 +115,7 @@ export function AddWidgetDialog({
               <option value="number">Number</option>
               <option value="chart">Chart</option>
               <option value="battery">Battery</option>
+              <option value="list">List</option>
             </select>
           </label>
 
@@ -122,6 +130,7 @@ export function AddWidgetDialog({
                 setBoardId(e.target.value);
                 setGroupColumnId("");
                 setValueColumnId("");
+                setColumnIds([]);
               }}
             >
               {boards.map((b) => (
@@ -175,6 +184,52 @@ export function AddWidgetDialog({
                   </select>
                 </label>
               ) : null}
+            </>
+          ) : kind === "list" ? (
+            <>
+              <fieldset className="text-sm">
+                <legend className="mb-1">Columns to show</legend>
+                <div className="flex flex-col gap-1 rounded-md border p-2">
+                  {(board?.allColumns ?? []).length === 0 ? (
+                    <span className="text-muted-foreground text-xs">
+                      This board has no columns.
+                    </span>
+                  ) : (
+                    board?.allColumns.map((c) => (
+                      <label key={c.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="accent-primary size-4"
+                          checked={columnIds.includes(c.id)}
+                          onChange={(e) =>
+                            setColumnIds((prev) =>
+                              e.target.checked
+                                ? [...prev, c.id]
+                                : prev.filter((id) => id !== c.id),
+                            )
+                          }
+                        />
+                        {c.name}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </fieldset>
+              <label className="text-sm">
+                Max rows
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="mt-1"
+                  value={limit}
+                  onChange={(e) =>
+                    setLimit(
+                      Math.min(Math.max(Number(e.target.value) || 1, 1), 100),
+                    )
+                  }
+                />
+              </label>
             </>
           ) : (
             <>

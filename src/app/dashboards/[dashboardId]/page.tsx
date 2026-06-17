@@ -26,27 +26,26 @@ export default async function DashboardPage({
     .eq("workspace_id", payload.dashboard.workspace_id)
     .order("position", { ascending: true });
   const boardIds = (boardRows ?? []).map((b) => b.id);
-  const { data: numberCols } = await supabase
+  const { data: allCols } = await supabase
     .from("columns")
-    .select("id, name, board_id")
-    .eq("kind", "numbers")
-    .in("board_id", boardIds);
-  const { data: statusCols } = await supabase
-    .from("columns")
-    .select("id, name, board_id")
-    .eq("kind", "status")
-    .in("board_id", boardIds);
+    .select("id, name, kind, board_id")
+    .in("board_id", boardIds)
+    .order("position", { ascending: true });
 
-  const boards: BoardOption[] = (boardRows ?? []).map((b) => ({
-    id: b.id,
-    name: b.name,
-    numbersColumns: (numberCols ?? [])
-      .filter((c) => c.board_id === b.id)
-      .map((c) => ({ id: c.id, name: c.name })),
-    statusColumns: (statusCols ?? [])
-      .filter((c) => c.board_id === b.id)
-      .map((c) => ({ id: c.id, name: c.name })),
-  }));
+  const boards: BoardOption[] = (boardRows ?? []).map((b) => {
+    const cols = (allCols ?? []).filter((c) => c.board_id === b.id);
+    return {
+      id: b.id,
+      name: b.name,
+      numbersColumns: cols
+        .filter((c) => c.kind === "numbers")
+        .map((c) => ({ id: c.id, name: c.name })),
+      statusColumns: cols
+        .filter((c) => c.kind === "status")
+        .map((c) => ({ id: c.id, name: c.name })),
+      allColumns: cols.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+    };
+  });
 
   return <DashboardCanvas initialData={payload} boards={boards} />;
 }
