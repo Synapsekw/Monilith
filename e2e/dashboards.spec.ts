@@ -56,6 +56,11 @@ function widgetNumber(page: Page) {
 }
 
 test.describe("Dashboards: create → add Number widget → drag → persist", () => {
+  // These tests share one CONFIRMED user (created in beforeAll). Run them
+  // serially so onboarding happens exactly once and the two flows don't race
+  // over the shared org/board state.
+  test.describe.configure({ mode: "serial" });
+
   test.skip(
     !hasSecrets,
     "Supabase secrets not available — skipping dashboards e2e",
@@ -139,7 +144,7 @@ test.describe("Dashboards: create → add Number widget → drag → persist", (
     // Open the Add-widget dialog (the toolbar trigger).
     await page.getByRole("button", { name: /add widget/i }).click();
     await expect(
-      page.getByRole("heading", { name: /add a number widget/i }),
+      page.getByRole("heading", { name: /add a widget/i }),
     ).toBeVisible();
     // Default source board is the only board; default metric is Count of items.
     // Submit via the dialog footer button (the last "Add widget" button).
@@ -209,5 +214,93 @@ test.describe("Dashboards: create → add Number widget → drag → persist", (
     const afterReload = widgetNumber(page);
     await expect(afterReload).toBeVisible({ timeout: 15_000 });
     await expect(afterReload).toHaveText(before!);
+  });
+
+  test("add a Chart widget grouped by status renders an SVG chart", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    // ── 1. Log in ─────────────────────────────────────────────────────────────
+    await page.goto("/login");
+    await page.getByLabel(/email/i).fill(testEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: /sign in/i }).click();
+
+    // Tests run in parallel against one shared user, so this context may land on
+    // either the onboarding form (org not yet created) or the app root ("New
+    // board" present). Branch on whichever UI actually appears, not on the URL
+    // (the post-login redirect to /onboarding races a transient "/").
+    const orgNameField = page.getByLabel(/organization name/i);
+    const newBoardButton = page.getByRole("button", { name: "New board" });
+    await expect(orgNameField.or(newBoardButton).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    if (await orgNameField.isVisible().catch(() => false)) {
+      await orgNameField.fill(unique("Org"));
+      await page.getByLabel(/workspace name/i).fill("Engineering");
+      await page.getByRole("button", { name: /create organization/i }).click();
+      await page.waitForURL(/localhost:3000\/$/, { timeout: 30_000 });
+    }
+    await expect(newBoardButton).toBeVisible({ timeout: 30_000 });
+
+    // ── 2. Create a board with one item (the seeded board has a Status column) ─
+    const boardName = unique("ChartBoard");
+    await page.getByRole("button", { name: "New board" }).click();
+    await page.getByLabel(/board name/i).fill(boardName);
+    await page.getByRole("button", { name: /create board/i }).click();
+    await page.waitForURL(/\/boards\//);
+    await expect(page.getByText("Group 1")).toBeVisible();
+
+    const itemName = unique("Task");
+    await page.getByLabel("Add item").fill(itemName);
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(itemName)).toBeVisible({ timeout: 15_000 });
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // ── 3. Create a dashboard ─────────────────────────────────────────────────
+    await page.getByRole("button", { name: /new dashboard/i }).click();
+    await page.getByLabel(/dashboard name/i).fill("Chart Dash");
+    await page.getByRole("button", { name: /create dashboard/i }).click();
+    await expect(page).toHaveURL(/\/dashboards\/[0-9a-f-]+/, {
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("heading", { name: "Chart Dash" })).toBeVisible(
+      { timeout: 15_000 },
+    );
+
+    // ── 4. Enter Edit, open Add-widget, pick Chart grouped by Status ──────────
+    await page.getByRole("button", { name: /^edit$/i }).click();
+    await page.getByRole("button", { name: /add widget/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /add a widget/i }),
+    ).toBeVisible();
+
+    // Select the Chart widget type. The "Widget type" select is the one whose
+    // label text precedes it; target via its containing label for robustness.
+    const typeSelect = page
+      .locator("label", { hasText: "Widget type" })
+      .locator("select");
+    await typeSelect.selectOption("chart");
+
+    // Selecting "chart" reveals the "Group by (status column)" select. The
+    // seeded board's Status column appears as the first real option (index 1,
+    // after the "Select…" placeholder).
+    const groupSelect = page
+      .locator("label", { hasText: "Group by (status column)" })
+      .locator("select");
+    await expect(groupSelect).toBeVisible();
+    await groupSelect.selectOption({ index: 1 });
+
+    // Submit via the dialog footer button (the last "Add widget" button).
+    await page
+      .getByRole("button", { name: /add widget/i })
+      .last()
+      .click();
+
+    // ── 5. A recharts SVG renders inside the widget card (mounts async) ───────
+    await expect(page.locator("svg.recharts-surface").first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });
