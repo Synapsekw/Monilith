@@ -25,6 +25,21 @@ const people: DisplayColumn = {
   kind: "people",
   options: [],
 };
+const date: DisplayColumn = {
+  id: "c5",
+  name: "Due",
+  kind: "date",
+  options: [],
+};
+const dropdown: DisplayColumn = {
+  id: "c6",
+  name: "Tags",
+  kind: "dropdown",
+  options: [
+    { id: "d1", label: "Front", color: "#000" },
+    { id: "d2", label: "Back", color: "#000" },
+  ],
+};
 
 describe("formatCell", () => {
   it("status → label + color", () => {
@@ -47,5 +62,18 @@ describe("formatCell", () => {
   it("people → assignee count", () => {
     expect(formatCell(people, { userIds: ["a", "b"] })).toEqual({ text: "2" });
     expect(formatCell(people, { userIds: [] })).toEqual({ text: "—" });
+  });
+  it("date → its string, empty → dash", () => {
+    expect(formatCell(date, { date: "2026-06-17" })).toEqual({
+      text: "2026-06-17",
+    });
+    expect(formatCell(date, { date: "" })).toEqual({ text: "—" });
+    expect(formatCell(date, {})).toEqual({ text: "—" });
+  });
+  it("dropdown → joined known labels, skips unknown ids", () => {
+    expect(
+      formatCell(dropdown, { optionIds: ["d1", "missing", "d2"] }),
+    ).toEqual({ text: "Front, Back" });
+    expect(formatCell(dropdown, { optionIds: [] })).toEqual({ text: "—" });
   });
 });
