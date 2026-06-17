@@ -147,12 +147,14 @@ describe("getAttachmentDownloadUrl", () => {
 
 describe("getAttachmentPreviewUrls", () => {
   it("mints inline (no-download) URLs only for previewable rows", async () => {
+    const PNG = "55555555-5555-4555-8555-555555555555";
+    const SVG = "66666666-6666-4666-8666-666666666666";
     from.mockImplementation(() => ({
       select: () => ({
         in: async () => ({
           data: [
-            { id: "p", storage_path: "p/x.png", mime_type: "image/png" },
-            { id: "s", storage_path: "s/x.svg", mime_type: "image/svg+xml" },
+            { id: PNG, storage_path: "p/x.png", mime_type: "image/png" },
+            { id: SVG, storage_path: "s/x.svg", mime_type: "image/svg+xml" },
           ],
           error: null,
         }),
@@ -162,11 +164,11 @@ describe("getAttachmentPreviewUrls", () => {
       data: [{ path: "p/x.png", signedUrl: "https://signed/p" }],
       error: null,
     });
-    const res = await getAttachmentPreviewUrls({ attachmentIds: ["p", "s"] });
+    const res = await getAttachmentPreviewUrls({ attachmentIds: [PNG, SVG] });
     expect(createSignedUrls).toHaveBeenCalledWith(["p/x.png"], 300);
     expect(res).toEqual({
       ok: true,
-      data: { urls: { p: "https://signed/p" } },
+      data: { urls: { [PNG]: "https://signed/p" } },
     });
   });
 });

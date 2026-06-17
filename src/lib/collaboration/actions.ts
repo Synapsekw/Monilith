@@ -9,6 +9,7 @@ import {
   createAttachmentSchema,
   deleteAttachmentSchema,
   attachmentUrlSchema,
+  attachmentUrlsSchema,
 } from "@/lib/validations/collaboration-actions";
 import { isPreviewable } from "@/lib/collaboration/attachments-format";
 import type { ActionResult } from "@/lib/boards/actions";
@@ -230,23 +231,17 @@ export async function getAttachmentDownloadUrl(input: {
 export async function getAttachmentPreviewUrls(input: {
   attachmentIds: string[];
 }): Promise<ActionResult<{ urls: Record<string, string> }>> {
-  // Validate the wrapper shape (max 60 ids) without UUID-format checks on the
-  // ids themselves: format is enforced at upload time; signed URLs are scoped
-  // by RLS on the DB read below. attachmentUrlsSchema validates UUID format
-  // and is used by the typesystem / other callers; here we only need the cap.
-  if (
-    !Array.isArray(input.attachmentIds) ||
-    input.attachmentIds.length > 60 ||
-    input.attachmentIds.some((id) => typeof id !== "string")
-  )
-    return fail("Invalid");
-  if (input.attachmentIds.length === 0) return { ok: true, data: { urls: {} } };
+  const parsed = attachmentUrlsSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (parsed.data.attachmentIds.length === 0)
+    return { ok: true, data: { urls: {} } };
 
   const supabase = await createClient();
   const { data: rows, error } = await supabase
     .from("attachments")
     .select("id, storage_path, mime_type")
-    .in("id", input.attachmentIds);
+    .in("id", parsed.data.attachmentIds);
   if (error || !rows) return fail("Could not load attachments.");
 
   // Inline preview only for the safe raster/video allow-list (no `download`).
