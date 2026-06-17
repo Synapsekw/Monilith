@@ -28,8 +28,9 @@ describe("Sidebar", () => {
     expect(useUIStore.getState().sidebarCollapsed).toBe(true);
     expect(screen.queryByText("MONOLITH")).not.toBeInTheDocument();
     expect(screen.queryByText("Dashboards")).not.toBeInTheDocument();
+    // Collapsed: the Dashboards section renders an icon-only link.
     expect(
-      screen.getByRole("button", { name: "Dashboards" }),
+      screen.getByRole("link", { name: "Dashboards" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /expand sidebar/i }),
