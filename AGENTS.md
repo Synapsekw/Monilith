@@ -6,13 +6,64 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 <!-- END:nextjs-agent-rules -->
 
+# Where things live
+
+Pulse is a Next.js 16 (App Router) + Supabase multi-tenant "Work OS". Orientation map:
+
+| Path                          | What's there                                                        |
+| ----------------------------- | ------------------------------------------------------------------- |
+| `src/app/`                    | Routes (RSC). `(auth)` group, `auth/`, `onboarding/`, `boards/`     |
+| `src/components/`             | `ui/` (shadcn primitives) + feature folders (`boards/`, `auth/`, …) |
+| `src/lib/`                    | `supabase/` (clients), `boards/`, `auth/`, `validations/` (Zod)     |
+| `src/stores/`                 | Zustand client state                                                |
+| `src/types/database.types.ts` | Generated Supabase types — **never hand-edit**                      |
+| `supabase/migrations/`        | Versioned schema (source of truth for the DB)                       |
+| `docs/`                       | `prd.md`, docs index (`README.md`), bundled `superpowers/`          |
+| `vault/`                      | Dev-memory: `sessions/`, `decisions/` (ADRs), `00-north-star.md`    |
+
+# Engineering invariants (the things agents get wrong)
+
+`CONTRIBUTING.md` is the full reference — these are the non-negotiables to internalize up front:
+
+- **Server Components by default.** Client components only when interactive; **Server Actions for
+  all mutations**. This is Next.js 16 — confirm APIs against `node_modules/next/dist/docs/`.
+- **Validate at boundaries with Zod.** TypeScript strict; avoid `any` (justify when unavoidable).
+- **RLS is the security boundary** — default-deny, org-scoped, no cross-tenant access. Never trust
+  the client. `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach the browser.
+- **Schema changes are versioned migrations** in `supabase/migrations/` (never dashboard
+  click-ops). After a migration, regenerate types with `pnpm db:types` and commit them in the same
+  PR — stale types are the main source of `any` creep.
+- **In-page state must not refetch server data.** View toggles, tabs, filters, and sorts over data
+  already loaded are **client state + the History API** (`window.history.pushState`/`replaceState`,
+  which Next.js 16 syncs into `useSearchParams()` with no RSC re-run) — never a `<Link>`/`router`
+  navigation, which re-runs the whole page (every query in it) on each interaction. Reserve RSC
+  navigation / Server Actions for changes to server data. Hot-path list/board reads must be
+  **bounded** (pagination/virtualization) over **indexed** filter columns — no unbounded `select *`
+  on growing tables. See `vault/decisions/2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch.md`.
+
+# Dev memory
+
+This repo keeps a tracked dev-memory vault. At the end of a working block, run `/wrapup` to log a
+session note in `vault/sessions/` and bump `vault/00-north-star.md`. Record non-obvious traps as
+ADRs in `vault/decisions/`.
+
 # Working agreement (how to build in this repo)
 
 These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the full workflow.
 
-1. **Branch lifecycle.** Work on a `feat/…` or `chore/…` branch off `main`; open a PR; merge once
-   CI is green. Branches are **deleted on merge** (GitHub auto-deletes them — never leave stale
-   branches around). `main` is protected: no direct pushes.
+1. **Two long-lived branches: `develop` (integration) and `main` (production).** All day-to-day
+   work — features, fixes, debugging, every session — happens on **`develop`**. Do **not** create
+   per-feature branches. Commit and push to `develop`; CI runs there. When `develop` is green and
+   you're happy with it, **promote to `main`** (open a `develop → main` PR, merge once CI passes) —
+   that, and only that, deploys production on Vercel. `develop` never deploys to production.
+
+   - **One working directory, one branch.** A git branch belongs to the checkout, not to a
+     terminal/agent — two sessions in the same folder share one branch and one set of files. So:
+     **never `git checkout` to a different branch or `git stash`-and-switch in a shared checkout**
+     (it clobbers other live sessions). All sessions simply stay on `develop`. If you genuinely
+     need isolation for parallel work, use a **git worktree** (a separate folder per branch), not a
+     branch switch in the shared checkout.
+   - `main` is protected: no direct pushes — it only advances via the promotion PR.
 
 2. **Use Superpowers skills for non-trivial work — but don't overthink trivial changes.** For
    anything beyond a simple/obvious edit (new features, components, behavior changes, debugging,
@@ -26,6 +77,22 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
    visual/component work.
 
 4. **Tests are mandatory.** Every feature — at spec time and at build time — ships with tests that
-   are **written and executed**. A feature is not "done" until `pnpm typecheck`, `pnpm lint`,
-   `pnpm test`, and `pnpm build` all pass (and behavior is verified). This is the Superpowers
-   `test-driven-development` + `verification-before-completion` discipline: evidence before claims.
+   are **written and executed**. This is the Superpowers `test-driven-development` +
+   `verification-before-completion` discipline: evidence before claims. A feature is not "done"
+   until all of the following pass and behavior is verified:
+
+   ```bash
+   pnpm typecheck   # tsc --noEmit
+   pnpm lint        # ESLint
+   pnpm test        # Vitest
+   pnpm build       # production build
+   ```
+
+5. **Specs and plans state a performance & data-fetching budget.** When `brainstorming` or
+   `writing-plans` (agent or human) designs any UI with **multiple views, tabs, filters, or sorts
+   over the same data**, the spec/plan MUST answer: (a) what loads on **first paint** vs. each
+   **interaction** — in-page toggles should be **0 new server round-trips**; (b) does the
+   interaction change **server data** (yes → Server Action + targeted revalidation; no → client
+   state + History API); (c) is the hot-path read **bounded** (pagination/virtualization) over
+   **indexed** columns. A plan that can't answer these isn't ready to build. Rationale:
+   `vault/decisions/2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch.md`.

@@ -7,6 +7,8 @@ export type Group = Tables<"groups">;
 export type Item = Tables<"items">;
 export type Column = Tables<"columns">;
 export type CellValue = Tables<"cell_values">;
+export type BoardView = Tables<"board_views">;
+export type ItemDependency = Tables<"item_dependencies">;
 
 export type BoardPayload = {
   board: Board;
@@ -14,6 +16,8 @@ export type BoardPayload = {
   columns: Column[];
   items: Item[];
   cellValues: CellValue[];
+  views: BoardView[];
+  dependencies: ItemDependency[];
 };
 
 export type BoardListEntry = Pick<
@@ -34,7 +38,7 @@ export async function listBoards(): Promise<BoardListEntry[]> {
 
 /**
  * Batched read of a board's full payload. Returns null when the board is not
- * visible (RLS) or does not exist. Five parallel RLS-scoped reads — no joins,
+ * visible (RLS) or does not exist. Six parallel RLS-scoped reads — no joins,
  * no N+1.
  */
 export async function getBoardPayload(
@@ -49,24 +53,35 @@ export async function getBoardPayload(
     .maybeSingle();
   if (boardErr || !board) return null;
 
-  const [groupsRes, columnsRes, itemsRes, cellsRes] = await Promise.all([
-    supabase
-      .from("groups")
-      .select("*")
-      .eq("board_id", boardId)
-      .order("position", { ascending: true }),
-    supabase
-      .from("columns")
-      .select("*")
-      .eq("board_id", boardId)
-      .order("position", { ascending: true }),
-    supabase
-      .from("items")
-      .select("*")
-      .eq("board_id", boardId)
-      .order("position", { ascending: true }),
-    supabase.from("cell_values").select("*").eq("board_id", boardId),
-  ]);
+  const [groupsRes, columnsRes, itemsRes, cellsRes, viewsRes, depsRes] =
+    await Promise.all([
+      supabase
+        .from("groups")
+        .select("*")
+        .eq("board_id", boardId)
+        .order("position", { ascending: true }),
+      supabase
+        .from("columns")
+        .select("*")
+        .eq("board_id", boardId)
+        .order("position", { ascending: true }),
+      supabase
+        .from("items")
+        .select("*")
+        .eq("board_id", boardId)
+        .order("position", { ascending: true }),
+      supabase.from("cell_values").select("*").eq("board_id", boardId),
+      supabase
+        .from("board_views")
+        .select("*")
+        .eq("board_id", boardId)
+        .order("position", { ascending: true }),
+      supabase
+        .from("item_dependencies")
+        .select("*")
+        .eq("board_id", boardId)
+        .order("created_at", { ascending: true }),
+    ]);
 
   return {
     board,
@@ -74,6 +89,8 @@ export async function getBoardPayload(
     columns: columnsRes.data ?? [],
     items: itemsRes.data ?? [],
     cellValues: cellsRes.data ?? [],
+    views: viewsRes.data ?? [],
+    dependencies: depsRes.data ?? [],
   };
 }
 

@@ -5,6 +5,7 @@ export type CacheGroup = Tables<"groups">;
 export type CacheItem = Tables<"items">;
 export type CacheColumn = Tables<"columns">;
 export type CacheCellValue = Tables<"cell_values">;
+export type CacheDependency = Tables<"item_dependencies">;
 
 /** Client-side mirror of the server BoardPayload shape (no server-only deps). */
 export type BoardCache = {
@@ -13,7 +14,22 @@ export type BoardCache = {
   columns: CacheColumn[];
   items: CacheItem[];
   cellValues: CacheCellValue[];
+  dependencies: CacheDependency[];
 };
+
+/** Stable lookup key for a cell value (item + column). */
+export function cellKey(itemId: string, columnId: string): string {
+  return `${itemId}:${columnId}`;
+}
+
+/** Build an O(1) `${item_id}:${column_id}` → value map from cell values. */
+export function buildCellMap(
+  cellValues: readonly CacheCellValue[],
+): Map<string, CacheCellValue["value"]> {
+  const map = new Map<string, CacheCellValue["value"]>();
+  for (const c of cellValues) map.set(cellKey(c.item_id, c.column_id), c.value);
+  return map;
+}
 
 /** Insert or replace a cell value keyed by (item_id, column_id). Immutable. */
 export function upsertCellValue(
@@ -56,4 +72,50 @@ export function replaceItem(cache: BoardCache, item: CacheItem): BoardCache {
 export function insertItem(cache: BoardCache, item: CacheItem): BoardCache {
   if (cache.items.some((i) => i.id === item.id)) return cache;
   return { ...cache, items: [...cache.items, item] };
+}
+
+/** Append a dependency; idempotent on id. Immutable. */
+export function addDependency(
+  cache: BoardCache,
+  dep: CacheDependency,
+): BoardCache {
+  if (cache.dependencies.some((d) => d.id === dep.id)) return cache;
+  return { ...cache, dependencies: [...cache.dependencies, dep] };
+}
+
+/** Remove a dependency by id. No-op if absent. Immutable. */
+export function removeDependency(cache: BoardCache, id: string): BoardCache {
+  return {
+    ...cache,
+    dependencies: cache.dependencies.filter((d) => d.id !== id),
+  };
+}
+
+function byPosition(a: CacheColumn, b: CacheColumn) {
+  return a.position - b.position;
+}
+
+/** Insert a column, keeping position order. No-op if the id already exists. */
+export function insertColumn(cache: BoardCache, col: CacheColumn): BoardCache {
+  if (cache.columns.some((c) => c.id === col.id)) return cache;
+  return { ...cache, columns: [...cache.columns, col].sort(byPosition) };
+}
+
+/** Replace a column by id (rename/width/settings), keeping position order. */
+export function replaceColumn(cache: BoardCache, col: CacheColumn): BoardCache {
+  return {
+    ...cache,
+    columns: cache.columns
+      .map((c) => (c.id === col.id ? col : c))
+      .sort(byPosition),
+  };
+}
+
+/** Remove a column and its cell values (mirrors the DB cascade). Immutable. */
+export function removeColumn(cache: BoardCache, columnId: string): BoardCache {
+  return {
+    ...cache,
+    columns: cache.columns.filter((c) => c.id !== columnId),
+    cellValues: cache.cellValues.filter((c) => c.column_id !== columnId),
+  };
 }

@@ -43,7 +43,9 @@ that stays smooth at 10k-item boards.
 Three words: **Calm. Capable. Crisp.**
 
 - **Calm** — a colorful category (Monday especially) tends toward visual noise. Pulse stays
-  monochromatic by default; color carries _meaning_ (status, labels), not decoration.
+  monochromatic by default; color carries _meaning_ (status, labels), not decoration. The lead look
+  is **dark-first**: layered near-black surfaces, hairline borders, a single indigo accent (light
+  mode supported but secondary).
 - **Capable** — depth is there when you reach for it (nesting, formulas, automations, time tracking)
   but never thrown at you up front.
 - **Crisp** — Linear-grade restraint. Generous whitespace, sharp typography, subtle 150–250ms motion.
@@ -73,6 +75,9 @@ Three words: **Calm. Capable. Crisp.**
 Semantic CSS variables in `globals.css` for both themes (`--background`, `--surface`,
 `--surface-muted`, `--border`, `--foreground`, `--muted-foreground`, plus a single configurable
 `--accent`). next-themes, class-based dark mode, no flash, respect system pref + manual toggle. One
-clean sans (Geist/Inter), 4px grid, `rounded-md`, subtle shadows in light / hairline borders in dark.
-App-level primitives: `BoardTable`, `StatusCell`, `PersonCell`, `ItemPanel`, `ViewSwitcher`,
-`CommandPalette`.
+clean sans (Geist/Inter), 4px grid, `rounded-md`, soft shadows for elevation / hairline borders for
+separation. **Dark-first** — the dark near-black theme is the reference look; light is secondary.
+The concrete palette/density target is the in-repo prototype reskin (reuse map:
+[[2026-06-16-decision-08-dark-first-monday-reskin]]); its hex tokens are translated into the
+`@theme`/OKLch variables (never hardcoded). App-level primitives: `BoardTable`, `StatusCell`,
+`PersonCell`, `ItemPanel`, `ViewSwitcher`, `CommandPalette`.

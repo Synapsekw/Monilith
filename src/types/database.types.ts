@@ -14,6 +14,128 @@ export type Database = {
   };
   public: {
     Tables: {
+      attachments: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          file_name: string;
+          id: string;
+          item_id: string | null;
+          mime_type: string;
+          org_id: string;
+          size_bytes: number;
+          storage_path: string;
+          update_id: string | null;
+          uploaded_by: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          file_name: string;
+          id?: string;
+          item_id?: string | null;
+          mime_type: string;
+          org_id: string;
+          size_bytes: number;
+          storage_path: string;
+          update_id?: string | null;
+          uploaded_by: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          file_name?: string;
+          id?: string;
+          item_id?: string | null;
+          mime_type?: string;
+          org_id?: string;
+          size_bytes?: number;
+          storage_path?: string;
+          update_id?: string | null;
+          uploaded_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attachments_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_update_id_fkey";
+            columns: ["update_id"];
+            isOneToOne: false;
+            referencedRelation: "item_updates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      board_views: {
+        Row: {
+          board_id: string;
+          config: Json;
+          created_at: string;
+          id: string;
+          kind: Database["public"]["Enums"]["view_kind"];
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          config?: Json;
+          created_at?: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["view_kind"];
+          name: string;
+          org_id: string;
+          position?: number;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          config?: Json;
+          created_at?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["view_kind"];
+          name?: string;
+          org_id?: string;
+          position?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_views_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_views_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       boards: {
         Row: {
           created_at: string;
@@ -132,6 +254,7 @@ export type Database = {
           position: number;
           settings: Json;
           updated_at: string;
+          width: number | null;
         };
         Insert: {
           board_id: string;
@@ -143,6 +266,7 @@ export type Database = {
           position?: number;
           settings?: Json;
           updated_at?: string;
+          width?: number | null;
         };
         Update: {
           board_id?: string;
@@ -154,6 +278,7 @@ export type Database = {
           position?: number;
           settings?: Json;
           updated_at?: string;
+          width?: number | null;
         };
         Relationships: [
           {
@@ -213,6 +338,194 @@ export type Database = {
           },
           {
             foreignKeyName: "groups_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      item_activities: {
+        Row: {
+          action: Database["public"]["Enums"]["activity_action"];
+          actor_id: string | null;
+          board_id: string;
+          column_id: string | null;
+          created_at: string;
+          id: string;
+          item_id: string;
+          new_value: Json | null;
+          old_value: Json | null;
+          org_id: string;
+        };
+        Insert: {
+          action: Database["public"]["Enums"]["activity_action"];
+          actor_id?: string | null;
+          board_id: string;
+          column_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id: string;
+          new_value?: Json | null;
+          old_value?: Json | null;
+          org_id: string;
+        };
+        Update: {
+          action?: Database["public"]["Enums"]["activity_action"];
+          actor_id?: string | null;
+          board_id?: string;
+          column_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id?: string;
+          new_value?: Json | null;
+          old_value?: Json | null;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_activities_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_activities_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_activities_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_activities_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      item_dependencies: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          predecessor_id: string;
+          successor_id: string;
+          type: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          predecessor_id: string;
+          successor_id: string;
+          type?: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          predecessor_id?: string;
+          successor_id?: string;
+          type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_dependencies_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_predecessor_id_fkey";
+            columns: ["predecessor_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_dependencies_successor_id_fkey";
+            columns: ["successor_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      item_updates: {
+        Row: {
+          author_id: string;
+          board_id: string;
+          body: Json;
+          body_text: string;
+          created_at: string;
+          edited_at: string | null;
+          id: string;
+          item_id: string;
+          org_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          author_id: string;
+          board_id: string;
+          body: Json;
+          body_text?: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          item_id: string;
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          author_id?: string;
+          board_id?: string;
+          body?: Json;
+          body_text?: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          item_id?: string;
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_updates_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_updates_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_updates_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -281,6 +594,74 @@ export type Database = {
             columns: ["parent_id"];
             isOneToOne: false;
             referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notifications: {
+        Row: {
+          actor_id: string | null;
+          board_id: string | null;
+          created_at: string;
+          id: string;
+          item_id: string | null;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          org_id: string;
+          read_at: string | null;
+          recipient_id: string;
+          update_id: string | null;
+        };
+        Insert: {
+          actor_id?: string | null;
+          board_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id?: string | null;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          org_id: string;
+          read_at?: string | null;
+          recipient_id: string;
+          update_id?: string | null;
+        };
+        Update: {
+          actor_id?: string | null;
+          board_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id?: string | null;
+          kind?: Database["public"]["Enums"]["notification_kind"];
+          org_id?: string;
+          read_at?: string | null;
+          recipient_id?: string;
+          update_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_update_id_fkey";
+            columns: ["update_id"];
+            isOneToOne: false;
+            referencedRelation: "item_updates";
             referencedColumns: ["id"];
           },
         ];
@@ -437,6 +818,31 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_board_view: {
+        Args: {
+          p_board_id: string;
+          p_config?: Json;
+          p_kind: Database["public"]["Enums"]["view_kind"];
+          p_name: string;
+        };
+        Returns: {
+          board_id: string;
+          config: Json;
+          created_at: string;
+          id: string;
+          kind: Database["public"]["Enums"]["view_kind"];
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "board_views";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_item: {
         Args: { p_group_id: string; p_name: string };
         Returns: {
@@ -453,6 +859,24 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "items";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_item_dependency: {
+        Args: { p_predecessor: string; p_successor: string };
+        Returns: {
+          board_id: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          predecessor_id: string;
+          successor_id: string;
+          type: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "item_dependencies";
           isOneToOne: true;
           isSetofReturn: false;
         };
@@ -474,6 +898,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
       group_in_org: {
         Args: { p_group_id: string; p_org_id: string };
         Returns: boolean;
@@ -485,6 +910,10 @@ export type Database = {
         };
         Returns: boolean;
       };
+      is_member_of: {
+        Args: { p_org_id: string; p_user: string };
+        Returns: boolean;
+      };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
@@ -493,6 +922,13 @@ export type Database = {
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
     };
     Enums: {
+      activity_action:
+        | "item_created"
+        | "item_renamed"
+        | "item_moved"
+        | "item_deleted"
+        | "cell_changed"
+        | "update_added";
       column_kind:
         | "text"
         | "status"
@@ -500,7 +936,9 @@ export type Database = {
         | "date"
         | "numbers"
         | "dropdown";
+      notification_kind: "mention" | "assigned" | "update_on_item";
       org_role: "owner" | "admin" | "member" | "guest";
+      view_kind: "table" | "kanban" | "calendar" | "timeline";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -631,8 +1069,18 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_action: [
+        "item_created",
+        "item_renamed",
+        "item_moved",
+        "item_deleted",
+        "cell_changed",
+        "update_added",
+      ],
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
+      notification_kind: ["mention", "assigned", "update_on_item"],
       org_role: ["owner", "admin", "member", "guest"],
+      view_kind: ["table", "kanban", "calendar", "timeline"],
     },
   },
 } as const;

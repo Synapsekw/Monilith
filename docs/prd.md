@@ -41,6 +41,13 @@ and run any kind of work. Multi-tenant from day one; performance that stays smoo
 — status and labels — not decoration); depth available when you reach for it but never thrown at
 you; Linear-grade restraint.
 
+**Visual lead: dark-first.** The primary, reference look is a **near-black monochromatic surface
+set with a single indigo accent** — color reserved strictly for meaning (status pills, priority
+tags, charts, the active nav item, primary actions). Light mode is fully supported but secondary.
+The concrete visual target is the in-repo prototype reskin captured in
+[`2026-06-16-decision-08-dark-first-monday-reskin`](../vault/decisions/2026-06-16-decision-08-dark-first-monday-reskin.md)
+and its reuse map; tokens/components are being aligned to it (see Release plan §8).
+
 See the master spec [§1 Product vision](superpowers/specs/2026-06-14-pulse-design.md#1-product-vision)
 and [`vault/product.md`](../vault/product.md) for the full positioning, anti-references, and
 design principles.
@@ -127,13 +134,14 @@ delivers it.
 
 ### 5.4 Cross-cutting
 
-| ID  | Requirement                                                                                   | Priority | Phase |
-| --- | --------------------------------------------------------------------------------------------- | -------- | ----- |
-| X-1 | Performance: virtualize/paginate/index/stream — smooth at 10k-item boards                     | P0       | 2 / 9 |
-| X-2 | RLS as the security boundary — default-deny, org-scoped, client never trusted                 | P0       | 1     |
-| X-3 | Monochrome design system + single configurable accent; full dark/light; WCAG AA, keyboard nav | P0       | 0     |
-| X-4 | Command palette (⌘K)                                                                          | P1       | 0 / 8 |
-| X-5 | Templates; mobile-responsive PWA-ready layout                                                 | P2       | 8     |
+| ID  | Requirement                                                                                                                    | Priority | Phase  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------ | -------- | ------ |
+| X-1 | Performance: virtualize/paginate/index/stream — smooth at 10k-item boards                                                      | P0       | 2 / 9  |
+| X-2 | RLS as the security boundary — default-deny, org-scoped, client never trusted                                                  | P0       | 1      |
+| X-3 | Monochrome design system + single configurable accent; **dark-first** (near-black surfaces), light also; WCAG AA, keyboard nav | P0       | 0 / RS |
+| X-4 | Command palette (⌘K)                                                                                                           | P1       | 0 / 8  |
+| X-5 | Templates; mobile-responsive PWA-ready layout                                                                                  | P2       | 8      |
+| X-6 | Board export / import (CSV + JSON) and duplicate                                                                               | P2       | 8      |
 
 ## 6. Non-goals / out of scope
 
@@ -174,8 +182,20 @@ master spec [§7 Phased build plan](superpowers/specs/2026-06-14-pulse-design.md
 current status is tracked in [`00-north-star`](../vault/00-north-star.md) §2 and
 [`platform-roadmap`](../vault/moc/platform-roadmap.md).
 
-**Where we are (2026-06-15):** Phases 0 (Setup) and 1 (Auth & tenancy) done; Phase 2 (Boards
-core) in progress — 2a (data layer + read-only Table) merged, 2b (interactive editing) next.
+**Design refresh (RS) — dark-first reskin, near-term cross-cutting pass.** Beyond the numbered
+phases, a visual reskin aligns the existing surfaces (app shell, sidebar, board Table/Kanban,
+cells, editors) to the dark-first near-black monochromatic look (§2). It runs as its own
+workstream against the current build (not a renumber of 0–9) and is sequenced **first** among the
+current near-term work. The concrete target and a component-by-component reuse map from the in-repo
+prototype are recorded in
+[`2026-06-16-decision-08-dark-first-monday-reskin`](../vault/decisions/2026-06-16-decision-08-dark-first-monday-reskin.md).
+Feature phases (Calendar/Timeline, collaboration, automations, dashboards, export) then land on
+the reskinned surface, reusing prototype view/logic code where portable.
+
+**Where we are (2026-06-16):** Phases 0 (Setup), 1 (Auth & tenancy), 2 (Boards core) done; Phase 3
+(Views) in progress — 3a (view switcher + Kanban) built, 3b (Calendar + Timeline/Gantt +
+dependencies) next. Dark-first reskin (RS) queued as the immediate near-term pass. Live status:
+[`00-north-star`](../vault/00-north-star.md) §2.
 
 ## 9. Risks & open questions
 

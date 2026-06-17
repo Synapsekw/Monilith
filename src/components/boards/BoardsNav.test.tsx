@@ -1,15 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BoardsNav } from "./BoardsNav";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/",
+  useParams: () => mockUseParams(),
 }));
 
 const noWorkspaces: { id: string; name: string }[] = [];
 
 describe("BoardsNav", () => {
+  beforeEach(() => {
+    mockUseParams.mockReturnValue({});
+  });
+
   it("shows 'No boards yet' when no boards are provided", () => {
     render(<BoardsNav boards={[]} workspaces={noWorkspaces} />);
 
@@ -34,5 +42,60 @@ describe("BoardsNav", () => {
     const link = screen.getByRole("link", { name: "My Board" });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute("href", "/boards/board-123");
+  });
+
+  it("marks the board matching the route param as active", () => {
+    mockUseParams.mockReturnValue({ boardId: "board-123" });
+    render(
+      <BoardsNav
+        boards={[
+          {
+            id: "board-123",
+            name: "Active Board",
+            workspace_id: "w1",
+            position: 0,
+          },
+          {
+            id: "board-456",
+            name: "Other Board",
+            workspace_id: "w1",
+            position: 1,
+          },
+        ]}
+        workspaces={noWorkspaces}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "Active Board" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(
+      screen.getByRole("link", { name: "Other Board" }),
+    ).not.toHaveAttribute("aria-current");
+  });
+
+  it("collapsed: renders each board as an initial with the board name as its accessible label", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          collapsed
+          boards={[
+            {
+              id: "b1",
+              name: "Sprint backlog",
+              workspace_id: "w1",
+              position: 0,
+            },
+          ]}
+          workspaces={[{ id: "w1", name: "Acme" }]}
+        />
+      </TooltipProvider>,
+    );
+
+    const link = screen.getByRole("link", { name: "Sprint backlog" });
+    expect(link).toHaveAttribute("href", "/boards/b1");
+    expect(link).toHaveTextContent("S");
+    expect(screen.queryByText("Boards")).not.toBeInTheDocument();
   });
 });

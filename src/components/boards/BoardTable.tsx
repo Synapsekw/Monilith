@@ -1,26 +1,23 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import {
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Maximize2, Plus } from "lucide-react";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
-import type { Json } from "@/types/database.types";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { BoardHeader } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
 import {
   CellEditor,
   type EditorMember,
 } from "@/components/boards/cells/editors";
-import type { BoardCache } from "@/lib/boards/cache";
+import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
+import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
-import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
+import { ColumnHeader } from "@/components/boards/ColumnHeader";
+import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -42,21 +39,42 @@ type CellControls = {
   renameItemInCache: (vars: { itemId: string; name: string }) => void;
 };
 
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 36; // direction C density
+
+/**
+ * Open the item detail panel by setting `?item=<id>` via the History API — no
+ * RSC navigation, so the board page's queries don't re-run (mirrors how
+ * `ViewSwitcher` sets `?view=`). {@link BoardViews} reads the param and renders
+ * the panel.
+ */
+function openItemPanel(itemId: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("item", itemId);
+  window.history.pushState({}, "", url);
+}
 const NAME_COL_WIDTH = 280;
 const VALUE_COL_WIDTH = 180;
+const ADD_COL_WIDTH = 44;
 
-/** CSS grid template: pinned Name column + one track per configurable column. */
-function gridTemplate(columnCount: number) {
-  return `${NAME_COL_WIDTH}px repeat(${columnCount}, minmax(${VALUE_COL_WIDTH}px, 1fr))`;
+/** CSS grid template: pinned Name + one fixed px track per column + the add-column slot. */
+function gridTemplate(
+  columns: { id: string; width: number | null }[],
+  liveWidths: Record<string, number>,
+): string {
+  const tracks = columns
+    .map((c) => `${liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}px`)
+    .join(" ");
+  return `${NAME_COL_WIDTH}px ${tracks} ${ADD_COL_WIDTH}px`;
 }
 
 export function BoardTable({
   payload,
   members = [],
+  selectedViewId,
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
+  selectedViewId: string;
 }) {
   // Hydrate the ["board", boardId] cache once from the server payload; read all
   // board data from the cache so optimistic + realtime patches re-render.
@@ -67,42 +85,34 @@ export function BoardTable({
   const { board, groups, columns, items, cellValues } = cache;
 
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  const mutations = useBoardMutations(payload.board.id);
   const {
     setCell,
     clearCellValue,
     addItem,
     renameItem: renameItemMutation,
-  } = useBoardMutations(payload.board.id);
-  useBoardRealtime(payload.board.id);
+  } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
-  const cellMap = new Map<string, Json>(
-    cellValues.map((c) => [`${c.item_id}:${c.column_id}`, c.value]),
-  );
+  const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
 
   // Items grouped by group_id, kept in position order (query already sorts).
-  const itemsByGroup = new Map<string, Item[]>();
-  for (const g of groups) itemsByGroup.set(g.id, []);
-  for (const it of items) {
-    const bucket = itemsByGroup.get(it.group_id);
-    if (bucket) bucket.push(it);
-    else itemsByGroup.set(it.group_id, [it]);
-  }
+  const itemsByGroup = useMemo(() => {
+    const byGroup = new Map<string, Item[]>();
+    for (const g of groups) byGroup.set(g.id, []);
+    for (const it of items) {
+      const bucket = byGroup.get(it.group_id);
+      if (bucket) bucket.push(it);
+      else byGroup.set(it.group_id, [it]);
+    }
+    return byGroup;
+  }, [groups, items]);
 
-  // TanStack Table models the column/header structure (read-only here).
-  const tableColumns: ColumnDef<Item>[] = columns.map((col) => ({
-    id: col.id,
-    header: col.name,
-    accessorFn: (row) => cellMap.get(`${row.id}:${col.id}`) ?? null,
-  }));
-  const table = useReactTable({
-    data: items,
-    columns: tableColumns,
-    getCoreRowModel: getCoreRowModel(),
-  });
-  const headerGroups = table.getHeaderGroups();
-
-  const template = gridTemplate(columns.length);
+  const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
+  const template = useMemo(
+    () => gridTemplate(columns, liveWidths),
+    [columns, liveWidths],
+  );
 
   const controls: CellControls = {
     editing,
@@ -117,9 +127,12 @@ export function BoardTable({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b px-6 py-4">
-        <h1 className="text-xl font-semibold tracking-tight">{board.name}</h1>
-      </header>
+      <BoardHeader
+        boardId={board.id}
+        boardName={board.name}
+        views={payload.views}
+        selectedViewId={selectedViewId}
+      />
 
       <div className="flex-1 overflow-auto">
         <div className="min-w-fit">
@@ -128,14 +141,21 @@ export function BoardTable({
             className="bg-surface-muted text-muted-foreground sticky top-0 z-20 grid border-b text-xs font-medium"
             style={{ gridTemplateColumns: template }}
           >
-            <div className="bg-surface-muted sticky left-0 z-10 truncate px-4 py-2">
+            <div className="bg-surface-muted sticky left-0 z-10 truncate px-4 py-1.5">
               Name
             </div>
-            {headerGroups[0]?.headers.map((header) => (
-              <div key={header.id} className="truncate border-l px-3 py-2">
-                {String(header.column.columnDef.header ?? "")}
-              </div>
+            {columns.map((col) => (
+              <ColumnHeader
+                key={col.id}
+                column={col}
+                width={liveWidths[col.id] ?? col.width ?? VALUE_COL_WIDTH}
+                onRename={(name) => mutations.renameColumn(col.id, name)}
+                onDelete={() => mutations.deleteColumn(col.id)}
+                onResize={(w) => setLiveWidths((m) => ({ ...m, [col.id]: w }))}
+                onResizeEnd={(w) => mutations.resizeColumn(col.id, w)}
+              />
             ))}
+            <AddColumnMenu onAdd={(kind) => mutations.addColumn(kind)} />
           </div>
 
           {groups.length === 0 ? (
@@ -172,7 +192,7 @@ function GroupSection({
   group: Group;
   items: Item[];
   columns: Column[];
-  cellMap: Map<string, Json>;
+  cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
 }) {
@@ -197,7 +217,7 @@ function GroupSection({
         type="button"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
-        className="bg-surface hover:bg-accent focus-visible:ring-ring sticky left-0 flex w-full items-center gap-2 border-b px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-surface hover:bg-accent focus-visible:ring-ring sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-left text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none"
         style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
       >
         {collapsed ? (
@@ -233,7 +253,7 @@ function GroupSection({
                   return (
                     <div
                       key={item.id}
-                      className="hover:bg-accent/50 absolute top-0 left-0 grid w-full border-b transition-colors"
+                      className="hover:bg-surface absolute top-0 left-0 grid w-full border-b transition-colors"
                       style={{
                         height: ROW_HEIGHT,
                         transform: `translateY(${vr.start}px)`,
@@ -246,10 +266,11 @@ function GroupSection({
                           key={col.id}
                           item={item}
                           column={col}
-                          value={cellMap.get(`${item.id}:${col.id}`) ?? null}
+                          value={cellMap.get(cellKey(item.id, col.id)) ?? null}
                           controls={controls}
                         />
                       ))}
+                      <div aria-hidden /> {/* add-column track spacer */}
                     </div>
                   );
                 })}
@@ -278,7 +299,7 @@ function EditableCell({
 }: {
   item: Item;
   column: Column;
-  value: Json;
+  value: CacheCellValue["value"];
   controls: CellControls;
 }) {
   const { editing, setEditing, setCell, clearCellValue, members } = controls;
@@ -321,7 +342,7 @@ function EditableCell({
           setEditing({ itemId: item.id, columnId: column.id });
         }
       }}
-      className="hover:bg-accent/60 focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      className="hover:bg-surface-muted focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
     >
       <CellRenderer kind={column.kind} value={value} settings={settings} />
     </div>
@@ -379,20 +400,30 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${item.name} name`}
-      onClick={open}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          open();
-        }
-      }}
-      className="bg-surface hover:bg-accent/60 focus-visible:ring-ring sticky left-0 z-10 flex h-full cursor-pointer items-center truncate px-4 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
-    >
-      {item.name}
+    <div className="group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${item.name} name`}
+        onClick={open}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        }}
+        className="focus-visible:ring-ring flex h-full min-w-0 flex-1 cursor-pointer items-center truncate px-4 text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      >
+        {item.name}
+      </div>
+      <button
+        type="button"
+        aria-label={`Open ${item.name}`}
+        onClick={() => openItemPanel(item.id)}
+        className="hover:bg-accent text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <Maximize2 className="size-3.5" />
+      </button>
     </div>
   );
 }

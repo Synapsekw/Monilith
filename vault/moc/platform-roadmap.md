@@ -13,18 +13,22 @@ related: ["[[00-north-star]]"]
 
 ## Phases
 
-| #   | Phase                              | Outcome                                                                           | Status          |
-| --- | ---------------------------------- | --------------------------------------------------------------------------------- | --------------- |
-| 0   | Setup                              | Scaffold, deps, theming tokens, Supabase + MCP wired; themed shell + ⌘K stub      | **Done**        |
-| 1   | Auth & tenancy                     | Supabase Auth, org creation + membership, protected routes, RLS baseline          | **In progress** |
-| 2   | Boards core                        | Workspaces→boards→groups→items, Table view, inline edit, optimistic, realtime     | Not started     |
-| 3   | Views                              | Kanban + Calendar + Timeline/Gantt (deps); switcher + saved config                | Not started     |
-| 4   | Collaboration                      | Item panel, updates/comments/@mentions, attachments, activity log, notifications  | Not started     |
-| 5   | Automations + Rules                | Trigger/condition/action builder; Postgres triggers + Edge Functions              | Not started     |
-| 6   | ClickUp depth                      | Subitems/nesting, time tracking, Docs, custom statuses/fields, relations + mirror | Not started     |
-| 7   | Asana polish                       | Goals/OKRs, Portfolios, Workload/capacity                                         | Not started     |
-| 8   | Dashboards + templates + ⌘K polish | Cross-board widgets, templates, palette polish                                    | Not started     |
-| 9   | Hardening                          | Performance, advisors clean, tests, a11y audit, Vercel deploy                     | Not started     |
+| #   | Phase                              | Outcome                                                                                                                                                                                                       | Status               |
+| --- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| 0   | Setup                              | Scaffold, deps, theming tokens, Supabase + MCP wired; themed shell + ⌘K stub                                                                                                                                  | **Done**             |
+| 1   | Auth & tenancy                     | Supabase Auth, org creation + membership, protected routes, RLS baseline                                                                                                                                      | **Done**             |
+| 2   | Boards core                        | Workspaces→boards→groups→items, Table view, inline edit, optimistic, realtime                                                                                                                                 | **Done**             |
+| 3   | Views                              | Kanban + Calendar + Timeline/Gantt (deps); switcher + saved config                                                                                                                                            | **Done** (3a + 3b)   |
+| RS  | Design refresh (dark-first reskin) | Align shipped surfaces to dark near-black look; reuse in-repo prototype ([[2026-06-16-decision-08-dark-first-monday-reskin]])                                                                                 | **Queued — next**    |
+| 4   | Collaboration                      | Item panel, updates/comments/@mentions, attachments, activity log, notifications ([[2026-06-16-phase-4-collaboration-design\|spec]]: 4a panel+updates+activity → 4b @mentions+notifications → 4c attachments) | **Spec'd — 4a next** |
+| 5   | Automations + Rules                | Trigger/condition/action builder; Postgres triggers + Edge Functions                                                                                                                                          | Not started          |
+| 6   | ClickUp depth                      | Subitems/nesting, time tracking, Docs, custom statuses/fields, relations + mirror                                                                                                                             | Not started          |
+| 7   | Asana polish                       | Goals/OKRs, Portfolios, Workload/capacity                                                                                                                                                                     | Not started          |
+| 8   | Dashboards + templates + ⌘K polish | Cross-board widgets, templates, **export/import (CSV/JSON)**, palette polish                                                                                                                                  | Not started          |
+| 9   | Hardening                          | Performance, advisors clean, tests, a11y audit, Vercel deploy                                                                                                                                                 | Not started          |
+
+> **RS** is a cross-cutting workstream, not a renumber of 0–9 — it re-skins what's shipped and the
+> feature phases then land on the dark surface, reusing prototype view/logic code where portable.
 
 ## Sessions by phase
 

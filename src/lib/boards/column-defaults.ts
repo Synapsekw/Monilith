@@ -1,0 +1,41 @@
+import type { ColumnKind } from "@/lib/validations/boards";
+
+const DEFAULT_NAME: Record<ColumnKind, string> = {
+  text: "Text",
+  status: "Status",
+  people: "People",
+  date: "Date",
+  numbers: "Numbers",
+  dropdown: "Dropdown",
+};
+
+function opt(label: string, color: string) {
+  return { id: crypto.randomUUID(), label, color };
+}
+
+/**
+ * Default name + settings for a freshly added column. Status/Dropdown are
+ * seeded with usable options (the create_board Status palette) so the column
+ * works immediately before the options editor ships. Pure.
+ */
+export function defaultColumn(
+  kind: ColumnKind,
+  name?: string,
+): { name: string; settings: Record<string, unknown> } {
+  const resolved = name?.trim() ? name.trim() : DEFAULT_NAME[kind];
+  let settings: Record<string, unknown> = {};
+  if (kind === "status") {
+    settings = {
+      options: [
+        opt("Working on it", "#fdab3d"),
+        opt("Stuck", "#e2445c"),
+        opt("Done", "#00c875"),
+      ],
+    };
+  } else if (kind === "dropdown") {
+    settings = {
+      options: [opt("Option 1", "#579bfc"), opt("Option 2", "#a25ddc")],
+    };
+  }
+  return { name: resolved, settings };
+}

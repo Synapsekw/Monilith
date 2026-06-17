@@ -5,12 +5,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import {
+  addDependency,
+  insertColumn,
   insertItem,
   removeCellValue,
+  removeColumn,
+  removeDependency,
+  replaceColumn,
   replaceItem,
   upsertCellValue,
   type BoardCache,
   type CacheCellValue,
+  type CacheColumn,
+  type CacheDependency,
   type CacheItem,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
@@ -76,6 +83,30 @@ export function useBoardRealtime(boardId: string) {
       );
     }
 
+    function onDependency(p: RealtimePostgresChangesPayload<CacheDependency>) {
+      if (p.eventType === "DELETE") {
+        const oldRow = p.old as Partial<CacheDependency>;
+        if (oldRow.id) patch((prev) => removeDependency(prev, oldRow.id!));
+        return;
+      }
+      const row = p.new as CacheDependency;
+      patch((prev) => addDependency(prev, row)); // idempotent on id (echo-safe)
+    }
+
+    function onColumn(p: RealtimePostgresChangesPayload<CacheColumn>) {
+      if (p.eventType === "DELETE") {
+        const oldRow = p.old as Partial<CacheColumn>;
+        if (oldRow.id) patch((prev) => removeColumn(prev, oldRow.id!));
+        return;
+      }
+      const row = p.new as CacheColumn;
+      patch((prev) =>
+        prev.columns.some((c) => c.id === row.id)
+          ? replaceColumn(prev, row)
+          : insertColumn(prev, row),
+      );
+    }
+
     const channel = supabase
       .channel(`board:${boardId}`)
       .on(
@@ -87,6 +118,16 @@ export function useBoardRealtime(boardId: string) {
         "postgres_changes",
         { event: "*", schema: "public", table: "items", filter },
         onItem,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "item_dependencies", filter },
+        onDependency,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "columns", filter },
+        onColumn,
       )
       .subscribe();
 

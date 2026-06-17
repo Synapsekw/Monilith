@@ -84,6 +84,38 @@ describe("StatusEditor", () => {
     expect(onCommit).toHaveBeenCalledWith({ optionId: "o1" });
   });
 
+  it("renders options in a portal so they escape clipped scroll containers", () => {
+    render(
+      <div data-testid="clip" style={{ overflow: "hidden" }}>
+        <StatusEditor
+          value={{ optionId: null }}
+          settings={statusSettings}
+          onCommit={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </div>,
+    );
+    const listbox = screen.getByRole("listbox", { name: /select status/i });
+    // The floating surface must NOT be trapped inside the clipping container;
+    // it lives in a body-level portal so all options stay visible (Monday-style).
+    expect(screen.getByTestId("clip")).not.toContainElement(listbox);
+    expect(document.body).toContainElement(listbox);
+  });
+
+  it("cancels when the popover is dismissed with Escape", async () => {
+    const onCancel = vi.fn();
+    render(
+      <StatusEditor
+        value={{ optionId: null }}
+        settings={statusSettings}
+        onCommit={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+    await userEvent.keyboard("{Escape}");
+    expect(onCancel).toHaveBeenCalled();
+  });
+
   it("routes Clear through onClear (deletes the row), not a null upsert", async () => {
     const onCommit = vi.fn();
     const onClear = vi.fn();

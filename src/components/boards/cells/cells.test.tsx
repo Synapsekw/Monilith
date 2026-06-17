@@ -153,6 +153,10 @@ function statusPayload(): BoardPayload {
         value: { optionId: "o2" },
       } as never,
     ],
+    views: [
+      { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
+    ],
+    dependencies: [],
   };
 }
 
@@ -169,9 +173,12 @@ describe("BoardTable inline edit (optimistic + rollback)", () => {
       }),
     );
     const qc = new QueryClient();
-    render(<BoardTable payload={statusPayload()} members={[]} />, {
-      wrapper: tableWrapper(qc),
-    });
+    render(
+      <BoardTable payload={statusPayload()} members={[]} selectedViewId="v1" />,
+      {
+        wrapper: tableWrapper(qc),
+      },
+    );
 
     // Resting state shows the seeded "Stuck" pill.
     expect(screen.getByText("Stuck")).toBeInTheDocument();
@@ -198,9 +205,12 @@ describe("BoardTable Name column rename", () => {
   it("renames an item via the renameItem action on Enter", async () => {
     renameItemMock.mockResolvedValue({ ok: true, data: undefined });
     const qc = new QueryClient();
-    render(<BoardTable payload={statusPayload()} members={[]} />, {
-      wrapper: tableWrapper(qc),
-    });
+    render(
+      <BoardTable payload={statusPayload()} members={[]} selectedViewId="v1" />,
+      {
+        wrapper: tableWrapper(qc),
+      },
+    );
 
     // The Name cell is click/Enter-to-edit, labelled `${item.name} name`.
     await userEvent.click(screen.getByRole("button", { name: "One name" }));
