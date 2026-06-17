@@ -3,8 +3,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   clearCell,
+  createColumn,
   createItem,
+  deleteColumn,
+  renameColumn,
   renameItem,
+  resizeColumn,
   upsertCell,
 } from "@/lib/boards/actions";
 import {
@@ -14,14 +18,18 @@ import {
 import {
   insertItem,
   removeCellValue,
+  removeColumn,
   removeDependency,
+  replaceColumn,
   replaceItem,
   upsertCellValue,
   type BoardCache,
   type CacheCellValue,
+  type CacheColumn,
   type CacheItem,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
+import type { ColumnKind } from "@/lib/validations/boards";
 
 type SetCellVars = { itemId: string; columnId: string; value: unknown };
 type ClearCellVars = { itemId: string; columnId: string };
@@ -62,6 +70,101 @@ export function useBoardMutations(boardId: string) {
     },
     onSettled: () => {
       // No refetch: Realtime + revalidatePath keep the cache fresh.
+    },
+  });
+
+  const addColumnMutation = useMutation<
+    { columnId: string },
+    Error,
+    { kind: ColumnKind },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await createColumn({ boardId, kind: vars.kind });
+      if (!res.ok) throw new Error(res.error);
+      return res.data;
+    },
+    onSettled: () => {
+      // The new column arrives via the columns Realtime subscription.
+    },
+  });
+
+  function optimisticColumn(
+    columnId: string,
+    change: Partial<CacheColumn>,
+  ): { previous?: BoardCache } {
+    const previous = qc.getQueryData<BoardCache>(key);
+    if (previous) {
+      const current = previous.columns.find((c) => c.id === columnId);
+      if (current)
+        qc.setQueryData<BoardCache>(
+          key,
+          replaceColumn(previous, { ...current, ...change }),
+        );
+    }
+    return { previous };
+  }
+
+  const renameColumnMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string; name: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await renameColumn(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      return optimisticColumn(vars.columnId, { name: vars.name });
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const resizeColumnMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string; width: number },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await resizeColumn(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      return optimisticColumn(vars.columnId, { width: vars.width });
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const deleteColumnMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await deleteColumn(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous)
+        qc.setQueryData<BoardCache>(key, removeColumn(previous, vars.columnId));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
     },
   });
 
@@ -207,5 +310,12 @@ export function useBoardMutations(boardId: string) {
       }),
     removeDependency: (vars: RemoveDependencyVars) =>
       removeDependencyMutation.mutate(vars),
+    addColumn: (kind: ColumnKind) => addColumnMutation.mutate({ kind }),
+    renameColumn: (columnId: string, name: string) =>
+      renameColumnMutation.mutate({ columnId, name }),
+    resizeColumn: (columnId: string, width: number) =>
+      resizeColumnMutation.mutate({ columnId, width }),
+    deleteColumn: (columnId: string) =>
+      deleteColumnMutation.mutate({ columnId }),
   };
 }
