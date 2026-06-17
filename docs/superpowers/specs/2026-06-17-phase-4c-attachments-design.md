@@ -186,7 +186,7 @@ attachmentUrlsSchema = { attachmentIds: z.array(UUID).max(60) }; // batch previe
 - `deleteAttachment({ attachmentId })` → load row (RLS) → uploader/admin check → `storage.remove([path])`
   **then** delete row (object first so a row never dangles pointing at live bytes).
 
-### Query (`src/lib/collaboration/queries.ts`)
+### Query (`src/lib/collaboration/attachments.ts`)
 
 - `getItemAttachments(itemId, cursor?)` → bounded list (latest **50**, `item_id`-indexed,
   `created_at desc`, cursor "load more"). Returns metadata rows only — **no** URL minting here.
@@ -235,7 +235,10 @@ Built with the `pulse-ui` + `frontend-design` skills at implementation time. Com
 - **`AttachmentCard.tsx`** — gallery card: thumbnail = signed `<img>` for **images**; **video** shows
   a file-type badge with a play glyph (no poster is generated; it previews inline in the lightbox);
   every other type shows a colored file-type badge. Plus filename, size, uploader avatar; hover
-  overlay actions **Preview · Download · Delete** (delete shown to uploader/admin). Uploading/error states.
+  overlay actions **Preview · Download · Delete**. Delete is shown in the UI only to the **uploader**
+  (`uploaded_by === currentUserId`); org admins/owners remain RLS-permitted to delete, but a UI
+  affordance for admin-deleting another member's file is a deferred fast-follow (needs the current
+  user's org role plumbed into the panel). Uploading/error states.
 - **`AttachmentRow.tsx`** — list-view compact row (icon, name, size, uploader, date, actions).
 - **`FilePreviewLightbox.tsx`** — modal: large inline preview for previewable types (icon +
   "Download" for the rest), top-bar **open-in-new-tab · delete · Download · close**, arrow + bottom
