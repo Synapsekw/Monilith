@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BoardsNav } from "./BoardsNav";
 
@@ -13,6 +13,10 @@ vi.mock("next/navigation", () => ({
 const noWorkspaces: { id: string; name: string }[] = [];
 
 describe("BoardsNav", () => {
+  beforeEach(() => {
+    mockUseParams.mockReturnValue({});
+  });
+
   it("shows 'No boards yet' when no boards are provided", () => {
     render(<BoardsNav boards={[]} workspaces={noWorkspaces} />);
 
@@ -61,11 +65,12 @@ describe("BoardsNav", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "Active Board" })).toHaveClass(
-      "bg-surface",
+    expect(screen.getByRole("link", { name: "Active Board" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
-    expect(screen.getByRole("link", { name: "Other Board" })).not.toHaveClass(
-      "bg-surface",
-    );
+    expect(
+      screen.getByRole("link", { name: "Other Board" }),
+    ).not.toHaveAttribute("aria-current");
   });
 });

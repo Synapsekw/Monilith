@@ -116,6 +116,7 @@ export function BoardsNav({
           <Link
             key={b.id}
             href={`/boards/${b.id}`}
+            aria-current={b.id === activeBoardId ? "page" : undefined}
             className={cn(
               "truncate rounded-md px-3 py-1 text-sm transition-colors",
               b.id === activeBoardId
