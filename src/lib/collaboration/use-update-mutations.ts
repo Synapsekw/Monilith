@@ -37,7 +37,7 @@ export function useUpdateMutations(
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<UpdatesCache>(key);
-      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticId = `optimistic-${crypto.randomUUID()}`;
       const optimistic: ItemUpdate = {
         id: optimisticId,
         org_id: ctx.orgId,
@@ -63,20 +63,14 @@ export function useUpdateMutations(
         c?.optimisticId && prev ? removeUpdate(prev, c.optimisticId) : prev,
       );
     },
-    onSuccess: (data, _v, c) => {
-      // Swap the optimistic temp for a real-id row so it survives regardless of
-      // Realtime timing; the Realtime INSERT echo dedupes on this id.
-      qc.setQueryData<UpdatesCache>(key, (prev) =>
-        c?.optimisticId && prev
-          ? {
-              updates: prev.updates.map((u) =>
-                u.id === c.optimisticId ? { ...u, id: data.updateId } : u,
-              ),
-            }
-          : prev,
-      );
-      // The `update_added` activity is written by a trigger in the same
-      // transaction — refetch so it shows deterministically (Realtime dedupes).
+    onSuccess: () => {
+      // Refetch the authoritative lists rather than hand-reconciling the
+      // optimistic temp against the Realtime INSERT echo — the echo can arrive
+      // before this callback and prepend a second real-id row that the id-swap
+      // would then duplicate (and `staleTime: Infinity` would never heal). The
+      // `update_added` activity is written by a trigger in the same transaction,
+      // so it is present on refetch too. Realtime keeps both lists live after.
+      qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: itemActivityKey(itemId) });
     },
   });
