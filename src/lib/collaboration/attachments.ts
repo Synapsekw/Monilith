@@ -23,6 +23,7 @@ export async function getItemAttachments(
     .order("created_at", { ascending: false })
     .limit(ATTACHMENTS_LIMIT);
   if (cursor) q = q.lt("created_at", cursor);
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) throw error;
   return (data ?? []) as Attachment[];
 }

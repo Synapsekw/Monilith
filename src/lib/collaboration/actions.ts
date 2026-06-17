@@ -277,7 +277,7 @@ export async function deleteAttachment(input: {
   const supabase = await createClient();
   const { data: row, error } = await supabase
     .from("attachments")
-    .select("id, storage_path, uploaded_by, org_id")
+    .select("id, storage_path")
     .eq("id", parsed.data.attachmentId)
     .maybeSingle();
   // RLS already hides rows outside the caller's org; a missing row is a no-op.
