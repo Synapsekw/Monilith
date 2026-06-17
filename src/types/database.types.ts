@@ -254,6 +254,7 @@ export type Database = {
           position: number;
           settings: Json;
           updated_at: string;
+          width: number | null;
         };
         Insert: {
           board_id: string;
@@ -265,6 +266,7 @@ export type Database = {
           position?: number;
           settings?: Json;
           updated_at?: string;
+          width?: number | null;
         };
         Update: {
           board_id?: string;
@@ -276,6 +278,7 @@ export type Database = {
           position?: number;
           settings?: Json;
           updated_at?: string;
+          width?: number | null;
         };
         Relationships: [
           {
