@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-16
+last-updated: 2026-06-17
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -46,12 +46,19 @@ run tests + advisors + regenerate types before moving on.**
   Kanban. **3b** (2026-06-16): Calendar (`CalendarBoard` + `dates.ts`/`calendar.ts`) and Timeline/Gantt
   (`GanttBoard` + `gantt.ts`) with the `item_dependencies` model (cycle-safe RPC + RLS, 23 integration
   tests). Per-kind view config; ViewSwitcher add-view menu. See [[2026-06-16-2009-dark-reskin-calendar-timeline]]._
-- **4 — Collaboration** — <span style="color:#fdab3d">**[Spec'd — 4a next]**</span>
+- **4 — Collaboration** — <span style="color:#fdab3d">**[4a+4b Done — 4c next]**</span>
   Item detail panel, updates/comments/@mentions, attachments, activity log, notifications inbox.
   _Design done 2026-06-16: [[2026-06-16-phase-4-collaboration-design]]
-  (`docs/superpowers/specs/2026-06-16-phase-4-collaboration-design.md`). One spec, three sliced PRs:
-  **4a** panel (`?item=` drawer, 0 RSC refetch) + Updates + trigger-driven Activity Log →
-  **4b** @mentions + per-user Notifications inbox → **4c** attachments (Supabase Storage). Informed by a
+  (`docs/superpowers/specs/2026-06-16-phase-4-collaboration-design.md`). One spec, three sliced PRs.
+  **4a** (Done 2026-06-17): `?item=` drawer (History API, 0 RSC refetch) + Updates
+  (optimistic Server Actions) + trigger-driven append-only Activity Log (`item_updates` +
+  `item_activities`, RLS, Realtime, render-time resolution). Final review caught a delete-breaking
+  trigger FK bug + an optimistic dedup race. See [[2026-06-17-0846-phase4a-item-panel-updates-activity]].
+  **4b** (Done 2026-06-17, 19 commits): @mentions (@-autocomplete composer, `body {text,mentions}`,
+  fan-out per recipient) + People-cell `assigned` fan-out + per-user `notifications` table (recipient-gated
+  RLS, per-user Realtime) + app-shell inbox bell w/ unread badge + deep-link. 266 tests + live RLS
+  integration + two-user e2e green; advisors clean. See [[2026-06-17-0920-phase4b-mentions-notifications]].
+  Next: **4c** attachments (Supabase Storage). Informed by a
   study of the `idandavid1/My-Day` Monday clone — UX taxonomy reused, data architecture rejected; see
   [[2026-06-16-decision-11-myday-clone-donor]]._
 - **5 — Automations + Rules** — **[Not started]**
@@ -70,14 +77,15 @@ animations), dark set as default, and "direction C" density applied to the board
 kanban, chrome). User-verified. **Light-mode pass still pending.** Target + reuse map:
 [[2026-06-16-decision-08-dark-first-monday-reskin]].
 
-**Where we are:** Phases 0–3 done on `develop` (3b Calendar + Timeline/Gantt + dependencies shipped + user-verified). Dark reskin shipped. Board-view performance pass shipped (client-side view switching, memoization across all views, single hoisted realtime channel, Kanban virtualization, `cell_values(board_id)` index) — some Phase-9 hardening pulled forward. Remaining near-term: Dashboard view (needs `dashboard` view_kind migration + `recharts`), ItemPanel (needs updates/comments schema), light-mode reskin, Phase 4 collaboration.
+**Where we are:** Phases 0–3 done on `develop` (3b Calendar + Timeline/Gantt + dependencies shipped + user-verified). Dark reskin shipped. Board-view performance pass shipped. **Phases 4a + 4b shipped + pushed 2026-06-17** — item detail panel (`?item=` drawer) + Updates + Activity Log (4a), then @mentions + per-user notifications inbox (4b), fully verified (266 tests, live integration, two-user e2e) with advisors clean. Remaining near-term: Phase-4 **4c** (attachments — Supabase Storage), Dashboard view (needs `dashboard` view_kind migration + `recharts`), light-mode reskin, `develop → main` promotion.
 
 ## 3. Now
 
-- **Phase:** 3 done (incl. 3b) + dark reskin + board-view perf amplifiers shipped → pick next from {light-mode, Dashboard, ItemPanel, Phase 4 collab}
-- **Branch:** `develop` (pushed through `7abbaf1`)
-- **Latest (2026-06-16):** Board-view performance pass shipped + pushed. Quick win: view switching is now client-side (`BoardViews` + `useSearchParams` + `pushState`), zero RSC refetch per switch. Then the deferred amplifiers (subagent-driven plan, re-baselined mid-run for 3b): shared `buildCellMap`/`cellKey`, memoized derivations across all four views (Table/Kanban/Calendar/Gantt — incl. per-card/chip/row `find` → O(1) map), realtime channel hoisted to `BoardViews` (one subscription, survives switches), Kanban virtualization, and a `cell_values(board_id)` index applied to the cloud DB. 219 tests + typecheck/lint/build green. Guardrail: [[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]] + `AGENTS.md` perf invariant + working-agreement rule #5. Prior session (reskin + Calendar + Timeline/Gantt): [[2026-06-16-2009-dark-reskin-calendar-timeline]]. See [[2026-06-16-2110-board-view-perf-amplifiers]]. **Next:** confirm 3b migration completeness (open thread), then light-mode reskin / Dashboard / ItemPanel / Phase 4 collab — or open the `develop → main` promotion PR.
-- **🧑 Manual gates (Danijel):** Supabase keys done. **MCP is read-only**, but the project is cloud-native with no local stack — with explicit per-session authorization, agents may apply migrations via `supabase db push --linked` (done this session for the `cell_values` index). Regenerate types after schema changes (note: `pnpm db:types` can leak a PostHog telemetry line — filter `'"_tag"'` before prettier). **Drift watch:** 3b's `timeline_dependencies` schema was applied out-of-band (objects existed, ledger missing); reconciled via `supabase migration repair --status applied 20260616192633` — confirm that out-of-band apply was complete.
+- **Phase:** 3 done + dark reskin + perf amplifiers; **Phase 4a + 4b Done + pushed** → pick **4c** (attachments) next, or {`develop → main` promotion, light-mode, Dashboard}
+- **Branch:** `develop` (synced with origin through `89b195e`)
+- **Latest (2026-06-17):** **Board-to-board switching perf fix** (8 commits `d342e56..89b195e`, pushed). Root cause was navigation wiring, not data (DB is tiny): hoisted the `AppShell` into a new persistent `app/boards/layout.tsx` (Next 16 preserves shared layouts across sibling dynamic segments → shell fetched once, sidebar/realtime no longer remount on switch), added an instant `app/boards/[boardId]/loading.tsx` skeleton (+ default prefetch of the loading boundary), slimmed the page to board-only data, wrapped `getUser` in React `cache()`, and moved active-board detection to `useParams()`/`aria-current`. Notifications (4b) left untouched. Deferred unbounded `getBoardPayload` reads logged as [[2026-06-17-gotcha-10-board-payload-unbounded-reads]]. Gate green (typecheck/lint/268 tests/build); user-verified "significantly better." See [[2026-06-17-1043-board-switch-perf-layout]]. **Next:** Phase **4c** (attachments) or the `develop → main` promotion PR.
+- **Prior (2026-06-17):** Built + shipped **Phase 4a then 4b** in one long session. 4b (19 commits, `9158214`→`730038a`): @mentions (@-autocomplete `MentionTextarea`, `body {text,mentions}`, fan-out per recipient in `addUpdate`) + People-cell `assigned` fan-out in `upsertCell` + per-user `notifications` table (recipient-gated RLS, per-user Realtime) + app-shell inbox bell (unread badge, deep-link to `?item=`). Wrote the 4b plan from the Phase-4 spec, executed all 16 tasks inline (subagents Write-blocked). 267 tests + live RLS integration + a two-user e2e (A mentions B → B's inbox) green; advisors clean (RLS + 3 policies, indexed `item_id` cascade FK). **Final review folded** (no Criticals): hardened the notifications insert policy with org-integrity guards (`is_member_of(recipient,org)` + null-safe `board_in_org`/`item_in_org`) and pruned stale mention ids on submit. See [[2026-06-17-0920-phase4b-mentions-notifications]]. **Next:** Phase **4c** (attachments — Supabase Storage bucket + signed URLs), or the `develop → main` promotion PR.
+- **🧑 Manual gates (Danijel):** Supabase keys done. Project is cloud-native with no local stack — with explicit per-session authorization, agents apply migrations via `supabase db push --linked` (done this session for the three 4a migrations). The **Supabase MCP** was OAuth-authorized this session (read-write scope; used read-only for advisor lints — schema still goes through versioned migration files, never `apply_migration`). Regenerate types after schema changes (note: `pnpm db:types` can leak a PostHog telemetry line — filter `'"_tag"'` before prettier). **Drift watch RESOLVED:** the migration ledger was fully in sync (local == remote) before 4a's pushes — 3b's `timeline_dependencies` out-of-band apply is confirmed complete.
 
 ### Last session
 

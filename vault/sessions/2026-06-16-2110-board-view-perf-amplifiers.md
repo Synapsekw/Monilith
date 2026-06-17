@@ -32,3 +32,8 @@ Switching views felt slow because in-page state was driven through RSC navigatio
 ## Next session entry point
 
 `develop` @ `7abbaf1` is green and pushed. Next: confirm 3b migration completeness, then consider the `develop → main` promotion PR (only that deploys prod). Phase 4 collaboration spec (`1e9c7da`) is queued for implementation.
+
+## Update (2026-06-17)
+
+- Vault wrap-up committed + pushed (`a2ab0a7`); `develop` now at `a2ab0a7` on remote.
+- Opened the **`develop → main` promotion PR (#16)** — 47 commits (Phase 3 views + dark reskin + this perf pass). Not merged; CI + the 3b-migration-completeness check are the gates before merge. Body carries the migration-drift caveat.
