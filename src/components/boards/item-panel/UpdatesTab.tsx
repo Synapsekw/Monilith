@@ -30,7 +30,13 @@ export function UpdatesTab({
   function submit() {
     const t = text.trim();
     if (!t) return;
-    onAdd(t, mentionIds);
+    // Drop ids whose `@Name` was edited back out before sending, so we don't
+    // notify someone the final text no longer mentions.
+    const present = mentionIds.filter((id) => {
+      const m = members.find((x) => x.userId === id);
+      return !!m?.fullName && t.includes(`@${m.fullName}`);
+    });
+    onAdd(t, present);
     reset();
   }
 
