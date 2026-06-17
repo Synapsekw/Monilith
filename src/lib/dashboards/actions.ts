@@ -18,6 +18,7 @@ import {
   updateWidgetConfigSchema,
 } from "@/lib/validations/dashboards";
 import type { Json, Tables } from "@/types/database.types";
+import type { DisplayColumn } from "@/lib/dashboards/list-rows";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const fail = (error: string): ActionResult<never> => ({ ok: false, error });
@@ -223,4 +224,88 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
   }
 
   return { ok: true, data: { kind: widget.kind, config, buckets, columnMeta } };
+}
+
+/**
+ * Bounded row fetch for a List widget: the most recent `limit` items of the
+ * source board + their cell values for the chosen columns. RLS-scoped plain
+ * selects (board_id indexed; LIMIT bounds the read). No grouping.
+ */
+export async function getWidgetRows(input: { widgetId: string }): Promise<
+  ActionResult<{
+    columns: DisplayColumn[];
+    rows: { itemId: string; name: string; cells: Record<string, unknown> }[];
+  }>
+> {
+  const parsed = getWidgetDataSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data: widget } = await supabase
+    .from("dashboard_widgets")
+    .select("config, source_board_id")
+    .eq("id", parsed.data.widgetId)
+    .maybeSingle();
+  if (!widget) return fail("Widget not found.");
+  if (!widget.source_board_id)
+    return { ok: true, data: { columns: [], rows: [] } };
+
+  const config = (widget.config ?? {}) as {
+    columnIds?: string[];
+    limit?: number;
+  };
+  const columnIds = Array.isArray(config.columnIds) ? config.columnIds : [];
+  const limit = Math.min(Math.max(config.limit ?? 25, 1), 100);
+
+  const { data: items } = await supabase
+    .from("items")
+    .select("id, name")
+    .eq("board_id", widget.source_board_id)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const itemIds = (items ?? []).map((i) => i.id);
+
+  let columns: DisplayColumn[] = [];
+  const cellMap = new Map<string, unknown>(); // `${itemId}:${columnId}` → value
+  if (columnIds.length > 0) {
+    const { data: cols } = await supabase
+      .from("columns")
+      .select("id, name, kind, settings")
+      .in("id", columnIds);
+    columns = (cols ?? [])
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        kind: c.kind,
+        options:
+          optionSchema
+            .array()
+            .safeParse((c.settings as { options?: unknown }).options ?? [])
+            .data ?? [],
+      }))
+      // preserve the config's column order
+      .sort((a, b) => columnIds.indexOf(a.id) - columnIds.indexOf(b.id));
+
+    if (itemIds.length > 0) {
+      const { data: cells } = await supabase
+        .from("cell_values")
+        .select("item_id, column_id, value")
+        .eq("board_id", widget.source_board_id)
+        .in("item_id", itemIds)
+        .in("column_id", columnIds);
+      for (const cell of cells ?? [])
+        cellMap.set(`${cell.item_id}:${cell.column_id}`, cell.value);
+    }
+  }
+
+  const rows = (items ?? []).map((it) => ({
+    itemId: it.id,
+    name: it.name,
+    cells: Object.fromEntries(
+      columnIds.map((cid) => [cid, cellMap.get(`${it.id}:${cid}`) ?? null]),
+    ),
+  }));
+
+  return { ok: true, data: { columns, rows } };
 }
