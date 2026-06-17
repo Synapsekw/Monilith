@@ -138,4 +138,61 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: collaboration", () => {
     expect(still ?? []).toHaveLength(1);
     expect(error).toBeNull();
   });
+
+  it("logs item_renamed when the item name changes", async () => {
+    await a.anon.from("items").update({ name: "Renamed" }).eq("id", a.itemId);
+    const { data } = await a.anon
+      .from("item_activities")
+      .select("action, old_value, new_value")
+      .eq("item_id", a.itemId)
+      .eq("action", "item_renamed");
+    expect(data?.length ?? 0).toBeGreaterThan(0);
+    expect(data?.[0]?.new_value).toBe("Renamed");
+  });
+
+  it("logs cell_changed when a cell value is set", async () => {
+    const { data: col } = await a.anon
+      .from("columns")
+      .select("id")
+      .eq("board_id", a.boardId)
+      .limit(1)
+      .single();
+    await a.anon.from("cell_values").insert({
+      org_id: a.orgId,
+      board_id: a.boardId,
+      item_id: a.itemId,
+      column_id: (col as { id: string }).id,
+      value: "hello",
+    });
+    const { data } = await a.anon
+      .from("item_activities")
+      .select("action")
+      .eq("item_id", a.itemId)
+      .eq("action", "cell_changed");
+    expect(data?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("allows deleting an item — the activity trigger does not abort the delete", async () => {
+    // Regression guard: an AFTER DELETE `item_deleted` insert referencing the
+    // just-deleted item would FK-violate and roll back the delete. The trigger
+    // no longer logs deletes, so this must succeed.
+    const { data: group } = await a.anon
+      .from("groups")
+      .select("id")
+      .eq("board_id", a.boardId)
+      .limit(1)
+      .single();
+    const { data: tmp } = await a.anon.rpc("create_item", {
+      p_group_id: (group as { id: string }).id,
+      p_name: "To delete",
+    });
+    const tmpId = (tmp as { id: string }).id;
+    const { error } = await a.anon.from("items").delete().eq("id", tmpId);
+    expect(error).toBeNull();
+    const { data: gone } = await a.anon
+      .from("items")
+      .select("id")
+      .eq("id", tmpId);
+    expect(gone ?? []).toHaveLength(0);
+  });
 });
