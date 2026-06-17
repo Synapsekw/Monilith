@@ -524,6 +524,74 @@ export type Database = {
           },
         ];
       };
+      notifications: {
+        Row: {
+          actor_id: string | null;
+          board_id: string | null;
+          created_at: string;
+          id: string;
+          item_id: string | null;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          org_id: string;
+          read_at: string | null;
+          recipient_id: string;
+          update_id: string | null;
+        };
+        Insert: {
+          actor_id?: string | null;
+          board_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id?: string | null;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          org_id: string;
+          read_at?: string | null;
+          recipient_id: string;
+          update_id?: string | null;
+        };
+        Update: {
+          actor_id?: string | null;
+          board_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id?: string | null;
+          kind?: Database["public"]["Enums"]["notification_kind"];
+          org_id?: string;
+          read_at?: string | null;
+          recipient_id?: string;
+          update_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_update_id_fkey";
+            columns: ["update_id"];
+            isOneToOne: false;
+            referencedRelation: "item_updates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       org_members: {
         Row: {
           created_at: string;
@@ -790,6 +858,7 @@ export type Database = {
         | "date"
         | "numbers"
         | "dropdown";
+      notification_kind: "mention" | "assigned" | "update_on_item";
       org_role: "owner" | "admin" | "member" | "guest";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
     };
@@ -931,6 +1000,7 @@ export const Constants = {
         "update_added",
       ],
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
+      notification_kind: ["mention", "assigned", "update_on_item"],
       org_role: ["owner", "admin", "member", "guest"],
       view_kind: ["table", "kanban", "calendar", "timeline"],
     },
