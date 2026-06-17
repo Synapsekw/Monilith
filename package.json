@@ -51,6 +51,7 @@
     "radix-ui": "^1.5.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-grid-layout": "^2.2.3",
     "react-hook-form": "^7.79.0",
     "shadcn": "^4.11.0",
     "tailwind-merge": "^3.6.0",
