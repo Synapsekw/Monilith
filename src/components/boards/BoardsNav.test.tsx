@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { BoardsNav } from "./BoardsNav";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
 
@@ -72,5 +73,29 @@ describe("BoardsNav", () => {
     expect(
       screen.getByRole("link", { name: "Other Board" }),
     ).not.toHaveAttribute("aria-current");
+  });
+
+  it("collapsed: renders each board as an initial with the board name as its accessible label", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          collapsed
+          boards={[
+            {
+              id: "b1",
+              name: "Sprint backlog",
+              workspace_id: "w1",
+              position: 0,
+            },
+          ]}
+          workspaces={[{ id: "w1", name: "Acme" }]}
+        />
+      </TooltipProvider>,
+    );
+
+    const link = screen.getByRole("link", { name: "Sprint backlog" });
+    expect(link).toHaveAttribute("href", "/boards/b1");
+    expect(link).toHaveTextContent("S");
+    expect(screen.queryByText("Boards")).not.toBeInTheDocument();
   });
 });
