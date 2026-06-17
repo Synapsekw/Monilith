@@ -297,6 +297,115 @@ export type Database = {
           },
         ];
       };
+      dashboard_widgets: {
+        Row: {
+          config: Json;
+          created_at: string;
+          dashboard_id: string;
+          id: string;
+          kind: Database["public"]["Enums"]["widget_kind"];
+          layout: Json;
+          org_id: string;
+          position: number;
+          source_board_id: string | null;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          config?: Json;
+          created_at?: string;
+          dashboard_id: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["widget_kind"];
+          layout?: Json;
+          org_id: string;
+          position?: number;
+          source_board_id?: string | null;
+          title?: string;
+          updated_at?: string;
+        };
+        Update: {
+          config?: Json;
+          created_at?: string;
+          dashboard_id?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["widget_kind"];
+          layout?: Json;
+          org_id?: string;
+          position?: number;
+          source_board_id?: string | null;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_widgets_dashboard_id_fkey";
+            columns: ["dashboard_id"];
+            isOneToOne: false;
+            referencedRelation: "dashboards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dashboard_widgets_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dashboard_widgets_source_board_id_fkey";
+            columns: ["source_board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      dashboards: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          name: string;
+          org_id: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dashboards_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dashboards_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       groups: {
         Row: {
           board_id: string;
@@ -843,6 +952,53 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_dashboard: {
+        Args: { p_name: string; p_workspace_id: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "dashboards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_dashboard_widget: {
+        Args: {
+          p_config?: Json;
+          p_dashboard_id: string;
+          p_kind: Database["public"]["Enums"]["widget_kind"];
+          p_layout?: Json;
+          p_source_board_id: string;
+          p_title?: string;
+        };
+        Returns: {
+          config: Json;
+          created_at: string;
+          dashboard_id: string;
+          id: string;
+          kind: Database["public"]["Enums"]["widget_kind"];
+          layout: Json;
+          org_id: string;
+          position: number;
+          source_board_id: string | null;
+          title: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "dashboard_widgets";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_item: {
         Args: { p_group_id: string; p_name: string };
         Returns: {
@@ -898,6 +1054,18 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      dashboard_aggregate: {
+        Args: {
+          p_agg?: string;
+          p_board_id: string;
+          p_group_column_id?: string;
+          p_value_column_id?: string;
+        };
+        Returns: {
+          group_key: string;
+          metric: number;
+        }[];
+      };
       delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
       group_in_org: {
         Args: { p_group_id: string; p_org_id: string };
@@ -919,6 +1087,10 @@ export type Database = {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
       };
+      set_widget_layouts: {
+        Args: { p_dashboard_id: string; p_layouts: Json };
+        Returns: undefined;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
     };
     Enums: {
@@ -939,6 +1111,7 @@ export type Database = {
       notification_kind: "mention" | "assigned" | "update_on_item";
       org_role: "owner" | "admin" | "member" | "guest";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
+      widget_kind: "number" | "chart" | "battery" | "list";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -1081,6 +1254,7 @@ export const Constants = {
       notification_kind: ["mention", "assigned", "update_on_item"],
       org_role: ["owner", "admin", "member", "guest"],
       view_kind: ["table", "kanban", "calendar", "timeline"],
+      widget_kind: ["number", "chart", "battery", "list"],
     },
   },
 } as const;
