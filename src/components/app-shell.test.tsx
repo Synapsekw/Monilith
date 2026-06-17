@@ -71,15 +71,18 @@ describe("AppShell", () => {
     expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
   });
 
-  it("renders disabled nav stubs for Dashboards, Goals, Portfolios, Inbox", () => {
+  it("renders a live Dashboards link and disabled stubs for Goals, Portfolios, Inbox", () => {
     render(
       <AppShell>
         <div>content</div>
       </AppShell>,
     );
 
-    const dashboards = screen.getByText("Dashboards");
-    expect(dashboards.closest("button")).toBeDisabled();
+    // Dashboards is now a wired section (a link to /dashboards), not a disabled stub.
+    expect(screen.getByText("Dashboards").closest("a")).toHaveAttribute(
+      "href",
+      "/dashboards",
+    );
     expect(screen.getByText("Goals").closest("button")).toBeDisabled();
     expect(screen.getByText("Portfolios").closest("button")).toBeDisabled();
     expect(screen.getByText("Inbox").closest("button")).toBeDisabled();
