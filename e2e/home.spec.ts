@@ -1,7 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test("unauthenticated visit to / redirects to /login", async ({ page }) => {
+test("unauthenticated visit to / shows the MONOLITH landing linking to /login", async ({
+  page,
+}) => {
   await page.goto("/");
+  await expect(page).toHaveURL(/\/$/);
+
+  const hero = page.getByRole("link", { name: "MONOLITH" });
+  await expect(hero).toBeVisible();
+  await expect(hero).toHaveAttribute("href", "/login");
+
+  await hero.click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByText("Welcome back")).toBeVisible();
 });

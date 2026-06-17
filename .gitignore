@@ -77,3 +77,4 @@ next-env.d.ts
 
 # Brainstorming visual companion (local mockups)
 .superpowers/
+e2e/.artifacts/
