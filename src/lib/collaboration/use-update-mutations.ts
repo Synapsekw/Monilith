@@ -28,9 +28,18 @@ export function useUpdateMutations(
   const qc = useQueryClient();
   const key = itemUpdatesKey(itemId);
 
-  const add = useMutation<{ updateId: string }, Error, { text: string }, Ctx>({
+  const add = useMutation<
+    { updateId: string },
+    Error,
+    { text: string; mentions: string[] },
+    Ctx
+  >({
     mutationFn: async (vars) => {
-      const res = await addUpdate({ itemId, text: vars.text });
+      const res = await addUpdate({
+        itemId,
+        text: vars.text,
+        mentions: vars.mentions,
+      });
       if (!res.ok) throw new Error(res.error);
       return res.data;
     },
@@ -44,7 +53,7 @@ export function useUpdateMutations(
         board_id: ctx.boardId,
         item_id: itemId,
         author_id: authorId,
-        body: { text: vars.text },
+        body: { text: vars.text, mentions: vars.mentions },
         body_text: vars.text,
         edited_at: null,
         created_at: new Date().toISOString(),
@@ -130,7 +139,8 @@ export function useUpdateMutations(
   });
 
   return {
-    addUpdate: (text: string) => add.mutate({ text }),
+    addUpdate: (text: string, mentions: string[]) =>
+      add.mutate({ text, mentions }),
     editUpdate: (update: ItemUpdate, text: string) =>
       edit.mutate({ update, text }),
     deleteUpdate: (updateId: string) => remove.mutate({ updateId }),

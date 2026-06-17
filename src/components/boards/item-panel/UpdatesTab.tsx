@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
 import type { UpdatesCache } from "@/lib/collaboration/cache";
 import type { Member } from "@/lib/collaboration/activity";
 
@@ -14,18 +14,24 @@ export function UpdatesTab({
 }: {
   cache: UpdatesCache | undefined;
   members: readonly Member[];
-  onAdd: (text: string) => void;
+  onAdd: (text: string, mentionIds: string[]) => void;
   onDelete: (updateId: string) => void;
 }) {
   const [text, setText] = useState("");
+  const [mentionIds, setMentionIds] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+
+  function reset() {
+    setText("");
+    setMentionIds([]);
+    setOpen(false);
+  }
 
   function submit() {
     const t = text.trim();
     if (!t) return;
-    onAdd(t);
-    setText("");
-    setOpen(false);
+    onAdd(t, mentionIds);
+    reset();
   }
 
   return (
@@ -39,24 +45,20 @@ export function UpdatesTab({
         </button>
       ) : (
         <div className="flex flex-col gap-2">
-          <Textarea
+          <MentionTextarea
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            autoFocus
-            rows={3}
+            mentionIds={mentionIds}
+            members={members}
+            onChange={(t, ids) => {
+              setText(t);
+              setMentionIds(ids);
+            }}
           />
           <div className="flex gap-2">
             <Button size="sm" onClick={submit}>
               Update
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setOpen(false);
-                setText("");
-              }}
-            >
+            <Button size="sm" variant="ghost" onClick={reset}>
               Cancel
             </Button>
           </div>
