@@ -6,7 +6,11 @@ import {
   editUpdateSchema,
   deleteUpdateSchema,
   markNotificationReadSchema,
+  createAttachmentSchema,
+  deleteAttachmentSchema,
+  attachmentUrlSchema,
 } from "@/lib/validations/collaboration-actions";
+import { isPreviewable } from "@/lib/collaboration/attachments-format";
 import type { ActionResult } from "@/lib/boards/actions";
 import type { Json } from "@/types/database.types";
 
@@ -141,5 +145,161 @@ export async function markAllNotificationsRead(): Promise<ActionResult> {
     .eq("recipient_id", user.id)
     .is("read_at", null);
   if (error) return fail(error.message);
+  return { ok: true, data: undefined };
+}
+
+const DOWNLOAD_TTL = 60; // short-lived; re-minted per click
+const PREVIEW_TTL = 300; // inline preview window for the gallery/lightbox
+
+export async function createAttachment(input: {
+  itemId: string;
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}): Promise<ActionResult<{ attachmentId: string }>> {
+  const parsed = createAttachmentSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Not authenticated.");
+
+  // Re-derive org/board from the item (RLS-scoped) and reject any path not
+  // under this org/board/item — a client cannot register a row pointing at
+  // another tenant's object (path-spoof guard).
+  const { data: item, error: itemErr } = await supabase
+    .from("items")
+    .select("org_id, board_id")
+    .eq("id", parsed.data.itemId)
+    .maybeSingle();
+  if (itemErr || !item) return fail("Item not found.");
+
+  const prefix = `${item.org_id}/${item.board_id}/${parsed.data.itemId}/`;
+  if (!parsed.data.storagePath.startsWith(prefix))
+    return fail("Storage path does not match this item.");
+
+  const { data, error } = await supabase
+    .from("attachments")
+    .insert({
+      org_id: item.org_id,
+      board_id: item.board_id,
+      item_id: parsed.data.itemId,
+      uploaded_by: user.id,
+      storage_path: parsed.data.storagePath,
+      file_name: parsed.data.fileName,
+      mime_type: parsed.data.mimeType,
+      size_bytes: parsed.data.sizeBytes,
+    })
+    .select("id")
+    .single();
+  if (error || !data)
+    return fail(error?.message ?? "Could not register attachment.");
+  return { ok: true, data: { attachmentId: data.id } };
+}
+
+export async function getAttachmentDownloadUrl(input: {
+  attachmentId: string;
+}): Promise<ActionResult<{ url: string }>> {
+  const parsed = attachmentUrlSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data: row, error } = await supabase
+    .from("attachments")
+    .select("storage_path, file_name")
+    .eq("id", parsed.data.attachmentId)
+    .maybeSingle();
+  if (error || !row) return fail("Attachment not found.");
+
+  // Attachment disposition forces a download (never a top-level render) — the
+  // "any type" XSS mitigation for HTML/SVG uploads.
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("attachments")
+    .createSignedUrl(row.storage_path, DOWNLOAD_TTL, {
+      download: row.file_name,
+    });
+  if (signErr || !signed) return fail("Could not sign download URL.");
+  return { ok: true, data: { url: signed.signedUrl } };
+}
+
+export async function getAttachmentPreviewUrls(input: {
+  attachmentIds: string[];
+}): Promise<ActionResult<{ urls: Record<string, string> }>> {
+  // Validate the wrapper shape (max 60 ids) without UUID-format checks on the
+  // ids themselves: format is enforced at upload time; signed URLs are scoped
+  // by RLS on the DB read below. attachmentUrlsSchema validates UUID format
+  // and is used by the typesystem / other callers; here we only need the cap.
+  if (
+    !Array.isArray(input.attachmentIds) ||
+    input.attachmentIds.length > 60 ||
+    input.attachmentIds.some((id) => typeof id !== "string")
+  )
+    return fail("Invalid");
+  if (input.attachmentIds.length === 0) return { ok: true, data: { urls: {} } };
+
+  const supabase = await createClient();
+  const { data: rows, error } = await supabase
+    .from("attachments")
+    .select("id, storage_path, mime_type")
+    .in("id", input.attachmentIds);
+  if (error || !rows) return fail("Could not load attachments.");
+
+  // Inline preview only for the safe raster/video allow-list (no `download`).
+  const previewable = rows.filter((r) => isPreviewable(r.mime_type));
+  if (previewable.length === 0) return { ok: true, data: { urls: {} } };
+
+  const paths = previewable.map((r) => r.storage_path);
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("attachments")
+    .createSignedUrls(paths, PREVIEW_TTL);
+  if (signErr || !signed) return fail("Could not sign preview URLs.");
+
+  const byPath = new Map(
+    signed
+      .filter((s) => s.signedUrl)
+      .map((s) => [s.path as string, s.signedUrl as string]),
+  );
+  const urls: Record<string, string> = {};
+  for (const r of previewable) {
+    const u = byPath.get(r.storage_path);
+    if (u) urls[r.id] = u;
+  }
+  return { ok: true, data: { urls } };
+}
+
+export async function deleteAttachment(input: {
+  attachmentId: string;
+}): Promise<ActionResult> {
+  const parsed = deleteAttachmentSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data: row, error } = await supabase
+    .from("attachments")
+    .select("id, storage_path, uploaded_by, org_id")
+    .eq("id", parsed.data.attachmentId)
+    .maybeSingle();
+  // RLS already hides rows outside the caller's org; a missing row is a no-op.
+  if (error || !row) return fail("Attachment not found.");
+
+  // Object first so a metadata row never dangles pointing at live bytes.
+  // Storage RLS independently enforces uploader-or-admin on the object.
+  const { error: rmErr } = await supabase.storage
+    .from("attachments")
+    .remove([row.storage_path]);
+  if (rmErr) return fail("Could not remove file.");
+
+  // Table RLS enforces uploader-or-admin on the row delete (the real guard).
+  const { error: delErr } = await supabase
+    .from("attachments")
+    .delete()
+    .eq("id", row.id);
+  if (delErr) return fail(delErr.message);
   return { ok: true, data: undefined };
 }
