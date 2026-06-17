@@ -6,6 +6,7 @@ import { BoardTable } from "@/components/boards/BoardTable";
 import { CalendarBoard } from "@/components/boards/CalendarBoard";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import { KanbanBoard } from "@/components/boards/KanbanBoard";
+import { ItemPanel } from "@/components/boards/item-panel/ItemPanel";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardCache } from "@/lib/boards/cache";
 import type { BoardPayload } from "@/lib/boards/queries";
@@ -29,10 +30,12 @@ export function BoardViews({
   payload,
   members,
   initialViewId,
+  currentUserId,
 }: {
   payload: BoardPayload;
   members: EditorMember[];
   initialViewId: string;
+  currentUserId: string;
 }) {
   useBoardCache(payload.board.id, payload as unknown as BoardCache);
   useBoardRealtime(payload.board.id);
@@ -41,41 +44,62 @@ export function BoardViews({
   const selected = resolveSelectedView(payload.views, requested || undefined);
   const activeViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
-  if (selected?.kind === "kanban") {
-    return (
+  // The detail panel opens via `?item=` (History API → no RSC refetch, same as
+  // `?view=`). The open item's name/fields come from the already-loaded cache.
+  const openItemId = searchParams.get("item");
+  const openItem = openItemId
+    ? (payload.items.find((i) => i.id === openItemId) ?? null)
+    : null;
+
+  function closeItem() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("item");
+    window.history.pushState({}, "", url);
+  }
+
+  const view =
+    selected?.kind === "kanban" ? (
       <KanbanBoard
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
       />
-    );
-  }
-
-  if (selected?.kind === "calendar") {
-    return (
+    ) : selected?.kind === "calendar" ? (
       <CalendarBoard
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
       />
-    );
-  }
-
-  if (selected?.kind === "timeline") {
-    return (
+    ) : selected?.kind === "timeline" ? (
       <GanttBoard
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
       />
+    ) : (
+      <BoardTable
+        payload={payload}
+        members={members}
+        selectedViewId={activeViewId}
+      />
     );
-  }
 
   return (
-    <BoardTable
-      payload={payload}
-      members={members}
-      selectedViewId={activeViewId}
-    />
+    <>
+      {view}
+      <ItemPanel
+        itemId={openItem?.id ?? null}
+        itemName={openItem?.name ?? ""}
+        orgId={payload.board.org_id}
+        boardId={payload.board.id}
+        currentUserId={currentUserId}
+        columns={payload.columns}
+        members={members.map((m) => ({
+          userId: m.userId,
+          fullName: m.fullName,
+        }))}
+        onClose={closeItem}
+      />
+    </>
   );
 }

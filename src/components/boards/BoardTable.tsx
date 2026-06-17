@@ -7,7 +7,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Maximize2, Plus } from "lucide-react";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
@@ -43,6 +43,18 @@ type CellControls = {
 };
 
 const ROW_HEIGHT = 36; // direction C density
+
+/**
+ * Open the item detail panel by setting `?item=<id>` via the History API — no
+ * RSC navigation, so the board page's queries don't re-run (mirrors how
+ * `ViewSwitcher` sets `?view=`). {@link BoardViews} reads the param and renders
+ * the panel.
+ */
+function openItemPanel(itemId: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("item", itemId);
+  window.history.pushState({}, "", url);
+}
 const NAME_COL_WIDTH = 280;
 const VALUE_COL_WIDTH = 180;
 
@@ -388,20 +400,30 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${item.name} name`}
-      onClick={open}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          open();
-        }
-      }}
-      className="bg-surface hover:bg-surface-muted focus-visible:ring-ring sticky left-0 z-10 flex h-full cursor-pointer items-center truncate px-4 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
-    >
-      {item.name}
+    <div className="group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`${item.name} name`}
+        onClick={open}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        }}
+        className="focus-visible:ring-ring flex h-full min-w-0 flex-1 cursor-pointer items-center truncate px-4 text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      >
+        {item.name}
+      </div>
+      <button
+        type="button"
+        aria-label={`Open ${item.name}`}
+        onClick={() => openItemPanel(item.id)}
+        className="hover:bg-accent text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <Maximize2 className="size-3.5" />
+      </button>
     </div>
   );
 }

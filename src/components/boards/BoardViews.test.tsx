@@ -38,6 +38,13 @@ vi.mock("@/components/boards/GanttBoard", () => ({
     <div data-testid="gantt">gantt:{selectedViewId}</div>
   ),
 }));
+// Stub the detail panel — its data hooks (React Query/Realtime) are out of
+// scope for this routing test; here it's closed (no `?item=`) regardless.
+vi.mock("@/components/boards/item-panel/ItemPanel", () => ({
+  ItemPanel: ({ itemId }: { itemId: string | null }) => (
+    <div data-testid="item-panel" data-open={itemId ? "true" : "false"} />
+  ),
+}));
 
 const payload = {
   board: { id: "b1", name: "Board", org_id: "o1" },
@@ -57,27 +64,55 @@ const payload = {
 describe("BoardViews", () => {
   it("renders the table view when the URL selects a table view", () => {
     viewParam = "v1";
-    render(<BoardViews payload={payload} members={[]} initialViewId="v1" />);
+    render(
+      <BoardViews
+        payload={payload}
+        members={[]}
+        initialViewId="v1"
+        currentUserId="u1"
+      />,
+    );
     expect(screen.getByTestId("table")).toHaveTextContent("table:v1");
     expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
   });
 
   it("renders the kanban view when the URL selects a kanban view", () => {
     viewParam = "v2";
-    render(<BoardViews payload={payload} members={[]} initialViewId="v1" />);
+    render(
+      <BoardViews
+        payload={payload}
+        members={[]}
+        initialViewId="v1"
+        currentUserId="u1"
+      />,
+    );
     expect(screen.getByTestId("kanban")).toHaveTextContent("kanban:v2");
     expect(screen.queryByTestId("table")).not.toBeInTheDocument();
   });
 
   it("falls back to initialViewId when the URL has no view param", () => {
     viewParam = null;
-    render(<BoardViews payload={payload} members={[]} initialViewId="v2" />);
+    render(
+      <BoardViews
+        payload={payload}
+        members={[]}
+        initialViewId="v2"
+        currentUserId="u1"
+      />,
+    );
     expect(screen.getByTestId("kanban")).toHaveTextContent("kanban:v2");
   });
 
   it("renders the calendar view when the URL selects a calendar view", () => {
     viewParam = "v3";
-    render(<BoardViews payload={payload} members={[]} initialViewId="v1" />);
+    render(
+      <BoardViews
+        payload={payload}
+        members={[]}
+        initialViewId="v1"
+        currentUserId="u1"
+      />,
+    );
     expect(screen.getByTestId("calendar")).toHaveTextContent("calendar:v3");
     expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
     expect(screen.queryByTestId("table")).not.toBeInTheDocument();
@@ -85,7 +120,14 @@ describe("BoardViews", () => {
 
   it("renders the gantt view when the URL selects a timeline view", () => {
     viewParam = "v4";
-    render(<BoardViews payload={payload} members={[]} initialViewId="v1" />);
+    render(
+      <BoardViews
+        payload={payload}
+        members={[]}
+        initialViewId="v1"
+        currentUserId="u1"
+      />,
+    );
     expect(screen.getByTestId("gantt")).toHaveTextContent("gantt:v4");
     expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
     expect(screen.queryByTestId("table")).not.toBeInTheDocument();

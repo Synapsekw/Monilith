@@ -53,6 +53,7 @@ export default async function BoardPage({
         payload={payload}
         members={members}
         initialViewId={selectedViewId}
+        currentUserId={user.id}
       />
     </AppShell>
   );
