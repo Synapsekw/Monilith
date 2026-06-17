@@ -31,37 +31,35 @@ export function BatteryWidget({ widget }: { widget: CacheWidget }) {
       </div>
     );
 
+  const visible = rows.filter((r) => r.count > 0);
+
   return (
     <div className="flex h-full flex-col justify-center gap-3">
       <div className="flex h-7 w-full overflow-hidden rounded-md">
-        {rows
-          .filter((r) => r.count > 0)
-          .map((r) => (
-            <div
-              key={r.key ?? "none"}
-              className="h-full"
-              style={{
-                width: `${(r.count / total) * 100}%`,
-                backgroundColor: r.color,
-              }}
-              title={`${r.label}: ${r.count}`}
-            />
-          ))}
+        {visible.map((r) => (
+          <div
+            key={r.key ?? "none"}
+            className="h-full"
+            style={{
+              width: `${(r.count / total) * 100}%`,
+              backgroundColor: r.color,
+            }}
+            title={`${r.label}: ${r.count}`}
+          />
+        ))}
       </div>
       <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        {rows
-          .filter((r) => r.count > 0)
-          .map((r) => (
-            <li key={r.key ?? "none"} className="flex items-center gap-1.5">
-              <span
-                className="size-2.5 rounded-sm"
-                style={{ backgroundColor: r.color }}
-              />
-              <span className="text-muted-foreground">
-                {r.label} {Math.round((r.count / total) * 100)}%
-              </span>
-            </li>
-          ))}
+        {visible.map((r) => (
+          <li key={r.key ?? "none"} className="flex items-center gap-1.5">
+            <span
+              className="size-2.5 rounded-sm"
+              style={{ backgroundColor: r.color }}
+            />
+            <span className="text-muted-foreground">
+              {r.label} {Math.round((r.count / total) * 100)}%
+            </span>
+          </li>
+        ))}
       </ul>
     </div>
   );

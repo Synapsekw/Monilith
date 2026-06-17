@@ -116,7 +116,13 @@ export function AddWidgetDialog({
             <select
               className={selectClass}
               value={boardId}
-              onChange={(e) => setBoardId(e.target.value)}
+              onChange={(e) => {
+                // Reset column pickers — a column id from the old board would
+                // otherwise persist a widget grouped/valued by the wrong board.
+                setBoardId(e.target.value);
+                setGroupColumnId("");
+                setValueColumnId("");
+              }}
             >
               {boards.map((b) => (
                 <option key={b.id} value={b.id}>
