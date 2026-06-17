@@ -13,9 +13,12 @@ import {
   type ItemUpdate,
   type UpdatesCache,
 } from "@/lib/collaboration/cache";
-import { itemUpdatesKey } from "@/lib/collaboration/use-item-collab";
+import {
+  itemActivityKey,
+  itemUpdatesKey,
+} from "@/lib/collaboration/use-item-collab";
 
-type Ctx = { previous?: UpdatesCache };
+type Ctx = { previous?: UpdatesCache; optimisticId?: string };
 
 export function useUpdateMutations(
   itemId: string,
@@ -34,37 +37,47 @@ export function useUpdateMutations(
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<UpdatesCache>(key);
-      if (previous) {
-        const optimistic: ItemUpdate = {
-          id: `optimistic-${Date.now()}`,
-          org_id: ctx.orgId,
-          board_id: ctx.boardId,
-          item_id: itemId,
-          author_id: authorId,
-          body: { text: vars.text },
-          body_text: vars.text,
-          edited_at: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as ItemUpdate;
-        qc.setQueryData<UpdatesCache>(key, prependUpdate(previous, optimistic));
-      }
-      return { previous };
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimistic: ItemUpdate = {
+        id: optimisticId,
+        org_id: ctx.orgId,
+        board_id: ctx.boardId,
+        item_id: itemId,
+        author_id: authorId,
+        body: { text: vars.text },
+        body_text: vars.text,
+        edited_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as ItemUpdate;
+      // Seed an empty cache if the fetch hasn't resolved yet so the optimistic
+      // row always shows immediately.
+      qc.setQueryData<UpdatesCache>(
+        key,
+        prependUpdate(previous ?? { updates: [] }, optimistic),
+      );
+      return { previous, optimisticId };
     },
     onError: (_e, _v, c) => {
-      if (c?.previous) qc.setQueryData(key, c.previous);
-    },
-    onSettled: () => {
-      // Realtime INSERT echo carries the real row; drop the optimistic temp.
       qc.setQueryData<UpdatesCache>(key, (prev) =>
-        prev
+        c?.optimisticId && prev ? removeUpdate(prev, c.optimisticId) : prev,
+      );
+    },
+    onSuccess: (data, _v, c) => {
+      // Swap the optimistic temp for a real-id row so it survives regardless of
+      // Realtime timing; the Realtime INSERT echo dedupes on this id.
+      qc.setQueryData<UpdatesCache>(key, (prev) =>
+        c?.optimisticId && prev
           ? {
-              updates: prev.updates.filter(
-                (u) => !u.id.startsWith("optimistic-"),
+              updates: prev.updates.map((u) =>
+                u.id === c.optimisticId ? { ...u, id: data.updateId } : u,
               ),
             }
           : prev,
       );
+      // The `update_added` activity is written by a trigger in the same
+      // transaction — refetch so it shows deterministically (Realtime dedupes).
+      qc.invalidateQueries({ queryKey: itemActivityKey(itemId) });
     },
   });
 
