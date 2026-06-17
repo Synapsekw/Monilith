@@ -11,6 +11,7 @@ import {
 import { NumberWidget } from "@/components/dashboards/widgets/NumberWidget";
 import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
 import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
+import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 
@@ -59,6 +60,8 @@ export function DashboardWidget({
           <ChartWidget widget={widget} />
         ) : widget.kind === "battery" ? (
           <BatteryWidget widget={widget} />
+        ) : widget.kind === "list" ? (
+          <ListWidget widget={widget} />
         ) : (
           <div className="text-muted-foreground text-sm">
             {widget.kind} widget — coming soon
