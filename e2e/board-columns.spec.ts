@@ -96,24 +96,28 @@ test.describe("Board columns: add → rename → delete", () => {
     await expect(page.getByText("Group 1")).toBeVisible();
 
     // ── 4. Add a Text column ──────────────────────────────────────────────────
+    // The new column is server-authoritative (arrives via the columns Realtime
+    // subscription). Anchor on the header's uniquely-labelled menu button, not a
+    // bare getByText: the add-menu also renders a "Text" menuitem, and a loose
+    // text match grabs (then loses) that closing menu item as Radix detaches it.
     await page.getByRole("button", { name: "Add column" }).click();
     await page.getByRole("menuitem", { name: "Text" }).click();
-    await expect(page.getByText("Text")).toBeVisible({ timeout: 15_000 });
+    const textMenu = page.getByRole("button", { name: "Text column menu" });
+    await expect(textMenu).toBeVisible({ timeout: 15_000 });
 
     // ── 5. Rename it ──────────────────────────────────────────────────────────
-    await page.getByText("Text").hover();
-    await page.getByRole("button", { name: "Text column menu" }).click();
+    await textMenu.click();
     await page.getByRole("menuitem", { name: "Rename" }).click();
     const input = page.getByLabel("Column name");
     await input.fill("Notes");
     await input.press("Enter");
-    await expect(page.getByText("Notes")).toBeVisible();
+    const notesMenu = page.getByRole("button", { name: "Notes column menu" });
+    await expect(notesMenu).toBeVisible({ timeout: 15_000 });
 
     // ── 6. Delete it (confirm) ────────────────────────────────────────────────
-    await page.getByText("Notes").hover();
-    await page.getByRole("button", { name: "Notes column menu" }).click();
+    await notesMenu.click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
     await page.getByRole("button", { name: "Delete" }).click();
-    await expect(page.getByText("Notes")).toHaveCount(0, { timeout: 15_000 });
+    await expect(notesMenu).toHaveCount(0, { timeout: 15_000 });
   });
 });
