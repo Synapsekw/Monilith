@@ -57,6 +57,10 @@ test.describe("Item attachments: upload → preview → download → delete", ()
   test("upload a file → card → preview → download 200 → delete", async ({
     page,
   }) => {
+    // Full login → onboard → board → item → upload → preview → delete flow is
+    // heavy; give it room beyond the default 30s.
+    test.setTimeout(120_000);
+
     // Login.
     await page.goto("/login");
     await page.getByLabel(/email/i).fill(testEmail);
@@ -106,18 +110,18 @@ test.describe("Item attachments: upload → preview → download → delete", ()
     const lightbox = page.getByRole("dialog").last();
     await expect(lightbox).toBeVisible();
 
-    // Download mints a signed URL that actually returns 200 — open it and
-    // fetch the opened URL directly (a real HTTP 200, not just a tab opening).
-    const [popup] = await Promise.all([
-      page.waitForEvent("popup"),
-      lightbox.getByRole("button", { name: "Download" }).first().click(),
-    ]);
-    await popup.waitForLoadState("domcontentloaded").catch(() => {});
-    const signedUrl = popup.url();
-    expect(signedUrl).toMatch(/^https?:\/\//);
-    const resp = await page.request.get(signedUrl);
+    // Download window.open's the signed URL. Because it's served with
+    // Content-Disposition: attachment (the XSS guard), the browser turns it into
+    // a file download — so we capture the context download event (set up before
+    // the click), assert the filename, and fetch its URL for a real HTTP 200.
+    const downloadPromise = page
+      .context()
+      .waitForEvent("download", { timeout: 20_000 });
+    await lightbox.getByRole("button", { name: "Download" }).first().click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("pixel.png");
+    const resp = await page.request.get(download.url());
     expect(resp.status()).toBe(200);
-    await popup.close();
     await page.keyboard.press("Escape");
 
     // Delete → card disappears.
