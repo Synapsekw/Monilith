@@ -15,13 +15,13 @@ beforeEach(() => {
 
 describe("Sidebar", () => {
   it("renders the brand and nav labels when expanded", () => {
-    render(<Sidebar boards={[]} workspaces={[]} />);
+    render(<Sidebar boards={[]} workspaces={[]} dashboards={[]} />);
     expect(screen.getByText("MONOLITH")).toBeInTheDocument();
     expect(screen.getByText("Dashboards")).toBeInTheDocument();
   });
 
   it("collapses on toggle click, hiding the labels", () => {
-    render(<Sidebar boards={[]} workspaces={[]} />);
+    render(<Sidebar boards={[]} workspaces={[]} dashboards={[]} />);
 
     fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
 
@@ -37,7 +37,7 @@ describe("Sidebar", () => {
   });
 
   it("toggles with the Cmd/Ctrl+\\ shortcut", () => {
-    render(<Sidebar boards={[]} workspaces={[]} />);
+    render(<Sidebar boards={[]} workspaces={[]} dashboards={[]} />);
 
     fireEvent.keyDown(window, { key: "\\", metaKey: true });
     expect(useUIStore.getState().sidebarCollapsed).toBe(true);

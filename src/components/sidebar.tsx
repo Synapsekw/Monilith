@@ -32,9 +32,11 @@ const nav = [
 export function Sidebar({
   boards,
   workspaces,
+  dashboards,
 }: {
   boards: BoardListEntry[];
   workspaces: { id: string; name: string }[];
+  dashboards: { id: string; name: string }[];
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
