@@ -12,7 +12,13 @@ import {
   renameBoardSchema,
   renameItemSchema,
   upsertCellSchema,
+  createColumnSchema,
+  renameColumnSchema,
+  deleteColumnSchema,
+  resizeColumnSchema,
 } from "@/lib/validations/board-actions";
+import type { ColumnKind } from "@/lib/validations/boards";
+import { defaultColumn } from "@/lib/boards/column-defaults";
 import { cellValueSchema } from "@/lib/validations/boards";
 import type { Json, Tables } from "@/types/database.types";
 
@@ -285,5 +291,119 @@ export async function clearCell(input: {
   if (error) return fail(error.message);
 
   revalidatePath(`/boards/${column.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+export async function createColumn(input: {
+  boardId: string;
+  kind: ColumnKind;
+  name?: string;
+}): Promise<ActionResult<{ columnId: string }>> {
+  const parsed = createColumnSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data: board, error: boardErr } = await supabase
+    .from("boards")
+    .select("org_id")
+    .eq("id", parsed.data.boardId)
+    .maybeSingle();
+  if (boardErr || !board) return fail("Board not found.");
+
+  const { data: last } = await supabase
+    .from("columns")
+    .select("position")
+    .eq("board_id", parsed.data.boardId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { name, settings } = defaultColumn(parsed.data.kind, parsed.data.name);
+
+  const { data, error } = await supabase
+    .from("columns")
+    .insert({
+      org_id: board.org_id,
+      board_id: parsed.data.boardId,
+      kind: parsed.data.kind,
+      name,
+      settings: settings as Tables<"columns">["settings"],
+      position: midpoint(last?.position ?? null, null),
+    })
+    .select("id")
+    .single();
+  if (error || !data) return fail(error?.message ?? "Could not create column.");
+
+  revalidatePath(`/boards/${parsed.data.boardId}`);
+  return { ok: true, data: { columnId: data.id } };
+}
+
+async function columnBoardId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  columnId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("columns")
+    .select("board_id")
+    .eq("id", columnId)
+    .maybeSingle();
+  return data?.board_id ?? null;
+}
+
+export async function renameColumn(input: {
+  columnId: string;
+  name: string;
+}): Promise<ActionResult> {
+  const parsed = renameColumnSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const boardId = await columnBoardId(supabase, parsed.data.columnId);
+  if (!boardId) return fail("Column not found.");
+  const { error } = await supabase
+    .from("columns")
+    .update({ name: parsed.data.name })
+    .eq("id", parsed.data.columnId);
+  if (error) return fail(error.message);
+  revalidatePath(`/boards/${boardId}`);
+  return { ok: true, data: undefined };
+}
+
+export async function resizeColumn(input: {
+  columnId: string;
+  width: number;
+}): Promise<ActionResult> {
+  const parsed = resizeColumnSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const boardId = await columnBoardId(supabase, parsed.data.columnId);
+  if (!boardId) return fail("Column not found.");
+  const { error } = await supabase
+    .from("columns")
+    .update({ width: parsed.data.width })
+    .eq("id", parsed.data.columnId);
+  if (error) return fail(error.message);
+  revalidatePath(`/boards/${boardId}`);
+  return { ok: true, data: undefined };
+}
+
+export async function deleteColumn(input: {
+  columnId: string;
+}): Promise<ActionResult> {
+  const parsed = deleteColumnSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const boardId = await columnBoardId(supabase, parsed.data.columnId);
+  if (!boardId) return fail("Column not found.");
+  // cell_values cascade via the column_id FK (on delete cascade).
+  const { error } = await supabase
+    .from("columns")
+    .delete()
+    .eq("id", parsed.data.columnId);
+  if (error) return fail(error.message);
+  revalidatePath(`/boards/${boardId}`);
   return { ok: true, data: undefined };
 }
