@@ -76,7 +76,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
         .single();
       const statusColumnId = (statusCol as { id: string }).id;
       const options = (
-        statusCol as {
+        statusCol as unknown as {
           settings: { options: { id: string; label: string }[] };
         }
       ).settings.options;
