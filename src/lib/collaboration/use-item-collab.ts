@@ -14,6 +14,13 @@ import {
   type ItemUpdate,
   type UpdatesCache,
 } from "@/lib/collaboration/cache";
+import {
+  prependAttachment,
+  removeAttachment,
+  type Attachment,
+  type AttachmentsCache,
+} from "@/lib/collaboration/attachments-cache";
+import { itemAttachmentsKey } from "@/lib/collaboration/use-item-attachments";
 
 const UPDATES_LIMIT = 30;
 const ACTIVITY_LIMIT = 50;
@@ -66,6 +73,7 @@ export function useItemCollab(itemId: string | null) {
     const filter = `item_id=eq.${itemId}`;
     const uKey = itemUpdatesKey(itemId);
     const aKey = itemActivityKey(itemId);
+    const atKey = itemAttachmentsKey(itemId);
 
     function onUpdate(p: RealtimePostgresChangesPayload<ItemUpdate>) {
       if (p.eventType === "DELETE") {
@@ -94,6 +102,22 @@ export function useItemCollab(itemId: string | null) {
       );
     }
 
+    function onAttachment(p: RealtimePostgresChangesPayload<Attachment>) {
+      if (p.eventType === "DELETE") {
+        const id = (p.old as Partial<Attachment>).id;
+        if (id)
+          qc.setQueryData<AttachmentsCache>(atKey, (prev) =>
+            prev ? removeAttachment(prev, id) : prev,
+          );
+        return;
+      }
+      if (p.eventType !== "INSERT") return;
+      const row = p.new as Attachment;
+      qc.setQueryData<AttachmentsCache>(atKey, (prev) =>
+        prev ? prependAttachment(prev, row) : prev,
+      );
+    }
+
     const channel = supabase
       .channel(`item:${itemId}`)
       .on(
@@ -105,6 +129,11 @@ export function useItemCollab(itemId: string | null) {
         "postgres_changes",
         { event: "*", schema: "public", table: "item_activities", filter },
         onActivity,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "attachments", filter },
+        onAttachment,
       )
       .subscribe();
 
