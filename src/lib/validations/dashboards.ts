@@ -28,6 +28,12 @@ export type ChartConfig = z.infer<typeof chartConfigSchema>;
 export const batteryConfigSchema = z.object({ groupColumnId: uuid });
 export type BatteryConfig = z.infer<typeof batteryConfigSchema>;
 
+export const listConfigSchema = z.object({
+  columnIds: z.array(uuid).max(8).default([]),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+export type ListConfig = z.infer<typeof listConfigSchema>;
+
 // Structural gate for the jsonb column; kind-specific shape is enforced in the
 // action via configSchemaForKind(kind).
 const configObject = z.record(z.string(), z.unknown());
@@ -40,7 +46,8 @@ export function configSchemaForKind(kind: z.infer<typeof widgetKindSchema>) {
       return chartConfigSchema;
     case "battery":
       return batteryConfigSchema;
-    // D3 adds list; until then accept any object.
+    case "list":
+      return listConfigSchema;
     default:
       return configObject;
   }

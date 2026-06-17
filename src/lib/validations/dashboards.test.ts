@@ -122,3 +122,40 @@ describe("configSchemaForKind (D2)", () => {
     expect(configSchemaForKind("chart").safeParse({}).success).toBe(false);
   });
 });
+
+import { listConfigSchema } from "./dashboards";
+
+describe("listConfigSchema", () => {
+  const col = "11111111-1111-4111-8111-111111111111";
+  it("defaults limit to 25 and accepts an empty column list", () => {
+    const r = listConfigSchema.safeParse({ columnIds: [] });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.limit).toBe(25);
+  });
+  it("accepts columnIds + a bounded limit", () => {
+    expect(
+      listConfigSchema.safeParse({ columnIds: [col], limit: 50 }).success,
+    ).toBe(true);
+  });
+  it("rejects a limit over 100 or under 1", () => {
+    expect(
+      listConfigSchema.safeParse({ columnIds: [], limit: 0 }).success,
+    ).toBe(false);
+    expect(
+      listConfigSchema.safeParse({ columnIds: [], limit: 200 }).success,
+    ).toBe(false);
+  });
+  it("rejects more than 8 columns", () => {
+    expect(
+      listConfigSchema.safeParse({ columnIds: Array(9).fill(col) }).success,
+    ).toBe(false);
+  });
+});
+
+describe("configSchemaForKind (list)", () => {
+  it("routes list to listConfigSchema", () => {
+    expect(
+      configSchemaForKind("list").safeParse({ columnIds: [] }).success,
+    ).toBe(true);
+  });
+});
