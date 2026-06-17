@@ -130,6 +130,19 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: notifications", () => {
     expect(error).not.toBeNull();
   });
 
+  it("forbids notifying a recipient who is not a member of the org", async () => {
+    // C is a real user but not a member of org A → insert must be rejected.
+    const { error } = await A.anon.from("notifications").insert({
+      org_id: orgId,
+      recipient_id: C.id,
+      actor_id: A.id,
+      kind: "mention",
+      board_id: boardId,
+      item_id: itemId,
+    });
+    expect(error).not.toBeNull();
+  });
+
   it("forbids inserting into an org you don't belong to", async () => {
     const { error } = await C.anon.from("notifications").insert({
       org_id: orgId, // C is not a member of org A
