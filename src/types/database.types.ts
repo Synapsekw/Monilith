@@ -271,6 +271,74 @@ export type Database = {
           },
         ];
       };
+      item_activities: {
+        Row: {
+          action: Database["public"]["Enums"]["activity_action"];
+          actor_id: string | null;
+          board_id: string;
+          column_id: string | null;
+          created_at: string;
+          id: string;
+          item_id: string;
+          new_value: Json | null;
+          old_value: Json | null;
+          org_id: string;
+        };
+        Insert: {
+          action: Database["public"]["Enums"]["activity_action"];
+          actor_id?: string | null;
+          board_id: string;
+          column_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id: string;
+          new_value?: Json | null;
+          old_value?: Json | null;
+          org_id: string;
+        };
+        Update: {
+          action?: Database["public"]["Enums"]["activity_action"];
+          actor_id?: string | null;
+          board_id?: string;
+          column_id?: string | null;
+          created_at?: string;
+          id?: string;
+          item_id?: string;
+          new_value?: Json | null;
+          old_value?: Json | null;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_activities_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_activities_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_activities_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_activities_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       item_dependencies: {
         Row: {
           board_id: string;
@@ -326,6 +394,67 @@ export type Database = {
             columns: ["successor_id"];
             isOneToOne: false;
             referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      item_updates: {
+        Row: {
+          author_id: string;
+          board_id: string;
+          body: Json;
+          body_text: string;
+          created_at: string;
+          edited_at: string | null;
+          id: string;
+          item_id: string;
+          org_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          author_id: string;
+          board_id: string;
+          body: Json;
+          body_text?: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          item_id: string;
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          author_id?: string;
+          board_id?: string;
+          body?: Json;
+          body_text?: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          item_id?: string;
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_updates_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_updates_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_updates_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
             referencedColumns: ["id"];
           },
         ];
@@ -647,6 +776,13 @@ export type Database = {
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
     };
     Enums: {
+      activity_action:
+        | "item_created"
+        | "item_renamed"
+        | "item_moved"
+        | "item_deleted"
+        | "cell_changed"
+        | "update_added";
       column_kind:
         | "text"
         | "status"
@@ -786,6 +922,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_action: [
+        "item_created",
+        "item_renamed",
+        "item_moved",
+        "item_deleted",
+        "cell_changed",
+        "update_added",
+      ],
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
       org_role: ["owner", "admin", "member", "guest"],
       view_kind: ["table", "kanban", "calendar", "timeline"],
