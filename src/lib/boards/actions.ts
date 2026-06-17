@@ -298,7 +298,7 @@ export async function createColumn(input: {
   boardId: string;
   kind: ColumnKind;
   name?: string;
-}): Promise<ActionResult<{ columnId: string }>> {
+}): Promise<ActionResult<{ column: Tables<"columns"> }>> {
   const parsed = createColumnSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -331,12 +331,12 @@ export async function createColumn(input: {
       settings: settings as Tables<"columns">["settings"],
       position: midpoint(last?.position ?? null, null),
     })
-    .select("id")
+    .select("*")
     .single();
   if (error || !data) return fail(error?.message ?? "Could not create column.");
 
   revalidatePath(`/boards/${parsed.data.boardId}`);
-  return { ok: true, data: { columnId: data.id } };
+  return { ok: true, data: { column: data } };
 }
 
 async function columnBoardId(

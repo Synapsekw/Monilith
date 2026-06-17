@@ -16,6 +16,7 @@ import {
   deleteDependency,
 } from "@/lib/boards/dependency-actions";
 import {
+  insertColumn,
   insertItem,
   removeCellValue,
   removeColumn,
@@ -74,7 +75,7 @@ export function useBoardMutations(boardId: string) {
   });
 
   const addColumnMutation = useMutation<
-    { columnId: string },
+    { column: CacheColumn },
     Error,
     { kind: ColumnKind },
     Ctx
@@ -84,8 +85,13 @@ export function useBoardMutations(boardId: string) {
       if (!res.ok) throw new Error(res.error);
       return res.data;
     },
-    onSettled: () => {
-      // The new column arrives via the columns Realtime subscription.
+    // Insert the returned column immediately (mirrors addItem). The Realtime
+    // INSERT echo is idempotent via `insertColumn`, so this client and peers
+    // don't double-add — and the column appears even if Realtime lags or drops.
+    onSuccess: ({ column }) => {
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? insertColumn(prev, column) : prev,
+      );
     },
   });
 

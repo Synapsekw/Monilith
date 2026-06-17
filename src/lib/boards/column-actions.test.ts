@@ -55,7 +55,9 @@ describe("createColumn", () => {
     });
 
     const res = await createColumn({ boardId: BOARD, kind: "status" });
-    expect(res).toEqual({ ok: true, data: { columnId: COL } });
+    // Returns the full inserted row so the client inserts it optimistically
+    // (mirrors createItem); Realtime echo de-dupes via insertColumn.
+    expect(res).toEqual({ ok: true, data: { column: { id: COL } } });
     const row = insert.mock.calls[0][0];
     expect(row).toMatchObject({
       org_id: ORG,
