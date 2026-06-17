@@ -9,6 +9,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NumberWidget } from "@/components/dashboards/widgets/NumberWidget";
+import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
+import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 
@@ -53,6 +55,10 @@ export function DashboardWidget({
       <div className="min-h-0 flex-1 p-3">
         {widget.kind === "number" ? (
           <NumberWidget widget={widget} />
+        ) : widget.kind === "chart" ? (
+          <ChartWidget widget={widget} />
+        ) : widget.kind === "battery" ? (
+          <BatteryWidget widget={widget} />
         ) : (
           <div className="text-muted-foreground text-sm">
             {widget.kind} widget — coming soon
