@@ -168,5 +168,33 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
       });
       expect(error).not.toBeNull();
     });
+
+    it("dashboard_aggregate groups items by a status column (optionId + None bucket)", async () => {
+      // userA's board already has 3 items from the earlier count test; set "Done" on one item.
+      const { data: items } = await userA.anon
+        .from("items")
+        .select("id")
+        .eq("board_id", userA.boardId);
+      expect(items && items.length > 0).toBe(true);
+      // set the status cell on the first item via direct cell_values upsert (mirrors boards RLS test)
+      await userA.anon.from("cell_values").upsert({
+        org_id: userA.orgId,
+        board_id: userA.boardId,
+        item_id: items![0].id,
+        column_id: userA.statusColumnId,
+        value: { optionId: userA.doneOptionId },
+      });
+
+      const { data, error } = await userA.anon.rpc("dashboard_aggregate", {
+        p_board_id: userA.boardId,
+        p_group_column_id: userA.statusColumnId,
+        p_agg: "count",
+      });
+      expect(error).toBeNull();
+      const done = data!.find((r) => r.group_key === userA.doneOptionId);
+      const none = data!.find((r) => r.group_key === null);
+      expect(Number(done!.metric)).toBe(1);
+      expect(Number(none!.metric)).toBeGreaterThanOrEqual(1); // the other items
+    });
   },
 );

@@ -24,7 +24,7 @@ export function NumberWidget({ widget }: { widget: CacheWidget }) {
   if (isError)
     return <div className="text-destructive text-sm">Failed to load</div>;
 
-  const value = numberFromBuckets(data ?? []);
+  const value = numberFromBuckets(data?.buckets ?? []);
   return (
     <div className="flex h-full flex-col items-center justify-center">
       <span className="text-4xl font-semibold tabular-nums">

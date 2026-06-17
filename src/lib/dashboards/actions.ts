@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { type AggregateBucket } from "@/lib/dashboards/widget-data";
+import { optionSchema } from "@/lib/validations/boards";
+import {
+  type AggregateBucket,
+  type ColumnMeta,
+} from "@/lib/dashboards/widget-data";
 import {
   configSchemaForKind,
   createDashboardSchema,
@@ -165,6 +169,7 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
     kind: Widget["kind"];
     config: Record<string, unknown>;
     buckets: AggregateBucket[];
+    columnMeta: ColumnMeta | null;
   }>
 > {
   const parsed = getWidgetDataSchema.safeParse(input);
@@ -179,7 +184,10 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
     .maybeSingle();
   if (!widget) return fail("Widget not found.");
   if (!widget.source_board_id)
-    return { ok: true, data: { kind: widget.kind, config: {}, buckets: [] } };
+    return {
+      ok: true,
+      data: { kind: widget.kind, config: {}, buckets: [], columnMeta: null },
+    };
 
   const config = (widget.config ?? {}) as Record<string, unknown>;
   const agg = (config.agg as string) ?? "count";
@@ -195,5 +203,24 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
     group_key: r.group_key,
     metric: Number(r.metric),
   }));
-  return { ok: true, data: { kind: widget.kind, config, buckets } };
+
+  // For grouped widgets, resolve the group column's options for label/color
+  // rendering (kept server-side so renames/recolors reflect without a stale snapshot).
+  let columnMeta: ColumnMeta | null = null;
+  const groupColumnId = config.groupColumnId as string | undefined;
+  if (groupColumnId) {
+    const { data: col } = await supabase
+      .from("columns")
+      .select("kind, settings")
+      .eq("id", groupColumnId)
+      .maybeSingle();
+    if (col) {
+      const opts = optionSchema
+        .array()
+        .safeParse((col.settings as { options?: unknown }).options ?? []);
+      columnMeta = { kind: col.kind, options: opts.success ? opts.data : [] };
+    }
+  }
+
+  return { ok: true, data: { kind: widget.kind, config, buckets, columnMeta } };
 }
