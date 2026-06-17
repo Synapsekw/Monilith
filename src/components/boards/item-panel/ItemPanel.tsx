@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -46,6 +47,9 @@ export function ItemPanel({
       <SheetContent>
         <SheetHeader>
           <SheetTitle>{itemName}</SheetTitle>
+          <SheetDescription className="sr-only">
+            Item details, updates, and activity.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="flex gap-1 border-b">
