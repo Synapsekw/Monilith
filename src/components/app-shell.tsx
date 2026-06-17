@@ -43,7 +43,6 @@ type AppShellProps = {
   org?: AppShellOrg;
   workspaces?: AppShellWorkspace[];
   boards?: BoardListEntry[];
-  activeBoardId?: string;
 };
 
 function Brand({ org }: { org?: AppShellOrg }) {
@@ -102,7 +101,6 @@ export function AppShell({
   org,
   workspaces,
   boards,
-  activeBoardId,
 }: AppShellProps) {
   return (
     <div className="flex h-svh w-full overflow-hidden">
@@ -110,11 +108,7 @@ export function AppShell({
         <div className="flex min-h-14 items-center px-4 py-2">
           <Brand org={org} />
         </div>
-        <BoardsNav
-          boards={boards ?? []}
-          workspaces={workspaces ?? []}
-          activeBoardId={activeBoardId}
-        />
+        <BoardsNav boards={boards ?? []} workspaces={workspaces ?? []} />
         <nav className="flex flex-col gap-0.5 px-2 py-2">
           {nav.map((item) => (
             <button
