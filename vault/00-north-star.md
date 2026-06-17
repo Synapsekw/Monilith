@@ -46,7 +46,7 @@ run tests + advisors + regenerate types before moving on.**
   Kanban. **3b** (2026-06-16): Calendar (`CalendarBoard` + `dates.ts`/`calendar.ts`) and Timeline/Gantt
   (`GanttBoard` + `gantt.ts`) with the `item_dependencies` model (cycle-safe RPC + RLS, 23 integration
   tests). Per-kind view config; ViewSwitcher add-view menu. See [[2026-06-16-2009-dark-reskin-calendar-timeline]]._
-- **4 — Collaboration** — <span style="color:#fdab3d">**[4a+4b Done — 4c next]**</span>
+- **4 — Collaboration** — <span style="color:#22c55e">**[Done]**</span>
   Item detail panel, updates/comments/@mentions, attachments, activity log, notifications inbox.
   _Design done 2026-06-16: [[2026-06-16-phase-4-collaboration-design]]
   (`docs/superpowers/specs/2026-06-16-phase-4-collaboration-design.md`). One spec, three sliced PRs.
@@ -58,9 +58,13 @@ run tests + advisors + regenerate types before moving on.**
   fan-out per recipient) + People-cell `assigned` fan-out + per-user `notifications` table (recipient-gated
   RLS, per-user Realtime) + app-shell inbox bell w/ unread badge + deep-link. 266 tests + live RLS
   integration + two-user e2e green; advisors clean. See [[2026-06-17-0920-phase4b-mentions-notifications]].
-  Next: **4c** attachments (Supabase Storage). Informed by a
-  study of the `idandavid1/My-Day` Monday clone — UX taxonomy reused, data architecture rejected; see
-  [[2026-06-16-decision-11-myday-clone-donor]]._
+  **4c** (Done 2026-06-17, 16 commits): item-level attachments — `attachments` table + private Storage
+  bucket + table & **Storage-object RLS** (org from path's leading segment) + Realtime; client-direct
+  upload, server-minted signed URLs (attachment-disposition download; SVG excluded from inline preview),
+  path-spoof guard; Monday-style **Files tab** (gallery/list + drag-drop + preview lightbox). 310 tests +
+  cloud RLS integration (table + Storage policies) + Playwright e2e green; review verdict SHIP. See
+  [[2026-06-17-1400-phase4c-attachments]]. Informed by a study of the `idandavid1/My-Day` Monday clone —
+  UX taxonomy reused, data architecture rejected; see [[2026-06-16-decision-11-myday-clone-donor]]._
 - **5 — Automations + Rules** — **[Not started]**
   Trigger/condition/action builder; Postgres triggers + Edge Functions; common recipes.
 - **6 — ClickUp depth** — **[Not started]**
@@ -77,14 +81,14 @@ animations), dark set as default, and "direction C" density applied to the board
 kanban, chrome). User-verified. **Light-mode pass still pending.** Target + reuse map:
 [[2026-06-16-decision-08-dark-first-monday-reskin]].
 
-**Where we are:** Phases 0–3 done on `develop` (3b Calendar + Timeline/Gantt + dependencies shipped + user-verified). Dark reskin shipped. Board-view performance pass shipped. **Phases 4a + 4b shipped + pushed 2026-06-17** — item detail panel (`?item=` drawer) + Updates + Activity Log (4a), then @mentions + per-user notifications inbox (4b), fully verified (266 tests, live integration, two-user e2e) with advisors clean. Remaining near-term: Phase-4 **4c** (attachments — Supabase Storage), Dashboard view (needs `dashboard` view_kind migration + `recharts`), light-mode reskin, `develop → main` promotion.
+**Where we are:** Phases 0–3 done on `develop` (3b Calendar + Timeline/Gantt + dependencies shipped + user-verified). Dark reskin shipped. Board-view performance pass shipped. **Public MONOLITH landing page shipped + pushed 2026-06-17.** **Phase 4 Collaboration complete (4a+4b+4c) + pushed 2026-06-17** — item detail panel (`?item=` drawer) + Updates + Activity Log (4a), @mentions + per-user notifications inbox (4b), and item-level **attachments** (4c — Supabase Storage + table/Storage RLS, Monday-style Files tab), all verified (310 tests, cloud RLS integration, Playwright e2e) with advisors clean. Remaining near-term: Dashboard view (needs `dashboard` view_kind migration + `recharts`), light-mode reskin, `develop → main` promotion, then Phase 5 (Automations).
 
 ## 3. Now
 
-- **Phase:** 3 done + dark reskin + perf amplifiers; **Phase 4a + 4b Done + pushed** → pick **4c** (attachments) next, or {`develop → main` promotion, light-mode, Dashboard}
-- **Branch:** `develop` (synced with origin through `89b195e`)
-- **Latest (2026-06-17):** **Board-to-board switching perf fix** (8 commits `d342e56..89b195e`, pushed). Root cause was navigation wiring, not data (DB is tiny): hoisted the `AppShell` into a new persistent `app/boards/layout.tsx` (Next 16 preserves shared layouts across sibling dynamic segments → shell fetched once, sidebar/realtime no longer remount on switch), added an instant `app/boards/[boardId]/loading.tsx` skeleton (+ default prefetch of the loading boundary), slimmed the page to board-only data, wrapped `getUser` in React `cache()`, and moved active-board detection to `useParams()`/`aria-current`. Notifications (4b) left untouched. Deferred unbounded `getBoardPayload` reads logged as [[2026-06-17-gotcha-10-board-payload-unbounded-reads]]. Gate green (typecheck/lint/268 tests/build); user-verified "significantly better." See [[2026-06-17-1043-board-switch-perf-layout]]. **Next:** Phase **4c** (attachments) or the `develop → main` promotion PR.
-- **Prior (2026-06-17):** Built + shipped **Phase 4a then 4b** in one long session. 4b (19 commits, `9158214`→`730038a`): @mentions (@-autocomplete `MentionTextarea`, `body {text,mentions}`, fan-out per recipient in `addUpdate`) + People-cell `assigned` fan-out in `upsertCell` + per-user `notifications` table (recipient-gated RLS, per-user Realtime) + app-shell inbox bell (unread badge, deep-link to `?item=`). Wrote the 4b plan from the Phase-4 spec, executed all 16 tasks inline (subagents Write-blocked). 267 tests + live RLS integration + a two-user e2e (A mentions B → B's inbox) green; advisors clean (RLS + 3 policies, indexed `item_id` cascade FK). **Final review folded** (no Criticals): hardened the notifications insert policy with org-integrity guards (`is_member_of(recipient,org)` + null-safe `board_in_org`/`item_in_org`) and pruned stale mention ids on submit. See [[2026-06-17-0920-phase4b-mentions-notifications]]. **Next:** Phase **4c** (attachments — Supabase Storage bucket + signed URLs), or the `develop → main` promotion PR.
+- **Phase:** **Phase 4 Collaboration complete (4a+4b+4c)** + public landing shipped; → pick {`develop → main` promotion, light-mode reskin, Dashboard view, Phase 5 Automations}
+- **Branch:** `develop` (synced with origin through `aafc1ea`)
+- **Latest (2026-06-17):** **Phase 4c — Attachments** (`bc2a0fb..7b018cb`, pushed). The repo's **first Supabase Storage** use: `attachments` table + private bucket + **table & Storage-object RLS** (org from the path's leading segment) + Realtime; 4 Server Actions — `createAttachment` (path-spoof guard), download (`{ download }` attachment-disposition), batch inline preview URLs (previewable-only, **SVG excluded**), delete (object-before-row); lazy query + optimistic client-direct upload (orphan cleanup); Monday-style **Files tab** (gallery/list, drag-drop, hover actions, preview lightbox) in Pulse dark, mocked live in the brainstorming visual companion. Built via brainstorming→spec→plan→subagent-driven execution; a mid-session process restart Write-blocked subagents, so T6–T10 ran **inline**. Gate green (typecheck/lint/**310 tests**/build/db-lint clean); **cloud RLS integration** (cross-tenant + Storage-policy denial) + **Playwright e2e** (upload→preview→**200** download→delete) green; final review **SHIP** (no Criticals). v1 = item-level only (update-level → 4d); delete UI uploader-gated. See [[2026-06-17-1400-phase4c-attachments]]. **Next:** `develop → main` promotion, light-mode, or Dashboard.
+- **Prior (2026-06-17):** **MONOLITH public landing page** (`b5dbbe1..cfd3d95`, pushed): public `/` route, pure-RSC `MonolithHero` wrapping `<Link href="/login">`; trap — `src/proxy.ts` had to whitelist `/` as public + invert the `home` e2e → [[2026-06-17-gotcha-12-public-route-needs-proxy-and-e2e-update]]. See [[2026-06-17-1126-monolith-landing-page]]. (Board-switch perf fix before it: [[2026-06-17-1043-board-switch-perf-layout]].)
 - **🧑 Manual gates (Danijel):** Supabase keys done. Project is cloud-native with no local stack — with explicit per-session authorization, agents apply migrations via `supabase db push --linked` (done this session for the three 4a migrations). The **Supabase MCP** was OAuth-authorized this session (read-write scope; used read-only for advisor lints — schema still goes through versioned migration files, never `apply_migration`). Regenerate types after schema changes (note: `pnpm db:types` can leak a PostHog telemetry line — filter `'"_tag"'` before prettier). **Drift watch RESOLVED:** the migration ledger was fully in sync (local == remote) before 4a's pushes — 3b's `timeline_dependencies` out-of-band apply is confirmed complete.
 
 ### Last session
