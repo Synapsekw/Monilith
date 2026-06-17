@@ -3,6 +3,15 @@ import type { Database } from "@/types/database.types";
 
 export type ColumnKind = Database["public"]["Enums"]["column_kind"];
 
+export const columnKindSchema = z.enum([
+  "text",
+  "status",
+  "people",
+  "date",
+  "numbers",
+  "dropdown",
+]);
+
 // --- shared option shape (status + dropdown) ---
 export const optionSchema = z.object({
   id: z.string().min(1),

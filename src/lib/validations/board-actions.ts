@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { columnKindSchema } from "@/lib/validations/boards";
+
 const name = z.string().trim().min(1).max(100);
 const itemName = z.string().trim().min(1).max(255);
 const uuid = z.string().uuid();
@@ -21,3 +23,15 @@ export const upsertCellSchema = z.object({
   value: cellValue,
 });
 export const clearCellSchema = z.object({ itemId: uuid, columnId: uuid });
+
+export const createColumnSchema = z.object({
+  boardId: uuid,
+  kind: columnKindSchema,
+  name: name.optional(),
+});
+export const renameColumnSchema = z.object({ columnId: uuid, name });
+export const deleteColumnSchema = z.object({ columnId: uuid });
+export const resizeColumnSchema = z.object({
+  columnId: uuid,
+  width: z.number().int().min(80).max(1200),
+});
