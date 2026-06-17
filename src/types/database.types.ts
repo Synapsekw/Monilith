@@ -14,6 +14,77 @@ export type Database = {
   };
   public: {
     Tables: {
+      attachments: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          file_name: string;
+          id: string;
+          item_id: string | null;
+          mime_type: string;
+          org_id: string;
+          size_bytes: number;
+          storage_path: string;
+          update_id: string | null;
+          uploaded_by: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          file_name: string;
+          id?: string;
+          item_id?: string | null;
+          mime_type: string;
+          org_id: string;
+          size_bytes: number;
+          storage_path: string;
+          update_id?: string | null;
+          uploaded_by: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          file_name?: string;
+          id?: string;
+          item_id?: string | null;
+          mime_type?: string;
+          org_id?: string;
+          size_bytes?: number;
+          storage_path?: string;
+          update_id?: string | null;
+          uploaded_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attachments_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_update_id_fkey";
+            columns: ["update_id"];
+            isOneToOne: false;
+            referencedRelation: "item_updates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_views: {
         Row: {
           board_id: string;
@@ -834,6 +905,10 @@ export type Database = {
           p_org_id: string;
           p_roles: Database["public"]["Enums"]["org_role"][];
         };
+        Returns: boolean;
+      };
+      is_member_of: {
+        Args: { p_org_id: string; p_user: string };
         Returns: boolean;
       };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
