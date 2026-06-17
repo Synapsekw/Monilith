@@ -3,6 +3,7 @@ import { BarChart3, Inbox, LayoutGrid, Target } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { CommandTrigger } from "@/components/command-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,7 @@ export type AppShellWorkspace = {
 type AppShellProps = {
   children: ReactNode;
   user?: AppShellUser;
+  currentUserId?: string;
   org?: AppShellOrg;
   workspaces?: AppShellWorkspace[];
   boards?: BoardListEntry[];
@@ -96,6 +98,7 @@ function UserMenu({ user }: { user: AppShellUser }) {
 export function AppShell({
   children,
   user,
+  currentUserId,
   org,
   workspaces,
   boards,
@@ -149,6 +152,9 @@ export function AppShell({
           </div>
           <div className="flex flex-1 items-center justify-end gap-2">
             <CommandTrigger />
+            {currentUserId ? (
+              <NotificationsBell userId={currentUserId} />
+            ) : null}
             <ThemeToggle />
             {user ? <UserMenu user={user} /> : null}
           </div>

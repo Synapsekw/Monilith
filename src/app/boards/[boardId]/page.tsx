@@ -37,6 +37,7 @@ export default async function BoardPage({
 
   return (
     <AppShell
+      currentUserId={user.id}
       user={{
         email: user.email,
         full_name:
