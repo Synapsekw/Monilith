@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   board: LayoutGrid,
@@ -28,7 +29,14 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 
 export function NewBoardDialog({ workspaceId }: { workspaceId?: string }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const storeOpen = useUIStore((s) => s.newBoardOpen);
+  const setNewBoardOpen = useUIStore((s) => s.setNewBoardOpen);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = storeOpen || localOpen;
+  const setOpen = (next: boolean) => {
+    setLocalOpen(next);
+    if (!next) setNewBoardOpen(false);
+  };
   const [templateId, setTemplateId] = useState("blank");
   const [name, setName] = useState("Blank board");
   const [error, setError] = useState<string | null>(null);

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { useUIStore } from "@/stores/ui";
 
 const push = vi.fn();
 const refresh = vi.fn();
@@ -23,6 +24,7 @@ beforeEach(() => {
     ok: true,
     data: { boardId: "b1" },
   });
+  useUIStore.setState({ newBoardOpen: false });
 });
 
 describe("NewBoardDialog", () => {
@@ -56,6 +58,23 @@ describe("NewBoardDialog", () => {
       expect(createBoardFromTemplate).toHaveBeenCalledWith(
         expect.objectContaining({ templateId: "blank" }),
       ),
+    );
+  });
+
+  it("opens when the newBoardOpen store flag is set (controlled path)", async () => {
+    render(<NewBoardDialog workspaceId="ws1" />);
+    expect(
+      screen.queryByText(
+        "Pick a template to start from, then name your board.",
+      ),
+    ).toBeNull();
+    useUIStore.setState({ newBoardOpen: true });
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Pick a template to start from, then name your board.",
+        ),
+      ).toBeInTheDocument(),
     );
   });
 });
