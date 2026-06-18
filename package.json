@@ -14,6 +14,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:types": "supabase gen types typescript --linked --schema public | prettier --parser typescript > src/types/database.types.ts",
+    "changelog:gen": "tsx scripts/generate-changelog.ts && prettier --write src/lib/changelog/generated.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
@@ -83,6 +84,7 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "supabase": "^2.106.0",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^6",
     "vitest": "^4.1.8"
   }
