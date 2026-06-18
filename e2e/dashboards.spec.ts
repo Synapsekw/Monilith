@@ -386,4 +386,142 @@ test.describe("Dashboards: create → add Number widget → drag → persist", (
     });
     await expect(page.locator("table tbody tr").first()).toBeVisible();
   });
+
+  test("list widget with a status filter shows only matching rows and persists", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    // ── 1. Log in ─────────────────────────────────────────────────────────────
+    await page.goto("/login");
+    await page.getByLabel(/email/i).fill(testEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: /sign in/i }).click();
+
+    // Shared user: this serial test may land on onboarding (first run) or the
+    // app root. Branch on whichever UI appears, mirroring the other tests.
+    const orgNameField = page.getByLabel(/organization name/i);
+    const newBoardButton = page.getByRole("button", { name: "New board" });
+    await expect(orgNameField.or(newBoardButton).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    if (await orgNameField.isVisible().catch(() => false)) {
+      await orgNameField.fill(unique("Org"));
+      await page.getByLabel(/workspace name/i).fill("Engineering");
+      await page.getByRole("button", { name: /create organization/i }).click();
+      await page.waitForURL(/localhost:3000\/$/, { timeout: 30_000 });
+    }
+    await expect(newBoardButton).toBeVisible({ timeout: 30_000 });
+
+    // ── 2. Create a board with TWO items: one will get "Working on it" status,
+    //       one will have no status — so we can prove the filter narrows rows. ─
+    const boardName = unique("FilterBoard");
+    await page.getByRole("button", { name: "New board" }).click();
+    await page.getByLabel(/board name/i).fill(boardName);
+    await page.getByRole("button", { name: /create board/i }).click();
+    await page.waitForURL(/\/boards\//);
+    await expect(page.getByText("Group 1")).toBeVisible();
+
+    // First item — will receive "Working on it" status.
+    const matchingItem = unique("MatchTask");
+    await page.getByLabel("Add item").fill(matchingItem);
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(matchingItem)).toBeVisible({ timeout: 15_000 });
+
+    // Second item — left with no status (will NOT match the filter).
+    const nonMatchingItem = unique("NoStatusTask");
+    await page.getByLabel("Add item").fill(nonMatchingItem);
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(nonMatchingItem)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Set the first item's Status to "Working on it".
+    // Resting Status cell: div[role="button"][aria-label="${item} Status"].
+    await page.getByRole("button", { name: `${matchingItem} Status` }).click();
+    // StatusEditor renders option pills with role="option". Use dispatchEvent
+    // to bypass z-stack hit-test issues (same pattern as boards.spec.ts).
+    await page
+      .getByRole("option", { name: /working on it/i })
+      .dispatchEvent("click");
+    await expect(page.getByText(/working on it/i)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // ── 3. Create a dashboard ─────────────────────────────────────────────────
+    await page.getByRole("button", { name: /new dashboard/i }).click();
+    await page.getByLabel(/dashboard name/i).fill("Filter Dash");
+    await page.getByRole("button", { name: /create dashboard/i }).click();
+    await expect(page).toHaveURL(/\/dashboards\/[0-9a-f-]+/, {
+      timeout: 30_000,
+    });
+    await expect(
+      page.getByRole("heading", { name: "Filter Dash" }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // ── 4. Enter Edit, open Add-widget, configure a filtered List widget ──────
+    await page.getByRole("button", { name: /^edit$/i }).click();
+    await page.getByRole("button", { name: /add widget/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /add a widget/i }),
+    ).toBeVisible();
+
+    // Widget type → List.
+    await page
+      .locator("label", { hasText: "Widget type" })
+      .locator("select")
+      .selectOption("list");
+
+    // Check the first column to show (Status is the first auto-seeded column).
+    const firstColumnCheck = page.getByRole("checkbox").first();
+    await expect(firstColumnCheck).toBeVisible();
+    await firstColumnCheck.check();
+
+    // Add one filter condition: Status is "Working on it".
+    await page.getByRole("button", { name: /add condition/i }).click();
+    // "Filter column" defaults to the first column (Status). Confirm it.
+    await page.getByLabel("Filter column").selectOption({ label: "Status" });
+    // "Filter operator" — "is" is the first operator for a status/option column.
+    await page.getByLabel("Filter operator").selectOption("is");
+    // "Filter value" — pick "Working on it" by label (value is a dynamic UUID).
+    await page
+      .getByLabel("Filter value")
+      .selectOption({ label: "Working on it" });
+
+    // Submit via the dialog footer button (the last "Add widget" button).
+    await page
+      .getByRole("button", { name: /add widget/i })
+      .last()
+      .click();
+
+    // ── 5. Assert only the matching item row is visible ───────────────────────
+    // The table header and the matching row must be present.
+    await expect(page.locator("table thead").getByText("Item")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator("table tbody").getByText(matchingItem),
+    ).toBeVisible({ timeout: 15_000 });
+    // The non-matching item (no status set) must NOT appear.
+    await expect(
+      page.locator("table tbody").getByText(nonMatchingItem),
+    ).not.toBeVisible();
+
+    // Allow the widget config write (Server Action) to settle before reloading.
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // ── 6. Reload → filter persists (config.filter was saved and re-read) ─────
+    await page.reload();
+    await expect(page.locator("table thead").getByText("Item")).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator("table tbody").getByText(matchingItem),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.locator("table tbody").getByText(nonMatchingItem),
+    ).not.toBeVisible();
+  });
 });
