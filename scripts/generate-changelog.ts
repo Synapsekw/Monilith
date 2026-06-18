@@ -7,7 +7,7 @@ import {
   RECORD_SEP,
   FIELD_SEP,
   VALUE_SEP,
-} from "../src/lib/changelog/parse.ts";
+} from "../src/lib/changelog/parse";
 
 // Translate a separator char into a git pretty-format `%xNN` hex escape.
 const hex = (c: string) => `%x${c.charCodeAt(0).toString(16).padStart(2, "0")}`;
