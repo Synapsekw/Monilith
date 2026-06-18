@@ -5,7 +5,7 @@
   min-height: 100dvh;
   isolation: isolate;
   overflow: hidden;
-  background: #0d0d0f;
+  background: #06070c;
 }
 
 .scene {
@@ -20,36 +20,42 @@
   overflow: hidden;
 }
 
-/* Darkens the edges so the topographic lines fade out toward the frame. */
+/* Full-bleed WebGL light-rays backdrop. */
+.rays {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Seats the ray source with a soft bloom at the top-centre origin. */
+.source {
+  position: absolute;
+  top: -6%;
+  left: 50%;
+  z-index: 1;
+  transform: translateX(-50%);
+  width: min(560px, 70vw);
+  height: 300px;
+  pointer-events: none;
+  filter: blur(50px);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(170, 180, 255, 0.35),
+    transparent 70%
+  );
+}
+
+/* Darkens the edges so the rays fall off cleanly toward the frame. */
 .vignette {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
   background: radial-gradient(
-    120% 90% at 50% 45%,
-    transparent 45%,
-    rgba(13, 13, 15, 0.7) 100%
+    130% 100% at 50% 30%,
+    transparent 40%,
+    rgba(6, 7, 12, 0.82) 100%
   );
-}
-
-/* Soft glow hugging the wordmark — the only light source now the slab is gone. */
-.aura {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: 1;
-  transform: translate(-50%, -55%);
-  width: min(820px, 80vw);
-  height: 360px;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(150, 162, 235, 0.4),
-    rgba(126, 136, 224, 0.16) 42%,
-    transparent 70%
-  );
-  filter: blur(46px);
 }
 
 .wordmark {

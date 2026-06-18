@@ -10,6 +10,25 @@ vi.mock("next/font/google", () => {
   return { Nunito: font, Geist: font, Geist_Mono: font };
 });
 
+// ogl spins up a real WebGL context, which jsdom lacks. Stub the four primitives
+// the LightRays hero uses so it mounts (and tears down) under jsdom without a
+// GPU. Renderer exposes a fake gl/canvas so the component's append + cleanup run.
+vi.mock("ogl", () => {
+  class Renderer {
+    dpr = 1;
+    gl = {
+      canvas: document.createElement("canvas"),
+      getExtension: () => null,
+    };
+    setSize() {}
+    render() {}
+  }
+  class Program {}
+  class Triangle {}
+  class Mesh {}
+  return { Renderer, Program, Triangle, Mesh };
+});
+
 // jsdom lacks the layout/observer APIs Radix (Popover/DismissableLayer + Floating
 // UI) relies on. Provide minimal stubs so portaled floating surfaces can mount.
 globalThis.ResizeObserver ??= class {

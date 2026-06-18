@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import { nunito } from "@/lib/fonts";
-import { TopographyCanvas } from "./topography-canvas";
+import { LightRays } from "./light-rays";
 import styles from "./monolith-hero.module.css";
 
 // framer-motion v12 does not export `Variants` directly; define it locally.
@@ -26,11 +26,11 @@ const item: Variants = {
 };
 
 /**
- * Interactive landing centerpiece. A mouse-reactive topographic field sits
- * behind a central glow; the wordmark, subcopy and CTA slot rise in on load.
- * `children` is the CTA row, rendered by the server `MonolithHero`. The reveal
- * is disabled under prefers-reduced-motion; the backdrop freezes to a static
- * field (handled inside `TopographyCanvas`).
+ * Interactive landing centerpiece. Mouse-reactive WebGL light rays stream from
+ * the top behind a soft source bloom; the wordmark, subcopy and CTA slot rise in
+ * on load. `children` is the CTA row, rendered by the server `MonolithHero`. The
+ * reveal is disabled under prefers-reduced-motion; the backdrop freezes to a
+ * single static frame (handled inside `LightRays`).
  */
 export function MonolithScene({ children }: { children: React.ReactNode }) {
   const reduce = useReducedMotion();
@@ -42,9 +42,9 @@ export function MonolithScene({ children }: { children: React.ReactNode }) {
       initial={reduce ? false : "hidden"}
       animate="show"
     >
-      <TopographyCanvas />
+      <LightRays className={styles.rays} />
+      <span className={styles.source} aria-hidden />
       <span className={styles.vignette} aria-hidden />
-      <span className={styles.aura} aria-hidden />
       <motion.span className={styles.badge} variants={item}>
         <span className={styles.badgeDot} aria-hidden />
         In active development
