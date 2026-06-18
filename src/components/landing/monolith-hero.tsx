@@ -1,27 +1,59 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { MagneticButton } from "./magnetic-button";
+import { MonolithScene } from "./monolith-scene";
 import styles from "./monolith-hero.module.css";
-import { archivo } from "@/lib/fonts";
 
 /**
- * Public landing hero. Pure Server Component: CSS-only animation + hover
- * affordance, the whole surface is a single navigation. No client JS.
+ * Public landing hero. Server Component: derives the nav + CTA labels/targets
+ * from auth state and renders the interactive client `MonolithScene`. The top
+ * nav holds quick auth links; the hero holds primary magnetic CTAs.
  *
- * `href` is where clicking the hero goes — defaults to `/login` (the public `/`
- * landing for logged-out visitors). The `/landing` route passes the in-app
- * destination for already-signed-in viewers.
+ * `signedIn` drives the copy: logged-out visitors get Log in / Sign up; a
+ * signed-in viewer (the `/landing` splash) gets a single "Enter app" path back
+ * into the product (`/`, which routes on to their board) via the "Enter app" CTA;
+ * logged-out visitors get the Log in / Sign up entry points.
  */
-export function MonolithHero({ href = "/login" }: { href?: string }) {
+export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
   return (
-    <Link href={href} className={styles.hero}>
-      <span className={styles.vignette} aria-hidden />
-      <span className={styles.glow} aria-hidden />
-      <span className={styles.slab} aria-hidden />
-      <span className={`${styles.wordmark} ${archivo.className}`}>
-        MONOLITH
-      </span>
-      <span className={styles.enter} aria-hidden>
-        Click to enter
-      </span>
-    </Link>
+    <div className={styles.page}>
+      <header className={styles.nav}>
+        <span className={styles.brand}>
+          <span className={styles.brandMark} aria-hidden>
+            P
+          </span>
+          Pulse
+        </span>
+        <nav className={styles.navActions}>
+          {signedIn ? (
+            <Button asChild size="sm">
+              <Link href="/">Enter app</Link>
+            </Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/login">Log in</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/signup">Sign up</Link>
+              </Button>
+            </>
+          )}
+        </nav>
+      </header>
+
+      <MonolithScene>
+        {signedIn ? (
+          <MagneticButton href="/">Enter app</MagneticButton>
+        ) : (
+          <>
+            <MagneticButton href="/signup">Get started</MagneticButton>
+            <MagneticButton href="/login" variant="outline">
+              Sign in
+            </MagneticButton>
+          </>
+        )}
+      </MonolithScene>
+    </div>
   );
 }
