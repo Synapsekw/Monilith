@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-17
+last-updated: 2026-06-18
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -71,7 +71,7 @@ run tests + advisors + regenerate types before moving on.**
   Subitems/nesting, time tracking, Docs, custom statuses/fields, relations + mirror columns.
 - **7 — Asana polish** — **[Not started]**
   Goals/OKRs, Portfolios, Workload/capacity.
-- **8 — Dashboards + templates + ⌘K polish** — <span style="color:#eab308">**[In progress — D1+D2+D3a shipped]**</span>
+- **8 — Dashboards + templates + ⌘K polish** — <span style="color:#eab308">**[In progress — widget subsystem closed (D1+D2+D3a+D3b); templates + ⌘K remain]**</span>
   _**Dashboards D1** (2026-06-17, `708a7dc..7aa1fed`, pushed): cross-board workspace dashboards —
   `dashboards`+`dashboard_widgets` tables (org-RLS) + `dashboard_aggregate` RPC spine (count/sum/avg,
   optional grouping) + Server Actions + TanStack hooks + `react-grid-layout` v2 drag-resize canvas
@@ -89,7 +89,16 @@ run tests + advisors + regenerate types before moving on.**
   ready-to-merge. D3 split: D3a=list (done), **D3b=multi-condition filter (next)**. See
   [[2026-06-17-2155-dashboards-d3a-list-widget]],
   [[2026-06-17-2155-gotcha-15-subagent-scope-overstep-shared-checkout]]. Then templates + ⌘K polish.
-  Deferred: Dropdown/People grouping, per-widget config editing, People name/avatar rendering._
+  Deferred: Dropdown/People grouping, People name/avatar rendering._
+  _**Dashboards D3b** (2026-06-18, `493e77d..40684d4`, pushed): **List filter** — flat AND/OR
+  multi-condition filter, **closing the dashboards widget subsystem**. New bounded `dashboard_list_rows`
+  RPC (`SECURITY DEFINER`, membership-checked, per-condition `EXISTS(cell_values)` joined by combinator,
+  **LIMIT after filter**, injection-safe `%L` + cast guards) + `getWidgetRows` delegates to it + filter
+  Zod schema + `filter-meta` + `FilterBuilder` UI + add-widget wiring + **per-widget List config editor**.
+  Subagent-driven (9 tasks, two-stage review each; review caught a stale-config-on-reopen bug). 404
+  tests + e2e 4/4 + advisor-parity (search_path pinned); final holistic review verdict **Ship**.
+  Deferred (lean tier): dropdown/people value-matching, nested groups, relative dates, `between`.
+  See [[2026-06-18-0818-dashboards-d3b-list-filter]]._
 - **9 — Hardening** — **[Not started]**
   Performance (virtualization, indexes), advisors clean, tests, a11y audit, Vercel deploy.
 
@@ -99,13 +108,13 @@ animations), dark set as default, and "direction C" density applied to the board
 kanban, chrome). User-verified. **Light-mode pass still pending.** Target + reuse map:
 [[2026-06-16-decision-08-dark-first-monday-reskin]].
 
-**Where we are:** Phases 0–4 done on `develop` **and now promoted to `main`** (PR #16 squash-merged 2026-06-17 — `main` carries Phases 0–4 + dark reskin + landing + sidebar; no Vercel project yet, so this is integration, not a live deploy). Phase 2 boards-core fully complete (**2c column management** add/rename/delete/resize shipped + pushed; 3b Calendar + Timeline/Gantt + dependencies shipped + user-verified). Dark reskin shipped. Board-view performance pass shipped. Collapsible sidebar shipped. **Public MONOLITH landing page shipped + pushed 2026-06-17.** **Phase 4 Collaboration complete (4a+4b+4c) + pushed 2026-06-17** — item detail panel (`?item=` drawer) + Updates + Activity Log (4a), @mentions + per-user notifications inbox (4b), and item-level **attachments** (4c — Supabase Storage + table/Storage RLS, Monday-style Files tab), all verified (310 tests, cloud RLS integration, Playwright e2e) with advisors clean. (`develop → main` promotion done 2026-06-17.) **Phase 8 started: Dashboards D1+D2+D3a shipped + pushed 2026-06-17** — cross-board workspace dashboards (aggregation-RPC spine + drag-resize canvas + Number in D1; **Chart bar/pie + Battery** grouping by status in D2; **List** widget — bounded latest-N rows + chosen columns — in D3a). Remaining near-term: user-verify the four widget types, Dashboards **D3b** (multi-condition filter — closes the subsystem), light-mode reskin, then Phase 5 (Automations).
+**Where we are:** Phases 0–4 done on `develop` **and now promoted to `main`** (PR #16 squash-merged 2026-06-17 — `main` carries Phases 0–4 + dark reskin + landing + sidebar; no Vercel project yet, so this is integration, not a live deploy). Phase 2 boards-core fully complete (**2c column management** add/rename/delete/resize shipped + pushed; 3b Calendar + Timeline/Gantt + dependencies shipped + user-verified). Dark reskin shipped. Board-view performance pass shipped. Collapsible sidebar shipped. **Public MONOLITH landing page shipped + pushed 2026-06-17.** **Phase 4 Collaboration complete (4a+4b+4c) + pushed 2026-06-17** — item detail panel (`?item=` drawer) + Updates + Activity Log (4a), @mentions + per-user notifications inbox (4b), and item-level **attachments** (4c — Supabase Storage + table/Storage RLS, Monday-style Files tab), all verified (310 tests, cloud RLS integration, Playwright e2e) with advisors clean. (`develop → main` promotion done 2026-06-17.) **Phase 8: Dashboards widget subsystem CLOSED (D1+D2+D3a+D3b) + pushed** — cross-board workspace dashboards (aggregation-RPC spine + drag-resize canvas + Number in D1; **Chart bar/pie + Battery** grouping by status in D2; **List** widget — bounded latest-N rows + chosen columns — in D3a; **multi-condition List filter** — bounded `dashboard_list_rows` RPC + filter-builder UI + per-widget editor — in D3b, 2026-06-18). Remaining near-term: user-verify the four widget types + filter in the live app, then templates + ⌘K polish (rest of Phase 8), light-mode reskin, then Phase 5 (Automations).
 
 ## 3. Now
 
-- **Phase:** Phases 0–4 complete + promoted to `main`. **Phase 8 in progress — Dashboards D1+D2+D3a shipped.** **Next:** Dashboards **D3b** (multi-condition filter) — closes the dashboards subsystem; or user-verify the four widget types first; then light-mode reskin / Phase 5.
-- **Branch:** `develop` (synced with `origin/develop` at `3a6d0dd`). `main` at squash commit `30a9cf3`.
-- **Latest (2026-06-17):** **Dashboards D3a — List widget** (`ab1a5d4..3a6d0dd`, 7 commits, pushed). Bounded latest-N rows of a source board shown as a compact table (item name + chosen columns; Status pill, Number/Date/Text, People count). **No DB/RPC change** — new `getWidgetRows` Server Action does RLS-scoped bounded selects (items `LIMIT N` over indexed `board_id`; cells/columns via `.in(...)`). Pure `formatCell` + `listConfigSchema` + `ListWidget`/`useWidgetRows` + add-widget List option (column multi-select + max-rows) + one all-columns page query. Gate green (typecheck/lint/**378 tests**/build); **e2e 3/3** (Number/Chart/List); review ready-to-merge. D3 **split**: D3a (list, done) + **D3b (multi-condition filter, next)**. Process gotcha: a subagent overstepped its task scope while a second agent ran the same file → [[2026-06-17-2155-gotcha-15-subagent-scope-overstep-shared-checkout]]. See [[2026-06-17-2155-dashboards-d3a-list-widget]].
+- **Phase:** Phases 0–4 complete + promoted to `main`. **Phase 8 in progress — Dashboards widget subsystem closed (D1+D2+D3a+D3b).** **Next:** user-verify the four widget types + filter in the live app; then templates + ⌘K polish, light-mode reskin, or Phase 5 (Automations).
+- **Branch:** `develop` (synced with `origin/develop` at `40684d4`). `main` at squash commit `30a9cf3`.
+- **Latest (2026-06-18):** **Dashboards D3b — List multi-condition filter** (`493e77d..40684d4`, 13 commits, pushed) — **closes the dashboards widget subsystem**. Flat AND/OR filter on the List widget. New bounded **`dashboard_list_rows` RPC** (`SECURITY DEFINER`, membership-checked → 42501; per-condition `EXISTS(cell_values)` joined by combinator; **LIMIT applied after filtering**; injection-safe `format(%L)` + numeric/date regex guards) + `getWidgetRows` delegates to it (cells query unchanged) + filter Zod schema + `filter-meta` operators-per-kind + `FilterBuilder` UI + add-widget wiring (columns carry `options`) + **per-widget List config editor**. Built subagent-driven (9 tasks, fresh implementer + two-stage review each, one-file-per-agent per gotcha-15; review caught a real stale-config-on-reopen bug). Gate green (typecheck/lint/**404 tests**/build); **e2e 4/4**; both new functions pin `search_path` (advisor parity, `get_advisors` MCP tool not exposed). Final holistic review verdict **Ship**. Deferred (lean tier): dropdown/people value-matching, nested groups, relative dates, `between`. See [[2026-06-18-0818-dashboards-d3b-list-filter]].
 - **Prior (2026-06-17):** **Dashboards D2 — Chart + Battery** (`818e4f1..376402e`, 8 commits, pushed). **Chart** (bar/pie, recharts v3.8.1) + **Battery** (status-distribution bar) grouping by a **Status** column. No DB/RPC change — reused D1's `dashboard_aggregate`. `shapeBuckets`/`bucketsTotal` + `getWidgetData` `columnMeta` (server-side label/color) + generalized add-widget dialog. 366 tests + live integration 5/5 (grouped-by-status) + e2e 2/2; review SHIP-WITH-NITS (board-switch reset fixed). See [[2026-06-17-2119-dashboards-d2-chart-battery]].
 - **Earlier (2026-06-17):** **Dashboards D1 — foundation + canvas + Number widget** (`708a7dc..7aa1fed`, 16 commits, pushed). `dashboards`+`dashboard_widgets` (org-RLS) + `dashboard_aggregate` RPC spine + `react-grid-layout` v2 canvas (0-refetch-on-drag) + Number widget + sidebar section. Gate green; live RLS/aggregate 4/4; e2e green; review SHIP-WITH-NITS. rgl v2 API gotcha → [[2026-06-17-2048-gotcha-14-react-grid-layout-v2-api]]. See [[2026-06-17-2048-dashboards-d1-foundation]].
 - **Earlier (2026-06-17):** **develop → main promotion.** Squash-merged the standing promotion PR #16 — `main` advanced past Phase 2b to carry Phases 0–4 + dark reskin + landing + sidebar. No code changes. Repo forces squash (merge-commits disabled, rebase fails on `develop`'s merge-commit history), so `main` now diverges permanently from `develop` in history — future promotions still diff correctly (tree-based). No Vercel project yet → integration only, not a live deploy. See [[2026-06-17-1947-develop-main-promotion]].
