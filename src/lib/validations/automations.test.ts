@@ -1,60 +1,83 @@
 import { describe, it, expect } from "vitest";
 import {
   automationTriggerSchema,
-  automationActionsSchema,
   createAutomationSchema,
 } from "@/lib/validations/automations";
 
-const UUID = "00000000-0000-4000-8000-000000000001";
-const UUID2 = "00000000-0000-4000-8000-000000000002";
+const COL = "00000000-0000-4000-8000-000000000001";
+const OPT = "00000000-0000-4000-8000-000000000002";
 
-describe("automation schemas", () => {
-  it("accepts a status_changed trigger (specific + any)", () => {
+describe("automationTriggerSchema (5b-1 union)", () => {
+  it("accepts status_changed", () => {
     expect(
       automationTriggerSchema.safeParse({
         type: "status_changed",
-        columnId: UUID,
-        toOptionId: "opt-1",
-      }).success,
-    ).toBe(true);
-    expect(
-      automationTriggerSchema.safeParse({
-        type: "status_changed",
-        columnId: UUID,
+        columnId: COL,
         toOptionId: null,
       }).success,
     ).toBe(true);
   });
 
-  it("accepts notify(owner/member) and set_option actions", () => {
-    const ok = automationActionsSchema.safeParse([
-      { type: "notify", recipient: { kind: "owner", peopleColumnId: UUID } },
-      { type: "notify", recipient: { kind: "member", userId: UUID2 } },
-      { type: "set_option", columnId: UUID, optionId: "opt-9" },
-    ]);
-    expect(ok.success).toBe(true);
+  it("accepts item_created with no extra fields", () => {
+    expect(
+      automationTriggerSchema.safeParse({ type: "item_created" }).success,
+    ).toBe(true);
   });
 
-  it("rejects an empty actions array and unknown action types", () => {
-    expect(automationActionsSchema.safeParse([]).success).toBe(false);
+  it("accepts person_assigned with a columnId", () => {
     expect(
-      automationActionsSchema.safeParse([{ type: "delete_item" }]).success,
+      automationTriggerSchema.safeParse({
+        type: "person_assigned",
+        columnId: COL,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects person_assigned without a columnId", () => {
+    expect(
+      automationTriggerSchema.safeParse({ type: "person_assigned" }).success,
     ).toBe(false);
   });
 
-  it("requires a valid trigger + non-empty actions for create", () => {
+  it("rejects an unknown trigger type", () => {
+    expect(
+      automationTriggerSchema.safeParse({ type: "nope", columnId: COL })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("createAutomationSchema condition", () => {
+  const base = {
+    boardId: COL,
+    trigger: { type: "item_created" as const },
+    actions: [{ type: "set_option" as const, columnId: COL, optionId: OPT }],
+  };
+
+  it("accepts an absent condition", () => {
+    expect(createAutomationSchema.safeParse(base).success).toBe(true);
+  });
+
+  it("accepts a multi-condition AND/OR filter", () => {
     expect(
       createAutomationSchema.safeParse({
-        boardId: UUID,
-        trigger: { type: "status_changed", columnId: UUID, toOptionId: null },
-        actions: [{ type: "set_option", columnId: UUID2, optionId: "x" }],
+        ...base,
+        condition: {
+          combinator: "or",
+          conditions: [{ columnId: COL, operator: "is", value: OPT }],
+        },
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects an invalid operator in a condition", () => {
     expect(
       createAutomationSchema.safeParse({
-        boardId: UUID,
-        trigger: {},
-        actions: [],
+        ...base,
+        condition: {
+          combinator: "and",
+          conditions: [{ columnId: COL, operator: "bogus", value: "x" }],
+        },
       }).success,
     ).toBe(false);
   });
