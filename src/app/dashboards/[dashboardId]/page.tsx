@@ -5,6 +5,7 @@ import type { BoardOption } from "@/components/dashboards/AddWidgetDialog";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardPayload } from "@/lib/dashboards/queries";
+import { optionSchema } from "@/lib/validations/boards";
 
 export default async function DashboardPage({
   params,
@@ -28,7 +29,7 @@ export default async function DashboardPage({
   const boardIds = (boardRows ?? []).map((b) => b.id);
   const { data: allCols } = await supabase
     .from("columns")
-    .select("id, name, kind, board_id")
+    .select("id, name, kind, settings, board_id")
     .in("board_id", boardIds)
     .order("position", { ascending: true });
 
@@ -43,7 +44,16 @@ export default async function DashboardPage({
       statusColumns: cols
         .filter((c) => c.kind === "status")
         .map((c) => ({ id: c.id, name: c.name })),
-      allColumns: cols.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+      allColumns: cols.map((c) => ({
+        id: c.id,
+        name: c.name,
+        kind: c.kind,
+        options:
+          optionSchema
+            .array()
+            .safeParse((c.settings as { options?: unknown }).options ?? [])
+            .data ?? [],
+      })),
     };
   });
 

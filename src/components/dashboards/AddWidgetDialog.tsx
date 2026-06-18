@@ -14,13 +14,20 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
+import { FilterBuilder } from "@/components/dashboards/FilterBuilder";
+import type { ListFilter } from "@/lib/validations/dashboards";
 
 export type BoardOption = {
   id: string;
   name: string;
   numbersColumns: { id: string; name: string }[];
   statusColumns: { id: string; name: string }[];
-  allColumns: { id: string; name: string; kind: string }[];
+  allColumns: {
+    id: string;
+    name: string;
+    kind: string;
+    options: { id: string; label: string; color?: string }[];
+  }[];
 };
 
 type Kind = "number" | "chart" | "battery" | "list";
@@ -46,6 +53,10 @@ export function AddWidgetDialog({
   const [chartStyle, setChartStyle] = useState<"bar" | "pie">("bar");
   const [columnIds, setColumnIds] = useState<string[]>([]);
   const [limit, setLimit] = useState(25);
+  const [filter, setFilter] = useState<ListFilter>({
+    combinator: "and",
+    conditions: [],
+  });
   const [error, setError] = useState<string | null>(null);
 
   const board = boards.find((b) => b.id === boardId);
@@ -60,6 +71,7 @@ export function AddWidgetDialog({
     setChartStyle("bar");
     setColumnIds([]);
     setLimit(25);
+    setFilter({ combinator: "and", conditions: [] });
     setKind("number");
   }
 
@@ -73,7 +85,10 @@ export function AddWidgetDialog({
         return setError("Pick a numbers column for sum/average.");
       config = agg === "count" ? { agg } : { agg, valueColumnId };
     } else if (kind === "list") {
-      config = { columnIds, limit };
+      config =
+        filter.conditions.length > 0
+          ? { columnIds, limit, filter }
+          : { columnIds, limit };
     } else {
       // chart + battery both group by a status column
       if (!groupColumnId) return setError("Pick a status column to group by.");
@@ -131,6 +146,7 @@ export function AddWidgetDialog({
                 setGroupColumnId("");
                 setValueColumnId("");
                 setColumnIds([]);
+                setFilter({ combinator: "and", conditions: [] });
               }}
             >
               {boards.map((b) => (
@@ -230,6 +246,11 @@ export function AddWidgetDialog({
                   }
                 />
               </label>
+              <FilterBuilder
+                columns={board?.allColumns ?? []}
+                value={filter}
+                onChange={setFilter}
+              />
             </>
           ) : (
             <>
