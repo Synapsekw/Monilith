@@ -133,6 +133,8 @@ export function BoardTable({
         boardName={board.name}
         views={payload.views}
         selectedViewId={selectedViewId}
+        columns={columns}
+        members={members}
       />
 
       <div className="flex-1 overflow-auto">

@@ -7,7 +7,17 @@ import {
   updateAutomationSchema,
   deleteAutomationSchema,
 } from "@/lib/validations/automations";
+import { listAutomations, type Automation } from "@/lib/boards/queries";
 import type { Json } from "@/types/database.types";
+
+/**
+ * Client-callable read wrapper around {@link listAutomations} so the
+ * Automations dialog can fetch rules via TanStack Query. RLS scopes the rows
+ * to the caller's org; the underlying query is bounded (per board, ordered).
+ */
+export async function getAutomations(boardId: string): Promise<Automation[]> {
+  return listAutomations(boardId);
+}
 
 type ActionResult<T = void> =
   | { ok: true; data: T }

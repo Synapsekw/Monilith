@@ -87,6 +87,7 @@ type CardDragData = { itemId: string; fromColId: string };
 export function KanbanBoard({
   payload,
   selectedViewId,
+  members = [],
 }: {
   payload: BoardPayload;
   // Accepted for parity with BoardTable / the route's prop contract. The card
@@ -150,6 +151,8 @@ export function KanbanBoard({
           boardName={cache.board.name}
           views={payload.views}
           selectedViewId={selectedViewId}
+          columns={cache.columns}
+          members={members}
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -194,6 +197,8 @@ export function KanbanBoard({
         boardName={cache.board.name}
         views={payload.views}
         selectedViewId={selectedViewId}
+        columns={cache.columns}
+        members={members}
       />
 
       {/* Grouping-column picker — native select keeps it dependency-light. */}

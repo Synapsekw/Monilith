@@ -2,28 +2,43 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Zap } from "lucide-react";
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
+import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { BoardView } from "@/lib/boards/queries";
+import type { CacheColumn } from "@/lib/boards/cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+
+export type HeaderMember = {
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+};
 
 export function BoardHeader({
   boardId,
   boardName,
   views,
   selectedViewId,
+  columns = [],
+  members = [],
 }: {
   boardId: string;
   boardName: string;
   views: BoardView[];
   selectedViewId: string;
+  columns?: CacheColumn[];
+  members?: HeaderMember[];
 }) {
   const router = useRouter();
   const { renameBoard } = useBoardMutations(boardId);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(boardName);
   const [isPending, startTransition] = useTransition();
+  const [automationsOpen, setAutomationsOpen] = useState(false);
 
   function openRename() {
     setName(boardName);
@@ -69,10 +84,28 @@ export function BoardHeader({
           {boardName}
         </button>
       )}
-      <ViewSwitcher
+      <div className="flex items-center justify-between gap-2">
+        <ViewSwitcher
+          boardId={boardId}
+          views={views}
+          selectedViewId={selectedViewId}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Automations"
+          onClick={() => setAutomationsOpen(true)}
+        >
+          <Zap className="size-3.5" /> Automations
+        </Button>
+      </div>
+      <AutomationsDialog
         boardId={boardId}
-        views={views}
-        selectedViewId={selectedViewId}
+        columns={columns}
+        members={members}
+        open={automationsOpen}
+        onOpenChange={setAutomationsOpen}
       />
     </header>
   );

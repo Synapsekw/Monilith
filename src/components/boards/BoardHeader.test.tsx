@@ -18,6 +18,12 @@ vi.mock("./ViewSwitcher", () => ({
   ViewSwitcher: () => <div data-testid="view-switcher" />,
 }));
 
+// The Automations dialog pulls in Server Actions (and TanStack Query) that are
+// out of scope for the header rename test; stub it to its trigger only.
+vi.mock("@/components/boards/automations/AutomationsDialog", () => ({
+  AutomationsDialog: () => <div data-testid="automations-dialog" />,
+}));
+
 const views = [
   { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
 ];
