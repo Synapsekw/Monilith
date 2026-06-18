@@ -931,6 +931,26 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_board_from_template: {
+        Args: { p_name: string; p_template: Json; p_workspace_id: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          position: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "boards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_board_view: {
         Args: {
           p_board_id: string;
