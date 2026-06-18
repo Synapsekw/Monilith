@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AutomationBuilder } from "./AutomationBuilder";
@@ -38,8 +38,9 @@ const statusCol = col({
 });
 
 const peopleCol = col({ id: "c-people", name: "Owner", kind: "people" });
+const dateCol = col({ id: "c-date", name: "Due Date", kind: "date" });
 
-const columns = [statusCol, peopleCol];
+const columns = [statusCol, peopleCol, dateCol];
 const members = [
   { userId: "u1", fullName: "Ada Lovelace", email: "ada@x.com" },
 ];
@@ -286,6 +287,126 @@ describe("AutomationBuilder – new trigger types", () => {
     await userEvent.click(save);
 
     expect(onSubmit.mock.calls[0][0].condition).toBeUndefined();
+  });
+});
+
+describe("5b-2 date_reached trigger", () => {
+  it("builds a date_reached trigger with direction 'before', count 3 → offsetDays -3", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Switch trigger type to "Date reached"
+    await userEvent.selectOptions(
+      screen.getByLabelText("Trigger type"),
+      "date_reached",
+    );
+
+    // Date column picker appears; select the date column
+    expect(
+      (screen.getByLabelText("Date column") as HTMLSelectElement).value,
+    ).toBe("c-date");
+
+    // Direction picker — select "before"
+    await userEvent.selectOptions(screen.getByLabelText("Direction"), "before");
+
+    // Count input — set to 3 via fireEvent to avoid number-input quirks
+    const countInput = screen.getByLabelText("Days count") as HTMLInputElement;
+    fireEvent.change(countInput, { target: { value: "3" } });
+
+    // Add a notify action to make Save valid
+    await userEvent.click(screen.getByRole("button", { name: /notify/i }));
+
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: {
+          type: "date_reached",
+          columnId: "c-date",
+          offsetDays: -3,
+        },
+      }),
+    );
+  });
+
+  it("builds a date_reached trigger with direction 'on' → offsetDays 0", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Trigger type"),
+      "date_reached",
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText("Direction"), "on");
+
+    // Add notify to make form valid
+    await userEvent.click(screen.getByRole("button", { name: /notify/i }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: {
+          type: "date_reached",
+          columnId: "c-date",
+          offsetDays: 0,
+        },
+      }),
+    );
+  });
+
+  it("builds a date_reached trigger with direction 'after', count 2 → offsetDays 2", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await userEvent.selectOptions(
+      screen.getByLabelText("Trigger type"),
+      "date_reached",
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText("Direction"), "after");
+
+    const countInput = screen.getByLabelText("Days count") as HTMLInputElement;
+    fireEvent.change(countInput, { target: { value: "2" } });
+
+    // Add notify to make form valid
+    await userEvent.click(screen.getByRole("button", { name: /notify/i }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: {
+          type: "date_reached",
+          columnId: "c-date",
+          offsetDays: 2,
+        },
+      }),
+    );
   });
 });
 

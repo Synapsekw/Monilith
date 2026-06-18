@@ -36,6 +36,7 @@ const selectClass =
 const ANY = "__any__";
 const CONDITION_KINDS = ["status", "text", "numbers", "date"];
 type TriggerType = AutomationTrigger["type"];
+type DateDirection = "on" | "before" | "after";
 
 type DraftAction = AutomationAction & { _id: string };
 
@@ -85,6 +86,7 @@ export function AutomationBuilder({
     (c) => c.kind === "status" || c.kind === "dropdown",
   );
   const peopleColumns = columns.filter((c) => c.kind === "people");
+  const dateColumns = columns.filter((c) => c.kind === "date");
   const conditionColumns: FilterColumn[] = columns
     .filter((c) => CONDITION_KINDS.includes(c.kind))
     .map((c) => ({
@@ -107,6 +109,22 @@ export function AutomationBuilder({
   const [peopleColId, setPeopleColId] = useState<string>(
     it?.type === "person_assigned" ? it.columnId : (peopleColumns[0]?.id ?? ""),
   );
+  const [dateColId, setDateColId] = useState<string>(
+    it?.type === "date_reached" ? it.columnId : (dateColumns[0]?.id ?? ""),
+  );
+  const [dateDirection, setDateDirection] = useState<DateDirection>(() => {
+    if (it?.type === "date_reached") {
+      if (it.offsetDays === 0) return "on";
+      return it.offsetDays < 0 ? "before" : "after";
+    }
+    return "before";
+  });
+  const [dateCount, setDateCount] = useState<number>(() => {
+    if (it?.type === "date_reached" && it.offsetDays !== 0) {
+      return Math.abs(it.offsetDays);
+    }
+    return 3;
+  });
   const [actions, setActions] = useState<DraftAction[]>(() =>
     initial ? withIds(initial.actions) : [],
   );
@@ -127,14 +145,27 @@ export function AutomationBuilder({
         }
       : triggerType === "person_assigned"
         ? { type: "person_assigned", columnId: peopleColId }
-        : { type: "item_created" };
+        : triggerType === "date_reached"
+          ? {
+              type: "date_reached",
+              columnId: dateColId,
+              offsetDays:
+                dateDirection === "on"
+                  ? 0
+                  : dateDirection === "before"
+                    ? -Math.abs(dateCount)
+                    : Math.abs(dateCount),
+            }
+          : { type: "item_created" };
 
   const triggerValid =
     triggerType === "status_changed"
       ? !!statusColId
       : triggerType === "person_assigned"
         ? !!peopleColId
-        : true;
+        : triggerType === "date_reached"
+          ? !!dateColId
+          : true;
 
   const valid =
     triggerValid && actions.length > 0 && actions.every(isActionComplete);
@@ -201,6 +232,7 @@ export function AutomationBuilder({
             <option value="status_changed">A status or dropdown changes</option>
             <option value="item_created">An item is created</option>
             <option value="person_assigned">A person is assigned</option>
+            <option value="date_reached">Date reached</option>
           </select>
         </label>
 
@@ -278,6 +310,66 @@ export function AutomationBuilder({
             Runs when a new item is added. Tip: cells are empty at creation —
             pair with &ldquo;Set a column&rdquo;.
           </p>
+        ) : null}
+
+        {triggerType === "date_reached" ? (
+          dateColumns.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Add a Date column to use this trigger.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label className="text-sm">
+                <span className="text-muted-foreground">Date column</span>
+                <select
+                  aria-label="Date column"
+                  className={selectClass}
+                  value={dateColId}
+                  onChange={(e) => setDateColId(e.target.value)}
+                >
+                  {dateColumns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-sm">
+                  <span className="text-muted-foreground">Direction</span>
+                  <select
+                    aria-label="Direction"
+                    className={selectClass}
+                    value={dateDirection}
+                    onChange={(e) =>
+                      setDateDirection(e.target.value as DateDirection)
+                    }
+                  >
+                    <option value="before">N days before</option>
+                    <option value="on">On the date</option>
+                    <option value="after">N days after</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  <span className="text-muted-foreground">Days</span>
+                  <input
+                    aria-label="Days count"
+                    type="number"
+                    min={1}
+                    max={365}
+                    className={selectClass}
+                    value={dateCount}
+                    disabled={dateDirection === "on"}
+                    onChange={(e) =>
+                      setDateCount(
+                        Math.max(1, parseInt(e.target.value, 10) || 1),
+                      )
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          )
         ) : null}
       </fieldset>
 
