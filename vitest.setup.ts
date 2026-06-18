@@ -22,6 +22,19 @@ Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.setPointerCapture ??= () => {};
 Element.prototype.releasePointerCapture ??= () => {};
 
+// jsdom lacks matchMedia; Framer Motion's useReducedMotion (and any media-query
+// reads) need it. Default to "no match" (motion enabled) so components render.
+globalThis.matchMedia ??= ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+})) as unknown as typeof window.matchMedia;
+
 // Radix menu triggers open on `pointerdown` (button 0), not on `click`. In a
 // real browser a click is always preceded by pointer events; jsdom's synthetic
 // `fireEvent.click` is a bare click, so the menu never opens. Bridge it: when a
