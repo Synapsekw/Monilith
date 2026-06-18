@@ -206,6 +206,73 @@ describe("AutomationsDialog", () => {
     });
   });
 
+  // -----------------------------------------------------------------------
+  // date_reached trigger: summarize() produces the right text.
+  // -----------------------------------------------------------------------
+  describe("summarize() for date_reached trigger", () => {
+    const dateCol = col({ id: "c-date", name: "Due Date", kind: "date" });
+    const allColumns = [...columns, dateCol];
+
+    // We render the dialog with a pre-loaded automation so summarize() is exercised.
+    function renderWithRule(offsetDays: number) {
+      const rule = {
+        id: "auto-dr",
+        board_id: "board-1",
+        org_id: "o1",
+        name: null,
+        enabled: true,
+        trigger: { type: "date_reached", columnId: "c-date", offsetDays },
+        actions: [
+          {
+            type: "notify",
+            recipient: { kind: "owner", peopleColumnId: "c-people" },
+          },
+        ],
+        condition: null,
+        created_at: "",
+        updated_at: "",
+      };
+      getAutomations.mockResolvedValue([rule]);
+
+      const qc = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      });
+      const Wrapper = ({
+        children,
+      }: {
+        children: import("react").ReactNode;
+      }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+      render(
+        <AutomationsDialog
+          open
+          boardId="board-1"
+          columns={allColumns}
+          members={members}
+          onOpenChange={vi.fn()}
+        />,
+        { wrapper: Wrapper },
+      );
+    }
+
+    it("offset 0 → 'is reached'", async () => {
+      renderWithRule(0);
+      expect(await screen.findByText(/is reached/i)).toBeInTheDocument();
+    });
+
+    it("offset -3 → 'in 3 days'", async () => {
+      renderWithRule(-3);
+      expect(await screen.findByText(/in 3 days/i)).toBeInTheDocument();
+    });
+
+    it("offset +2 → '2 days overdue'", async () => {
+      renderWithRule(2);
+      expect(await screen.findByText(/2 days overdue/i)).toBeInTheDocument();
+    });
+  });
+
   it("Cancel from build mode returns to list mode", async () => {
     renderDialog();
     const newBtn = await screen.findByRole("button", {

@@ -38,6 +38,8 @@ import {
   recipeSetOption,
   recipeItemCreatedSetOption,
   recipePersonAssignedNotify,
+  recipeDateReachedSetOption,
+  recipeDueSoonNotifyOwner,
   type Draft,
 } from "@/components/boards/automations/recipes";
 
@@ -101,6 +103,15 @@ function summarize(
     when = "When an item is created";
   } else if (trigger.type === "person_assigned") {
     when = `When someone is assigned in ${colName(columns, trigger.columnId)}`;
+  } else if (trigger.type === "date_reached") {
+    const col = colName(columns, trigger.columnId);
+    const n = Math.abs(trigger.offsetDays);
+    when =
+      trigger.offsetDays === 0
+        ? `When ${col} is reached`
+        : trigger.offsetDays < 0
+          ? `When ${col} is in ${n} day${n === 1 ? "" : "s"}`
+          : `When ${col} is ${n} day${n === 1 ? "" : "s"} overdue`;
   } else {
     when =
       trigger.toOptionId == null
@@ -215,8 +226,15 @@ export function AutomationsDialog({
     () => columns.filter((c) => c.kind === "people"),
     [columns],
   );
+  const dateColumns = useMemo(
+    () => columns.filter((c) => c.kind === "date"),
+    [columns],
+  );
   const canNotifyOwner = statusColumns.length > 0 && peopleColumns.length > 0;
   const canSetOption = statusColumns.length >= 2;
+  const canDateReachedSetOption =
+    dateColumns.length > 0 && statusColumns.length > 0;
+  const canDueSoonNotify = dateColumns.length > 0 && peopleColumns.length > 0;
 
   function startBuild(draft?: Draft) {
     setError(null);
@@ -253,7 +271,9 @@ export function AutomationsDialog({
             {(canNotifyOwner ||
               canSetOption ||
               statusColumns.length > 0 ||
-              peopleColumns.length > 0) &&
+              peopleColumns.length > 0 ||
+              canDateReachedSetOption ||
+              canDueSoonNotify) &&
             !initialDraft ? (
               <div className="flex flex-col gap-2">
                 <p className="text-muted-foreground text-xs font-medium">
@@ -323,6 +343,41 @@ export function AutomationsDialog({
                       }
                     >
                       Notify on assignment
+                    </Button>
+                  ) : null}
+                  {canDateReachedSetOption ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const target = statusColumns[0];
+                        const toOpt = columnOptions(target)[0]?.id ?? "";
+                        startBuild(
+                          recipeDateReachedSetOption(
+                            dateColumns[0].id,
+                            target.id,
+                            toOpt,
+                          ),
+                        );
+                      }}
+                    >
+                      Set status when date is reached
+                    </Button>
+                  ) : null}
+                  {canDueSoonNotify ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        startBuild(
+                          recipeDueSoonNotifyOwner(
+                            dateColumns[0].id,
+                            peopleColumns[0].id,
+                          ),
+                        )
+                      }
+                    >
+                      Notify owner before due date
                     </Button>
                   ) : null}
                 </div>

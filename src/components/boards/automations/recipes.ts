@@ -76,3 +76,39 @@ export function recipePersonAssignedNotify(peopleColumnId: string): Draft {
     actions: [{ type: "notify", recipient: { kind: "owner", peopleColumnId } }],
   };
 }
+
+/**
+ * "When a date column is reached (offsetDays = 0), set a status/dropdown column to Y."
+ * Requires a date column and a status/dropdown column.
+ */
+export function recipeDateReachedSetOption(
+  dateColumnId: string,
+  targetColumnId: string,
+  toOptionId: string,
+): Draft {
+  return {
+    trigger: { type: "date_reached", columnId: dateColumnId, offsetDays: 0 },
+    actions: [
+      { type: "set_option", columnId: targetColumnId, optionId: toOptionId },
+    ],
+  };
+}
+
+/**
+ * "X days before a date column is reached, notify the item owner."
+ * `daysBefore` is the number of days before (stored as a negative offset).
+ */
+export function recipeDueSoonNotifyOwner(
+  dateColumnId: string,
+  peopleColumnId: string,
+  daysBefore = 3,
+): Draft {
+  return {
+    trigger: {
+      type: "date_reached",
+      columnId: dateColumnId,
+      offsetDays: -Math.abs(daysBefore),
+    },
+    actions: [{ type: "notify", recipient: { kind: "owner", peopleColumnId } }],
+  };
+}
