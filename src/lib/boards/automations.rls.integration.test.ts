@@ -54,6 +54,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + engine: automations (5a)", () => {
   /** orgB context — NOT a member of orgA */
   let userBId: string;
   let userBAnon: SupabaseClient<Database>;
+  let orgBId: string;
 
   beforeAll(async () => {
     admin = createClient<Database>(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
@@ -198,8 +199,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + engine: automations (5a)", () => {
       p_name: "Org B (auto)",
       p_slug: `auto-b-${randomUUID().slice(0, 8)}`,
     });
-    // we don't need orgB's id for most tests, but keep it for completeness
-    void (orgBData as { id: string }).id;
+    orgBId = (orgBData as { id: string }).id;
   }, 90_000);
 
   afterAll(async () => {
@@ -721,6 +721,503 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + engine: automations (5a)", () => {
         data,
         "automation still exists after B's delete attempt",
       ).not.toBeNull();
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §7-T1. Cross-org RLS on automation_date_fires ledger
+  // ─────────────────────────────────────────────────────────────────────────
+  describe("§7 cross-org RLS on automation_date_fires (5b-2 ledger)", () => {
+    let ledgerAutoId: string;
+    let ledgerItemId: string;
+
+    beforeAll(async () => {
+      // Seed a minimal date_reached automation in orgA via service-role
+      const { data: autoData, error: autoErr } = await admin
+        .from("automations")
+        .insert({
+          org_id: orgAId,
+          board_id: boardAId,
+          trigger: {
+            type: "date_reached",
+            columnId: colSId,
+            offsetDays: 0,
+          } as never,
+          actions: [] as never,
+          enabled: true,
+          created_by: userAId,
+        })
+        .select("id")
+        .single();
+      expect(autoErr, "seed ledger automation").toBeNull();
+      ledgerAutoId = (autoData as { id: string }).id;
+
+      // Find the existing item in orgA (itemAId is set in parent beforeAll)
+      ledgerItemId = itemAId;
+
+      // Insert one ledger row via admin (service-role bypasses RLS)
+      const { error: fireErr } = await admin
+        .from("automation_date_fires")
+        .insert({
+          automation_id: ledgerAutoId,
+          item_id: ledgerItemId,
+          org_id: orgAId,
+          fire_date: "2026-07-01",
+        });
+      expect(fireErr, "insert ledger row via admin").toBeNull();
+    }, 20_000);
+
+    afterAll(async () => {
+      await admin
+        .from("automation_date_fires")
+        .delete()
+        .eq("automation_id", ledgerAutoId);
+      await admin.from("automations").delete().eq("id", ledgerAutoId);
+    });
+
+    it("orgA member CAN read their own ledger row", async () => {
+      const { data, error } = await userAAnon
+        .from("automation_date_fires")
+        .select("*")
+        .eq("automation_id", ledgerAutoId);
+      expect(error, "orgA read should not error").toBeNull();
+      expect(data ?? [], "orgA user should see their ledger row").toHaveLength(
+        1,
+      );
+    });
+
+    it("orgB user CANNOT read orgA ledger row (0 rows — cross-org isolation)", async () => {
+      const { data, error } = await userBAnon
+        .from("automation_date_fires")
+        .select("*")
+        .eq("automation_id", ledgerAutoId);
+      expect(
+        error,
+        "cross-org read should not error (RLS silently hides)",
+      ).toBeNull();
+      expect(
+        data ?? [],
+        "orgB user must see 0 rows from orgA ledger",
+      ).toHaveLength(0);
+    });
+
+    it("no anon client can INSERT into automation_date_fires (default-deny write)", async () => {
+      // Count rows before the attempted insert
+      const { data: before } = await admin
+        .from("automation_date_fires")
+        .select("automation_id")
+        .eq("automation_id", ledgerAutoId);
+      const countBefore = (before ?? []).length;
+
+      // Attempt insert as orgA member (should be blocked by RLS — no write policy)
+      await userAAnon.from("automation_date_fires").insert({
+        automation_id: ledgerAutoId,
+        item_id: ledgerItemId,
+        org_id: orgAId,
+        fire_date: "2026-08-01",
+      });
+
+      // Count after — must be unchanged regardless of whether an error was returned
+      const { data: after } = await admin
+        .from("automation_date_fires")
+        .select("automation_id")
+        .eq("automation_id", ledgerAutoId);
+      expect(
+        (after ?? []).length,
+        "row count must not increase after blocked insert attempt",
+      ).toBe(countBefore);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §7-T2. Non-admin member cannot update organizations.timezone
+  // ─────────────────────────────────────────────────────────────────────────
+  describe("§7 non-admin cannot update organizations.timezone", () => {
+    let memberUserId: string;
+    let memberAnon: SupabaseClient<Database>;
+    const memberEmail = `rls-member-${randomUUID()}@example.com`;
+
+    beforeAll(async () => {
+      // Create a plain member user and add them to orgA with role 'member'
+      const { data: createdMember, error: memberErr } =
+        await admin.auth.admin.createUser({
+          email: memberEmail,
+          password: PASSWORD,
+          email_confirm: true,
+        });
+      expect(memberErr, "createUser(member)").toBeNull();
+      memberUserId = createdMember.user!.id;
+      createdUserIds.push(memberUserId);
+
+      memberAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      await memberAnon.auth.signInWithPassword({
+        email: memberEmail,
+        password: PASSWORD,
+      });
+
+      // Add them to orgA as 'member' via service-role (bypasses any RLS on insert)
+      const { error: addErr } = await admin.from("org_members").insert({
+        org_id: orgAId,
+        user_id: memberUserId,
+        role: "member",
+      });
+      expect(addErr, "add member to orgA").toBeNull();
+    }, 20_000);
+
+    afterAll(async () => {
+      await admin
+        .from("org_members")
+        .delete()
+        .eq("org_id", orgAId)
+        .eq("user_id", memberUserId);
+      // memberUserId cleanup is handled by the parent afterAll (createdUserIds)
+    });
+
+    it("plain member update of organizations.timezone is blocked by RLS", async () => {
+      // Read current timezone so we can assert it is unchanged after the attempt
+      const { data: before } = await admin
+        .from("organizations")
+        .select("timezone")
+        .eq("id", orgAId)
+        .single();
+      const originalTz = (before as { timezone: string | null }).timezone;
+
+      // Attempt update as plain member
+      await memberAnon
+        .from("organizations")
+        .update({ timezone: "Asia/Tokyo" })
+        .eq("id", orgAId);
+
+      // RLS blocks silently (0 rows affected, no error returned to client).
+      // Verify by reading back the value via admin.
+      const { data: after } = await admin
+        .from("organizations")
+        .select("timezone")
+        .eq("id", orgAId)
+        .single();
+      expect(
+        (after as { timezone: string | null }).timezone,
+        "timezone must be unchanged after member update attempt",
+      ).toBe(originalTz);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §7-T3. Org-local correctness: same UTC instant, only the 08:00-local org fires
+  //
+  // Placed here (rls file) because this file already has two orgs (A and B)
+  // and admin.rpc("_automation_date_sweep") works without the full engine-file
+  // beforeAll overhead.
+  //
+  // p_now = 2026-07-10T23:00:00Z
+  //   Asia/Tokyo   (UTC+9): 2026-07-11 08:00 → fires  (cell date = 2026-07-11)
+  //   America/New_York (UTC-4 in July): 2026-07-10 19:00 → does NOT fire
+  // ─────────────────────────────────────────────────────────────────────────
+  describe("§7 org-local correctness: only the 08:00-local org fires (two orgs, one sweep)", () => {
+    const P_NOW = "2026-07-10T23:00:00Z";
+
+    // orgB board/group (created fresh in this describe)
+    let orgBBoardId: string;
+    let orgBGroupId: string;
+
+    // Column ids created for this test (both orgs)
+    let orgADateColId: string;
+    let orgAStatusColId: string;
+    let orgAOptWorkingId: string;
+
+    let orgBDateColId: string;
+    let orgBStatusColId: string;
+    let orgBOptWorkingId: string;
+
+    // Automation ids
+    let autoAId: string;
+    let autoBId: string;
+
+    // Item ids
+    let itemALocalId: string;
+    let itemBLocalId: string;
+
+    beforeAll(async () => {
+      // ── Configure timezones ───────────────────────────────────────────────
+      await admin
+        .from("organizations")
+        .update({ timezone: "Asia/Tokyo" })
+        .eq("id", orgAId);
+      await admin
+        .from("organizations")
+        .update({ timezone: "America/New_York" })
+        .eq("id", orgBId);
+
+      // ── orgB: create a workspace + board + group ──────────────────────────
+      const { data: wsBData } = await userBAnon
+        .from("workspaces")
+        .insert({ org_id: orgBId, name: "WS B sweep", created_by: userBId })
+        .select("id")
+        .single();
+      const wsBId = (wsBData as { id: string }).id;
+
+      const { data: boardBData, error: boardBErr } = await userBAnon.rpc(
+        "create_board",
+        { p_workspace_id: wsBId, p_name: "Board B sweep" },
+      );
+      expect(boardBErr, "create_board(B sweep)").toBeNull();
+      orgBBoardId = (boardBData as { id: string }).id;
+
+      const { data: groupBData } = await userBAnon
+        .from("groups")
+        .select("id")
+        .eq("board_id", orgBBoardId)
+        .single();
+      orgBGroupId = (groupBData as { id: string }).id;
+
+      // ── orgA: fresh date + status columns (isolated from parent suite cols) ─
+      orgAOptWorkingId = randomUUID();
+      const [
+        { data: colADate, error: colADateErr },
+        { data: colAStat, error: colAStatErr },
+      ] = await Promise.all([
+        admin
+          .from("columns")
+          .insert({
+            org_id: orgAId,
+            board_id: boardAId,
+            name: "D_sweep",
+            kind: "date",
+            settings: {},
+            position: 20,
+          })
+          .select("id")
+          .single(),
+        admin
+          .from("columns")
+          .insert({
+            org_id: orgAId,
+            board_id: boardAId,
+            name: "S_sweep",
+            kind: "status",
+            settings: {
+              options: [
+                { id: orgAOptWorkingId, label: "Working", color: "#00c875" },
+              ],
+            },
+            position: 21,
+          })
+          .select("id")
+          .single(),
+      ]);
+      expect(colADateErr, "insert date col orgA").toBeNull();
+      expect(colAStatErr, "insert status col orgA").toBeNull();
+      orgADateColId = (colADate as { id: string }).id;
+      orgAStatusColId = (colAStat as { id: string }).id;
+
+      // ── orgB: fresh date + status columns ────────────────────────────────
+      orgBOptWorkingId = randomUUID();
+      const [
+        { data: colBDate, error: colBDateErr },
+        { data: colBStat, error: colBStatErr },
+      ] = await Promise.all([
+        admin
+          .from("columns")
+          .insert({
+            org_id: orgBId,
+            board_id: orgBBoardId,
+            name: "D",
+            kind: "date",
+            settings: {},
+            position: 10,
+          })
+          .select("id")
+          .single(),
+        admin
+          .from("columns")
+          .insert({
+            org_id: orgBId,
+            board_id: orgBBoardId,
+            name: "S",
+            kind: "status",
+            settings: {
+              options: [
+                { id: orgBOptWorkingId, label: "Working", color: "#00c875" },
+              ],
+            },
+            position: 11,
+          })
+          .select("id")
+          .single(),
+      ]);
+      expect(colBDateErr, "insert date col orgB").toBeNull();
+      expect(colBStatErr, "insert status col orgB").toBeNull();
+      orgBDateColId = (colBDate as { id: string }).id;
+      orgBStatusColId = (colBStat as { id: string }).id;
+
+      // ── orgA: item + date cell (cell date = Tokyo local date at p_now = 2026-07-11) ─
+      const { data: itemAData, error: itemAErr } = await userAAnon.rpc(
+        "create_item",
+        {
+          p_group_id: (
+            await userAAnon
+              .from("groups")
+              .select("id")
+              .eq("board_id", boardAId)
+              .single()
+          ).data!.id,
+          p_name: "Sweep item A",
+        },
+      );
+      expect(itemAErr, "create item A").toBeNull();
+      itemALocalId = (itemAData as { id: string }).id;
+
+      const { error: dateCellAErr } = await userAAnon
+        .from("cell_values")
+        .upsert(
+          {
+            org_id: orgAId,
+            board_id: boardAId,
+            item_id: itemALocalId,
+            column_id: orgADateColId,
+            value: { date: "2026-07-11" } as never,
+          },
+          { onConflict: "item_id,column_id" },
+        );
+      expect(dateCellAErr, "set date cell orgA").toBeNull();
+
+      // ── orgB: item + date cell (cell date = NY local date at p_now = 2026-07-10) ─
+      const { data: itemBData, error: itemBErr } = await userBAnon.rpc(
+        "create_item",
+        { p_group_id: orgBGroupId, p_name: "Sweep item B" },
+      );
+      expect(itemBErr, "create item B").toBeNull();
+      itemBLocalId = (itemBData as { id: string }).id;
+
+      const { error: dateCellBErr } = await userBAnon
+        .from("cell_values")
+        .upsert(
+          {
+            org_id: orgBId,
+            board_id: orgBBoardId,
+            item_id: itemBLocalId,
+            column_id: orgBDateColId,
+            value: { date: "2026-07-10" } as never,
+          },
+          { onConflict: "item_id,column_id" },
+        );
+      expect(dateCellBErr, "set date cell orgB").toBeNull();
+
+      // ── orgA automation: date_reached offset 0 → set_option(Working) ──────
+      const { data: autoAData, error: autoAErr } = await admin
+        .from("automations")
+        .insert({
+          org_id: orgAId,
+          board_id: boardAId,
+          trigger: {
+            type: "date_reached",
+            columnId: orgADateColId,
+            offsetDays: 0,
+          } as never,
+          actions: [
+            {
+              type: "set_option",
+              columnId: orgAStatusColId,
+              optionId: orgAOptWorkingId,
+            },
+          ] as never,
+          enabled: true,
+          created_by: userAId,
+        })
+        .select("id")
+        .single();
+      expect(autoAErr, "insert automation orgA").toBeNull();
+      autoAId = (autoAData as { id: string }).id;
+
+      // ── orgB automation: date_reached offset 0 → set_option(Working) ──────
+      const { data: autoBData, error: autoBErr } = await admin
+        .from("automations")
+        .insert({
+          org_id: orgBId,
+          board_id: orgBBoardId,
+          trigger: {
+            type: "date_reached",
+            columnId: orgBDateColId,
+            offsetDays: 0,
+          } as never,
+          actions: [
+            {
+              type: "set_option",
+              columnId: orgBStatusColId,
+              optionId: orgBOptWorkingId,
+            },
+          ] as never,
+          enabled: true,
+          created_by: userBId,
+        })
+        .select("id")
+        .single();
+      expect(autoBErr, "insert automation orgB").toBeNull();
+      autoBId = (autoBData as { id: string }).id;
+    }, 60_000);
+
+    afterAll(async () => {
+      // orgA sweep artefact cleanup
+      await admin.from("automations").delete().eq("id", autoAId);
+      await admin
+        .from("automation_date_fires")
+        .delete()
+        .eq("automation_id", autoAId);
+      await admin.from("cell_values").delete().eq("item_id", itemALocalId);
+      await admin.from("items").delete().eq("id", itemALocalId);
+      await admin.from("columns").delete().eq("id", orgADateColId);
+      await admin.from("columns").delete().eq("id", orgAStatusColId);
+
+      // orgB sweep artefact cleanup
+      await admin.from("automations").delete().eq("id", autoBId);
+      await admin
+        .from("automation_date_fires")
+        .delete()
+        .eq("automation_id", autoBId);
+      await admin.from("cell_values").delete().eq("item_id", itemBLocalId);
+      await admin.from("items").delete().eq("id", itemBLocalId);
+      await admin.from("columns").delete().eq("id", orgBDateColId);
+      await admin.from("columns").delete().eq("id", orgBStatusColId);
+    }, 30_000);
+
+    it("sweep at 2026-07-10T23:00Z fires orgA (Tokyo 08:00) but NOT orgB (NY 19:00)", async () => {
+      const { error: sweepErr } = await admin.rpc("_automation_date_sweep", {
+        p_now: P_NOW,
+      });
+      expect(sweepErr, "sweep RPC error").toBeNull();
+
+      // ── orgA item: status cell should be set to Working ───────────────────
+      const cellA = await poll(async () => {
+        const { data } = await admin
+          .from("cell_values")
+          .select("value")
+          .eq("item_id", itemALocalId)
+          .eq("column_id", orgAStatusColId);
+        return data && data.length > 0 ? data[0] : null;
+      });
+      expect(
+        cellA,
+        "orgA (Tokyo 08:00) status cell should be set after sweep",
+      ).not.toBeNull();
+      expect((cellA as { value: unknown }).value).toMatchObject({
+        optionId: orgAOptWorkingId,
+      });
+
+      // ── orgB item: status cell must NOT be set ────────────────────────────
+      await new Promise((r) => setTimeout(r, 1_500));
+
+      const { data: cellBRows } = await admin
+        .from("cell_values")
+        .select("value")
+        .eq("item_id", itemBLocalId)
+        .eq("column_id", orgBStatusColId);
+
+      expect(
+        cellBRows ?? [],
+        "orgB (NY 19:00 local) status cell must NOT be set — 08:00 gate blocked it",
+      ).toHaveLength(0);
     });
   });
 });
