@@ -9,6 +9,7 @@ export type Column = Tables<"columns">;
 export type CellValue = Tables<"cell_values">;
 export type BoardView = Tables<"board_views">;
 export type ItemDependency = Tables<"item_dependencies">;
+export type Automation = Tables<"automations">;
 
 export type BoardPayload = {
   board: Board;
@@ -137,4 +138,15 @@ export async function listOrgMembers(orgId: string): Promise<OrgMember[]> {
       avatarUrl: profile?.avatar_url ?? null,
     };
   });
+}
+
+export async function listAutomations(boardId: string): Promise<Automation[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("automations")
+    .select("*")
+    .eq("board_id", boardId)
+    .order("position", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
 }
