@@ -89,6 +89,7 @@ export type Database = {
         Row: {
           actions: Json;
           board_id: string;
+          condition: Json | null;
           created_at: string;
           created_by: string | null;
           enabled: boolean;
@@ -102,6 +103,7 @@ export type Database = {
         Insert: {
           actions?: Json;
           board_id: string;
+          condition?: Json | null;
           created_at?: string;
           created_by?: string | null;
           enabled?: boolean;
@@ -115,6 +117,7 @@ export type Database = {
         Update: {
           actions?: Json;
           board_id?: string;
+          condition?: Json | null;
           created_at?: string;
           created_by?: string | null;
           enabled?: boolean;
