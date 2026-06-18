@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { signOut } from "@/app/auth/actions";
 import { Brand } from "@/components/brand/brand";
 import { Sidebar } from "@/components/sidebar";
+import { CommandPalette } from "@/components/command-palette";
 import { CommandTrigger } from "@/components/command-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
@@ -107,6 +108,11 @@ export function AppShell({
         </header>
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>
+      <CommandPalette
+        boards={boards ?? []}
+        dashboards={dashboards ?? []}
+        workspaces={workspaces ?? []}
+      />
     </div>
   );
 }
