@@ -89,7 +89,7 @@ describe("upsertCell people-cell assignment fan-out", () => {
   });
 });
 
-import { buildTemplatePayload } from "@/lib/boards/actions";
+import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import { getTemplate } from "@/lib/boards/templates";
 
 const UUID_RE =
