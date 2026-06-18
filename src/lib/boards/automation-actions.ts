@@ -29,6 +29,7 @@ export async function createAutomation(input: {
   name?: string;
   trigger: unknown;
   actions: unknown;
+  condition?: unknown;
 }): Promise<ActionResult<{ id: string }>> {
   const parsed = createAutomationSchema.safeParse(input);
   if (!parsed.success)
@@ -62,6 +63,7 @@ export async function createAutomation(input: {
       name: parsed.data.name ?? null,
       trigger: parsed.data.trigger as unknown as Json,
       actions: parsed.data.actions as unknown as Json,
+      condition: (parsed.data.condition ?? null) as unknown as Json,
       created_by: user?.id ?? null,
       position: (nextPos?.position ?? -1) + 1,
     })
@@ -79,6 +81,7 @@ export async function updateAutomation(input: {
   enabled?: boolean;
   trigger?: unknown;
   actions?: unknown;
+  condition?: unknown;
 }): Promise<ActionResult> {
   const parsed = updateAutomationSchema.safeParse(input);
   if (!parsed.success)
@@ -95,6 +98,9 @@ export async function updateAutomation(input: {
       : {}),
     ...(parsed.data.actions !== undefined
       ? { actions: parsed.data.actions as unknown as Json }
+      : {}),
+    ...(parsed.data.condition !== undefined
+      ? { condition: parsed.data.condition as unknown as Json }
       : {}),
   };
 
