@@ -898,6 +898,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      _dashboard_list_predicate: {
+        Args: { p_col: string; p_op: string; p_val: string };
+        Returns: string;
+      };
       auth_user_orgs: { Args: never; Returns: string[] };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
@@ -1064,6 +1068,14 @@ export type Database = {
         Returns: {
           group_key: string;
           metric: number;
+        }[];
+      };
+      dashboard_list_rows: {
+        Args: { p_board_id: string; p_filter?: Json; p_limit?: number };
+        Returns: {
+          created_at: string;
+          item_id: string;
+          name: string;
         }[];
       };
       delete_board_view: { Args: { p_view_id: string }; Returns: undefined };

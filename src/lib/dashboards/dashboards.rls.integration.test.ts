@@ -196,5 +196,125 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
       expect(Number(done!.metric)).toBe(1);
       expect(Number(none!.metric)).toBeGreaterThanOrEqual(1); // the other items
     });
+
+    // Seed an item on a board, optionally giving it a status cell.
+    async function seedItem(
+      user: TestUser,
+      opts: { name: string; statusOptionId?: string | null },
+    ) {
+      const { data: item } = await user.anon
+        .from("items")
+        .insert({
+          board_id: user.boardId,
+          org_id: user.orgId,
+          group_id: (
+            await user.anon
+              .from("groups")
+              .select("id")
+              .eq("board_id", user.boardId)
+              .single()
+          ).data!.id,
+          name: opts.name,
+        })
+        .select("id")
+        .single();
+      const itemId = (item as { id: string }).id;
+      if (opts.statusOptionId !== undefined && opts.statusOptionId !== null) {
+        await user.anon.from("cell_values").insert({
+          item_id: itemId,
+          column_id: user.statusColumnId,
+          board_id: user.boardId,
+          org_id: user.orgId,
+          value: { optionId: opts.statusOptionId },
+        });
+      }
+      return itemId;
+    }
+
+    describe("dashboard_list_rows (D3b filter)", () => {
+      it("filters by status 'is' and includes the empty-status item only via is_empty", async () => {
+        await seedItem(userA, {
+          name: "Done one",
+          statusOptionId: userA.doneOptionId,
+        });
+        await seedItem(userA, { name: "No status", statusOptionId: null });
+
+        const isDone = await userA.anon.rpc("dashboard_list_rows", {
+          p_board_id: userA.boardId,
+          p_filter: {
+            combinator: "and",
+            conditions: [
+              {
+                columnId: userA.statusColumnId,
+                operator: "is",
+                value: userA.doneOptionId,
+              },
+            ],
+          },
+          p_limit: 50,
+        });
+        expect(isDone.error).toBeNull();
+        const doneNames = (isDone.data ?? []).map((r) => r.name);
+        expect(doneNames).toContain("Done one");
+        expect(doneNames).not.toContain("No status");
+
+        const empties = await userA.anon.rpc("dashboard_list_rows", {
+          p_board_id: userA.boardId,
+          p_filter: {
+            conditions: [
+              { columnId: userA.statusColumnId, operator: "is_empty" },
+            ],
+          },
+          p_limit: 50,
+        });
+        expect(empties.error).toBeNull();
+        const emptyNames = (empties.data ?? []).map((r) => r.name);
+        expect(emptyNames).toContain("No status");
+        expect(emptyNames).not.toContain("Done one");
+      });
+
+      it("applies the limit AFTER filtering (newest first)", async () => {
+        for (const n of ["A", "B", "C"])
+          await seedItem(userA, {
+            name: `lim-${n}`,
+            statusOptionId: userA.doneOptionId,
+          });
+        const res = await userA.anon.rpc("dashboard_list_rows", {
+          p_board_id: userA.boardId,
+          p_filter: {
+            conditions: [
+              {
+                columnId: userA.statusColumnId,
+                operator: "is",
+                value: userA.doneOptionId,
+              },
+            ],
+          },
+          p_limit: 2,
+        });
+        expect(res.error).toBeNull();
+        expect((res.data ?? []).length).toBe(2);
+      });
+
+      it("empty filter returns latest-N of the board (D3a parity)", async () => {
+        const res = await userA.anon.rpc("dashboard_list_rows", {
+          p_board_id: userA.boardId,
+          p_filter: {},
+          p_limit: 5,
+        });
+        expect(res.error).toBeNull();
+        expect((res.data ?? []).length).toBeGreaterThan(0);
+      });
+
+      it("denies running against another org's board (42501)", async () => {
+        const res = await userB.anon.rpc("dashboard_list_rows", {
+          p_board_id: userA.boardId,
+          p_filter: {},
+          p_limit: 10,
+        });
+        expect(res.error).not.toBeNull();
+        expect(res.error?.code).toBe("42501");
+      });
+    });
   },
 );
