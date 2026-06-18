@@ -111,6 +111,12 @@ production build imports generated.ts (NO git access)  ──▶  /updates (stat
   2. runs `pnpm changelog:gen`,
   3. `git diff --exit-code src/lib/changelog/generated.ts` — **fails if stale.**
 
+  **Scoped to develop only** (`if: github.ref == 'refs/heads/develop' ||
+github.base_ref == 'develop'`). On `main` the squashed history contains no
+  trailers, so regenerating there would emit an empty `generated.ts` and the diff
+  check would falsely fail against the committed artifact that rode in from
+  develop. On `main`, `generated.ts` is simply consumed as committed.
+
   This directly mirrors the repo's Supabase type-drift guard intent: a generated
   artifact that CI refuses to let drift.
 
