@@ -7,6 +7,11 @@ const itemName = z.string().trim().min(1).max(255);
 const uuid = z.string().uuid();
 
 export const createBoardSchema = z.object({ workspaceId: uuid, name });
+export const createBoardFromTemplateSchema = z.object({
+  workspaceId: uuid,
+  templateId: z.string().min(1),
+  name,
+});
 export const renameBoardSchema = z.object({ boardId: uuid, name });
 export const deleteBoardSchema = z.object({ boardId: uuid });
 export const createGroupSchema = z.object({ boardId: uuid, name });
