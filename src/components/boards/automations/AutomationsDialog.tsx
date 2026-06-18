@@ -74,6 +74,8 @@ function condClause(
   const parts = condition.conditions.map((c) => {
     const name = colName(columns, c.columnId);
     const op = OPERATOR_LABEL[c.operator] ?? c.operator;
+    // optName resolves option labels for status columns; for text/number/date it
+    // falls back to the raw value, which is what we want.
     const val =
       c.value == null || `${c.value}` === ""
         ? ""
