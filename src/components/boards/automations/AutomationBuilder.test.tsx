@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 
 import { AutomationBuilder } from "./AutomationBuilder";
 import type { CacheColumn } from "@/lib/boards/cache";
+import {
+  recipeItemCreatedSetOption,
+  recipePersonAssignedNotify,
+} from "@/components/boards/automations/recipes";
 
 function col(over: Partial<CacheColumn>): CacheColumn {
   return {
@@ -112,5 +116,29 @@ describe("AutomationBuilder", () => {
       screen.getByText(/Add a Status or Dropdown column/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+});
+
+describe("5b-1 recipes", () => {
+  it("recipeItemCreatedSetOption builds an item_created → set_option draft", () => {
+    const d = recipeItemCreatedSetOption("col-1", "opt-1");
+    expect(d.trigger).toEqual({ type: "item_created" });
+    expect(d.actions).toEqual([
+      { type: "set_option", columnId: "col-1", optionId: "opt-1" },
+    ]);
+  });
+
+  it("recipePersonAssignedNotify builds a person_assigned → notify-owner draft", () => {
+    const d = recipePersonAssignedNotify("people-1");
+    expect(d.trigger).toEqual({
+      type: "person_assigned",
+      columnId: "people-1",
+    });
+    expect(d.actions).toEqual([
+      {
+        type: "notify",
+        recipient: { kind: "owner", peopleColumnId: "people-1" },
+      },
+    ]);
   });
 });

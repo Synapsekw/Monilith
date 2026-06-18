@@ -2,6 +2,7 @@ import type {
   AutomationAction,
   AutomationTrigger,
 } from "@/lib/validations/automations";
+import type { ListFilter } from "@/lib/validations/dashboards";
 
 /**
  * A not-yet-persisted automation. Mirrors {@link createAutomationSchema}'s
@@ -11,6 +12,7 @@ export type Draft = {
   name?: string;
   trigger: AutomationTrigger;
   actions: AutomationAction[];
+  condition?: ListFilter | null;
 };
 
 /**
@@ -51,5 +53,26 @@ export function recipeSetOption(
     actions: [
       { type: "set_option", columnId: targetColumnId, optionId: toOptionId },
     ],
+  };
+}
+
+/** "When an item is created, set a status/dropdown column to Y." */
+export function recipeItemCreatedSetOption(
+  targetColumnId: string,
+  toOptionId: string,
+): Draft {
+  return {
+    trigger: { type: "item_created" },
+    actions: [
+      { type: "set_option", columnId: targetColumnId, optionId: toOptionId },
+    ],
+  };
+}
+
+/** "When someone is assigned in a People column, notify them (first assignee)." */
+export function recipePersonAssignedNotify(peopleColumnId: string): Draft {
+  return {
+    trigger: { type: "person_assigned", columnId: peopleColumnId },
+    actions: [{ type: "notify", recipient: { kind: "owner", peopleColumnId } }],
   };
 }
