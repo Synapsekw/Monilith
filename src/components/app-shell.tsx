@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { Brand } from "@/components/brand/brand";
 import { Sidebar } from "@/components/sidebar";
@@ -63,6 +65,13 @@ function UserMenu({ user }: { user: AppShellUser }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/settings" className="flex items-center gap-2">
+            <Settings className="size-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild variant="destructive">
           <form action={signOut}>
