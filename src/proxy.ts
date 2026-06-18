@@ -9,9 +9,8 @@ const AUTH_ROUTES = ["/login", "/signup", "/auth"];
 // Public routes an unauthenticated visitor may view (exact match). `/` is the
 // MONOLITH landing for logged-out visitors (the page redirects authenticated
 // users on); `/landing` is the always-on splash the nav logo points to;
-// `/updates` is the public changelog linked from the landing footer;
-// `/landing-test` is the throwaway mono-animation experiment route.
-const PUBLIC_ROUTES = ["/", "/landing", "/updates", "/landing-test"];
+// `/updates` is the public changelog linked from the landing footer.
+const PUBLIC_ROUTES = ["/", "/landing", "/updates"];
 
 export async function proxy(request: NextRequest) {
   // Standard @supabase/ssr session-refresh pattern adapted to proxy.
