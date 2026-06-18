@@ -39,9 +39,9 @@ function row(partial: Partial<ActivityRow>): ActivityRow {
 }
 
 describe("resolveActivity", () => {
-  it("resolves a status change to from/to chips", () => {
+  it("resolves a status change to from/to chips (wrapped cell value)", () => {
     const d = resolveActivity(
-      row({ action: "cell_changed", old_value: "s1", new_value: "s2" }),
+      row({ old_value: { optionId: "s1" }, new_value: { optionId: "s2" } }),
       [COL],
       [],
     );
@@ -51,6 +51,93 @@ describe("resolveActivity", () => {
       from: { label: "Working on it", color: "#fdab3d" },
       to: { label: "Done", color: "#00c875" },
     });
+  });
+
+  it("returns null for an unresolvable / empty status option", () => {
+    const d = resolveActivity(
+      row({ old_value: null, new_value: { optionId: "gone" } }),
+      [COL],
+      [],
+    );
+    expect(d).toMatchObject({ kind: "cell_changed", from: null, to: null });
+  });
+
+  it("joins dropdown option labels", () => {
+    const dropCol = {
+      ...COL,
+      id: "col-d",
+      kind: "dropdown",
+      name: "Tags",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({ column_id: "col-d", new_value: { optionIds: ["s1", "s2"] } }),
+      [dropCol],
+      [],
+    );
+    expect(d).toMatchObject({
+      kind: "cell_changed",
+      to: "Working on it, Done",
+    });
+  });
+
+  it("resolves people to member names", () => {
+    const pplCol = {
+      ...COL,
+      id: "col-p",
+      kind: "people",
+      name: "Owner",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({ column_id: "col-p", new_value: { userIds: ["u1"] } }),
+      [pplCol],
+      [{ userId: "u1", fullName: "Ada" }],
+    );
+    expect(d).toMatchObject({ kind: "cell_changed", to: "Ada" });
+  });
+
+  it("resolves a text cell to its text", () => {
+    const txtCol = {
+      ...COL,
+      id: "col-t",
+      kind: "text",
+      name: "Notes",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({ column_id: "col-t", new_value: { text: "Hello" } }),
+      [txtCol],
+      [],
+    );
+    expect(d).toMatchObject({ kind: "cell_changed", to: "Hello" });
+  });
+
+  it("resolves a number cell to a string, including 0", () => {
+    const numCol = {
+      ...COL,
+      id: "col-n",
+      kind: "numbers",
+      name: "Estimate",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({ column_id: "col-n", old_value: { n: 0 }, new_value: { n: 5 } }),
+      [numCol],
+      [],
+    );
+    expect(d).toMatchObject({ kind: "cell_changed", from: "0", to: "5" });
+  });
+
+  it("resolves a date cell to its date string", () => {
+    const dateCol = {
+      ...COL,
+      id: "col-dt",
+      kind: "date",
+      name: "Due",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({ column_id: "col-dt", new_value: { date: "2026-06-20" } }),
+      [dateCol],
+      [],
+    );
+    expect(d).toMatchObject({ kind: "cell_changed", to: "2026-06-20" });
   });
 
   it("renders item_renamed with from/to strings", () => {
@@ -78,25 +165,5 @@ describe("resolveActivity", () => {
       [],
     );
     expect(d.kind).toBe("item_created");
-  });
-
-  it("falls back to a literal for a number cell", () => {
-    const numCol = {
-      ...COL,
-      id: "col-n",
-      kind: "numbers",
-      name: "Estimate",
-    } as unknown as Tables<"columns">;
-    const d = resolveActivity(
-      row({ column_id: "col-n", old_value: 3, new_value: 5 }),
-      [numCol],
-      [],
-    );
-    expect(d).toMatchObject({
-      kind: "cell_changed",
-      columnName: "Estimate",
-      from: "3",
-      to: "5",
-    });
   });
 });
