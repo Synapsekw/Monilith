@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { LayoutGrid, Monitor, Moon, Plus, Search, Sun } from "lucide-react";
+import {
+  LayoutDashboard,
+  LayoutGrid,
+  Monitor,
+  Moon,
+  Plus,
+  Sun,
+} from "lucide-react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -13,12 +21,25 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useUIStore } from "@/stores/ui";
+import type { BoardListEntry } from "@/lib/boards/queries";
 
-export function CommandPalette() {
+export function CommandPalette({
+  boards,
+  dashboards,
+  workspaces,
+}: {
+  boards: BoardListEntry[];
+  dashboards: { id: string; name: string }[];
+  workspaces: { id: string; name: string }[];
+}) {
   const open = useUIStore((s) => s.commandOpen);
   const setOpen = useUIStore((s) => s.setCommandOpen);
   const toggle = useUIStore((s) => s.toggleCommand);
+  const setNewBoardOpen = useUIStore((s) => s.setNewBoardOpen);
+  const setNewDashboardOpen = useUIStore((s) => s.setNewDashboardOpen);
+  const router = useRouter();
   const { setTheme } = useTheme();
+  const canCreate = Boolean(workspaces[0]?.id);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -32,8 +53,8 @@ export function CommandPalette() {
   }, [toggle]);
 
   const run = (fn: () => void) => {
-    fn();
     setOpen(false);
+    fn();
   };
 
   return (
@@ -47,19 +68,40 @@ export function CommandPalette() {
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Navigation">
-          <CommandItem disabled>
-            <LayoutGrid className="size-4" /> Dashboards
-            <span className="text-muted-foreground ml-auto text-xs">soon</span>
+          <CommandItem onSelect={() => run(() => router.push("/dashboards"))}>
+            <LayoutDashboard className="size-4" /> Dashboards
           </CommandItem>
-          <CommandItem disabled>
-            <Search className="size-4" /> Search everything
-            <span className="text-muted-foreground ml-auto text-xs">soon</span>
-          </CommandItem>
+          {boards.map((b) => (
+            <CommandItem
+              key={b.id}
+              value={`board ${b.name}`}
+              onSelect={() => run(() => router.push(`/boards/${b.id}`))}
+            >
+              <LayoutGrid className="size-4" /> {b.name}
+            </CommandItem>
+          ))}
+          {dashboards.map((d) => (
+            <CommandItem
+              key={d.id}
+              value={`dashboard ${d.name}`}
+              onSelect={() => run(() => router.push(`/dashboards/${d.id}`))}
+            >
+              <LayoutDashboard className="size-4" /> {d.name}
+            </CommandItem>
+          ))}
         </CommandGroup>
         <CommandGroup heading="Create">
-          <CommandItem disabled>
+          <CommandItem
+            disabled={!canCreate}
+            onSelect={() => run(() => setNewBoardOpen(true))}
+          >
             <Plus className="size-4" /> New board
-            <span className="text-muted-foreground ml-auto text-xs">soon</span>
+          </CommandItem>
+          <CommandItem
+            disabled={!canCreate}
+            onSelect={() => run(() => setNewDashboardOpen(true))}
+          >
+            <Plus className="size-4" /> New dashboard
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
