@@ -94,7 +94,7 @@ export function MonolithScene({ children }: { children: React.ReactNode }) {
         MONOLITH
       </motion.span>
       <motion.p className={styles.subcopy} variants={item}>
-        One coherent surface for all your work.
+        The only work surface you need.
       </motion.p>
       <motion.div className={styles.ctas} variants={item}>
         {children}

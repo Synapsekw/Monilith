@@ -9,26 +9,30 @@ import {
   useSpring,
 } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type MagneticButtonProps = {
   href: string;
   children: React.ReactNode;
   variant?: "default" | "outline";
   size?: "default" | "lg";
+  className?: string;
 };
 
 const STRENGTH = 8; // px the button drifts toward the cursor
 
 /**
  * A real navigation link styled as a Button that gently pulls toward the cursor
- * with an indigo glow on hover. Pure progressive enhancement: under reduced
- * motion the magnetic transform is skipped and it behaves as a static link.
+ * on hover. Pure progressive enhancement: under reduced motion the magnetic
+ * transform is skipped and it behaves as a static link. `className` is merged
+ * last (tailwind-merge), so callers can override fill/radius/glow.
  */
 export function MagneticButton({
   href,
   children,
   variant = "default",
   size = "lg",
+  className,
 }: MagneticButtonProps) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
@@ -63,7 +67,7 @@ export function MagneticButton({
         asChild
         variant={variant}
         size={size}
-        className="transition-shadow duration-200 hover:shadow-[0_0_30px_-6px_var(--brand)]"
+        className={cn("transition-shadow duration-200", className)}
       >
         <Link href={href}>{children}</Link>
       </Button>

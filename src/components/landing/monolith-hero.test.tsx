@@ -22,16 +22,9 @@ describe("MonolithHero", () => {
     expect(screen.getByText("MONOLITH")).toBeInTheDocument();
   });
 
-  it("logged out: nav and hero link to both /login and /signup", () => {
+  it("logged out: hero CTAs link to both /signup and /login", () => {
     render(<MonolithHero />);
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute(
-      "href",
-      "/login",
-    );
-    expect(screen.getByRole("link", { name: "Sign up" })).toHaveAttribute(
-      "href",
-      "/signup",
-    );
+    // Entry points live only in the hero now (no top nav).
     expect(screen.getByRole("link", { name: "Get started" })).toHaveAttribute(
       "href",
       "/signup",
@@ -40,16 +33,14 @@ describe("MonolithHero", () => {
       "href",
       "/login",
     );
+    expect(screen.getAllByRole("link")).toHaveLength(2);
   });
 
-  it("signed in: shows Enter app → / and no signup link", () => {
+  it("signed in: shows a single Enter app → / and no signup link", () => {
     render(<MonolithHero signedIn />);
-    const enter = screen.getAllByRole("link", { name: "Enter app" });
-    expect(enter.length).toBeGreaterThan(0);
-    enter.forEach((link) => expect(link).toHaveAttribute("href", "/"));
-    expect(
-      screen.queryByRole("link", { name: "Sign up" }),
-    ).not.toBeInTheDocument();
+    const enter = screen.getByRole("link", { name: "Enter app" });
+    expect(enter).toHaveAttribute("href", "/");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
     expect(
       screen.queryByRole("link", { name: "Get started" }),
     ).not.toBeInTheDocument();
