@@ -101,7 +101,14 @@ export function FilterBuilder({
           const kind = col?.kind ?? "text";
           const control = valueControlFor(kind, cond.operator);
           return (
-            <div key={i} className="flex items-center gap-1.5">
+            // Key on column+operator (not bare index): when a condition's
+            // control type changes — or a middle row is removed — this forces
+            // the value <Input>/<select> to remount instead of React reusing a
+            // node with stale type/value.
+            <div
+              key={`${i}-${cond.columnId}-${cond.operator}`}
+              className="flex items-center gap-1.5"
+            >
               {/* Column picker */}
               <select
                 aria-label="Filter column"
