@@ -18,7 +18,7 @@ export default function UpdatesPage() {
     <div className="dark bg-background text-foreground min-h-dvh">
       <div className="mx-auto max-w-2xl px-6 py-20">
         <Link
-          href="/"
+          href="/landing"
           className="text-muted-foreground hover:text-foreground mb-12 inline-flex items-center gap-1.5 text-sm transition-colors"
         >
           <ArrowLeft className="size-4" />

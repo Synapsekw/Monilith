@@ -18,14 +18,16 @@ vi.mock("next/link", () => ({
 import UpdatesPage from "./page";
 
 describe("UpdatesPage", () => {
-  it("renders the heading and a back-to-home link", () => {
+  it("renders the heading and a back link to the public landing splash", () => {
     render(<UpdatesPage />);
     expect(
       screen.getByRole("heading", { level: 1, name: "What's new" }),
     ).toBeInTheDocument();
+    // `/landing` is the always-on splash so "back" reaches the landing even
+    // for a logged-in visitor (`/` would redirect them into the app).
     expect(screen.getByRole("link", { name: /back to home/i })).toHaveAttribute(
       "href",
-      "/",
+      "/landing",
     );
   });
 
