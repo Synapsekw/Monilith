@@ -146,3 +146,16 @@ describe("buildTemplatePayload", () => {
     expect(UUID_RE.test(ids[0])).toBe(true);
   });
 });
+
+import { createBoardFromTemplate } from "@/lib/boards/actions";
+
+describe("createBoardFromTemplate", () => {
+  it("rejects an unknown templateId before touching Supabase", async () => {
+    const res = await createBoardFromTemplate({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      templateId: "does-not-exist",
+      name: "My board",
+    });
+    expect(res).toEqual({ ok: false, error: "Unknown template." });
+  });
+});

@@ -103,7 +103,8 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: create_board_from_template", () => {
       .from("cell_values")
       .select("*", { count: "exact", head: true })
       .eq("board_id", boardId);
-    expect(cells).toBeGreaterThanOrEqual(12);
+    // sprints seeds 4+4+3+3 = 14 cells across its four items.
+    expect(cells).toBe(14);
 
     const { data: views } = await anonA
       .from("board_views")
