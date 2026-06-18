@@ -57,6 +57,7 @@ describe("AutomationBuilder", () => {
       />,
     );
 
+    // Trigger type defaults to "status_changed" (first status column exists).
     // Trigger column defaults to the first status column; pick "Done".
     await userEvent.selectOptions(
       screen.getByLabelText("Trigger value"),
@@ -87,6 +88,7 @@ describe("AutomationBuilder", () => {
           recipient: { kind: "owner", peopleColumnId: "c-people" },
         },
       ],
+      condition: undefined,
     });
   });
 
@@ -112,10 +114,178 @@ describe("AutomationBuilder", () => {
         onCancel={onCancel}
       />,
     );
+    // With only a people column, there are no status columns but the builder
+    // still renders (trigger defaults to item_created). The "no status col"
+    // hint appears only if user selects status_changed and no status columns exist.
+    // The new builder shows a hint inside the trigger section; Save is still present
+    // (item_created is valid without a column).
+    // Verify we DON'T see the old "Add a Status or Dropdown column to this board" top-level gate.
     expect(
-      screen.getByText(/Add a Status or Dropdown column/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+      screen.queryByText(/Add a Status or Dropdown column to this board/i),
+    ).toBeNull();
+    // The trigger type select should be present
+    expect(screen.getByLabelText("Trigger type")).toBeInTheDocument();
+  });
+});
+
+describe("AutomationBuilder – new trigger types", () => {
+  it("builds an item_created → set_option draft", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Switch trigger type to "An item is created"
+    await userEvent.selectOptions(
+      screen.getByLabelText("Trigger type"),
+      "item_created",
+    );
+
+    // Add a "Set a column" action
+    await userEvent.click(
+      screen.getByRole("button", { name: /set a column/i }),
+    );
+
+    // Pick the status column
+    await userEvent.selectOptions(
+      screen.getByLabelText("Set column"),
+      "c-status",
+    );
+
+    // Pick an option
+    await userEvent.selectOptions(
+      screen.getByLabelText("Set value"),
+      "opt-done",
+    );
+
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: { type: "item_created" },
+        actions: [
+          { type: "set_option", columnId: "c-status", optionId: "opt-done" },
+        ],
+      }),
+    );
+  });
+
+  it("builds a person_assigned trigger from a People column", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Switch trigger type to "A person is assigned"
+    await userEvent.selectOptions(
+      screen.getByLabelText("Trigger type"),
+      "person_assigned",
+    );
+
+    // People column picker appears; should auto-select the only people column
+    expect(
+      (screen.getByLabelText("People column") as HTMLSelectElement).value,
+    ).toBe("c-people");
+
+    // Add a notify action (defaults to owner)
+    await userEvent.click(screen.getByRole("button", { name: /notify/i }));
+
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: { type: "person_assigned", columnId: "c-people" },
+      }),
+    );
+  });
+
+  it("attaches an If condition when one is added", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // status_changed is the default trigger type
+
+    // Reveal the If section
+    await userEvent.click(
+      screen.getByRole("button", { name: /add condition/i }),
+    );
+
+    // FilterBuilder renders an "Add condition" button inside it — click it to add a row
+    const addCondBtns = screen.getAllByRole("button", {
+      name: /add condition/i,
+    });
+    // The last one is the FilterBuilder's own "+ Add condition" button
+    await userEvent.click(addCondBtns[addCondBtns.length - 1]);
+
+    // A "Filter column" select should appear — pick the status column
+    await userEvent.selectOptions(
+      screen.getByLabelText("Filter column"),
+      "c-status",
+    );
+
+    // Operator defaults to "is" for status columns; pick an option value
+    await userEvent.selectOptions(
+      screen.getByLabelText("Filter value"),
+      "opt-done",
+    );
+
+    // Add a notify action to make Save valid
+    await userEvent.click(screen.getByRole("button", { name: /notify/i }));
+
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    const arg = onSubmit.mock.calls[0][0];
+    expect(arg.condition).toBeDefined();
+    expect(arg.condition.conditions).toHaveLength(1);
+    expect(arg.condition.conditions[0]).toMatchObject({
+      columnId: "c-status",
+      operator: "is",
+      value: "opt-done",
+    });
+  });
+
+  it("omits the condition when none added", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // status_changed default + add a notify action (no If section opened)
+    await userEvent.click(screen.getByRole("button", { name: /notify/i }));
+
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    expect(onSubmit.mock.calls[0][0].condition).toBeUndefined();
   });
 });
 
