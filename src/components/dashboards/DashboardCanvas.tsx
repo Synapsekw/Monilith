@@ -123,6 +123,7 @@ export function DashboardCanvas({
                     widget={w}
                     dashboardId={dashboardId}
                     editing={editing}
+                    boards={boards}
                   />
                 </div>
               ))}
