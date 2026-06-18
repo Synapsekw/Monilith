@@ -14,6 +14,11 @@ export const automationTriggerSchema = z.discriminatedUnion("type", [
     type: z.literal("person_assigned"),
     columnId: z.string().uuid(),
   }),
+  z.object({
+    type: z.literal("date_reached"),
+    columnId: z.string().uuid(),
+    offsetDays: z.number().int().min(-365).max(365),
+  }),
 ]);
 export type AutomationTrigger = z.infer<typeof automationTriggerSchema>;
 

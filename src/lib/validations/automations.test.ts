@@ -82,3 +82,49 @@ describe("createAutomationSchema condition", () => {
     ).toBe(false);
   });
 });
+
+describe("date_reached trigger", () => {
+  it("accepts a valid date_reached trigger", () => {
+    const r = automationTriggerSchema.safeParse({
+      type: "date_reached",
+      columnId: COL,
+      offsetDays: -3,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts offset 0 (on the date)", () => {
+    const r = automationTriggerSchema.safeParse({
+      type: "date_reached",
+      columnId: COL,
+      offsetDays: 0,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects offsetDays out of range", () => {
+    const r = automationTriggerSchema.safeParse({
+      type: "date_reached",
+      columnId: COL,
+      offsetDays: 9999,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects non-integer offsetDays", () => {
+    const r = automationTriggerSchema.safeParse({
+      type: "date_reached",
+      columnId: COL,
+      offsetDays: 1.5,
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a missing columnId", () => {
+    const r = automationTriggerSchema.safeParse({
+      type: "date_reached",
+      offsetDays: 0,
+    });
+    expect(r.success).toBe(false);
+  });
+});
