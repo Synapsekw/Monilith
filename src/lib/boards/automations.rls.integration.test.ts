@@ -531,7 +531,114 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + engine: automations (5a)", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 7. Cross-org RLS on automations table
+  // 7. Unresolved owner no-ops: notify(owner) with empty People column → 0 rows
+  // ─────────────────────────────────────────────────────────────────────────
+  it("unresolved owner no-ops: notify(owner) with empty People column creates no notification", async () => {
+    await cleanItemState();
+    // People column O is intentionally left empty (no cell_values row for it)
+
+    const automationId = await insertAutomation({
+      trigger: {
+        type: "status_changed",
+        columnId: colSId,
+        toOptionId: optDoneId,
+      },
+      actions: [
+        {
+          type: "notify",
+          recipient: { kind: "owner", peopleColumnId: colOId },
+        },
+      ],
+    });
+
+    // userA sets S=Done → engine fires but owner list is empty → no notification
+    const writeErr = await setCell(colSId, { optionId: optDoneId });
+    expect(writeErr, "set S=Done (empty owner)").toBeNull();
+
+    await new Promise((r) => setTimeout(r, 1_500));
+
+    const { data: notifs } = await admin
+      .from("notifications")
+      .select("id")
+      .eq("item_id", itemAId)
+      .eq("kind", "automation")
+      .eq("automation_id", automationId);
+    expect(
+      notifs ?? [],
+      "no notification when owner column is empty",
+    ).toHaveLength(0);
+
+    await admin.from("automations").delete().eq("id", automationId);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 8. set_option skips when already equal: value unchanged, row count stays 1
+  // ─────────────────────────────────────────────────────────────────────────
+  it("set_option skips when P already equals Urgent (no duplicate row, value unchanged)", async () => {
+    await cleanItemState();
+
+    // Pre-seed P = Urgent directly via admin (service-role) so no trigger fires
+    const { error: seedErr } = await admin.from("cell_values").upsert(
+      {
+        org_id: orgAId,
+        board_id: boardAId,
+        item_id: itemAId,
+        column_id: colPId,
+        value: { optionId: optUrgentId } as never,
+      },
+      { onConflict: "item_id,column_id" },
+    );
+    expect(seedErr, "seed P=Urgent").toBeNull();
+
+    // Capture updated_at of the pre-seeded row
+    const { data: before } = await admin
+      .from("cell_values")
+      .select("updated_at")
+      .eq("item_id", itemAId)
+      .eq("column_id", colPId)
+      .single();
+    const updatedAtBefore = (before as { updated_at: string }).updated_at;
+
+    const automationId = await insertAutomation({
+      trigger: {
+        type: "status_changed",
+        columnId: colSId,
+        toOptionId: optDoneId,
+      },
+      actions: [
+        { type: "set_option", columnId: colPId, optionId: optUrgentId },
+      ],
+    });
+
+    // Trigger S=Done; engine sees P already equals Urgent → skip-if-equal branch
+    const writeErr = await setCell(colSId, { optionId: optDoneId });
+    expect(writeErr, "set S=Done (skip-if-equal)").toBeNull();
+
+    await new Promise((r) => setTimeout(r, 1_500));
+
+    // Exactly one row for (item, P)
+    const { data: rows } = await admin
+      .from("cell_values")
+      .select("value, updated_at")
+      .eq("item_id", itemAId)
+      .eq("column_id", colPId);
+    expect(rows ?? [], "exactly one P cell row").toHaveLength(1);
+
+    const row = (
+      rows as { value: { optionId: string }; updated_at: string }[]
+    )[0];
+    expect(row.value, "P still equals Urgent").toMatchObject({
+      optionId: optUrgentId,
+    });
+    expect(row.updated_at, "updated_at unchanged (no redundant write)").toBe(
+      updatedAtBefore,
+    );
+
+    await admin.from("automations").delete().eq("id", automationId);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 9. Cross-org RLS on automations table
   // ─────────────────────────────────────────────────────────────────────────
   describe("cross-org RLS on automations", () => {
     let seedAutoId: string;
