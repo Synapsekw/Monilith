@@ -159,3 +159,47 @@ describe("configSchemaForKind (list)", () => {
     ).toBe(true);
   });
 });
+
+describe("listConfigSchema filter", () => {
+  it("accepts an empty config (D3a backward-compat)", () => {
+    const r = listConfigSchema.safeParse({});
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.filter).toBeUndefined();
+  });
+
+  it("accepts a flat AND/OR condition list", () => {
+    const r = listConfigSchema.safeParse({
+      columnIds: [UUID_A],
+      limit: 25,
+      filter: {
+        combinator: "or",
+        conditions: [
+          { columnId: UUID_A, operator: "is", value: UUID_B },
+          { columnId: UUID_A, operator: "is_empty" },
+        ],
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("defaults combinator to 'and'", () => {
+    const r = listConfigSchema.safeParse({ filter: { conditions: [] } });
+    expect(r.success && r.data.filter?.combinator).toBe("and");
+  });
+
+  it("rejects an unknown operator", () => {
+    const r = listConfigSchema.safeParse({
+      filter: { conditions: [{ columnId: UUID_A, operator: "matches" }] },
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects more than 10 conditions", () => {
+    const many = Array.from({ length: 11 }, () => ({
+      columnId: UUID_A,
+      operator: "not_empty" as const,
+    }));
+    const r = listConfigSchema.safeParse({ filter: { conditions: many } });
+    expect(r.success).toBe(false);
+  });
+});

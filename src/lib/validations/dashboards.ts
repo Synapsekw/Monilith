@@ -28,9 +28,41 @@ export type ChartConfig = z.infer<typeof chartConfigSchema>;
 export const batteryConfigSchema = z.object({ groupColumnId: uuid });
 export type BatteryConfig = z.infer<typeof batteryConfigSchema>;
 
+export const filterOperatorSchema = z.enum([
+  "is",
+  "is_not", // status
+  "contains",
+  "eq", // text
+  "num_eq",
+  "num_ne",
+  "gt",
+  "lt", // numbers
+  "before",
+  "after",
+  "on", // date
+  "is_empty",
+  "not_empty", // any kind
+]);
+export type FilterOperator = z.infer<typeof filterOperatorSchema>;
+
+export const filterConditionSchema = z.object({
+  columnId: uuid,
+  operator: filterOperatorSchema,
+  // unused for is_empty / not_empty
+  value: z.union([z.string(), z.number(), z.null()]).optional(),
+});
+export type FilterCondition = z.infer<typeof filterConditionSchema>;
+
+export const listFilterSchema = z.object({
+  combinator: z.enum(["and", "or"]).default("and"),
+  conditions: z.array(filterConditionSchema).max(10).default([]),
+});
+export type ListFilter = z.infer<typeof listFilterSchema>;
+
 export const listConfigSchema = z.object({
   columnIds: z.array(uuid).max(8).default([]),
   limit: z.number().int().min(1).max(100).default(25),
+  filter: listFilterSchema.optional(),
 });
 export type ListConfig = z.infer<typeof listConfigSchema>;
 
