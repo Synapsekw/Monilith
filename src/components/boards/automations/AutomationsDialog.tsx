@@ -13,6 +13,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { OPERATOR_LABEL } from "@/lib/dashboards/filter-meta";
+import type { ListFilter } from "@/lib/validations/dashboards";
 import type { CacheColumn } from "@/lib/boards/cache";
 import type { ColumnOption } from "@/lib/validations/boards";
 import type {
@@ -34,6 +36,8 @@ import {
 import {
   recipeNotifyOwner,
   recipeSetOption,
+  recipeItemCreatedSetOption,
+  recipePersonAssignedNotify,
   type Draft,
 } from "@/components/boards/automations/recipes";
 
@@ -62,6 +66,24 @@ function memberName(members: BuilderMember[], userId: string): string {
   return m?.fullName ?? m?.email ?? "someone";
 }
 
+function condClause(
+  condition: ListFilter | null,
+  columns: CacheColumn[],
+): string {
+  if (!condition?.conditions?.length) return "";
+  const parts = condition.conditions.map((c) => {
+    const name = colName(columns, c.columnId);
+    const op = OPERATOR_LABEL[c.operator] ?? c.operator;
+    const val =
+      c.value == null || `${c.value}` === ""
+        ? ""
+        : ` ${optName(columns, c.columnId, String(c.value))}`;
+    return `${name} ${op}${val}`;
+  });
+  const joiner = condition.combinator === "or" ? " or " : " and ";
+  return ` if ${parts.join(joiner)}`;
+}
+
 /** One-line, human-readable summary of an automation rule. */
 function summarize(
   rule: Automation,
@@ -70,15 +92,23 @@ function summarize(
 ): string {
   const trigger = rule.trigger as unknown as AutomationTrigger;
   const actions = rule.actions as unknown as AutomationAction[];
+  const condition = rule.condition as unknown as ListFilter | null;
 
-  const when =
-    trigger.toOptionId == null
-      ? `When ${colName(columns, trigger.columnId)} changes`
-      : `When ${colName(columns, trigger.columnId)} changes to ${optName(
-          columns,
-          trigger.columnId,
-          trigger.toOptionId,
-        )}`;
+  let when: string;
+  if (trigger.type === "item_created") {
+    when = "When an item is created";
+  } else if (trigger.type === "person_assigned") {
+    when = `When someone is assigned in ${colName(columns, trigger.columnId)}`;
+  } else {
+    when =
+      trigger.toOptionId == null
+        ? `When ${colName(columns, trigger.columnId)} changes`
+        : `When ${colName(columns, trigger.columnId)} changes to ${optName(
+            columns,
+            trigger.columnId,
+            trigger.toOptionId,
+          )}`;
+  }
 
   const thens = actions.map((a) => {
     if (a.type === "notify") {
@@ -93,7 +123,7 @@ function summarize(
     )}`;
   });
 
-  return `${when}, ${thens.join(" and ")}.`;
+  return `${when}${condClause(condition, columns)}, ${thens.join(" and ")}.`;
 }
 
 export function AutomationsDialog({
@@ -208,14 +238,19 @@ export function AutomationsDialog({
             <Zap className="size-4" /> Automations
           </DialogTitle>
           <DialogDescription>
-            Run actions automatically when a status or dropdown changes.
+            Run actions automatically when items change, are created, or are
+            assigned.
           </DialogDescription>
         </DialogHeader>
 
         {mode === "build" ? (
           <div className="flex flex-col gap-4">
             {/* Recipe quick-starts */}
-            {(canNotifyOwner || canSetOption) && !initialDraft ? (
+            {(canNotifyOwner ||
+              canSetOption ||
+              statusColumns.length > 0 ||
+              peopleColumns.length > 0) &&
+            !initialDraft ? (
               <div className="flex flex-col gap-2">
                 <p className="text-muted-foreground text-xs font-medium">
                   Start from a recipe
@@ -256,6 +291,34 @@ export function AutomationsDialog({
                       }}
                     >
                       Set another column on status change
+                    </Button>
+                  ) : null}
+                  {statusColumns.length > 0 ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const target = statusColumns[0];
+                        const toOpt = columnOptions(target)[0]?.id ?? "";
+                        startBuild(
+                          recipeItemCreatedSetOption(target.id, toOpt),
+                        );
+                      }}
+                    >
+                      Set a column when an item is created
+                    </Button>
+                  ) : null}
+                  {peopleColumns.length > 0 ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        startBuild(
+                          recipePersonAssignedNotify(peopleColumns[0].id),
+                        )
+                      }
+                    >
+                      Notify on assignment
                     </Button>
                   ) : null}
                 </div>
