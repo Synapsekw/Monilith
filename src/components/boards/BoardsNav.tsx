@@ -31,17 +31,22 @@ export function BoardsNav({
       )}
     >
       {collapsed ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              aria-label="Boards"
-              className="text-muted-foreground flex size-9 items-center justify-center"
-            >
-              <FolderKanban className="size-4" />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="right">Boards</TooltipContent>
-        </Tooltip>
+        <>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                aria-label="Boards"
+                className="text-muted-foreground flex size-9 items-center justify-center"
+              >
+                <FolderKanban className="size-4" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="right">Boards</TooltipContent>
+          </Tooltip>
+          {/* Triggerless: keeps the dialog mounted so the ⌘K "New board"
+              command can open it even while the sidebar is collapsed. */}
+          <NewBoardDialog workspaceId={workspaces[0]?.id} collapsed />
+        </>
       ) : (
         <div className="flex items-center justify-between px-3 py-1">
           <span className="text-muted-foreground flex items-center gap-2.5 text-sm">

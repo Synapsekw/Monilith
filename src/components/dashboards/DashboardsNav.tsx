@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,57 +95,59 @@ export function DashboardsNav({
             <LayoutGrid className="size-4" />
             Dashboards
           </Link>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="New dashboard"
-                className="size-6"
-              >
-                <Plus className="size-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>New dashboard</DialogTitle>
-                <DialogDescription>
-                  Give your dashboard a name to get started.
-                </DialogDescription>
-              </DialogHeader>
-              <form
-                className="flex flex-col gap-3"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submit();
-                }}
-              >
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="dashboard-name">Dashboard name</Label>
-                  <Input
-                    id="dashboard-name"
-                    autoFocus
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Team overview"
-                  />
-                </div>
-                {error ? (
-                  <p role="alert" className="text-destructive text-xs">
-                    {error}
-                  </p>
-                ) : null}
-                <DialogFooter>
-                  <Button type="submit" disabled={isPending || !name.trim()}>
-                    {isPending ? "Creating…" : "Create dashboard"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="New dashboard"
+            className="size-6"
+            onClick={() => setOpen(true)}
+          >
+            <Plus className="size-4" />
+          </Button>
         </div>
       )}
+
+      {/* Controlled dialog, mounted regardless of collapsed state so the ⌘K
+          "New dashboard" command can open it from the store flag. */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New dashboard</DialogTitle>
+            <DialogDescription>
+              Give your dashboard a name to get started.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dashboard-name">Dashboard name</Label>
+              <Input
+                id="dashboard-name"
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Team overview"
+              />
+            </div>
+            {error ? (
+              <p role="alert" className="text-destructive text-xs">
+                {error}
+              </p>
+            ) : null}
+            <DialogFooter>
+              <Button type="submit" disabled={isPending || !name.trim()}>
+                {isPending ? "Creating…" : "Create dashboard"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {dashboards.length === 0 ? (
         collapsed ? null : (

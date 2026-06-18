@@ -77,4 +77,18 @@ describe("NewBoardDialog", () => {
       ).toBeInTheDocument(),
     );
   });
+
+  it("collapsed: hides the trigger but still opens from the store flag", async () => {
+    render(<NewBoardDialog workspaceId="ws1" collapsed />);
+    // no + trigger rendered in collapsed mode
+    expect(screen.queryByRole("button", { name: /new board/i })).toBeNull();
+    useUIStore.setState({ newBoardOpen: true });
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Pick a template to start from, then name your board.",
+        ),
+      ).toBeInTheDocument(),
+    );
+  });
 });

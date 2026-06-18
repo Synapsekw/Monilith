@@ -27,7 +27,13 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   dashboard: BarChart3,
 };
 
-export function NewBoardDialog({ workspaceId }: { workspaceId?: string }) {
+export function NewBoardDialog({
+  workspaceId,
+  collapsed = false,
+}: {
+  workspaceId?: string;
+  collapsed?: boolean;
+}) {
   const router = useRouter();
   const storeOpen = useUIStore((s) => s.newBoardOpen);
   const setNewBoardOpen = useUIStore((s) => s.setNewBoardOpen);
@@ -68,17 +74,19 @@ export function NewBoardDialog({ workspaceId }: { workspaceId?: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="New board"
-          className="size-6"
-        >
-          <Plus className="size-4" />
-        </Button>
-      </DialogTrigger>
+      {collapsed ? null : (
+        <DialogTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="New board"
+            className="size-6"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>New board</DialogTitle>
