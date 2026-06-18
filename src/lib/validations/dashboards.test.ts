@@ -194,6 +194,13 @@ describe("listConfigSchema filter", () => {
     expect(r.success).toBe(false);
   });
 
+  it("rejects a non-uuid columnId", () => {
+    const r = listConfigSchema.safeParse({
+      filter: { conditions: [{ columnId: "bad-id", operator: "is_empty" }] },
+    });
+    expect(r.success).toBe(false);
+  });
+
   it("rejects more than 10 conditions", () => {
     const many = Array.from({ length: 11 }, () => ({
       columnId: UUID_A,
