@@ -30,6 +30,41 @@ export function EditListWidgetDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit list widget</DialogTitle>
+        </DialogHeader>
+        {/* Remount the form each time the dialog opens (key on `open`) so its
+            useState initializers re-read the current config. The dialog stays
+            mounted for the widget's lifetime, so without a fresh mount a save
+            (which updates `widget` via the cache) would leave the form showing
+            stale, first-mount values on the next open. */}
+        {open ? (
+          <EditListWidgetForm
+            widget={widget}
+            board={board}
+            dashboardId={dashboardId}
+            onClose={() => onOpenChange(false)}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditListWidgetForm({
+  widget,
+  board,
+  dashboardId,
+  onClose,
+}: {
+  widget: CacheWidget;
+  board: BoardOption | undefined;
+  dashboardId: string;
+  onClose: () => void;
+}) {
   const { editWidget } = useDashboardMutations(dashboardId);
   const cfg = (widget.config ?? {}) as {
     columnIds?: string[];
@@ -52,75 +87,68 @@ export function EditListWidgetDialog({
     editWidget.mutate(
       { widgetId: widget.id, config },
       {
-        onSuccess: () => onOpenChange(false),
+        onSuccess: () => onClose(),
         onError: (e) => setError(e.message),
       },
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit list widget</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <fieldset className="text-sm">
-            <legend className="mb-1">Columns to show</legend>
-            <div className="flex flex-col gap-1 rounded-md border p-2">
-              {(board?.allColumns ?? []).length === 0 ? (
-                <span className="text-muted-foreground text-xs">
-                  This board has no columns.
-                </span>
-              ) : (
-                (board?.allColumns ?? []).map((c) => (
-                  <label key={c.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="accent-primary size-4"
-                      checked={columnIds.includes(c.id)}
-                      onChange={(e) =>
-                        setColumnIds((prev) =>
-                          e.target.checked
-                            ? [...prev, c.id]
-                            : prev.filter((id) => id !== c.id),
-                        )
-                      }
-                    />
-                    {c.name}
-                  </label>
-                ))
-              )}
-            </div>
-          </fieldset>
-          <label className="text-sm">
-            Max rows
-            <Input
-              type="number"
-              min={1}
-              max={100}
-              className="mt-1"
-              value={limit}
-              onChange={(e) =>
-                setLimit(
-                  Math.min(Math.max(Number(e.target.value) || 1, 1), 100),
-                )
-              }
-            />
-          </label>
-          <FilterBuilder
-            columns={board?.allColumns ?? []}
-            value={filter}
-            onChange={setFilter}
+    <>
+      <div className="flex flex-col gap-3">
+        <fieldset className="text-sm">
+          <legend className="mb-1">Columns to show</legend>
+          <div className="flex flex-col gap-1 rounded-md border p-2">
+            {(board?.allColumns ?? []).length === 0 ? (
+              <span className="text-muted-foreground text-xs">
+                This board has no columns.
+              </span>
+            ) : (
+              (board?.allColumns ?? []).map((c) => (
+                <label key={c.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="accent-primary size-4"
+                    checked={columnIds.includes(c.id)}
+                    onChange={(e) =>
+                      setColumnIds((prev) =>
+                        e.target.checked
+                          ? [...prev, c.id]
+                          : prev.filter((id) => id !== c.id),
+                      )
+                    }
+                  />
+                  {c.name}
+                </label>
+              ))
+            )}
+          </div>
+        </fieldset>
+        <label className="text-sm">
+          Max rows
+          <Input
+            type="number"
+            min={1}
+            max={100}
+            className="mt-1"
+            value={limit}
+            onChange={(e) =>
+              setLimit(Math.min(Math.max(Number(e.target.value) || 1, 1), 100))
+            }
           />
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
-        </div>
-        <DialogFooter>
-          <Button onClick={save} disabled={editWidget.isPending}>
-            Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </label>
+        <FilterBuilder
+          columns={board?.allColumns ?? []}
+          value={filter}
+          onChange={setFilter}
+        />
+        {error ? <p className="text-destructive text-sm">{error}</p> : null}
+      </div>
+      <DialogFooter>
+        <Button onClick={save} disabled={editWidget.isPending}>
+          Save
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

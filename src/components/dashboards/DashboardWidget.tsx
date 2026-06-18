@@ -52,11 +52,13 @@ export function DashboardWidget({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {widget.kind === "list" ? (
-                  <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                    <Pencil className="mr-2 size-4" /> Edit
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                      <Pencil className="mr-2 size-4" /> Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
                 ) : null}
-                {widget.kind === "list" ? <DropdownMenuSeparator /> : null}
                 <DropdownMenuItem
                   className="text-destructive"
                   onClick={() => removeWidget.mutate({ widgetId: widget.id })}
