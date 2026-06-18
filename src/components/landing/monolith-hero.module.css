@@ -20,48 +20,36 @@
   overflow: hidden;
 }
 
+/* Darkens the edges so the topographic lines fade out toward the frame. */
 .vignette {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
   background: radial-gradient(
     120% 90% at 50% 45%,
-    transparent 40%,
-    rgba(0, 0, 0, 0.55) 100%
+    transparent 45%,
+    rgba(13, 13, 15, 0.7) 100%
   );
 }
 
-.glow {
+/* Soft glow hugging the wordmark — the only light source now the slab is gone. */
+.aura {
   position: absolute;
+  top: 50%;
+  left: 50%;
   z-index: 1;
-  width: min(15vh, 150px);
-  height: min(70vh, 620px);
-  filter: blur(40px);
+  transform: translate(-50%, -55%);
+  width: min(820px, 80vw);
+  height: 360px;
   pointer-events: none;
-  background: linear-gradient(
-    to top,
-    rgba(186, 200, 255, 0),
-    rgba(186, 200, 255, 0.55) 45%,
-    rgba(224, 231, 255, 0.2)
+  background: radial-gradient(
+    ellipse at center,
+    rgba(150, 162, 235, 0.4),
+    rgba(126, 136, 224, 0.16) 42%,
+    transparent 70%
   );
-  animation: shaft 7s ease-in-out infinite;
-}
-
-.slab {
-  position: absolute;
-  z-index: 2;
-  width: min(15vh, 140px);
-  height: min(52vh, 470px);
-  border-radius: 3px;
-  pointer-events: none;
-  background: linear-gradient(160deg, #1c1c22, #0a0a0c);
-  box-shadow:
-    inset 1.5px 0 0 rgba(255, 255, 255, 0.1),
-    inset -1.5px 0 0 rgba(0, 0, 0, 0.6),
-    0 40px 90px rgba(0, 0, 0, 0.65);
-  clip-path: polygon(0 11%, 100% 0, 100% 100%, 0 100%);
-  animation: float 6.5s ease-in-out infinite;
+  filter: blur(46px);
 }
 
 .wordmark {
@@ -72,7 +60,9 @@
   line-height: 1;
   letter-spacing: 0.02em;
   color: #f4f4f6;
-  text-shadow: 0 4px 50px rgba(0, 0, 0, 0.7);
+  text-shadow:
+    0 4px 60px rgba(120, 130, 220, 0.35),
+    0 4px 50px rgba(0, 0, 0, 0.6);
   background-image: linear-gradient(
     100deg,
     transparent 35%,
@@ -112,28 +102,6 @@
   gap: 0.75rem;
 }
 
-@keyframes shaft {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: translateY(8px) scaleY(0.96);
-  }
-  50% {
-    opacity: 0.92;
-    transform: translateY(-6px) scaleY(1.04);
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(6px);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
-}
-
 @keyframes sweep {
   0% {
     background-position: 200% 0;
@@ -145,8 +113,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .glow,
-  .slab,
   .wordmark {
     animation: none;
   }

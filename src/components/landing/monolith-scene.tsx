@@ -1,14 +1,9 @@
 "use client";
 
-import { useRef } from "react";
-import {
-  motion,
-  useMotionValue,
-  useReducedMotion,
-  useSpring,
-} from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import { archivo } from "@/lib/fonts";
+import { TopographyCanvas } from "./topography-canvas";
 import styles from "./monolith-hero.module.css";
 
 // framer-motion v12 does not export `Variants` directly; define it locally.
@@ -31,62 +26,25 @@ const item: Variants = {
 };
 
 /**
- * Interactive landing centerpiece. Glow + slab drift toward the cursor (parallax
- * at two depths); wordmark, subcopy and the CTA slot rise in on load. `children`
- * is the CTA row, rendered by the server `MonolithHero`. All motion is disabled
- * under prefers-reduced-motion.
+ * Interactive landing centerpiece. A mouse-reactive topographic field sits
+ * behind a central glow; the wordmark, subcopy and CTA slot rise in on load.
+ * `children` is the CTA row, rendered by the server `MonolithHero`. The reveal
+ * is disabled under prefers-reduced-motion; the backdrop freezes to a static
+ * field (handled inside `TopographyCanvas`).
  */
 export function MonolithScene({ children }: { children: React.ReactNode }) {
   const reduce = useReducedMotion();
-  const ref = useRef<HTMLDivElement>(null);
-  const px = useMotionValue(0);
-  const py = useMotionValue(0);
-  const spring = { stiffness: 120, damping: 20, mass: 0.6 };
-  // Two depths: slab moves more than the glow behind it.
-  const glowX = useSpring(px, spring);
-  const glowY = useSpring(py, spring);
-  const slabX = useSpring(useMotionValue(0), spring);
-  const slabY = useSpring(useMotionValue(0), spring);
-
-  function handleMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (reduce || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
-    const nx = (e.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
-    const ny = (e.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
-    px.set(nx * 14);
-    py.set(ny * 10);
-    slabX.set(nx * 26);
-    slabY.set(ny * 16);
-  }
-
-  function reset() {
-    px.set(0);
-    py.set(0);
-    slabX.set(0);
-    slabY.set(0);
-  }
 
   return (
     <motion.div
-      ref={ref}
       className={styles.scene}
-      onPointerMove={handleMove}
-      onPointerLeave={reset}
       variants={container}
       initial={reduce ? false : "hidden"}
       animate="show"
     >
+      <TopographyCanvas />
       <span className={styles.vignette} aria-hidden />
-      <motion.span
-        className={styles.glow}
-        aria-hidden
-        style={reduce ? undefined : { x: glowX, y: glowY }}
-      />
-      <motion.span
-        className={styles.slab}
-        aria-hidden
-        style={reduce ? undefined : { x: slabX, y: slabY }}
-      />
+      <span className={styles.aura} aria-hidden />
       <motion.span
         className={`${styles.wordmark} ${archivo.className}`}
         variants={item}
