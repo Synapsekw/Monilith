@@ -142,6 +142,7 @@ export function AutomationsDialog({
   const qc = useQueryClient();
   const [mode, setMode] = useState<"list" | "build">("list");
   const [initialDraft, setInitialDraft] = useState<Draft | undefined>();
+  const [builderKey, setBuilderKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const { data: rules = [], isLoading } = useQuery({
@@ -218,6 +219,7 @@ export function AutomationsDialog({
   function startBuild(draft?: Draft) {
     setError(null);
     setInitialDraft(draft);
+    setBuilderKey((k) => k + 1);
     setMode("build");
   }
 
@@ -332,6 +334,7 @@ export function AutomationsDialog({
             ) : null}
 
             <AutomationBuilder
+              key={builderKey}
               columns={columns}
               members={members}
               initial={initialDraft}
