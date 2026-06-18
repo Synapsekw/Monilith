@@ -1,4 +1,6 @@
 import type { ChangelogEntry } from "./types";
+import { SEED } from "./seed";
+import { GENERATED } from "./generated";
 
 export interface ChangelogGroup {
   date: string;
@@ -6,31 +8,11 @@ export interface ChangelogGroup {
 }
 
 /**
- * Hand-written, user-facing changelog. Newest entries can go anywhere —
- * `groupByDate` sorts. Add an entry when something noteworthy ships; keep the
- * wording for end users (no internal jargon, milestone codes, or file names).
+ * The user-facing changelog: frozen pre-convention `SEED` plus everything
+ * generated from `Changelog:` commit trailers. `groupByDate` sorts; entries may
+ * appear in any order here.
  */
-export const CHANGELOG: ChangelogEntry[] = [
-  {
-    date: "2026-06-18",
-    kind: "new",
-    title: "Board automations",
-    description:
-      "Set up rules that react to changes on your board — a guided builder with ready-made recipes.",
-  },
-  {
-    date: "2026-06-10",
-    kind: "improved",
-    title: "Faster board loads",
-    description: "Large boards open noticeably quicker.",
-  },
-  {
-    date: "2026-06-02",
-    kind: "new",
-    title: "Command palette",
-    description: "Press ⌘K to jump anywhere and run actions without the mouse.",
-  },
-];
+export const CHANGELOG: ChangelogEntry[] = [...SEED, ...GENERATED];
 
 /** Group entries by date, newest date first, preserving authored order within a date. */
 export function groupByDate(entries: ChangelogEntry[]): ChangelogGroup[] {

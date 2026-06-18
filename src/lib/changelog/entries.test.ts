@@ -18,6 +18,22 @@ describe("groupByDate", () => {
     expect(groups[0].entries.map((e) => e.title)).toEqual(["B", "C"]);
     expect(groups[1].entries.map((e) => e.title)).toEqual(["A"]);
   });
+
+  it("orders groups newest-date-first, preserving authored order within a date", () => {
+    const entries: ChangelogEntry[] = [
+      { date: "2026-06-10", kind: "improved", title: "Older" },
+      { date: "2026-06-18", kind: "new", title: "First on day" },
+      { date: "2026-06-18", kind: "fixed", title: "Second on day" },
+    ];
+
+    const groups = groupByDate(entries);
+
+    expect(groups.map((g) => g.date)).toEqual(["2026-06-18", "2026-06-10"]);
+    expect(groups[0].entries.map((e) => e.title)).toEqual([
+      "First on day",
+      "Second on day",
+    ]);
+  });
 });
 
 describe("formatDate", () => {
