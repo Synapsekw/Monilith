@@ -15,6 +15,7 @@ import {
 import { Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { pillTextColor } from "@/lib/boards/contrast";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type {
   BoardCache,
@@ -284,8 +285,11 @@ function KanbanColumnView({
       <header className="flex items-center gap-2 px-3 py-2">
         {column.color ? (
           <span
-            className="inline-flex items-center truncate rounded-md px-2 py-0.5 text-xs font-medium text-white"
-            style={{ backgroundColor: column.color }}
+            className="inline-flex items-center truncate rounded-md px-2 py-0.5 text-xs font-medium"
+            style={{
+              backgroundColor: column.color,
+              color: pillTextColor(column.color),
+            }}
           >
             {column.label}
           </span>
