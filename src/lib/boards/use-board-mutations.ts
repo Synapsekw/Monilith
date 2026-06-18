@@ -6,7 +6,9 @@ import {
   createColumn,
   createItem,
   deleteColumn,
+  renameBoard,
   renameColumn,
+  renameGroup,
   renameItem,
   resizeColumn,
   upsertCell,
@@ -21,7 +23,9 @@ import {
   removeCellValue,
   removeColumn,
   removeDependency,
+  replaceBoard,
   replaceColumn,
+  replaceGroup,
   replaceItem,
   upsertCellValue,
   type BoardCache,
@@ -36,6 +40,8 @@ type SetCellVars = { itemId: string; columnId: string; value: unknown };
 type ClearCellVars = { itemId: string; columnId: string };
 type AddItemVars = { groupId: string; name: string };
 type RenameItemVars = { itemId: string; name: string };
+type RenameGroupVars = { groupId: string; name: string };
+type RenameBoardVars = { name: string };
 type AddDependencyVars = { predecessorId: string; successorId: string };
 type RemoveDependencyVars = { dependencyId: string };
 type Ctx = { previous?: BoardCache };
@@ -248,6 +254,57 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
+  const renameGroupMutation = useMutation<unknown, Error, RenameGroupVars, Ctx>(
+    {
+      mutationFn: async (vars) => {
+        const res = await renameGroup(vars);
+        if (!res.ok) throw new Error(res.error);
+        return res;
+      },
+      onMutate: async (vars) => {
+        await qc.cancelQueries({ queryKey: key });
+        const previous = qc.getQueryData<BoardCache>(key);
+        if (previous) {
+          const existing = previous.groups.find((g) => g.id === vars.groupId);
+          if (existing) {
+            qc.setQueryData<BoardCache>(
+              key,
+              replaceGroup(previous, { ...existing, name: vars.name }),
+            );
+          }
+        }
+        return { previous };
+      },
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      },
+    },
+  );
+
+  const renameBoardMutation = useMutation<unknown, Error, RenameBoardVars, Ctx>(
+    {
+      mutationFn: async (vars) => {
+        const res = await renameBoard({ boardId, name: vars.name });
+        if (!res.ok) throw new Error(res.error);
+        return res;
+      },
+      onMutate: async (vars) => {
+        await qc.cancelQueries({ queryKey: key });
+        const previous = qc.getQueryData<BoardCache>(key);
+        if (previous) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceBoard(previous, { ...previous.board, name: vars.name }),
+          );
+        }
+        return { previous };
+      },
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      },
+    },
+  );
+
   /**
    * Add a dependency. Non-optimistic: we do NOT insert into the cache here.
    * The Realtime INSERT echo will arrive in ms and `addDependency` is idempotent,
@@ -307,6 +364,13 @@ export function useBoardMutations(boardId: string) {
         onError: (err) => callbacks?.onError?.(err),
       }),
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),
+    renameGroup: (groupId: string, name: string) =>
+      renameGroupMutation.mutate({ groupId, name }),
+    renameBoard: (name: string, callbacks?: { onSuccess?: () => void }) =>
+      renameBoardMutation.mutate(
+        { name },
+        { onSuccess: () => callbacks?.onSuccess?.() },
+      ),
     addDependency: (
       vars: AddDependencyVars,
       callbacks?: { onError?: (err: Error) => void },

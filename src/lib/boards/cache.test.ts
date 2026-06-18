@@ -9,7 +9,9 @@ import {
   removeColumn,
   removeDependency,
   replaceColumn,
+  replaceGroup,
   replaceItem,
+  replaceBoard,
   upsertCellValue,
   type BoardCache,
   type CacheColumn,
@@ -99,6 +101,40 @@ describe("replaceItem", () => {
       name: "Renamed",
     } as never);
     expect(next.items.find((i) => i.id === "i1")!.name).toBe("Renamed");
+  });
+});
+
+describe("replaceBoard", () => {
+  it("replaces the board row", () => {
+    const next = replaceBoard(baseCache(), {
+      id: "b1",
+      org_id: "o1",
+      name: "Renamed board",
+    } as never);
+    expect(next.board.name).toBe("Renamed board");
+  });
+});
+
+describe("replaceGroup", () => {
+  it("replaces a matching group by id", () => {
+    const withGroup = {
+      ...baseCache(),
+      groups: [
+        {
+          id: "g1",
+          board_id: "b1",
+          name: "Group 1",
+          color: "#0073ea",
+        } as never,
+      ],
+    };
+    const next = replaceGroup(withGroup, {
+      id: "g1",
+      board_id: "b1",
+      name: "Renamed group",
+      color: "#0073ea",
+    } as never);
+    expect(next.groups.find((g) => g.id === "g1")!.name).toBe("Renamed group");
   });
 });
 

@@ -10,6 +10,7 @@ import {
   createItemSchema,
   deleteBoardSchema,
   renameBoardSchema,
+  renameGroupSchema,
   renameItemSchema,
   upsertCellSchema,
   createColumnSchema,
@@ -85,6 +86,28 @@ export async function deleteBoard(input: {
   if (error) return fail(error.message);
 
   revalidatePath("/", "layout");
+  return { ok: true, data: undefined };
+}
+
+export async function renameGroup(input: {
+  groupId: string;
+  name: string;
+}): Promise<ActionResult> {
+  const parsed = renameGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("groups")
+    .update({ name: parsed.data.name })
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 

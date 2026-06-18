@@ -5,6 +5,7 @@ import {
   createItemSchema,
   deleteBoardSchema,
   renameBoardSchema,
+  renameGroupSchema,
   renameItemSchema,
 } from "./board-actions";
 import { upsertCellSchema, clearCellSchema } from "./board-actions";
@@ -59,6 +60,15 @@ describe("board action schemas", () => {
     expect(
       createGroupSchema.safeParse({ boardId: uuid, name: "Group 2" }).success,
     ).toBe(true);
+  });
+
+  it("renameGroup requires a groupId and a name", () => {
+    expect(
+      renameGroupSchema.safeParse({ groupId: uuid, name: "Renamed" }).success,
+    ).toBe(true);
+    expect(
+      renameGroupSchema.safeParse({ groupId: uuid, name: "" }).success,
+    ).toBe(false);
   });
 
   it("createItem requires a groupId and a name", () => {

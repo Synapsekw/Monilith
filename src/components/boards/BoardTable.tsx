@@ -91,6 +91,7 @@ export function BoardTable({
     clearCellValue,
     addItem,
     renameItem: renameItemMutation,
+    renameGroup,
   } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
@@ -172,6 +173,7 @@ export function BoardTable({
                 cellMap={cellMap}
                 template={template}
                 controls={controls}
+                onRenameGroup={(name) => renameGroup(group.id, name)}
               />
             ))
           )}
@@ -188,6 +190,7 @@ function GroupSection({
   cellMap,
   template,
   controls,
+  onRenameGroup,
 }: {
   group: Group;
   items: Item[];
@@ -195,8 +198,11 @@ function GroupSection({
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
+  onRenameGroup: (name: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(group.name);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -210,31 +216,74 @@ function GroupSection({
   // Cap the scroll viewport so long groups virtualize; short ones shrink.
   const viewportHeight = Math.min(items.length * ROW_HEIGHT, 12 * ROW_HEIGHT);
 
+  function openRename() {
+    setName(group.name);
+    setRenaming(true);
+  }
+
+  function commitRename() {
+    const trimmed = name.trim();
+    setRenaming(false);
+    if (!trimmed || trimmed === group.name) return;
+    onRenameGroup(trimmed);
+  }
+
   return (
     <section>
       {/* Colored band header — group.color tints the left rail + label. */}
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        aria-expanded={!collapsed}
-        className="bg-surface hover:bg-accent focus-visible:ring-ring sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-left text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      <div
+        className="bg-surface hover:bg-accent sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-sm font-semibold transition-colors"
         style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
       >
-        {collapsed ? (
-          <ChevronRight className="text-muted-foreground size-4" />
-        ) : (
-          <ChevronDown className="text-muted-foreground size-4" />
-        )}
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-4" />
+          ) : (
+            <ChevronDown className="size-4" />
+          )}
+        </button>
         <span
           className="inline-block size-2 shrink-0 rounded-full"
           style={{ backgroundColor: group.color }}
           aria-hidden
         />
-        <span className="truncate">{group.name}</span>
+        {renaming ? (
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitRename();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setRenaming(false);
+              }
+            }}
+            aria-label={`Rename ${group.name}`}
+            className="h-7 max-w-xs"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={openRename}
+            className="focus-visible:ring-ring min-w-0 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
+          >
+            {group.name}
+          </button>
+        )}
         <span className="text-muted-foreground text-xs font-normal">
           {items.length}
         </span>
-      </button>
+      </div>
 
       {!collapsed && (
         <>

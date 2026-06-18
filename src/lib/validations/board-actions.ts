@@ -10,6 +10,7 @@ export const createBoardSchema = z.object({ workspaceId: uuid, name });
 export const renameBoardSchema = z.object({ boardId: uuid, name });
 export const deleteBoardSchema = z.object({ boardId: uuid });
 export const createGroupSchema = z.object({ boardId: uuid, name });
+export const renameGroupSchema = z.object({ groupId: uuid, name });
 export const createItemSchema = z.object({ groupId: uuid, name: itemName });
 export const renameItemSchema = z.object({ itemId: uuid, name: itemName });
 

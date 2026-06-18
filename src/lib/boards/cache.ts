@@ -60,6 +60,19 @@ export function removeCellValue(
   };
 }
 
+/** Replace the board row (e.g. rename). Immutable. */
+export function replaceBoard(cache: BoardCache, board: CacheBoard): BoardCache {
+  return { ...cache, board };
+}
+
+/** Replace a group by id (e.g. rename). No-op if absent. Immutable. */
+export function replaceGroup(cache: BoardCache, group: CacheGroup): BoardCache {
+  return {
+    ...cache,
+    groups: cache.groups.map((g) => (g.id === group.id ? group : g)),
+  };
+}
+
 /** Replace an item by id (e.g. rename). No-op if absent. Immutable. */
 export function replaceItem(cache: BoardCache, item: CacheItem): BoardCache {
   return {
