@@ -1,20 +1,68 @@
-.hero {
+.page {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   min-height: 100dvh;
   isolation: isolate;
   overflow: hidden;
   background: #0d0d0f;
-  cursor: pointer;
-  text-decoration: none;
+}
+
+.nav {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem clamp(1rem, 4vw, 2.5rem);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #f4f4f6;
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 6px;
+  background: var(--brand);
+  color: var(--brand-foreground);
+  font-size: 0.8rem;
+}
+
+.navActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scene {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  overflow: hidden;
 }
 
 .vignette {
   position: absolute;
   inset: 0;
   z-index: 0;
+  pointer-events: none;
   background: radial-gradient(
     120% 90% at 50% 45%,
     transparent 40%,
@@ -28,6 +76,7 @@
   width: min(15vh, 150px);
   height: min(70vh, 620px);
   filter: blur(40px);
+  pointer-events: none;
   background: linear-gradient(
     to top,
     rgba(186, 200, 255, 0),
@@ -43,6 +92,7 @@
   width: min(15vh, 140px);
   height: min(52vh, 470px);
   border-radius: 3px;
+  pointer-events: none;
   background: linear-gradient(160deg, #1c1c22, #0a0a0c);
   box-shadow:
     inset 1.5px 0 0 rgba(255, 255, 255, 0.1),
@@ -60,39 +110,42 @@
   letter-spacing: 0.02em;
   color: #f4f4f6;
   text-shadow: 0 4px 50px rgba(0, 0, 0, 0.7);
-  transition:
-    letter-spacing 0.6s ease,
-    text-shadow 0.6s ease;
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgba(186, 200, 255, 0.85) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: sweep 6s ease-in-out 1.2s infinite;
+  transition: letter-spacing 0.6s ease;
 }
 
-.enter {
-  position: absolute;
-  z-index: 5;
-  bottom: 13%;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: #a1a1aa;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-
-.hero:hover .enter,
-.hero:focus-visible .enter {
-  opacity: 0.85;
-}
-
-.hero:hover .wordmark {
+.scene:hover .wordmark {
   letter-spacing: 0.05em;
-  text-shadow: 0 4px 60px rgba(99, 102, 241, 0.35);
 }
 
-.hero:focus-visible {
-  outline: 2px solid #6366f1;
-  outline-offset: -4px;
+.subcopy {
+  position: relative;
+  z-index: 5;
+  margin: 0;
+  font-size: clamp(0.9rem, 1.4vw, 1.05rem);
+  letter-spacing: 0.01em;
+  color: #a1a1aa;
+  text-align: center;
+}
+
+.ctas {
+  position: relative;
+  z-index: 5;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
 }
 
 @keyframes shaft {
@@ -117,9 +170,20 @@
   }
 }
 
+@keyframes sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  40%,
+  100% {
+    background-position: -120% 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .glow,
-  .slab {
+  .slab,
+  .wordmark {
     animation: none;
   }
 }
