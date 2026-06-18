@@ -42,8 +42,8 @@ Closes the templates portion of Phase 8 (dashboards + templates + ⌘K). Templat
   (covered by the catalog test, no runtime guard); the New-board dialog uses `workspaces[0]` so
   multi-workspace users only target the first (pre-existing, same as old `createBoard`); `createBoard`
   / `createBoardSchema` may now be dead code — verify before removing.
-- Not yet **user-verified in the live app** (picker + seeded boards). People cells seed empty by
-  design; sample dates resolve relative to creation day.
+- **User-verified in the live app 2026-06-18** (picker + seeded boards work). People cells seed
+  empty by design; sample dates resolve relative to creation day.
 
 ## Next session entry point
 
