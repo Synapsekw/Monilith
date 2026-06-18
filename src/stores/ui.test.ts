@@ -38,3 +38,21 @@ describe("useUIStore", () => {
     expect(useUIStore.getState().sidebarCollapsed).toBe(true);
   });
 });
+
+describe("useUIStore create-dialog flags", () => {
+  beforeEach(() => {
+    useUIStore.setState({ newBoardOpen: false, newDashboardOpen: false });
+  });
+
+  it("setNewBoardOpen toggles newBoardOpen", () => {
+    useUIStore.getState().setNewBoardOpen(true);
+    expect(useUIStore.getState().newBoardOpen).toBe(true);
+    useUIStore.getState().setNewBoardOpen(false);
+    expect(useUIStore.getState().newBoardOpen).toBe(false);
+  });
+
+  it("setNewDashboardOpen toggles newDashboardOpen", () => {
+    useUIStore.getState().setNewDashboardOpen(true);
+    expect(useUIStore.getState().newDashboardOpen).toBe(true);
+  });
+});
