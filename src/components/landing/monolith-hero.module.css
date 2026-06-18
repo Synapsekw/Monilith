@@ -102,6 +102,51 @@
   gap: 0.75rem;
 }
 
+.badge {
+  position: relative;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid rgba(244, 244, 246, 0.16);
+  border-radius: 9999px;
+  background: rgba(244, 244, 246, 0.06);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: #d4d4d8;
+  backdrop-filter: blur(4px);
+}
+
+.badgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #8ea2eb;
+  box-shadow: 0 0 8px 1px rgba(142, 162, 235, 0.85);
+}
+
+.footer {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.8rem;
+  color: #71717a;
+}
+
+.footerLink {
+  color: #a1a1aa;
+  transition: color 0.2s ease;
+}
+
+.footerLink:hover {
+  color: #f4f4f6;
+}
+
 @keyframes sweep {
   0% {
     background-position: 200% 0;

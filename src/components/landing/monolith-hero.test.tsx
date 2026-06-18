@@ -17,14 +17,23 @@ vi.mock("next/link", () => ({
 }));
 
 describe("MonolithHero", () => {
-  it("renders the MONOLITH wordmark", () => {
+  it("renders the MONOLITH wordmark and the dev-status pill", () => {
     render(<MonolithHero />);
     expect(screen.getByText("MONOLITH")).toBeInTheDocument();
+    expect(screen.getByText("In active development")).toBeInTheDocument();
+  });
+
+  it("links to the public /updates page from the footer", () => {
+    render(<MonolithHero />);
+    expect(screen.getByText("Invitation only")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /updates/i })).toHaveAttribute(
+      "href",
+      "/updates",
+    );
   });
 
   it("logged out: hero CTAs link to both /signup and /login", () => {
     render(<MonolithHero />);
-    // Entry points live only in the hero now (no top nav).
     expect(screen.getByRole("link", { name: "Get started" })).toHaveAttribute(
       "href",
       "/signup",
@@ -33,14 +42,16 @@ describe("MonolithHero", () => {
       "href",
       "/login",
     );
-    expect(screen.getAllByRole("link")).toHaveLength(2);
+    // 2 CTAs + the footer Updates link.
+    expect(screen.getAllByRole("link")).toHaveLength(3);
   });
 
-  it("signed in: shows a single Enter app → / and no signup link", () => {
+  it("signed in: shows a single Enter app → / plus the Updates link", () => {
     render(<MonolithHero signedIn />);
     const enter = screen.getByRole("link", { name: "Enter app" });
     expect(enter).toHaveAttribute("href", "/");
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    // Enter app + footer Updates link.
+    expect(screen.getAllByRole("link")).toHaveLength(2);
     expect(
       screen.queryByRole("link", { name: "Get started" }),
     ).not.toBeInTheDocument();

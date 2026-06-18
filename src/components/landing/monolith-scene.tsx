@@ -45,6 +45,10 @@ export function MonolithScene({ children }: { children: React.ReactNode }) {
       <TopographyCanvas />
       <span className={styles.vignette} aria-hidden />
       <span className={styles.aura} aria-hidden />
+      <motion.span className={styles.badge} variants={item}>
+        <span className={styles.badgeDot} aria-hidden />
+        In active development
+      </motion.span>
       <motion.span
         className={`${styles.wordmark} ${nunito.className}`}
         variants={item}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MagneticButton } from "./magnetic-button";
 import { MonolithScene } from "./monolith-scene";
 import styles from "./monolith-hero.module.css";
@@ -41,6 +42,12 @@ export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
           </>
         )}
       </MonolithScene>
+      <footer className={styles.footer}>
+        <span>Invitation only</span>
+        <Link href="/updates" className={styles.footerLink}>
+          Updates →
+        </Link>
+      </footer>
     </div>
   );
 }
