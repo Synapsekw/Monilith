@@ -85,6 +85,63 @@ export type Database = {
           },
         ];
       };
+      automations: {
+        Row: {
+          actions: Json;
+          board_id: string;
+          created_at: string;
+          created_by: string | null;
+          enabled: boolean;
+          id: string;
+          name: string | null;
+          org_id: string;
+          position: number;
+          trigger: Json;
+          updated_at: string;
+        };
+        Insert: {
+          actions?: Json;
+          board_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          id?: string;
+          name?: string | null;
+          org_id: string;
+          position?: number;
+          trigger: Json;
+          updated_at?: string;
+        };
+        Update: {
+          actions?: Json;
+          board_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          id?: string;
+          name?: string | null;
+          org_id?: string;
+          position?: number;
+          trigger?: Json;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automations_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_views: {
         Row: {
           board_id: string;
@@ -710,6 +767,7 @@ export type Database = {
       notifications: {
         Row: {
           actor_id: string | null;
+          automation_id: string | null;
           board_id: string | null;
           created_at: string;
           id: string;
@@ -722,6 +780,7 @@ export type Database = {
         };
         Insert: {
           actor_id?: string | null;
+          automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
           id?: string;
@@ -734,6 +793,7 @@ export type Database = {
         };
         Update: {
           actor_id?: string | null;
+          automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
           id?: string;
@@ -745,6 +805,13 @@ export type Database = {
           update_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "notifications_automation_id_fkey";
+            columns: ["automation_id"];
+            isOneToOne: false;
+            referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "notifications_board_id_fkey";
             columns: ["board_id"];
@@ -1140,7 +1207,11 @@ export type Database = {
         | "date"
         | "numbers"
         | "dropdown";
-      notification_kind: "mention" | "assigned" | "update_on_item";
+      notification_kind:
+        | "mention"
+        | "assigned"
+        | "update_on_item"
+        | "automation";
       org_role: "owner" | "admin" | "member" | "guest";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
       widget_kind: "number" | "chart" | "battery" | "list";
@@ -1283,7 +1354,12 @@ export const Constants = {
         "update_added",
       ],
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
-      notification_kind: ["mention", "assigned", "update_on_item"],
+      notification_kind: [
+        "mention",
+        "assigned",
+        "update_on_item",
+        "automation",
+      ],
       org_role: ["owner", "admin", "member", "guest"],
       view_kind: ["table", "kanban", "calendar", "timeline"],
       widget_kind: ["number", "chart", "battery", "list"],
