@@ -27,7 +27,7 @@ export const MonoLayer = forwardRef<HTMLDivElement>(function MonoLayer(_, ref) {
         />
       </svg>
       <div ref={ref} className={`mono ${styles.mono}`}>
-        <svg width="32" height="36" viewBox="0 0 32 36">
+        <svg width="60" height="74" viewBox="0 0 60 74">
           <MonoWisp />
         </svg>
       </div>
