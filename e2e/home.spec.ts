@@ -1,29 +1,51 @@
 import { expect, test } from "@playwright/test";
 
-test("unauthenticated visit to / shows the MONOLITH landing linking to /login", async ({
+test("unauthenticated / shows the landing with Log in + Sign up entry points", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/$/);
 
-  const hero = page.getByRole("link", { name: "MONOLITH" });
-  await expect(hero).toBeVisible();
-  await expect(hero).toHaveAttribute("href", "/login");
+  await expect(page.getByText("MONOLITH")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute(
+    "href",
+    "/login",
+  );
+  await expect(page.getByRole("link", { name: "Sign up" })).toHaveAttribute(
+    "href",
+    "/signup",
+  );
+  await expect(page.getByRole("link", { name: "Get started" })).toHaveAttribute(
+    "href",
+    "/signup",
+  );
+  await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+    "href",
+    "/login",
+  );
 
-  await hero.click();
+  await page.getByRole("link", { name: "Get started" }).click();
+  await expect(page).toHaveURL(/\/signup$/);
+  await expect(page.getByText("Create your account")).toBeVisible();
+});
+
+test("landing Log in navigates to the sign-in form", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Log in" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByText("Welcome back")).toBeVisible();
 });
 
-test("unauthenticated visit to /landing shows the splash (proxy lets it through)", async ({
+test("unauthenticated /landing shows the splash entry points (proxy lets it through)", async ({
   page,
 }) => {
   await page.goto("/landing");
   await expect(page).toHaveURL(/\/landing$/);
-
-  const hero = page.getByRole("link", { name: "MONOLITH" });
-  await expect(hero).toBeVisible();
-  await expect(hero).toHaveAttribute("href", "/login");
+  await expect(page.getByText("MONOLITH")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign up" })).toHaveAttribute(
+    "href",
+    "/signup",
+  );
 });
 
 test("/login shows the sign-in form", async ({ page }) => {
