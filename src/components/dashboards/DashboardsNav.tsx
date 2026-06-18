@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
 import {
   Tooltip,
   TooltipContent,
@@ -37,7 +38,14 @@ export function DashboardsNav({
   const { dashboardId: activeDashboardId } = useParams<{
     dashboardId: string;
   }>();
-  const [open, setOpen] = useState(false);
+  const storeOpen = useUIStore((s) => s.newDashboardOpen);
+  const setNewDashboardOpen = useUIStore((s) => s.setNewDashboardOpen);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = storeOpen || localOpen;
+  const setOpen = (next: boolean) => {
+    setLocalOpen(next);
+    if (!next) setNewDashboardOpen(false);
+  };
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
