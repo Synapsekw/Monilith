@@ -254,17 +254,19 @@ export async function getWidgetRows(input: { widgetId: string }): Promise<
   const config = (widget.config ?? {}) as {
     columnIds?: string[];
     limit?: number;
+    filter?: unknown;
   };
   const columnIds = Array.isArray(config.columnIds) ? config.columnIds : [];
   const limit = Math.min(Math.max(config.limit ?? 25, 1), 100);
 
-  const { data: items } = await supabase
-    .from("items")
-    .select("id, name")
-    .eq("board_id", widget.source_board_id)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  const itemIds = (items ?? []).map((i) => i.id);
+  // Bounded, indexed, membership-checked row fetch — LIMIT applied after the
+  // filter inside the RPC (D3b). Empty/absent filter ⇒ latest-N (D3a parity).
+  const { data: items } = await supabase.rpc("dashboard_list_rows", {
+    p_board_id: widget.source_board_id,
+    p_filter: (config.filter ?? {}) as Json,
+    p_limit: limit,
+  });
+  const itemIds = (items ?? []).map((i) => i.item_id);
 
   let columns: DisplayColumn[] = [];
   const cellMap = new Map<string, unknown>(); // `${itemId}:${columnId}` → value
@@ -300,10 +302,13 @@ export async function getWidgetRows(input: { widgetId: string }): Promise<
   }
 
   const rows = (items ?? []).map((it) => ({
-    itemId: it.id,
+    itemId: it.item_id,
     name: it.name,
     cells: Object.fromEntries(
-      columnIds.map((cid) => [cid, cellMap.get(`${it.id}:${cid}`) ?? null]),
+      columnIds.map((cid) => [
+        cid,
+        cellMap.get(`${it.item_id}:${cid}`) ?? null,
+      ]),
     ),
   }));
 
