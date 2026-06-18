@@ -7,7 +7,7 @@ import { afterEach, vi } from "vitest";
 // tests without per-file mocks.
 vi.mock("next/font/google", () => {
   const font = () => ({ className: "font-mock", variable: "", style: {} });
-  return { Archivo: font, Geist: font, Geist_Mono: font };
+  return { Nunito: font, Geist: font, Geist_Mono: font };
 });
 
 // jsdom lacks the layout/observer APIs Radix (Popover/DismissableLayer + Floating

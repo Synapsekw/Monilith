@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import type { MotionProps } from "framer-motion";
-import { archivo } from "@/lib/fonts";
+import { nunito } from "@/lib/fonts";
 import { TopographyCanvas } from "./topography-canvas";
 import styles from "./monolith-hero.module.css";
 
@@ -46,7 +46,7 @@ export function MonolithScene({ children }: { children: React.ReactNode }) {
       <span className={styles.vignette} aria-hidden />
       <span className={styles.aura} aria-hidden />
       <motion.span
-        className={`${styles.wordmark} ${archivo.className}`}
+        className={`${styles.wordmark} ${nunito.className}`}
         variants={item}
       >
         MONOLITH

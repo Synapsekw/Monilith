@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { archivo } from "@/lib/fonts";
+import { nunito } from "@/lib/fonts";
 import { MonolithMark } from "@/components/brand/monolith-mark";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +19,7 @@ export function Brand({ collapsed = false }: { collapsed?: boolean }) {
       {!collapsed ? (
         <span
           className={cn(
-            archivo.className,
+            nunito.className,
             "text-sm font-extrabold tracking-wide",
           )}
         >
