@@ -12,6 +12,12 @@ export default defineConfig({
     exclude: ["e2e/**", "node_modules/**", ".next/**"],
   },
   resolve: {
-    alias: { "@": resolve(process.cwd(), "src") },
+    alias: {
+      "@": resolve(process.cwd(), "src"),
+      // `server-only` is a Next.js build-time guard, unresolvable under Vitest.
+      // Stub it so tests that pull a guarded module (e.g. `@/lib/boards/queries`,
+      // typically only for its types) can load. See vitest.server-only-stub.ts.
+      "server-only": resolve(process.cwd(), "vitest.server-only-stub.ts"),
+    },
   },
 });
