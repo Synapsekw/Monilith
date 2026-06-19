@@ -2,10 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
+  CheckboxEditor,
   DateEditor,
   DropdownEditor,
+  LinkEditor,
   NumbersEditor,
   PeopleEditor,
+  RatingEditor,
   StatusEditor,
   TextEditor,
 } from "./index";
@@ -257,5 +260,72 @@ describe("DateEditor", () => {
     await userEvent.type(input, "{Enter}");
     expect(onClear).toHaveBeenCalled();
     expect(onCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe("CheckboxEditor", () => {
+  it("commits the toggled checked state", async () => {
+    const onCommit = vi.fn();
+    render(
+      <CheckboxEditor
+        value={{ checked: false }}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("checkbox", { name: /toggle/i }));
+    expect(onCommit).toHaveBeenCalledWith({ checked: true });
+  });
+});
+
+describe("RatingEditor", () => {
+  it("commits the chosen star count", async () => {
+    const onCommit = vi.fn();
+    render(
+      <RatingEditor
+        value={{ rating: 0 }}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /4 stars/i }));
+    expect(onCommit).toHaveBeenCalledWith({ rating: 4 });
+  });
+
+  it("clears via onClear when the current rating is reclicked", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <RatingEditor
+        value={{ rating: 3 }}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /3 stars/i }));
+    expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe("LinkEditor", () => {
+  it("rejects an invalid URL and shows an error without committing", async () => {
+    const onCommit = vi.fn();
+    render(
+      <LinkEditor
+        value={null}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText(/url/i), "nope");
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.getByText(/valid url/i)).toBeInTheDocument();
   });
 });

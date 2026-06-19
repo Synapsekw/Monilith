@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { Input } from "@/components/ui/input";
 import {
@@ -308,6 +309,184 @@ export function DateEditor({
   );
 }
 
+export function CheckboxEditor({
+  value,
+  onCommit,
+}: EditorProps<{ checked: boolean }>) {
+  const checked = value?.checked ?? false;
+  return (
+    <div className="flex h-8 items-center px-1">
+      <input
+        type="checkbox"
+        aria-label="Toggle"
+        checked={checked}
+        autoFocus
+        onChange={() => onCommit({ checked: !checked })}
+        className="size-4"
+      />
+    </div>
+  );
+}
+
+export function RatingEditor({
+  value,
+  onCommit,
+  onClear,
+  onCancel,
+}: EditorProps<{ rating: number }>) {
+  const current = value?.rating ?? 0;
+  return (
+    <PopoverSurface label="Set rating" onCancel={onCancel}>
+      <div className="flex items-center gap-1 p-1">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`${i} stars`}
+            onClick={() =>
+              i === current ? (onClear ?? onCancel)() : onCommit({ rating: i })
+            }
+          >
+            <Star
+              className={`size-5 ${i <= current ? "fill-current text-amber-400" : "text-muted-foreground/40"}`}
+            />
+          </button>
+        ))}
+      </div>
+    </PopoverSurface>
+  );
+}
+
+export function LinkEditor({
+  value,
+  onCommit,
+  onCancel,
+}: EditorProps<{ url: string; text?: string }>) {
+  const [url, setUrl] = useState(value?.url ?? "");
+  const [text, setText] = useState(value?.text ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const commit = () => {
+    try {
+      new URL(url);
+    } catch {
+      setErr("Enter a valid URL");
+      return;
+    }
+    onCommit({ url, ...(text ? { text } : {}) });
+  };
+  return (
+    <PopoverSurface label="Edit link" onCancel={onCancel}>
+      <div className="flex w-56 flex-col gap-1 p-1">
+        <Input
+          autoFocus
+          aria-label="URL"
+          placeholder="https://…"
+          value={url}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setErr(null);
+          }}
+          className="h-8"
+        />
+        <Input
+          aria-label="Label"
+          placeholder="Label (optional)"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="h-8"
+        />
+        {err && <span className="text-destructive text-xs">{err}</span>}
+        <button type="button" className="self-end text-xs" onClick={commit}>
+          Save
+        </button>
+      </div>
+    </PopoverSurface>
+  );
+}
+
+function TextLikeEditor({
+  label,
+  initial,
+  validate,
+  build,
+  onCommit,
+  onCancel,
+}: {
+  label: string;
+  initial: string;
+  validate: (s: string) => string | null;
+  build: (s: string) => unknown;
+  onCommit: (v: unknown) => void;
+  onCancel: () => void;
+}) {
+  const [s, setS] = useState(initial);
+  const [err, setErr] = useState<string | null>(null);
+  const commit = () => {
+    const e = validate(s);
+    if (e) {
+      setErr(e);
+      return;
+    }
+    onCommit(build(s));
+  };
+  const onKey = useCommitKeys(commit, onCancel);
+  return (
+    <div className="flex flex-col gap-1">
+      <Input
+        autoFocus
+        aria-label={label}
+        value={s}
+        onChange={(e) => {
+          setS(e.target.value);
+          setErr(null);
+        }}
+        onKeyDown={onKey}
+        className="h-8"
+      />
+      {err && <span className="text-destructive text-xs">{err}</span>}
+      <button type="button" className="self-end text-xs" onClick={commit}>
+        Save
+      </button>
+    </div>
+  );
+}
+
+export function EmailEditor({
+  value,
+  onCommit,
+  onCancel,
+}: EditorProps<{ email: string }>) {
+  return (
+    <TextLikeEditor
+      label="Email"
+      initial={value?.email ?? ""}
+      onCommit={onCommit as (v: unknown) => void}
+      onCancel={onCancel}
+      validate={(s) =>
+        /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) ? null : "Enter a valid email"
+      }
+      build={(s) => ({ email: s })}
+    />
+  );
+}
+
+export function PhoneEditor({
+  value,
+  onCommit,
+  onCancel,
+}: EditorProps<{ phone: string }>) {
+  return (
+    <TextLikeEditor
+      label="Phone"
+      initial={value?.phone ?? ""}
+      onCommit={onCommit as (v: unknown) => void}
+      onCancel={onCancel}
+      validate={(s) => (s.trim().length ? null : "Enter a phone number")}
+      build={(s) => ({ phone: s.trim() })}
+    />
+  );
+}
+
 /** Dispatch a cell to its kind's editor. Clearing maps to onCommit of an empty value. */
 export function CellEditor({
   kind,
@@ -382,6 +561,56 @@ export function CellEditor({
       return (
         <DateEditor
           value={value as { date: string; end?: string } | null}
+          settings={settings}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          onClear={onClear}
+        />
+      );
+    case "checkbox":
+      return (
+        <CheckboxEditor
+          value={value as { checked: boolean } | null}
+          settings={settings}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          onClear={onClear}
+        />
+      );
+    case "rating":
+      return (
+        <RatingEditor
+          value={value as { rating: number } | null}
+          settings={settings}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          onClear={onClear}
+        />
+      );
+    case "link":
+      return (
+        <LinkEditor
+          value={value as { url: string; text?: string } | null}
+          settings={settings}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          onClear={onClear}
+        />
+      );
+    case "email":
+      return (
+        <EmailEditor
+          value={value as { email: string } | null}
+          settings={settings}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          onClear={onClear}
+        />
+      );
+    case "phone":
+      return (
+        <PhoneEditor
+          value={value as { phone: string } | null}
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
