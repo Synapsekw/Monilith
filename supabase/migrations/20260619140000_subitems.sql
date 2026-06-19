@@ -31,7 +31,7 @@ begin
     if v_parent_parent is not null then
       raise exception 'Subitems cannot be nested (single-level only)';
     end if;
-    if v_parent_board <> new.board_id then
+    if v_parent_board is distinct from new.board_id then
       raise exception 'Subitem must belong to the same board as its parent';
     end if;
     if exists (select 1 from public.items c where c.parent_id = new.id) then
@@ -45,4 +45,5 @@ $$;
 drop trigger if exists items_single_level on public.items;
 create trigger items_single_level
   before insert or update on public.items
-  for each row execute function public.tg_items_single_level();
+  for each row when (new.parent_id is not null)
+  execute function public.tg_items_single_level();
