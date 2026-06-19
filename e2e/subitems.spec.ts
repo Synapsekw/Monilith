@@ -4,6 +4,8 @@
  * Flow (one test, shared page session):
  *   1.  Log in → onboard → create a board with a Numbers column.
  *   2.  Create a top-level item "Epic".
+ *   2b. Create a second top-level item "Story"; drag it above "Epic" via the
+ *       "Reorder Story" grip handle; assert top-level order.
  *   3.  Hover "Epic"'s name cell → click "Add subitem to Epic" → rename to "Design".
  *   4.  Add a second subitem "Build" via the inline AddSubitemRow input.
  *   5.  Set the Numbers cell on "Design" to 5; set "Build"'s Numbers cell to 8.
