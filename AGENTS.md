@@ -96,3 +96,22 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
    state + History API); (c) is the hot-path read **bounded** (pagination/virtualization) over
    **indexed** columns. A plan that can't answer these isn't ready to build. Rationale:
    `vault/decisions/2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch.md`.
+
+6. **Plans and specs state a parallelization plan (execution DAG).** Every spec and plan for
+   multi-task work MUST make concurrency explicit, not implicit. Concretely:
+
+   - **Spec (`brainstorming`):** name the independent units — pieces with no shared state and no
+     sequential dependency on each other — so the plan can schedule them concurrently.
+   - **Plan (`writing-plans`):** the per-task `Interfaces: Consumes / Produces` blocks ARE a
+     dependency edge list. The plan MUST add an **Execution DAG** section that synthesizes them
+     into: (a) a dependency graph (Task N depends on Tasks …); (b) **parallel batches** — sets of
+     tasks with no unmet dependency that can run at the same time, each batch a wave of concurrent
+     agents; (c) the critical path (longest dependency chain = the real wall-clock floor).
+   - **Execution:** when ≥2 tasks share a batch, dispatch them with
+     `superpowers:dispatching-parallel-agents` (or parallel `subagent-driven-development`
+     subagents), not one-at-a-time. Tasks that mutate files in parallel get isolated **git
+     worktrees** (`superpowers:using-git-worktrees`) to avoid clobbering the shared `develop`
+     checkout — see working agreement #1.
+
+   A plan whose tasks are a flat sequential list with no DAG isn't ready to build. Rationale:
+   `vault/decisions/2026-06-19-decision-21-plans-must-state-execution-dag.md`.
