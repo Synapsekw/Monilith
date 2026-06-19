@@ -4,6 +4,7 @@ import {
   buildCellMap,
   cellKey,
   insertColumn,
+  insertGroup,
   insertItem,
   removeCellValue,
   removeColumn,
@@ -275,5 +276,52 @@ describe("column cache mutators", () => {
     const c = removeColumn(cache([col("a", 0)]), "a");
     expect(c.columns).toHaveLength(0);
     expect(c.cellValues).toHaveLength(0); // 'a' cell removed
+  });
+});
+
+describe("insertGroup", () => {
+  function withGroup(): BoardCache {
+    return {
+      ...baseCache(),
+      groups: [
+        {
+          id: "g1",
+          board_id: "b1",
+          name: "Group 1",
+          color: "#0073ea",
+        } as never,
+      ],
+    };
+  }
+
+  it("appends a new group", () => {
+    const next = insertGroup(withGroup(), {
+      id: "g2",
+      board_id: "b1",
+      name: "Group 2",
+      color: "#0073ea",
+    } as never);
+    expect(next.groups.map((g) => g.id)).toEqual(["g1", "g2"]);
+  });
+
+  it("is idempotent — does not duplicate an existing group id", () => {
+    const next = insertGroup(withGroup(), {
+      id: "g1",
+      board_id: "b1",
+      name: "Group 1",
+      color: "#0073ea",
+    } as never);
+    expect(next.groups).toHaveLength(1);
+  });
+
+  it("does not mutate the input cache (immutable)", () => {
+    const input = withGroup();
+    insertGroup(input, {
+      id: "g2",
+      board_id: "b1",
+      name: "Group 2",
+      color: "#0073ea",
+    } as never);
+    expect(input.groups).toHaveLength(1);
   });
 });

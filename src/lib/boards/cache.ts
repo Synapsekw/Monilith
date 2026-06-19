@@ -87,6 +87,12 @@ export function insertItem(cache: BoardCache, item: CacheItem): BoardCache {
   return { ...cache, items: [...cache.items, item] };
 }
 
+/** Append a group; idempotent on id. Immutable. */
+export function insertGroup(cache: BoardCache, group: CacheGroup): BoardCache {
+  if (cache.groups.some((g) => g.id === group.id)) return cache;
+  return { ...cache, groups: [...cache.groups, group] };
+}
+
 /** Append a dependency; idempotent on id. Immutable. */
 export function addDependency(
   cache: BoardCache,
