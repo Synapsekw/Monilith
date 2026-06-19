@@ -270,6 +270,9 @@ function KanbanColumnView({
 
   // Virtualize the card list so large columns don't render every card to the DOM.
   const scrollRef = useRef<HTMLDivElement>(null);
+  // React Compiler safely skips memoizing this component because useVirtualizer
+  // returns non-memoizable functions; that fallback is correct here.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: column.cards.length,
     getScrollElement: () => scrollRef.current,

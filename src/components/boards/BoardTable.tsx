@@ -207,6 +207,9 @@ function GroupSection({
   const [name, setName] = useState(group.name);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // React Compiler safely skips memoizing this component because useVirtualizer
+  // returns non-memoizable functions; that fallback is correct here.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
