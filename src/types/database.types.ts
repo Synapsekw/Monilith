@@ -1383,6 +1383,24 @@ export type Database = {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
       };
+      provision_account: {
+        Args: { p_org_name: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          slug: string;
+          timezone: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "organizations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       set_widget_layouts: {
         Args: { p_dashboard_id: string; p_layouts: Json };
         Returns: undefined;
