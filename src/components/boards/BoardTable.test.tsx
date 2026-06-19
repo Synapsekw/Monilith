@@ -457,6 +457,67 @@ function rollupPayload() {
   } as never;
 }
 
+function twoItemsPayload() {
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [],
+    items: [
+      {
+        id: "t1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task One",
+        position: 0,
+      },
+      {
+        id: "t2",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task Two",
+        position: 1,
+      },
+    ],
+    cellValues: [],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderTwoItems() {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardTable payload={twoItemsPayload()} selectedViewId="v1" />
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable item drag handle", () => {
+  it("renders a reorder handle for each top-level item", () => {
+    renderTwoItems();
+    expect(
+      screen.getByRole("button", { name: "Reorder Task One" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reorder Task Two" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("BoardTable rollup", () => {
   it("shows a summed rollup on the collapsed parent and the children on expand", () => {
     const qc = new QueryClient();

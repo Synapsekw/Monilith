@@ -608,6 +608,21 @@ function GroupSection({
     isDragging,
   } = useSortable({ id: group.id });
 
+  const itemSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  function handleItemDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const position = reorderPosition(
+      items.map((i) => ({ id: i.id, position: i.position })),
+      String(active.id),
+      String(over.id),
+    );
+    if (position !== null) controls.reorderItem(String(active.id), position);
+  }
+
   // React Compiler safely skips memoizing this component because useVirtualizer
   // returns non-memoizable functions; that fallback is correct here.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -722,59 +737,70 @@ function GroupSection({
       {!collapsed && (
         <>
           {items.length > 0 && (
-            <div
-              ref={scrollRef}
-              className="overflow-auto"
-              style={{ height: viewportHeight }}
+            <DndContext
+              sensors={itemSensors}
+              modifiers={[restrictToVerticalAxis]}
+              onDragEnd={handleItemDragEnd}
             >
-              <div
-                className="relative"
-                style={{ height: virtualizer.getTotalSize() }}
+              <SortableContext
+                items={items.map((i) => i.id)}
+                strategy={verticalListSortingStrategy}
               >
-                {virtualRows.map((vr) => {
-                  const item = items[vr.index];
-                  const children = childrenByParent.get(item.id) ?? [];
-                  const isExpanded = expanded.has(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      data-index={vr.index}
-                      ref={virtualizer.measureElement}
-                      className="absolute top-0 left-0 w-full"
-                      style={{ transform: `translateY(${vr.start}px)` }}
-                    >
-                      <ItemRow
-                        item={item}
-                        columns={columns}
-                        cellMap={cellMap}
-                        template={template}
-                        controls={controls}
-                        subitems={children}
-                        childCount={children.length}
-                        isExpanded={isExpanded}
-                        onToggle={() => onToggleExpand(item.id)}
-                        autoFocusRename={item.id === renamingItemId}
-                        onRenameSettled={onRenameItemSettled}
-                        onSubitemAdded={onSetRenamingItemId}
-                      />
-                      {isExpanded && children.length > 0 && (
-                        <SubitemBlock
-                          parentId={item.id}
-                          subitems={children}
-                          columns={columns}
-                          cellMap={cellMap}
-                          template={template}
-                          controls={controls}
-                          renamingItemId={renamingItemId}
-                          onRenameSettled={onRenameItemSettled}
-                          onAdded={(id) => onSetRenamingItemId(id)}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                <div
+                  ref={scrollRef}
+                  className="overflow-auto"
+                  style={{ height: viewportHeight }}
+                >
+                  <div
+                    className="relative"
+                    style={{ height: virtualizer.getTotalSize() }}
+                  >
+                    {virtualRows.map((vr) => {
+                      const item = items[vr.index];
+                      const children = childrenByParent.get(item.id) ?? [];
+                      const isExpanded = expanded.has(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          data-index={vr.index}
+                          ref={virtualizer.measureElement}
+                          className="absolute top-0 left-0 w-full"
+                          style={{ transform: `translateY(${vr.start}px)` }}
+                        >
+                          <ItemRow
+                            item={item}
+                            columns={columns}
+                            cellMap={cellMap}
+                            template={template}
+                            controls={controls}
+                            subitems={children}
+                            childCount={children.length}
+                            isExpanded={isExpanded}
+                            onToggle={() => onToggleExpand(item.id)}
+                            autoFocusRename={item.id === renamingItemId}
+                            onRenameSettled={onRenameItemSettled}
+                            onSubitemAdded={onSetRenamingItemId}
+                          />
+                          {isExpanded && children.length > 0 && (
+                            <SubitemBlock
+                              parentId={item.id}
+                              subitems={children}
+                              columns={columns}
+                              cellMap={cellMap}
+                              template={template}
+                              controls={controls}
+                              renamingItemId={renamingItemId}
+                              onRenameSettled={onRenameItemSettled}
+                              onAdded={(id) => onSetRenamingItemId(id)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
           <AddItemRow
             groupId={group.id}
@@ -815,6 +841,27 @@ function ItemRow({
   onRenameSettled: () => void;
   onSubitemAdded?: (id: string) => void;
 }) {
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const dragHandle = (
+    <button
+      type="button"
+      aria-label={`Reorder ${item.name}`}
+      {...attributes}
+      {...listeners}
+      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing"
+    >
+      <GripVertical className="size-3.5" />
+    </button>
+  );
+
   const chevron =
     childCount > 0 ? (
       <>
@@ -871,13 +918,27 @@ function ItemRow({
 
   return (
     <div
-      className="hover:bg-surface grid w-full border-b transition-colors"
-      style={{ height: ROW_HEIGHT, gridTemplateColumns: template }}
+      ref={setNodeRef}
+      className={cn(
+        "hover:bg-surface grid w-full border-b transition-colors",
+        isDragging && "relative z-10 shadow-lg",
+      )}
+      style={{
+        height: ROW_HEIGHT,
+        gridTemplateColumns: template,
+        transform: CSS.Translate.toString(transform),
+        transition,
+      }}
     >
       <NameCell
         item={item}
         controls={controls}
-        leading={chevron}
+        leading={
+          <>
+            {dragHandle}
+            {chevron}
+          </>
+        }
         trailing={trailing}
         autoFocusRename={autoFocusRename}
         onRenameSettled={onRenameSettled}
