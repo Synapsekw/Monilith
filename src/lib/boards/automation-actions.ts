@@ -8,7 +8,7 @@ import {
   deleteAutomationSchema,
 } from "@/lib/validations/automations";
 import { listAutomations, type Automation } from "@/lib/boards/queries";
-import type { Json } from "@/types/database.types";
+import type { Json, Tables } from "@/types/database.types";
 
 /**
  * Client-callable read wrapper around {@link listAutomations} so the
@@ -17,6 +17,28 @@ import type { Json } from "@/types/database.types";
  */
 export async function getAutomations(boardId: string): Promise<Automation[]> {
   return listAutomations(boardId);
+}
+
+export type AutomationRun = Tables<"automation_runs">;
+
+/**
+ * Client-callable read wrapper for automation run history. RLS scopes rows to
+ * the caller's org; the query is bounded (limit) and ordered by the indexed
+ * created_at desc.
+ */
+export async function getAutomationRuns(
+  automationId: string,
+  limit = 50,
+): Promise<AutomationRun[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("automation_runs")
+    .select("*")
+    .eq("automation_id", automationId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
 }
 
 type ActionResult<T = void> =
