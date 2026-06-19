@@ -41,3 +41,20 @@ describe("formatRunSummary", () => {
     expect(formatRunSummary("ran", [])).toMatch(/no action/i);
   });
 });
+
+describe("call_webhook outcome formatting", () => {
+  const cases: [string, string][] = [
+    ["queued", "webhook queued"],
+    ["delivered_200", "webhook delivered (200)"],
+    ["delivered_204", "webhook delivered (204)"],
+    ["failed_500", "webhook failed (500)"],
+    ["failed_404", "webhook failed (404)"],
+    ["failed_network", "webhook failed (no response)"],
+    ["blocked_unsafe_url", "webhook blocked: unsafe URL"],
+  ];
+  it.each(cases)("renders %s as %s", (outcome, expected) => {
+    expect(formatRunSummary("ran", [{ type: "call_webhook", outcome }])).toBe(
+      expected,
+    );
+  });
+});

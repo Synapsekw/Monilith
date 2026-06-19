@@ -27,9 +27,23 @@ const SET_OPTION: Record<string, string> = {
   skipped_equal: "status unchanged",
 };
 
+function describeWebhook(outcome: string): string {
+  if (outcome === "queued") return "webhook queued";
+  if (outcome === "failed_network") return "webhook failed (no response)";
+  if (outcome === "blocked_unsafe_url") return "webhook blocked: unsafe URL";
+  const m = /^(delivered|failed)_(\d{3})$/.exec(outcome);
+  if (m) {
+    return m[1] === "delivered"
+      ? `webhook delivered (${m[2]})`
+      : `webhook failed (${m[2]})`;
+  }
+  return `webhook: ${outcome}`;
+}
+
 function describeAction(a: RunActionOutcome): string {
   if (a.type === "notify") return NOTIFY[a.outcome] ?? a.outcome;
   if (a.type === "set_option") return SET_OPTION[a.outcome] ?? a.outcome;
+  if (a.type === "call_webhook") return describeWebhook(a.outcome);
   return `${a.type}: ${a.outcome}`;
 }
 
