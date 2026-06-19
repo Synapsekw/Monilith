@@ -9,11 +9,13 @@ const getAutomations = vi.fn();
 const createAutomation = vi.fn();
 const updateAutomation = vi.fn();
 const deleteAutomation = vi.fn();
+const getBoardAdminStatus = vi.fn();
 vi.mock("@/lib/boards/automation-actions", () => ({
   getAutomations: (...a: unknown[]) => getAutomations(...a),
   createAutomation: (...a: unknown[]) => createAutomation(...a),
   updateAutomation: (...a: unknown[]) => updateAutomation(...a),
   deleteAutomation: (...a: unknown[]) => deleteAutomation(...a),
+  getBoardAdminStatus: (...a: unknown[]) => getBoardAdminStatus(...a),
 }));
 
 import { AutomationsDialog } from "./AutomationsDialog";
@@ -96,12 +98,14 @@ describe("AutomationsDialog", () => {
     createAutomation.mockReset();
     updateAutomation.mockReset();
     deleteAutomation.mockReset();
+    getBoardAdminStatus.mockReset();
 
-    // Default: no automations, successful mutations.
+    // Default: no automations, successful mutations, non-admin.
     getAutomations.mockResolvedValue([]);
     createAutomation.mockResolvedValue({ ok: true, data: { id: "auto-1" } });
     updateAutomation.mockResolvedValue({ ok: true });
     deleteAutomation.mockResolvedValue({ ok: true });
+    getBoardAdminStatus.mockResolvedValue(false);
   });
 
   it("starts in list mode with a 'New automation' button", async () => {
@@ -271,6 +275,32 @@ describe("AutomationsDialog", () => {
       renderWithRule(2);
       expect(await screen.findByText(/2 days overdue/i)).toBeInTheDocument();
     });
+  });
+
+  it("passes canWebhook=true to the builder for an admin", async () => {
+    getBoardAdminStatus.mockResolvedValue(true);
+    renderDialog();
+    await userEvent.click(
+      await screen.findByRole("button", { name: /new automation/i }),
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: /call a webhook on status change/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the webhook button for a non-admin", async () => {
+    getBoardAdminStatus.mockResolvedValue(false);
+    renderDialog();
+    await userEvent.click(
+      await screen.findByRole("button", { name: /new automation/i }),
+    );
+    expect(
+      screen.queryByRole("button", {
+        name: /call a webhook on status change/i,
+      }),
+    ).toBeNull();
   });
 
   it("Cancel from build mode returns to list mode", async () => {

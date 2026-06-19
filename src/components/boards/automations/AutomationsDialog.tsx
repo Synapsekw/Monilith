@@ -26,6 +26,7 @@ import {
   createAutomation,
   deleteAutomation,
   getAutomations,
+  getBoardAdminStatus,
   updateAutomation,
 } from "@/lib/boards/automation-actions";
 import {
@@ -41,6 +42,7 @@ import {
   recipePersonAssignedNotify,
   recipeDateReachedSetOption,
   recipeDueSoonNotifyOwner,
+  recipeStatusChangedWebhook,
   type Draft,
 } from "@/components/boards/automations/recipes";
 
@@ -130,6 +132,9 @@ function summarize(
         ? `notify the owner (${colName(columns, a.recipient.peopleColumnId)})`
         : `notify ${memberName(members, a.recipient.userId)}`;
     }
+    if (a.type === "call_webhook") {
+      return "call a webhook";
+    }
     return `set ${colName(columns, a.columnId)} to ${optName(
       columns,
       a.columnId,
@@ -164,6 +169,13 @@ export function AutomationsDialog({
     enabled: open,
     staleTime: 30_000,
     queryFn: () => getAutomations(boardId),
+  });
+
+  const { data: isAdmin = false } = useQuery({
+    queryKey: ["board-admin", boardId] as const,
+    enabled: open,
+    staleTime: 60_000,
+    queryFn: () => getBoardAdminStatus(boardId),
   });
 
   const create = useMutation({
@@ -274,7 +286,8 @@ export function AutomationsDialog({
               statusColumns.length > 0 ||
               peopleColumns.length > 0 ||
               canDateReachedSetOption ||
-              canDueSoonNotify) &&
+              canDueSoonNotify ||
+              (isAdmin && statusColumns.length > 0)) &&
             !initialDraft ? (
               <div className="flex flex-col gap-2">
                 <p className="text-muted-foreground text-xs font-medium">
@@ -381,6 +394,23 @@ export function AutomationsDialog({
                       Notify owner before due date
                     </Button>
                   ) : null}
+                  {isAdmin && statusColumns.length > 0 ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        startBuild(
+                          recipeStatusChangedWebhook(
+                            statusColumns[0].id,
+                            null,
+                            "",
+                          ),
+                        )
+                      }
+                    >
+                      Call a webhook on status change
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -396,6 +426,7 @@ export function AutomationsDialog({
               columns={columns}
               members={members}
               initial={initialDraft}
+              canWebhook={isAdmin}
               onSubmit={(draft) => create.mutate(draft)}
               onCancel={() => {
                 setMode("list");

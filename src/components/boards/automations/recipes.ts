@@ -94,6 +94,22 @@ export function recipeDateReachedSetOption(
   };
 }
 
+/** "When status changes (to X), POST to a webhook." optionId null = any change. */
+export function recipeStatusChangedWebhook(
+  statusColumnId: string,
+  optionId: string | null,
+  url: string,
+): Draft {
+  return {
+    trigger: {
+      type: "status_changed",
+      columnId: statusColumnId,
+      toOptionId: optionId,
+    },
+    actions: [{ type: "call_webhook", url }],
+  };
+}
+
 /**
  * "X days before a date column is reached, notify the item owner."
  * `daysBefore` is the number of days before (stored as a negative offset).
