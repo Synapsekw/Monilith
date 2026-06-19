@@ -53,7 +53,54 @@
 
 ---
 
+## Execution waves & parallelization
+
+Tasks are **not** a strict linear chain. The dependency graph (← = "depends on"):
+
+```
+Wave 1 (independent — 5 agents in parallel):
+  Task 1  migration + integration test      (supabase/migrations + new test)
+  Task 2  zod schemas                        (board-actions.ts)
+  Task 3  removeItem cache helper            (cache.ts)
+  Task 4  bucketItems helper                 (item-tree.ts — new)
+  Task 5  rollupCell helper                  (rollup.ts — new)
+
+Wave 2 (3 agents in parallel; each waits only on its Wave-1 dep):
+  Task 6→7  actions ← Task 2, then mutations ← Task 6 + Task 3   (actions.ts → use-board-mutations.ts)
+  Task 8    RollupCell component ← Task 5                          (RollupCell.tsx — new)
+  Task 9    BoardTable refactor ← Task 4                           (BoardTable.tsx)
+
+Wave 3:  Task 10  nesting       ← Task 7 + Task 9   (BoardTable.tsx)
+Wave 4:  Task 11  rollup cells  ← Task 10 + 5 + 8   (BoardTable.tsx)
+Wave 5:  Task 12  reorder       ← Task 10 + Task 7  (BoardTable.tsx)
+Wave 6:  Task 13  e2e           ← Task 10 + 11 + 12
+Wave 7:  Task 14  gate + docs   ← all
+```
+
+**Why the tail is sequential:** Tasks 9–12 all edit `BoardTable.tsx` (one file). They **cannot** be parallelized with each other — concurrent edits to the same file in this shared checkout would clobber. They run back-to-back. Task 6 and Task 7 are different files but tightly coupled (7 imports 6), so a **single agent should do Task 6 then Task 7** in sequence — that keeps Wave 2 a clean 3-way fan-out instead of adding a wave for Task 7.
+
+**Recommended dispatch:**
+
+- **Wave 1:** fan out 5 subagents (Tasks 1–5). Fully independent files.
+- **Wave 2:** after Wave 1 lands, fan out 3 subagents — one doing Tasks 6+7, one Task 8, one Task 9.
+- **Waves 3–7:** sequential single subagents (Tasks 10 → 11 → 12 → 13 → 14).
+
+So the 14 tasks collapse to **7 waves** (~5× then ~3× parallelism up front).
+
+**Shared-checkout safety (mandatory — see `gotcha-15` + `develop-red-concurrent-work` memory):**
+
+- Parallel agents in the same wave must touch **disjoint files** (the waves above guarantee this) — never two agents in one file.
+- Because this is **one checkout / one branch**, concurrent `git commit` (and the `lint-staged` pre-commit stash) will race. Choose one:
+  - **(a) Worktree isolation (recommended):** dispatch each parallel agent with its own git worktree (`isolation: "worktree"`), so each has an isolated index; the orchestrator integrates results after the wave. Best when a real concurrent session may also be on `develop`.
+  - **(b) Stage-only + serialized commit:** parallel agents write + run their own tests but do **not** commit; the orchestrator commits each task sequentially after the wave completes.
+- **Task 1's cloud migration apply is a global side effect** — only that agent applies it, it needs explicit push authorization, and it is the only Wave-1 task that touches `src/types/database.types.ts` (regen), so no types-file race.
+- A concurrent session currently has **3 unpushed dashboards commits** on `develop`; verify your own scope (`npx tsc --noEmit` + `npx eslint` on your files) before claiming green, and don't "fix" red files outside this plan's scope.
+
+---
+
 ## Task 1: Migration — `parent_id` index + single-level guard trigger
+
+> **Wave 1 · independent** (parallel with Tasks 2–5). Sole owner of the cloud-migration apply + `database.types.ts` regen.
 
 **Files:**
 
@@ -318,6 +365,8 @@ git commit -m "feat(boards): subitems single-level guard trigger + parent_id ind
 
 ## Task 2: Zod schemas for subitem actions
 
+> **Wave 1 · independent** (parallel with Tasks 1, 3–5).
+
 **Files:**
 
 - Modify: `src/lib/validations/board-actions.ts`
@@ -408,6 +457,8 @@ git commit -m "feat(boards): zod schemas for addSubitem/deleteItem/reorderItem"
 
 ## Task 3: `removeItem` cache helper
 
+> **Wave 1 · independent** (parallel with Tasks 1–2, 4–5).
+
 **Files:**
 
 - Modify: `src/lib/boards/cache.ts`
@@ -491,6 +542,8 @@ git commit -m "feat(boards): removeItem cache helper (cascades subitems + cells)
 ---
 
 ## Task 4: `bucketItems` pure helper (top-level + children map)
+
+> **Wave 1 · independent** (parallel with Tasks 1–3, 5).
 
 **Files:**
 
@@ -598,6 +651,8 @@ git commit -m "feat(boards): bucketItems helper (top-level + children-by-parent)
 ---
 
 ## Task 5: `rollupCell` pure helper
+
+> **Wave 1 · independent** (parallel with Tasks 1–4).
 
 **Files:**
 
@@ -833,6 +888,8 @@ git commit -m "feat(boards): rollupCell helper (sum/distribution/span/people)"
 
 ## Task 6: Server actions — `addSubitem`, `deleteItem`, `reorderItem`
 
+> **Wave 2 · depends on Task 2.** Parallel with Tasks 8 + 9. **Same agent should continue straight into Task 7** (different file, but 7 imports 6).
+
 **Files:**
 
 - Modify: `src/lib/boards/actions.ts`
@@ -1003,6 +1060,8 @@ git commit -m "feat(boards): addSubitem/deleteItem/reorderItem server actions"
 
 ## Task 7: Mutations — wire `addSubitem`, `deleteItem`, `reorderItem`
 
+> **Wave 2 (run by the Task 6 agent, immediately after Task 6) · depends on Task 6 + Task 3.** Different file from 8/9, so still parallel with them.
+
 **Files:**
 
 - Modify: `src/lib/boards/use-board-mutations.ts`
@@ -1136,6 +1195,8 @@ git commit -m "feat(boards): addSubitem/deleteItem/reorderItem mutations"
 ---
 
 ## Task 8: `RollupCell` read-only renderer
+
+> **Wave 2 · depends on Task 5.** Parallel with Tasks 6/7 + 9 (new file, disjoint).
 
 **Files:**
 
@@ -1272,6 +1333,8 @@ git commit -m "feat(boards): RollupCell read-only summary renderer"
 
 ## Task 9: BoardTable — bucket items + dynamic-height virtualization (refactor, behavior-preserving)
 
+> **Wave 2 · depends on Task 4.** Parallel with Tasks 6/7 + 8. **First and only Wave-2 task in `BoardTable.tsx`** — it opens the serial BoardTable chain (Tasks 9 → 10 → 11 → 12), so no other agent may touch `BoardTable.tsx` while this runs.
+
 **Files:**
 
 - Modify: `src/components/boards/BoardTable.tsx`
@@ -1392,6 +1455,8 @@ git commit -m "refactor(boards): bucket items + dynamic-height virtualization in
 ---
 
 ## Task 10: BoardTable — nesting (chevron, subitem sub-block, add-subitem, delete menu)
+
+> **Wave 3 · serial · depends on Task 7 + Task 9.** Edits `BoardTable.tsx` — must run after Task 9 lands; not parallel with 11/12.
 
 **Files:**
 
@@ -1792,6 +1857,8 @@ git commit -m "feat(boards): nested subitems in table (expand, add, delete)"
 
 ## Task 11: BoardTable — collapsed-parent rollup cells
 
+> **Wave 4 · serial · depends on Task 10 + Task 5 + Task 8.** Edits `BoardTable.tsx`.
+
 **Files:**
 
 - Modify: `src/components/boards/BoardTable.tsx`
@@ -1958,6 +2025,8 @@ git commit -m "feat(boards): rollup summary on collapsed parent rows"
 
 ## Task 12: BoardTable — subitem drag-reorder (within a parent)
 
+> **Wave 5 · serial · depends on Task 10 + Task 7.** Edits `BoardTable.tsx`.
+
 **Files:**
 
 - Modify: `src/components/boards/BoardTable.tsx`
@@ -2034,6 +2103,8 @@ git commit -m "feat(boards): drag-reorder subitems within a parent"
 
 ## Task 13: End-to-end test
 
+> **Wave 6 · depends on Tasks 10 + 11 + 12** (the full UI).
+
 **Files:**
 
 - Create: `e2e/subitems.spec.ts`
@@ -2080,6 +2151,8 @@ git commit -m "test(boards): e2e subitems create/nest/reorder/rollup/delete"
 ---
 
 ## Task 14: Final verification gate + docs
+
+> **Wave 7 · depends on all.**
 
 **Files:**
 
