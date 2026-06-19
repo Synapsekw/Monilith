@@ -4,10 +4,13 @@ import {
   createGroupSchema,
   createItemSchema,
   deleteBoardSchema,
+  deleteGroupSchema,
   renameBoardSchema,
   renameGroupSchema,
   renameItemSchema,
+  reorderGroupSchema,
   resizeNameColumnSchema,
+  updateGroupColorSchema,
 } from "./board-actions";
 import { upsertCellSchema, clearCellSchema } from "./board-actions";
 
@@ -150,5 +153,35 @@ describe("cell action schemas", () => {
     expect(clearCellSchema.safeParse({ itemId: "x", columnId }).success).toBe(
       false,
     );
+  });
+});
+
+describe("group management schemas", () => {
+  const groupId = "11111111-1111-4111-8111-111111111111";
+
+  it("deleteGroup requires a uuid groupId", () => {
+    expect(deleteGroupSchema.safeParse({ groupId }).success).toBe(true);
+    expect(deleteGroupSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("reorderGroup requires a numeric position", () => {
+    expect(
+      reorderGroupSchema.safeParse({ groupId, position: 1.5 }).success,
+    ).toBe(true);
+    expect(
+      reorderGroupSchema.safeParse({ groupId, position: "x" }).success,
+    ).toBe(false);
+  });
+
+  it("updateGroupColor requires a 6-digit hex color", () => {
+    expect(
+      updateGroupColorSchema.safeParse({ groupId, color: "#00c875" }).success,
+    ).toBe(true);
+    expect(
+      updateGroupColorSchema.safeParse({ groupId, color: "red" }).success,
+    ).toBe(false);
+    expect(
+      updateGroupColorSchema.safeParse({ groupId, color: "#fff" }).success,
+    ).toBe(false);
   });
 });

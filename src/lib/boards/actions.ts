@@ -10,8 +10,11 @@ import {
   createGroupSchema,
   createItemSchema,
   deleteBoardSchema,
+  deleteGroupSchema,
   renameBoardSchema,
   renameGroupSchema,
+  reorderGroupSchema,
+  updateGroupColorSchema,
   renameItemSchema,
   upsertCellSchema,
   createColumnSchema,
@@ -182,6 +185,72 @@ export async function createGroup(input: {
 
   revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: { group: data } };
+}
+
+export async function reorderGroup(input: {
+  groupId: string;
+  position: number;
+}): Promise<ActionResult> {
+  const parsed = reorderGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("groups")
+    .update({ position: parsed.data.position })
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+export async function updateGroupColor(input: {
+  groupId: string;
+  color: string;
+}): Promise<ActionResult> {
+  const parsed = updateGroupColorSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("groups")
+    .update({ color: parsed.data.color })
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+export async function deleteGroup(input: {
+  groupId: string;
+}): Promise<ActionResult> {
+  const parsed = deleteGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  // items cascade via the group_id FK (on delete cascade).
+  const { data, error } = await supabase
+    .from("groups")
+    .delete()
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
 }
 
 /** Create an item via RPC (server derives org_id/board_id and position). Returns the full created item row. */

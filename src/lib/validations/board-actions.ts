@@ -16,6 +16,15 @@ export const renameBoardSchema = z.object({ boardId: uuid, name });
 export const deleteBoardSchema = z.object({ boardId: uuid });
 export const createGroupSchema = z.object({ boardId: uuid, name });
 export const renameGroupSchema = z.object({ groupId: uuid, name });
+export const deleteGroupSchema = z.object({ groupId: uuid });
+export const reorderGroupSchema = z.object({
+  groupId: uuid,
+  position: z.number(),
+});
+export const updateGroupColorSchema = z.object({
+  groupId: uuid,
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid color"),
+});
 export const createItemSchema = z.object({ groupId: uuid, name: itemName });
 export const renameItemSchema = z.object({ itemId: uuid, name: itemName });
 
