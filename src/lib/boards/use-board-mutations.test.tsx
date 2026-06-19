@@ -82,6 +82,7 @@ function seedCache(qc: QueryClient): BoardCache {
         created_at: "2026-06-16T00:00:00Z",
       } as CacheDependency,
     ],
+    attachments: [],
   };
   qc.setQueryData(boardKey("b1"), cache);
   return cache;
@@ -342,6 +343,7 @@ function seedGroups(qc: QueryClient): void {
     items: [{ id: "i1", board_id: "b1", group_id: "g1", name: "One" }],
     cellValues: [],
     dependencies: [],
+    attachments: [],
   } as never);
 }
 

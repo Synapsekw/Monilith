@@ -16,7 +16,11 @@ import {
   replaceItem,
   replaceBoard,
   upsertCellValue,
+  prependColumnFile,
+  removeColumnFile,
+  filesForCell,
   type BoardCache,
+  type CacheAttachment,
   type CacheColumn,
   type CacheDependency,
 } from "./cache";
@@ -40,6 +44,7 @@ function baseCache(): BoardCache {
       } as never,
     ],
     dependencies: [],
+    attachments: [],
   };
 }
 
@@ -254,6 +259,7 @@ function cache(columns: CacheColumn[]): BoardCache {
       { item_id: "i", column_id: "a" } as BoardCache["cellValues"][number],
     ],
     dependencies: [],
+    attachments: [],
   };
 }
 
@@ -420,6 +426,7 @@ describe("removeGroup", () => {
         } as never,
       ],
       dependencies: [],
+      attachments: [],
     };
   }
 
@@ -465,5 +472,51 @@ describe("removeItem", () => {
     const next = removeItem(cache, "i1");
     expect(next.items.some((i) => i.id === "sub1")).toBe(false);
     expect(next.cellValues.some((c) => c.item_id === "sub1")).toBe(false);
+  });
+});
+
+function attachment(
+  id: string,
+  over: Partial<CacheAttachment> = {},
+): CacheAttachment {
+  return {
+    id,
+    org_id: "o1",
+    board_id: "b1",
+    item_id: "i1",
+    column_id: "c1",
+    uploaded_by: "u1",
+    storage_path: `o1/b1/i1/c1/${id}.txt`,
+    file_name: `${id}.txt`,
+    mime_type: "text/plain",
+    size_bytes: 4,
+    created_at: "2026-06-19T00:00:00Z",
+    ...over,
+  } as CacheAttachment;
+}
+
+describe("files-column attachment cache mutators", () => {
+  it("prependColumnFile adds newest-first and de-dupes by id", () => {
+    let c = prependColumnFile(baseCache(), attachment("a1"));
+    expect(c.attachments.map((a) => a.id)).toEqual(["a1"]);
+    c = prependColumnFile(c, attachment("a2"));
+    expect(c.attachments.map((a) => a.id)).toEqual(["a2", "a1"]); // prepended
+    c = prependColumnFile(c, attachment("a1"));
+    expect(c.attachments).toHaveLength(2); // de-dupe
+  });
+
+  it("removeColumnFile removes by id (no-op when absent)", () => {
+    const seeded = prependColumnFile(baseCache(), attachment("a1"));
+    expect(removeColumnFile(seeded, "a1").attachments).toHaveLength(0);
+    expect(removeColumnFile(seeded, "nope").attachments).toHaveLength(1);
+  });
+
+  it("filesForCell filters by item + column", () => {
+    let c = prependColumnFile(baseCache(), attachment("a1"));
+    c = prependColumnFile(c, attachment("a2", { column_id: "c2" }));
+    c = prependColumnFile(c, attachment("a3", { item_id: "i2" }));
+    expect(filesForCell(c, "i1", "c1").map((a) => a.id)).toEqual(["a1"]);
+    expect(filesForCell(c, "i1", "c2").map((a) => a.id)).toEqual(["a2"]);
+    expect(filesForCell(c, "i9", "c1")).toHaveLength(0);
   });
 });

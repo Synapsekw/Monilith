@@ -200,6 +200,7 @@ function statusPayload(): BoardPayload {
       { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
     ],
     dependencies: [],
+    attachments: [],
   };
 }
 

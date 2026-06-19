@@ -6,6 +6,7 @@ export type CacheItem = Tables<"items">;
 export type CacheColumn = Tables<"columns">;
 export type CacheCellValue = Tables<"cell_values">;
 export type CacheDependency = Tables<"item_dependencies">;
+export type CacheAttachment = Tables<"attachments">;
 
 /** Client-side mirror of the server BoardPayload shape (no server-only deps). */
 export type BoardCache = {
@@ -15,6 +16,7 @@ export type BoardCache = {
   items: CacheItem[];
   cellValues: CacheCellValue[];
   dependencies: CacheDependency[];
+  attachments: CacheAttachment[];
 };
 
 /** Stable lookup key for a cell value (item + column). */
@@ -167,4 +169,32 @@ export function removeColumn(cache: BoardCache, columnId: string): BoardCache {
     columns: cache.columns.filter((c) => c.id !== columnId),
     cellValues: cache.cellValues.filter((c) => c.column_id !== columnId),
   };
+}
+
+/** Prepend a files-column attachment; idempotent on id (newest-first). Immutable. */
+export function prependColumnFile(
+  cache: BoardCache,
+  a: CacheAttachment,
+): BoardCache {
+  if (cache.attachments.some((x) => x.id === a.id)) return cache;
+  return { ...cache, attachments: [a, ...cache.attachments] };
+}
+
+/** Remove a files-column attachment by id. No-op if absent. Immutable. */
+export function removeColumnFile(cache: BoardCache, id: string): BoardCache {
+  return {
+    ...cache,
+    attachments: cache.attachments.filter((a) => a.id !== id),
+  };
+}
+
+/** All attachments for a given (item, files-column) cell. */
+export function filesForCell(
+  cache: BoardCache,
+  itemId: string,
+  columnId: string,
+): CacheAttachment[] {
+  return cache.attachments.filter(
+    (a) => a.item_id === itemId && a.column_id === columnId,
+  );
 }
