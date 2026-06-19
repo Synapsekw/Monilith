@@ -4,8 +4,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
 
 const createGroup = vi.fn();
+const updateGroupColor = vi.fn();
+const deleteGroup = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   createGroup: (...a: unknown[]) => createGroup(...a),
+  updateGroupColor: (...a: unknown[]) => updateGroupColor(...a),
+  deleteGroup: (...a: unknown[]) => deleteGroup(...a),
 }));
 
 // dependency-actions is a server module pulled in transitively by
@@ -53,6 +57,8 @@ function renderBoard() {
 
 beforeEach(() => {
   createGroup.mockReset();
+  updateGroupColor.mockReset();
+  deleteGroup.mockReset();
 });
 
 describe("BoardTable add group", () => {
@@ -82,5 +88,36 @@ describe("BoardTable add group", () => {
     );
     // The new group lands in inline rename mode, pre-filled with its default name.
     expect(await screen.findByDisplayValue("Group 2")).toBeInTheDocument();
+  });
+});
+
+describe("BoardTable group menu", () => {
+  it("sets a group color from the palette", async () => {
+    updateGroupColor.mockResolvedValue({ ok: true, data: undefined });
+    renderBoard();
+
+    fireEvent.click(screen.getByLabelText("Group 1 group menu"));
+    fireEvent.click(screen.getByLabelText("Set color #00c875"));
+
+    await waitFor(() =>
+      expect(updateGroupColor).toHaveBeenCalledWith({
+        groupId: "g1",
+        color: "#00c875",
+      }),
+    );
+  });
+
+  it("deletes a group after confirmation", async () => {
+    deleteGroup.mockResolvedValue({ ok: true, data: undefined });
+    renderBoard();
+
+    fireEvent.click(screen.getByLabelText("Group 1 group menu"));
+    fireEvent.click(screen.getByText("Delete"));
+    expect(deleteGroup).not.toHaveBeenCalled(); // dialog open, not confirmed
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(deleteGroup).toHaveBeenCalledWith({ groupId: "g1" }),
+    );
   });
 });

@@ -2,7 +2,13 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronRight, Maximize2, Plus } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Maximize2,
+  MoreHorizontal,
+  Plus,
+} from "lucide-react";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
@@ -22,6 +28,25 @@ import {
   fitNameColumnWidth,
   NAME_COL_MAX,
 } from "@/lib/boards/name-column-width";
+import { cn } from "@/lib/utils";
+import { GROUP_COLORS } from "@/lib/boards/group-colors";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -99,6 +124,8 @@ export function BoardTable({
     renameItem: renameItemMutation,
     renameGroup,
     addGroup,
+    setGroupColor,
+    deleteGroup,
   } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
@@ -220,6 +247,8 @@ export function BoardTable({
                 nameWidth={nameWidth}
                 autoFocusRename={group.id === renameGroupId}
                 onRenameSettled={() => setRenameGroupId(null)}
+                onSetColor={(color) => setGroupColor(group.id, color)}
+                onDelete={() => deleteGroup(group.id)}
               />
             ))
           )}
@@ -291,6 +320,91 @@ function NameColumnHeader({
   );
 }
 
+function GroupMenu({
+  group,
+  onRename,
+  onSetColor,
+  onDelete,
+}: {
+  group: Group;
+  onRename: () => void;
+  onSetColor: (color: string) => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${group.name} group menu`}
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-auto grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onSelect={onRename}>Rename</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <div className="px-2 py-1.5">
+            <p className="text-muted-foreground mb-1.5 text-xs">Color</p>
+            <div className="grid grid-cols-6 gap-1.5">
+              {GROUP_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={`Set color ${c}`}
+                  onClick={() => {
+                    onSetColor(c);
+                    setOpen(false);
+                  }}
+                  style={{ backgroundColor: c }}
+                  className={cn(
+                    "focus-visible:ring-ring size-5 rounded-full focus-visible:ring-2 focus-visible:outline-none",
+                    group.color.toLowerCase() === c.toLowerCase() &&
+                      "ring-foreground ring-offset-background ring-2 ring-offset-1",
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-destructive"
+            onSelect={() => setConfirming(true)}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{group.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the group and all of its items on this
+              board. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 text-white"
+              onClick={onDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 function GroupSection({
   group,
   items,
@@ -302,6 +416,8 @@ function GroupSection({
   nameWidth,
   autoFocusRename,
   onRenameSettled,
+  onSetColor,
+  onDelete,
 }: {
   group: Group;
   items: Item[];
@@ -313,6 +429,8 @@ function GroupSection({
   nameWidth: number;
   autoFocusRename: boolean;
   onRenameSettled: () => void;
+  onSetColor: (color: string) => void;
+  onDelete: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(autoFocusRename);
@@ -350,7 +468,7 @@ function GroupSection({
     <section>
       {/* Colored band header — group.color tints the left rail + label. */}
       <div
-        className="bg-surface hover:bg-accent sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-sm font-semibold transition-colors"
+        className="group/grouphdr bg-surface hover:bg-accent sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-sm font-semibold transition-colors"
         style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
       >
         <button
@@ -402,6 +520,12 @@ function GroupSection({
         <span className="text-muted-foreground text-xs font-normal">
           {items.length}
         </span>
+        <GroupMenu
+          group={group}
+          onRename={openRename}
+          onSetColor={onSetColor}
+          onDelete={onDelete}
+        />
       </div>
 
       {!collapsed && (
