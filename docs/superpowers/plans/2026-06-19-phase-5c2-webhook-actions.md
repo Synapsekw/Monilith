@@ -446,7 +446,11 @@ end; $$;
 create or replace function public.tg_automations_guard_webhook()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+  -- Boundary applies only to authenticated end-users. A null auth.uid() means a
+  -- trusted server context (service-role key, cron, SECURITY DEFINER RPC), which
+  -- is server-only and never reaches the browser — allow it through.
   if new.actions @> '[{"type":"call_webhook"}]'::jsonb
+     and (select auth.uid()) is not null
      and not public.has_org_role(new.org_id, array['owner','admin']::public.org_role[]) then
     raise exception 'Webhook actions require an organization admin'
       using errcode = '42501';
@@ -680,7 +684,8 @@ it("blocks an unsafe url without enqueuing", async () => {
     trigger: { type: "status_changed", columnId: colSId, toOptionId: null },
     actions: [{ type: "call_webhook", url: "http://10.0.0.1/x" }], // http + private
   }).select("id").single();
-  // NOTE: inserted as admin (service role) to bypass the admin-gate trigger for this engine test.
+  // Inserted via the service-role `admin` client: auth.uid() is null, so the
+  // admin-gate trigger allows it (the trigger only blocks authenticated non-admins).
 
   const itemId = /* fresh item */;
   await userAAnon.from("cell_values").upsert({
