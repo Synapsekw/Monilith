@@ -23,6 +23,7 @@ vi.mock("@/lib/boards/queries", () => ({ listBoards: () => listBoards() }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: () => ({ select: async () => ({ data: [] }) }),
+    rpc: async () => ({ data: false, error: null }),
   }),
 }));
 vi.mock("@/components/landing/monolith-hero", () => ({
