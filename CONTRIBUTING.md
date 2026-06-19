@@ -59,6 +59,25 @@ type(optional-scope): short imperative summary
 - **Scopes** (free-form): `auth`, `db`, `tenancy`, `boards`, `vault`, `ci`, …
 - Enforced locally (Husky `commit-msg`) and on PRs (commitlint job). Config: `commitlint.config.mjs`.
 
+### Changelog entries (`/updates`)
+
+The public `/updates` page is generated from opt-in git trailers — no manual
+list to maintain. To surface a change to users, add a trailer to that commit's
+body:
+
+```
+Changelog: <kind> | <title> | <description>
+```
+
+- `kind` is one of `new`, `improved`, `fixed`.
+- `title` is required; `description` is optional (`Changelog: new | Board automations` is valid).
+- Use **user-facing** wording — no scopes, milestone codes (e.g. `(5b-1)`), or file names.
+- The entry's date is the commit's author date.
+
+After adding or changing a trailer, run `pnpm changelog:gen` and commit the
+updated `src/lib/changelog/generated.ts`. CI (on develop) fails if it is stale.
+Pre-convention history lives in `src/lib/changelog/seed.ts`.
+
 ## Code style
 
 - TypeScript **strict**; avoid `any` (justify when unavoidable). Validate inputs with **Zod** at boundaries.
