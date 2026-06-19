@@ -72,7 +72,17 @@ async function setUserBan(
   return ok();
 }
 
-export const platformDeactivateUser = (input: unknown) =>
-  setUserBan(input, true, "platform.user_deactivated");
-export const platformReactivateUser = (input: unknown) =>
-  setUserBan(input, false, "platform.user_reactivated");
+// Server Actions in a "use server" module must be async function declarations
+// (Turbopack rejects const-assigned arrow exports). Keep these as thin async
+// wrappers around the shared setUserBan helper.
+export async function platformDeactivateUser(
+  input: unknown,
+): Promise<ActionResult> {
+  return setUserBan(input, true, "platform.user_deactivated");
+}
+
+export async function platformReactivateUser(
+  input: unknown,
+): Promise<ActionResult> {
+  return setUserBan(input, false, "platform.user_reactivated");
+}
