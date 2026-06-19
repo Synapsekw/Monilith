@@ -34,6 +34,28 @@ export const automationActionSchema = z.discriminatedUnion("type", [
     columnId: z.string().uuid(),
     optionId: z.string().min(1),
   }),
+  z.object({
+    type: z.literal("call_webhook"),
+    url: z
+      .string()
+      .url()
+      .refine((u) => u.startsWith("https://"), {
+        message: "Webhook URL must use https://",
+      }),
+    authHeader: z
+      .object({
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .max(128)
+          .regex(/^[A-Za-z0-9-]+$/, {
+            message: "Header name may contain letters, digits, and dashes only",
+          }),
+        value: z.string().min(1).max(2048),
+      })
+      .optional(),
+  }),
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;
 

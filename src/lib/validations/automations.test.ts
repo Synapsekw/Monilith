@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   automationTriggerSchema,
   createAutomationSchema,
+  automationActionSchema,
 } from "@/lib/validations/automations";
 
 const COL = "00000000-0000-4000-8000-000000000001";
@@ -124,6 +125,42 @@ describe("date_reached trigger", () => {
     const r = automationTriggerSchema.safeParse({
       type: "date_reached",
       offsetDays: 0,
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("call_webhook action", () => {
+  it("accepts an https url with no auth header", () => {
+    const r = automationActionSchema.safeParse({
+      type: "call_webhook",
+      url: "https://hooks.example.com/abc",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts an optional auth header", () => {
+    const r = automationActionSchema.safeParse({
+      type: "call_webhook",
+      url: "https://hooks.example.com/abc",
+      authHeader: { name: "Authorization", value: "Bearer xyz" },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects a non-https url", () => {
+    const r = automationActionSchema.safeParse({
+      type: "call_webhook",
+      url: "http://hooks.example.com/abc",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects an auth header name with illegal characters", () => {
+    const r = automationActionSchema.safeParse({
+      type: "call_webhook",
+      url: "https://hooks.example.com/abc",
+      authHeader: { name: "Bad Header!", value: "x" },
     });
     expect(r.success).toBe(false);
   });
