@@ -34,7 +34,7 @@ export async function platformSetOrgRole(
       return fail("Can't demote the last owner.");
     return fail("Could not change that role.");
   }
-  revalidatePath(`/admin/${parsed.data.orgId}`);
+  revalidatePath(`/admin/organizations/${parsed.data.orgId}`);
   return ok();
 }
 

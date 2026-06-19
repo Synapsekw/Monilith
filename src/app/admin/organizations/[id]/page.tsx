@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requirePlatformAdmin } from "@/lib/platform/guard";
@@ -9,13 +10,12 @@ export const metadata = { title: "Platform admin · organization" };
 export default async function AdminOrgPage({
   params,
 }: {
-  params: Promise<{ orgId: string }>;
+  params: Promise<{ id: string }>;
 }) {
   const me = await requirePlatformAdmin();
-  const { orgId } = await params;
+  const { id: orgId } = await params;
   const supabase = await createClient();
 
-  // get_org_members passes its gate via is_platform_admin() even cross-tenant.
   const { data: members } = await supabase.rpc("get_org_members", {
     p_org_id: orgId,
   });
@@ -29,9 +29,15 @@ export default async function AdminOrgPage({
     .limit(50);
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <header>
-        <h1 className="text-foreground font-heading text-xl font-semibold tracking-tight">
+        <Link
+          href="/admin/organizations"
+          className="text-primary text-xs font-medium"
+        >
+          ← Organizations
+        </Link>
+        <h1 className="text-foreground font-heading mt-2 text-xl font-semibold tracking-tight">
           Organization members
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">
@@ -39,9 +45,6 @@ export default async function AdminOrgPage({
         </p>
       </header>
 
-      {/* mode="platform" → canManage is always true; currentUserRole is unused
-          for gating but required by the prop type. The RPC's is_platform_admin()
-          gate + last-owner check are the real boundary. */}
       <MembersTable
         orgId={orgId}
         members={members}
