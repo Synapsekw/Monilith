@@ -276,7 +276,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
       expect(runs, "run row should appear").not.toBeNull();
       expect(runs!.length, "exactly 1 run row").toBe(1);
 
-      const run = runs![0] as {
+      const run = runs![0] as unknown as {
         trigger_type: string;
         status: string;
         actions: { type: string; outcome: string }[];
@@ -350,7 +350,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
         return rows.length >= 1 ? rows : null;
       });
       expect(runs1, "first run row").not.toBeNull();
-      const firstRun = runs1![0] as {
+      const firstRun = runs1![0] as unknown as {
         actions: { type: string; outcome: string }[];
       };
       expect(firstRun.actions[0].outcome, "first fire outcome").toBe("set");
@@ -366,7 +366,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
       });
       expect(runs2, "second run row").not.toBeNull();
       // runs are ordered newest first, so runs2[0] is the second fire
-      const secondRun = runs2![0] as {
+      const secondRun = runs2![0] as unknown as {
         actions: { type: string; outcome: string }[];
       };
       expect(secondRun.actions[0].outcome, "second fire outcome").toBe(
