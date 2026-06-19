@@ -33,6 +33,7 @@ import {
   columnOptions,
   type BuilderMember,
 } from "@/components/boards/automations/AutomationBuilder";
+import { RecentRuns } from "./RecentRuns";
 import {
   recipeNotifyOwner,
   recipeSetOption,
@@ -416,52 +417,55 @@ export function AutomationsDialog({
                 rules.map((rule) => (
                   <div
                     key={rule.id}
-                    className="bg-surface flex items-center gap-3 rounded-md border p-3"
+                    className="bg-surface flex flex-col gap-2 rounded-md border p-3"
                   >
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={rule.enabled}
-                      aria-label={
-                        rule.enabled
-                          ? "Disable automation"
-                          : "Enable automation"
-                      }
-                      onClick={() =>
-                        toggle.mutate({ id: rule.id, enabled: !rule.enabled })
-                      }
-                      className={cn(
-                        "focus-visible:ring-ring relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                        rule.enabled ? "bg-primary" : "bg-muted",
-                      )}
-                    >
-                      <span
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={rule.enabled}
+                        aria-label={
+                          rule.enabled
+                            ? "Disable automation"
+                            : "Enable automation"
+                        }
+                        onClick={() =>
+                          toggle.mutate({ id: rule.id, enabled: !rule.enabled })
+                        }
                         className={cn(
-                          "bg-background inline-block size-4 rounded-full shadow transition-transform",
-                          rule.enabled ? "translate-x-4" : "translate-x-0.5",
+                          "focus-visible:ring-ring relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                          rule.enabled ? "bg-primary" : "bg-muted",
                         )}
-                      />
-                    </button>
-                    <p
-                      className={cn(
-                        "flex-1 text-sm",
-                        !rule.enabled && "text-muted-foreground",
-                      )}
-                    >
-                      {rule.name ? (
-                        <span className="font-medium">{rule.name}: </span>
-                      ) : null}
-                      {summarize(rule, columns, members)}
-                    </p>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Delete automation"
-                      onClick={() => remove.mutate(rule.id)}
-                    >
-                      <Trash2 className="text-destructive size-3.5" />
-                    </Button>
+                      >
+                        <span
+                          className={cn(
+                            "bg-background inline-block size-4 rounded-full shadow transition-transform",
+                            rule.enabled ? "translate-x-4" : "translate-x-0.5",
+                          )}
+                        />
+                      </button>
+                      <p
+                        className={cn(
+                          "flex-1 text-sm",
+                          !rule.enabled && "text-muted-foreground",
+                        )}
+                      >
+                        {rule.name ? (
+                          <span className="font-medium">{rule.name}: </span>
+                        ) : null}
+                        {summarize(rule, columns, members)}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Delete automation"
+                        onClick={() => remove.mutate(rule.id)}
+                      >
+                        <Trash2 className="text-destructive size-3.5" />
+                      </Button>
+                    </div>
+                    <RecentRuns automationId={rule.id} />
                   </div>
                 ))
               )}
