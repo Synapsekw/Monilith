@@ -199,6 +199,48 @@ export type Database = {
           },
         ];
       };
+      automation_webhook_deliveries: {
+        Row: {
+          action_index: number;
+          created_at: string;
+          org_id: string;
+          request_id: number;
+          run_id: string;
+          status: string;
+        };
+        Insert: {
+          action_index: number;
+          created_at?: string;
+          org_id: string;
+          request_id: number;
+          run_id: string;
+          status?: string;
+        };
+        Update: {
+          action_index?: number;
+          created_at?: string;
+          org_id?: string;
+          request_id?: number;
+          run_id?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_webhook_deliveries_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_webhook_deliveries_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "automation_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       automations: {
         Row: {
           actions: Json;
@@ -1111,10 +1153,16 @@ export type Database = {
         Returns: undefined;
       };
       _automation_runs_prune: { Args: never; Returns: undefined };
+      _automation_webhook_reconcile: { Args: never; Returns: undefined };
       _dashboard_list_predicate: {
         Args: { p_col: string; p_op: string; p_val: string };
         Returns: string;
       };
+      _webhook_outcome: {
+        Args: { p_error_msg: string; p_status_code: number };
+        Returns: string;
+      };
+      _webhook_url_safe: { Args: { p_url: string }; Returns: boolean };
       auth_user_orgs: { Args: never; Returns: string[] };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
