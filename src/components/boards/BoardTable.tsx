@@ -83,6 +83,16 @@ type CellControls = {
     callbacks?: { onSuccess?: () => void; onError?: (err: Error) => void },
   ) => void;
   renameItemInCache: (vars: { itemId: string; name: string }) => void;
+  addSubitem: (
+    parentId: string,
+    name: string,
+    callbacks?: {
+      onSuccess?: (id: string) => void;
+      onError?: (err: Error) => void;
+    },
+  ) => void;
+  deleteItem: (itemId: string) => void;
+  reorderItem: (itemId: string, position: number) => void;
 };
 
 const ROW_HEIGHT = 36; // direction C density
@@ -133,6 +143,20 @@ export function BoardTable({
 
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
+  const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) {
+        n.delete(id);
+      } else {
+        n.add(id);
+      }
+      return n;
+    });
+
   const mutations = useBoardMutations(payload.board.id);
   const {
     setCell,
@@ -144,6 +168,9 @@ export function BoardTable({
     setGroupColor,
     deleteGroup,
     reorderGroup,
+    addSubitem,
+    deleteItem,
+    reorderItem,
   } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
@@ -206,6 +233,13 @@ export function BoardTable({
     boardId: payload.board.id,
     addItem,
     renameItemInCache: renameItemMutation,
+    addSubitem: (parentId, name, cbs) =>
+      addSubitem(parentId, name, {
+        onSuccess: (item) => cbs?.onSuccess?.(item.id),
+        onError: cbs?.onError,
+      }),
+    deleteItem,
+    reorderItem,
   };
 
   const sensors = useSensors(
@@ -297,6 +331,11 @@ export function BoardTable({
                     onSetColor={(color) => setGroupColor(group.id, color)}
                     onDelete={() => deleteGroup(group.id)}
                     childrenByParent={childrenByParent}
+                    expanded={expanded}
+                    onToggleExpand={toggleExpand}
+                    renamingItemId={renamingItemId}
+                    onRenameItemSettled={() => setRenamingItemId(null)}
+                    onSetRenamingItemId={setRenamingItemId}
                   />
                 ))}
               </SortableContext>
@@ -434,10 +473,69 @@ function GroupMenu({
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{group.name}”?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete &ldquo;{group.name}&rdquo;?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               This permanently deletes the group and all of its items on this
-              board. This can’t be undone.
+              board. This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 text-white"
+              onClick={onDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+/** Row ⋯ menu: Delete with an AlertDialog confirm for parents-with-children. */
+function RowMenu({
+  label,
+  hasChildren,
+  onDelete,
+}: {
+  label: string;
+  hasChildren: boolean;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`${label} menu`}
+            className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            className="text-destructive"
+            onSelect={() => (hasChildren ? setConfirming(true) : onDelete())}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{label}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the item and all of its subitems. This
+              can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -468,7 +566,12 @@ function GroupSection({
   onRenameSettled,
   onSetColor,
   onDelete,
-  childrenByParent: _childrenByParent,
+  childrenByParent,
+  expanded,
+  onToggleExpand,
+  renamingItemId,
+  onRenameItemSettled,
+  onSetRenamingItemId,
 }: {
   group: Group;
   items: Item[];
@@ -483,6 +586,11 @@ function GroupSection({
   onSetColor: (color: string) => void;
   onDelete: () => void;
   childrenByParent: Map<string, Item[]>;
+  expanded: Set<string>;
+  onToggleExpand: (id: string) => void;
+  renamingItemId: string | null;
+  onRenameItemSettled: () => void;
+  onSetRenamingItemId: (id: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(autoFocusRename);
@@ -623,6 +731,8 @@ function GroupSection({
               >
                 {virtualRows.map((vr) => {
                   const item = items[vr.index];
+                  const children = childrenByParent.get(item.id) ?? [];
+                  const isExpanded = expanded.has(item.id);
                   return (
                     <div
                       key={item.id}
@@ -631,27 +741,32 @@ function GroupSection({
                       className="absolute top-0 left-0 w-full"
                       style={{ transform: `translateY(${vr.start}px)` }}
                     >
-                      <div
-                        className="hover:bg-surface grid w-full border-b transition-colors"
-                        style={{
-                          height: ROW_HEIGHT,
-                          gridTemplateColumns: template,
-                        }}
-                      >
-                        <NameCell item={item} controls={controls} />
-                        {columns.map((col) => (
-                          <EditableCell
-                            key={col.id}
-                            item={item}
-                            column={col}
-                            value={
-                              cellMap.get(cellKey(item.id, col.id)) ?? null
-                            }
-                            controls={controls}
-                          />
-                        ))}
-                        <div aria-hidden /> {/* add-column track spacer */}
-                      </div>
+                      <ItemRow
+                        item={item}
+                        columns={columns}
+                        cellMap={cellMap}
+                        template={template}
+                        controls={controls}
+                        childCount={children.length}
+                        isExpanded={isExpanded}
+                        onToggle={() => onToggleExpand(item.id)}
+                        autoFocusRename={item.id === renamingItemId}
+                        onRenameSettled={onRenameItemSettled}
+                        onSubitemAdded={onSetRenamingItemId}
+                      />
+                      {isExpanded && children.length > 0 && (
+                        <SubitemBlock
+                          parentId={item.id}
+                          subitems={children}
+                          columns={columns}
+                          cellMap={cellMap}
+                          template={template}
+                          controls={controls}
+                          renamingItemId={renamingItemId}
+                          onRenameSettled={onRenameItemSettled}
+                          onAdded={(id) => onSetRenamingItemId(id)}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -666,6 +781,220 @@ function GroupSection({
         </>
       )}
     </section>
+  );
+}
+
+/** A single top-level item row: optional expand chevron, name, value cells. */
+function ItemRow({
+  item,
+  columns,
+  cellMap,
+  template,
+  controls,
+  childCount,
+  isExpanded,
+  onToggle,
+  autoFocusRename,
+  onRenameSettled,
+  onSubitemAdded,
+}: {
+  item: Item;
+  columns: Column[];
+  cellMap: Map<string, CacheCellValue["value"]>;
+  template: string;
+  controls: CellControls;
+  childCount: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  autoFocusRename: boolean;
+  onRenameSettled: () => void;
+  onSubitemAdded?: (id: string) => void;
+}) {
+  const chevron =
+    childCount > 0 ? (
+      <button
+        type="button"
+        aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.name}`}
+        aria-expanded={isExpanded}
+        onClick={onToggle}
+        className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded"
+      >
+        {isExpanded ? (
+          <ChevronDown className="size-3.5" />
+        ) : (
+          <ChevronRight className="size-3.5" />
+        )}
+      </button>
+    ) : (
+      // Spacer to keep name text aligned
+      <span className="inline-block size-6 shrink-0" aria-hidden />
+    );
+
+  const trailing = (
+    <>
+      {childCount === 0 && (
+        <button
+          type="button"
+          aria-label={`Add subitem to ${item.name}`}
+          onClick={() =>
+            controls.addSubitem(item.id, "New subitem", {
+              onSuccess: (id) => {
+                // Expand the parent so the new subitem is visible, then
+                // enter rename mode on it.
+                if (!isExpanded) onToggle();
+                onSubitemAdded?.(id);
+              },
+            })
+          }
+          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100"
+        >
+          <Plus className="size-3.5" />
+        </button>
+      )}
+      <RowMenu
+        label={item.name}
+        hasChildren={childCount > 0}
+        onDelete={() => controls.deleteItem(item.id)}
+      />
+    </>
+  );
+
+  return (
+    <div
+      className="hover:bg-surface grid w-full border-b transition-colors"
+      style={{ height: ROW_HEIGHT, gridTemplateColumns: template }}
+    >
+      <NameCell
+        item={item}
+        controls={controls}
+        leading={chevron}
+        trailing={trailing}
+        autoFocusRename={autoFocusRename}
+        onRenameSettled={onRenameSettled}
+      />
+      {columns.map((col) => (
+        <EditableCell
+          key={col.id}
+          item={item}
+          column={col}
+          value={cellMap.get(cellKey(item.id, col.id)) ?? null}
+          controls={controls}
+        />
+      ))}
+      <div aria-hidden /> {/* add-column track spacer */}
+    </div>
+  );
+}
+
+/** An indented block of subitems rendered below their expanded parent. */
+function SubitemBlock({
+  parentId,
+  subitems,
+  columns,
+  cellMap,
+  template,
+  controls,
+  renamingItemId,
+  onRenameSettled,
+  onAdded,
+}: {
+  parentId: string;
+  subitems: Item[];
+  columns: Column[];
+  cellMap: Map<string, CacheCellValue["value"]>;
+  template: string;
+  controls: CellControls;
+  renamingItemId: string | null;
+  onRenameSettled: () => void;
+  onAdded: (id: string) => void;
+}) {
+  return (
+    <div>
+      {subitems.map((sub) => (
+        <div
+          key={sub.id}
+          className="hover:bg-surface grid w-full border-b transition-colors"
+          style={{ height: ROW_HEIGHT, gridTemplateColumns: template }}
+        >
+          <NameCell
+            item={sub}
+            controls={controls}
+            indented
+            autoFocusRename={sub.id === renamingItemId}
+            onRenameSettled={onRenameSettled}
+            trailing={
+              <RowMenu
+                label={sub.name}
+                hasChildren={false}
+                onDelete={() => controls.deleteItem(sub.id)}
+              />
+            }
+          />
+          {columns.map((col) => (
+            <EditableCell
+              key={col.id}
+              item={sub}
+              column={col}
+              value={cellMap.get(cellKey(sub.id, col.id)) ?? null}
+              controls={controls}
+            />
+          ))}
+          <div aria-hidden />
+        </div>
+      ))}
+      <AddSubitemRow
+        parentId={parentId}
+        controls={controls}
+        nameWidth={Number.parseInt(template) || 240}
+        onAdded={onAdded}
+      />
+    </div>
+  );
+}
+
+/** Inline input row appended to the expanded subitem block. */
+function AddSubitemRow({
+  parentId,
+  controls,
+  onAdded,
+}: {
+  parentId: string;
+  controls: CellControls;
+  nameWidth: number;
+  onAdded: (id: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [isPending, startTransition] = useTransition();
+  function commit() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    startTransition(() =>
+      controls.addSubitem(parentId, trimmed, {
+        onSuccess: (id) => {
+          setName("");
+          onAdded(id);
+        },
+      }),
+    );
+  }
+  return (
+    <div className="bg-surface sticky left-0 flex items-center gap-2 border-b py-1.5 pr-4 pl-12">
+      <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        disabled={isPending}
+        placeholder="Add subitem"
+        aria-label="Add subitem"
+        className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-sm outline-none disabled:opacity-50"
+      />
+    </div>
   );
 }
 
@@ -735,13 +1064,27 @@ function EditableCell({
 }
 
 /**
- * The built-in primary "Name" cell. Click/Enter opens an inline rename input
- * (Enter or blur commits optimistically via the cache-patching rename mutation,
- * Esc cancels). An empty name is rejected — it reverts to the current name.
- * On error the mutation rolls back the cache automatically.
+ * The built-in primary "Name" cell. Supports optional leading (chevron/spacer),
+ * trailing (add-subitem + row menu), indented layout, and auto-focus rename.
  */
-function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
-  const [editing, setEditing] = useState(false);
+function NameCell({
+  item,
+  controls,
+  leading,
+  trailing,
+  indented = false,
+  autoFocusRename = false,
+  onRenameSettled,
+}: {
+  item: Item;
+  controls: CellControls;
+  leading?: React.ReactNode;
+  trailing?: React.ReactNode;
+  indented?: boolean;
+  autoFocusRename?: boolean;
+  onRenameSettled?: () => void;
+}) {
+  const [editing, setEditing] = useState(autoFocusRename);
   const [name, setName] = useState(item.name);
   const [isPending, startTransition] = useTransition();
 
@@ -753,6 +1096,7 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
   function commit() {
     const trimmed = name.trim();
     setEditing(false);
+    onRenameSettled?.();
     if (!trimmed || trimmed === item.name) return;
     startTransition(async () => {
       controls.renameItemInCache({ itemId: item.id, name: trimmed });
@@ -762,6 +1106,7 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
   if (editing) {
     return (
       <div className="bg-surface sticky left-0 z-10 flex items-center px-4">
+        {leading}
         <Input
           autoFocus
           value={name}
@@ -775,6 +1120,7 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
             } else if (e.key === "Escape") {
               e.preventDefault();
               setEditing(false);
+              onRenameSettled?.();
             }
           }}
           aria-label={`Rename ${item.name}`}
@@ -786,6 +1132,7 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
 
   return (
     <div className="group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors">
+      {leading}
       <div
         role="button"
         tabIndex={0}
@@ -797,7 +1144,10 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
             open();
           }
         }}
-        className="focus-visible:ring-ring flex h-full min-w-0 flex-1 cursor-pointer items-center truncate px-4 text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+        className={cn(
+          "focus-visible:ring-ring flex h-full min-w-0 flex-1 cursor-pointer items-center truncate text-sm focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",
+          indented ? "pl-8" : "px-4",
+        )}
       >
         {item.name}
       </div>
@@ -809,6 +1159,7 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
       >
         <Maximize2 className="size-3.5" />
       </button>
+      {trailing}
     </div>
   );
 }
