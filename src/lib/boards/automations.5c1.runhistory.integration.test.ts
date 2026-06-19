@@ -385,6 +385,79 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
     }, 30_000);
 
     // =========================================================================
+    // 2b. set_option → DROPDOWN target writes the {optionIds:[...]} shape
+    //     (regression: the 5a engine wrote the singular {optionId} shape, which
+    //     DropdownCell can't render → blank cell despite the run logging 'set').
+    // =========================================================================
+    it("set_option → dropdown target writes {optionIds:[...]} (not {optionId})", async () => {
+      const dOptions = [
+        { id: randomUUID(), label: "Option 1", color: "#579bfc" },
+        { id: randomUUID(), label: "Option 2", color: "#a25ddc" },
+      ];
+      const optD1Id = dOptions[0].id;
+
+      const { data: colD, error: colDErr } = await admin
+        .from("columns")
+        .insert({
+          org_id: orgAId,
+          board_id: boardAId,
+          name: "D_t2b",
+          kind: "dropdown",
+          settings: { options: dOptions },
+          position: 30,
+        })
+        .select("id")
+        .single();
+      expect(colDErr, "insert dropdown col D").toBeNull();
+      const colDId = (colD as { id: string }).id;
+
+      const itemId = await createFreshItem();
+
+      // Rule: status_changed(S, any) → set_option(D = Option 1)
+      const automationId = await insertAutomation({
+        trigger: { type: "status_changed", columnId: colSId, toOptionId: null },
+        actions: [{ type: "set_option", columnId: colDId, optionId: optD1Id }],
+      });
+
+      const writeErr = await setCell(itemId, colSId, {
+        optionId: optWorkingId,
+      });
+      expect(writeErr, "set S=Working").toBeNull();
+
+      const runs = await poll(async () => {
+        const rows = await runsFor(automationId);
+        return rows.length >= 1 ? rows : null;
+      });
+      expect(runs, "run row").not.toBeNull();
+      const run = runs![0] as unknown as {
+        actions: { type: string; outcome: string }[];
+      };
+      expect(run.actions[0].outcome, "outcome").toBe("set");
+
+      // The written value MUST be the dropdown shape so DropdownCell (which reads
+      // value.optionIds) renders it — the crux of the bug.
+      const { data: cell } = await admin
+        .from("cell_values")
+        .select("value")
+        .eq("item_id", itemId)
+        .eq("column_id", colDId)
+        .single();
+      expect(cell!.value, "dropdown cell shape").toEqual({
+        optionIds: [optD1Id],
+      });
+
+      // Cleanup
+      await admin.from("automations").delete().eq("id", automationId);
+      await admin
+        .from("automation_runs")
+        .delete()
+        .eq("automation_id", automationId);
+      await admin.from("cell_values").delete().eq("item_id", itemId);
+      await admin.from("items").delete().eq("id", itemId);
+      await admin.from("columns").delete().eq("id", colDId);
+    }, 30_000);
+
+    // =========================================================================
     // 3. condition blocked → status='blocked'
     // =========================================================================
     it("condition blocked → run row with status='blocked' and empty actions", async () => {
