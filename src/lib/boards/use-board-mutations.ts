@@ -7,12 +7,15 @@ import {
   createGroup,
   createItem,
   deleteColumn,
+  deleteGroup,
   renameBoard,
   renameColumn,
   renameGroup,
   renameItem,
+  reorderGroup,
   resizeColumn,
   resizeNameColumn,
+  updateGroupColor,
   upsertCell,
 } from "@/lib/boards/actions";
 import {
@@ -26,6 +29,7 @@ import {
   removeCellValue,
   removeColumn,
   removeDependency,
+  removeGroup,
   replaceBoard,
   replaceColumn,
   replaceGroup,
@@ -309,6 +313,89 @@ export function useBoardMutations(boardId: string) {
     },
   );
 
+  const reorderGroupMutation = useMutation<
+    unknown,
+    Error,
+    { groupId: string; position: number },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await reorderGroup(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const existing = previous.groups.find((g) => g.id === vars.groupId);
+        if (existing) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceGroup(previous, { ...existing, position: vars.position }),
+          );
+        }
+      }
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const setGroupColorMutation = useMutation<
+    unknown,
+    Error,
+    { groupId: string; color: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await updateGroupColor(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const existing = previous.groups.find((g) => g.id === vars.groupId);
+        if (existing) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceGroup(previous, { ...existing, color: vars.color }),
+          );
+        }
+      }
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const deleteGroupMutation = useMutation<
+    unknown,
+    Error,
+    { groupId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await deleteGroup(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous)
+        qc.setQueryData<BoardCache>(key, removeGroup(previous, vars.groupId));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
   const renameBoardMutation = useMutation<unknown, Error, RenameBoardVars, Ctx>(
     {
       mutationFn: async (vars) => {
@@ -424,6 +511,11 @@ export function useBoardMutations(boardId: string) {
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),
     renameGroup: (groupId: string, name: string) =>
       renameGroupMutation.mutate({ groupId, name }),
+    reorderGroup: (groupId: string, position: number) =>
+      reorderGroupMutation.mutate({ groupId, position }),
+    setGroupColor: (groupId: string, color: string) =>
+      setGroupColorMutation.mutate({ groupId, color }),
+    deleteGroup: (groupId: string) => deleteGroupMutation.mutate({ groupId }),
     addGroup: (
       name: string,
       callbacks?: {

@@ -6,10 +6,16 @@ import type { ReactNode } from "react";
 const upsertCell = vi.fn();
 const clearCell = vi.fn();
 const createGroup = vi.fn();
+const reorderGroup = vi.fn();
+const updateGroupColor = vi.fn();
+const deleteGroup = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
   createGroup: (...a: unknown[]) => createGroup(...a),
+  reorderGroup: (...a: unknown[]) => reorderGroup(...a),
+  updateGroupColor: (...a: unknown[]) => updateGroupColor(...a),
+  deleteGroup: (...a: unknown[]) => deleteGroup(...a),
 }));
 
 const createDependency = vi.fn();
@@ -289,5 +295,123 @@ describe("useBoardMutations.addGroup", () => {
     // No optimistic add, so nothing to roll back — cache stays empty.
     const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
     expect(cache.groups).toHaveLength(0);
+  });
+});
+
+function seedGroups(qc: QueryClient): void {
+  qc.setQueryData(boardKey("b1"), {
+    board: { id: "b1", org_id: "o1", name: "B" },
+    groups: [
+      { id: "g1", board_id: "b1", name: "G1", color: "#0073ea", position: 0 },
+      { id: "g2", board_id: "b1", name: "G2", color: "#0073ea", position: 1 },
+    ],
+    columns: [],
+    items: [{ id: "i1", board_id: "b1", group_id: "g1", name: "One" }],
+    cellValues: [],
+    dependencies: [],
+  } as never);
+}
+
+describe("useBoardMutations.reorderGroup", () => {
+  beforeEach(() => reorderGroup.mockReset());
+
+  it("optimistically moves the group and re-sorts", async () => {
+    const qc = new QueryClient();
+    seedGroups(qc);
+    reorderGroup.mockResolvedValue({ ok: true, data: undefined });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.reorderGroup("g1", 2);
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.groups.map((g) => g.id)).toEqual(["g2", "g1"]);
+    expect(reorderGroup).toHaveBeenCalledWith({ groupId: "g1", position: 2 });
+  });
+
+  it("rolls back when the action fails", async () => {
+    const qc = new QueryClient();
+    seedGroups(qc);
+    reorderGroup.mockResolvedValue({ ok: false, error: "boom" });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.reorderGroup("g1", 2);
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.groups.map((g) => g.id)).toEqual(["g1", "g2"]);
+    });
+  });
+});
+
+describe("useBoardMutations.setGroupColor", () => {
+  beforeEach(() => updateGroupColor.mockReset());
+
+  it("optimistically updates the color", async () => {
+    const qc = new QueryClient();
+    seedGroups(qc);
+    updateGroupColor.mockResolvedValue({ ok: true, data: undefined });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.setGroupColor("g1", "#00c875");
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.groups.find((g) => g.id === "g1")!.color).toBe("#00c875");
+    expect(updateGroupColor).toHaveBeenCalledWith({
+      groupId: "g1",
+      color: "#00c875",
+    });
+  });
+});
+
+describe("useBoardMutations.deleteGroup", () => {
+  beforeEach(() => deleteGroup.mockReset());
+
+  it("optimistically removes the group and its items", async () => {
+    const qc = new QueryClient();
+    seedGroups(qc);
+    deleteGroup.mockResolvedValue({ ok: true, data: undefined });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.deleteGroup("g1");
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.groups.map((g) => g.id)).toEqual(["g2"]);
+    expect(cache.items).toHaveLength(0);
+    expect(deleteGroup).toHaveBeenCalledWith({ groupId: "g1" });
+  });
+
+  it("rolls back when the action fails", async () => {
+    const qc = new QueryClient();
+    seedGroups(qc);
+    deleteGroup.mockResolvedValue({ ok: false, error: "boom" });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.deleteGroup("g1");
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.groups.map((g) => g.id)).toEqual(["g1", "g2"]);
+      expect(cache.items).toHaveLength(1);
+    });
   });
 });
