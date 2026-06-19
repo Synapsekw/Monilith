@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import { reorderPosition } from "@/lib/boards/group-reorder";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
@@ -471,5 +472,17 @@ describe("BoardTable rollup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
     expect(screen.getByText("Design")).toBeInTheDocument();
     expect(screen.queryByText(/Σ\s*13/)).not.toBeInTheDocument();
+  });
+});
+
+describe("BoardTable subitem drag-reorder (pure position math)", () => {
+  it("computes a subitem reorder position among siblings", () => {
+    const siblings = [
+      { id: "s1", position: 1 },
+      { id: "s2", position: 2 },
+      { id: "s3", position: 3 },
+    ];
+    // drop s3 above s1 → strictly less than 1
+    expect(reorderPosition(siblings, "s3", "s1")!).toBeLessThan(1);
   });
 });

@@ -913,6 +913,90 @@ function ItemRow({
   );
 }
 
+/** A single sortable subitem row inside a `SubitemBlock`. */
+function SortableSubitemRow({
+  sub,
+  columns,
+  cellMap,
+  template,
+  controls,
+  renamingItemId,
+  onRenameSettled,
+}: {
+  sub: Item;
+  columns: Column[];
+  cellMap: Map<string, CacheCellValue["value"]>;
+  template: string;
+  controls: CellControls;
+  renamingItemId: string | null;
+  onRenameSettled: () => void;
+}) {
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: sub.id });
+
+  const dragHandle = (
+    <button
+      type="button"
+      aria-label={`Reorder ${sub.name}`}
+      {...attributes}
+      {...listeners}
+      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing"
+    >
+      <GripVertical className="size-3.5" />
+    </button>
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        // CSS.Translate (not CSS.Transform) — drops the scale so variable-height
+        // rows don't stretch/squish during drag (gotcha-20).
+        transform: CSS.Translate.toString(transform),
+        transition,
+        height: ROW_HEIGHT,
+        gridTemplateColumns: template,
+      }}
+      className={cn(
+        "hover:bg-surface grid w-full border-b transition-colors",
+        isDragging && "relative z-10 shadow-lg",
+      )}
+    >
+      <NameCell
+        item={sub}
+        controls={controls}
+        leading={dragHandle}
+        indented
+        autoFocusRename={sub.id === renamingItemId}
+        onRenameSettled={onRenameSettled}
+        trailing={
+          <RowMenu
+            label={sub.name}
+            hasChildren={false}
+            onDelete={() => controls.deleteItem(sub.id)}
+          />
+        }
+      />
+      {columns.map((col) => (
+        <EditableCell
+          key={col.id}
+          item={sub}
+          column={col}
+          value={cellMap.get(cellKey(sub.id, col.id)) ?? null}
+          controls={controls}
+        />
+      ))}
+      <div aria-hidden />
+    </div>
+  );
+}
+
 /** An indented block of subitems rendered below their expanded parent. */
 function SubitemBlock({
   parentId,
@@ -935,40 +1019,46 @@ function SubitemBlock({
   onRenameSettled: () => void;
   onAdded: (id: string) => void;
 }) {
+  const subitemSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  function handleSubitemDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const position = reorderPosition(
+      subitems.map((s) => ({ id: s.id, position: s.position })),
+      String(active.id),
+      String(over.id),
+    );
+    if (position !== null) controls.reorderItem(String(active.id), position);
+  }
+
   return (
     <div>
-      {subitems.map((sub) => (
-        <div
-          key={sub.id}
-          className="hover:bg-surface grid w-full border-b transition-colors"
-          style={{ height: ROW_HEIGHT, gridTemplateColumns: template }}
+      <DndContext
+        sensors={subitemSensors}
+        modifiers={[restrictToVerticalAxis]}
+        onDragEnd={handleSubitemDragEnd}
+      >
+        <SortableContext
+          items={subitems.map((s) => s.id)}
+          strategy={verticalListSortingStrategy}
         >
-          <NameCell
-            item={sub}
-            controls={controls}
-            indented
-            autoFocusRename={sub.id === renamingItemId}
-            onRenameSettled={onRenameSettled}
-            trailing={
-              <RowMenu
-                label={sub.name}
-                hasChildren={false}
-                onDelete={() => controls.deleteItem(sub.id)}
-              />
-            }
-          />
-          {columns.map((col) => (
-            <EditableCell
-              key={col.id}
-              item={sub}
-              column={col}
-              value={cellMap.get(cellKey(sub.id, col.id)) ?? null}
+          {subitems.map((sub) => (
+            <SortableSubitemRow
+              key={sub.id}
+              sub={sub}
+              columns={columns}
+              cellMap={cellMap}
+              template={template}
               controls={controls}
+              renamingItemId={renamingItemId}
+              onRenameSettled={onRenameSettled}
             />
           ))}
-          <div aria-hidden />
-        </div>
-      ))}
+        </SortableContext>
+      </DndContext>
       <AddSubitemRow
         parentId={parentId}
         controls={controls}
