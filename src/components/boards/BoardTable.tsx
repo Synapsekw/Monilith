@@ -18,6 +18,10 @@ import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { ColumnHeader } from "@/components/boards/ColumnHeader";
 import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
+import {
+  fitNameColumnWidth,
+  NAME_COL_MAX,
+} from "@/lib/boards/name-column-width";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -52,19 +56,20 @@ function openItemPanel(itemId: string) {
   url.searchParams.set("item", itemId);
   window.history.pushState({}, "", url);
 }
-const NAME_COL_WIDTH = 280;
 const VALUE_COL_WIDTH = 180;
 const ADD_COL_WIDTH = 44;
+const NAME_DRAG_MIN = 80; // manual drag floor (matches ColumnHeader MIN)
 
 /** CSS grid template: pinned Name + one fixed px track per column + the add-column slot. */
 function gridTemplate(
   columns: { id: string; width: number | null }[],
   liveWidths: Record<string, number>,
+  nameWidth: number,
 ): string {
   const tracks = columns
     .map((c) => `${liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}px`)
     .join(" ");
-  return `${NAME_COL_WIDTH}px ${tracks} ${ADD_COL_WIDTH}px`;
+  return `${nameWidth}px ${tracks} ${ADD_COL_WIDTH}px`;
 }
 
 export function BoardTable({
@@ -110,9 +115,34 @@ export function BoardTable({
   }, [groups, items]);
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
+
+  // Offscreen canvas measurer at the Name cell font (Geist 14px / text-sm), used
+  // to auto-fit the Name column to the longest item name across ALL items (not
+  // just the virtualized rows). Pure measurement — no server round-trip.
+  const measureName = useMemo(() => {
+    const ctx =
+      typeof document !== "undefined"
+        ? document.createElement("canvas").getContext("2d")
+        : null;
+    if (ctx) ctx.font = "14px ui-sans-serif, system-ui, sans-serif";
+    return (text: string) => ctx?.measureText(text).width ?? 0;
+  }, []);
+  const autoFitWidth = useMemo(
+    () =>
+      fitNameColumnWidth(
+        items.map((it) => it.name),
+        measureName,
+      ),
+    [items, measureName],
+  );
+
+  // null = follow board.name_column_width (or auto-fit). Set live during a drag.
+  const [liveNameWidth, setLiveNameWidth] = useState<number | null>(null);
+  const nameWidth = liveNameWidth ?? board.name_column_width ?? autoFitWidth;
+
   const template = useMemo(
-    () => gridTemplate(columns, liveWidths),
-    [columns, liveWidths],
+    () => gridTemplate(columns, liveWidths, nameWidth),
+    [columns, liveWidths, nameWidth],
   );
 
   const controls: CellControls = {
@@ -144,9 +174,18 @@ export function BoardTable({
             className="bg-surface-muted text-muted-foreground sticky top-0 z-20 grid border-b text-xs font-medium"
             style={{ gridTemplateColumns: template }}
           >
-            <div className="bg-surface-muted sticky left-0 z-10 truncate px-4 py-1.5">
-              Name
-            </div>
+            <NameColumnHeader
+              width={nameWidth}
+              onResize={(w) => setLiveNameWidth(w)}
+              onResizeEnd={(w) => {
+                setLiveNameWidth(null);
+                mutations.resizeNameColumn(w);
+              }}
+              onAutoFit={() => {
+                setLiveNameWidth(null);
+                mutations.resizeNameColumn(null);
+              }}
+            />
             {columns.map((col) => (
               <ColumnHeader
                 key={col.id}
@@ -176,11 +215,65 @@ export function BoardTable({
                 template={template}
                 controls={controls}
                 onRenameGroup={(name) => renameGroup(group.id, name)}
+                nameWidth={nameWidth}
               />
             ))
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Header for the built-in Name column: a sticky "Name" label plus a right-edge
+ * resize handle that mirrors {@link ColumnHeader}. Drag resizes live (0 server
+ * round-trips) and persists the px width on release; double-clicking the handle
+ * clears the manual width so the column returns to auto-fit.
+ */
+function NameColumnHeader({
+  width,
+  onResize,
+  onResizeEnd,
+  onAutoFit,
+}: {
+  width: number;
+  onResize: (w: number) => void;
+  onResizeEnd: (w: number) => void;
+  onAutoFit: () => void;
+}) {
+  function onPointerDown(e: React.PointerEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = width;
+    let last = width;
+    const move = (ev: PointerEvent) => {
+      last = Math.min(
+        NAME_COL_MAX,
+        Math.max(NAME_DRAG_MIN, startW + (ev.clientX - startX)),
+      );
+      onResize(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      onResizeEnd(last);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  return (
+    <div className="bg-surface-muted sticky left-0 z-10 flex items-center truncate px-4 py-1.5">
+      Name
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize Name column (double-click to auto-fit)"
+        onPointerDown={onPointerDown}
+        onDoubleClick={onAutoFit}
+        className="hover:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize"
+      />
     </div>
   );
 }
@@ -193,6 +286,7 @@ function GroupSection({
   template,
   controls,
   onRenameGroup,
+  nameWidth,
 }: {
   group: Group;
   items: Item[];
@@ -201,6 +295,7 @@ function GroupSection({
   template: string;
   controls: CellControls;
   onRenameGroup: (name: string) => void;
+  nameWidth: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -331,7 +426,11 @@ function GroupSection({
               </div>
             </div>
           )}
-          <AddItemRow groupId={group.id} controls={controls} />
+          <AddItemRow
+            groupId={group.id}
+            controls={controls}
+            nameWidth={nameWidth}
+          />
         </>
       )}
     </section>
@@ -485,9 +584,11 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
 function AddItemRow({
   groupId,
   controls,
+  nameWidth,
 }: {
   groupId: string;
   controls: CellControls;
+  nameWidth: number;
 }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -516,7 +617,7 @@ function AddItemRow({
   return (
     <div
       className="bg-surface sticky left-0 flex flex-col border-b px-4 py-1.5"
-      style={{ width: NAME_COL_WIDTH }}
+      style={{ width: nameWidth }}
     >
       <div className="flex items-center gap-2">
         <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
