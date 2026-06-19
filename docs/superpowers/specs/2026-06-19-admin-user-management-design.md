@@ -110,7 +110,7 @@ actor), and write an `admin_audit_log` row (`org_id:null`, `actor_kind:'platform
 
 Validation (`src/lib/validations/admin.ts`):
 
-- New `platformSetPasswordSchema` = `{ userId: uuid, password: string min 12 }`.
+- New `platformSetPasswordSchema` = `{ userId: uuid, password: string min 8 }`.
 - Reset & delete reuse `platformUserTargetSchema`.
 
 Error mapping: friendly, non-leaking copy (mirror existing helpers). Delete returns a
