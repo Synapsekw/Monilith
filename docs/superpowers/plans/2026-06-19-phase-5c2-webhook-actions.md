@@ -1249,6 +1249,28 @@ const { data: isAdmin = false } = useQuery({
 
 3. Pass `canWebhook={isAdmin}` to `<AutomationBuilder … />`.
 
+3a. **Make `summarize()` exhaustive for the new union variant.** Adding `call_webhook` to `AutomationAction` (Task 1) leaves the existing `summarize()` `thens` map — which assumes any non-`notify` action is `set_option` and reads `a.columnId`/`a.optionId` — a TypeScript error (`Property 'columnId' does not exist on … call_webhook`). Add a `call_webhook` branch before the final `return`:
+
+```tsx
+const thens = actions.map((a) => {
+  if (a.type === "notify") {
+    return a.recipient.kind === "owner"
+      ? `notify the owner (${colName(columns, a.recipient.peopleColumnId)})`
+      : `notify ${memberName(members, a.recipient.userId)}`;
+  }
+  if (a.type === "call_webhook") {
+    return "call a webhook";
+  }
+  return `set ${colName(columns, a.columnId)} to ${optName(
+    columns,
+    a.columnId,
+    a.optionId,
+  )}`;
+});
+```
+
+Verify with `pnpm typecheck` that `AutomationsDialog.tsx` is clean after this change.
+
 4. Add an admin-only recipe button inside the recipe quick-starts block (only when `isAdmin && statusColumns.length > 0`):
 
 ```tsx
