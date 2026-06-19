@@ -5,9 +5,11 @@ import type { ReactNode } from "react";
 
 const upsertCell = vi.fn();
 const clearCell = vi.fn();
+const createGroup = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
+  createGroup: (...a: unknown[]) => createGroup(...a),
 }));
 
 const createDependency = vi.fn();
@@ -58,6 +60,7 @@ describe("useBoardMutations.setCell", () => {
   beforeEach(() => {
     upsertCell.mockReset();
     clearCell.mockReset();
+    createGroup.mockReset();
     createDependency.mockReset();
     deleteDependency.mockReset();
   });
@@ -218,5 +221,48 @@ describe("useBoardMutations.addDependency", () => {
         }),
       );
     });
+  });
+});
+
+describe("useBoardMutations.addGroup", () => {
+  beforeEach(() => {
+    createGroup.mockReset();
+  });
+
+  it("inserts the created group into the cache and forwards the new id", async () => {
+    const qc = new QueryClient();
+    seedCache(qc); // groups: []
+    createGroup.mockResolvedValue({
+      ok: true,
+      data: {
+        group: {
+          id: "g2",
+          board_id: "b1",
+          org_id: "o1",
+          name: "Group 2",
+          color: "#0073ea",
+          position: 1,
+        },
+      },
+    });
+
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.addGroup("Group 2", { onSuccess });
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.groups.map((g) => g.id)).toContain("g2");
+    });
+    expect(createGroup).toHaveBeenCalledWith({
+      boardId: "b1",
+      name: "Group 2",
+    });
+    expect(onSuccess).toHaveBeenCalledWith("g2");
   });
 });

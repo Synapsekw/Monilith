@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   clearCell,
   createColumn,
+  createGroup,
   createItem,
   deleteColumn,
   renameBoard,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/boards/dependency-actions";
 import {
   insertColumn,
+  insertGroup,
   insertItem,
   removeCellValue,
   removeColumn,
@@ -32,6 +34,7 @@ import {
   type BoardCache,
   type CacheCellValue,
   type CacheColumn,
+  type CacheGroup,
   type CacheItem,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
@@ -99,6 +102,29 @@ export function useBoardMutations(boardId: string) {
     onSuccess: ({ column }) => {
       qc.setQueryData<BoardCache>(key, (prev) =>
         prev ? insertColumn(prev, column) : prev,
+      );
+    },
+  });
+
+  /**
+   * Add a new group. Patch-on-success (mirrors addColumn): wait for the server
+   * to return the real group row, then insert it into the cache. The Realtime
+   * INSERT echo is idempotent via `insertGroup`.
+   */
+  const addGroupMutation = useMutation<
+    { group: CacheGroup },
+    Error,
+    { name: string },
+    void
+  >({
+    mutationFn: async (vars) => {
+      const res = await createGroup({ boardId, name: vars.name });
+      if (!res.ok) throw new Error(res.error);
+      return res.data;
+    },
+    onSuccess: ({ group }) => {
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? insertGroup(prev, group) : prev,
       );
     },
   });
@@ -398,6 +424,20 @@ export function useBoardMutations(boardId: string) {
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),
     renameGroup: (groupId: string, name: string) =>
       renameGroupMutation.mutate({ groupId, name }),
+    addGroup: (
+      name: string,
+      callbacks?: {
+        onSuccess?: (groupId: string) => void;
+        onError?: (err: Error) => void;
+      },
+    ) =>
+      addGroupMutation.mutate(
+        { name },
+        {
+          onSuccess: (data) => callbacks?.onSuccess?.(data.group.id),
+          onError: (err) => callbacks?.onError?.(err),
+        },
+      ),
     renameBoard: (name: string, callbacks?: { onSuccess?: () => void }) =>
       renameBoardMutation.mutate(
         { name },
