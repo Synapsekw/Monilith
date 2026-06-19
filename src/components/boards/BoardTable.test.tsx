@@ -121,3 +121,12 @@ describe("BoardTable group menu", () => {
     );
   });
 });
+
+describe("BoardTable group drag handle", () => {
+  it("renders a reorder handle for each group", () => {
+    renderBoard();
+    expect(
+      screen.getByRole("button", { name: "Reorder Group 1" }),
+    ).toBeInTheDocument();
+  });
+});

@@ -5,10 +5,26 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
+  GripVertical,
   Maximize2,
   MoreHorizontal,
   Plus,
 } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { CSS } from "@dnd-kit/utilities";
+import { reorderPosition } from "@/lib/boards/group-reorder";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
@@ -126,6 +142,7 @@ export function BoardTable({
     addGroup,
     setGroupColor,
     deleteGroup,
+    reorderGroup,
   } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
@@ -185,6 +202,21 @@ export function BoardTable({
     renameItemInCache: renameItemMutation,
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
+
+  function handleGroupDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over) return;
+    const position = reorderPosition(
+      groups.map((g) => ({ id: g.id, position: g.position })),
+      String(active.id),
+      String(over.id),
+    );
+    if (position !== null) reorderGroup(String(active.id), position);
+  }
+
   return (
     <div className="flex h-full flex-col">
       <BoardHeader
@@ -234,23 +266,34 @@ export function BoardTable({
               This board has no groups yet.
             </p>
           ) : (
-            groups.map((group) => (
-              <GroupSection
-                key={group.id}
-                group={group}
-                items={itemsByGroup.get(group.id) ?? []}
-                columns={columns}
-                cellMap={cellMap}
-                template={template}
-                controls={controls}
-                onRenameGroup={(name) => renameGroup(group.id, name)}
-                nameWidth={nameWidth}
-                autoFocusRename={group.id === renameGroupId}
-                onRenameSettled={() => setRenameGroupId(null)}
-                onSetColor={(color) => setGroupColor(group.id, color)}
-                onDelete={() => deleteGroup(group.id)}
-              />
-            ))
+            <DndContext
+              sensors={sensors}
+              modifiers={[restrictToVerticalAxis]}
+              onDragEnd={handleGroupDragEnd}
+            >
+              <SortableContext
+                items={groups.map((g) => g.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {groups.map((group) => (
+                  <GroupSection
+                    key={group.id}
+                    group={group}
+                    items={itemsByGroup.get(group.id) ?? []}
+                    columns={columns}
+                    cellMap={cellMap}
+                    template={template}
+                    controls={controls}
+                    onRenameGroup={(name) => renameGroup(group.id, name)}
+                    nameWidth={nameWidth}
+                    autoFocusRename={group.id === renameGroupId}
+                    onRenameSettled={() => setRenameGroupId(null)}
+                    onSetColor={(color) => setGroupColor(group.id, color)}
+                    onDelete={() => deleteGroup(group.id)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           )}
           <AddGroupRow
             onAdd={() =>
@@ -437,6 +480,15 @@ function GroupSection({
   const [name, setName] = useState(group.name);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: group.id });
+
   // React Compiler safely skips memoizing this component because useVirtualizer
   // returns non-memoizable functions; that fallback is correct here.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -465,12 +517,25 @@ function GroupSection({
   }
 
   return (
-    <section>
+    <section
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "relative z-10 opacity-70")}
+    >
       {/* Colored band header — group.color tints the left rail + label. */}
       <div
         className="group/grouphdr bg-surface hover:bg-accent sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-sm font-semibold transition-colors"
         style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
       >
+        <button
+          type="button"
+          aria-label={`Reorder ${group.name}`}
+          {...attributes}
+          {...listeners}
+          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" />
+        </button>
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
