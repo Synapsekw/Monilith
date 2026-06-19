@@ -21,6 +21,38 @@
   `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 - Verification gate for "done": `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass.
 
+## Execution DAG & Parallelization
+
+**This plan is built to run mostly in parallel. Do not execute it top-to-bottom.** The seven tasks form four independent tracks over **disjoint file sets** (verified against the File Map — no two tracks write the same file). Only two edges are real dependencies, both genuine TypeScript type dependencies.
+
+```
+Track A (signup surface):     Task 1 ──▶ Task 2 ┐
+Track B (provisioning):       Task 3 ──▶ Task 4 ┤
+Track C (logo asset):         Task 5 ──────────┼──▶ Task 7 (gate)
+Track D (email template):     Task 6 ──────────┘
+```
+
+| Wave       | Run concurrently               | Why this wave                                                                                                                                                            |
+| ---------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Wave 1** | Task 1, Task 3, Task 5, Task 6 | All four have **no** unmet dependency — dispatch as 4 parallel agents in one batch.                                                                                      |
+| **Wave 2** | Task 2, Task 4                 | Task 2 needs Task 1's `orgName` type; Task 4 needs Task 3's regenerated `provision_account` RPC type. Dispatch as 2 parallel agents once Wave 1's Track A/B halves land. |
+| **Wave 3** | Task 7                         | Whole-repo gate + hosted apply — must follow everything. Coordinator runs it once.                                                                                       |
+
+**Dependency edges (the only two):**
+
+- `Task 1 → Task 2`: the form references `SignUpInput.orgName`; without Task 1 it won't typecheck.
+- `Task 3 → Task 4`: `supabase.rpc("provision_account", …)` is only typed after Task 3 regenerates `src/types/database.types.ts`.
+
+Tasks 5 and 6 depend on **nothing** and can finish anytime before the gate. (Task 6 references the asset _path_ as a literal string, not the PNG bytes, so it does not depend on Task 5.)
+
+**Concurrency rules for a shared checkout (important):**
+
+- This repo is one working directory on `develop`. Parallel agents editing **disjoint** files is safe; the contention points are the **git index** and **external state**, not the files. Therefore:
+  - **Parallel implementers do NOT run `git add`/`git commit`.** Each agent implements its files and runs only its own scoped `vitest run <file>` to prove green, then returns a summary. The **coordinator** performs the per-track commits sequentially (commit messages are specified in each task's final step). This avoids index-lock races.
+  - Only **Track B** mutates external/shared state — `supabase db push` (linked DB) and `pnpm db:types` (rewrites the committed `database.types.ts`). No other track touches the DB or that file, so there is no cross-track race; keep Track B's two tasks in order.
+  - Do **not** run whole-repo `pnpm build` / `pnpm test` / `pnpm lint` inside parallel tasks — those touch everything and would thrash. Per-task steps run only their own test file (already scoped that way). The single whole-repo gate is **Task 7**.
+- **Alternative for hard isolation:** if you prefer fully independent commits, give each track its own **git worktree** (`superpowers:using-git-worktrees`) and merge to `develop` at the end. For a plan this size the shared-checkout + coordinator-commits approach above is lighter and sufficient.
+
 ## File Map
 
 | File                                             | Change     | Responsibility                                           |
