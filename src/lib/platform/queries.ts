@@ -1,4 +1,5 @@
 import "server-only";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isPlatformAdmin } from "./guard";
 
@@ -26,7 +27,11 @@ const ZERO_STATS: PlatformStats = {
 
 export async function getPlatformStats(): Promise<PlatformStats> {
   if (!(await isPlatformAdmin())) return ZERO_STATS;
-  const { data } = await createServiceClient().rpc("platform_stats");
+  // Call via the AUTHED client: these RPCs gate internally on auth.uid() through
+  // is_platform_admin(), so the service-role client (no session) would fail that
+  // gate and return nothing. SECURITY DEFINER still lets it read auth.users.
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("platform_stats");
   const row = data?.[0];
   if (!row) return ZERO_STATS;
   return {
@@ -133,7 +138,10 @@ export async function searchUsers(
   offset = 0,
 ): Promise<PlatformUser[]> {
   if (!(await isPlatformAdmin())) return [];
-  const { data } = await createServiceClient().rpc("platform_search_users", {
+  // Authed client — the RPC's internal is_platform_admin() gate reads auth.uid()
+  // (the service-role client has no session and would return zero rows).
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("platform_search_users", {
     p_query: query.trim(),
     p_limit: limit,
     p_offset: offset,
