@@ -309,6 +309,7 @@ export function BoardTable({
             </p>
           ) : (
             <DndContext
+              id="board-groups"
               sensors={sensors}
               modifiers={[restrictToVerticalAxis]}
               onDragEnd={handleGroupDragEnd}
@@ -738,6 +739,7 @@ function GroupSection({
         <>
           {items.length > 0 && (
             <DndContext
+              id={`group-items-${group.id}`}
               sensors={itemSensors}
               modifiers={[restrictToVerticalAxis]}
               onDragEnd={handleItemDragEnd}
@@ -1098,6 +1100,7 @@ function SubitemBlock({
   return (
     <div>
       <DndContext
+        id={`subitems-${parentId}`}
         sensors={subitemSensors}
         modifiers={[restrictToVerticalAxis]}
         onDragEnd={handleSubitemDragEnd}

@@ -400,7 +400,11 @@ export function GanttBoard({
       </div>
 
       {/* Gantt grid */}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext
+        id={`gantt-${selectedViewId}`}
+        sensors={sensors}
+        onDragEnd={handleDragEnd}
+      >
         <div className="min-h-0 flex-1 overflow-auto">
           <div className="inline-block min-w-full">
             {/* Sticky header row */}

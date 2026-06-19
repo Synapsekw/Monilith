@@ -318,7 +318,11 @@ export function CalendarBoard({
       </div>
 
       {/* Grid */}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext
+        id={`calendar-${selectedViewId}`}
+        sensors={sensors}
+        onDragEnd={handleDragEnd}
+      >
         <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3">
           {/* Weekday header row */}
           <div className="mb-1 grid grid-cols-7 gap-1">

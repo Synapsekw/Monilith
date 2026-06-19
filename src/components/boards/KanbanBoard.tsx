@@ -223,7 +223,11 @@ export function KanbanBoard({
         </select>
       </div>
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext
+        id={`kanban-${selectedViewId}`}
+        sensors={sensors}
+        onDragEnd={handleDragEnd}
+      >
         <div className="flex flex-1 gap-4 overflow-x-auto p-4">
           {kanbanColumns.map((col) => (
             <KanbanColumnView
