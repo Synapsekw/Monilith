@@ -295,6 +295,10 @@ export function CellRenderer({
           settings={settings}
         />
       );
+    // Files cells are special-cased in BoardTable's EditableCell (they need the
+    // board cache + upload/lightbox wiring), not rendered through this switch.
+    case "files":
+      return null;
     default:
       return null;
   }

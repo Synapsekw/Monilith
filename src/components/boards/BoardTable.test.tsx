@@ -45,6 +45,17 @@ vi.mock("@/lib/boards/dependency-actions", () => ({
   deleteDependency: vi.fn(),
 }));
 
+// collaboration/actions is a server module pulled in by BoardTable +
+// useBoardMutations (Files-column upload/preview/delete); stub it for jsdom.
+vi.mock("@/lib/collaboration/actions", () => ({
+  createAttachment: vi.fn(),
+  deleteAttachment: vi.fn(),
+  getAttachmentDownloadUrl: vi.fn(),
+  getAttachmentPreviewUrls: vi
+    .fn()
+    .mockResolvedValue({ ok: true, data: { urls: {} } }),
+}));
+
 // BoardHeader pulls in ViewSwitcher + AutomationsDialog (router + Server
 // Actions) that are out of scope here; stub it to a placeholder.
 vi.mock("./BoardHeader", () => ({
@@ -557,5 +568,66 @@ describe("BoardTable item drag-reorder (pure position math)", () => {
     ];
     expect(reorderPosition(siblings, "t3", "t1")!).toBeLessThan(0);
     expect(reorderPosition(siblings, "t2", "t2")).toBeNull();
+  });
+});
+
+function filesColumnPayload() {
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [
+      {
+        id: "c-files",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Files",
+        kind: "files",
+        settings: {},
+        position: 0,
+        width: 180,
+      },
+    ],
+    items: [
+      {
+        id: "t1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task One",
+        position: 0,
+      },
+    ],
+    cellValues: [],
+    dependencies: [],
+    attachments: [],
+    views: [],
+  } as never;
+}
+
+describe("BoardTable files column", () => {
+  it("renders a Files cell with the upload affordance without crashing", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable
+          payload={filesColumnPayload()}
+          selectedViewId="v1"
+          currentUserId="u1"
+        />
+      </QueryClientProvider>,
+    );
+    // The empty Files cell shows an "Add file" affordance and a "0 files" group.
+    expect(screen.getByLabelText("Add file")).toBeInTheDocument();
+    expect(screen.getByLabelText("0 files")).toBeInTheDocument();
   });
 });

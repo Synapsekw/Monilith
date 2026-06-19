@@ -617,6 +617,10 @@ export function CellEditor({
           onClear={onClear}
         />
       );
+    // Files cells have no inline editor — upload/preview is handled directly in
+    // BoardTable's EditableCell via FilesCell + the lightbox.
+    case "files":
+      return null;
     default:
       return null;
   }

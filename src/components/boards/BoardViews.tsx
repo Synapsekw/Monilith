@@ -81,6 +81,7 @@ export function BoardViews({
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
+        currentUserId={currentUserId}
       />
     );
 

@@ -30,6 +30,12 @@ import { rollupCell } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { FilesCell } from "@/components/boards/cells/FilesCell";
+import { FilePreviewLightbox } from "@/components/boards/item-panel/FilePreviewLightbox";
+import {
+  getAttachmentDownloadUrl,
+  getAttachmentPreviewUrls,
+} from "@/lib/collaboration/actions";
 import { RollupCell } from "@/components/boards/RollupCell";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
@@ -39,10 +45,11 @@ import {
 } from "@/components/boards/cells/editors";
 import type {
   BoardCache,
+  CacheAttachment,
   CacheCellValue,
   CacheColumn,
 } from "@/lib/boards/cache";
-import { buildCellMap, cellKey } from "@/lib/boards/cache";
+import { buildCellMap, cellKey, filesForCell } from "@/lib/boards/cache";
 import { countOptionUsage } from "@/lib/boards/option-edit";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
@@ -101,6 +108,12 @@ type CellControls = {
   ) => void;
   deleteItem: (itemId: string) => void;
   reorderItem: (itemId: string, position: number) => void;
+  /** Live board cache — read by Files cells to resolve their attachments. */
+  cache: BoardCache;
+  /** Upload a file into a Files-column cell. */
+  uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
+  /** Open the Files lightbox over a cell's attachments at the given index. */
+  openFilesLightbox: (files: readonly CacheAttachment[], index: number) => void;
 };
 
 const ROW_HEIGHT = 36; // direction C density
@@ -136,10 +149,12 @@ export function BoardTable({
   payload,
   members = [],
   selectedViewId,
+  currentUserId = "",
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
   selectedViewId: string;
+  currentUserId?: string;
 }) {
   // Hydrate the ["board", boardId] cache once from the server payload; read all
   // board data from the cache so optimistic + realtime patches re-render.
@@ -154,6 +169,34 @@ export function BoardTable({
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
+
+  // Files-column lightbox state. The viewed cell's attachments and the active
+  // index live here; preview URLs are minted lazily on open (only for that
+  // cell's files) so first paint stays 0 round-trips (gotcha-09). Cell
+  // thumbnails themselves render icons only — no signed URLs on load.
+  const [filesLightbox, setFilesLightbox] = useState<{
+    files: CacheAttachment[];
+    index: number;
+  } | null>(null);
+  const [filesPreviewUrls, setFilesPreviewUrls] = useState<
+    Record<string, string>
+  >({});
+
+  function openFilesLightbox(files: readonly CacheAttachment[], index: number) {
+    const list = [...files];
+    setFilesLightbox({ files: list, index });
+    setFilesPreviewUrls({});
+    void getAttachmentPreviewUrls({
+      attachmentIds: list.map((a) => a.id),
+    }).then((res) => {
+      if (res.ok) setFilesPreviewUrls(res.data.urls);
+    });
+  }
+
+  async function downloadColumnFile(attachmentId: string) {
+    const res = await getAttachmentDownloadUrl({ attachmentId });
+    if (res.ok) window.open(res.data.url, "_blank", "noopener");
+  }
 
   const toggleExpand = (id: string) =>
     setExpanded((prev) => {
@@ -249,6 +292,9 @@ export function BoardTable({
       }),
     deleteItem,
     reorderItem,
+    cache,
+    uploadColumnFile: mutations.uploadColumnFile,
+    openFilesLightbox,
   };
 
   const sensors = useSensors(
@@ -379,6 +425,24 @@ export function BoardTable({
           }
           onOpenChange={(o) => {
             if (!o) setOptionsFor(null);
+          }}
+        />
+      )}
+
+      {filesLightbox && (
+        <FilePreviewLightbox
+          attachments={filesLightbox.files}
+          index={filesLightbox.index}
+          previewUrls={filesPreviewUrls}
+          currentUserId={currentUserId}
+          onIndexChange={(i) =>
+            setFilesLightbox((s) => (s ? { ...s, index: i } : s))
+          }
+          onClose={() => setFilesLightbox(null)}
+          onDownload={(a) => downloadColumnFile(a.id)}
+          onDelete={(a) => {
+            mutations.deleteColumnFile(a.id);
+            setFilesLightbox(null);
           }}
         />
       )}
@@ -1227,6 +1291,23 @@ function EditableCell({
     editing?.itemId === item.id && editing.columnId === column.id;
   const settings = (column.settings ?? {}) as Settings;
   const accessibleName = `${item.name} ${column.name}`;
+
+  // Files cells are not inline-edited like other kinds: they render a thumbnail
+  // strip + upload affordance, and open a lightbox on click. Thumbnails use
+  // icons (no signed URLs on load); preview URLs are minted on lightbox open.
+  if (column.kind === "files") {
+    const files = filesForCell(controls.cache, item.id, column.id);
+    return (
+      <div className="flex h-full items-center border-l px-3">
+        <FilesCell
+          files={files}
+          previewUrls={{}}
+          onOpen={(i) => controls.openFilesLightbox(files, i)}
+          onUpload={(f) => controls.uploadColumnFile(item.id, column.id, f)}
+        />
+      </div>
+    );
+  }
 
   if (isEditing) {
     return (
