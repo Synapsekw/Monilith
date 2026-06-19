@@ -195,7 +195,7 @@ Target + reuse map: [[2026-06-16-decision-08-dark-first-monday-reskin]]. See [[2
 ```dataviewjs
 const latest = dv.pages('"vault/sessions"')
   .where(p => p.type === "session" && p.status === "complete")
-  .sort(p => p.date, "desc")[0];
+  .sort(p => p.file.name, "desc")[0];
 
 if (!latest) {
   dv.paragraph("_No finalized session notes yet — capture one at the end of a working session._");
@@ -211,7 +211,7 @@ if (!latest) {
 TABLE branch, date as "Session"
 FROM "vault/sessions"
 WHERE type = "session"
-SORT date DESC
+SORT file.name DESC
 LIMIT 10
 ```
 
