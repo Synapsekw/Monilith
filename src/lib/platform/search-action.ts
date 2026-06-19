@@ -1,5 +1,11 @@
 "use server";
-import { platformDeactivateUser, platformReactivateUser } from "./actions";
+import {
+  platformDeactivateUser,
+  platformReactivateUser,
+  platformResetUserPassword,
+  platformSetUserPassword,
+  platformDeleteUser,
+} from "./actions";
 
 type ActionResult = { ok: true; data: unknown } | { ok: false; error: string };
 
@@ -19,4 +25,21 @@ export async function reactivateUserAction(
   userId: string,
 ): Promise<ActionResult> {
   return platformReactivateUser({ userId });
+}
+
+export async function resetUserPasswordAction(
+  userId: string,
+): Promise<ActionResult> {
+  return platformResetUserPassword({ userId });
+}
+
+export async function setUserPasswordAction(
+  userId: string,
+  password: string,
+): Promise<ActionResult> {
+  return platformSetUserPassword({ userId, password });
+}
+
+export async function deleteUserAction(userId: string): Promise<ActionResult> {
+  return platformDeleteUser({ userId });
 }
