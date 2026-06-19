@@ -117,6 +117,50 @@ test.describe("Subitems: create / nest / reorder / rollup / delete", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByText("Epic")).toBeVisible({ timeout: 15_000 });
 
+    // ── 5b. Create a second top-level item, then drag it above "Epic" ─────────
+    // Reuses the same group's "Add item" input. After Enter the input clears,
+    // so we re-fill it for "Story".
+    const itemInput = page.getByLabel("Add item", { exact: true });
+    await itemInput.fill("Story");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "Story name" })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    const storyHandle = page.getByRole("button", { name: "Reorder Story" });
+    const epicHandle = page.getByRole("button", { name: "Reorder Epic" });
+
+    // Hover the row to reveal the opacity-0 handle, then drag.
+    await page.getByRole("button", { name: "Story name" }).hover();
+    await expect(storyHandle).toBeVisible({ timeout: 10_000 });
+    const storyBox = await storyHandle.boundingBox();
+    const epicBox = await epicHandle.boundingBox();
+    expect(storyBox, "Story drag handle must be visible").not.toBeNull();
+    expect(epicBox, "Epic drag handle must be visible").not.toBeNull();
+
+    const storyCx = storyBox!.x + storyBox!.width / 2;
+    const storyCy = storyBox!.y + storyBox!.height / 2;
+    const epicCy = epicBox!.y + epicBox!.height / 2;
+
+    await page.mouse.move(storyCx, storyCy);
+    await page.mouse.down();
+    // Move in small steps to satisfy dnd-kit's activationConstraint (distance ≥ 6px).
+    await page.mouse.move(storyCx, storyCy - 4);
+    await page.mouse.move(storyCx, storyCy - 8);
+    await page.mouse.move(storyCx, epicCy - 4);
+    await page.mouse.up();
+
+    // Wait for the reorderItem Server Action to settle.
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // Assert "Story" is now the first top-level row (above "Epic").
+    const firstItem = page
+      .locator('[aria-label="Story name"], [aria-label="Epic name"]')
+      .first();
+    await expect(firstItem).toHaveAttribute("aria-label", "Story name", {
+      timeout: 10_000,
+    });
+
     // ── 6. Add the first subitem: hover "Epic" name → click "Add subitem to Epic"
     // The button is opacity-0 until the name cell is hovered (group-hover/name).
     // Playwright's hover() triggers CSS :hover so it becomes visible.
