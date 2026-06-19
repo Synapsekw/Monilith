@@ -517,10 +517,13 @@ function GroupSection({
   }
 
   return (
+    // Translate only (no scale): CSS.Transform emits dnd-kit's scaleX/scaleY,
+    // which — with variable-height groups — stretches the absolutely-positioned
+    // virtual rows. Mirrors KanbanCard's translate3d-only drag transform.
     <section
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(isDragging && "relative z-10 opacity-70")}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn(isDragging && "relative z-20 shadow-lg")}
     >
       {/* Colored band header — group.color tints the left rail + label. */}
       <div
