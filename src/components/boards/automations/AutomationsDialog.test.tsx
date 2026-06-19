@@ -283,11 +283,13 @@ describe("AutomationsDialog", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /new automation/i }),
     );
-    expect(
-      await screen.findByRole("button", {
-        name: /call a webhook on status change/i,
-      }),
-    ).toBeInTheDocument();
+    // Both the recipe button ("Call a webhook on status change") AND the
+    // builder's own action button ("Call a webhook") must be present, proving
+    // that canWebhook=true reached <AutomationBuilder>.
+    const webhookBtns = await screen.findAllByRole("button", {
+      name: /call a webhook/i,
+    });
+    expect(webhookBtns.length).toBeGreaterThanOrEqual(2);
   });
 
   it("hides the webhook button for a non-admin", async () => {
@@ -296,11 +298,11 @@ describe("AutomationsDialog", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /new automation/i }),
     );
+    // Neither the recipe button nor the builder's action button should render
+    // when canWebhook=false (non-admin).
     expect(
-      screen.queryByRole("button", {
-        name: /call a webhook on status change/i,
-      }),
-    ).toBeNull();
+      screen.queryAllByRole("button", { name: /call a webhook/i }),
+    ).toHaveLength(0);
   });
 
   it("Cancel from build mode returns to list mode", async () => {

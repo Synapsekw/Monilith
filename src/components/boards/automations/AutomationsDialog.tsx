@@ -286,8 +286,7 @@ export function AutomationsDialog({
               statusColumns.length > 0 ||
               peopleColumns.length > 0 ||
               canDateReachedSetOption ||
-              canDueSoonNotify ||
-              (isAdmin && statusColumns.length > 0)) &&
+              canDueSoonNotify) &&
             !initialDraft ? (
               <div className="flex flex-col gap-2">
                 <p className="text-muted-foreground text-xs font-medium">
