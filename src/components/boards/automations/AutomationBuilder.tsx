@@ -59,6 +59,9 @@ function isActionComplete(a: AutomationAction): boolean {
       ? !!a.recipient.peopleColumnId
       : !!a.recipient.userId;
   }
+  if (a.type === "call_webhook") {
+    return /^https:\/\/.+/.test(a.url);
+  }
   return !!a.columnId && !!a.optionId;
 }
 function memberLabel(m: BuilderMember): string {
@@ -73,12 +76,14 @@ export function AutomationBuilder({
   columns,
   members,
   initial,
+  canWebhook = false,
   onSubmit,
   onCancel,
 }: {
   columns: CacheColumn[];
   members: BuilderMember[];
   initial?: Draft;
+  canWebhook?: boolean;
   onSubmit: (draft: Draft) => void;
   onCancel: () => void;
 }) {
@@ -198,6 +203,12 @@ export function AutomationBuilder({
     setActions((prev) => [
       ...prev,
       { _id: nextId(), type: "set_option", columnId: "", optionId: "" },
+    ]);
+  }
+  function addWebhook() {
+    setActions((prev) => [
+      ...prev,
+      { _id: nextId(), type: "call_webhook", url: "" },
     ]);
   }
 
@@ -439,6 +450,11 @@ export function AutomationBuilder({
                     members={members}
                     onChange={(next) => updateAction(action._id, next)}
                   />
+                ) : action.type === "call_webhook" ? (
+                  <WebhookRow
+                    action={action}
+                    onChange={(next) => updateAction(action._id, next)}
+                  />
                 ) : (
                   <SetOptionRow
                     action={action}
@@ -472,6 +488,16 @@ export function AutomationBuilder({
           >
             <Plus className="size-3.5" /> Set a column
           </Button>
+          {canWebhook ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addWebhook}
+            >
+              <Plus className="size-3.5" /> Call a webhook
+            </Button>
+          ) : null}
         </div>
       </fieldset>
 
@@ -631,6 +657,91 @@ function SetOptionRow({
             </option>
           ))}
         </select>
+      </label>
+    </>
+  );
+}
+
+function WebhookRow({
+  action,
+  onChange,
+}: {
+  action: Extract<AutomationAction, { type: "call_webhook" }>;
+  onChange: (next: AutomationAction) => void;
+}) {
+  const urlInvalid = action.url.length > 0 && !/^https:\/\/.+/.test(action.url);
+  const header = action.authHeader;
+  function patch(
+    next: Partial<Extract<AutomationAction, { type: "call_webhook" }>>,
+  ) {
+    const merged = {
+      type: "call_webhook" as const,
+      url: action.url,
+      authHeader: action.authHeader,
+      ...next,
+    };
+    if (merged.authHeader === undefined) {
+      const { authHeader: _ah, ...withoutHeader } = merged;
+      void _ah;
+      onChange(withoutHeader);
+    } else {
+      onChange(merged);
+    }
+  }
+  return (
+    <>
+      <label className="col-span-2 text-sm">
+        <span className="text-muted-foreground">Webhook URL</span>
+        <input
+          aria-label="Webhook URL"
+          type="url"
+          inputMode="url"
+          placeholder="https://hooks.example.com/…"
+          className={selectClass}
+          value={action.url}
+          onChange={(e) => patch({ url: e.target.value })}
+        />
+        {urlInvalid ? (
+          <span className="text-destructive mt-1 block text-xs">
+            Must start with https://
+          </span>
+        ) : null}
+      </label>
+      <label className="text-sm">
+        <span className="text-muted-foreground">Header name (optional)</span>
+        <input
+          aria-label="Auth header name"
+          className={selectClass}
+          placeholder="Authorization"
+          value={header?.name ?? ""}
+          onChange={(e) => {
+            const name = e.target.value;
+            patch({
+              authHeader:
+                name || header?.value
+                  ? { name, value: header?.value ?? "" }
+                  : undefined,
+            });
+          }}
+        />
+      </label>
+      <label className="text-sm">
+        <span className="text-muted-foreground">Header value (optional)</span>
+        <input
+          aria-label="Auth header value"
+          className={selectClass}
+          placeholder="Bearer …"
+          value={header?.value ?? ""}
+          onChange={(e) => {
+            const value = e.target.value;
+            patch({
+              authHeader:
+                value || header?.name
+                  ? { name: header?.name ?? "", value }
+                  : undefined,
+            });
+          }}
+        />
       </label>
     </>
   );

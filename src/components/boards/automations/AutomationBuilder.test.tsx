@@ -410,6 +410,56 @@ describe("5b-2 date_reached trigger", () => {
   });
 });
 
+describe("5c-2 webhook action", () => {
+  const cols = columns;
+
+  it("hides the webhook action button when canWebhook is false", () => {
+    render(
+      <AutomationBuilder
+        columns={cols}
+        members={[]}
+        canWebhook={false}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /call a webhook/i }),
+    ).toBeNull();
+  });
+
+  it("adds a webhook action and validates https before enabling save", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={cols}
+        members={[]}
+        canWebhook
+        initial={{ trigger: { type: "item_created" }, actions: [] }}
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /call a webhook/i }),
+    );
+    // save disabled until a valid https url is entered
+    expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
+    await userEvent.type(
+      screen.getByLabelText(/webhook url/i),
+      "https://hooks.example.com/abc",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actions: [
+          { type: "call_webhook", url: "https://hooks.example.com/abc" },
+        ],
+      }),
+    );
+  });
+});
+
 describe("5b-1 recipes", () => {
   it("recipeItemCreatedSetOption builds an item_created → set_option draft", () => {
     const d = recipeItemCreatedSetOption("col-1", "opt-1");
