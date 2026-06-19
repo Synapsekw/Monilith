@@ -49,6 +49,23 @@ Day-to-day:
 > other live sessions. For genuinely parallel, isolated work use a **git worktree** (a separate
 > folder per branch), not a branch switch.
 
+## Commit hygiene (stage your own work only)
+
+Because every session shares one `develop` checkout (above), the working tree at any moment may
+hold changes from **other concurrent sessions, the editor, or tooling** (e.g. `.obsidian/*`,
+generated files). A commit must contain **only the work this session actually did**.
+
+- **Stage explicitly by path.** `git add <specific/paths>` for the files you created or changed.
+  **Never** `git add -A`, `git add .`, `git add --all`, or `git commit -a` — they sweep in
+  everything in the tree, including other sessions' work.
+- **Inspect before you commit.** Run `git status` (and `git diff --staged`) and confirm every
+  staged path is yours. If something you didn't touch is staged, unstage it (`git restore
+--staged <path>`).
+- **Leave unrelated changes alone.** Don't stage, `git stash`, `git checkout --`, or otherwise
+  revert files another session may be editing — you'd clobber live work. Just don't include them.
+- **Only exception:** the user **explicitly** asks you to include everything / commit unrelated
+  changes. Absent that, your commit is scoped to your own edits.
+
 ## Commit messages (Conventional Commits)
 
 ```

@@ -63,6 +63,12 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
      (it clobbers other live sessions). All sessions simply stay on `develop`. If you genuinely
      need isolation for parallel work, use a **git worktree** (a separate folder per branch), not a
      branch switch in the shared checkout.
+   - **Commit your own work only.** That same shared checkout may hold changes from other
+     concurrent sessions, the editor, or tooling. **Stage explicitly by path** (`git add <paths>`)
+     — never `git add -A` / `git add .` / `git commit -a`, which sweep in everything in the tree.
+     Run `git status` first and confirm every staged path is yours; leave unrelated changes
+     unstaged (don't `git stash` or revert them — that clobbers live work). Sweep in unrelated
+     changes **only** when I explicitly ask. Full reference: `CONTRIBUTING.md` → "Commit hygiene".
    - `main` is protected: no direct pushes — it only advances via the promotion PR.
 
 2. **Use Superpowers skills for non-trivial work — but don't overthink trivial changes.** For
