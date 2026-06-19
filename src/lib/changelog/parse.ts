@@ -35,9 +35,10 @@ export function parseChangelogTrailers(gitLog: string): ChangelogEntry[] {
       const value = raw.trim();
       if (!value) continue;
 
-      const [rawKind = "", title = "", description = ""] = value
-        .split("|")
-        .map((p) => p.trim());
+      const parts = value.split("|");
+      const rawKind = (parts[0] ?? "").trim();
+      const title = (parts[1] ?? "").trim();
+      const description = parts.slice(2).join("|").trim();
 
       const kind = kindSchema.safeParse(rawKind);
       if (!kind.success || !title) {

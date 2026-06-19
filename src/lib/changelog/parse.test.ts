@@ -69,4 +69,16 @@ describe("parseChangelogTrailers", () => {
   it("returns [] for empty input", () => {
     expect(parseChangelogTrailers("")).toEqual([]);
   });
+
+  it("keeps a literal pipe in the description", () => {
+    const log = record("2026-06-18", "new | Filter view | Group by A | B");
+    expect(parseChangelogTrailers(log)).toEqual([
+      {
+        date: "2026-06-18",
+        kind: "new",
+        title: "Filter view",
+        description: "Group by A | B",
+      },
+    ]);
+  });
 });
