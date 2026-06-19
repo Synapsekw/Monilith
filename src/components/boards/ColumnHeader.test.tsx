@@ -40,6 +40,40 @@ describe("ColumnHeader", () => {
     expect(onRename).toHaveBeenCalledWith("Priority");
   });
 
+  it("shows 'Edit labels' for an option-bearing column and fires onEditOptions", () => {
+    const onEditOptions = vi.fn();
+    render(
+      <ColumnHeader
+        column={col({ kind: "status", name: "Status" })}
+        width={180}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+        onEditOptions={onEditOptions}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Status column menu"));
+    fireEvent.click(screen.getByText("Edit labels"));
+    expect(onEditOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides 'Edit labels' for a column kind without options", () => {
+    render(
+      <ColumnHeader
+        column={col({ kind: "text", name: "Notes" })}
+        width={180}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+        onEditOptions={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Notes column menu"));
+    expect(screen.queryByText("Edit labels")).not.toBeInTheDocument();
+  });
+
   it("confirms before delete", () => {
     const onDelete = vi.fn();
     render(

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import type { CacheColumn } from "@/lib/boards/cache";
+import { COLUMN_KIND_META } from "@/lib/boards/column-kinds";
 
 const MIN = 80;
 const MAX = 1200;
@@ -31,6 +32,7 @@ export function ColumnHeader({
   onDelete,
   onResize,
   onResizeEnd,
+  onEditOptions,
 }: {
   column: CacheColumn;
   width: number;
@@ -38,6 +40,7 @@ export function ColumnHeader({
   onDelete: () => void;
   onResize: (width: number) => void; // live, each drag move (updates liveWidths)
   onResizeEnd: (width: number) => void; // on release (persists via resizeColumn)
+  onEditOptions?: () => void; // open the option editor (status/dropdown only)
 }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -95,6 +98,11 @@ export function ColumnHeader({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {COLUMN_KIND_META[column.kind].hasOptions && onEditOptions && (
+                <DropdownMenuItem onSelect={() => onEditOptions()}>
+                  Edit labels
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onSelect={() => {
                   setDraft(column.name);

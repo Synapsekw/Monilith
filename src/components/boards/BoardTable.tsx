@@ -37,8 +37,14 @@ import {
   CellEditor,
   type EditorMember,
 } from "@/components/boards/cells/editors";
-import type { BoardCache, CacheCellValue } from "@/lib/boards/cache";
+import type {
+  BoardCache,
+  CacheCellValue,
+  CacheColumn,
+} from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
+import { countOptionUsage } from "@/lib/boards/option-edit";
+import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { ColumnHeader } from "@/components/boards/ColumnHeader";
@@ -147,6 +153,7 @@ export function BoardTable({
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
 
   const toggleExpand = (id: string) =>
     setExpanded((prev) => {
@@ -298,6 +305,7 @@ export function BoardTable({
                 onDelete={() => mutations.deleteColumn(col.id)}
                 onResize={(w) => setLiveWidths((m) => ({ ...m, [col.id]: w }))}
                 onResizeEnd={(w) => mutations.resizeColumn(col.id, w)}
+                onEditOptions={() => setOptionsFor(col)}
               />
             ))}
             <AddColumnMenu onAdd={(kind) => mutations.addColumn(kind)} />
@@ -355,6 +363,25 @@ export function BoardTable({
           />
         </div>
       </div>
+
+      {optionsFor && (
+        <ColumnOptionsDialog
+          open
+          column={optionsFor}
+          usageOf={(optionId) =>
+            countOptionUsage(cache.cellValues, optionsFor.id, optionId)
+          }
+          onSave={(settings) =>
+            mutations.updateColumnSettings(optionsFor.id, settings)
+          }
+          onRemoveOption={(optionId) =>
+            mutations.removeColumnOption(optionsFor.id, optionId)
+          }
+          onOpenChange={(o) => {
+            if (!o) setOptionsFor(null);
+          }}
+        />
+      )}
     </div>
   );
 }
