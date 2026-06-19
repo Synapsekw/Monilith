@@ -259,8 +259,9 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5c-2 webhook", () => {
     const m = async (code: number | null, err: string | null) =>
       (
         await admin.rpc("_webhook_outcome", {
-          p_status_code: code,
-          p_error_msg: err,
+          // Cast: the SQL fn accepts NULL args (tested below), but generated Args type is non-nullable.
+          p_status_code: code as number,
+          p_error_msg: err as string,
         })
       ).data;
     expect(await m(200, null)).toBe("delivered_200");
