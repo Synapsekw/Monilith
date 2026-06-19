@@ -7,6 +7,7 @@ import {
   renameBoardSchema,
   renameGroupSchema,
   renameItemSchema,
+  resizeNameColumnSchema,
 } from "./board-actions";
 import { upsertCellSchema, clearCellSchema } from "./board-actions";
 
@@ -81,6 +82,24 @@ describe("board action schemas", () => {
     expect(
       renameItemSchema.safeParse({ itemId: uuid, name: "Renamed" }).success,
     ).toBe(true);
+  });
+
+  it("resizeNameColumn accepts an in-range width and null (auto-fit)", () => {
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: 300 }).success,
+    ).toBe(true);
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: null }).success,
+    ).toBe(true);
+  });
+
+  it("resizeNameColumn rejects out-of-range and non-int widths", () => {
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: 5000 }).success,
+    ).toBe(false);
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: 12.5 }).success,
+    ).toBe(false);
   });
 });
 

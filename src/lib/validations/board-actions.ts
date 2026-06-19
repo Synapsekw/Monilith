@@ -41,3 +41,9 @@ export const resizeColumnSchema = z.object({
   columnId: uuid,
   width: z.number().int().min(80).max(1200),
 });
+// The built-in Name column persists per-board. NULL = auto-fit (client measures
+// the longest item name); an integer is a user-dragged width.
+export const resizeNameColumnSchema = z.object({
+  boardId: uuid,
+  width: z.number().int().min(80).max(1200).nullable(),
+});
