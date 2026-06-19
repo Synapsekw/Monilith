@@ -11,6 +11,7 @@ import {
   renameGroup,
   renameItem,
   resizeColumn,
+  resizeNameColumn,
   upsertCell,
 } from "@/lib/boards/actions";
 import {
@@ -42,6 +43,7 @@ type AddItemVars = { groupId: string; name: string };
 type RenameItemVars = { itemId: string; name: string };
 type RenameGroupVars = { groupId: string; name: string };
 type RenameBoardVars = { name: string };
+type ResizeNameColumnVars = { width: number | null };
 type AddDependencyVars = { predecessorId: string; successorId: string };
 type RemoveDependencyVars = { dependencyId: string };
 type Ctx = { previous?: BoardCache };
@@ -305,6 +307,36 @@ export function useBoardMutations(boardId: string) {
     },
   );
 
+  const resizeNameColumnMutation = useMutation<
+    unknown,
+    Error,
+    ResizeNameColumnVars,
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await resizeNameColumn({ boardId, width: vars.width });
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        qc.setQueryData<BoardCache>(
+          key,
+          replaceBoard(previous, {
+            ...previous.board,
+            name_column_width: vars.width,
+          }),
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
   /**
    * Add a dependency. Non-optimistic: we do NOT insert into the cache here.
    * The Realtime INSERT echo will arrive in ms and `addDependency` is idempotent,
@@ -371,6 +403,8 @@ export function useBoardMutations(boardId: string) {
         { name },
         { onSuccess: () => callbacks?.onSuccess?.() },
       ),
+    resizeNameColumn: (width: number | null) =>
+      resizeNameColumnMutation.mutate({ width }),
     addDependency: (
       vars: AddDependencyVars,
       callbacks?: { onError?: (err: Error) => void },
