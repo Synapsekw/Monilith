@@ -265,4 +265,29 @@ describe("useBoardMutations.addGroup", () => {
     });
     expect(onSuccess).toHaveBeenCalledWith("g2");
   });
+
+  it("surfaces errors via onError callback and leaves the cache untouched", async () => {
+    const qc = new QueryClient();
+    seedCache(qc); // groups: []
+    createGroup.mockResolvedValue({ ok: false, error: "boom" });
+
+    const onError = vi.fn();
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.addGroup("Group 2", { onError });
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "boom" }),
+      );
+    });
+
+    // No optimistic add, so nothing to roll back — cache stays empty.
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.groups).toHaveLength(0);
+  });
 });
