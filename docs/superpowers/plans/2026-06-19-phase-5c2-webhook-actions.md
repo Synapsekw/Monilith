@@ -520,7 +520,6 @@ declare
   v_code   int;
   v_err    text;
   v_timed  boolean;
-  v_done   boolean;
 begin
   for d in
     select request_id, run_id, action_index
@@ -532,8 +531,7 @@ begin
     from net._http_response
     where id = d.request_id;
 
-    get diagnostics v_done = row_count;
-    if not v_done then
+    if not found then
       continue;  -- response not back yet; revisit next minute
     end if;
 
