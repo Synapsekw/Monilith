@@ -42,7 +42,7 @@ export default async function AdminLayout({
       dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
       isPlatformAdmin
     >
-      <div className="mx-auto max-w-5xl px-6 py-10">{children}</div>
+      <div className="w-full px-6 py-8 lg:px-10">{children}</div>
     </AppShell>
   );
 }
