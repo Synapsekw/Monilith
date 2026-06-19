@@ -131,6 +131,74 @@ export type Database = {
           },
         ];
       };
+      automation_runs: {
+        Row: {
+          actions: Json;
+          automation_id: string;
+          board_id: string;
+          created_at: string;
+          error: string | null;
+          id: string;
+          item_id: string | null;
+          org_id: string;
+          status: string;
+          trigger_type: string;
+        };
+        Insert: {
+          actions?: Json;
+          automation_id: string;
+          board_id: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          item_id?: string | null;
+          org_id: string;
+          status: string;
+          trigger_type: string;
+        };
+        Update: {
+          actions?: Json;
+          automation_id?: string;
+          board_id?: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          item_id?: string | null;
+          org_id?: string;
+          status?: string;
+          trigger_type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_automation_id_fkey";
+            columns: ["automation_id"];
+            isOneToOne: false;
+            referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       automations: {
         Row: {
           actions: Json;
@@ -1026,18 +1094,33 @@ export type Database = {
         Returns: boolean;
       };
       _automation_date_sweep: { Args: { p_now?: string }; Returns: undefined };
-      _automation_run: {
-        Args: {
-          p_actions: Json;
-          p_actor: string;
-          p_automation_id: string;
-          p_board_id: string;
-          p_condition: Json;
-          p_item_id: string;
-          p_org_id: string;
-        };
-        Returns: undefined;
-      };
+      _automation_run:
+        | {
+            Args: {
+              p_actions: Json;
+              p_actor: string;
+              p_automation_id: string;
+              p_board_id: string;
+              p_condition: Json;
+              p_item_id: string;
+              p_org_id: string;
+            };
+            Returns: undefined;
+          }
+        | {
+            Args: {
+              p_actions: Json;
+              p_actor: string;
+              p_automation_id: string;
+              p_board_id: string;
+              p_condition: Json;
+              p_item_id: string;
+              p_org_id: string;
+              p_trigger_type: string;
+            };
+            Returns: undefined;
+          };
+      _automation_runs_prune: { Args: never; Returns: undefined };
       _dashboard_list_predicate: {
         Args: { p_col: string; p_op: string; p_val: string };
         Returns: string;
