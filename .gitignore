@@ -75,6 +75,14 @@ next-env.d.ts
 # Volatile Obsidian graph view-state (not knowledge)
 .obsidian/graph.json
 
+# Volatile per-user Obsidian UI/plugin state (churns every session; not shared config).
+# app.json stays TRACKED (shared link-format + attachment-path settings).
+.obsidian/appearance.json
+.obsidian/core-plugins.json
+
+# Obsidian's default new-vault placeholder note.
+Welcome.md
+
 # Brainstorming visual companion (local mockups)
 .superpowers/
 e2e/.artifacts/
