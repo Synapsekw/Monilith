@@ -8,11 +8,11 @@ export const signInSchema = z.object({
 export const signUpSchema = z.object({
   email: z.email("Enter a valid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  fullName: z
+  orgName: z
     .string()
     .trim()
-    .optional()
-    .transform((value) => (value ? value : undefined)),
+    .min(1, "Organization name is required")
+    .max(100, "Organization name must be 100 characters or fewer"),
 });
 
 export type SignInInput = z.infer<typeof signInSchema>;

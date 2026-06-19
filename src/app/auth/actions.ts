@@ -54,7 +54,7 @@ export async function signUp(
   const parsed = signUpSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
-    fullName: formData.get("fullName"),
+    orgName: formData.get("orgName"),
   });
 
   if (!parsed.success) {
@@ -68,9 +68,7 @@ export async function signUp(
     password: parsed.data.password,
     options: {
       emailRedirectTo: `${origin}/auth/callback`,
-      data: parsed.data.fullName
-        ? { full_name: parsed.data.fullName }
-        : undefined,
+      data: { org_name: parsed.data.orgName },
     },
   });
 
