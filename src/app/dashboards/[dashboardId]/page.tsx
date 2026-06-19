@@ -19,19 +19,22 @@ export default async function DashboardPage({
   if (!payload) notFound();
 
   // Source-board options for the Add-widget dialog: workspace boards + their
-  // numbers columns.
+  // columns. The columns read is filtered by the board's workspace via an inner
+  // embed (columns_board_id_fkey) so it no longer waterfalls on the boards query
+  // — both run in parallel. Boards with zero columns still appear (boards query).
   const supabase = await createClient();
-  const { data: boardRows } = await supabase
-    .from("boards")
-    .select("id, name")
-    .eq("workspace_id", payload.dashboard.workspace_id)
-    .order("position", { ascending: true });
-  const boardIds = (boardRows ?? []).map((b) => b.id);
-  const { data: allCols } = await supabase
-    .from("columns")
-    .select("id, name, kind, settings, board_id")
-    .in("board_id", boardIds)
-    .order("position", { ascending: true });
+  const [{ data: boardRows }, { data: allCols }] = await Promise.all([
+    supabase
+      .from("boards")
+      .select("id, name")
+      .eq("workspace_id", payload.dashboard.workspace_id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("columns")
+      .select("id, name, kind, settings, board_id, boards!inner(workspace_id)")
+      .eq("boards.workspace_id", payload.dashboard.workspace_id)
+      .order("position", { ascending: true }),
+  ]);
 
   const boards: BoardOption[] = (boardRows ?? []).map((b) => {
     const cols = (allCols ?? []).filter((c) => c.board_id === b.id);
