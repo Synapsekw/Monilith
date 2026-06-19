@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Settings, Shield } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { Brand } from "@/components/brand/brand";
 import { Sidebar } from "@/components/sidebar";
@@ -45,6 +45,8 @@ type AppShellProps = {
   workspaces?: AppShellWorkspace[];
   boards?: BoardListEntry[];
   dashboards?: AppShellDashboard[];
+  /** When true, the user menu shows a link to the cross-org platform console. */
+  isPlatformAdmin?: boolean;
 };
 
 function initialFor(user: AppShellUser): string {
@@ -52,7 +54,13 @@ function initialFor(user: AppShellUser): string {
   return source ? source.charAt(0).toUpperCase() : "?";
 }
 
-function UserMenu({ user }: { user: AppShellUser }) {
+function UserMenu({
+  user,
+  isPlatformAdmin,
+}: {
+  user: AppShellUser;
+  isPlatformAdmin?: boolean;
+}) {
   const label = user.full_name?.trim() || user.email || "Account";
 
   return (
@@ -66,6 +74,14 @@ function UserMenu({ user }: { user: AppShellUser }) {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {isPlatformAdmin ? (
+          <DropdownMenuItem asChild>
+            <Link href="/admin" className="flex items-center gap-2">
+              <Shield className="size-4" />
+              Platform admin
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem asChild>
           <Link href="/settings" className="flex items-center gap-2">
             <Settings className="size-4" />
@@ -92,6 +108,7 @@ export function AppShell({
   workspaces,
   boards,
   dashboards,
+  isPlatformAdmin,
 }: AppShellProps) {
   return (
     <div className="flex h-svh w-full overflow-hidden">
@@ -112,7 +129,9 @@ export function AppShell({
               <NotificationsBell userId={currentUserId} />
             ) : null}
             <ThemeToggle />
-            {user ? <UserMenu user={user} /> : null}
+            {user ? (
+              <UserMenu user={user} isPlatformAdmin={isPlatformAdmin} />
+            ) : null}
           </div>
         </header>
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>

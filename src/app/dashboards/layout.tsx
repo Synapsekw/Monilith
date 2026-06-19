@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { listBoards } from "@/lib/boards/queries";
 import { listDashboards } from "@/lib/dashboards/queries";
 import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { isPlatformAdmin } from "@/lib/platform/guard";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -21,12 +22,14 @@ export default async function DashboardsLayout({
 }) {
   const user = await requireUser();
   const supabase = await createClient();
-  const [orgs, boards, dashboards, { data: workspaces }] = await Promise.all([
-    getUserOrgs(),
-    listBoards(),
-    listDashboards(),
-    supabase.from("workspaces").select("id, name"),
-  ]);
+  const [orgs, boards, dashboards, { data: workspaces }, platformAdmin] =
+    await Promise.all([
+      getUserOrgs(),
+      listBoards(),
+      listDashboards(),
+      supabase.from("workspaces").select("id, name"),
+      isPlatformAdmin(),
+    ]);
 
   return (
     <AppShell
@@ -42,6 +45,7 @@ export default async function DashboardsLayout({
       workspaces={workspaces ?? []}
       boards={boards}
       dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
+      isPlatformAdmin={platformAdmin}
     >
       {children}
     </AppShell>
