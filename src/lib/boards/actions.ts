@@ -145,7 +145,7 @@ export async function renameGroup(input: {
 export async function createGroup(input: {
   boardId: string;
   name: string;
-}): Promise<ActionResult<{ groupId: string }>> {
+}): Promise<ActionResult<{ group: Tables<"groups"> }>> {
   const parsed = createGroupSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -176,12 +176,12 @@ export async function createGroup(input: {
       name: parsed.data.name,
       position: midpoint(last?.position ?? null, null),
     })
-    .select("id")
+    .select("*")
     .single();
   if (error || !data) return fail(error?.message ?? "Could not create group.");
 
   revalidatePath(`/boards/${parsed.data.boardId}`);
-  return { ok: true, data: { groupId: data.id } };
+  return { ok: true, data: { group: data } };
 }
 
 /** Create an item via RPC (server derives org_id/board_id and position). Returns the full created item row. */
