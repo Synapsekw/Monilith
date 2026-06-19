@@ -203,6 +203,72 @@ describe.skipIf(!SERVICE_ROLE_KEY)("admin RLS + RPCs", () => {
     expect(error?.message ?? "").toMatch(/cannot remove the last owner/);
   });
 
+  it("last-owner guard counts only ACTIVE owners (deactivated owner is ignored)", async () => {
+    // Setup: a SECOND owner exists but is deactivated. Before the fix the guard
+    // counted both owners (count=2) and wrongly allowed demoting/removing the
+    // remaining active owner, leaving the org with zero usable owners.
+    const secondOwner = await createUser("second-owner");
+    const { error: seedErr } = await admin.from("org_members").insert({
+      org_id: orgId,
+      user_id: secondOwner.id,
+      role: "owner" as Role,
+    });
+    expect(seedErr, "seed second owner").toBeNull();
+
+    // Deactivate the second owner via the RPC under test (owner is the actor).
+    const { error: deErr } = await owner.anon.rpc("deactivate_member", {
+      p_org_id: orgId,
+      p_user_id: secondOwner.id,
+    });
+    expect(deErr).toBeNull();
+
+    // Sanity: the second owner is indeed deactivated.
+    const { data: soRow } = await admin
+      .from("org_members")
+      .select("deactivated_at")
+      .eq("org_id", orgId)
+      .eq("user_id", secondOwner.id)
+      .single();
+    expect(
+      (soRow as { deactivated_at: string | null }).deactivated_at,
+    ).not.toBeNull();
+
+    // Demoting the remaining ACTIVE owner must be blocked (only 1 active owner).
+    const { error: demoteErr } = await owner.anon.rpc("set_member_role", {
+      p_org_id: orgId,
+      p_user_id: owner.id,
+      p_new_role: "member" as Role,
+    });
+    expect(demoteErr).not.toBeNull();
+    expect(demoteErr?.message ?? "").toMatch(/cannot demote the last owner/);
+
+    // Removing the remaining ACTIVE owner must be blocked too.
+    const { error: removeErr } = await owner.anon.rpc("remove_member", {
+      p_org_id: orgId,
+      p_user_id: owner.id,
+    });
+    expect(removeErr).not.toBeNull();
+    expect(removeErr?.message ?? "").toMatch(/cannot remove the last owner/);
+
+    // The active owner's role is intact.
+    const { data: ownerRow } = await admin
+      .from("org_members")
+      .select("role")
+      .eq("org_id", orgId)
+      .eq("user_id", owner.id)
+      .single();
+    expect((ownerRow as { role: Role }).role).toBe("owner");
+
+    // Cleanup: remove the deactivated second owner so it doesn't perturb later
+    // owner-count-sensitive cases (service-role delete; not the RPC under test).
+    const { error: cleanupErr } = await admin
+      .from("org_members")
+      .delete()
+      .eq("org_id", orgId)
+      .eq("user_id", secondOwner.id);
+    expect(cleanupErr).toBeNull();
+  });
+
   it("deactivated member is denied org data; reactivation restores it", async () => {
     // Baseline: active member sees their org + board.
     const { data: orgsBefore } = await member.anon
