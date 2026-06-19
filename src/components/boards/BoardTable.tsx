@@ -812,19 +812,24 @@ function ItemRow({
 }) {
   const chevron =
     childCount > 0 ? (
-      <button
-        type="button"
-        aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.name}`}
-        aria-expanded={isExpanded}
-        onClick={onToggle}
-        className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded"
-      >
-        {isExpanded ? (
-          <ChevronDown className="size-3.5" />
-        ) : (
-          <ChevronRight className="size-3.5" />
-        )}
-      </button>
+      <>
+        <button
+          type="button"
+          aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.name}`}
+          aria-expanded={isExpanded}
+          onClick={onToggle}
+          className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded"
+        >
+          {isExpanded ? (
+            <ChevronDown className="size-3.5" />
+          ) : (
+            <ChevronRight className="size-3.5" />
+          )}
+        </button>
+        <span className="text-muted-foreground ml-1 text-xs">
+          ({childCount})
+        </span>
+      </>
     ) : (
       // Spacer to keep name text aligned
       <span className="inline-block size-6 shrink-0" aria-hidden />
@@ -945,7 +950,6 @@ function SubitemBlock({
       <AddSubitemRow
         parentId={parentId}
         controls={controls}
-        nameWidth={Number.parseInt(template) || 240}
         onAdded={onAdded}
       />
     </div>
@@ -960,7 +964,6 @@ function AddSubitemRow({
 }: {
   parentId: string;
   controls: CellControls;
-  nameWidth: number;
   onAdded: (id: string) => void;
 }) {
   const [name, setName] = useState("");

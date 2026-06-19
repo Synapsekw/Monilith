@@ -242,4 +242,141 @@ describe("BoardTable subitems", () => {
       expect(deleteItem).toHaveBeenCalledWith({ itemId: "s1" }),
     );
   });
+
+  it("shows an AlertDialog before deleting a parent with children", async () => {
+    deleteItem.mockResolvedValue({ ok: true, data: undefined });
+    renderNested();
+
+    // Open the "Epic" row menu and click Delete
+    fireEvent.click(screen.getByLabelText("Epic menu"));
+    fireEvent.click(screen.getByText("Delete"));
+
+    // deleteItem must NOT have been called yet — the dialog is open
+    expect(deleteItem).not.toHaveBeenCalled();
+
+    // The confirm dialog should be visible
+    expect(
+      screen.getByText(/permanently deletes the item and all of its subitems/i),
+    ).toBeInTheDocument();
+
+    // Clicking the dialog's Delete button confirms
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(deleteItem).toHaveBeenCalledWith({ itemId: "p1" }),
+    );
+  });
+
+  it("renders the (N) child-count badge next to the chevron", () => {
+    renderNested();
+    // The badge should show "(2)" for the "Epic" parent which has 2 subitems
+    expect(screen.getByText("(2)")).toBeInTheDocument();
+  });
+});
+
+function childlessPayload() {
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [],
+    items: [
+      {
+        id: "t1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task One",
+        position: 0,
+      },
+    ],
+    cellValues: [],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderChildless() {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardTable payload={childlessPayload()} selectedViewId="v1" />
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable add-subitem hover button", () => {
+  it("shows the Add subitem button on a childless top-level item", async () => {
+    addSubitem.mockResolvedValue({
+      ok: true,
+      data: {
+        item: {
+          id: "new-s1",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: "t1",
+          name: "New subitem",
+          position: 1,
+        },
+      },
+    });
+
+    renderChildless();
+
+    const btn = screen.getByRole("button", { name: "Add subitem to Task One" });
+    expect(btn).toBeInTheDocument();
+
+    fireEvent.click(btn);
+
+    await waitFor(() =>
+      expect(addSubitem).toHaveBeenCalledWith({
+        parentId: "t1",
+        name: "New subitem",
+      }),
+    );
+  });
+
+  it("calls addSubitem and triggers onSuccess with the new item id", async () => {
+    const newItem = {
+      id: "new-s1",
+      board_id: "b1",
+      org_id: "o1",
+      group_id: "g1",
+      parent_id: "t1",
+      name: "New subitem",
+      position: 1,
+    };
+    addSubitem.mockResolvedValue({ ok: true, data: { item: newItem } });
+
+    renderChildless();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add subitem to Task One" }),
+    );
+
+    // The action is called with the correct args
+    await waitFor(() =>
+      expect(addSubitem).toHaveBeenCalledWith({
+        parentId: "t1",
+        name: "New subitem",
+      }),
+    );
+
+    // After the mutation resolves the parent expands (onToggle fires) and the
+    // Expand button becomes a Collapse button.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Collapse Task One" }),
+      ).toBeInTheDocument(),
+    );
+  });
 });
