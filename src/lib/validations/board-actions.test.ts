@@ -11,6 +11,9 @@ import {
   reorderGroupSchema,
   resizeNameColumnSchema,
   updateGroupColorSchema,
+  addSubitemSchema,
+  deleteItemSchema,
+  reorderItemSchema,
 } from "./board-actions";
 import { upsertCellSchema, clearCellSchema } from "./board-actions";
 
@@ -183,5 +186,40 @@ describe("group management schemas", () => {
     expect(
       updateGroupColorSchema.safeParse({ groupId, color: "#fff" }).success,
     ).toBe(false);
+  });
+});
+
+// Zod 4 enforces strict RFC 4122 UUID format — variant nibble must be [89abAB].
+const UUID = "11111111-1111-4111-8111-111111111111";
+
+describe("addSubitemSchema", () => {
+  it("accepts a valid parentId + name", () => {
+    expect(
+      addSubitemSchema.safeParse({ parentId: UUID, name: "Sub" }).success,
+    ).toBe(true);
+  });
+  it("rejects an empty name", () => {
+    expect(
+      addSubitemSchema.safeParse({ parentId: UUID, name: "  " }).success,
+    ).toBe(false);
+  });
+  it("rejects a non-uuid parentId", () => {
+    expect(
+      addSubitemSchema.safeParse({ parentId: "x", name: "Sub" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("deleteItemSchema", () => {
+  it("accepts a uuid", () => {
+    expect(deleteItemSchema.safeParse({ itemId: UUID }).success).toBe(true);
+  });
+});
+
+describe("reorderItemSchema", () => {
+  it("accepts a numeric position", () => {
+    expect(
+      reorderItemSchema.safeParse({ itemId: UUID, position: 2.5 }).success,
+    ).toBe(true);
   });
 });

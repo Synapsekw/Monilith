@@ -27,6 +27,12 @@ export const updateGroupColorSchema = z.object({
 });
 export const createItemSchema = z.object({ groupId: uuid, name: itemName });
 export const renameItemSchema = z.object({ itemId: uuid, name: itemName });
+export const addSubitemSchema = z.object({ parentId: uuid, name: itemName });
+export const deleteItemSchema = z.object({ itemId: uuid });
+export const reorderItemSchema = z.object({
+  itemId: uuid,
+  position: z.number(),
+});
 
 // Cell value is validated structurally here (must be a JSON object); the
 // kind-specific shape is enforced server-side with cellValueSchema(kind).
