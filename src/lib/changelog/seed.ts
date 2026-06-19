@@ -7,11 +7,67 @@ import type { ChangelogEntry } from "./types";
  */
 export const SEED: ChangelogEntry[] = [
   {
+    date: "2026-06-19",
+    kind: "new",
+    title: "Subitems",
+    description:
+      "Break work down into nested subitems under any row, with rolled-up totals on the parent.",
+  },
+  {
+    date: "2026-06-19",
+    kind: "new",
+    title: "Board groups",
+    description:
+      "Organize rows into colored groups — add, rename, recolor, and reorder them however you like.",
+  },
+  {
+    date: "2026-06-19",
+    kind: "improved",
+    title: "Drag and drop to reorder",
+    description:
+      "Reorder items, subitems, and groups by dragging — changes save and sync instantly.",
+  },
+  {
+    date: "2026-06-19",
+    kind: "new",
+    title: "Team management",
+    description:
+      "Invite teammates and manage members, invitations, and activity from a new admin console in Settings.",
+  },
+  {
+    date: "2026-06-19",
+    kind: "new",
+    title: "Webhook automations",
+    description:
+      "Automations can now call external webhooks, so your boards can talk to the tools you already use.",
+  },
+  {
+    date: "2026-06-19",
+    kind: "improved",
+    title: "Automation run history",
+    description:
+      "See when each automation ran and what happened, right in the builder.",
+  },
+  {
+    date: "2026-06-19",
+    kind: "improved",
+    title: "Quicker sign-up",
+    description:
+      "Name your organization at sign-up and we'll set up your workspace automatically.",
+  },
+  {
     date: "2026-06-18",
     kind: "new",
     title: "Board automations",
     description:
       "Set up rules that react to changes on your board — a guided builder with ready-made recipes.",
+  },
+  {
+    date: "2026-06-18",
+    kind: "improved",
+    title: "More automation triggers",
+    description:
+      "Trigger automations when an item is created, someone is assigned, or a date arrives — with optional conditions.",
   },
   {
     date: "2026-06-18",
