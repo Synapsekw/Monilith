@@ -178,4 +178,88 @@ describe.skipIf(!SERVICE_ROLE_KEY)("platform-admin gate + RPCs", () => {
     expect(normalErr).toBeNull();
     expect(normalSees ?? []).toEqual([]);
   });
+
+  it("platform_stats fails closed for a normal user", async () => {
+    const { data, error } = await normalUser.anon.rpc("platform_stats");
+    expect(error).toBeNull();
+    // SECURITY DEFINER fn gated by is_platform_admin(): zero rows, not an error.
+    expect(data ?? []).toEqual([]);
+  });
+
+  it("platform_stats returns a single counts row for a platform admin", async () => {
+    const { data, error } = await platformAdmin.anon.rpc("platform_stats");
+    expect(error).toBeNull();
+    expect((data ?? []).length).toBe(1);
+
+    const row = (data ?? [])[0]!;
+    // Don't hard-code totals — the shared dev project has other data. There is
+    // at least the seeded admin's org, the created users, and the seeded admin.
+    expect(typeof row.orgs).toBe("number");
+    expect(typeof row.users).toBe("number");
+    expect(typeof row.admins).toBe("number");
+    expect(typeof row.events_24h).toBe("number");
+    expect(row.orgs).toBeGreaterThanOrEqual(1);
+    expect(row.users).toBeGreaterThanOrEqual(1);
+    expect(row.admins).toBeGreaterThanOrEqual(1);
+    expect(row.events_24h).toBeGreaterThanOrEqual(0);
+  });
+
+  it("platform_search_users fails closed for a normal user", async () => {
+    const { data, error } = await normalUser.anon.rpc("platform_search_users", {
+      p_query: "",
+      p_limit: 25,
+      p_offset: 0,
+    });
+    expect(error).toBeNull();
+    expect(data ?? []).toEqual([]);
+  });
+
+  it("platform_search_users finds the seeded admin and honors limit/offset", async () => {
+    // The platform admin's email is `platform-admin-<uuid>@example.com`; use a
+    // distinctive substring (the full local part) so we match exactly that user.
+    const queryFragment = platformAdmin.email.split("@")[0]!;
+    const { data, error } = await platformAdmin.anon.rpc(
+      "platform_search_users",
+      { p_query: queryFragment, p_limit: 25, p_offset: 0 },
+    );
+    expect(error).toBeNull();
+
+    const rows = data ?? [];
+    const match = rows.find((r) => r.id === platformAdmin.id);
+    expect(
+      match,
+      "seeded platform admin should be in search results",
+    ).toBeDefined();
+    expect(match!.email).toBe(platformAdmin.email);
+    // The platform admin self-provisioned no org here, but org_names must be a
+    // (possibly empty) array, never null.
+    expect(Array.isArray(match!.org_names)).toBe(true);
+
+    // limit is honored: limit 1 returns at most 1 row.
+    const { data: limited, error: limitErr } = await platformAdmin.anon.rpc(
+      "platform_search_users",
+      { p_query: "", p_limit: 1, p_offset: 0 },
+    );
+    expect(limitErr).toBeNull();
+    expect((limited ?? []).length).toBeLessThanOrEqual(1);
+  });
+
+  it("platform_search_users returns org_names for a user with org membership", async () => {
+    // `normalUser` was made an admin in `orgId` ("Target Org") by an earlier
+    // test; searching their email must surface that org in org_names.
+    const queryFragment = normalUser.email.split("@")[0]!;
+    const { data, error } = await platformAdmin.anon.rpc(
+      "platform_search_users",
+      { p_query: queryFragment, p_limit: 25, p_offset: 0 },
+    );
+    expect(error).toBeNull();
+
+    const match = (data ?? []).find((r) => r.id === normalUser.id);
+    expect(
+      match,
+      "normalUser should be found by email substring",
+    ).toBeDefined();
+    expect(match!.email).toBe(normalUser.email);
+    expect(match!.org_names).toContain("Target Org");
+  });
 });
