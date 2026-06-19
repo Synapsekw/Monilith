@@ -9,6 +9,7 @@ import {
 } from "@/lib/validations/automations";
 import { listAutomations, type Automation } from "@/lib/boards/queries";
 import type { Json, Tables } from "@/types/database.types";
+import { actionsContainWebhook } from "@/lib/boards/automation-action-helpers";
 
 /**
  * Client-callable read wrapper around {@link listAutomations} so the
@@ -46,6 +47,34 @@ type ActionResult<T = void> =
   | { ok: false; error: string };
 const fail = (error: string): ActionResult<never> => ({ ok: false, error });
 
+async function isOrgAdmin(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+): Promise<boolean> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from("org_members")
+    .select("role")
+    .eq("org_id", orgId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return data?.role === "owner" || data?.role === "admin";
+}
+
+export async function getBoardAdminStatus(boardId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: board } = await supabase
+    .from("boards")
+    .select("org_id")
+    .eq("id", boardId)
+    .maybeSingle();
+  if (!board) return false;
+  return isOrgAdmin(supabase, board.org_id);
+}
+
 export async function createAutomation(input: {
   boardId: string;
   name?: string;
@@ -64,6 +93,13 @@ export async function createAutomation(input: {
     .eq("id", parsed.data.boardId)
     .maybeSingle();
   if (bErr || !board) return fail("Board not found.");
+
+  if (
+    actionsContainWebhook(parsed.data.actions) &&
+    !(await isOrgAdmin(supabase, board.org_id))
+  ) {
+    return fail("Webhook actions require an organization admin");
+  }
 
   const {
     data: { user },
@@ -110,6 +146,21 @@ export async function updateAutomation(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
+
+  if (
+    parsed.data.actions !== undefined &&
+    actionsContainWebhook(parsed.data.actions)
+  ) {
+    const { data: row } = await supabase
+      .from("automations")
+      .select("org_id")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+    if (!row || !(await isOrgAdmin(supabase, row.org_id))) {
+      return fail("Webhook actions require an organization admin");
+    }
+  }
+
   const patch = {
     ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
     ...(parsed.data.enabled !== undefined
