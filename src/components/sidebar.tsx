@@ -11,6 +11,7 @@ import {
 import { Brand } from "@/components/brand/brand";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
+import { PlatformNav } from "@/components/platform/PlatformNav";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -32,10 +33,12 @@ export function Sidebar({
   boards,
   workspaces,
   dashboards,
+  isPlatformAdmin,
 }: {
   boards: BoardListEntry[];
   workspaces: { id: string; name: string }[];
   dashboards: { id: string; name: string }[];
+  isPlatformAdmin?: boolean;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
@@ -108,6 +111,11 @@ export function Sidebar({
         <DashboardsNav
           dashboards={dashboards}
           workspaces={workspaces}
+          collapsed={isCollapsed}
+        />
+
+        <PlatformNav
+          isPlatformAdmin={isPlatformAdmin}
           collapsed={isCollapsed}
         />
 

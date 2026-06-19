@@ -1,0 +1,122 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  ChevronDown,
+  ChevronRight,
+  LayoutDashboard,
+  Building2,
+  Users,
+  ScrollText,
+  Shield,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+type PlatformLink = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+};
+
+const LINKS: readonly PlatformLink[] = [
+  { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/admin/organizations", label: "Organizations", icon: Building2 },
+  { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/audit", label: "Audit log", icon: ScrollText },
+];
+
+function isActive(pathname: string, href: string, exact?: boolean): boolean {
+  return exact ? pathname === href : pathname.startsWith(href);
+}
+
+export function PlatformNav({
+  isPlatformAdmin = false,
+  collapsed = false,
+}: {
+  isPlatformAdmin?: boolean;
+  collapsed?: boolean;
+}) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(true);
+
+  if (!isPlatformAdmin) return null;
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-0.5 px-2 py-2">
+        {LINKS.map((l) => (
+          <Tooltip key={l.href}>
+            <TooltipTrigger asChild>
+              <Link
+                href={l.href}
+                aria-label={l.label}
+                aria-current={
+                  isActive(pathname, l.href, l.exact) ? "page" : undefined
+                }
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-md transition-colors",
+                  isActive(pathname, l.href, l.exact)
+                    ? "bg-surface text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <l.icon className="size-4" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">{l.label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-0.5 border-t px-2 pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="text-muted-foreground hover:text-foreground flex items-center gap-2 rounded-md px-3 py-1 text-xs font-semibold tracking-wide transition-colors"
+      >
+        {open ? (
+          <ChevronDown className="size-3.5" />
+        ) : (
+          <ChevronRight className="size-3.5" />
+        )}
+        <Shield className="size-3.5" />
+        PLATFORM
+        <span className="bg-primary/15 text-primary ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider">
+          SUPER
+        </span>
+      </button>
+      {open
+        ? LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              aria-current={
+                isActive(pathname, l.href, l.exact) ? "page" : undefined
+              }
+              className={cn(
+                "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                isActive(pathname, l.href, l.exact)
+                  ? "border-primary bg-surface text-foreground border-l-2"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground border-l-2 border-transparent",
+              )}
+            >
+              <l.icon className="size-4" />
+              {l.label}
+            </Link>
+          ))
+        : null}
+    </div>
+  );
+}

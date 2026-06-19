@@ -116,6 +116,7 @@ export function AppShell({
         boards={boards ?? []}
         workspaces={workspaces ?? []}
         dashboards={dashboards ?? []}
+        isPlatformAdmin={isPlatformAdmin}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
