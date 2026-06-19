@@ -458,6 +458,28 @@ describe("5c-2 webhook action", () => {
       }),
     );
   });
+
+  it("keeps save disabled for a non-https url", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={cols}
+        members={[]}
+        canWebhook
+        initial={{ trigger: { type: "item_created" }, actions: [] }}
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /call a webhook/i }),
+    );
+    await userEvent.type(
+      screen.getByLabelText(/webhook url/i),
+      "http://hooks.example.com/abc",
+    );
+    expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
+  });
 });
 
 describe("5b-1 recipes", () => {
