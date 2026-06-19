@@ -10,6 +10,14 @@ export type DashboardCache = {
   widgets: CacheWidget[];
 };
 
+/** Set the dashboard's name. Immutable; widgets untouched. */
+export function renameDashboard(
+  cache: DashboardCache,
+  name: string,
+): DashboardCache {
+  return { ...cache, dashboard: { ...cache.dashboard, name } };
+}
+
 /** Append a widget; idempotent on id. Immutable. */
 export function insertWidget(
   cache: DashboardCache,

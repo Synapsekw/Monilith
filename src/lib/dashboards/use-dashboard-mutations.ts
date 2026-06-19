@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   createWidget,
   deleteWidget,
+  renameDashboard,
   saveLayout,
   updateWidgetConfig,
 } from "@/lib/dashboards/actions";
@@ -12,6 +13,7 @@ import {
   applyLayouts,
   insertWidget,
   removeWidget,
+  renameDashboard as renameDashboardInCache,
   replaceWidget,
   type CacheWidget,
   type DashboardCache,
@@ -81,6 +83,30 @@ export function useDashboardMutations(dashboardId: string) {
     },
   });
 
+  // Rename: patch the cache optimistically, roll back if the action fails.
+  const renameDashboardMut = useMutation<
+    unknown,
+    Error,
+    { name: string },
+    { previous?: DashboardCache }
+  >({
+    mutationFn: async (vars) => {
+      const res = await renameDashboard({ dashboardId, name: vars.name });
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<DashboardCache>(key);
+      if (previous)
+        qc.setQueryData(key, renameDashboardInCache(previous, vars.name));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
   // Layout: patch cache immediately, persist debounced (caller debounces).
   // Roll back the optimistic layout if the persist fails (else the cache would
   // drift ahead of the DB and a reload would snap widgets back).
@@ -111,5 +137,10 @@ export function useDashboardMutations(dashboardId: string) {
     editWidget,
     removeWidget: removeWidgetMut,
     persistLayout,
+    renameDashboard: (name: string, callbacks?: { onSuccess?: () => void }) =>
+      renameDashboardMut.mutate(
+        { name },
+        { onSuccess: () => callbacks?.onSuccess?.() },
+      ),
   };
 }

@@ -15,6 +15,7 @@ import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
 import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
 import { EditListWidgetDialog } from "@/components/dashboards/EditListWidgetDialog";
+import { Input } from "@/components/ui/input";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 import type { BoardOption } from "@/components/dashboards/AddWidgetDialog";
@@ -30,16 +31,61 @@ export function DashboardWidget({
   editing: boolean;
   boards: BoardOption[];
 }) {
-  const { removeWidget } = useDashboardMutations(dashboardId);
+  const { removeWidget, editWidget } = useDashboardMutations(dashboardId);
   const [editOpen, setEditOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(widget.title ?? "");
+
+  function openRename() {
+    setTitleDraft(widget.title ?? "");
+    setRenaming(true);
+  }
+
+  function commitRename() {
+    const trimmed = titleDraft.trim();
+    setRenaming(false);
+    if (!trimmed || trimmed === (widget.title ?? "")) return;
+    editWidget.mutate({ widgetId: widget.id, title: trimmed });
+  }
 
   return (
     <>
       <div className="bg-card flex h-full flex-col rounded-lg border">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="truncate text-sm font-medium">
-            {widget.title || "Untitled"}
-          </span>
+          {editing && renaming ? (
+            <Input
+              autoFocus
+              value={titleDraft}
+              disabled={editWidget.isPending}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={commitRename}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitRename();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setRenaming(false);
+                }
+              }}
+              aria-label="Widget title"
+              className="h-7 max-w-[12rem] text-sm font-medium"
+            />
+          ) : editing ? (
+            <button
+              type="button"
+              onClick={openRename}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="hover:text-muted-foreground focus-visible:ring-ring truncate rounded-sm text-left text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {widget.title || "Untitled"}
+            </button>
+          ) : (
+            <span className="truncate text-sm font-medium">
+              {widget.title || "Untitled"}
+            </span>
+          )}
           {editing ? (
             <DropdownMenu>
               <DropdownMenuTrigger

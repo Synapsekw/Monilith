@@ -3,6 +3,7 @@ import {
   createDashboardSchema,
   createWidgetSchema,
   numberConfigSchema,
+  renameDashboardSchema,
   saveLayoutSchema,
 } from "./dashboards";
 
@@ -65,6 +66,38 @@ describe("createDashboardSchema", () => {
         name: "",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("renameDashboardSchema", () => {
+  it("requires a uuid dashboardId and a 1..100 name", () => {
+    expect(
+      renameDashboardSchema.safeParse({ dashboardId: UUID_A, name: "New" })
+        .success,
+    ).toBe(true);
+    expect(
+      renameDashboardSchema.safeParse({ dashboardId: UUID_A, name: "" })
+        .success,
+    ).toBe(false);
+    expect(
+      renameDashboardSchema.safeParse({ dashboardId: "nope", name: "X" })
+        .success,
+    ).toBe(false);
+    expect(
+      renameDashboardSchema.safeParse({
+        dashboardId: UUID_A,
+        name: "a".repeat(101),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("trims the name", () => {
+    const r = renameDashboardSchema.safeParse({
+      dashboardId: UUID_A,
+      name: "  Hi  ",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.name).toBe("Hi");
   });
 });
 

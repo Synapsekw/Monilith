@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import {
   ResponsiveGridLayout,
   useContainerWidth,
@@ -15,6 +15,7 @@ import {
 } from "@/components/dashboards/AddWidgetDialog";
 import { DashboardWidget } from "@/components/dashboards/DashboardWidget";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { DashboardCache, GridRect } from "@/lib/dashboards/cache";
 import { useDashboardCache } from "@/lib/dashboards/use-dashboard-cache";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
@@ -33,9 +34,26 @@ export function DashboardCanvas({
 }) {
   const dashboardId = initialData.dashboard.id;
   const { data: cache } = useDashboardCache(dashboardId, initialData);
-  const { persistLayout } = useDashboardMutations(dashboardId);
+  const { persistLayout, renameDashboard } = useDashboardMutations(dashboardId);
   const [editing, setEditing] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dashboardName = cache.dashboard.name;
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(dashboardName);
+  const [isRenamePending, startRename] = useTransition();
+
+  function openRename() {
+    setNameDraft(dashboardName);
+    setRenaming(true);
+  }
+
+  function commitRename() {
+    const trimmed = nameDraft.trim();
+    setRenaming(false);
+    if (!trimmed || trimmed === dashboardName) return;
+    startRename(() => renameDashboard(trimmed));
+  }
 
   // react-grid-layout v2 has no WidthProvider HOC — measure the container width
   // ourselves and feed it to ResponsiveGridLayout.
@@ -82,7 +100,36 @@ export function DashboardCanvas({
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">{cache.dashboard.name}</h1>
+        {renaming ? (
+          <Input
+            autoFocus
+            value={nameDraft}
+            disabled={isRenamePending}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitRename();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setRenaming(false);
+              }
+            }}
+            aria-label="Dashboard name"
+            className="h-8 max-w-md text-lg font-semibold"
+          />
+        ) : (
+          <h1 className="text-lg font-semibold">
+            <button
+              type="button"
+              onClick={openRename}
+              className="hover:text-muted-foreground focus-visible:ring-ring rounded-sm text-left tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {dashboardName}
+            </button>
+          </h1>
+        )}
         <div className="flex items-center gap-2">
           {editing ? (
             <AddWidgetDialog dashboardId={dashboardId} boards={boards} />

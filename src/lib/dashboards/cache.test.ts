@@ -3,6 +3,7 @@ import {
   applyLayouts,
   insertWidget,
   removeWidget,
+  renameDashboard,
   replaceWidget,
   type DashboardCache,
   type CacheWidget,
@@ -59,6 +60,19 @@ describe("replaceWidget", () => {
 describe("removeWidget", () => {
   it("removes by id", () => {
     expect(removeWidget(base(), "w1").widgets).toHaveLength(0);
+  });
+});
+
+describe("renameDashboard", () => {
+  it("updates the dashboard name, leaving widgets untouched", () => {
+    const next = renameDashboard(base(), "Renamed");
+    expect(next.dashboard.name).toBe("Renamed");
+    expect(next.widgets).toHaveLength(1);
+  });
+  it("does not mutate the input", () => {
+    const input = base();
+    renameDashboard(input, "Renamed");
+    expect(input.dashboard.name).toBe("D");
   });
 });
 

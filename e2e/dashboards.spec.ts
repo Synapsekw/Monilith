@@ -216,6 +216,68 @@ test.describe("Dashboards: create → add Number widget → drag → persist", (
     await expect(afterReload).toHaveText(before!);
   });
 
+  test("rename a dashboard via the inline title; the new name persists", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    // ── 1. Log in ─────────────────────────────────────────────────────────────
+    await page.goto("/login");
+    await page.getByLabel(/email/i).fill(testEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: /sign in/i }).click();
+
+    // Shared user: this serial test may land on onboarding (first run) or the
+    // app root. Branch on whichever UI appears, mirroring the other tests.
+    const orgNameField = page.getByLabel(/organization name/i);
+    const newBoardButton = page.getByRole("button", { name: "New board" });
+    await expect(orgNameField.or(newBoardButton).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    if (await orgNameField.isVisible().catch(() => false)) {
+      await orgNameField.fill(unique("Org"));
+      await page.getByLabel(/workspace name/i).fill("Engineering");
+      await page.getByRole("button", { name: /create organization/i }).click();
+      await page.waitForURL(/localhost:3000\/$/, { timeout: 30_000 });
+    }
+    await expect(newBoardButton).toBeVisible({ timeout: 30_000 });
+
+    // ── 2. Create a dashboard ─────────────────────────────────────────────────
+    await page.getByRole("button", { name: /new dashboard/i }).click();
+    await page.getByLabel(/dashboard name/i).fill("Rename Me");
+    await page.getByRole("button", { name: /create dashboard/i }).click();
+    await expect(page).toHaveURL(/\/dashboards\/[0-9a-f-]+/, {
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("heading", { name: "Rename Me" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // ── 3. Click the title to edit, type a new name, commit with Enter ────────
+    await page.getByRole("button", { name: "Rename Me" }).click();
+    const input = page.getByLabel("Dashboard name");
+    await expect(input).toBeVisible();
+    await input.fill("Renamed Dashboard");
+    await input.press("Enter");
+
+    // The heading reflects the new name (optimistic cache patch + server write).
+    await expect(
+      page.getByRole("heading", { name: "Renamed Dashboard" }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("heading", { name: "Rename Me" }),
+    ).not.toBeVisible();
+
+    // Allow the rename Server Action to settle before reloading.
+    await page.waitForLoadState("networkidle", { timeout: 15_000 });
+
+    // ── 4. Reload → the new name persisted to the database ────────────────────
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Renamed Dashboard" }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
   test("add a Chart widget grouped by status renders an SVG chart", async ({
     page,
   }) => {

@@ -14,6 +14,7 @@ import {
   createWidgetSchema,
   deleteWidgetSchema,
   getWidgetDataSchema,
+  renameDashboardSchema,
   saveLayoutSchema,
   updateWidgetConfigSchema,
 } from "@/lib/validations/dashboards";
@@ -42,6 +43,30 @@ export async function createDashboard(input: {
   if (error || !data)
     return fail(error?.message ?? "Could not create dashboard.");
 
+  revalidatePath("/dashboards");
+  return { ok: true, data: { dashboard: data as Tables<"dashboards"> } };
+}
+
+/** Rename a dashboard. RLS enforces org membership; returns the updated row. */
+export async function renameDashboard(input: {
+  dashboardId: string;
+  name: string;
+}): Promise<ActionResult<{ dashboard: Tables<"dashboards"> }>> {
+  const parsed = renameDashboardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("dashboards")
+    .update({ name: parsed.data.name })
+    .eq("id", parsed.data.dashboardId)
+    .select("*")
+    .maybeSingle();
+  if (error || !data)
+    return fail(error?.message ?? "Could not rename dashboard.");
+
+  revalidatePath(`/dashboards/${parsed.data.dashboardId}`);
   revalidatePath("/dashboards");
   return { ok: true, data: { dashboard: data as Tables<"dashboards"> } };
 }
