@@ -25,12 +25,17 @@ import {
   addSubitemSchema,
   deleteItemSchema,
   reorderItemSchema,
+  updateColumnSettingsSchema,
+  removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { defaultColumn } from "@/lib/boards/column-defaults";
-import { cellValueSchema } from "@/lib/validations/boards";
+import {
+  cellValueSchema,
+  columnSettingsSchema,
+} from "@/lib/validations/boards";
 import type { Json, Tables } from "@/types/database.types";
 
 export type ActionResult<T = void> =
@@ -627,6 +632,62 @@ export async function resizeNameColumn(input: {
   if (error) return fail(error.message);
   revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: undefined };
+}
+
+/**
+ * Replace a column's settings. Validates the incoming settings against the
+ * column kind's shape (status/dropdown options, numbers unit/precision, …)
+ * before writing. RLS scopes the read + write to the caller's org.
+ */
+export async function updateColumnSettings(input: {
+  columnId: string;
+  settings: Record<string, unknown>;
+}): Promise<ActionResult> {
+  const parsed = updateColumnSettingsSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { data: col } = await supabase
+    .from("columns")
+    .select("board_id, kind")
+    .eq("id", parsed.data.columnId)
+    .maybeSingle();
+  if (!col) return fail("Column not found.");
+  const shape = columnSettingsSchema(col.kind);
+  const settingsParsed = shape.safeParse(parsed.data.settings);
+  if (!settingsParsed.success)
+    return fail(settingsParsed.error.issues[0]?.message ?? "Invalid settings");
+  const { error } = await supabase
+    .from("columns")
+    .update({ settings: settingsParsed.data as Tables<"columns">["settings"] })
+    .eq("id", parsed.data.columnId);
+  if (error) return fail(error.message);
+  revalidatePath(`/boards/${col.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Remove a single option (status/dropdown) from a column's settings AND clear
+ * every cell that referenced it, atomically, via the `delete_column_option`
+ * RPC. Returns the number of cell rows the server cleared.
+ */
+export async function removeColumnOption(input: {
+  columnId: string;
+  optionId: string;
+}): Promise<ActionResult<{ clearedCells: number }>> {
+  const parsed = removeColumnOptionSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const boardId = await columnBoardId(supabase, parsed.data.columnId);
+  if (!boardId) return fail("Column not found.");
+  const { data, error } = await supabase.rpc("delete_column_option", {
+    p_column_id: parsed.data.columnId,
+    p_option_id: parsed.data.optionId,
+  });
+  if (error) return fail(error.message);
+  revalidatePath(`/boards/${boardId}`);
+  return { ok: true, data: { clearedCells: data ?? 0 } };
 }
 
 export async function deleteColumn(input: {
