@@ -11,6 +11,7 @@ import {
   deleteGroup,
   deleteItem,
   renameBoard,
+  removeColumnOption,
   renameColumn,
   renameGroup,
   renameItem,
@@ -18,6 +19,7 @@ import {
   reorderItem,
   resizeColumn,
   resizeNameColumn,
+  updateColumnSettings,
   updateGroupColor,
   upsertCell,
 } from "@/lib/boards/actions";
@@ -58,6 +60,27 @@ type ResizeNameColumnVars = { width: number | null };
 type AddDependencyVars = { predecessorId: string; successorId: string };
 type RemoveDependencyVars = { dependencyId: string };
 type Ctx = { previous?: BoardCache };
+
+/**
+ * Strip a removed option id from a single status/dropdown cell value. Returns
+ * the updated cell, or `null` when the cell becomes empty (status cell that
+ * referenced the option, or a dropdown left with no ids) and should be dropped.
+ * Pure — mirrors the server's `delete_column_option` clearing behavior.
+ */
+export function stripOption(
+  cv: CacheCellValue,
+  optionId: string,
+): CacheCellValue | null {
+  const v = cv.value as { optionId?: string | null; optionIds?: string[] };
+  if (v?.optionId !== undefined) return v.optionId === optionId ? null : cv;
+  if (v?.optionIds) {
+    const left = v.optionIds.filter((id) => id !== optionId);
+    return left.length
+      ? { ...cv, value: { optionIds: left } as CacheCellValue["value"] }
+      : null;
+  }
+  return cv;
+}
 
 export function useBoardMutations(boardId: string) {
   const qc = useQueryClient();
@@ -167,6 +190,75 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       return optimisticColumn(vars.columnId, { name: vars.name });
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const updateColumnSettingsMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string; settings: Record<string, unknown> },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await updateColumnSettings(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      return optimisticColumn(vars.columnId, {
+        settings: vars.settings as CacheColumn["settings"],
+      });
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const removeColumnOptionMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string; optionId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await removeColumnOption(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const col = previous.columns.find((c) => c.id === vars.columnId);
+        const opts = (
+          (col?.settings as { options?: { id: string }[] })?.options ?? []
+        ).filter((o) => o.id !== vars.optionId);
+        let next = col
+          ? replaceColumn(previous, {
+              ...col,
+              settings: {
+                ...(col.settings as object),
+                options: opts,
+              } as CacheColumn["settings"],
+            })
+          : previous;
+        next = {
+          ...next,
+          cellValues: next.cellValues
+            .map((cv) =>
+              cv.column_id === vars.columnId
+                ? stripOption(cv, vars.optionId)
+                : cv,
+            )
+            .filter((cv): cv is CacheCellValue => cv !== null),
+        };
+        qc.setQueryData(key, next);
+      }
+      return { previous };
     },
     onError: (_e, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
@@ -649,5 +741,11 @@ export function useBoardMutations(boardId: string) {
       resizeColumnMutation.mutate({ columnId, width }),
     deleteColumn: (columnId: string) =>
       deleteColumnMutation.mutate({ columnId }),
+    updateColumnSettings: (
+      columnId: string,
+      settings: Record<string, unknown>,
+    ) => updateColumnSettingsMutation.mutate({ columnId, settings }),
+    removeColumnOption: (columnId: string, optionId: string) =>
+      removeColumnOptionMutation.mutate({ columnId, optionId }),
   };
 }
