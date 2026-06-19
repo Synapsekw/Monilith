@@ -461,7 +461,7 @@ export async function upsertCell(input: {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const next = (valueParsed.data as { userIds: string[] }).userIds;
+    const next = (valueParsed.data as { userIds?: string[] }).userIds ?? [];
     const added = next.filter(
       (id) => !priorPeople.includes(id) && id !== user?.id,
     );

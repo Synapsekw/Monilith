@@ -114,3 +114,65 @@ describe("cell value schemas", () => {
     );
   });
 });
+
+describe("6b cell value schemas", () => {
+  it("checkbox accepts a boolean", () => {
+    expect(
+      cellValueSchema("checkbox").safeParse({ checked: true }).success,
+    ).toBe(true);
+    expect(
+      cellValueSchema("checkbox").safeParse({ checked: "yes" }).success,
+    ).toBe(false);
+  });
+  it("rating is an int 1..5", () => {
+    expect(cellValueSchema("rating").safeParse({ rating: 5 }).success).toBe(
+      true,
+    );
+    expect(cellValueSchema("rating").safeParse({ rating: 0 }).success).toBe(
+      false,
+    );
+    expect(cellValueSchema("rating").safeParse({ rating: 6 }).success).toBe(
+      false,
+    );
+  });
+  it("link requires a valid url, label optional", () => {
+    expect(
+      cellValueSchema("link").safeParse({ url: "https://a.com" }).success,
+    ).toBe(true);
+    expect(
+      cellValueSchema("link").safeParse({ url: "https://a.com", text: "A" })
+        .success,
+    ).toBe(true);
+    expect(
+      cellValueSchema("link").safeParse({ url: "not-a-url" }).success,
+    ).toBe(false);
+  });
+  it("email validates format", () => {
+    expect(
+      cellValueSchema("email").safeParse({ email: "a@b.com" }).success,
+    ).toBe(true);
+    expect(cellValueSchema("email").safeParse({ email: "nope" }).success).toBe(
+      false,
+    );
+  });
+  it("phone is a non-empty trimmed string", () => {
+    expect(
+      cellValueSchema("phone").safeParse({ phone: "+1 555" }).success,
+    ).toBe(true);
+    expect(cellValueSchema("phone").safeParse({ phone: "" }).success).toBe(
+      false,
+    );
+  });
+  it("new kinds use empty settings", () => {
+    for (const k of [
+      "checkbox",
+      "rating",
+      "link",
+      "email",
+      "phone",
+      "files",
+    ] as const) {
+      expect(columnSettingsSchema(k).safeParse({}).success).toBe(true);
+    }
+  });
+});

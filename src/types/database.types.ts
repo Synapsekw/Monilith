@@ -61,6 +61,7 @@ export type Database = {
       attachments: {
         Row: {
           board_id: string;
+          column_id: string | null;
           created_at: string;
           file_name: string;
           id: string;
@@ -74,6 +75,7 @@ export type Database = {
         };
         Insert: {
           board_id: string;
+          column_id?: string | null;
           created_at?: string;
           file_name: string;
           id?: string;
@@ -87,6 +89,7 @@ export type Database = {
         };
         Update: {
           board_id?: string;
+          column_id?: string | null;
           created_at?: string;
           file_name?: string;
           id?: string;
@@ -104,6 +107,13 @@ export type Database = {
             columns: ["board_id"];
             isOneToOne: false;
             referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
             referencedColumns: ["id"];
           },
           {
@@ -1485,6 +1495,10 @@ export type Database = {
         Returns: undefined;
       };
       delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
+      delete_column_option: {
+        Args: { p_column_id: string; p_option_id: string };
+        Returns: number;
+      };
       get_org_members: {
         Args: { p_limit?: number; p_offset?: number; p_org_id: string };
         Returns: {
@@ -1599,7 +1613,13 @@ export type Database = {
         | "people"
         | "date"
         | "numbers"
-        | "dropdown";
+        | "dropdown"
+        | "checkbox"
+        | "rating"
+        | "link"
+        | "email"
+        | "phone"
+        | "files";
       notification_kind:
         | "mention"
         | "assigned"
@@ -1746,7 +1766,20 @@ export const Constants = {
         "cell_changed",
         "update_added",
       ],
-      column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
+      column_kind: [
+        "text",
+        "status",
+        "people",
+        "date",
+        "numbers",
+        "dropdown",
+        "checkbox",
+        "rating",
+        "link",
+        "email",
+        "phone",
+        "files",
+      ],
       notification_kind: [
         "mention",
         "assigned",
