@@ -12,10 +12,10 @@ import {
 } from "@/lib/boards/automation-runs";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
-  ran: {
-    label: "Ran",
-    className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  },
+  // "ran" = the earned brand accent; "blocked" = muted monochrome; "error" =
+  // the sanctioned destructive token. Mirrors changelog-item-badge.tsx so the
+  // disclosure stays on Pulse's monochromatic + single-accent system.
+  ran: { label: "Ran", className: "bg-primary text-primary-foreground" },
   blocked: { label: "Blocked", className: "bg-muted text-muted-foreground" },
   error: { label: "Error", className: "bg-destructive/15 text-destructive" },
 };

@@ -47,4 +47,31 @@ describe("RecentRuns", () => {
     await userEvent.click(screen.getByRole("button", { name: /recent runs/i }));
     expect(await screen.findByText(/no runs yet/i)).toBeInTheDocument();
   });
+
+  it("renders blocked and error badges with their summaries", async () => {
+    const base = {
+      automation_id: "a3",
+      item_id: "i1",
+      trigger_type: "status_changed",
+      created_at: new Date().toISOString(),
+      org_id: "o1",
+      board_id: "b1",
+    };
+    getAutomationRuns.mockResolvedValue([
+      { ...base, id: "r1", status: "blocked", actions: [], error: null },
+      {
+        ...base,
+        id: "r2",
+        status: "error",
+        actions: [],
+        error: "boom",
+      },
+    ]);
+    wrap(<RecentRuns automationId="a3" />);
+    await userEvent.click(screen.getByRole("button", { name: /recent runs/i }));
+    expect(await screen.findByText("Blocked")).toBeInTheDocument();
+    expect(screen.getByText("Error")).toBeInTheDocument();
+    expect(screen.getByText(/condition not met/i)).toBeInTheDocument();
+    expect(screen.getByText(/error while running/i)).toBeInTheDocument();
+  });
 });
