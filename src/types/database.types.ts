@@ -317,6 +317,7 @@ export type Database = {
           description: string | null;
           id: string;
           name: string;
+          name_column_width: number | null;
           org_id: string;
           position: number;
           updated_at: string;
@@ -328,6 +329,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           name: string;
+          name_column_width?: number | null;
           org_id: string;
           position?: number;
           updated_at?: string;
@@ -339,6 +341,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           name?: string;
+          name_column_width?: number | null;
           org_id?: string;
           position?: number;
           updated_at?: string;
@@ -1094,32 +1097,19 @@ export type Database = {
         Returns: boolean;
       };
       _automation_date_sweep: { Args: { p_now?: string }; Returns: undefined };
-      _automation_run:
-        | {
-            Args: {
-              p_actions: Json;
-              p_actor: string;
-              p_automation_id: string;
-              p_board_id: string;
-              p_condition: Json;
-              p_item_id: string;
-              p_org_id: string;
-            };
-            Returns: undefined;
-          }
-        | {
-            Args: {
-              p_actions: Json;
-              p_actor: string;
-              p_automation_id: string;
-              p_board_id: string;
-              p_condition: Json;
-              p_item_id: string;
-              p_org_id: string;
-              p_trigger_type: string;
-            };
-            Returns: undefined;
-          };
+      _automation_run: {
+        Args: {
+          p_actions: Json;
+          p_actor: string;
+          p_automation_id: string;
+          p_board_id: string;
+          p_condition: Json;
+          p_item_id: string;
+          p_org_id: string;
+          p_trigger_type: string;
+        };
+        Returns: undefined;
+      };
       _automation_runs_prune: { Args: never; Returns: undefined };
       _dashboard_list_predicate: {
         Args: { p_col: string; p_op: string; p_val: string };
@@ -1142,6 +1132,7 @@ export type Database = {
           description: string | null;
           id: string;
           name: string;
+          name_column_width: number | null;
           org_id: string;
           position: number;
           updated_at: string;
@@ -1162,6 +1153,7 @@ export type Database = {
           description: string | null;
           id: string;
           name: string;
+          name_column_width: number | null;
           org_id: string;
           position: number;
           updated_at: string;
