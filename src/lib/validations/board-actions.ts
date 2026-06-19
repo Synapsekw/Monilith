@@ -62,3 +62,14 @@ export const resizeNameColumnSchema = z.object({
   boardId: uuid,
   width: z.number().int().min(80).max(1200).nullable(),
 });
+
+// Settings validated structurally here; kind-specific shape enforced server-side
+// via columnSettingsSchema(kind).
+export const updateColumnSettingsSchema = z.object({
+  columnId: uuid,
+  settings: z.record(z.string(), z.unknown()),
+});
+export const removeColumnOptionSchema = z.object({
+  columnId: uuid,
+  optionId: z.string().min(1),
+});

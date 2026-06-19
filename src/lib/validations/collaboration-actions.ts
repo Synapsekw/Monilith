@@ -36,6 +36,8 @@ export const createAttachmentSchema = z.object({
   fileName: FILE_NAME,
   mimeType: MIME,
   sizeBytes: SIZE,
+  // Set for Files-column attachments; omitted for item-level attachments.
+  columnId: z.string().uuid().optional(),
 });
 
 export const deleteAttachmentSchema = z.object({
