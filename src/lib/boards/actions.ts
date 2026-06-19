@@ -18,6 +18,7 @@ import {
   renameColumnSchema,
   deleteColumnSchema,
   resizeColumnSchema,
+  resizeNameColumnSchema,
 } from "@/lib/validations/board-actions";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
@@ -439,6 +440,28 @@ export async function resizeColumn(input: {
     .eq("id", parsed.data.columnId);
   if (error) return fail(error.message);
   revalidatePath(`/boards/${boardId}`);
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Resize the built-in Name column (per-board). `width: null` clears the manual
+ * width so the client falls back to auto-fit. RLS is the boundary; no need to
+ * derive the board (the id is the board).
+ */
+export async function resizeNameColumn(input: {
+  boardId: string;
+  width: number | null;
+}): Promise<ActionResult> {
+  const parsed = resizeNameColumnSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("boards")
+    .update({ name_column_width: parsed.data.width })
+    .eq("id", parsed.data.boardId);
+  if (error) return fail(error.message);
+  revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: undefined };
 }
 
