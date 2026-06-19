@@ -31,28 +31,46 @@ function describeCell(
 ): CellDisplay {
   if (value === null || value === undefined) return null;
   switch (kind) {
-    case "status":
+    case "status": {
+      const options =
+        (column?.settings as { options?: StatusOption[] })?.options ?? [];
+      const optionId = (value as { optionId?: string | null }).optionId ?? null;
+      if (!optionId) return null;
+      const opt = options.find((o) => o.id === optionId);
+      return opt ? { label: opt.label, color: opt.color } : null;
+    }
     case "dropdown": {
       const options =
         (column?.settings as { options?: StatusOption[] })?.options ?? [];
-      const opt = options.find((o) => o.id === value);
-      return opt
-        ? { label: opt.label, color: opt.color }
-        : { label: String(value), color: "#c4c4c4" };
+      const ids = (value as { optionIds?: string[] }).optionIds ?? [];
+      if (ids.length === 0) return null;
+      return ids
+        .map((id) => options.find((o) => o.id === id)?.label ?? id)
+        .join(", ");
     }
     case "people": {
-      const ids = Array.isArray(value) ? (value as string[]) : [String(value)];
-      const names = ids.map(
-        (id) => members.find((m) => m.userId === id)?.fullName ?? "Someone",
-      );
-      return names.join(", ");
+      const ids = (value as { userIds?: string[] }).userIds ?? [];
+      if (ids.length === 0) return null;
+      return ids
+        .map(
+          (id) => members.find((m) => m.userId === id)?.fullName ?? "Someone",
+        )
+        .join(", ");
     }
     case "date": {
       const v = value as { date?: string };
-      return v?.date ?? String(value);
+      return v.date ?? null;
+    }
+    case "text": {
+      const v = value as { text?: string };
+      return v.text ?? null;
+    }
+    case "numbers": {
+      const v = value as { n?: number };
+      return v.n != null ? String(v.n) : null;
     }
     default:
-      return String(value);
+      return null;
   }
 }
 

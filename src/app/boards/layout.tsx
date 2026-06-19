@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { listBoards } from "@/lib/boards/queries";
+import { listDashboards } from "@/lib/dashboards/queries";
 import { requireUser, getUserOrgs } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,9 +18,10 @@ export default async function BoardsLayout({
 }) {
   const user = await requireUser();
   const supabase = await createClient();
-  const [orgs, boards, { data: workspaces }] = await Promise.all([
+  const [orgs, boards, dashboards, { data: workspaces }] = await Promise.all([
     getUserOrgs(),
     listBoards(),
+    listDashboards(),
     supabase.from("workspaces").select("id, name"),
   ]);
 
@@ -36,6 +38,7 @@ export default async function BoardsLayout({
       org={{ name: orgs[0]?.name ?? "Pulse" }}
       workspaces={workspaces ?? []}
       boards={boards}
+      dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
     >
       {children}
     </AppShell>

@@ -2,13 +2,23 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  addSubitem,
   clearCell,
   createColumn,
+  createGroup,
   createItem,
   deleteColumn,
+  deleteGroup,
+  deleteItem,
+  renameBoard,
   renameColumn,
+  renameGroup,
   renameItem,
+  reorderGroup,
+  reorderItem,
   resizeColumn,
+  resizeNameColumn,
+  updateGroupColor,
   upsertCell,
 } from "@/lib/boards/actions";
 import {
@@ -17,16 +27,22 @@ import {
 } from "@/lib/boards/dependency-actions";
 import {
   insertColumn,
+  insertGroup,
   insertItem,
   removeCellValue,
   removeColumn,
   removeDependency,
+  removeGroup,
+  removeItem,
+  replaceBoard,
   replaceColumn,
+  replaceGroup,
   replaceItem,
   upsertCellValue,
   type BoardCache,
   type CacheCellValue,
   type CacheColumn,
+  type CacheGroup,
   type CacheItem,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
@@ -36,6 +52,9 @@ type SetCellVars = { itemId: string; columnId: string; value: unknown };
 type ClearCellVars = { itemId: string; columnId: string };
 type AddItemVars = { groupId: string; name: string };
 type RenameItemVars = { itemId: string; name: string };
+type RenameGroupVars = { groupId: string; name: string };
+type RenameBoardVars = { name: string };
+type ResizeNameColumnVars = { width: number | null };
 type AddDependencyVars = { predecessorId: string; successorId: string };
 type RemoveDependencyVars = { dependencyId: string };
 type Ctx = { previous?: BoardCache };
@@ -91,6 +110,29 @@ export function useBoardMutations(boardId: string) {
     onSuccess: ({ column }) => {
       qc.setQueryData<BoardCache>(key, (prev) =>
         prev ? insertColumn(prev, column) : prev,
+      );
+    },
+  });
+
+  /**
+   * Add a new group. Patch-on-success (mirrors addColumn): wait for the server
+   * to return the real group row, then insert it into the cache. The Realtime
+   * INSERT echo is idempotent via `insertGroup`.
+   */
+  const addGroupMutation = useMutation<
+    { group: CacheGroup },
+    Error,
+    { name: string },
+    void
+  >({
+    mutationFn: async (vars) => {
+      const res = await createGroup({ boardId, name: vars.name });
+      if (!res.ok) throw new Error(res.error);
+      return res.data;
+    },
+    onSuccess: ({ group }) => {
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? insertGroup(prev, group) : prev,
       );
     },
   });
@@ -219,6 +261,80 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
+  /** Add a subitem. Patch-on-success (mirrors addItem); Realtime echo idempotent. */
+  const addSubitemMutation = useMutation<
+    { item: CacheItem },
+    Error,
+    { parentId: string; name: string },
+    void
+  >({
+    mutationFn: async (vars) => {
+      const res = await addSubitem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return { item: res.data.item as CacheItem };
+    },
+    onSuccess: ({ item }) => {
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? insertItem(prev, item) : prev,
+      );
+    },
+  });
+
+  /** Delete an item/subitem. Optimistic remove (cascades subitems in cache); rollback on error. */
+  const deleteItemMutation = useMutation<
+    unknown,
+    Error,
+    { itemId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await deleteItem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous)
+        qc.setQueryData<BoardCache>(key, removeItem(previous, vars.itemId));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  /** Reorder an item (subitem within its parent). Optimistic position patch; rollback on error. */
+  const reorderItemMutation = useMutation<
+    unknown,
+    Error,
+    { itemId: string; position: number },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await reorderItem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const existing = previous.items.find((i) => i.id === vars.itemId);
+        if (existing) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceItem(previous, { ...existing, position: vars.position }),
+          );
+        }
+      }
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
   /**
    * Rename an item. Optimistic: patch the cache immediately with the new name,
    * roll back on error. The Realtime UPDATE echo is idempotent (same id/name).
@@ -240,6 +356,170 @@ export function useBoardMutations(boardId: string) {
             replaceItem(previous, { ...existing, name: vars.name }),
           );
         }
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const renameGroupMutation = useMutation<unknown, Error, RenameGroupVars, Ctx>(
+    {
+      mutationFn: async (vars) => {
+        const res = await renameGroup(vars);
+        if (!res.ok) throw new Error(res.error);
+        return res;
+      },
+      onMutate: async (vars) => {
+        await qc.cancelQueries({ queryKey: key });
+        const previous = qc.getQueryData<BoardCache>(key);
+        if (previous) {
+          const existing = previous.groups.find((g) => g.id === vars.groupId);
+          if (existing) {
+            qc.setQueryData<BoardCache>(
+              key,
+              replaceGroup(previous, { ...existing, name: vars.name }),
+            );
+          }
+        }
+        return { previous };
+      },
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      },
+    },
+  );
+
+  const reorderGroupMutation = useMutation<
+    unknown,
+    Error,
+    { groupId: string; position: number },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await reorderGroup(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const existing = previous.groups.find((g) => g.id === vars.groupId);
+        if (existing) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceGroup(previous, { ...existing, position: vars.position }),
+          );
+        }
+      }
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const setGroupColorMutation = useMutation<
+    unknown,
+    Error,
+    { groupId: string; color: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await updateGroupColor(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const existing = previous.groups.find((g) => g.id === vars.groupId);
+        if (existing) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceGroup(previous, { ...existing, color: vars.color }),
+          );
+        }
+      }
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const deleteGroupMutation = useMutation<
+    unknown,
+    Error,
+    { groupId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await deleteGroup(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous)
+        qc.setQueryData<BoardCache>(key, removeGroup(previous, vars.groupId));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const renameBoardMutation = useMutation<unknown, Error, RenameBoardVars, Ctx>(
+    {
+      mutationFn: async (vars) => {
+        const res = await renameBoard({ boardId, name: vars.name });
+        if (!res.ok) throw new Error(res.error);
+        return res;
+      },
+      onMutate: async (vars) => {
+        await qc.cancelQueries({ queryKey: key });
+        const previous = qc.getQueryData<BoardCache>(key);
+        if (previous) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceBoard(previous, { ...previous.board, name: vars.name }),
+          );
+        }
+        return { previous };
+      },
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      },
+    },
+  );
+
+  const resizeNameColumnMutation = useMutation<
+    unknown,
+    Error,
+    ResizeNameColumnVars,
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await resizeNameColumn({ boardId, width: vars.width });
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        qc.setQueryData<BoardCache>(
+          key,
+          replaceBoard(previous, {
+            ...previous.board,
+            name_column_width: vars.width,
+          }),
+        );
       }
       return { previous };
     },
@@ -306,7 +586,53 @@ export function useBoardMutations(boardId: string) {
         onSuccess: (data) => callbacks?.onSuccess?.(data.item),
         onError: (err) => callbacks?.onError?.(err),
       }),
+    addSubitem: (
+      parentId: string,
+      name: string,
+      callbacks?: {
+        onSuccess?: (item: CacheItem) => void;
+        onError?: (err: Error) => void;
+      },
+    ) =>
+      addSubitemMutation.mutate(
+        { parentId, name },
+        {
+          onSuccess: (data) => callbacks?.onSuccess?.(data.item),
+          onError: (err) => callbacks?.onError?.(err),
+        },
+      ),
+    deleteItem: (itemId: string) => deleteItemMutation.mutate({ itemId }),
+    reorderItem: (itemId: string, position: number) =>
+      reorderItemMutation.mutate({ itemId, position }),
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),
+    renameGroup: (groupId: string, name: string) =>
+      renameGroupMutation.mutate({ groupId, name }),
+    reorderGroup: (groupId: string, position: number) =>
+      reorderGroupMutation.mutate({ groupId, position }),
+    setGroupColor: (groupId: string, color: string) =>
+      setGroupColorMutation.mutate({ groupId, color }),
+    deleteGroup: (groupId: string) => deleteGroupMutation.mutate({ groupId }),
+    addGroup: (
+      name: string,
+      callbacks?: {
+        onSuccess?: (groupId: string) => void;
+        onError?: (err: Error) => void;
+      },
+    ) =>
+      addGroupMutation.mutate(
+        { name },
+        {
+          onSuccess: (data) => callbacks?.onSuccess?.(data.group.id),
+          onError: (err) => callbacks?.onError?.(err),
+        },
+      ),
+    renameBoard: (name: string, callbacks?: { onSuccess?: () => void }) =>
+      renameBoardMutation.mutate(
+        { name },
+        { onSuccess: () => callbacks?.onSuccess?.() },
+      ),
+    resizeNameColumn: (width: number | null) =>
+      resizeNameColumnMutation.mutate({ width }),
     addDependency: (
       vars: AddDependencyVars,
       callbacks?: { onError?: (err: Error) => void },

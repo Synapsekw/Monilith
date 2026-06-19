@@ -77,9 +77,9 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* Elevation — ported from the prototype (shadow-panel for popovers/modals, shadow-card for cards) */
-  --shadow-panel: 0 8px 30px rgba(0, 0, 0, 0.5);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  /* Elevation — values set per theme in :root / .dark (see below) */
+  --shadow-panel: var(--elevation-panel);
+  --shadow-card: var(--elevation-card);
 
   /* Signature motion (150–250ms, ease-out) — usable as animate-fadein / animate-slidein */
   --animate-fadein: fadein 0.15s ease-out;
@@ -111,7 +111,7 @@
   --brand: oklch(0.546 0.215 262.9);
   --brand-foreground: oklch(0.985 0 0);
 
-  --background: oklch(1 0 0);
+  --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --surface: oklch(1 0 0);
   --surface-muted: oklch(0.97 0 0);
@@ -146,12 +146,14 @@
   --status-purple: oklch(0.6 0.2 300);
   --status-teal: oklch(0.71 0.11 190);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-1: oklch(0.72 0 0);
+  --chart-2: oklch(0.58 0 0);
+  --chart-3: oklch(0.46 0 0);
+  --chart-4: oklch(0.34 0 0);
+  --chart-5: oklch(0.22 0 0);
   --radius: 0.625rem;
+  --elevation-panel: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --elevation-card: 0 1px 2px rgba(0, 0, 0, 0.06);
 
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -223,6 +225,8 @@
   --sidebar-accent-foreground: oklch(0.925 0.003 286);
   --sidebar-border: oklch(0.3 0.008 286);
   --sidebar-ring: var(--brand);
+  --elevation-panel: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --elevation-card: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 @layer base {
@@ -234,6 +238,25 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Light-mode scrollbar — neutral thumb on the page canvas. */
+  html:not(.dark) * {
+    scrollbar-color: oklch(0.82 0 0) transparent;
+  }
+  html:not(.dark) ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  html:not(.dark) ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  html:not(.dark) ::-webkit-scrollbar-thumb {
+    background: oklch(0.82 0 0);
+    border: 2px solid var(--background);
+    border-radius: 6px;
+  }
+  html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.72 0 0);
   }
   /* Subtle themed scrollbar (ported from the prototype) — track blends into the canvas. */
   .dark * {

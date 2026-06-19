@@ -54,7 +54,7 @@ export function AuthForm({ mode, footer }: AuthFormProps) {
   const form = useForm<SignInInput | SignUpInput>({
     resolver: zodResolver(isSignup ? signUpSchema : signInSchema),
     defaultValues: isSignup
-      ? { email: "", password: "", fullName: "" }
+      ? { email: "", password: "", orgName: "" }
       : { email: "", password: "" },
   });
 
@@ -88,8 +88,8 @@ export function AuthForm({ mode, footer }: AuthFormProps) {
             const formData = new FormData();
             formData.set("email", values.email);
             formData.set("password", values.password);
-            if (isSignup && "fullName" in values && values.fullName) {
-              formData.set("fullName", values.fullName);
+            if (isSignup && "orgName" in values && values.orgName) {
+              formData.set("orgName", values.orgName);
             }
             startTransition(() => {
               formAction(formData);
@@ -108,19 +108,25 @@ export function AuthForm({ mode, footer }: AuthFormProps) {
 
           {isSignup ? (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fullName">Full name</Label>
+              <Label htmlFor="orgName">Organization name</Label>
               <Input
-                id="fullName"
-                autoComplete="name"
-                placeholder="Ada Lovelace"
+                id="orgName"
+                autoComplete="organization"
+                placeholder="Acme Inc."
                 aria-invalid={
-                  "fullName" in form.formState.errors &&
-                  form.formState.errors.fullName
+                  "orgName" in form.formState.errors &&
+                  form.formState.errors.orgName
                     ? true
                     : undefined
                 }
-                {...form.register("fullName")}
+                {...form.register("orgName")}
               />
+              {"orgName" in form.formState.errors &&
+              form.formState.errors.orgName ? (
+                <p className="text-destructive text-xs">
+                  {form.formState.errors.orgName.message}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

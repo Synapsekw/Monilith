@@ -15,21 +15,22 @@ beforeEach(() => {
 
 describe("Sidebar", () => {
   it("renders the brand and nav labels when expanded", () => {
-    render(<Sidebar boards={[]} workspaces={[]} />);
+    render(<Sidebar boards={[]} workspaces={[]} dashboards={[]} />);
     expect(screen.getByText("MONOLITH")).toBeInTheDocument();
     expect(screen.getByText("Dashboards")).toBeInTheDocument();
   });
 
   it("collapses on toggle click, hiding the labels", () => {
-    render(<Sidebar boards={[]} workspaces={[]} />);
+    render(<Sidebar boards={[]} workspaces={[]} dashboards={[]} />);
 
     fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
 
     expect(useUIStore.getState().sidebarCollapsed).toBe(true);
     expect(screen.queryByText("MONOLITH")).not.toBeInTheDocument();
     expect(screen.queryByText("Dashboards")).not.toBeInTheDocument();
+    // Collapsed: the Dashboards section renders an icon-only link.
     expect(
-      screen.getByRole("button", { name: "Dashboards" }),
+      screen.getByRole("link", { name: "Dashboards" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /expand sidebar/i }),
@@ -37,7 +38,7 @@ describe("Sidebar", () => {
   });
 
   it("toggles with the Cmd/Ctrl+\\ shortcut", () => {
-    render(<Sidebar boards={[]} workspaces={[]} />);
+    render(<Sidebar boards={[]} workspaces={[]} dashboards={[]} />);
 
     fireEvent.keyDown(window, { key: "\\", metaKey: true });
     expect(useUIStore.getState().sidebarCollapsed).toBe(true);

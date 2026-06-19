@@ -10,6 +10,10 @@ interface UIState {
   commandOpen: boolean;
   setCommandOpen: (open: boolean) => void;
   toggleCommand: () => void;
+  newBoardOpen: boolean;
+  setNewBoardOpen: (open: boolean) => void;
+  newDashboardOpen: boolean;
+  setNewDashboardOpen: (open: boolean) => void;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
@@ -23,6 +27,10 @@ export const useUIStore = create<UIState>()(
       commandOpen: false,
       setCommandOpen: (open) => set({ commandOpen: open }),
       toggleCommand: () => set((s) => ({ commandOpen: !s.commandOpen })),
+      newBoardOpen: false,
+      setNewBoardOpen: (open) => set({ newBoardOpen: open }),
+      newDashboardOpen: false,
+      setNewDashboardOpen: (open) => set({ newDashboardOpen: open }),
       sidebarCollapsed: false,
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleSidebar: () =>

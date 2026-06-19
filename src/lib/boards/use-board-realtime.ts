@@ -7,17 +7,20 @@ import { createClient } from "@/lib/supabase/client";
 import {
   addDependency,
   insertColumn,
+  insertGroup,
   insertItem,
   removeCellValue,
   removeColumn,
   removeDependency,
   replaceColumn,
+  replaceGroup,
   replaceItem,
   upsertCellValue,
   type BoardCache,
   type CacheCellValue,
   type CacheColumn,
   type CacheDependency,
+  type CacheGroup,
   type CacheItem,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
@@ -107,6 +110,23 @@ export function useBoardRealtime(boardId: string) {
       );
     }
 
+    function onGroup(p: RealtimePostgresChangesPayload<CacheGroup>) {
+      if (p.eventType === "DELETE") {
+        const oldRow = p.old as Partial<CacheGroup>;
+        patch((prev) => ({
+          ...prev,
+          groups: prev.groups.filter((g) => g.id !== oldRow.id),
+        }));
+        return;
+      }
+      const row = p.new as CacheGroup;
+      patch((prev) =>
+        prev.groups.some((g) => g.id === row.id)
+          ? replaceGroup(prev, row)
+          : insertGroup(prev, row),
+      );
+    }
+
     const channel = supabase
       .channel(`board:${boardId}`)
       .on(
@@ -128,6 +148,11 @@ export function useBoardRealtime(boardId: string) {
         "postgres_changes",
         { event: "*", schema: "public", table: "columns", filter },
         onColumn,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "groups", filter },
+        onGroup,
       )
       .subscribe();
 

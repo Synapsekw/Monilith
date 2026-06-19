@@ -11,17 +11,20 @@ describe("AuthForm", () => {
     expect(
       screen.getByRole("button", { name: /sign in/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText(/full name/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/organization name/i),
+    ).not.toBeInTheDocument();
   });
 
-  it("renders a full name field in signup mode", () => {
+  it("renders an organization name field in signup mode", () => {
     render(<AuthForm mode="signup" />);
 
-    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/organization name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /create account/i }),
     ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/full name/i)).not.toBeInTheDocument();
   });
 });

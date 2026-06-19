@@ -4,8 +4,16 @@ import {
   createGroupSchema,
   createItemSchema,
   deleteBoardSchema,
+  deleteGroupSchema,
   renameBoardSchema,
+  renameGroupSchema,
   renameItemSchema,
+  reorderGroupSchema,
+  resizeNameColumnSchema,
+  updateGroupColorSchema,
+  addSubitemSchema,
+  deleteItemSchema,
+  reorderItemSchema,
 } from "./board-actions";
 import { upsertCellSchema, clearCellSchema } from "./board-actions";
 
@@ -61,6 +69,15 @@ describe("board action schemas", () => {
     ).toBe(true);
   });
 
+  it("renameGroup requires a groupId and a name", () => {
+    expect(
+      renameGroupSchema.safeParse({ groupId: uuid, name: "Renamed" }).success,
+    ).toBe(true);
+    expect(
+      renameGroupSchema.safeParse({ groupId: uuid, name: "" }).success,
+    ).toBe(false);
+  });
+
   it("createItem requires a groupId and a name", () => {
     expect(
       createItemSchema.safeParse({ groupId: uuid, name: "Task" }).success,
@@ -71,6 +88,24 @@ describe("board action schemas", () => {
     expect(
       renameItemSchema.safeParse({ itemId: uuid, name: "Renamed" }).success,
     ).toBe(true);
+  });
+
+  it("resizeNameColumn accepts an in-range width and null (auto-fit)", () => {
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: 300 }).success,
+    ).toBe(true);
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: null }).success,
+    ).toBe(true);
+  });
+
+  it("resizeNameColumn rejects out-of-range and non-int widths", () => {
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: 5000 }).success,
+    ).toBe(false);
+    expect(
+      resizeNameColumnSchema.safeParse({ boardId: uuid, width: 12.5 }).success,
+    ).toBe(false);
   });
 });
 
@@ -121,5 +156,70 @@ describe("cell action schemas", () => {
     expect(clearCellSchema.safeParse({ itemId: "x", columnId }).success).toBe(
       false,
     );
+  });
+});
+
+describe("group management schemas", () => {
+  const groupId = "11111111-1111-4111-8111-111111111111";
+
+  it("deleteGroup requires a uuid groupId", () => {
+    expect(deleteGroupSchema.safeParse({ groupId }).success).toBe(true);
+    expect(deleteGroupSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("reorderGroup requires a numeric position", () => {
+    expect(
+      reorderGroupSchema.safeParse({ groupId, position: 1.5 }).success,
+    ).toBe(true);
+    expect(
+      reorderGroupSchema.safeParse({ groupId, position: "x" }).success,
+    ).toBe(false);
+  });
+
+  it("updateGroupColor requires a 6-digit hex color", () => {
+    expect(
+      updateGroupColorSchema.safeParse({ groupId, color: "#00c875" }).success,
+    ).toBe(true);
+    expect(
+      updateGroupColorSchema.safeParse({ groupId, color: "red" }).success,
+    ).toBe(false);
+    expect(
+      updateGroupColorSchema.safeParse({ groupId, color: "#fff" }).success,
+    ).toBe(false);
+  });
+});
+
+// Zod 4 enforces strict RFC 4122 UUID format — variant nibble must be [89abAB].
+const UUID = "11111111-1111-4111-8111-111111111111";
+
+describe("addSubitemSchema", () => {
+  it("accepts a valid parentId + name", () => {
+    expect(
+      addSubitemSchema.safeParse({ parentId: UUID, name: "Sub" }).success,
+    ).toBe(true);
+  });
+  it("rejects an empty name", () => {
+    expect(
+      addSubitemSchema.safeParse({ parentId: UUID, name: "  " }).success,
+    ).toBe(false);
+  });
+  it("rejects a non-uuid parentId", () => {
+    expect(
+      addSubitemSchema.safeParse({ parentId: "x", name: "Sub" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("deleteItemSchema", () => {
+  it("accepts a uuid", () => {
+    expect(deleteItemSchema.safeParse({ itemId: UUID }).success).toBe(true);
+  });
+});
+
+describe("reorderItemSchema", () => {
+  it("accepts a numeric position", () => {
+    expect(
+      reorderItemSchema.safeParse({ itemId: UUID, position: 2.5 }).success,
+    ).toBe(true);
   });
 });

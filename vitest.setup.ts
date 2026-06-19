@@ -7,7 +7,26 @@ import { afterEach, vi } from "vitest";
 // tests without per-file mocks.
 vi.mock("next/font/google", () => {
   const font = () => ({ className: "font-mock", variable: "", style: {} });
-  return { Archivo: font, Geist: font, Geist_Mono: font };
+  return { Nunito: font, Geist: font, Geist_Mono: font };
+});
+
+// ogl spins up a real WebGL context, which jsdom lacks. Stub the four primitives
+// the LightRays hero uses so it mounts (and tears down) under jsdom without a
+// GPU. Renderer exposes a fake gl/canvas so the component's append + cleanup run.
+vi.mock("ogl", () => {
+  class Renderer {
+    dpr = 1;
+    gl = {
+      canvas: document.createElement("canvas"),
+      getExtension: () => null,
+    };
+    setSize() {}
+    render() {}
+  }
+  class Program {}
+  class Triangle {}
+  class Mesh {}
+  return { Renderer, Program, Triangle, Mesh };
 });
 
 // jsdom lacks the layout/observer APIs Radix (Popover/DismissableLayer + Floating
@@ -21,6 +40,19 @@ Element.prototype.scrollIntoView ??= vi.fn();
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.setPointerCapture ??= () => {};
 Element.prototype.releasePointerCapture ??= () => {};
+
+// jsdom lacks matchMedia; Framer Motion's useReducedMotion (and any media-query
+// reads) need it. Default to "no match" (motion enabled) so components render.
+globalThis.matchMedia ??= ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+})) as unknown as typeof window.matchMedia;
 
 // Radix menu triggers open on `pointerdown` (button 0), not on `click`. In a
 // real browser a click is always preceded by pointer events; jsdom's synthetic

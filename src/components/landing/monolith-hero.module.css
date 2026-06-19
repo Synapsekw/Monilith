@@ -1,55 +1,61 @@
-.hero {
+.page {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   min-height: 100dvh;
   isolation: isolate;
   overflow: hidden;
-  background: #0d0d0f;
-  cursor: pointer;
-  text-decoration: none;
+  background: #06070c;
 }
 
-.vignette {
+.scene {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+/* Full-bleed WebGL light-rays backdrop. */
+.rays {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: radial-gradient(
-    120% 90% at 50% 45%,
-    transparent 40%,
-    rgba(0, 0, 0, 0.55) 100%
-  );
 }
 
-.glow {
+/* Seats the ray source with a soft bloom at the top-centre origin. */
+.source {
   position: absolute;
+  top: -6%;
+  left: 50%;
   z-index: 1;
-  width: min(15vh, 150px);
-  height: min(70vh, 620px);
-  filter: blur(40px);
-  background: linear-gradient(
-    to top,
-    rgba(186, 200, 255, 0),
-    rgba(186, 200, 255, 0.55) 45%,
-    rgba(224, 231, 255, 0.2)
+  transform: translateX(-50%);
+  width: min(560px, 70vw);
+  height: 300px;
+  pointer-events: none;
+  filter: blur(50px);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(170, 180, 255, 0.35),
+    transparent 70%
   );
-  animation: shaft 7s ease-in-out infinite;
 }
 
-.slab {
+/* Darkens the edges so the rays fall off cleanly toward the frame. */
+.vignette {
   position: absolute;
-  z-index: 2;
-  width: min(15vh, 140px);
-  height: min(52vh, 470px);
-  border-radius: 3px;
-  background: linear-gradient(160deg, #1c1c22, #0a0a0c);
-  box-shadow:
-    inset 1.5px 0 0 rgba(255, 255, 255, 0.1),
-    inset -1.5px 0 0 rgba(0, 0, 0, 0.6),
-    0 40px 90px rgba(0, 0, 0, 0.65);
-  clip-path: polygon(0 11%, 100% 0, 100% 100%, 0 100%);
-  animation: float 6.5s ease-in-out infinite;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    130% 100% at 50% 30%,
+    transparent 40%,
+    rgba(6, 7, 12, 0.82) 100%
+  );
 }
 
 .wordmark {
@@ -57,69 +63,108 @@
   z-index: 5;
   font-size: clamp(40px, 9vw, 124px);
   font-weight: 800;
+  line-height: 1;
   letter-spacing: 0.02em;
   color: #f4f4f6;
-  text-shadow: 0 4px 50px rgba(0, 0, 0, 0.7);
-  transition:
-    letter-spacing 0.6s ease,
-    text-shadow 0.6s ease;
+  text-shadow:
+    0 4px 60px rgba(120, 130, 220, 0.35),
+    0 4px 50px rgba(0, 0, 0, 0.6);
+  background-image: linear-gradient(
+    100deg,
+    transparent 35%,
+    rgba(186, 200, 255, 0.85) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: sweep 6s ease-in-out 1.2s infinite;
+  transition: letter-spacing 0.6s ease;
 }
 
-.enter {
-  position: absolute;
-  z-index: 5;
-  bottom: 13%;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: #a1a1aa;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-
-.hero:hover .enter,
-.hero:focus-visible .enter {
-  opacity: 0.85;
-}
-
-.hero:hover .wordmark {
+.scene:hover .wordmark {
   letter-spacing: 0.05em;
-  text-shadow: 0 4px 60px rgba(99, 102, 241, 0.35);
 }
 
-.hero:focus-visible {
-  outline: 2px solid #6366f1;
-  outline-offset: -4px;
+.subcopy {
+  position: relative;
+  z-index: 5;
+  margin: 0;
+  font-size: clamp(0.9rem, 1.4vw, 1.05rem);
+  letter-spacing: 0.01em;
+  color: #a1a1aa;
+  text-align: center;
 }
 
-@keyframes shaft {
-  0%,
+.ctas {
+  position: relative;
+  z-index: 5;
+  margin-top: 1.25rem;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.badge {
+  position: relative;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid rgba(244, 244, 246, 0.16);
+  border-radius: 9999px;
+  background: rgba(244, 244, 246, 0.06);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: #d4d4d8;
+  backdrop-filter: blur(4px);
+}
+
+.badgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #8ea2eb;
+  box-shadow: 0 0 8px 1px rgba(142, 162, 235, 0.85);
+}
+
+.footer {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  font-size: 0.8rem;
+  color: #71717a;
+}
+
+.footerLink {
+  color: #a1a1aa;
+  transition: color 0.2s ease;
+}
+
+.footerLink:hover {
+  color: #f4f4f6;
+}
+
+@keyframes sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  40%,
   100% {
-    opacity: 0.5;
-    transform: translateY(8px) scaleY(0.96);
-  }
-  50% {
-    opacity: 0.92;
-    transform: translateY(-6px) scaleY(1.04);
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(6px);
-  }
-  50% {
-    transform: translateY(-8px);
+    background-position: -120% 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .glow,
-  .slab {
+  .wordmark {
     animation: none;
   }
 }

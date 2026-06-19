@@ -1,4 +1,5 @@
 import type { ColumnOption } from "@/lib/validations/boards";
+import { pillTextColor } from "@/lib/boards/contrast";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -20,8 +21,11 @@ function optionById(settings: Settings, id: string | null) {
 function OptionPill({ option }: { option: ColumnOption }) {
   return (
     <span
-      className="inline-flex max-w-full items-center truncate rounded-md px-2.5 py-0.5 text-xs font-medium text-white"
-      style={{ backgroundColor: option.color }}
+      className="inline-flex max-w-full items-center truncate rounded-md px-2.5 py-0.5 text-xs font-medium"
+      style={{
+        backgroundColor: option.color,
+        color: pillTextColor(option.color),
+      }}
     >
       {option.label}
     </span>

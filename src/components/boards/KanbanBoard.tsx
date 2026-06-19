@@ -15,6 +15,7 @@ import {
 import { Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { pillTextColor } from "@/lib/boards/contrast";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type {
   BoardCache,
@@ -86,6 +87,7 @@ type CardDragData = { itemId: string; fromColId: string };
 export function KanbanBoard({
   payload,
   selectedViewId,
+  members = [],
 }: {
   payload: BoardPayload;
   // Accepted for parity with BoardTable / the route's prop contract. The card
@@ -149,6 +151,8 @@ export function KanbanBoard({
           boardName={cache.board.name}
           views={payload.views}
           selectedViewId={selectedViewId}
+          columns={cache.columns}
+          members={members}
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -193,6 +197,8 @@ export function KanbanBoard({
         boardName={cache.board.name}
         views={payload.views}
         selectedViewId={selectedViewId}
+        columns={cache.columns}
+        members={members}
       />
 
       {/* Grouping-column picker — native select keeps it dependency-light. */}
@@ -264,6 +270,9 @@ function KanbanColumnView({
 
   // Virtualize the card list so large columns don't render every card to the DOM.
   const scrollRef = useRef<HTMLDivElement>(null);
+  // React Compiler safely skips memoizing this component because useVirtualizer
+  // returns non-memoizable functions; that fallback is correct here.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: column.cards.length,
     getScrollElement: () => scrollRef.current,
@@ -284,8 +293,11 @@ function KanbanColumnView({
       <header className="flex items-center gap-2 px-3 py-2">
         {column.color ? (
           <span
-            className="inline-flex items-center truncate rounded-md px-2 py-0.5 text-xs font-medium text-white"
-            style={{ backgroundColor: column.color }}
+            className="inline-flex items-center truncate rounded-md px-2 py-0.5 text-xs font-medium"
+            style={{
+              backgroundColor: column.color,
+              color: pillTextColor(column.color),
+            }}
           >
             {column.label}
           </span>

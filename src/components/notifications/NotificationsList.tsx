@@ -8,6 +8,8 @@ function label(n: AppNotification): string {
       return "mentioned you in an update";
     case "assigned":
       return "assigned you to an item";
+    case "automation":
+      return "an automation ran on an item";
     default:
       return "updated an item you follow";
   }

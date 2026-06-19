@@ -88,3 +88,104 @@ describe("upsertCell people-cell assignment fan-out", () => {
     ]);
   });
 });
+
+import { buildTemplatePayload } from "@/lib/boards/template-payload";
+import { getTemplate } from "@/lib/boards/templates";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+describe("buildTemplatePayload", () => {
+  it("blank: 1 group, 3 columns, 0 items; all ids are uuids", () => {
+    const p = buildTemplatePayload(getTemplate("blank")!);
+    expect(p.groups).toHaveLength(1);
+    expect(p.columns).toHaveLength(3);
+    expect(p.items).toHaveLength(0);
+    expect(p.groups[0].id).toMatch(UUID_RE);
+    expect(p.columns.every((c) => UUID_RE.test(c.id))).toBe(true);
+    expect(p.groups[0].position).toBe(0);
+  });
+
+  it("status column carries options with minted uuid ids", () => {
+    const p = buildTemplatePayload(getTemplate("blank")!);
+    const status = p.columns.find((c) => c.kind === "status")!;
+    const opts = (status.settings as { options: { id: string }[] }).options;
+    expect(opts).toHaveLength(4);
+    expect(opts.every((o) => UUID_RE.test(o.id))).toBe(true);
+  });
+
+  it("resolves a status cell to the matching minted optionId", () => {
+    const p = buildTemplatePayload(getTemplate("sprints")!);
+    const status = p.columns.find((c) => c.name === "Status")!;
+    const doneId = (
+      status.settings as { options: { id: string; label: string }[] }
+    ).options.find((o) => o.label === "Done")!.id;
+    const shipItem = p.items.find((i) => i.name === "Ship settings page")!;
+    const statusCell = shipItem.cells.find((c) => c.columnId === status.id)!;
+    expect(statusCell.value).toEqual({ optionId: doneId });
+  });
+
+  it("resolves a date range cell to ISO start + end", () => {
+    const p = buildTemplatePayload(getTemplate("sprints")!);
+    const sprintCol = p.columns.find((c) => c.name === "Sprint")!;
+    const item = p.items.find((i) => i.name === "Build onboarding flow")!;
+    const cell = item.cells.find((c) => c.columnId === sprintCol.id)!;
+    const v = cell.value as { date: string; end: string };
+    expect(v.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(v.end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(v.end > v.date).toBe(true);
+  });
+
+  it("resolves dropdown, numbers and text cells", () => {
+    const p = buildTemplatePayload(getTemplate("content")!);
+    const channel = p.columns.find((c) => c.name === "Channel")!;
+    const item = p.items.find((i) => i.name === "Launch thread")!;
+    const cell = item.cells.find((c) => c.columnId === channel.id)!;
+    const ids = (cell.value as { optionIds: string[] }).optionIds;
+    expect(ids).toHaveLength(1);
+    expect(UUID_RE.test(ids[0])).toBe(true);
+  });
+});
+
+import { createBoardFromTemplate } from "@/lib/boards/actions";
+
+describe("createBoardFromTemplate", () => {
+  it("rejects an unknown templateId before touching Supabase", async () => {
+    const res = await createBoardFromTemplate({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      templateId: "does-not-exist",
+      name: "My board",
+    });
+    expect(res).toEqual({ ok: false, error: "Unknown template." });
+  });
+});
+
+import { addSubitem, deleteItem, reorderItem } from "./actions";
+
+describe("addSubitem", () => {
+  it("rejects an empty name", async () => {
+    const res = await addSubitem({
+      parentId: "11111111-1111-1111-1111-111111111111",
+      name: " ",
+    });
+    expect(res.ok).toBe(false);
+  });
+  it("rejects a non-uuid parentId", async () => {
+    const res = await addSubitem({ parentId: "nope", name: "Sub" });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("deleteItem", () => {
+  it("rejects a non-uuid itemId", async () => {
+    const res = await deleteItem({ itemId: "nope" });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("reorderItem", () => {
+  it("rejects a non-uuid itemId", async () => {
+    const res = await reorderItem({ itemId: "nope", position: 1 });
+    expect(res.ok).toBe(false);
+  });
+});

@@ -88,6 +88,7 @@ function monthLabel(monthISO: string): string {
 export function CalendarBoard({
   payload,
   selectedViewId,
+  members = [],
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
@@ -177,6 +178,8 @@ export function CalendarBoard({
           boardName={cache.board.name}
           views={payload.views}
           selectedViewId={selectedViewId}
+          columns={cache.columns}
+          members={members}
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -251,6 +254,8 @@ export function CalendarBoard({
         boardName={cache.board.name}
         views={payload.views}
         selectedViewId={selectedViewId}
+        columns={cache.columns}
+        members={members}
       />
 
       {/* Controls bar */}

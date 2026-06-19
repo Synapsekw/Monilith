@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { Brand } from "@/components/brand/brand";
 import { Sidebar } from "@/components/sidebar";
+import { CommandPalette } from "@/components/command-palette";
 import { CommandTrigger } from "@/components/command-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
@@ -29,6 +32,11 @@ export type AppShellWorkspace = {
   name: string;
 };
 
+export type AppShellDashboard = {
+  id: string;
+  name: string;
+};
+
 type AppShellProps = {
   children: ReactNode;
   user?: AppShellUser;
@@ -36,6 +44,7 @@ type AppShellProps = {
   org?: AppShellOrg;
   workspaces?: AppShellWorkspace[];
   boards?: BoardListEntry[];
+  dashboards?: AppShellDashboard[];
 };
 
 function initialFor(user: AppShellUser): string {
@@ -57,6 +66,13 @@ function UserMenu({ user }: { user: AppShellUser }) {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/settings" className="flex items-center gap-2">
+            <Settings className="size-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem asChild variant="destructive">
           <form action={signOut}>
             <button type="submit" className="w-full text-left">
@@ -75,10 +91,15 @@ export function AppShell({
   currentUserId,
   workspaces,
   boards,
+  dashboards,
 }: AppShellProps) {
   return (
     <div className="flex h-svh w-full overflow-hidden">
-      <Sidebar boards={boards ?? []} workspaces={workspaces ?? []} />
+      <Sidebar
+        boards={boards ?? []}
+        workspaces={workspaces ?? []}
+        dashboards={dashboards ?? []}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
@@ -96,6 +117,11 @@ export function AppShell({
         </header>
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>
+      <CommandPalette
+        boards={boards ?? []}
+        dashboards={dashboards ?? []}
+        workspaces={workspaces ?? []}
+      />
     </div>
   );
 }

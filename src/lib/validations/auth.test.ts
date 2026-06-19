@@ -33,23 +33,15 @@ describe("signInSchema", () => {
 });
 
 describe("signUpSchema", () => {
-  it("accepts a valid email and an 8+ char password", () => {
+  it("accepts a valid email, 8+ char password, and org name", () => {
     const result = signUpSchema.safeParse({
       email: "user@example.com",
       password: "password123",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts an optional fullName", () => {
-    const result = signUpSchema.safeParse({
-      email: "user@example.com",
-      password: "password123",
-      fullName: "Ada Lovelace",
+      orgName: "Acme Inc.",
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.fullName).toBe("Ada Lovelace");
+      expect(result.data.orgName).toBe("Acme Inc.");
     }
   });
 
@@ -57,6 +49,7 @@ describe("signUpSchema", () => {
     const result = signUpSchema.safeParse({
       email: "nope",
       password: "password123",
+      orgName: "Acme",
     });
     expect(result.success).toBe(false);
   });
@@ -65,6 +58,7 @@ describe("signUpSchema", () => {
     const result = signUpSchema.safeParse({
       email: "user@example.com",
       password: "short",
+      orgName: "Acme",
     });
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -72,15 +66,32 @@ describe("signUpSchema", () => {
     }
   });
 
-  it("treats an empty fullName as undefined", () => {
+  it("rejects a missing org name", () => {
     const result = signUpSchema.safeParse({
       email: "user@example.com",
       password: "password123",
-      fullName: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a blank/whitespace org name", () => {
+    const result = signUpSchema.safeParse({
+      email: "user@example.com",
+      password: "password123",
+      orgName: "   ",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("trims the org name", () => {
+    const result = signUpSchema.safeParse({
+      email: "user@example.com",
+      password: "password123",
+      orgName: "  Acme  ",
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.fullName).toBeUndefined();
+      expect(result.data.orgName).toBe("Acme");
     }
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ActivityDescriptor } from "@/lib/collaboration/activity";
+import { pillTextColor } from "@/lib/boards/contrast";
 
 function Chip({
   value,
@@ -11,8 +12,11 @@ function Chip({
   if (typeof value === "string") return <span>{value}</span>;
   return (
     <span
-      className="rounded px-1.5 py-0.5 text-xs font-medium text-white"
-      style={{ backgroundColor: value.color }}
+      className="rounded px-1.5 py-0.5 text-xs font-medium"
+      style={{
+        backgroundColor: value.color,
+        color: pillTextColor(value.color),
+      }}
     >
       {value.label}
     </span>

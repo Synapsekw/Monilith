@@ -136,6 +136,7 @@ type BarDragData = {
 export function GanttBoard({
   payload,
   selectedViewId,
+  members = [],
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
@@ -280,6 +281,8 @@ export function GanttBoard({
           boardName={cache.board.name}
           views={payload.views}
           selectedViewId={selectedViewId}
+          columns={cache.columns}
+          members={members}
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <div className="flex flex-col items-center gap-3 text-center">
@@ -346,6 +349,8 @@ export function GanttBoard({
         boardName={cache.board.name}
         views={payload.views}
         selectedViewId={selectedViewId}
+        columns={cache.columns}
+        members={members}
       />
 
       {/* Controls bar */}

@@ -53,12 +53,29 @@ related: []
    - **Bump `last-updated`** in the frontmatter to today's date.
    - Add the new session to the `related:` of anything it closes out, and link it with `[[<session-filename-without-ext>]]` where relevant.
 
-6. **Report back** to the user with the session file path and a one-line summary, and note what you changed in the north-star.
+6. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
+   commits its own output:
+
+   ```bash
+   git add vault/ && git commit -m "docs(vault): <slug> session + north-star bump"
+   ```
+
+   - **Stage `vault/` only** — never `git add -A`/`.`. This commits the session note, the
+     north-star bump, any ADRs you wrote, and removes the folded-in `_draft-*.md`. It must not
+     pull in source changes; those follow the normal "don't commit unless asked" rule.
+   - If there are also source changes in the working tree, leave them staged-out and untouched.
+   - Don't push unless the user asks.
+
+7. **Report back** to the user with the session file path, the commit hash, and a one-line
+   summary, and note what you changed in the north-star.
 
 ## Discipline
 
 - **Keep it tight.** If the summary is more than ~30 lines, the work belonged in a spec or ADR, not a session note. Trim and split rather than expanding.
-- **Don't commit.** Per the user's standing preference, never commit unless they explicitly say so. Just write the files.
+- **Commit vault paths only.** The standing "never commit unless asked" preference protects
+  _source code_ from surprise commits/deploys — it does **not** apply to the vault, whose whole
+  point is durable dev-memory. So `/wrapup` commits `vault/` (and only `vault/`) per step 6. Never
+  stage or commit source changes during a wrapup.
 - **No emoji** in the file body unless the user asked for them.
 - **Cross-link** any decisions worth surfacing — if a real architectural decision or a non-obvious gotcha came up, also create an ADR in `vault/decisions/` using the `decision.md` template (tag gotchas with `gotcha`).
 

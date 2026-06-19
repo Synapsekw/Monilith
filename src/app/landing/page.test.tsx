@@ -5,7 +5,9 @@ const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
 
 vi.mock("@/lib/auth/session", () => ({ getUser: () => getUser() }));
 vi.mock("@/components/landing/monolith-hero", () => ({
-  MonolithHero: ({ href }: { href?: string }) => <a href={href}>MONOLITH</a>,
+  MonolithHero: ({ signedIn }: { signedIn?: boolean }) => (
+    <div>monolith:{signedIn ? "in" : "out"}</div>
+  ),
 }));
 
 import LandingPage from "./page";
@@ -15,19 +17,15 @@ beforeEach(() => {
 });
 
 describe("LandingPage (/landing splash)", () => {
-  it("sends logged-out visitors to /login", async () => {
+  it("renders the logged-out hero for visitors", async () => {
     getUser.mockResolvedValue(null);
-
     render(await LandingPage());
-
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/login");
+    expect(screen.getByText("monolith:out")).toBeInTheDocument();
   });
 
-  it("sends signed-in viewers back into the app", async () => {
+  it("renders the signed-in hero for authenticated viewers", async () => {
     getUser.mockResolvedValue({ id: "u1" });
-
     render(await LandingPage());
-
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/");
+    expect(screen.getByText("monolith:in")).toBeInTheDocument();
   });
 });

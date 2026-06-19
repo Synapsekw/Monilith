@@ -85,6 +85,222 @@ export type Database = {
           },
         ];
       };
+      automation_date_fires: {
+        Row: {
+          automation_id: string;
+          fire_date: string;
+          fired_at: string;
+          item_id: string;
+          org_id: string;
+        };
+        Insert: {
+          automation_id: string;
+          fire_date: string;
+          fired_at?: string;
+          item_id: string;
+          org_id: string;
+        };
+        Update: {
+          automation_id?: string;
+          fire_date?: string;
+          fired_at?: string;
+          item_id?: string;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_date_fires_automation_id_fkey";
+            columns: ["automation_id"];
+            isOneToOne: false;
+            referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_date_fires_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_date_fires_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      automation_runs: {
+        Row: {
+          actions: Json;
+          automation_id: string;
+          board_id: string;
+          created_at: string;
+          error: string | null;
+          id: string;
+          item_id: string | null;
+          org_id: string;
+          status: string;
+          trigger_type: string;
+        };
+        Insert: {
+          actions?: Json;
+          automation_id: string;
+          board_id: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          item_id?: string | null;
+          org_id: string;
+          status: string;
+          trigger_type: string;
+        };
+        Update: {
+          actions?: Json;
+          automation_id?: string;
+          board_id?: string;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          item_id?: string | null;
+          org_id?: string;
+          status?: string;
+          trigger_type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_runs_automation_id_fkey";
+            columns: ["automation_id"];
+            isOneToOne: false;
+            referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_runs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      automation_webhook_deliveries: {
+        Row: {
+          action_index: number;
+          created_at: string;
+          org_id: string;
+          request_id: number;
+          run_id: string;
+          status: string;
+        };
+        Insert: {
+          action_index: number;
+          created_at?: string;
+          org_id: string;
+          request_id: number;
+          run_id: string;
+          status?: string;
+        };
+        Update: {
+          action_index?: number;
+          created_at?: string;
+          org_id?: string;
+          request_id?: number;
+          run_id?: string;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_webhook_deliveries_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_webhook_deliveries_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "automation_runs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      automations: {
+        Row: {
+          actions: Json;
+          board_id: string;
+          condition: Json | null;
+          created_at: string;
+          created_by: string | null;
+          enabled: boolean;
+          id: string;
+          name: string | null;
+          org_id: string;
+          position: number;
+          trigger: Json;
+          updated_at: string;
+        };
+        Insert: {
+          actions?: Json;
+          board_id: string;
+          condition?: Json | null;
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          id?: string;
+          name?: string | null;
+          org_id: string;
+          position?: number;
+          trigger: Json;
+          updated_at?: string;
+        };
+        Update: {
+          actions?: Json;
+          board_id?: string;
+          condition?: Json | null;
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          id?: string;
+          name?: string | null;
+          org_id?: string;
+          position?: number;
+          trigger?: Json;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automations_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_views: {
         Row: {
           board_id: string;
@@ -143,6 +359,7 @@ export type Database = {
           description: string | null;
           id: string;
           name: string;
+          name_column_width: number | null;
           org_id: string;
           position: number;
           updated_at: string;
@@ -154,6 +371,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           name: string;
+          name_column_width?: number | null;
           org_id: string;
           position?: number;
           updated_at?: string;
@@ -165,6 +383,7 @@ export type Database = {
           description?: string | null;
           id?: string;
           name?: string;
+          name_column_width?: number | null;
           org_id?: string;
           position?: number;
           updated_at?: string;
@@ -293,6 +512,115 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      dashboard_widgets: {
+        Row: {
+          config: Json;
+          created_at: string;
+          dashboard_id: string;
+          id: string;
+          kind: Database["public"]["Enums"]["widget_kind"];
+          layout: Json;
+          org_id: string;
+          position: number;
+          source_board_id: string | null;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          config?: Json;
+          created_at?: string;
+          dashboard_id: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["widget_kind"];
+          layout?: Json;
+          org_id: string;
+          position?: number;
+          source_board_id?: string | null;
+          title?: string;
+          updated_at?: string;
+        };
+        Update: {
+          config?: Json;
+          created_at?: string;
+          dashboard_id?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["widget_kind"];
+          layout?: Json;
+          org_id?: string;
+          position?: number;
+          source_board_id?: string | null;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_widgets_dashboard_id_fkey";
+            columns: ["dashboard_id"];
+            isOneToOne: false;
+            referencedRelation: "dashboards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dashboard_widgets_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dashboard_widgets_source_board_id_fkey";
+            columns: ["source_board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      dashboards: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          name: string;
+          org_id: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "dashboards_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "dashboards_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },
         ];
@@ -601,6 +929,7 @@ export type Database = {
       notifications: {
         Row: {
           actor_id: string | null;
+          automation_id: string | null;
           board_id: string | null;
           created_at: string;
           id: string;
@@ -613,6 +942,7 @@ export type Database = {
         };
         Insert: {
           actor_id?: string | null;
+          automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
           id?: string;
@@ -625,6 +955,7 @@ export type Database = {
         };
         Update: {
           actor_id?: string | null;
+          automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
           id?: string;
@@ -636,6 +967,13 @@ export type Database = {
           update_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "notifications_automation_id_fkey";
+            columns: ["automation_id"];
+            isOneToOne: false;
+            referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "notifications_board_id_fkey";
             columns: ["board_id"];
@@ -702,6 +1040,7 @@ export type Database = {
           id: string;
           name: string;
           slug: string;
+          timezone: string;
           updated_at: string;
         };
         Insert: {
@@ -710,6 +1049,7 @@ export type Database = {
           id?: string;
           name: string;
           slug: string;
+          timezone?: string;
           updated_at?: string;
         };
         Update: {
@@ -718,6 +1058,7 @@ export type Database = {
           id?: string;
           name?: string;
           slug?: string;
+          timezone?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -789,6 +1130,39 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      _automation_condition_predicate: {
+        Args: { p_col: string; p_item_id: string; p_op: string; p_val: string };
+        Returns: string;
+      };
+      _automation_conditions_pass: {
+        Args: { p_condition: Json; p_item_id: string };
+        Returns: boolean;
+      };
+      _automation_date_sweep: { Args: { p_now?: string }; Returns: undefined };
+      _automation_run: {
+        Args: {
+          p_actions: Json;
+          p_actor: string;
+          p_automation_id: string;
+          p_board_id: string;
+          p_condition: Json;
+          p_item_id: string;
+          p_org_id: string;
+          p_trigger_type: string;
+        };
+        Returns: undefined;
+      };
+      _automation_runs_prune: { Args: never; Returns: undefined };
+      _automation_webhook_reconcile: { Args: never; Returns: undefined };
+      _dashboard_list_predicate: {
+        Args: { p_col: string; p_op: string; p_val: string };
+        Returns: string;
+      };
+      _webhook_outcome: {
+        Args: { p_error_msg: string; p_status_code: number };
+        Returns: string;
+      };
+      _webhook_url_safe: { Args: { p_url: string }; Returns: boolean };
       auth_user_orgs: { Args: never; Returns: string[] };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
@@ -806,6 +1180,28 @@ export type Database = {
           description: string | null;
           id: string;
           name: string;
+          name_column_width: number | null;
+          org_id: string;
+          position: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "boards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_board_from_template: {
+        Args: { p_name: string; p_template: Json; p_workspace_id: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          name: string;
+          name_column_width: number | null;
           org_id: string;
           position: number;
           updated_at: string;
@@ -839,6 +1235,53 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "board_views";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_dashboard: {
+        Args: { p_name: string; p_workspace_id: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "dashboards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_dashboard_widget: {
+        Args: {
+          p_config?: Json;
+          p_dashboard_id: string;
+          p_kind: Database["public"]["Enums"]["widget_kind"];
+          p_layout?: Json;
+          p_source_board_id: string;
+          p_title?: string;
+        };
+        Returns: {
+          config: Json;
+          created_at: string;
+          dashboard_id: string;
+          id: string;
+          kind: Database["public"]["Enums"]["widget_kind"];
+          layout: Json;
+          org_id: string;
+          position: number;
+          source_board_id: string | null;
+          title: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "dashboard_widgets";
           isOneToOne: true;
           isSetofReturn: false;
         };
@@ -889,6 +1332,7 @@ export type Database = {
           id: string;
           name: string;
           slug: string;
+          timezone: string;
           updated_at: string;
         };
         SetofOptions: {
@@ -897,6 +1341,26 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      dashboard_aggregate: {
+        Args: {
+          p_agg?: string;
+          p_board_id: string;
+          p_group_column_id?: string;
+          p_value_column_id?: string;
+        };
+        Returns: {
+          group_key: string;
+          metric: number;
+        }[];
+      };
+      dashboard_list_rows: {
+        Args: { p_board_id: string; p_filter?: Json; p_limit?: number };
+        Returns: {
+          created_at: string;
+          item_id: string;
+          name: string;
+        }[];
       };
       delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
       group_in_org: {
@@ -919,6 +1383,28 @@ export type Database = {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
       };
+      provision_account: {
+        Args: { p_org_name: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          slug: string;
+          timezone: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "organizations";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      set_widget_layouts: {
+        Args: { p_dashboard_id: string; p_layouts: Json };
+        Returns: undefined;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
     };
     Enums: {
@@ -936,9 +1422,14 @@ export type Database = {
         | "date"
         | "numbers"
         | "dropdown";
-      notification_kind: "mention" | "assigned" | "update_on_item";
+      notification_kind:
+        | "mention"
+        | "assigned"
+        | "update_on_item"
+        | "automation";
       org_role: "owner" | "admin" | "member" | "guest";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
+      widget_kind: "number" | "chart" | "battery" | "list";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -1078,9 +1569,15 @@ export const Constants = {
         "update_added",
       ],
       column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
-      notification_kind: ["mention", "assigned", "update_on_item"],
+      notification_kind: [
+        "mention",
+        "assigned",
+        "update_on_item",
+        "automation",
+      ],
       org_role: ["owner", "admin", "member", "guest"],
       view_kind: ["table", "kanban", "calendar", "timeline"],
+      widget_kind: ["number", "chart", "battery", "list"],
     },
   },
 } as const;

@@ -9,6 +9,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { pillTextColor } from "@/lib/boards/contrast";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -85,6 +86,23 @@ function PopoverSurface({
   );
 }
 
+/**
+ * Trailing "Clear" affordance shared by the selector editors (Status / Dropdown
+ * / People). Clearing deletes the cell value; falls back to dismissing the
+ * popover when no `onClear` is wired.
+ */
+function ClearButton({ onClear }: { onClear: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      className="text-muted-foreground hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    >
+      Clear
+    </button>
+  );
+}
+
 export function TextEditor({
   value,
   onCommit,
@@ -151,19 +169,13 @@ export function StatusEditor({
           role="option"
           aria-selected={selected === o.id}
           onClick={() => onCommit({ optionId: o.id })}
-          className="focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
-          style={{ backgroundColor: o.color }}
+          className="focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+          style={{ backgroundColor: o.color, color: pillTextColor(o.color) }}
         >
           {o.label}
         </button>
       ))}
-      <button
-        type="button"
-        onClick={() => (onClear ?? onCancel)()}
-        className="text-muted-foreground hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-      >
-        Clear
-      </button>
+      <ClearButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }
@@ -198,15 +210,16 @@ export function DropdownEditor({
             aria-selected={isSelected}
             onClick={() => toggle(o.id)}
             className={cn(
-              "focus-visible:ring-ring inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium text-white transition-opacity focus-visible:ring-2 focus-visible:outline-none",
+              "focus-visible:ring-ring inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium transition-opacity focus-visible:ring-2 focus-visible:outline-none",
               isSelected ? "opacity-100" : "opacity-60 hover:opacity-90",
             )}
-            style={{ backgroundColor: o.color }}
+            style={{ backgroundColor: o.color, color: pillTextColor(o.color) }}
           >
             {o.label}
           </button>
         );
       })}
+      <ClearButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }
@@ -262,6 +275,7 @@ export function PeopleEditor({
           );
         })
       )}
+      <ClearButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }

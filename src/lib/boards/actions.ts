@@ -6,17 +6,28 @@ import { midpoint } from "@/lib/boards/position";
 import {
   clearCellSchema,
   createBoardSchema,
+  createBoardFromTemplateSchema,
   createGroupSchema,
   createItemSchema,
   deleteBoardSchema,
+  deleteGroupSchema,
   renameBoardSchema,
+  renameGroupSchema,
+  reorderGroupSchema,
+  updateGroupColorSchema,
   renameItemSchema,
   upsertCellSchema,
   createColumnSchema,
   renameColumnSchema,
   deleteColumnSchema,
   resizeColumnSchema,
+  resizeNameColumnSchema,
+  addSubitemSchema,
+  deleteItemSchema,
+  reorderItemSchema,
 } from "@/lib/validations/board-actions";
+import { getTemplate } from "@/lib/boards/templates";
+import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { defaultColumn } from "@/lib/boards/column-defaults";
 import { cellValueSchema } from "@/lib/validations/boards";
@@ -28,6 +39,33 @@ export type ActionResult<T = void> =
 
 function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
+}
+
+/** Create a board pre-populated from a built-in template via an atomic RPC. */
+export async function createBoardFromTemplate(input: {
+  workspaceId: string;
+  templateId: string;
+  name: string;
+}): Promise<ActionResult<{ boardId: string }>> {
+  const parsed = createBoardFromTemplateSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const template = getTemplate(parsed.data.templateId);
+  if (!template) return fail("Unknown template.");
+
+  const payload = buildTemplatePayload(template);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_board_from_template", {
+    p_workspace_id: parsed.data.workspaceId,
+    p_name: parsed.data.name,
+    p_template: payload as unknown as Json,
+  });
+  if (error || !data) return fail(error?.message ?? "Could not create board.");
+
+  revalidatePath("/", "layout");
+  return { ok: true, data: { boardId: data.id } };
 }
 
 /** Create a board with auto-seeded Group 1 + Status/Owner/Date via RPC. */
@@ -88,10 +126,32 @@ export async function deleteBoard(input: {
   return { ok: true, data: undefined };
 }
 
+export async function renameGroup(input: {
+  groupId: string;
+  name: string;
+}): Promise<ActionResult> {
+  const parsed = renameGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("groups")
+    .update({ name: parsed.data.name })
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
 export async function createGroup(input: {
   boardId: string;
   name: string;
-}): Promise<ActionResult<{ groupId: string }>> {
+}): Promise<ActionResult<{ group: Tables<"groups"> }>> {
   const parsed = createGroupSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -122,12 +182,78 @@ export async function createGroup(input: {
       name: parsed.data.name,
       position: midpoint(last?.position ?? null, null),
     })
-    .select("id")
+    .select("*")
     .single();
   if (error || !data) return fail(error?.message ?? "Could not create group.");
 
   revalidatePath(`/boards/${parsed.data.boardId}`);
-  return { ok: true, data: { groupId: data.id } };
+  return { ok: true, data: { group: data } };
+}
+
+export async function reorderGroup(input: {
+  groupId: string;
+  position: number;
+}): Promise<ActionResult> {
+  const parsed = reorderGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("groups")
+    .update({ position: parsed.data.position })
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+export async function updateGroupColor(input: {
+  groupId: string;
+  color: string;
+}): Promise<ActionResult> {
+  const parsed = updateGroupColorSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("groups")
+    .update({ color: parsed.data.color })
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+export async function deleteGroup(input: {
+  groupId: string;
+}): Promise<ActionResult> {
+  const parsed = deleteGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  // items cascade via the group_id FK (on delete cascade).
+  const { data, error } = await supabase
+    .from("groups")
+    .delete()
+    .eq("id", parsed.data.groupId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
 }
 
 /** Create an item via RPC (server derives org_id/board_id and position). Returns the full created item row. */
@@ -169,6 +295,98 @@ export async function renameItem(input: {
   // maybeSingle() returns null data with no error when the item is missing or
   // hidden by RLS — treat that as a failure rather than a silent no-op success.
   if (!data) return fail("Item not found.");
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+/** Create a subitem under a top-level parent. Derives org/board/group from the
+ *  parent (RLS-scoped); the DB trigger enforces the single-level invariant. */
+export async function addSubitem(input: {
+  parentId: string;
+  name: string;
+}): Promise<ActionResult<{ item: Tables<"items"> }>> {
+  const parsed = addSubitemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+
+  const { data: parent, error: parentErr } = await supabase
+    .from("items")
+    .select("org_id, board_id, group_id, parent_id")
+    .eq("id", parsed.data.parentId)
+    .maybeSingle();
+  if (parentErr || !parent) return fail("Parent item not found.");
+  if (parent.parent_id !== null) return fail("Subitems cannot be nested.");
+
+  const { data: last } = await supabase
+    .from("items")
+    .select("position")
+    .eq("parent_id", parsed.data.parentId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("items")
+    .insert({
+      org_id: parent.org_id,
+      board_id: parent.board_id,
+      group_id: parent.group_id,
+      parent_id: parsed.data.parentId,
+      name: parsed.data.name,
+      position: midpoint(last?.position ?? null, null),
+    })
+    .select("*")
+    .single();
+  if (error || !data)
+    return fail(error?.message ?? "Could not create subitem.");
+
+  revalidatePath(`/boards/${parent.board_id}`);
+  return { ok: true, data: { item: data } };
+}
+
+/** Delete an item (or subitem). Subitems + cell values cascade via FKs. */
+export async function deleteItem(input: {
+  itemId: string;
+}): Promise<ActionResult> {
+  const parsed = deleteItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("items")
+    .delete()
+    .eq("id", parsed.data.itemId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Item not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+/** Update an item's position (subitem reorder within a parent). */
+export async function reorderItem(input: {
+  itemId: string;
+  position: number;
+}): Promise<ActionResult> {
+  const parsed = reorderItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("items")
+    .update({ position: parsed.data.position })
+    .eq("id", parsed.data.itemId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Item not found.");
+
   revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
@@ -386,6 +604,28 @@ export async function resizeColumn(input: {
     .eq("id", parsed.data.columnId);
   if (error) return fail(error.message);
   revalidatePath(`/boards/${boardId}`);
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Resize the built-in Name column (per-board). `width: null` clears the manual
+ * width so the client falls back to auto-fit. RLS is the boundary; no need to
+ * derive the board (the id is the board).
+ */
+export async function resizeNameColumn(input: {
+  boardId: string;
+  width: number | null;
+}): Promise<ActionResult> {
+  const parsed = resizeNameColumnSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("boards")
+    .update({ name_column_width: parsed.data.width })
+    .eq("id", parsed.data.boardId);
+  if (error) return fail(error.message);
+  revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: undefined };
 }
 

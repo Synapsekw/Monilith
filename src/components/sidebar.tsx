@@ -6,11 +6,11 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Inbox,
-  LayoutGrid,
   Target,
 } from "lucide-react";
 import { Brand } from "@/components/brand/brand";
 import { BoardsNav } from "@/components/boards/BoardsNav";
+import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -23,7 +23,6 @@ import { cn } from "@/lib/utils";
 import type { BoardListEntry } from "@/lib/boards/queries";
 
 const nav = [
-  { label: "Dashboards", icon: LayoutGrid },
   { label: "Goals", icon: Target },
   { label: "Portfolios", icon: BarChart3 },
   { label: "Inbox", icon: Inbox },
@@ -32,9 +31,11 @@ const nav = [
 export function Sidebar({
   boards,
   workspaces,
+  dashboards,
 }: {
   boards: BoardListEntry[];
   workspaces: { id: string; name: string }[];
+  dashboards: { id: string; name: string }[];
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
@@ -100,6 +101,12 @@ export function Sidebar({
 
         <BoardsNav
           boards={boards}
+          workspaces={workspaces}
+          collapsed={isCollapsed}
+        />
+
+        <DashboardsNav
+          dashboards={dashboards}
           workspaces={workspaces}
           collapsed={isCollapsed}
         />
