@@ -24,6 +24,18 @@ export function RollupCell({ result }: { result: RollupResult }) {
           {result.count} {result.count === 1 ? "person" : "people"}
         </span>
       );
+    case "checkbox":
+      return (
+        <span className="text-muted-foreground text-sm tabular-nums">
+          ✓ {result.checked}/{result.total}
+        </span>
+      );
+    case "rating":
+      return (
+        <span className="text-muted-foreground text-sm tabular-nums">
+          ★ {result.average}
+        </span>
+      );
     case "dateSpan":
       return (
         <span className="text-muted-foreground text-sm">
