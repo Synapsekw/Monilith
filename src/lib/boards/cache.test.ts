@@ -10,6 +10,7 @@ import {
   removeColumn,
   removeDependency,
   removeGroup,
+  removeItem,
   replaceColumn,
   replaceGroup,
   replaceItem,
@@ -434,5 +435,35 @@ describe("removeGroup", () => {
     removeGroup(input, "g1");
     expect(input.groups).toHaveLength(2);
     expect(input.items).toHaveLength(2);
+  });
+});
+
+describe("removeItem", () => {
+  it("removes the item and its cell values", () => {
+    const next = removeItem(baseCache(), "i1");
+    expect(next.items.some((i) => i.id === "i1")).toBe(false);
+    expect(next.cellValues.some((c) => c.item_id === "i1")).toBe(false);
+    expect(next.items.some((i) => i.id === "i2")).toBe(true);
+  });
+
+  it("cascades to subitems of the removed parent", () => {
+    const cache = baseCache();
+    cache.items.push({
+      id: "sub1",
+      board_id: "b1",
+      group_id: "g1",
+      parent_id: "i1",
+      name: "Sub",
+    } as never);
+    cache.cellValues.push({
+      item_id: "sub1",
+      column_id: "c1",
+      org_id: "o1",
+      board_id: "b1",
+      value: { text: "x" },
+    } as never);
+    const next = removeItem(cache, "i1");
+    expect(next.items.some((i) => i.id === "sub1")).toBe(false);
+    expect(next.cellValues.some((c) => c.item_id === "sub1")).toBe(false);
   });
 });

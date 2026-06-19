@@ -112,6 +112,17 @@ export function removeGroup(cache: BoardCache, groupId: string): BoardCache {
   };
 }
 
+/** Remove an item, its subitems, and all their cell values (mirrors the DB cascade). Immutable. */
+export function removeItem(cache: BoardCache, itemId: string): BoardCache {
+  const itemIds = new Set<string>([itemId]);
+  for (const i of cache.items) if (i.parent_id === itemId) itemIds.add(i.id);
+  return {
+    ...cache,
+    items: cache.items.filter((i) => !itemIds.has(i.id)),
+    cellValues: cache.cellValues.filter((c) => !itemIds.has(c.item_id)),
+  };
+}
+
 /** Append a dependency; idempotent on id. Immutable. */
 export function addDependency(
   cache: BoardCache,
