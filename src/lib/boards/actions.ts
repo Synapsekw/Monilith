@@ -22,6 +22,9 @@ import {
   deleteColumnSchema,
   resizeColumnSchema,
   resizeNameColumnSchema,
+  addSubitemSchema,
+  deleteItemSchema,
+  reorderItemSchema,
 } from "@/lib/validations/board-actions";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
@@ -292,6 +295,98 @@ export async function renameItem(input: {
   // maybeSingle() returns null data with no error when the item is missing or
   // hidden by RLS — treat that as a failure rather than a silent no-op success.
   if (!data) return fail("Item not found.");
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+/** Create a subitem under a top-level parent. Derives org/board/group from the
+ *  parent (RLS-scoped); the DB trigger enforces the single-level invariant. */
+export async function addSubitem(input: {
+  parentId: string;
+  name: string;
+}): Promise<ActionResult<{ item: Tables<"items"> }>> {
+  const parsed = addSubitemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+
+  const { data: parent, error: parentErr } = await supabase
+    .from("items")
+    .select("org_id, board_id, group_id, parent_id")
+    .eq("id", parsed.data.parentId)
+    .maybeSingle();
+  if (parentErr || !parent) return fail("Parent item not found.");
+  if (parent.parent_id !== null) return fail("Subitems cannot be nested.");
+
+  const { data: last } = await supabase
+    .from("items")
+    .select("position")
+    .eq("parent_id", parsed.data.parentId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("items")
+    .insert({
+      org_id: parent.org_id,
+      board_id: parent.board_id,
+      group_id: parent.group_id,
+      parent_id: parsed.data.parentId,
+      name: parsed.data.name,
+      position: midpoint(last?.position ?? null, null),
+    })
+    .select("*")
+    .single();
+  if (error || !data)
+    return fail(error?.message ?? "Could not create subitem.");
+
+  revalidatePath(`/boards/${parent.board_id}`);
+  return { ok: true, data: { item: data } };
+}
+
+/** Delete an item (or subitem). Subitems + cell values cascade via FKs. */
+export async function deleteItem(input: {
+  itemId: string;
+}): Promise<ActionResult> {
+  const parsed = deleteItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("items")
+    .delete()
+    .eq("id", parsed.data.itemId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Item not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
+  return { ok: true, data: undefined };
+}
+
+/** Update an item's position (subitem reorder within a parent). */
+export async function reorderItem(input: {
+  itemId: string;
+  position: number;
+}): Promise<ActionResult> {
+  const parsed = reorderItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("items")
+    .update({ position: parsed.data.position })
+    .eq("id", parsed.data.itemId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Item not found.");
+
   revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }

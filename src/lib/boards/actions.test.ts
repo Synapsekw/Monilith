@@ -159,3 +159,33 @@ describe("createBoardFromTemplate", () => {
     expect(res).toEqual({ ok: false, error: "Unknown template." });
   });
 });
+
+import { addSubitem, deleteItem, reorderItem } from "./actions";
+
+describe("addSubitem", () => {
+  it("rejects an empty name", async () => {
+    const res = await addSubitem({
+      parentId: "11111111-1111-1111-1111-111111111111",
+      name: " ",
+    });
+    expect(res.ok).toBe(false);
+  });
+  it("rejects a non-uuid parentId", async () => {
+    const res = await addSubitem({ parentId: "nope", name: "Sub" });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("deleteItem", () => {
+  it("rejects a non-uuid itemId", async () => {
+    const res = await deleteItem({ itemId: "nope" });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("reorderItem", () => {
+  it("rejects a non-uuid itemId", async () => {
+    const res = await reorderItem({ itemId: "nope", position: 1 });
+    expect(res.ok).toBe(false);
+  });
+});
