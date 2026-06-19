@@ -763,22 +763,26 @@ git commit -m "test(automations): webhook engine, ssrf, admin-gate, reconcile in
 
 **Files:**
 
+- Create: `src/lib/boards/automation-action-helpers.ts` (pure module — NO `"use server"`)
 - Modify: `src/lib/boards/automation-actions.ts`
-- Test: `src/lib/boards/automation-actions.test.ts` (create if absent)
+- Test: `src/lib/boards/automation-action-helpers.test.ts`
 
 **Interfaces:**
 
 - Produces:
+  - `actionsContainWebhook(actions: unknown): boolean` — a **pure sync** helper, in a NON-`"use server"` module (see the critical note below), imported by both the server actions and the dialog.
   - `getBoardAdminStatus(boardId: string): Promise<boolean>` — true if the caller is owner/admin of the board's org (used by the dialog in Task 8).
   - `createAutomation` / `updateAutomation` return `{ ok: false, error: "Webhook actions require an organization admin" }` when the payload contains a `call_webhook` action and the caller is not owner/admin — **before** the DB write (the Task-3 trigger is the real boundary; this is a friendly pre-check).
 - Consumes: the `org_members` table (`role` column, enum `org_role`), readable by members via existing RLS.
 
+> **CRITICAL (gotcha-16):** `src/lib/boards/automation-actions.ts` begins with `"use server"`. A `"use server"` module may export **only async functions** — a sync export there throws at build/runtime (it 500'd board pages once). Therefore the pure sync `actionsContainWebhook` MUST live in a separate plain module (`automation-action-helpers.ts`, no `"use server"` directive), NOT in `automation-actions.ts`. The server-action file imports it.
+
 - [ ] **Step 1: Write the failing test**
 
-Add to `src/lib/boards/automation-actions.test.ts` a unit for the pure helper that detects webhook actions (extract it so it is testable without Supabase):
+Create `src/lib/boards/automation-action-helpers.test.ts` — a unit for the pure helper that detects webhook actions:
 
 ```ts
-import { actionsContainWebhook } from "@/lib/boards/automation-actions";
+import { actionsContainWebhook } from "@/lib/boards/automation-action-helpers";
 
 describe("actionsContainWebhook", () => {
   it("detects a webhook action", () => {
@@ -800,12 +804,12 @@ describe("actionsContainWebhook", () => {
 
 - [ ] **Step 2: Run the test, verify it fails**
 
-Run: `pnpm test -- src/lib/boards/automation-actions.test.ts`
-Expected: FAIL — `actionsContainWebhook` is not exported.
+Run: `pnpm test -- src/lib/boards/automation-action-helpers.test.ts`
+Expected: FAIL — the module / `actionsContainWebhook` does not exist yet.
 
 - [ ] **Step 3: Implement the helper + admin checks**
 
-In `src/lib/boards/automation-actions.ts`:
+Create `src/lib/boards/automation-action-helpers.ts` (NO `"use server"` directive — a plain module):
 
 ```ts
 /** True if a (possibly unknown) actions payload contains a call_webhook action. */
@@ -820,7 +824,17 @@ export function actionsContainWebhook(actions: unknown): boolean {
     )
   );
 }
+```
 
+Then in `src/lib/boards/automation-actions.ts` (the `"use server"` file), import the helper and add the admin checks. Add to the imports at the top:
+
+```ts
+import { actionsContainWebhook } from "@/lib/boards/automation-action-helpers";
+```
+
+and add the internal (non-exported) async helper + the exported async `getBoardAdminStatus`:
+
+```ts
 async function isOrgAdmin(
   supabase: Awaited<ReturnType<typeof createClient>>,
   orgId: string,
@@ -879,15 +893,16 @@ if (
 }
 ```
 
-- [ ] **Step 4: Run the test, verify it passes**
+- [ ] **Step 4: Run the test + typecheck, verify they pass**
 
-Run: `pnpm test -- src/lib/boards/automation-actions.test.ts`
+Run: `pnpm test -- src/lib/boards/automation-action-helpers.test.ts`
 Expected: PASS.
+Also run `pnpm typecheck` and confirm `automation-actions.ts` compiles (no sync-export-from-"use server" error, no type errors from the new admin-check code). Note: `AutomationBuilder.tsx`/`AutomationsDialog.tsx` may still show typecheck errors — those are owned by Tasks 7 and 8 and are expected to remain until then.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lib/boards/automation-actions.ts src/lib/boards/automation-actions.test.ts
+git add src/lib/boards/automation-action-helpers.ts src/lib/boards/automation-action-helpers.test.ts src/lib/boards/automation-actions.ts
 git commit -m "feat(automations): admin-gate webhook rules in server actions"
 ```
 
