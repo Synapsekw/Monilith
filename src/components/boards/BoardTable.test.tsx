@@ -380,3 +380,96 @@ describe("BoardTable add-subitem hover button", () => {
     );
   });
 });
+
+function rollupPayload() {
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [
+      {
+        id: "c1",
+        board_id: "b1",
+        org_id: "o1",
+        kind: "numbers",
+        name: "Est",
+        settings: {},
+        position: 0,
+        width: null,
+      },
+    ],
+    items: [
+      {
+        id: "p1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Epic",
+        position: 0,
+      },
+      {
+        id: "s1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: "p1",
+        name: "Design",
+        position: 1,
+      },
+      {
+        id: "s2",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: "p1",
+        name: "Build",
+        position: 2,
+      },
+    ],
+    cellValues: [
+      {
+        item_id: "s1",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { n: 5 },
+      },
+      {
+        item_id: "s2",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { n: 8 },
+      },
+    ],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+describe("BoardTable rollup", () => {
+  it("shows a summed rollup on the collapsed parent and the children on expand", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable payload={rollupPayload()} selectedViewId="v1" />
+      </QueryClientProvider>,
+    );
+    // Collapsed by default → parent row shows the rollup (Σ 13), subitems hidden.
+    expect(screen.getByText(/Σ\s*13/)).toBeInTheDocument();
+    expect(screen.queryByText("Design")).not.toBeInTheDocument();
+    // Expand → children visible, rollup gone (parent shows its own cells).
+    fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
+    expect(screen.getByText("Design")).toBeInTheDocument();
+    expect(screen.queryByText(/Σ\s*13/)).not.toBeInTheDocument();
+  });
+});

@@ -26,9 +26,11 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
+import { rollupCell } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { RollupCell } from "@/components/boards/RollupCell";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
 import {
@@ -747,6 +749,7 @@ function GroupSection({
                         cellMap={cellMap}
                         template={template}
                         controls={controls}
+                        subitems={children}
                         childCount={children.length}
                         isExpanded={isExpanded}
                         onToggle={() => onToggleExpand(item.id)}
@@ -791,6 +794,7 @@ function ItemRow({
   cellMap,
   template,
   controls,
+  subitems,
   childCount,
   isExpanded,
   onToggle,
@@ -803,6 +807,7 @@ function ItemRow({
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
+  subitems: Item[];
   childCount: number;
   isExpanded: boolean;
   onToggle: () => void;
@@ -877,15 +882,32 @@ function ItemRow({
         autoFocusRename={autoFocusRename}
         onRenameSettled={onRenameSettled}
       />
-      {columns.map((col) => (
-        <EditableCell
-          key={col.id}
-          item={item}
-          column={col}
-          value={cellMap.get(cellKey(item.id, col.id)) ?? null}
-          controls={controls}
-        />
-      ))}
+      {columns.map((col) => {
+        if (childCount > 0 && !isExpanded) {
+          const values = subitems.map(
+            (c) => cellMap.get(cellKey(c.id, col.id)) ?? null,
+          );
+          const settings = (col.settings ?? {}) as Settings;
+          const result = rollupCell(col.kind, values, settings.options);
+          return (
+            <div
+              key={col.id}
+              className="flex h-full items-center truncate border-l px-3"
+            >
+              <RollupCell result={result} />
+            </div>
+          );
+        }
+        return (
+          <EditableCell
+            key={col.id}
+            item={item}
+            column={col}
+            value={cellMap.get(cellKey(item.id, col.id)) ?? null}
+            controls={controls}
+          />
+        );
+      })}
       <div aria-hidden /> {/* add-column track spacer */}
     </div>
   );
