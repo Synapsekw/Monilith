@@ -9,6 +9,7 @@ related:
   - "[[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]]"
   - "[[2026-06-17-2155-gotcha-15-subagent-scope-overstep-shared-checkout]]"
   - "[[2026-06-17-gotcha-07-shared-worktree-subagents]]"
+  - "[[2026-06-19-1904-plans-execution-dag]]"
 ---
 
 # Decision 21 — Plans and specs must state a parallelization plan (execution DAG)
