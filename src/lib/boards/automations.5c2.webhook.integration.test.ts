@@ -435,6 +435,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5c-2 webhook", () => {
       memberInsert.error,
       "member insert should be blocked",
     ).not.toBeNull(); // 42501 from the trigger (or RLS)
+    expect(memberInsert.error?.code).toBe("42501");
 
     // A notify-only (non-webhook) rule by the same member should succeed
     // Note: RLS must allow members to insert non-webhook automations. If this
