@@ -90,6 +90,7 @@ export function BoardTable({
   const { board, groups, columns, items, cellValues } = cache;
 
   const [editing, setEditing] = useState<EditingCell | null>(null);
+  const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
   const mutations = useBoardMutations(payload.board.id);
   const {
     setCell,
@@ -97,6 +98,7 @@ export function BoardTable({
     addItem,
     renameItem: renameItemMutation,
     renameGroup,
+    addGroup,
   } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
@@ -216,9 +218,18 @@ export function BoardTable({
                 controls={controls}
                 onRenameGroup={(name) => renameGroup(group.id, name)}
                 nameWidth={nameWidth}
+                autoFocusRename={group.id === renameGroupId}
+                onRenameSettled={() => setRenameGroupId(null)}
               />
             ))
           )}
+          <AddGroupRow
+            onAdd={() =>
+              addGroup(`Group ${groups.length + 1}`, {
+                onSuccess: (groupId) => setRenameGroupId(groupId),
+              })
+            }
+          />
         </div>
       </div>
     </div>
@@ -287,6 +298,8 @@ function GroupSection({
   controls,
   onRenameGroup,
   nameWidth,
+  autoFocusRename,
+  onRenameSettled,
 }: {
   group: Group;
   items: Item[];
@@ -296,9 +309,11 @@ function GroupSection({
   controls: CellControls;
   onRenameGroup: (name: string) => void;
   nameWidth: number;
+  autoFocusRename: boolean;
+  onRenameSettled: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [renaming, setRenaming] = useState(false);
+  const [renaming, setRenaming] = useState(autoFocusRename);
   const [name, setName] = useState(group.name);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -324,6 +339,7 @@ function GroupSection({
   function commitRename() {
     const trimmed = name.trim();
     setRenaming(false);
+    onRenameSettled();
     if (!trimmed || trimmed === group.name) return;
     onRenameGroup(trimmed);
   }
@@ -366,6 +382,7 @@ function GroupSection({
               } else if (e.key === "Escape") {
                 e.preventDefault();
                 setRenaming(false);
+                onRenameSettled();
               }
             }}
             aria-label={`Rename ${group.name}`}
@@ -578,6 +595,19 @@ function NameCell({ item, controls }: { item: Item; controls: CellControls }) {
         <Maximize2 className="size-3.5" />
       </button>
     </div>
+  );
+}
+
+function AddGroupRow({ onAdd }: { onAdd: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      className="text-muted-foreground hover:text-foreground hover:bg-surface focus-visible:ring-ring sticky left-0 flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    >
+      <Plus className="size-4 shrink-0" aria-hidden />
+      Add group
+    </button>
   );
 }
 
