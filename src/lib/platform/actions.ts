@@ -53,9 +53,10 @@ async function setUserBan(
   if (!actor) return fail("Not authenticated.");
   if (!(await isPlatformAdmin())) return fail("Not authorized.");
   const svc = createServiceClient();
-  const { error } = await svc.auth.admin.updateUserById(parsed.data.userId, {
-    ban_duration: ban ? BAN_FOREVER : "none",
-  });
+  const { data: updated, error } = await svc.auth.admin.updateUserById(
+    parsed.data.userId,
+    { ban_duration: ban ? BAN_FOREVER : "none" },
+  );
   if (error)
     return fail(
       ban ? "Could not deactivate user." : "Could not reactivate user.",
@@ -66,6 +67,9 @@ async function setUserBan(
     actor_kind: "platform",
     action,
     target_user_id: parsed.data.userId,
+    // Record the email so the platform audit feed shows the subject (the feed
+    // renders target_email).
+    target_email: updated.user?.email ?? null,
     metadata: {},
   });
   revalidatePath("/admin");

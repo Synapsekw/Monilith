@@ -11,7 +11,6 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 const adminInvite = vi.fn();
-const resetPasswordForEmail = vi.fn();
 const svcInsert = vi.fn();
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
