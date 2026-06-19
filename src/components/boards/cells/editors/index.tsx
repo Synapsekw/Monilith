@@ -86,6 +86,23 @@ function PopoverSurface({
   );
 }
 
+/**
+ * Trailing "Clear" affordance shared by the selector editors (Status / Dropdown
+ * / People). Clearing deletes the cell value; falls back to dismissing the
+ * popover when no `onClear` is wired.
+ */
+function ClearButton({ onClear }: { onClear: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      className="text-muted-foreground hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+    >
+      Clear
+    </button>
+  );
+}
+
 export function TextEditor({
   value,
   onCommit,
@@ -158,13 +175,7 @@ export function StatusEditor({
           {o.label}
         </button>
       ))}
-      <button
-        type="button"
-        onClick={() => (onClear ?? onCancel)()}
-        className="text-muted-foreground hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-      >
-        Clear
-      </button>
+      <ClearButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }
@@ -208,6 +219,7 @@ export function DropdownEditor({
           </button>
         );
       })}
+      <ClearButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }
@@ -263,6 +275,7 @@ export function PeopleEditor({
           );
         })
       )}
+      <ClearButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }

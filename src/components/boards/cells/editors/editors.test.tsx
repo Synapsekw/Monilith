@@ -165,6 +165,23 @@ describe("DropdownEditor", () => {
     expect(onClear).toHaveBeenCalled();
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it("routes the trailing Clear button through onClear", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <DropdownEditor
+        value={{ optionIds: ["o1"] }}
+        settings={statusSettings}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /clear/i }));
+    expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
 });
 
 describe("PeopleEditor", () => {
@@ -183,6 +200,26 @@ describe("PeopleEditor", () => {
     );
     await userEvent.click(screen.getByText("Ada"));
     expect(onCommit).toHaveBeenCalledWith({ userIds: ["u1"] });
+  });
+
+  it("routes the trailing Clear button through onClear", async () => {
+    const onCommit = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <PeopleEditor
+        value={{ userIds: ["u1"] }}
+        settings={{}}
+        members={[
+          { userId: "u1", fullName: "Ada", email: "a@x.io", avatarUrl: null },
+        ]}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /clear/i }));
+    expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 
