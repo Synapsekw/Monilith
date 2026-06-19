@@ -1558,6 +1558,13 @@ export type Database = {
           users: number;
         }[];
       };
+      platform_user_sole_owned_orgs: {
+        Args: { p_user_id: string };
+        Returns: {
+          org_id: string;
+          org_name: string;
+        }[];
+      };
       provision_account: {
         Args: { p_org_name: string };
         Returns: {
