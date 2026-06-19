@@ -114,11 +114,6 @@ export function Sidebar({
           collapsed={isCollapsed}
         />
 
-        <PlatformNav
-          isPlatformAdmin={isPlatformAdmin}
-          collapsed={isCollapsed}
-        />
-
         <nav
           className={cn(
             "flex flex-col gap-0.5 py-2",
@@ -169,6 +164,13 @@ export function Sidebar({
             ))}
           </div>
         ) : null}
+
+        <div className="mt-auto">
+          <PlatformNav
+            isPlatformAdmin={isPlatformAdmin}
+            collapsed={isCollapsed}
+          />
+        </div>
       </aside>
     </TooltipProvider>
   );
