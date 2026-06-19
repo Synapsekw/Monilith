@@ -33,7 +33,8 @@ summary on the collapsed row.
 
 ### Out of scope (deferred — YAGNI)
 
-- Subitem drag-reorder and moving subitems between parents (item DnD doesn't exist yet either).
+- **Moving** subitems between parents (cross-parent drag). Reordering _within_ a parent is in scope
+  (see §5).
 - Promote/demote (convert item ↔ subitem).
 - A "Subitems" tab in the item detail panel.
 - Persisting expand/collapse state across reloads (in-memory per session only).
@@ -85,6 +86,10 @@ In `src/lib/boards/actions.ts` (+ Zod schemas in `src/lib/validations/board-acti
 - **`deleteItem(itemId)`** — **new**; items currently have _no_ delete path. Resolves the item
   (RLS), deletes it; a parent delete cascades its subitems via the FK. Works for both items and
   subitems. Zod: `{ itemId: uuid }`.
+- **`reorderItem(itemId, position)`** — **new**; updates `items.position` (RLS-scoped). Used for
+  subitem drag-reorder within a parent (see §5). Mirrors `reorderGroup`. Zod:
+  `{ itemId: uuid, position: number }`. (Top-level item reorder is not wired in this slice — the same
+  action would serve it later.)
 - `renameItem`, `setCell`, `clearCellValue` already operate on any item id — subitems need no new
   actions.
 
@@ -109,6 +114,8 @@ DELETE per child, reconciled for free.
 - **`addSubitem`** mutation — mirrors `addItemMutation` (optimistic `insertItem`, patch the returned
   row on success; realtime echo is idempotent). Exposes `addSubitem(parentId, name, { onSuccess(id), onError })`.
 - **`deleteItem`** mutation — optimistic `removeItem`, rollback on error.
+- **`reorderItem`** mutation — optimistic `replaceItem` with the new `position` (re-sorts on the next
+  `childrenByParent` rebuild), rollback on error; realtime UPDATE echo is idempotent.
 
 ## 5. Table rendering (`BoardTable.tsx` — the main work)
 
@@ -155,6 +162,28 @@ creating the first subitem auto-expands the parent.
 - **Delete**: a row `⋯` menu on items and subitems → Delete (with an `AlertDialog` confirm for items
   that have children, since the cascade removes subitems). Calls `deleteItem`.
 
+### Subitem drag-reorder (within a parent)
+
+A subitem can be dragged to reorder it among its **siblings under the same parent** (single-level, so
+no cross-group/cross-parent moves in this slice — drop targets are restricted to the same parent's
+subitems). Implementation reuses the group-reorder machinery:
+
+- Each expanded parent wraps its subitem rows in a **`@dnd-kit` `SortableContext`** keyed by the
+  subitem ids (`verticalListSortingStrategy`, `restrictToVerticalAxis`), with a `GripVertical` handle
+  mirroring `GroupSection`. The dragged row uses **`CSS.Translate.toString` only** (not `Transform`) —
+  per [[2026-06-19-gotcha-20-dnd-kit-transform-scale-stretch]], scale stretches absolutely-positioned
+  virtual rows.
+- On drag end, compute the new position with the existing **`reorderPosition`** helper
+  (`src/lib/boards/group-reorder.ts`) over the parent's sibling list, then call the `reorderItem`
+  mutation (§3/§4).
+- **Virtualization interaction (implementation note for the plan):** subitem rows live inside the
+  group's flattened virtualized list. The plan must choose how drag coexists with virtualization —
+  recommended: since a parent's subitem list is small, render an **expanded parent's subitems as a
+  non-virtualized sortable sub-block** while continuing to virtualize the top-level item rows, OR run
+  the sortable context over the materialized (overscan-inclusive) rows. Resolve and validate in the
+  plan; keep `reorderPosition` pure and tested so the position math is decoupled from the DOM/dnd
+  wiring.
+
 ## 6. Rollup computation (`src/lib/boards/rollup.ts` — pure, fully unit-tested)
 
 ```ts
@@ -198,8 +227,10 @@ group context. No filtering, no per-view subitem UX in this slice.
   org-scoped (no cross-org read of a subitem).
 - **Component:** nested render, expand/collapse toggles children, collapsed parent shows rollup,
   add-subitem (hover button + trailing row) auto-expands & renames, delete with confirm.
-- **e2e:** create item → add subitem → see nested → set a subitem cell → collapse → see rollup →
-  delete subitem.
+- **Reorder:** `reorderPosition` over a sibling list (pure, already tested for groups — add subitem
+  cases) and an `onDragEnd` → `reorderItem` wiring test.
+- **e2e:** create item → add subitem → see nested → set a subitem cell → **drag to reorder
+  subitems** → collapse → see rollup → delete subitem.
 
 Gate (per working agreement): `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green;
 advisors clean after the migration.
@@ -211,5 +242,9 @@ advisors clean after the migration.
   green (see [[develop-red-concurrent-work]]).
 - **`GroupSection` refactor** (flat `Item[]` → `VisibleRow[]`) is the largest single change; keep the
   flattening pure and tested so the virtualizer change is low-risk.
+- **Subitem drag + virtualization** — dnd-kit sortable rows inside a virtualized list is the trickiest
+  interaction (offscreen rows unmount). The plan must pick and validate an approach (recommended:
+  non-virtualized sortable sub-block for an expanded parent's small subitem list); the translate-only
+  transform fix ([[2026-06-19-gotcha-20-dnd-kit-transform-scale-stretch]]) applies.
 - **`deleteItem` is a new general capability** (not subitem-specific) — it fills a real gap and is
   surfaced for both items and subitems.
