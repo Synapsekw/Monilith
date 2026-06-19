@@ -1,0 +1,112 @@
+import { config } from "dotenv";
+import { type SupabaseClient, createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
+
+// Vitest globalSetup file: the exported `teardown` runs ONCE after the whole
+// run. Integration suites (`*.integration.test.ts`) provision throwaway
+// `@example.com` users + orgs against the LIVE cloud project (no local stack),
+// which leaked thousands of rows historically. With the cascade-safe
+// cell-activity trigger in place (migration 20260619230000), deleting an org
+// cascades cleanly, so we can purge all leaked test data here using
+// supabase-js with the service role (the only DB access the test process has —
+// no direct Postgres URL / pg driver).
+// See vault/decisions/2026-06-19-gotcha-23-activity-trigger-blocks-cascade-delete.md
+
+const EXAMPLE_SUFFIX = "@example.com";
+const LIST_PER_PAGE = 1000;
+const MAX_PAGES = 50;
+const BATCH = 100;
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+export async function teardown(): Promise<void> {
+  // Mirror rls.integration.test.ts: `override: true` because vitest.setup.ts
+  // seeds placeholder NEXT_PUBLIC_* values before this runs.
+  config({ path: ".env.local", override: true });
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  // No service-role secret (e.g. CI) → no integration suite ran. Skip silently.
+  if (!url || !serviceRoleKey) return;
+
+  const admin: SupabaseClient<Database> = createClient<Database>(
+    url,
+    serviceRoleKey,
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+    },
+  );
+
+  // Collect every test user id, paginating until a short page.
+  const userIds: string[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({
+      page,
+      perPage: LIST_PER_PAGE,
+    });
+    if (error) {
+      console.warn(
+        `[global-teardown] listUsers page ${page} failed: ${error.message}`,
+      );
+      break;
+    }
+    const users = data?.users ?? [];
+    for (const u of users) {
+      if (u.email?.toLowerCase().endsWith(EXAMPLE_SUFFIX)) userIds.push(u.id);
+    }
+    if (users.length < LIST_PER_PAGE) break;
+  }
+
+  if (userIds.length === 0) return;
+
+  const idBatches = chunk(userIds, BATCH);
+
+  // Delete their orgs — the cascade-safe trigger lets this remove all
+  // org-scoped rows (boards/groups/items/columns/cell_values/activities).
+  for (const batch of idBatches) {
+    const { error } = await admin
+      .from("organizations")
+      .delete()
+      .in("created_by", batch);
+    if (error)
+      console.warn(
+        `[global-teardown] org delete batch failed: ${error.message}`,
+      );
+  }
+
+  // Platform-level audit rows aren't org-scoped, so they don't cascade away.
+  for (const batch of idBatches) {
+    const byActor = await admin
+      .from("admin_audit_log")
+      .delete()
+      .in("actor_id", batch);
+    if (byActor.error)
+      console.warn(
+        `[global-teardown] audit(actor) delete batch failed: ${byActor.error.message}`,
+      );
+    const byTarget = await admin
+      .from("admin_audit_log")
+      .delete()
+      .in("target_user_id", batch);
+    if (byTarget.error)
+      console.warn(
+        `[global-teardown] audit(target) delete batch failed: ${byTarget.error.message}`,
+      );
+  }
+
+  // Finally remove the auth users themselves (best-effort, per id).
+  let deletedUsers = 0;
+  for (const id of userIds) {
+    const { error } = await admin.auth.admin.deleteUser(id);
+    if (!error) deletedUsers++;
+  }
+
+  console.log(
+    `[global-teardown] purged ${deletedUsers} test users / ${userIds.length} candidate org-owners`,
+  );
+}
