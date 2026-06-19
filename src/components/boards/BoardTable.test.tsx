@@ -547,3 +547,15 @@ describe("BoardTable subitem drag-reorder (pure position math)", () => {
     expect(reorderPosition(siblings, "s3", "s1")!).toBeLessThan(1);
   });
 });
+
+describe("BoardTable item drag-reorder (pure position math)", () => {
+  it("computes a top-level item reorder position among siblings", () => {
+    const siblings = [
+      { id: "t1", position: 0 },
+      { id: "t2", position: 1 },
+      { id: "t3", position: 2 },
+    ];
+    expect(reorderPosition(siblings, "t3", "t1")!).toBeLessThan(0);
+    expect(reorderPosition(siblings, "t2", "t2")).toBeNull();
+  });
+});
