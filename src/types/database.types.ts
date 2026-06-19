@@ -1517,6 +1517,16 @@ export type Database = {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
       };
+      platform_search_users: {
+        Args: { p_limit?: number; p_offset?: number; p_query?: string };
+        Returns: {
+          banned_until: string;
+          created_at: string;
+          email: string;
+          id: string;
+          org_names: string[];
+        }[];
+      };
       platform_set_org_role: {
         Args: {
           p_org_id: string;
@@ -1524,6 +1534,15 @@ export type Database = {
           p_user_id: string;
         };
         Returns: undefined;
+      };
+      platform_stats: {
+        Args: never;
+        Returns: {
+          admins: number;
+          events_24h: number;
+          orgs: number;
+          users: number;
+        }[];
       };
       provision_account: {
         Args: { p_org_name: string };
