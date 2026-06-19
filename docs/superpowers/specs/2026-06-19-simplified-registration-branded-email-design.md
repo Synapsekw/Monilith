@@ -50,8 +50,8 @@ Key files:
 - `signUpSchema` in `src/lib/validations/auth.ts`:
   - **add** `orgName: z.string().trim().min(1, …).max(100, …)` (required).
   - **remove** `fullName`.
-- `auth-form.tsx`: in `signup` mode render an **Org name** input alongside email
-  - password; remove the full-name input. Login mode is unchanged.
+- `auth-form.tsx`: in `signup` mode render an **Org name** input alongside the
+  email and password inputs; remove the full-name input. Login mode is unchanged.
 
 ### B. Account provisioning (the session wrinkle)
 
