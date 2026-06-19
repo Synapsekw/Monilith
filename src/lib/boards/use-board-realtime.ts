@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   addDependency,
   insertColumn,
+  insertGroup,
   insertItem,
   removeCellValue,
   removeColumn,
@@ -122,7 +123,7 @@ export function useBoardRealtime(boardId: string) {
       patch((prev) =>
         prev.groups.some((g) => g.id === row.id)
           ? replaceGroup(prev, row)
-          : { ...prev, groups: [...prev.groups, row] },
+          : insertGroup(prev, row),
       );
     }
 
