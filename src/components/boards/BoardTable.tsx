@@ -25,6 +25,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { reorderPosition } from "@/lib/boards/group-reorder";
+import { bucketItems } from "@/lib/boards/item-tree";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
@@ -148,17 +149,22 @@ export function BoardTable({
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
 
-  // Items grouped by group_id, kept in position order (query already sorts).
+  const { topLevel, childrenByParent } = useMemo(
+    () => bucketItems(items),
+    [items],
+  );
+
+  // Top-level items grouped by group_id, in position order.
   const itemsByGroup = useMemo(() => {
-    const byGroup = new Map<string, Item[]>();
+    const byGroup = new Map<string, typeof topLevel>();
     for (const g of groups) byGroup.set(g.id, []);
-    for (const it of items) {
+    for (const it of topLevel) {
       const bucket = byGroup.get(it.group_id);
       if (bucket) bucket.push(it);
       else byGroup.set(it.group_id, [it]);
     }
     return byGroup;
-  }, [groups, items]);
+  }, [groups, topLevel]);
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
@@ -290,6 +296,7 @@ export function BoardTable({
                     onRenameSettled={() => setRenameGroupId(null)}
                     onSetColor={(color) => setGroupColor(group.id, color)}
                     onDelete={() => deleteGroup(group.id)}
+                    childrenByParent={childrenByParent}
                   />
                 ))}
               </SortableContext>
@@ -461,6 +468,7 @@ function GroupSection({
   onRenameSettled,
   onSetColor,
   onDelete,
+  childrenByParent: _childrenByParent,
 }: {
   group: Group;
   items: Item[];
@@ -474,6 +482,7 @@ function GroupSection({
   onRenameSettled: () => void;
   onSetColor: (color: string) => void;
   onDelete: () => void;
+  childrenByParent: Map<string, Item[]>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(autoFocusRename);
@@ -496,12 +505,16 @@ function GroupSection({
     count: items.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 10,
+    overscan: 6,
+    // getBoundingClientRect().height returns 0 in jsdom — fall back to ROW_HEIGHT
+    // so tests don't collapse all virtual rows to 0px height.
+    measureElement: (el) => el.getBoundingClientRect().height || ROW_HEIGHT,
   });
 
   const virtualRows = virtualizer.getVirtualItems();
-  // Cap the scroll viewport so long groups virtualize; short ones shrink.
-  const viewportHeight = Math.min(items.length * ROW_HEIGHT, 12 * ROW_HEIGHT);
+  // Cap the scroll viewport; long/expanded groups scroll inside it.
+  const viewportHeight =
+    Math.min(virtualizer.getTotalSize(), 12 * ROW_HEIGHT) || ROW_HEIGHT;
 
   function openRename() {
     setName(group.name);
@@ -613,24 +626,32 @@ function GroupSection({
                   return (
                     <div
                       key={item.id}
-                      className="hover:bg-surface absolute top-0 left-0 grid w-full border-b transition-colors"
-                      style={{
-                        height: ROW_HEIGHT,
-                        transform: `translateY(${vr.start}px)`,
-                        gridTemplateColumns: template,
-                      }}
+                      data-index={vr.index}
+                      ref={virtualizer.measureElement}
+                      className="absolute top-0 left-0 w-full"
+                      style={{ transform: `translateY(${vr.start}px)` }}
                     >
-                      <NameCell item={item} controls={controls} />
-                      {columns.map((col) => (
-                        <EditableCell
-                          key={col.id}
-                          item={item}
-                          column={col}
-                          value={cellMap.get(cellKey(item.id, col.id)) ?? null}
-                          controls={controls}
-                        />
-                      ))}
-                      <div aria-hidden /> {/* add-column track spacer */}
+                      <div
+                        className="hover:bg-surface grid w-full border-b transition-colors"
+                        style={{
+                          height: ROW_HEIGHT,
+                          gridTemplateColumns: template,
+                        }}
+                      >
+                        <NameCell item={item} controls={controls} />
+                        {columns.map((col) => (
+                          <EditableCell
+                            key={col.id}
+                            item={item}
+                            column={col}
+                            value={
+                              cellMap.get(cellKey(item.id, col.id)) ?? null
+                            }
+                            controls={controls}
+                          />
+                        ))}
+                        <div aria-hidden /> {/* add-column track spacer */}
+                      </div>
                     </div>
                   );
                 })}
