@@ -42,3 +42,20 @@ export function buildStoragePath(input: {
   const safe = sanitizeFileName(input.fileName);
   return `${input.orgId}/${input.boardId}/${input.itemId}/${crypto.randomUUID()}-${safe}`;
 }
+
+/**
+ * Build the bucket object key for a Files-column attachment, which nests the
+ * column id one level deeper than an item-level attachment:
+ * <org>/<board>/<item>/<column>/<uuid>-<sanitized name>. This matches the
+ * prefix guard in `createAttachment` (the column-scoped branch). Pure.
+ */
+export function buildColumnFilePath(input: {
+  orgId: string;
+  boardId: string;
+  itemId: string;
+  columnId: string;
+  fileName: string;
+}): string {
+  const safe = sanitizeFileName(input.fileName);
+  return `${input.orgId}/${input.boardId}/${input.itemId}/${input.columnId}/${crypto.randomUUID()}-${safe}`;
+}
