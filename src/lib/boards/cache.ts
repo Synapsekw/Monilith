@@ -65,11 +65,17 @@ export function replaceBoard(cache: BoardCache, board: CacheBoard): BoardCache {
   return { ...cache, board };
 }
 
-/** Replace a group by id (e.g. rename). No-op if absent. Immutable. */
+function byGroupPosition(a: CacheGroup, b: CacheGroup) {
+  return a.position - b.position;
+}
+
+/** Replace a group by id (rename/recolor/reorder), keeping position order. Immutable. */
 export function replaceGroup(cache: BoardCache, group: CacheGroup): BoardCache {
   return {
     ...cache,
-    groups: cache.groups.map((g) => (g.id === group.id ? group : g)),
+    groups: cache.groups
+      .map((g) => (g.id === group.id ? group : g))
+      .sort(byGroupPosition),
   };
 }
 
@@ -87,10 +93,23 @@ export function insertItem(cache: BoardCache, item: CacheItem): BoardCache {
   return { ...cache, items: [...cache.items, item] };
 }
 
-/** Append a group; idempotent on id. Immutable. */
+/** Insert a group, keeping position order. No-op if the id already exists. Immutable. */
 export function insertGroup(cache: BoardCache, group: CacheGroup): BoardCache {
   if (cache.groups.some((g) => g.id === group.id)) return cache;
-  return { ...cache, groups: [...cache.groups, group] };
+  return { ...cache, groups: [...cache.groups, group].sort(byGroupPosition) };
+}
+
+/** Remove a group and its items + their cell values (mirrors the DB cascade). Immutable. */
+export function removeGroup(cache: BoardCache, groupId: string): BoardCache {
+  const itemIds = new Set(
+    cache.items.filter((i) => i.group_id === groupId).map((i) => i.id),
+  );
+  return {
+    ...cache,
+    groups: cache.groups.filter((g) => g.id !== groupId),
+    items: cache.items.filter((i) => i.group_id !== groupId),
+    cellValues: cache.cellValues.filter((c) => !itemIds.has(c.item_id)),
+  };
 }
 
 /** Append a dependency; idempotent on id. Immutable. */

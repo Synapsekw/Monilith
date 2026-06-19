@@ -9,6 +9,7 @@ import {
   removeCellValue,
   removeColumn,
   removeDependency,
+  removeGroup,
   replaceColumn,
   replaceGroup,
   replaceItem,
@@ -289,17 +290,30 @@ describe("insertGroup", () => {
           board_id: "b1",
           name: "Group 1",
           color: "#0073ea",
+          position: 0,
         } as never,
       ],
     };
   }
 
-  it("appends a new group", () => {
+  it("inserts in position order, not insertion order", () => {
+    const next = insertGroup(withGroup(), {
+      id: "g0",
+      board_id: "b1",
+      name: "Group 0",
+      color: "#0073ea",
+      position: -1,
+    } as never);
+    expect(next.groups.map((g) => g.id)).toEqual(["g0", "g1"]);
+  });
+
+  it("appends when its position is greatest", () => {
     const next = insertGroup(withGroup(), {
       id: "g2",
       board_id: "b1",
       name: "Group 2",
       color: "#0073ea",
+      position: 1,
     } as never);
     expect(next.groups.map((g) => g.id)).toEqual(["g1", "g2"]);
   });
@@ -310,6 +324,7 @@ describe("insertGroup", () => {
       board_id: "b1",
       name: "Group 1",
       color: "#0073ea",
+      position: 0,
     } as never);
     expect(next.groups).toHaveLength(1);
   });
@@ -321,7 +336,103 @@ describe("insertGroup", () => {
       board_id: "b1",
       name: "Group 2",
       color: "#0073ea",
+      position: 1,
     } as never);
     expect(input.groups).toHaveLength(1);
+  });
+});
+
+describe("replaceGroup position sort", () => {
+  function twoGroups(): BoardCache {
+    return {
+      ...baseCache(),
+      groups: [
+        {
+          id: "g1",
+          board_id: "b1",
+          name: "G1",
+          color: "#0073ea",
+          position: 0,
+        } as never,
+        {
+          id: "g2",
+          board_id: "b1",
+          name: "G2",
+          color: "#0073ea",
+          position: 1,
+        } as never,
+      ],
+    };
+  }
+
+  it("re-sorts by position after a replace (covers reorder)", () => {
+    const next = replaceGroup(twoGroups(), {
+      id: "g1",
+      board_id: "b1",
+      name: "G1",
+      color: "#0073ea",
+      position: 2,
+    } as never);
+    expect(next.groups.map((g) => g.id)).toEqual(["g2", "g1"]);
+  });
+});
+
+describe("removeGroup", () => {
+  function cache(): BoardCache {
+    return {
+      board: { id: "b1", org_id: "o1", name: "B" } as never,
+      groups: [
+        {
+          id: "g1",
+          board_id: "b1",
+          name: "G1",
+          color: "#0073ea",
+          position: 0,
+        } as never,
+        {
+          id: "g2",
+          board_id: "b1",
+          name: "G2",
+          color: "#0073ea",
+          position: 1,
+        } as never,
+      ],
+      columns: [],
+      items: [
+        { id: "i1", board_id: "b1", group_id: "g1", name: "One" } as never,
+        { id: "i2", board_id: "b1", group_id: "g2", name: "Two" } as never,
+      ],
+      cellValues: [
+        {
+          item_id: "i1",
+          column_id: "c1",
+          org_id: "o1",
+          board_id: "b1",
+          value: { text: "x" },
+        } as never,
+        {
+          item_id: "i2",
+          column_id: "c1",
+          org_id: "o1",
+          board_id: "b1",
+          value: { text: "y" },
+        } as never,
+      ],
+      dependencies: [],
+    };
+  }
+
+  it("removes the group, its items, and those items' cell values", () => {
+    const next = removeGroup(cache(), "g1");
+    expect(next.groups.map((g) => g.id)).toEqual(["g2"]);
+    expect(next.items.map((i) => i.id)).toEqual(["i2"]);
+    expect(next.cellValues.map((c) => c.item_id)).toEqual(["i2"]);
+  });
+
+  it("does not mutate the input cache (immutable)", () => {
+    const input = cache();
+    removeGroup(input, "g1");
+    expect(input.groups).toHaveLength(2);
+    expect(input.items).toHaveLength(2);
   });
 });
