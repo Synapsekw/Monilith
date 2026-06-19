@@ -16,7 +16,7 @@
 
 A **concurrent org-admin session** is actively editing `BoardTable.tsx`, `KanbanBoard.tsx`, `CalendarBoard.tsx`, `GanttBoard.tsx`, `src/types/database.types.ts`, and adding migration `20260619200000_org_admin_platform_console.sql`. This plan touches several of the same files (`database.types.ts`, `BoardTable.tsx`, the view components, `queries.ts`, `cache.ts`, migrations).
 
-- **Migration timestamps in this plan are `20260619210000` / `20260619210001`** — strictly after the admin migration so the ledger stays ordered.
+- **Migration timestamps in this plan are `20260619240000` / `20260619240001`** — strictly after the concluded admin session's migrations (which already used `…210000`, `…220000`, `…230000`) so the ledger stays ordered.
 - Per working agreement #1: when ≥2 tasks in a batch mutate files in parallel, run them in **git worktrees** (`superpowers:using-git-worktrees`). Stage by path on commit (never `git add -A`) — see the recent shared-index collision.
 - Re-run `pnpm db:types` only after **both** this plan's migrations and the admin migration have applied, to avoid a partial type regen.
 
@@ -26,8 +26,8 @@ A **concurrent org-admin session** is actively editing `BoardTable.tsx`, `Kanban
 
 **Created**
 
-- `supabase/migrations/20260619210000_column_kinds_6b.sql` — enum extension (6 `ADD VALUE`).
-- `supabase/migrations/20260619210001_files_column_and_option_delete.sql` — `attachments.column_id` + index + `delete_column_option` RPC.
+- `supabase/migrations/20260619240000_column_kinds_6b.sql` — enum extension (6 `ADD VALUE`).
+- `supabase/migrations/20260619240001_files_column_and_option_delete.sql` — `attachments.column_id` + index + `delete_column_option` RPC.
 - `src/lib/boards/column-kinds.ts` — `COLUMN_KIND_META` map (label/icon/hasOptions) for the Add menu.
 - `src/lib/boards/option-colors.ts` — `OPTION_COLORS` fixed swatch palette + `nextOptionColor`.
 - `src/lib/boards/option-edit.ts` — pure option-list reducers (add/rename/recolor/reorder/remove) + `countOptionUsage`.
@@ -97,7 +97,7 @@ A **concurrent org-admin session** is actively editing `BoardTable.tsx`, `Kanban
 
 **Files:**
 
-- Create: `supabase/migrations/20260619210000_column_kinds_6b.sql`
+- Create: `supabase/migrations/20260619240000_column_kinds_6b.sql`
 
 - [ ] **Step 1: Write the migration**
 
@@ -131,7 +131,7 @@ Expected: includes `text, status, people, date, numbers, dropdown, checkbox, rat
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/20260619210000_column_kinds_6b.sql
+git add supabase/migrations/20260619240000_column_kinds_6b.sql
 git commit -m "feat(db): add 6 column kinds to column_kind enum"
 ```
 
@@ -141,7 +141,7 @@ git commit -m "feat(db): add 6 column kinds to column_kind enum"
 
 **Files:**
 
-- Create: `supabase/migrations/20260619210001_files_column_and_option_delete.sql`
+- Create: `supabase/migrations/20260619240001_files_column_and_option_delete.sql`
 
 - [ ] **Step 1: Write the migration**
 
@@ -244,7 +244,7 @@ Use the Supabase MCP `get_advisors` (security + performance). Expected: no new w
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/20260619210001_files_column_and_option_delete.sql
+git add supabase/migrations/20260619240001_files_column_and_option_delete.sql
 git commit -m "feat(db): attachments.column_id + delete_column_option RPC"
 ```
 
