@@ -32,3 +32,12 @@ export type PlatformSetOrgRoleInput = SetMemberRoleInput;
 
 export const platformUserTargetSchema = z.object({ userId: z.string().uuid() });
 export type PlatformUserTargetInput = z.infer<typeof platformUserTargetSchema>;
+
+// Platform: set a temporary password for a user (admin-typed). Min 8 chars.
+export const platformSetPasswordSchema = z.object({
+  userId: z.string().uuid(),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+});
+export type PlatformSetPasswordInput = z.infer<
+  typeof platformSetPasswordSchema
+>;
