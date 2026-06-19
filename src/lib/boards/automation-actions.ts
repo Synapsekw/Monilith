@@ -156,7 +156,8 @@ export async function updateAutomation(input: {
       .select("org_id")
       .eq("id", parsed.data.id)
       .maybeSingle();
-    if (!row || !(await isOrgAdmin(supabase, row.org_id))) {
+    if (!row) return fail("Automation not found.");
+    if (!(await isOrgAdmin(supabase, row.org_id))) {
       return fail("Webhook actions require an organization admin");
     }
   }
