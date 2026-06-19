@@ -174,7 +174,9 @@ test.describe("Automations 5c-2: webhook rule → queued run", () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 
     // The "Recent runs" button is inside the rule card — click it to expand.
-    const recentRunsBtn = dialog.getByRole("button", { name: /recent runs/i });
+    const recentRunsBtn = dialog
+      .getByRole("button", { name: /recent runs/i })
+      .first();
     await expect(recentRunsBtn).toBeVisible({ timeout: 10_000 });
     await recentRunsBtn.click();
 
