@@ -27,8 +27,8 @@ beforeEach(() => {
 describe("UserSearch", () => {
   it("calls the search action and renders matching users", async () => {
     searchUsersAction.mockResolvedValue([
-      { id: "u-1", email: "ada@x.com" },
-      { id: "u-2", email: "bob@x.com" },
+      { id: "u-1", email: "ada@x.com", bannedUntil: null, orgNames: [] },
+      { id: "u-2", email: "bob@x.com", bannedUntil: null, orgNames: [] },
     ]);
 
     render(<UserSearch />);
@@ -55,7 +55,9 @@ describe("UserSearch", () => {
   });
 
   it("invokes deactivate/reactivate actions for the chosen user", async () => {
-    searchUsersAction.mockResolvedValue([{ id: "u-1", email: "ada@x.com" }]);
+    searchUsersAction.mockResolvedValue([
+      { id: "u-1", email: "ada@x.com", bannedUntil: null, orgNames: [] },
+    ]);
 
     render(<UserSearch />);
     fireEvent.change(screen.getByLabelText("Search users by email"), {
@@ -76,7 +78,9 @@ describe("UserSearch", () => {
   });
 
   it("surfaces an inline error when a ban action fails", async () => {
-    searchUsersAction.mockResolvedValue([{ id: "u-1", email: "ada@x.com" }]);
+    searchUsersAction.mockResolvedValue([
+      { id: "u-1", email: "ada@x.com", bannedUntil: null, orgNames: [] },
+    ]);
     deactivateUserAction.mockResolvedValue({
       ok: false,
       error: "Could not deactivate user.",

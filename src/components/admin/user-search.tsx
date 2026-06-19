@@ -67,9 +67,21 @@ export function UserSearch() {
           {rows.map((u) => (
             <li key={u.id} className="flex flex-col gap-1 px-4 py-2.5">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-foreground min-w-0 truncate">
-                  {u.email ?? u.id}
-                </span>
+                <div className="min-w-0">
+                  <div className="text-foreground truncate">
+                    {u.email ?? u.id}
+                    {u.bannedUntil ? (
+                      <span className="text-destructive ml-2 text-xs">
+                        banned
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-muted-foreground truncate text-xs">
+                    {u.orgNames.length
+                      ? u.orgNames.join(" · ")
+                      : "No organizations"}
+                  </div>
+                </div>
                 <span className="flex shrink-0 gap-1">
                   <Button
                     size="sm"
