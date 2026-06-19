@@ -2,17 +2,20 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  addSubitem,
   clearCell,
   createColumn,
   createGroup,
   createItem,
   deleteColumn,
   deleteGroup,
+  deleteItem,
   renameBoard,
   renameColumn,
   renameGroup,
   renameItem,
   reorderGroup,
+  reorderItem,
   resizeColumn,
   resizeNameColumn,
   updateGroupColor,
@@ -30,6 +33,7 @@ import {
   removeColumn,
   removeDependency,
   removeGroup,
+  removeItem,
   replaceBoard,
   replaceColumn,
   replaceGroup,
@@ -254,6 +258,80 @@ export function useBoardMutations(boardId: string) {
       qc.setQueryData<BoardCache>(key, (prev) =>
         prev ? insertItem(prev, item) : prev,
       );
+    },
+  });
+
+  /** Add a subitem. Patch-on-success (mirrors addItem); Realtime echo idempotent. */
+  const addSubitemMutation = useMutation<
+    { item: CacheItem },
+    Error,
+    { parentId: string; name: string },
+    void
+  >({
+    mutationFn: async (vars) => {
+      const res = await addSubitem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return { item: res.data.item as CacheItem };
+    },
+    onSuccess: ({ item }) => {
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? insertItem(prev, item) : prev,
+      );
+    },
+  });
+
+  /** Delete an item/subitem. Optimistic remove (cascades subitems in cache); rollback on error. */
+  const deleteItemMutation = useMutation<
+    unknown,
+    Error,
+    { itemId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await deleteItem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous)
+        qc.setQueryData<BoardCache>(key, removeItem(previous, vars.itemId));
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  /** Reorder an item (subitem within its parent). Optimistic position patch; rollback on error. */
+  const reorderItemMutation = useMutation<
+    unknown,
+    Error,
+    { itemId: string; position: number },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await reorderItem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const existing = previous.items.find((i) => i.id === vars.itemId);
+        if (existing) {
+          qc.setQueryData<BoardCache>(
+            key,
+            replaceItem(previous, { ...existing, position: vars.position }),
+          );
+        }
+      }
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
     },
   });
 
@@ -508,6 +586,24 @@ export function useBoardMutations(boardId: string) {
         onSuccess: (data) => callbacks?.onSuccess?.(data.item),
         onError: (err) => callbacks?.onError?.(err),
       }),
+    addSubitem: (
+      parentId: string,
+      name: string,
+      callbacks?: {
+        onSuccess?: (item: CacheItem) => void;
+        onError?: (err: Error) => void;
+      },
+    ) =>
+      addSubitemMutation.mutate(
+        { parentId, name },
+        {
+          onSuccess: (data) => callbacks?.onSuccess?.(data.item),
+          onError: (err) => callbacks?.onError?.(err),
+        },
+      ),
+    deleteItem: (itemId: string) => deleteItemMutation.mutate({ itemId }),
+    reorderItem: (itemId: string, position: number) =>
+      reorderItemMutation.mutate({ itemId, position }),
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),
     renameGroup: (groupId: string, name: string) =>
       renameGroupMutation.mutate({ groupId, name }),
