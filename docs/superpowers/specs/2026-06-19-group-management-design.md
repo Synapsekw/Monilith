@@ -134,9 +134,10 @@ The existing color dot + colored left rail already read from `group.color`, so a
 
 ```ts
 // src/lib/boards/group-reorder.ts (new)
-import { midpoint } from "@/lib/boards/position";
-/** Given the current position-ordered group ids and a move (activeId over overId),
- *  return the new float position for activeId, or null for a no-op. */
+/** Given the current position-ordered groups and a move (activeId over overId),
+ *  return the new float position for activeId, or null for a no-op. Boundary
+ *  drops use ±1 (not midpoint's halving) so a drop above a position-0 group
+ *  still sorts strictly before it. */
 export function reorderPosition(
   groups: { id: string; position: number }[],
   activeId: string,
@@ -146,17 +147,20 @@ export function reorderPosition(
   const from = groups.findIndex((g) => g.id === activeId);
   const to = groups.findIndex((g) => g.id === overId);
   if (from === -1 || to === -1) return null;
-  const without = groups.filter((g) => g.id !== activeId);
   // `to` is an index into the original (position-ordered) array; `without`
   // excludes the active group, so `to` is also the slot the active group should
-  // occupy in `without` — correct whether moving up or down (verified by tests).
+  // occupy — correct whether moving up or down (verified by tests).
+  const without = groups.filter((g) => g.id !== activeId);
   const before = without[to - 1]?.position ?? null;
   const after = without[to]?.position ?? null;
-  return midpoint(before, after);
+  if (before === null && after === null) return 0;
+  if (before === null) return after! - 1; // dropped at the top
+  if (after === null) return before + 1; // dropped at the bottom
+  return (before + after) / 2; // inserted between
 }
 ```
 
-`onDragEnd` then calls `reorderGroup(activeId, position)` when the helper returns non-null. The four directional cases (move down, up, to top, to bottom) plus the same-id no-op are pinned by `group-reorder.test.ts`.
+`onDragEnd` then calls `reorderGroup(activeId, position)` when the helper returns non-null. The directional cases (move down, up, to top, to bottom), the not-found case, and the same-id no-op are pinned by `group-reorder.test.ts`.
 
 ### 9. Data-fetching budget (AGENTS.md rule 5)
 
