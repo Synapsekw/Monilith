@@ -11,6 +11,7 @@ export type BoardView = Tables<"board_views">;
 export type ItemDependency = Tables<"item_dependencies">;
 export type Automation = Tables<"automations">;
 export type Attachment = Tables<"attachments">;
+export type TimeEntry = Tables<"time_entries">;
 
 export type BoardPayload = {
   board: Board;
@@ -21,6 +22,7 @@ export type BoardPayload = {
   views: BoardView[];
   dependencies: ItemDependency[];
   attachments: Attachment[];
+  timeEntries: TimeEntry[];
 };
 
 export type BoardListEntry = Pick<
@@ -64,6 +66,7 @@ export async function getBoardPayload(
     viewsRes,
     depsRes,
     attachmentsRes,
+    timeEntriesRes,
   ] = await Promise.all([
     supabase
       .from("groups")
@@ -98,6 +101,16 @@ export async function getBoardPayload(
       .not("column_id", "is", null)
       .order("created_at", { ascending: false })
       .limit(200),
+    // Bounded by time_entries_board_idx. Limit 1000 matches the first-paint
+    // budget for v1 (same tradeoff as attachments/.limit(200)). If a board
+    // exceeds this, running totals could undercount — a server-side aggregate
+    // is the documented follow-up (spec §8).
+    supabase
+      .from("time_entries")
+      .select("*")
+      .eq("board_id", boardId)
+      .order("created_at", { ascending: false })
+      .limit(1000),
   ]);
 
   return {
@@ -109,6 +122,7 @@ export async function getBoardPayload(
     views: viewsRes.data ?? [],
     dependencies: depsRes.data ?? [],
     attachments: attachmentsRes.data ?? [],
+    timeEntries: timeEntriesRes.data ?? [],
   };
 }
 
