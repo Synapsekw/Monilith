@@ -10,6 +10,7 @@ export type Invite = {
   id: string;
   email: string;
   role: string;
+  status: "pending" | "declined";
   created_at: string;
 };
 
@@ -96,22 +97,47 @@ export function InvitePanel({
                 {" "}
                 · {i.role}
               </span>
+              {i.status === "declined" && (
+                <span className="text-muted-foreground"> · Declined</span>
+              )}
             </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive shrink-0"
-              disabled={pending}
-              onClick={() =>
-                start(async () => {
-                  setError(null);
-                  const r = await revokeInvite({ inviteId: i.id });
-                  if (!r.ok) setError(r.error);
-                })
-              }
-            >
-              Revoke
-            </Button>
+            {i.status === "declined" ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="shrink-0"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setError(null);
+                    const r = await inviteMember({
+                      orgId,
+                      email: i.email,
+                      role: i.role,
+                    });
+                    if (!r.ok) setError(r.error);
+                  })
+                }
+              >
+                Re-invite
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive hover:text-destructive shrink-0"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setError(null);
+                    const r = await revokeInvite({ inviteId: i.id });
+                    if (!r.ok) setError(r.error);
+                  })
+                }
+              >
+                Revoke
+              </Button>
+            )}
           </li>
         ))}
       </ul>

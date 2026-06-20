@@ -33,9 +33,9 @@ export default async function SettingsPage() {
     ? await Promise.all([
         supabase
           .from("org_invitations")
-          .select("id, email, role, created_at")
+          .select("id, email, role, status, created_at")
           .eq("org_id", org.id)
-          .eq("status", "pending")
+          .in("status", ["pending", "declined"])
           .order("created_at", { ascending: false }),
         supabase
           .from("admin_audit_log")
@@ -94,7 +94,10 @@ export default async function SettingsPage() {
               <OrgAdminConsole
                 orgId={org.id}
                 members={members ?? []}
-                invites={invites ?? []}
+                invites={(invites ?? []).map((i) => ({
+                  ...i,
+                  status: i.status as "pending" | "declined",
+                }))}
                 audit={audit ?? []}
                 currentUserId={user.id}
                 currentUserRole={me.role}
