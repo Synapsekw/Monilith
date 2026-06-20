@@ -2,8 +2,8 @@
 
 import { Download, Eye, Trash2, File } from "lucide-react";
 import {
+  canPreviewInline,
   formatSize,
-  isPreviewable,
 } from "@/lib/collaboration/attachments-format";
 import type { Attachment } from "@/lib/collaboration/attachments-cache";
 import type { Member } from "@/lib/collaboration/activity";
@@ -26,7 +26,7 @@ export function AttachmentRow({
   const uploader =
     members.find((m) => m.userId === attachment.uploaded_by)?.fullName ??
     "Someone";
-  const previewable = isPreviewable(attachment.mime_type);
+  const canPreview = canPreviewInline(attachment.mime_type);
 
   return (
     <div className="group hover:bg-accent flex items-center gap-3 rounded-md px-2 py-1.5 text-sm">
@@ -41,7 +41,7 @@ export function AttachmentRow({
         {uploader}
       </span>
       <div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-        {previewable && (
+        {canPreview && (
           <button
             onClick={onPreview}
             aria-label="Preview"
