@@ -1401,6 +1401,7 @@ export type Database = {
         Returns: string;
       };
       _webhook_url_safe: { Args: { p_url: string }; Returns: boolean };
+      accept_invitation: { Args: { p_invite_id: string }; Returns: string };
       auth_user_orgs: { Args: never; Returns: string[] };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
@@ -1606,6 +1607,7 @@ export type Database = {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
       };
+      decline_invitation: { Args: { p_invite_id: string }; Returns: undefined };
       delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
       delete_column_option: {
         Args: { p_column_id: string; p_option_id: string };
@@ -1646,6 +1648,16 @@ export type Database = {
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
+      };
+      my_pending_invitations: {
+        Args: never;
+        Returns: {
+          created_at: string;
+          id: string;
+          org_id: string;
+          org_name: string;
+          role: Database["public"]["Enums"]["org_role"];
+        }[];
       };
       platform_search_users: {
         Args: { p_limit?: number; p_offset?: number; p_query?: string };
