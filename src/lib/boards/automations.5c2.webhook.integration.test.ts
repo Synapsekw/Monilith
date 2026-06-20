@@ -172,6 +172,20 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5c-2 webhook", () => {
       role: "member",
     });
 
+    // Grant userM editor access on Board A. Since board-level sharing,
+    // automations writes require can_edit_board(board_id) — without a board
+    // grant userM (a plain org member) could not create ANY automation here.
+    // This isolates the webhook admin-gate as the behavior under test: the
+    // webhook rule is still blocked by the admin-gate trigger, while the
+    // non-webhook rule is allowed.
+    await admin.from("board_members").insert({
+      org_id: orgAId,
+      board_id: boardAId,
+      user_id: userMId,
+      access_level: "editor",
+      granted_by: userAId,
+    });
+
     // ── create userB in a separate org (for RLS test 7) ──────────────────
     const emailB = `wh5c2-b-${randomUUID()}@example.com`;
     const { data: createdB, error: errB } = await admin.auth.admin.createUser({
