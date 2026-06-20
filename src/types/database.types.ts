@@ -1206,6 +1206,74 @@ export type Database = {
         };
         Relationships: [];
       };
+      time_entries: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          duration_secs: number | null;
+          ended_at: string | null;
+          id: string;
+          item_id: string;
+          org_id: string;
+          started_at: string;
+          user_id: string;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          created_at?: string;
+          duration_secs?: number | null;
+          ended_at?: string | null;
+          id?: string;
+          item_id: string;
+          org_id: string;
+          started_at: string;
+          user_id: string;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          created_at?: string;
+          duration_secs?: number | null;
+          ended_at?: string | null;
+          id?: string;
+          item_id?: string;
+          org_id?: string;
+          started_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspaces: {
         Row: {
           created_at: string;
@@ -1605,6 +1673,27 @@ export type Database = {
         Returns: undefined;
       };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
+      start_timer: {
+        Args: { p_column_id: string; p_item_id: string };
+        Returns: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          duration_secs: number | null;
+          ended_at: string | null;
+          id: string;
+          item_id: string;
+          org_id: string;
+          started_at: string;
+          user_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "time_entries";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
     };
     Enums: {
       activity_action:
