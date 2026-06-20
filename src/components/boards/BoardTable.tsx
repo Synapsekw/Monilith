@@ -26,7 +26,7 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
-import { rollupCell } from "@/lib/boards/rollup";
+import { rollupCell, rollupTimeTracking } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
@@ -965,6 +965,12 @@ function ItemRow({
   onRenameSettled: () => void;
   onSubitemAdded?: (id: string) => void;
 }) {
+  // Collapsed-parent time rollup needs a "now" for any running child entry, but
+  // a bare Date.now() in render violates react-hooks/purity. Snapshot it at mount
+  // via a lazy initializer (same idiom as TimeTrackingCell): the Σ of a running
+  // child's elapsed time is approximate while collapsed — the live tick happens in
+  // the expanded child cell — and it refreshes whenever this (virtualized) row remounts.
+  const [rollupNowMs] = useState(() => Date.now());
   const {
     setNodeRef,
     attributes,
@@ -1069,6 +1075,34 @@ function ItemRow({
       />
       {columns.map((col) => {
         if (childCount > 0 && !isExpanded) {
+          if (col.kind === "time_tracking") {
+            const childEntries = subitems.flatMap((c) =>
+              timeEntriesForCell(controls.cache, c.id, col.id),
+            );
+            const estimates = subitems
+              .map(
+                (c) =>
+                  (
+                    cellMap.get(cellKey(c.id, col.id)) as
+                      | { estimateSeconds?: number }
+                      | undefined
+                  )?.estimateSeconds,
+              )
+              .filter((n): n is number => typeof n === "number");
+            const result = rollupTimeTracking(
+              childEntries,
+              estimates,
+              rollupNowMs,
+            );
+            return (
+              <div
+                key={col.id}
+                className="flex h-full items-center truncate border-l px-3"
+              >
+                <RollupCell result={result} />
+              </div>
+            );
+          }
           const values = subitems.map(
             (c) => cellMap.get(cellKey(c.id, col.id)) ?? null,
           );
