@@ -28,17 +28,92 @@ export type BoardPayload = {
 export type BoardListEntry = Pick<
   Board,
   "id" | "name" | "workspace_id" | "position"
->;
+> & { shared_out: boolean };
 
-/** All boards visible to the current user (RLS-scoped), for the sidebar. */
-export async function listBoards(): Promise<BoardListEntry[]> {
+export type SharedBoardEntry = {
+  id: string;
+  name: string;
+  position: number;
+  owner_name: string | null;
+  access_level: "viewer" | "editor";
+};
+
+/** Boards the current user owns (created_by = me), with a shared-out flag. */
+export async function listMyBoards(): Promise<BoardListEntry[]> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
   const { data, error } = await supabase
     .from("boards")
-    .select("id, name, workspace_id, position")
+    .select("id, name, workspace_id, position, board_members(user_id)")
+    .eq("created_by", user.id)
     .order("position", { ascending: true });
   if (error) return [];
-  return data ?? [];
+  return (data ?? []).map((b) => ({
+    id: b.id,
+    name: b.name,
+    workspace_id: b.workspace_id,
+    position: b.position,
+    shared_out: (b.board_members ?? []).length > 0,
+  }));
+}
+
+/** Boards shared WITH the current user by someone else. */
+export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from("board_members")
+    .select("access_level, boards!inner(id, name, position, created_by)")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  const rows = data.filter((r) => r.boards && r.boards.created_by !== user.id);
+
+  const ownerIds = [...new Set(rows.map((r) => r.boards.created_by))];
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", ownerIds);
+  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+
+  return rows.map((r) => ({
+    id: r.boards.id,
+    name: r.boards.name,
+    position: r.boards.position,
+    owner_name: nameById.get(r.boards.created_by) ?? null,
+    access_level: r.access_level,
+  }));
+}
+
+/** The current user's effective access to a board (or null if none). */
+export async function getBoardAccess(
+  boardId: string,
+): Promise<"owner" | "editor" | "viewer" | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: board } = await supabase
+    .from("boards")
+    .select("created_by")
+    .eq("id", boardId)
+    .maybeSingle();
+  if (!board) return null;
+  if (board.created_by === user.id) return "owner";
+  const { data: grant } = await supabase
+    .from("board_members")
+    .select("access_level")
+    .eq("board_id", boardId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return grant?.access_level ?? null;
 }
 
 /**
