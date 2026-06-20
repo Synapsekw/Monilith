@@ -26,7 +26,8 @@ export function parseDuration(input: string): number | null {
     return secs > 0 ? secs : null;
   }
 
-  // h/m units, in any order
+  // h/m units, in any order — but the WHOLE string must be unit tokens, else it's junk
+  if (!/^(\s*\d+(?:\.\d+)?\s*[hm]\s*)+$/.test(s)) return null;
   let secs = 0;
   let matched = false;
   for (const m of s.matchAll(/(\d+(?:\.\d+)?)\s*([hm])/g)) {
@@ -42,8 +43,12 @@ export function parseDuration(input: string): number | null {
 /** Format seconds as "2h 45m" / "4h" / "15m" (drops zero parts). Pure. */
 export function formatDuration(totalSecs: number): string {
   const secs = Math.max(0, Math.floor(totalSecs));
-  const h = Math.floor(secs / 3600);
-  const m = Math.round((secs % 3600) / 60);
+  let h = Math.floor(secs / 3600);
+  let m = Math.round((secs % 3600) / 60);
+  if (m === 60) {
+    h += 1;
+    m = 0;
+  }
   const parts: string[] = [];
   if (h) parts.push(`${h}h`);
   if (m) parts.push(`${m}m`);

@@ -24,6 +24,14 @@ describe("parseDuration", () => {
     expect(parseDuration("abc")).toBeNull();
     expect(parseDuration("0m")).toBeNull();
   });
+  it("rejects unit forms with junk suffixes/prefixes", () => {
+    expect(parseDuration("abc5h")).toBeNull();
+    expect(parseDuration("1h??garbage")).toBeNull();
+    expect(parseDuration("5h foo")).toBeNull();
+  });
+  it("rejects bare zero", () => {
+    expect(parseDuration("0")).toBeNull();
+  });
 });
 
 describe("formatDuration", () => {
@@ -32,6 +40,10 @@ describe("formatDuration", () => {
     expect(formatDuration(14400)).toBe("4h");
     expect(formatDuration(900)).toBe("15m");
     expect(formatDuration(0)).toBe("0m");
+  });
+  it("normalizes minute rounding overflow", () => {
+    expect(formatDuration(3570)).toBe("1h");
+    expect(formatDuration(3599)).toBe("1h");
   });
 });
 
