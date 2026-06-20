@@ -106,6 +106,7 @@ export function rollupCell(
     case "email":
     case "phone":
     case "files":
+    case "time_tracking":
       return { kind: "blank" };
   }
 }

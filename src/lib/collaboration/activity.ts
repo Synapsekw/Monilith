@@ -69,6 +69,8 @@ function describeCell(
       const v = value as { n?: number };
       return v.n != null ? String(v.n) : null;
     }
+    case "time_tracking":
+      return "time";
     default:
       return null;
   }

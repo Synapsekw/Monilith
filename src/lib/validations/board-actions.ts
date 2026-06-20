@@ -73,3 +73,33 @@ export const removeColumnOptionSchema = z.object({
   columnId: uuid,
   optionId: z.string().min(1),
 });
+
+// --- time-tracking action schemas ---
+export const startTimerSchema = z.object({ itemId: uuid, columnId: uuid });
+export const stopTimerSchema = z.object({ entryId: uuid });
+export const addManualEntrySchema = z.object({
+  itemId: uuid,
+  columnId: uuid,
+  // local date (YYYY-MM-DD) the session is logged against; defaults today in UI
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  durationSecs: z
+    .number()
+    .int()
+    .positive()
+    .max(86_400 * 366),
+});
+export const editEntrySchema = z.object({
+  entryId: uuid,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  durationSecs: z
+    .number()
+    .int()
+    .positive()
+    .max(86_400 * 366),
+});
+export const deleteEntrySchema = z.object({ entryId: uuid });
+export const setEstimateSchema = z.object({
+  itemId: uuid,
+  columnId: uuid,
+  estimateSeconds: z.number().int().positive().nullable(),
+});

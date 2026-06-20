@@ -13,6 +13,7 @@ const DEFAULT_NAME: Record<ColumnKind, string> = {
   email: "Email",
   phone: "Phone",
   files: "Files",
+  time_tracking: "Time tracking",
 };
 
 function opt(label: string, color: string) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cellValueSchema,
+  columnKindSchema,
   columnSettingsSchema,
   dateValueSchema,
   dropdownSettingsSchema,
@@ -184,5 +185,17 @@ describe("6b cell value schemas", () => {
     ] as const) {
       expect(columnSettingsSchema(k).safeParse({}).success).toBe(true);
     }
+  });
+});
+
+describe("time_tracking validation", () => {
+  it("accepts time_tracking as a kind", () => {
+    expect(columnKindSchema.safeParse("time_tracking").success).toBe(true);
+  });
+  it("estimate cell value requires a positive int", () => {
+    const s = cellValueSchema("time_tracking");
+    expect(s.safeParse({ estimateSeconds: 3600 }).success).toBe(true);
+    expect(s.safeParse({ estimateSeconds: 0 }).success).toBe(false);
+    expect(s.safeParse({ estimateSeconds: 1.5 }).success).toBe(false);
   });
 });

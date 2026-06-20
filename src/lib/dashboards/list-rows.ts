@@ -38,6 +38,8 @@ export function formatCell(column: DisplayColumn, value: unknown): CellDisplay {
       const ids = Array.isArray(v.userIds) ? (v.userIds as string[]) : [];
       return ids.length ? { text: String(ids.length) } : EMPTY;
     }
+    case "time_tracking":
+      return EMPTY;
     default:
       return EMPTY;
   }
