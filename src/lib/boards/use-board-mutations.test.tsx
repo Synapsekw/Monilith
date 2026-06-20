@@ -83,6 +83,7 @@ function seedCache(qc: QueryClient): BoardCache {
       } as CacheDependency,
     ],
     attachments: [],
+    timeEntries: [],
   };
   qc.setQueryData(boardKey("b1"), cache);
   return cache;

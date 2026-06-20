@@ -19,10 +19,15 @@ import {
   prependColumnFile,
   removeColumnFile,
   filesForCell,
+  prependTimeEntry,
+  removeTimeEntry,
+  upsertTimeEntry,
+  timeEntriesForCell,
   type BoardCache,
   type CacheAttachment,
   type CacheColumn,
   type CacheDependency,
+  type CacheTimeEntry,
 } from "./cache";
 
 function baseCache(): BoardCache {
@@ -45,6 +50,7 @@ function baseCache(): BoardCache {
     ],
     dependencies: [],
     attachments: [],
+    timeEntries: [],
   };
 }
 
@@ -260,6 +266,7 @@ function cache(columns: CacheColumn[]): BoardCache {
     ],
     dependencies: [],
     attachments: [],
+    timeEntries: [],
   };
 }
 
@@ -427,6 +434,7 @@ describe("removeGroup", () => {
       ],
       dependencies: [],
       attachments: [],
+      timeEntries: [],
     };
   }
 
@@ -519,4 +527,49 @@ describe("files-column attachment cache mutators", () => {
     expect(filesForCell(c, "i1", "c2").map((a) => a.id)).toEqual(["a2"]);
     expect(filesForCell(c, "i9", "c1")).toHaveLength(0);
   });
+});
+
+const entry = (id: string, item = "i1", col = "c1"): CacheTimeEntry =>
+  ({
+    id,
+    org_id: "o",
+    board_id: "b",
+    item_id: item,
+    column_id: col,
+    user_id: "u",
+    started_at: "2026-06-20T00:00:00Z",
+    ended_at: null,
+    duration_secs: null,
+    created_at: "2026-06-20T00:00:00Z",
+  }) as CacheTimeEntry;
+
+it("filters entries for a (item,column) cell", () => {
+  const cache = {
+    timeEntries: [entry("a"), entry("b", "i2")],
+  } as unknown as BoardCache;
+  expect(timeEntriesForCell(cache, "i1", "c1").map((e) => e.id)).toEqual(["a"]);
+});
+it("prepend is idempotent on id", () => {
+  let cache = { timeEntries: [] } as unknown as BoardCache;
+  cache = prependTimeEntry(cache, entry("a"));
+  cache = prependTimeEntry(cache, entry("a"));
+  expect(cache.timeEntries).toHaveLength(1);
+});
+it("upsertTimeEntry inserts when absent, replaces when present", () => {
+  let cache = { timeEntries: [] } as unknown as BoardCache;
+  cache = upsertTimeEntry(cache, entry("a"));
+  expect(cache.timeEntries).toHaveLength(1);
+  const updated = { ...entry("a"), duration_secs: 3600 };
+  cache = upsertTimeEntry(cache, updated as CacheTimeEntry);
+  expect(cache.timeEntries).toHaveLength(1);
+  expect(cache.timeEntries[0].duration_secs).toBe(3600);
+});
+it("removeTimeEntry removes by id, no-op when absent", () => {
+  let cache = {
+    timeEntries: [entry("a"), entry("b")],
+  } as unknown as BoardCache;
+  cache = removeTimeEntry(cache, "a");
+  expect(cache.timeEntries.map((e) => e.id)).toEqual(["b"]);
+  cache = removeTimeEntry(cache, "nope");
+  expect(cache.timeEntries).toHaveLength(1);
 });

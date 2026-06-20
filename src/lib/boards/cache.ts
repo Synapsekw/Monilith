@@ -7,6 +7,7 @@ export type CacheColumn = Tables<"columns">;
 export type CacheCellValue = Tables<"cell_values">;
 export type CacheDependency = Tables<"item_dependencies">;
 export type CacheAttachment = Tables<"attachments">;
+export type CacheTimeEntry = Tables<"time_entries">;
 
 /** Client-side mirror of the server BoardPayload shape (no server-only deps). */
 export type BoardCache = {
@@ -17,6 +18,7 @@ export type BoardCache = {
   cellValues: CacheCellValue[];
   dependencies: CacheDependency[];
   attachments: CacheAttachment[];
+  timeEntries: CacheTimeEntry[];
 };
 
 /** Stable lookup key for a cell value (item + column). */
@@ -197,4 +199,45 @@ export function filesForCell(
   return cache.attachments.filter(
     (a) => a.item_id === itemId && a.column_id === columnId,
   );
+}
+
+/** All time entries for a given (item, time-tracking-column) cell. */
+export function timeEntriesForCell(
+  cache: BoardCache,
+  itemId: string,
+  columnId: string,
+): CacheTimeEntry[] {
+  return cache.timeEntries.filter(
+    (t) => t.item_id === itemId && t.column_id === columnId,
+  );
+}
+
+/** Prepend a time entry; idempotent on id (newest-first). Immutable. */
+export function prependTimeEntry(
+  cache: BoardCache,
+  e: CacheTimeEntry,
+): BoardCache {
+  if (cache.timeEntries.some((t) => t.id === e.id)) return cache;
+  return { ...cache, timeEntries: [e, ...cache.timeEntries] };
+}
+
+/** Insert-or-replace a time entry by id. Immutable. */
+export function upsertTimeEntry(
+  cache: BoardCache,
+  e: CacheTimeEntry,
+): BoardCache {
+  const idx = cache.timeEntries.findIndex((t) => t.id === e.id);
+  const timeEntries =
+    idx === -1
+      ? [e, ...cache.timeEntries]
+      : cache.timeEntries.map((t, i) => (i === idx ? e : t));
+  return { ...cache, timeEntries };
+}
+
+/** Remove a time entry by id. No-op if absent. Immutable. */
+export function removeTimeEntry(cache: BoardCache, id: string): BoardCache {
+  return {
+    ...cache,
+    timeEntries: cache.timeEntries.filter((t) => t.id !== id),
+  };
 }
