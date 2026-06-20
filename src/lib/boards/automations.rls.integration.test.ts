@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
 config({ path: ".env.local", override: true });
@@ -75,7 +76,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + engine: automations (5a)", () => {
     userAAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await userAAnon.auth.signInWithPassword({
+    await signInWithRetry(userAAnon, {
       email: emailA,
       password: PASSWORD,
     });
@@ -189,7 +190,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + engine: automations (5a)", () => {
     userBAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await userBAnon.auth.signInWithPassword({
+    await signInWithRetry(userBAnon, {
       email: emailB,
       password: PASSWORD,
     });
@@ -852,7 +853,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + engine: automations (5a)", () => {
       memberAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
-      await memberAnon.auth.signInWithPassword({
+      await signInWithRetry(memberAnon, {
         email: memberEmail,
         password: PASSWORD,
       });

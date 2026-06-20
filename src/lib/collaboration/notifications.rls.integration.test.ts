@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
 config({ path: ".env.local", override: true });
@@ -30,7 +31,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: notifications", () => {
     const anon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await anon.auth.signInWithPassword({ email, password: PASSWORD });
+    await signInWithRetry(anon, { email, password: PASSWORD });
     return { id, anon };
   }
 
