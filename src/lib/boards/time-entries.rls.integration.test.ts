@@ -170,6 +170,14 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
         .select("id")
         .eq("board_id", owner.boardId);
       expect(data ?? []).toHaveLength(0);
+
+      // proof-of-life: the row genuinely exists (the owner can read it), so the
+      // outsider's empty result is RLS isolation, not a missing/never-inserted row.
+      const { data: ownerSee } = await owner.anon
+        .from("time_entries")
+        .select("id")
+        .eq("board_id", owner.boardId);
+      expect((ownerSee ?? []).length).toBeGreaterThan(0);
     });
 
     it("a user cannot delete another user's entry", async () => {
