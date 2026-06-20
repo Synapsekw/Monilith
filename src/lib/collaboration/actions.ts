@@ -10,6 +10,7 @@ import {
   deleteAttachmentSchema,
   attachmentUrlSchema,
   attachmentUrlsSchema,
+  attachmentPdfUrlSchema,
 } from "@/lib/validations/collaboration-actions";
 import { isPreviewable } from "@/lib/collaboration/attachments-format";
 import type { ActionResult } from "@/lib/boards/actions";
@@ -282,6 +283,35 @@ export async function getAttachmentPreviewUrls(input: {
     if (u) urls[r.id] = u;
   }
   return { ok: true, data: { urls } };
+}
+
+export async function getAttachmentPdfUrl(input: {
+  attachmentId: string;
+}): Promise<ActionResult<{ url: string }>> {
+  const parsed = attachmentPdfUrlSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data: row, error } = await supabase
+    .from("attachments")
+    .select("storage_path, mime_type")
+    .eq("id", parsed.data.attachmentId)
+    .maybeSingle();
+  if (error || !row) return fail("Attachment not found.");
+
+  // Defense in depth: the only bytes we ever sign for inline `fetch` (no
+  // download disposition) are PDFs the client renders via PDF.js.
+  if (row.mime_type.toLowerCase() !== "application/pdf")
+    return fail("Not a previewable PDF.");
+
+  // No `download` disposition — bytes are consumed by fetch → canvas, never
+  // top-level navigation. Short TTL (shared with the gallery preview window).
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("attachments")
+    .createSignedUrl(row.storage_path, PREVIEW_TTL);
+  if (signErr || !signed) return fail("Could not sign preview URL.");
+  return { ok: true, data: { url: signed.signedUrl } };
 }
 
 export async function deleteAttachment(input: {

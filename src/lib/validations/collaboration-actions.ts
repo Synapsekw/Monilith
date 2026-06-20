@@ -52,7 +52,12 @@ export const attachmentUrlsSchema = z.object({
   attachmentIds: z.array(z.string().uuid()).max(60),
 });
 
+export const attachmentPdfUrlSchema = z.object({
+  attachmentId: z.string().uuid(),
+});
+
 export type CreateAttachmentInput = z.infer<typeof createAttachmentSchema>;
 export type DeleteAttachmentInput = z.infer<typeof deleteAttachmentSchema>;
 export type AttachmentUrlInput = z.infer<typeof attachmentUrlSchema>;
 export type AttachmentUrlsInput = z.infer<typeof attachmentUrlsSchema>;
+export type AttachmentPdfUrlInput = z.infer<typeof attachmentPdfUrlSchema>;
