@@ -355,6 +355,48 @@ export type Database = {
           },
         ];
       };
+      board_members: {
+        Row: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          board_id: string;
+          created_at: string;
+          granted_by: string;
+          org_id: string;
+          user_id: string;
+        };
+        Insert: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          board_id: string;
+          created_at?: string;
+          granted_by: string;
+          org_id: string;
+          user_id: string;
+        };
+        Update: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          board_id?: string;
+          created_at?: string;
+          granted_by?: string;
+          org_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_members_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_members_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_views: {
         Row: {
           board_id: string;
@@ -1364,6 +1406,8 @@ export type Database = {
         Args: { p_board_id: string; p_org_id: string };
         Returns: boolean;
       };
+      can_edit_board: { Args: { p_board_id: string }; Returns: boolean };
+      can_read_board: { Args: { p_board_id: string }; Returns: boolean };
       column_in_org: {
         Args: { p_column_id: string; p_org_id: string };
         Returns: boolean;
@@ -1594,6 +1638,10 @@ export type Database = {
         Returns: boolean;
       };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
+      is_org_member_of: {
+        Args: { p_org_id: string; p_user_id: string };
+        Returns: boolean;
+      };
       is_platform_admin: { Args: never; Returns: boolean };
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
@@ -1672,6 +1720,14 @@ export type Database = {
         Args: { p_dashboard_id: string; p_layouts: Json };
         Returns: undefined;
       };
+      share_board: {
+        Args: {
+          p_access: Database["public"]["Enums"]["board_access"];
+          p_board_id: string;
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
       start_timer: {
         Args: { p_column_id: string; p_item_id: string };
@@ -1694,6 +1750,10 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      unshare_board: {
+        Args: { p_board_id: string; p_user_id: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       activity_action:
@@ -1703,6 +1763,7 @@ export type Database = {
         | "item_deleted"
         | "cell_changed"
         | "update_added";
+      board_access: "viewer" | "editor";
       column_kind:
         | "text"
         | "status"
@@ -1863,6 +1924,7 @@ export const Constants = {
         "cell_changed",
         "update_added",
       ],
+      board_access: ["viewer", "editor"],
       column_kind: [
         "text",
         "status",
