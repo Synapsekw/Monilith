@@ -32,13 +32,13 @@ const initialState: AuthState = {};
 const copy = {
   login: {
     title: "Welcome back",
-    description: "Sign in to your Pulse workspace.",
+    description: "Sign in to your Monolith workspace.",
     submit: "Sign in",
     pending: "Signing in…",
   },
   signup: {
     title: "Create your account",
-    description: "Start organizing your work with Pulse.",
+    description: "Start organizing your work with Monolith.",
     submit: "Create account",
     pending: "Creating account…",
   },

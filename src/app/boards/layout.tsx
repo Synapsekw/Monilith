@@ -38,7 +38,7 @@ export default async function BoardsLayout({
             ? user.user_metadata.full_name
             : null,
       }}
-      org={{ name: orgs[0]?.name ?? "Pulse" }}
+      org={{ name: orgs[0]?.name ?? "Monolith" }}
       workspaces={workspaces ?? []}
       boards={boards}
       dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
