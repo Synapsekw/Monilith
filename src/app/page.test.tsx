@@ -2,15 +2,17 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const { getUser, getUserOrgs, listMyBoards, redirect } = vi.hoisted(() => ({
-  getUser: vi.fn(),
-  getUserOrgs: vi.fn(),
-  listMyBoards: vi.fn(),
-  // Real next/navigation redirect() throws to halt rendering — mirror that.
-  redirect: vi.fn((url: string) => {
-    throw new Error(`REDIRECT:${url}`);
-  }),
-}));
+const { getUser, getUserOrgs, listMyBoards, listSharedBoards, redirect } =
+  vi.hoisted(() => ({
+    getUser: vi.fn(),
+    getUserOrgs: vi.fn(),
+    listMyBoards: vi.fn(),
+    listSharedBoards: vi.fn(),
+    // Real next/navigation redirect() throws to halt rendering — mirror that.
+    redirect: vi.fn((url: string) => {
+      throw new Error(`REDIRECT:${url}`);
+    }),
+  }));
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
@@ -23,6 +25,7 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("@/lib/boards/queries", () => ({
   listMyBoards: () => listMyBoards(),
+  listSharedBoards: () => listSharedBoards(),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -78,6 +81,20 @@ describe("Home (root route)", () => {
     expect(redirect).toHaveBeenCalledWith("/onboarding");
   });
 
+  it("redirects a board-less member to their first shared board", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
+    listMyBoards.mockResolvedValue([]);
+    listSharedBoards.mockResolvedValue([{ id: "s1" }]);
+
+    await expect(Home()).rejects.toThrow("REDIRECT:/boards/s1");
+    expect(redirect).toHaveBeenCalledWith("/boards/s1");
+  });
+
   it("renders the welcome shell for a logged-in user with no boards", async () => {
     getUser.mockResolvedValue({
       id: "u1",
@@ -86,6 +103,7 @@ describe("Home (root route)", () => {
     });
     getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
     listMyBoards.mockResolvedValue([]);
+    listSharedBoards.mockResolvedValue([]);
 
     render(await Home());
 
