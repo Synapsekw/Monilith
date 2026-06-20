@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,7 +14,15 @@ import {
   fileKind,
   isPreviewable,
 } from "@/lib/collaboration/attachments-format";
+import { getAttachmentPdfUrl } from "@/lib/collaboration/actions";
 import type { Attachment } from "@/lib/collaboration/attachments-cache";
+
+// Client-only PDF.js renderer — lazily loaded only when a PDF lightbox opens,
+// so `pdfjs-dist` never enters the server bundle or the board/item first paint.
+const PdfPreview = dynamic(
+  () => import("./PdfPreview").then((m) => m.PdfPreview),
+  { ssr: false },
+);
 
 export function FilePreviewLightbox({
   attachments,
@@ -36,6 +45,28 @@ export function FilePreviewLightbox({
 }) {
   const current = attachments[index];
   const count = attachments.length;
+  // Keyed by attachment id so render can tell "resolved for THIS pdf" from
+  // "stale / still loading" without a synchronous reset in the effect body.
+  const [pdf, setPdf] = useState<{ id: string; url: string | null } | null>(
+    null,
+  );
+
+  // Fetch the PDF's signed URL when the lightbox lands on a PDF. Derived from
+  // attachments/index locally so it does not depend on values computed after
+  // the `!current` early return (rules of hooks). State is set only inside the
+  // async resolution — never synchronously in the effect body.
+  useEffect(() => {
+    const c = attachments[index];
+    if (!c || fileKind(c.mime_type, c.file_name) !== "pdf") return;
+    let cancelled = false;
+    getAttachmentPdfUrl({ attachmentId: c.id }).then((res) => {
+      if (cancelled) return;
+      setPdf({ id: c.id, url: res.ok ? res.data.url : null });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [attachments, index]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -111,6 +142,20 @@ export function FilePreviewLightbox({
             />
           ) : previewable && kind === "video" && url ? (
             <video src={url} controls className="max-h-[60vh]" />
+          ) : kind === "pdf" ? (
+            pdf && pdf.id === current.id ? (
+              pdf.url ? (
+                <PdfPreview src={pdf.url} fileName={current.file_name} />
+              ) : (
+                <div className="text-muted-foreground py-12 text-sm">
+                  Couldn’t load preview.
+                </div>
+              )
+            ) : (
+              <div className="text-muted-foreground py-12 text-sm">
+                Loading preview…
+              </div>
+            )
           ) : (
             <div className="text-muted-foreground flex flex-col items-center gap-3 py-12 text-sm">
               <span>No inline preview for this file type.</span>
