@@ -26,9 +26,9 @@ Phase 6 ("ClickUp depth") needed native time tracking after subitems (6a) and cu
 
 ## Open threads
 
-- **Not pushed** — `develop` is +22 vs `origin/develop` (16 of those are 6c; rest are concurrent sessions'). Awaiting user OK to push.
+- **Pushed + CI green** — `develop` pushed to origin; CI run `27877873381` green (`verify` + `changelog drift` pass). _(Commit-message miss: the 16 6c commits are bare one-line subjects with no body and no `Co-Authored-By` trailer — flagged by Danijel; can't fix cleanly post-push on shared `develop` (force-push risk). Standing fix going forward: [[commit-body-and-coauthor-trailer]].)_
 - Deferred v1 nits (all triaged acceptable): member-name resolution in the cell (shows truncated `user_id`); `time_entries` realtime publication; tighten `BoardTable currentUserId` to a required prop.
 
 ## Next session entry point
 
-Push `develop` (CI), then Phase 6d — relations + mirror columns (then 6e docs). Spec/plan pattern same as 6c.
+Phase 6d — relations + mirror columns (then 6e docs). Same spec → plan → subagent-driven-build rhythm as 6c.
