@@ -128,7 +128,23 @@ Both deliberately omit any `has_org_role` branch → admins get no read/write by
 
 ## 6. RLS changes
 
-For **each** of `boards`, `groups`, `items`, `columns`, `cell_values`:
+### 6a. Full board-scoped table surface (not just the core 5)
+
+A board's contents live in **every table carrying a `board_id`**, and each is currently
+readable by any org member via `is_org_member(org_id)`. For "private means private" to
+actually hold, **all** of them must switch their SELECT to `can_read_board(board_id)` —
+locking only the core 5 would still leak a private board's comments, attachments, time
+entries, and activity (all queryable directly by `board_id`). The full list (15 tables):
+
+| Group         | Tables                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| Core          | `boards`, `groups`, `items`, `columns`, `cell_values`                                      |
+| Views/links   | `board_views`, `item_dependencies`                                                         |
+| Collaboration | `item_updates`, `item_activities`, `attachments`                                           |
+| Time          | `time_entries`                                                                             |
+| Automations   | `automations`, `automation_date_fires`, `automation_runs`, `automation_webhook_deliveries` |
+
+For **each** table above:
 
 - **SELECT:** `using (public.can_read_board(board_id))`
   (for `boards`, the policy reads `can_read_board(id)`).
@@ -137,6 +153,22 @@ For **each** of `boards`, `groups`, `items`, `columns`, `cell_values`:
   - `boards` INSERT keeps `created_by = auth.uid()` (you create your own private board).
   - `boards` DELETE: owner only (`created_by = auth.uid()`) — replaces the old
     owner/admin-role delete policy (admins no longer delete others' private boards).
+  - Append-only/system-written tables (`item_activities`, `automation_runs`,
+    `automation_date_fires`, `automation_webhook_deliveries`) only need the **SELECT**
+    rewrite; their writes already run via `SECURITY DEFINER` engine/trigger paths.
+
+### 6b. Write RPCs must enforce `can_edit_board` (SECURITY DEFINER bypass)
+
+`SECURITY DEFINER` RPCs bypass RLS, so a Viewer (who is an org member) could write through
+them. These user-callable write RPCs gain a `can_edit_board(board_id)` guard (raising
+`42501` when false), in addition to their existing `is_org_member` check:
+
+`create_item`, `create_board_view`, `delete_board_view`, `create_item_dependency`,
+`delete_column_option`, `start_timer`.
+
+(`create_board` / `create_board_from_template` are exempt — they create a _new_ board the
+caller owns. Dashboard RPCs are out of scope: dashboards stay org-scoped in v1, noted as
+follow-up.)
 
 `board_members` own RLS:
 
@@ -159,7 +191,9 @@ DEFINER`.
 One ordered migration:
 
 1. Create enum, `board_members`, helpers, new policies (drop old `is_org_member`-based
-   read/write policies on the five tables, create the new ones).
+   read/write policies on **all 15 board-scoped tables** from §6a and recreate them on
+   `can_read_board` / `can_edit_board`), and add the `can_edit_board` guard to the 6 write
+   RPCs in §6b.
 2. **Back-fill:** for every existing board, insert an `editor` grant for **every current
    member of that board's org except `created_by`** (the creator already has owner access).
    `granted_by` = the board's `created_by`. This preserves today's "everyone sees
@@ -222,9 +256,12 @@ BOARDS                         + New board
 ## 11. Testing
 
 - **RLS (integration, Vitest + Supabase):** a non-shared member **cannot** read a private
-  board's rows on any of the five tables; a viewer can read but **cannot** write; an editor
-  can write; an owner/admin with no grant **cannot** read another member's private board;
-  cross-org access still denied. This is the security core — most test weight here.
+  board's rows on **any of the 15 board-scoped tables** (§6a — including comments,
+  attachments, time entries, activity, automations); a viewer can read but **cannot** write
+  (direct DML **and** via the 6 hardened RPCs in §6b); an editor can write; an owner/admin
+  with no grant **cannot** read another member's private board; cross-org access still
+  denied. This is the security core — most test weight here, split per table family so the
+  suites run as parallel tasks.
 - **Migration:** after back-fill, a second org member can still read a pre-existing board.
 - **Actions:** `shareBoard`/`unshareBoard` owner-gating; non-owner rejected; target must be
   an org member; Zod boundary validation.
@@ -234,25 +271,34 @@ BOARDS                         + New board
 
 ## 12. Execution DAG (parallelization plan)
 
-**Tasks**
+**Tasks** (the implementation plan refines these; IDs match the plan)
 
-1. **DB + RLS migration**: enum, `board_members`, helpers, policy rewrite on five tables,
-   share/unshare RPCs, back-fill, regen types. _(Produces: schema + types.)_
-2. **Sharing server layer**: `sharing-actions.ts`, validations, `listBoards` split.
-   _(Consumes: T1 types/RPCs.)_
-3. **Share dialog UI**: board-header button + dialog. _(Consumes: T2 actions.)_
-4. **Sidebar restructure**: "My boards" + "Shared with me" + indicator. _(Consumes: T2
-   `listBoards` shape.)_
-5. **Tests**: RLS/migration/actions/UI. _(Consumes: all; RLS tests can start once T1 lands.)_
+1. **DB + RLS migration (TDD root):** enum, `board_members`, `can_read_board` /
+   `can_edit_board` helpers, SELECT+write policy rewrite on all 15 tables (§6a), the 6 RPC
+   guards (§6b), `share_board`/`unshare_board` RPCs, back-fill, regen types — driven by the
+   core RLS integration suite. _(Produces: schema, types, RPC signatures.)_
+2. **Sharing server actions + validations** (`sharing-actions.ts`,
+   `validations/board-sharing.ts`). _(Consumes: T1 RPCs/types.)_
+3. **`listBoards` split** → `listMyBoards` / `listSharedBoards` + `getBoardAccess`.
+   _(Consumes: T1 types.)_
+4. **Share dialog UI** (`ShareBoardDialog`). _(Consumes: T2 action contract — mockable.)_
+5. **Sidebar restructure** + indicators. _(Consumes: T3 query contract — mockable.)_
+6. **Satellite-table RLS test suites** (one file per family: views/links, collaboration,
+   time, automations). _(Consumes: T1.)_
+7. **Integration wiring + verification gate:** board page passes effective access + Share
+   button; layout feeds split board lists to the sidebar; full gate. _(Consumes: T2–T6.)_
 
-**Dependency graph:** T1 → T2 → {T3, T4}; T5 spans (RLS subset after T1, rest after T3/T4).
+**Dependency graph:** T1 → {T2, T3, T4, T5, T6} → T7. T4 depends only on T2's documented
+action signatures and T5 only on T3's documented query shapes (both fixed in the plan), so
+they need no implementation from T2/T3 and join the same wave; they mock the server layer
+in component tests.
 
 **Parallel batches:**
 
-- Batch 1: **T1** (critical path root).
-- Batch 2: **T2** + start of **T5** (RLS/migration tests).
-- Batch 3: **T3** ∥ **T4** (independent surfaces — dispatch concurrently; isolate in
-  worktrees per AGENTS.md #6).
-- Batch 4: remaining **T5** (action/UI tests) + verification gate.
+- **Wave 1:** T1 (sole critical-path root — the migration + core RLS suite).
+- **Wave 2 (5-wide, concurrent):** T2 ∥ T3 ∥ T4 ∥ T5 ∥ T6. Disjoint files (T2/T3 in
+  `lib/boards`, T4/T5 in `components`, T6 in test files) → dispatch via
+  `superpowers:dispatching-parallel-agents` in isolated worktrees per AGENTS.md #6.
+- **Wave 3:** T7 wiring + `pnpm typecheck && lint && test && build`.
 
-**Critical path (wall-clock floor):** T1 → T2 → (T3 or T4) → T5 tail.
+**Critical path (wall-clock floor):** T1 → (slowest of T2/T3/T4/T5/T6) → T7.
