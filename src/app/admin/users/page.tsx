@@ -73,7 +73,11 @@ export default async function AdminUsers({
               >
                 {u.bannedUntil ? "Banned" : "Active"}
               </span>
-              <UserRowActions userId={u.id} banned={Boolean(u.bannedUntil)} />
+              <UserRowActions
+                userId={u.id}
+                email={u.email ?? ""}
+                banned={Boolean(u.bannedUntil)}
+              />
             </div>
           ))}
         </div>
