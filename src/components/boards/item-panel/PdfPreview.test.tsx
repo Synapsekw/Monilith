@@ -11,7 +11,8 @@ const destroy = vi.fn();
 vi.mock("pdfjs-dist", () => ({
   GlobalWorkerOptions: { workerSrc: "" },
   getDocument: vi.fn(() => ({
-    promise: Promise.resolve({ numPages: 2, getPage, destroy }),
+    promise: Promise.resolve({ numPages: 2, getPage }),
+    destroy,
   })),
 }));
 

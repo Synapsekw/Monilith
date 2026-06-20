@@ -22,16 +22,17 @@ export function PdfPreview({ src }: { src: string; fileName?: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    let doc: Awaited<
-      ReturnType<typeof pdfjsLib.getDocument>["promise"]
-    > | null = null;
+    // The loading task owns teardown in pdfjs v6 (destroy() lives here, not on
+    // the resolved document proxy); destroying it tears down the worker too.
+    let loadingTask: ReturnType<typeof pdfjsLib.getDocument> | null = null;
 
     (async () => {
       try {
         setStatus("loading");
         const bytes = await (await fetch(src)).arrayBuffer();
         if (cancelled) return;
-        doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+        loadingTask = pdfjsLib.getDocument({ data: bytes });
+        const doc = await loadingTask.promise;
         if (cancelled) return;
         setPageCount(doc.numPages);
 
@@ -67,7 +68,7 @@ export function PdfPreview({ src }: { src: string; fileName?: string }) {
 
     return () => {
       cancelled = true;
-      doc?.destroy();
+      loadingTask?.destroy?.();
     };
   }, [src, scale]);
 
