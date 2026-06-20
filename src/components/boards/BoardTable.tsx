@@ -93,6 +93,8 @@ type CellControls = {
   clearCellValue: (vars: { itemId: string; columnId: string }) => void;
   members: EditorMember[];
   boardId: string;
+  /** The signed-in user's id — threaded from the board page server component. */
+  currentUserId: string;
   addItem: (
     vars: { groupId: string; name: string },
     callbacks?: { onSuccess?: () => void; onError?: (err: Error) => void },
@@ -114,6 +116,22 @@ type CellControls = {
   uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
   /** Open the Files lightbox over a cell's attachments at the given index. */
   openFilesLightbox: (files: readonly CacheAttachment[], index: number) => void;
+  // ─── Time-tracking callbacks ───────────────────────────────────────────────
+  startTimer: (itemId: string, columnId: string) => void;
+  stopTimer: (entryId: string) => void;
+  addManualEntry: (
+    itemId: string,
+    columnId: string,
+    date: string,
+    durationSecs: number,
+  ) => void;
+  editEntry: (entryId: string, date: string, durationSecs: number) => void;
+  deleteEntry: (entryId: string) => void;
+  setEstimate: (
+    itemId: string,
+    columnId: string,
+    estimateSeconds: number | null,
+  ) => void;
 };
 
 const ROW_HEIGHT = 36; // direction C density
@@ -283,6 +301,7 @@ export function BoardTable({
     clearCellValue,
     members,
     boardId: payload.board.id,
+    currentUserId,
     addItem,
     renameItemInCache: renameItemMutation,
     addSubitem: (parentId, name, cbs) =>
@@ -295,6 +314,12 @@ export function BoardTable({
     cache,
     uploadColumnFile: mutations.uploadColumnFile,
     openFilesLightbox,
+    startTimer: mutations.startTimer,
+    stopTimer: mutations.stopTimer,
+    addManualEntry: mutations.addManualEntry,
+    editEntry: mutations.editEntry,
+    deleteEntry: mutations.deleteEntry,
+    setEstimate: mutations.setEstimate,
   };
 
   const sensors = useSensors(
