@@ -8,12 +8,25 @@ import {
 } from "@/components/ui/popover";
 import { useNotifications } from "@/lib/collaboration/use-notifications";
 import { useNotificationMutations } from "@/lib/collaboration/use-notification-mutations";
+import { useInvitations } from "@/lib/collaboration/use-invitations";
+import { useInvitationMutations } from "@/lib/collaboration/use-invitation-mutations";
 import type { AppNotification } from "@/lib/collaboration/notifications-cache";
 import { NotificationsList } from "./NotificationsList";
+import { InvitationsSection } from "./InvitationsSection";
 
 export function NotificationsBell({ userId }: { userId: string }) {
   const { query, unread } = useNotifications(userId);
   const { markRead, markAllRead } = useNotificationMutations(userId);
+  const { invites, count: inviteCount } = useInvitations(userId);
+  const { accept, decline } = useInvitationMutations(userId);
+
+  const badge = unread + inviteCount;
+  const pendingId = accept.isPending
+    ? ((accept.variables as string | undefined) ?? null)
+    : decline.isPending
+      ? ((decline.variables as string | undefined) ?? null)
+      : null;
+  const inviteError = (accept.error ?? decline.error)?.message ?? null;
 
   function open(n: AppNotification) {
     markRead(n.id);
@@ -26,6 +39,13 @@ export function NotificationsBell({ userId }: { userId: string }) {
     }
   }
 
+  function onAccept(id: string) {
+    // Membership is server data → reload to pull the new org context + boards.
+    accept.mutate(id, {
+      onSuccess: () => window.location.assign("/"),
+    });
+  }
+
   return (
     <Popover>
       <PopoverTrigger
@@ -33,9 +53,9 @@ export function NotificationsBell({ userId }: { userId: string }) {
         className="hover:bg-accent focus-visible:ring-ring relative grid size-9 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
       >
         <Bell className="size-4" />
-        {unread > 0 && (
+        {badge > 0 && (
           <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4">
-            {unread > 9 ? "9+" : unread}
+            {badge > 9 ? "9+" : badge}
           </span>
         )}
       </PopoverTrigger>
@@ -51,6 +71,13 @@ export function NotificationsBell({ userId }: { userId: string }) {
             </button>
           )}
         </div>
+        <InvitationsSection
+          invites={invites}
+          onAccept={onAccept}
+          onDecline={(id) => decline.mutate(id)}
+          pendingId={pendingId}
+          error={inviteError}
+        />
         <NotificationsList
           notifications={query.data?.notifications ?? []}
           onOpen={open}
