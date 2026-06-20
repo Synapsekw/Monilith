@@ -304,6 +304,10 @@ export function CellRenderer({
     // board cache + upload/lightbox wiring), not rendered through this switch.
     case "files":
       return null;
+    // Time-tracking cells are special-cased in BoardTable's EditableCell (they
+    // need the board cache + timer callbacks), not rendered through this switch.
+    case "time_tracking":
+      return null;
     default:
       return null;
   }

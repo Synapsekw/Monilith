@@ -31,6 +31,7 @@ import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
+import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
 import { FilePreviewLightbox } from "@/components/boards/item-panel/FilePreviewLightbox";
 import {
   getAttachmentDownloadUrl,
@@ -49,7 +50,12 @@ import type {
   CacheCellValue,
   CacheColumn,
 } from "@/lib/boards/cache";
-import { buildCellMap, cellKey, filesForCell } from "@/lib/boards/cache";
+import {
+  buildCellMap,
+  cellKey,
+  filesForCell,
+  timeEntriesForCell,
+} from "@/lib/boards/cache";
 import { countOptionUsage } from "@/lib/boards/option-edit";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
@@ -1329,6 +1335,33 @@ function EditableCell({
           previewUrls={{}}
           onOpen={(i) => controls.openFilesLightbox(files, i)}
           onUpload={(f) => controls.uploadColumnFile(item.id, column.id, f)}
+        />
+      </div>
+    );
+  }
+
+  // Time-tracking cells need the board cache + timer callbacks — special-cased
+  // like files; not routed through CellRenderer or the isEditing/inline branch.
+  if (column.kind === "time_tracking") {
+    const entries = timeEntriesForCell(controls.cache, item.id, column.id);
+    const estimate =
+      (value as { estimateSeconds?: number } | null)?.estimateSeconds ?? null;
+    return (
+      <div className="flex h-full items-center border-l px-3">
+        <TimeTrackingCell
+          entries={entries}
+          estimateSeconds={estimate}
+          currentUserId={controls.currentUserId}
+          onStart={() => controls.startTimer(item.id, column.id)}
+          onStop={(id) => controls.stopTimer(id)}
+          onAddManual={(date, secs) =>
+            controls.addManualEntry(item.id, column.id, date, secs)
+          }
+          onEdit={(id, date, secs) => controls.editEntry(id, date, secs)}
+          onDelete={(id) => controls.deleteEntry(id)}
+          onSetEstimate={(secs) =>
+            controls.setEstimate(item.id, column.id, secs)
+          }
         />
       </div>
     );
