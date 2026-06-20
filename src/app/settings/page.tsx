@@ -19,8 +19,8 @@ export default async function SettingsPage() {
   const org = orgs[0];
   if (!org) redirect("/onboarding");
 
-  // First paint: members (bounded ~50 via the RPC), pending invites, and a
-  // bounded audit slice. Tab switches in the console are History-API only
+  // First paint: members (bounded ~50 via the RPC), pending + declined invites,
+  // and a bounded audit slice. Tab switches in the console are History-API only
   // (0 server round-trips) — see OrgAdminConsole / spec §12.
   const supabase = await createClient();
   const { data: members } = await supabase.rpc("get_org_members", {
