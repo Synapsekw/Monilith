@@ -326,6 +326,22 @@ describe("LinkEditor", () => {
     await userEvent.type(screen.getByLabelText(/url/i), "nope");
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(onCommit).not.toHaveBeenCalled();
-    expect(screen.getByText(/valid url/i)).toBeInTheDocument();
+    expect(screen.getByText(/http or https/i)).toBeInTheDocument();
+  });
+
+  it("rejects a javascript: scheme (XSS guard) without committing", async () => {
+    const onCommit = vi.fn();
+    render(
+      <LinkEditor
+        value={null}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText(/url/i), "javascript:alert(1)");
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.getByText(/http or https/i)).toBeInTheDocument();
   });
 });

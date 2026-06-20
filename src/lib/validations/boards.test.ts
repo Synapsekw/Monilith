@@ -147,6 +147,16 @@ describe("6b cell value schemas", () => {
       cellValueSchema("link").safeParse({ url: "not-a-url" }).success,
     ).toBe(false);
   });
+  it("link rejects non-http(s) schemes (XSS guard)", () => {
+    for (const url of [
+      "javascript:alert(1)",
+      "mailto:a@b.com",
+      "ftp://x.com",
+      "data:text/html,<script>1</script>",
+    ]) {
+      expect(cellValueSchema("link").safeParse({ url }).success).toBe(false);
+    }
+  });
   it("email validates format", () => {
     expect(
       cellValueSchema("email").safeParse({ email: "a@b.com" }).success,

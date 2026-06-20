@@ -82,8 +82,20 @@ export const checkboxValueSchema = z.object({ checked: z.boolean() });
 export const ratingValueSchema = z.object({
   rating: z.number().int().min(1).max(5),
 });
+/**
+ * `z.string().url()` and `new URL()` both accept `javascript:`, `mailto:`, etc.
+ * Link cells render an `<a href>` that any board viewer can click, so the scheme
+ * MUST be restricted to http(s) to prevent stored XSS (spec §3.1).
+ */
+export function isHttpUrl(u: string): boolean {
+  try {
+    return ["http:", "https:"].includes(new URL(u).protocol);
+  } catch {
+    return false;
+  }
+}
 export const linkValueSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().refine(isHttpUrl, "URL must be http or https"),
   text: z.string().optional(),
 });
 export const emailValueSchema = z.object({ email: z.string().email() });

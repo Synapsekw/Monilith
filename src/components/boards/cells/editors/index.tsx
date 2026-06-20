@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
+import { isHttpUrl } from "@/lib/validations/boards";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -366,10 +367,8 @@ export function LinkEditor({
   const [text, setText] = useState(value?.text ?? "");
   const [err, setErr] = useState<string | null>(null);
   const commit = () => {
-    try {
-      new URL(url);
-    } catch {
-      setErr("Enter a valid URL");
+    if (!isHttpUrl(url)) {
+      setErr("Enter a valid http or https URL");
       return;
     }
     onCommit({ url, ...(text ? { text } : {}) });

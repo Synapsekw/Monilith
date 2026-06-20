@@ -1,5 +1,6 @@
 import { Check, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
+import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -161,6 +162,10 @@ export function LinkCell({
   settings: Settings;
 }) {
   if (!value?.url) return <span className="text-sm" />;
+  // Defense-in-depth: never render a non-http(s) href (e.g. a `javascript:` URL
+  // that slipped past an older boundary) as a clickable anchor.
+  if (!isHttpUrl(value.url))
+    return <span className="truncate text-sm">{value.text || value.url}</span>;
   return (
     <a
       href={value.url}
