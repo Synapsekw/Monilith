@@ -42,7 +42,7 @@ export function OnboardingForm() {
         <CardTitle>Create your organization</CardTitle>
         <CardDescription>
           Set up your organization and first workspace to get started with
-          Pulse.
+          Monolith.
         </CardDescription>
       </CardHeader>
       <CardContent>

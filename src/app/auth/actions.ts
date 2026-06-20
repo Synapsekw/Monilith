@@ -3,7 +3,12 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { signInSchema, signUpSchema } from "@/lib/validations/auth";
+import { createServiceClient } from "@/lib/supabase/service";
+import {
+  signInSchema,
+  signUpSchema,
+  changePasswordSchema,
+} from "@/lib/validations/auth";
 
 export type AuthState = {
   error?: string;
@@ -82,6 +87,39 @@ export async function signUp(
   }
 
   return { success: "check-email" };
+}
+
+export async function changeOwnPassword(
+  _prevState: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  const parsed = changePasswordSchema.safeParse({
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid password" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data.password,
+  });
+  if (error) return { error: error.message };
+
+  // app_metadata is admin-only → clear the flag with the service-role client so
+  // the user can't bypass the gate by editing their own metadata.
+  const svc = createServiceClient();
+  await svc.auth.admin.updateUserById(user.id, {
+    app_metadata: { ...user.app_metadata, must_change_password: false },
+  });
+
+  // redirect() throws — outside any try/catch.
+  redirect("/");
 }
 
 export async function signOut(): Promise<void> {

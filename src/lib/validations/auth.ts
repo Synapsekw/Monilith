@@ -15,5 +15,10 @@ export const signUpSchema = z.object({
     .max(100, "Organization name must be 100 characters or fewer"),
 });
 
+export const changePasswordSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters."),
+});
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
 export type SignInInput = z.infer<typeof signInSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;

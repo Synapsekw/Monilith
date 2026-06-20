@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Plus,
-  Type,
-  CircleDot,
-  Users,
-  Calendar,
-  Hash,
-  Tags,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,15 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { ColumnKind } from "@/lib/validations/boards";
-
-const KINDS: { kind: ColumnKind; label: string; Icon: typeof Type }[] = [
-  { kind: "text", label: "Text", Icon: Type },
-  { kind: "status", label: "Status", Icon: CircleDot },
-  { kind: "people", label: "People", Icon: Users },
-  { kind: "date", label: "Date", Icon: Calendar },
-  { kind: "numbers", label: "Numbers", Icon: Hash },
-  { kind: "dropdown", label: "Dropdown", Icon: Tags },
-];
+import { COLUMN_KIND_META, COLUMN_KIND_ORDER } from "@/lib/boards/column-kinds";
 
 export function AddColumnMenu({
   onAdd,
@@ -41,12 +25,15 @@ export function AddColumnMenu({
           <Plus className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        {KINDS.map(({ kind, label, Icon }) => (
-          <DropdownMenuItem key={kind} onSelect={() => onAdd(kind)}>
-            <Icon className="size-4" /> {label}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="start" className="max-h-80 overflow-auto">
+        {COLUMN_KIND_ORDER.map((kind) => {
+          const { label, Icon } = COLUMN_KIND_META[kind];
+          return (
+            <DropdownMenuItem key={kind} onSelect={() => onAdd(kind)}>
+              <Icon className="size-4" /> {label}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -25,9 +25,42 @@ vi.mock("@/lib/boards/dependency-actions", () => ({
   deleteDependency: (...a: unknown[]) => deleteDependency(...a),
 }));
 
-import { useBoardMutations } from "./use-board-mutations";
+import { useBoardMutations, stripOption } from "./use-board-mutations";
 import { boardKey } from "./use-board-cache";
-import type { BoardCache, CacheDependency } from "./cache";
+import type { BoardCache, CacheCellValue, CacheDependency } from "./cache";
+
+describe("stripOption", () => {
+  function cell(value: CacheCellValue["value"]): CacheCellValue {
+    return {
+      item_id: "i1",
+      column_id: "c1",
+      org_id: "o1",
+      board_id: "b1",
+      value,
+    } as CacheCellValue;
+  }
+
+  it("clears a status cell referencing the removed option (→ null)", () => {
+    expect(stripOption(cell({ optionId: "opt-1" }), "opt-1")).toBeNull();
+  });
+
+  it("keeps a status cell pointing at a different option", () => {
+    const c = cell({ optionId: "opt-2" });
+    expect(stripOption(c, "opt-1")).toBe(c);
+  });
+
+  it("strips one id from a dropdown cell, keeping the rest", () => {
+    const out = stripOption(cell({ optionIds: ["opt-1", "opt-2"] }), "opt-1");
+    expect(out).not.toBeNull();
+    expect((out!.value as { optionIds: string[] }).optionIds).toEqual([
+      "opt-2",
+    ]);
+  });
+
+  it("returns null for a dropdown cell emptied by the removal", () => {
+    expect(stripOption(cell({ optionIds: ["opt-1"] }), "opt-1")).toBeNull();
+  });
+});
 
 const DEP_ID = "dep1dep1-dep1-4dep-8dep-dep1dep1dep1";
 
@@ -49,6 +82,7 @@ function seedCache(qc: QueryClient): BoardCache {
         created_at: "2026-06-16T00:00:00Z",
       } as CacheDependency,
     ],
+    attachments: [],
   };
   qc.setQueryData(boardKey("b1"), cache);
   return cache;
@@ -309,6 +343,7 @@ function seedGroups(qc: QueryClient): void {
     items: [{ id: "i1", board_id: "b1", group_id: "g1", name: "One" }],
     cellValues: [],
     dependencies: [],
+    attachments: [],
   } as never);
 }
 

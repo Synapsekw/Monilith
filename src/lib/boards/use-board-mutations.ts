@@ -11,6 +11,7 @@ import {
   deleteGroup,
   deleteItem,
   renameBoard,
+  removeColumnOption,
   renameColumn,
   renameGroup,
   renameItem,
@@ -18,6 +19,7 @@ import {
   reorderItem,
   resizeColumn,
   resizeNameColumn,
+  updateColumnSettings,
   updateGroupColor,
   upsertCell,
 } from "@/lib/boards/actions";
@@ -26,11 +28,20 @@ import {
   deleteDependency,
 } from "@/lib/boards/dependency-actions";
 import {
+  createAttachment,
+  deleteAttachment,
+} from "@/lib/collaboration/actions";
+import { createClient } from "@/lib/supabase/client";
+import { buildColumnFilePath } from "@/lib/collaboration/attachments-path";
+import { MAX_FILE_BYTES } from "@/lib/collaboration/use-attachment-mutations";
+import {
   insertColumn,
   insertGroup,
   insertItem,
+  prependColumnFile,
   removeCellValue,
   removeColumn,
+  removeColumnFile,
   removeDependency,
   removeGroup,
   removeItem,
@@ -40,6 +51,7 @@ import {
   replaceItem,
   upsertCellValue,
   type BoardCache,
+  type CacheAttachment,
   type CacheCellValue,
   type CacheColumn,
   type CacheGroup,
@@ -58,6 +70,27 @@ type ResizeNameColumnVars = { width: number | null };
 type AddDependencyVars = { predecessorId: string; successorId: string };
 type RemoveDependencyVars = { dependencyId: string };
 type Ctx = { previous?: BoardCache };
+
+/**
+ * Strip a removed option id from a single status/dropdown cell value. Returns
+ * the updated cell, or `null` when the cell becomes empty (status cell that
+ * referenced the option, or a dropdown left with no ids) and should be dropped.
+ * Pure — mirrors the server's `delete_column_option` clearing behavior.
+ */
+export function stripOption(
+  cv: CacheCellValue,
+  optionId: string,
+): CacheCellValue | null {
+  const v = cv.value as { optionId?: string | null; optionIds?: string[] };
+  if (v?.optionId !== undefined) return v.optionId === optionId ? null : cv;
+  if (v?.optionIds) {
+    const left = v.optionIds.filter((id) => id !== optionId);
+    return left.length
+      ? { ...cv, value: { optionIds: left } as CacheCellValue["value"] }
+      : null;
+  }
+  return cv;
+}
 
 export function useBoardMutations(boardId: string) {
   const qc = useQueryClient();
@@ -167,6 +200,75 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       return optimisticColumn(vars.columnId, { name: vars.name });
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const updateColumnSettingsMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string; settings: Record<string, unknown> },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await updateColumnSettings(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      return optimisticColumn(vars.columnId, {
+        settings: vars.settings as CacheColumn["settings"],
+      });
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
+  const removeColumnOptionMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string; optionId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await removeColumnOption(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        const col = previous.columns.find((c) => c.id === vars.columnId);
+        const opts = (
+          (col?.settings as { options?: { id: string }[] })?.options ?? []
+        ).filter((o) => o.id !== vars.optionId);
+        let next = col
+          ? replaceColumn(previous, {
+              ...col,
+              settings: {
+                ...(col.settings as object),
+                options: opts,
+              } as CacheColumn["settings"],
+            })
+          : previous;
+        next = {
+          ...next,
+          cellValues: next.cellValues
+            .map((cv) =>
+              cv.column_id === vars.columnId
+                ? stripOption(cv, vars.optionId)
+                : cv,
+            )
+            .filter((cv): cv is CacheCellValue => cv !== null),
+        };
+        qc.setQueryData(key, next);
+      }
+      return { previous };
     },
     onError: (_e, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
@@ -572,6 +674,111 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
+  /**
+   * Upload a file into a Files-column cell. Client-direct upload to the
+   * `attachments` bucket (mirrors `useAttachmentMutations`), then registers the
+   * metadata row via `createAttachment` with the column id. On success the real
+   * row is constructed from known fields + the returned id and prepended into
+   * the board cache; the Realtime INSERT echo is idempotent via
+   * `prependColumnFile`. Non-optimistic insert (we wait for the server id), but
+   * a failed register cleans up the orphaned object.
+   */
+  const uploadColumnFileMutation = useMutation<
+    { attachment: CacheAttachment },
+    Error,
+    { itemId: string; columnId: string; file: File }
+  >({
+    mutationFn: async ({ itemId, columnId, file }) => {
+      if (file.size > MAX_FILE_BYTES) throw new Error("File exceeds 50 MB.");
+      if (file.size === 0) throw new Error("File is empty.");
+
+      const cache = qc.getQueryData<BoardCache>(key);
+      if (!cache) throw new Error("Board not loaded.");
+      const orgId = cache.board.org_id;
+      const path = buildColumnFilePath({
+        orgId,
+        boardId,
+        itemId,
+        columnId,
+        fileName: file.name,
+      });
+      const mimeType = file.type || "application/octet-stream";
+
+      const supabase = createClient();
+      const { error: upErr } = await supabase.storage
+        .from("attachments")
+        .upload(path, file, { contentType: mimeType });
+      if (upErr) throw new Error(upErr.message);
+
+      const res = await createAttachment({
+        itemId,
+        columnId,
+        storagePath: path,
+        fileName: file.name,
+        mimeType,
+        sizeBytes: file.size,
+      });
+      if (!res.ok) {
+        // Best-effort orphan cleanup if the register failed.
+        await supabase.storage.from("attachments").remove([path]);
+        throw new Error(res.error);
+      }
+
+      // Resolve the uploader for the cache row (create returns only the id).
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const attachment: CacheAttachment = {
+        id: res.data.attachmentId,
+        org_id: orgId,
+        board_id: boardId,
+        item_id: itemId,
+        column_id: columnId,
+        update_id: null,
+        uploaded_by: user?.id ?? "",
+        storage_path: path,
+        file_name: file.name,
+        mime_type: mimeType,
+        size_bytes: file.size,
+        created_at: new Date().toISOString(),
+      } as CacheAttachment;
+      return { attachment };
+    },
+    onSuccess: ({ attachment }) => {
+      qc.setQueryData<BoardCache>(key, (prev) =>
+        prev ? prependColumnFile(prev, attachment) : prev,
+      );
+    },
+  });
+
+  /** Delete a Files-column attachment. Optimistic remove; rollback on error. */
+  const deleteColumnFileMutation = useMutation<
+    unknown,
+    Error,
+    { attachmentId: string },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await deleteAttachment(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous)
+        qc.setQueryData<BoardCache>(
+          key,
+          removeColumnFile(previous, vars.attachmentId),
+        );
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
   return {
     setCell: (vars: SetCellVars) => setCellMutation.mutate(vars),
     clearCellValue: (vars: ClearCellVars) => clearCellMutation.mutate(vars),
@@ -649,5 +856,15 @@ export function useBoardMutations(boardId: string) {
       resizeColumnMutation.mutate({ columnId, width }),
     deleteColumn: (columnId: string) =>
       deleteColumnMutation.mutate({ columnId }),
+    updateColumnSettings: (
+      columnId: string,
+      settings: Record<string, unknown>,
+    ) => updateColumnSettingsMutation.mutate({ columnId, settings }),
+    removeColumnOption: (columnId: string, optionId: string) =>
+      removeColumnOptionMutation.mutate({ columnId, optionId }),
+    uploadColumnFile: (itemId: string, columnId: string, file: File) =>
+      uploadColumnFileMutation.mutate({ itemId, columnId, file }),
+    deleteColumnFile: (attachmentId: string) =>
+      deleteColumnFileMutation.mutate({ attachmentId }),
   };
 }

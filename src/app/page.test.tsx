@@ -18,11 +18,14 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/auth/session", () => ({
   getUser: () => getUser(),
   getUserOrgs: () => getUserOrgs(),
+  // No-op for these cases: the test users carry no must_change_password flag.
+  enforcePasswordChange: () => {},
 }));
 vi.mock("@/lib/boards/queries", () => ({ listBoards: () => listBoards() }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: () => ({ select: async () => ({ data: [] }) }),
+    rpc: async () => ({ data: false, error: null }),
   }),
 }));
 vi.mock("@/components/landing/monolith-hero", () => ({

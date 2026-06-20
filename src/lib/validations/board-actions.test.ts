@@ -14,6 +14,8 @@ import {
   addSubitemSchema,
   deleteItemSchema,
   reorderItemSchema,
+  updateColumnSettingsSchema,
+  removeColumnOptionSchema,
 } from "./board-actions";
 import { upsertCellSchema, clearCellSchema } from "./board-actions";
 
@@ -221,5 +223,39 @@ describe("reorderItemSchema", () => {
     expect(
       reorderItemSchema.safeParse({ itemId: UUID, position: 2.5 }).success,
     ).toBe(true);
+  });
+});
+
+describe("column settings + option schemas", () => {
+  it("updateColumnSettings accepts a columnId uuid + structural settings", () => {
+    expect(
+      updateColumnSettingsSchema.safeParse({
+        columnId: UUID,
+        settings: { options: [] },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("updateColumnSettings rejects a non-uuid columnId", () => {
+    expect(
+      updateColumnSettingsSchema.safeParse({
+        columnId: "x",
+        settings: {},
+      }).success,
+    ).toBe(false);
+  });
+
+  it("removeColumnOption accepts a columnId + non-empty optionId", () => {
+    expect(
+      removeColumnOptionSchema.safeParse({ columnId: UUID, optionId: "abc" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("removeColumnOption rejects an empty optionId", () => {
+    expect(
+      removeColumnOptionSchema.safeParse({ columnId: UUID, optionId: "" })
+        .success,
+    ).toBe(false);
   });
 });

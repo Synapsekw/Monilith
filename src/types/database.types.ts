@@ -14,9 +14,54 @@ export type Database = {
   };
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string;
+          actor_id: string;
+          actor_kind: string;
+          created_at: string;
+          id: string;
+          metadata: Json;
+          org_id: string | null;
+          target_email: string | null;
+          target_user_id: string | null;
+        };
+        Insert: {
+          action: string;
+          actor_id: string;
+          actor_kind: string;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          org_id?: string | null;
+          target_email?: string | null;
+          target_user_id?: string | null;
+        };
+        Update: {
+          action?: string;
+          actor_id?: string;
+          actor_kind?: string;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          org_id?: string | null;
+          target_email?: string | null;
+          target_user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       attachments: {
         Row: {
           board_id: string;
+          column_id: string | null;
           created_at: string;
           file_name: string;
           id: string;
@@ -30,6 +75,7 @@ export type Database = {
         };
         Insert: {
           board_id: string;
+          column_id?: string | null;
           created_at?: string;
           file_name: string;
           id?: string;
@@ -43,6 +89,7 @@ export type Database = {
         };
         Update: {
           board_id?: string;
+          column_id?: string | null;
           created_at?: string;
           file_name?: string;
           id?: string;
@@ -60,6 +107,13 @@ export type Database = {
             columns: ["board_id"];
             isOneToOne: false;
             referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "attachments_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
             referencedColumns: ["id"];
           },
           {
@@ -1004,21 +1058,68 @@ export type Database = {
           },
         ];
       };
+      org_invitations: {
+        Row: {
+          accepted_at: string | null;
+          created_at: string;
+          email: string;
+          id: string;
+          invited_by: string;
+          org_id: string;
+          role: Database["public"]["Enums"]["org_role"];
+          status: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          created_at?: string;
+          email: string;
+          id?: string;
+          invited_by: string;
+          org_id: string;
+          role?: Database["public"]["Enums"]["org_role"];
+          status?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          created_at?: string;
+          email?: string;
+          id?: string;
+          invited_by?: string;
+          org_id?: string;
+          role?: Database["public"]["Enums"]["org_role"];
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       org_members: {
         Row: {
           created_at: string;
+          deactivated_at: string | null;
+          deactivated_by: string | null;
           org_id: string;
           role: Database["public"]["Enums"]["org_role"];
           user_id: string;
         };
         Insert: {
           created_at?: string;
+          deactivated_at?: string | null;
+          deactivated_by?: string | null;
           org_id: string;
           role?: Database["public"]["Enums"]["org_role"];
           user_id: string;
         };
         Update: {
           created_at?: string;
+          deactivated_at?: string | null;
+          deactivated_by?: string | null;
           org_id?: string;
           role?: Database["public"]["Enums"]["org_role"];
           user_id?: string;
@@ -1060,6 +1161,21 @@ export type Database = {
           slug?: string;
           timezone?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      platform_admins: {
+        Row: {
+          created_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          user_id?: string;
         };
         Relationships: [];
       };
@@ -1130,6 +1246,18 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      _admin_audit: {
+        Args: {
+          p_action: string;
+          p_actor: string;
+          p_actor_kind: string;
+          p_metadata: Json;
+          p_org_id: string;
+          p_target_email: string;
+          p_target_user: string;
+        };
+        Returns: undefined;
+      };
       _automation_condition_predicate: {
         Args: { p_col: string; p_item_id: string; p_op: string; p_val: string };
         Returns: string;
@@ -1362,7 +1490,26 @@ export type Database = {
           name: string;
         }[];
       };
+      deactivate_member: {
+        Args: { p_org_id: string; p_user_id: string };
+        Returns: undefined;
+      };
       delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
+      delete_column_option: {
+        Args: { p_column_id: string; p_option_id: string };
+        Returns: number;
+      };
+      get_org_members: {
+        Args: { p_limit?: number; p_offset?: number; p_org_id: string };
+        Returns: {
+          created_at: string;
+          deactivated_at: string;
+          email: string;
+          full_name: string;
+          role: Database["public"]["Enums"]["org_role"];
+          user_id: string;
+        }[];
+      };
       group_in_org: {
         Args: { p_group_id: string; p_org_id: string };
         Returns: boolean;
@@ -1379,9 +1526,44 @@ export type Database = {
         Returns: boolean;
       };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
+      is_platform_admin: { Args: never; Returns: boolean };
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
+      };
+      platform_search_users: {
+        Args: { p_limit?: number; p_offset?: number; p_query?: string };
+        Returns: {
+          banned_until: string;
+          created_at: string;
+          email: string;
+          id: string;
+          org_names: string[];
+        }[];
+      };
+      platform_set_org_role: {
+        Args: {
+          p_org_id: string;
+          p_role: Database["public"]["Enums"]["org_role"];
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
+      platform_stats: {
+        Args: never;
+        Returns: {
+          admins: number;
+          events_24h: number;
+          orgs: number;
+          users: number;
+        }[];
+      };
+      platform_user_sole_owned_orgs: {
+        Args: { p_user_id: string };
+        Returns: {
+          org_id: string;
+          org_name: string;
+        }[];
       };
       provision_account: {
         Args: { p_org_name: string };
@@ -1400,6 +1582,23 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      reactivate_member: {
+        Args: { p_org_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      redeem_invitations: { Args: never; Returns: number };
+      remove_member: {
+        Args: { p_org_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      set_member_role: {
+        Args: {
+          p_new_role: Database["public"]["Enums"]["org_role"];
+          p_org_id: string;
+          p_user_id: string;
+        };
+        Returns: undefined;
       };
       set_widget_layouts: {
         Args: { p_dashboard_id: string; p_layouts: Json };
@@ -1421,7 +1620,13 @@ export type Database = {
         | "people"
         | "date"
         | "numbers"
-        | "dropdown";
+        | "dropdown"
+        | "checkbox"
+        | "rating"
+        | "link"
+        | "email"
+        | "phone"
+        | "files";
       notification_kind:
         | "mention"
         | "assigned"
@@ -1568,7 +1773,20 @@ export const Constants = {
         "cell_changed",
         "update_added",
       ],
-      column_kind: ["text", "status", "people", "date", "numbers", "dropdown"],
+      column_kind: [
+        "text",
+        "status",
+        "people",
+        "date",
+        "numbers",
+        "dropdown",
+        "checkbox",
+        "rating",
+        "link",
+        "email",
+        "phone",
+        "files",
+      ],
       notification_kind: [
         "mention",
         "assigned",

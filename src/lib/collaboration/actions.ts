@@ -158,6 +158,7 @@ export async function createAttachment(input: {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  columnId?: string;
 }): Promise<ActionResult<{ attachmentId: string }>> {
   const parsed = createAttachmentSchema.safeParse(input);
   if (!parsed.success)
@@ -179,9 +180,24 @@ export async function createAttachment(input: {
     .maybeSingle();
   if (itemErr || !item) return fail("Item not found.");
 
-  const prefix = `${item.org_id}/${item.board_id}/${parsed.data.itemId}/`;
+  // Files-column attachments nest the column id into the path; item-level ones
+  // do not. The prefix guard rejects any path outside this org/board/item(/col).
+  const prefix = parsed.data.columnId
+    ? `${item.org_id}/${item.board_id}/${parsed.data.itemId}/${parsed.data.columnId}/`
+    : `${item.org_id}/${item.board_id}/${parsed.data.itemId}/`;
   if (!parsed.data.storagePath.startsWith(prefix))
     return fail("Storage path does not match this item.");
+
+  // A column-scoped attachment must target a Files column on this item's board.
+  if (parsed.data.columnId) {
+    const { data: col } = await supabase
+      .from("columns")
+      .select("id, kind, board_id")
+      .eq("id", parsed.data.columnId)
+      .maybeSingle();
+    if (!col || col.board_id !== item.board_id || col.kind !== "files")
+      return fail("Invalid file column.");
+  }
 
   const { data, error } = await supabase
     .from("attachments")
@@ -189,6 +205,7 @@ export async function createAttachment(input: {
       org_id: item.org_id,
       board_id: item.board_id,
       item_id: parsed.data.itemId,
+      column_id: parsed.data.columnId ?? null,
       uploaded_by: user.id,
       storage_path: parsed.data.storagePath,
       file_name: parsed.data.fileName,

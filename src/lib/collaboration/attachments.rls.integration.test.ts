@@ -181,6 +181,63 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: attachments + storage", () => {
     expect(error).not.toBeNull();
   });
 
+  it("registers a column-scoped attachment under a files column with a nested path", async () => {
+    // Seed a Files column on org A's board.
+    const { data: col, error: colErr } = await userA.anon
+      .from("columns")
+      .insert({
+        org_id: userA.orgId,
+        board_id: userA.boardId,
+        kind: "files",
+        name: "Files",
+        settings: {},
+        position: 50,
+      })
+      .select("id")
+      .single();
+    expect(colErr).toBeNull();
+    const columnId = (col as { id: string }).id;
+
+    // A column-scoped path nests the column id after the item segment.
+    const colPath = `${userA.orgId}/${userA.boardId}/${userA.itemId}/${columnId}/${randomUUID()}-cell.txt`;
+    const { error: upErr } = await userA.anon.storage
+      .from(BUCKET)
+      .upload(colPath, new Blob(["cell"], { type: "text/plain" }));
+    expect(upErr).toBeNull();
+
+    const { data: row, error: rowErr } = await userA.anon
+      .from("attachments")
+      .insert({
+        org_id: userA.orgId,
+        board_id: userA.boardId,
+        item_id: userA.itemId,
+        column_id: columnId,
+        uploaded_by: userA.id,
+        storage_path: colPath,
+        file_name: "cell.txt",
+        mime_type: "text/plain",
+        size_bytes: 4,
+      })
+      .select("id, column_id")
+      .single();
+    expect(rowErr).toBeNull();
+    expect((row as { column_id: string }).column_id).toBe(columnId);
+
+    await admin.storage
+      .from(BUCKET)
+      .remove([colPath])
+      .catch(() => {});
+  });
+
+  it("a different org cannot upload into another org's column-scoped path", async () => {
+    // Leading segment is org A → storage insert RLS denies userB.
+    const foreignColPath = `${userA.orgId}/${userA.boardId}/${userA.itemId}/${randomUUID()}/evil.txt`;
+    const { error } = await userB.anon.storage
+      .from(BUCKET)
+      .upload(foreignColPath, new Blob(["x"]));
+    expect(error).not.toBeNull();
+  });
+
   it("a non-uploader, non-admin member cannot delete the uploader's row", async () => {
     const { error } = await memberAnon
       .from("attachments")

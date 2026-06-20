@@ -9,7 +9,9 @@ export type RollupResult =
       segments: { id: string; label: string; color: string; count: number }[];
     }
   | { kind: "dateSpan"; start: string; end: string }
-  | { kind: "people"; count: number };
+  | { kind: "people"; count: number }
+  | { kind: "checkbox"; checked: number; total: number }
+  | { kind: "rating"; average: number };
 
 type Options = readonly ColumnOption[] | undefined;
 
@@ -79,7 +81,31 @@ export function rollupCell(
         ? { kind: "people", count: ids.size }
         : { kind: "blank" };
     }
+    case "checkbox": {
+      let checked = 0;
+      for (const v of present)
+        if ((v as { checked?: boolean }).checked) checked++;
+      return { kind: "checkbox", checked, total: present.length };
+    }
+    case "rating": {
+      let sum = 0;
+      let n = 0;
+      for (const v of present) {
+        const r = (v as { rating?: number }).rating;
+        if (typeof r === "number") {
+          sum += r;
+          n++;
+        }
+      }
+      return n
+        ? { kind: "rating", average: Math.round((sum / n) * 10) / 10 }
+        : { kind: "blank" };
+    }
     case "text":
+    case "link":
+    case "email":
+    case "phone":
+    case "files":
       return { kind: "blank" };
   }
 }

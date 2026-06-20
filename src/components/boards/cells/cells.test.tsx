@@ -4,10 +4,15 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import {
+  CheckboxCell,
   DateCell,
   DropdownCell,
+  EmailCell,
+  LinkCell,
   NumberCell,
   PeopleCell,
+  PhoneCell,
+  RatingCell,
   StatusCell,
   TextCell,
 } from "./index";
@@ -111,6 +116,44 @@ describe("cell renderers (read-only, 2a)", () => {
     render(<TextCell value={{ text: "x" }} settings={{}} />);
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
+
+  it("CheckboxCell shows a checked state", () => {
+    render(<CheckboxCell value={{ checked: true }} settings={{}} />);
+    expect(screen.getByLabelText(/checked/)).toBeInTheDocument();
+  });
+
+  it("RatingCell shows the rating out of five", () => {
+    render(<RatingCell value={{ rating: 3 }} settings={{}} />);
+    expect(screen.getByLabelText("3 of 5")).toBeInTheDocument();
+  });
+
+  it("LinkCell renders an anchor with href and target=_blank", () => {
+    render(
+      <LinkCell
+        value={{ url: "https://example.com", text: "Site" }}
+        settings={{}}
+      />,
+    );
+    const link = screen.getByRole("link", { name: "Site" });
+    expect(link).toHaveAttribute("href", "https://example.com");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("EmailCell renders a mailto link", () => {
+    render(<EmailCell value={{ email: "a@x.io" }} settings={{}} />);
+    expect(screen.getByRole("link", { name: "a@x.io" })).toHaveAttribute(
+      "href",
+      "mailto:a@x.io",
+    );
+  });
+
+  it("PhoneCell renders a tel link", () => {
+    render(<PhoneCell value={{ phone: "+15551234" }} settings={{}} />);
+    expect(screen.getByRole("link", { name: "+15551234" })).toHaveAttribute(
+      "href",
+      "tel:+15551234",
+    );
+  });
 });
 
 function tableWrapper(qc: QueryClient) {
@@ -157,6 +200,7 @@ function statusPayload(): BoardPayload {
       { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
     ],
     dependencies: [],
+    attachments: [],
   };
 }
 

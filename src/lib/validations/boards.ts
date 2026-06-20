@@ -10,6 +10,12 @@ export const columnKindSchema = z.enum([
   "date",
   "numbers",
   "dropdown",
+  "checkbox",
+  "rating",
+  "link",
+  "email",
+  "phone",
+  "files",
 ]);
 
 // --- shared option shape (status + dropdown) ---
@@ -42,6 +48,12 @@ export function columnSettingsSchema(kind: ColumnKind) {
     case "text":
     case "people":
     case "date":
+    case "checkbox":
+    case "rating":
+    case "link":
+    case "email":
+    case "phone":
+    case "files":
       return emptySettingsSchema;
   }
 }
@@ -66,6 +78,33 @@ export const dateValueSchema = z.object({
 export const numbersValueSchema = z.object({
   n: z.number().finite(),
 });
+export const checkboxValueSchema = z.object({ checked: z.boolean() });
+export const ratingValueSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+});
+/**
+ * `z.string().url()` and `new URL()` both accept `javascript:`, `mailto:`, etc.
+ * Link cells render an `<a href>` that any board viewer can click, so the scheme
+ * MUST be restricted to http(s) to prevent stored XSS (spec §3.1).
+ */
+export function isHttpUrl(u: string): boolean {
+  try {
+    return ["http:", "https:"].includes(new URL(u).protocol);
+  } catch {
+    return false;
+  }
+}
+export const linkValueSchema = z.object({
+  url: z.string().url().refine(isHttpUrl, "URL must be http or https"),
+  text: z.string().optional(),
+});
+export const emailValueSchema = z.object({ email: z.string().email() });
+export const phoneValueSchema = z.object({
+  phone: z.string().trim().min(1).max(40),
+});
+// Files store no cell_values row (content derives from attachments); this case
+// exists only to keep the switch exhaustive and is never used by upsertCell.
+export const filesValueSchema = z.object({}).strict();
 
 export function cellValueSchema(kind: ColumnKind) {
   switch (kind) {
@@ -81,5 +120,17 @@ export function cellValueSchema(kind: ColumnKind) {
       return dateValueSchema;
     case "numbers":
       return numbersValueSchema;
+    case "checkbox":
+      return checkboxValueSchema;
+    case "rating":
+      return ratingValueSchema;
+    case "link":
+      return linkValueSchema;
+    case "email":
+      return emailValueSchema;
+    case "phone":
+      return phoneValueSchema;
+    case "files":
+      return filesValueSchema;
   }
 }

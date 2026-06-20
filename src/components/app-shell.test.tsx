@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AppShell } from "./app-shell";
 import { useUIStore } from "@/stores/ui";
 
@@ -9,8 +10,14 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({}),
 }));
 
+// Radix's DropdownMenu relies on pointer-capture + scrollIntoView, which jsdom
+// doesn't implement. Polyfill them so the menu can open in tests.
 beforeEach(() => {
   useUIStore.setState({ sidebarCollapsed: false, hasHydrated: true });
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.setPointerCapture ??= () => {};
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
 });
 
 describe("AppShell", () => {
@@ -86,5 +93,43 @@ describe("AppShell", () => {
     expect(screen.getByText("Goals").closest("button")).toBeDisabled();
     expect(screen.getByText("Portfolios").closest("button")).toBeDisabled();
     expect(screen.getByText("Inbox").closest("button")).toBeDisabled();
+  });
+
+  it("shows a Platform admin link in the user menu for platform admins", async () => {
+    render(
+      <AppShell user={{ email: "info@synapse-solutions.ai" }} isPlatformAdmin>
+        <div>content</div>
+      </AppShell>,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /open user menu/i }),
+    );
+
+    // asChild merges the menuitem role onto the Link's <a>, so href is on it.
+    const adminLink = await screen.findByRole("menuitem", {
+      name: /platform admin/i,
+    });
+    expect(adminLink).toHaveAttribute("href", "/admin");
+  });
+
+  it("hides the Platform admin link for non-platform users", async () => {
+    render(
+      <AppShell user={{ email: "member@example.com" }}>
+        <div>content</div>
+      </AppShell>,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /open user menu/i }),
+    );
+
+    // The menu opened (Settings is present) but no platform-admin entry.
+    expect(
+      await screen.findByRole("menuitem", { name: /settings/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /platform admin/i }),
+    ).not.toBeInTheDocument();
   });
 });

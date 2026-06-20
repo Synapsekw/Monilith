@@ -7,6 +7,12 @@ const DEFAULT_NAME: Record<ColumnKind, string> = {
   date: "Date",
   numbers: "Numbers",
   dropdown: "Dropdown",
+  checkbox: "Checkbox",
+  rating: "Rating",
+  link: "Link",
+  email: "Email",
+  phone: "Phone",
+  files: "Files",
 };
 
 function opt(label: string, color: string) {

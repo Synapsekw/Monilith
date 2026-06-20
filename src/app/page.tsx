@@ -2,13 +2,20 @@ import { redirect } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { MonolithHero } from "@/components/landing/monolith-hero";
 import { AppShell } from "@/components/app-shell";
-import { getUser, getUserOrgs } from "@/lib/auth/session";
+import {
+  getUser,
+  getUserOrgs,
+  enforcePasswordChange,
+} from "@/lib/auth/session";
+import { isPlatformAdmin } from "@/lib/platform/guard";
 import { listBoards } from "@/lib/boards/queries";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function Home() {
   const user = await getUser();
   if (!user) return <MonolithHero />;
+
+  enforcePasswordChange(user);
 
   const orgs = await getUserOrgs();
   if (orgs.length === 0) redirect("/onboarding");
@@ -19,9 +26,10 @@ export default async function Home() {
   if (boards.length > 0) redirect(`/boards/${boards[0].id}`);
 
   const supabase = await createClient();
-  const { data: workspaces } = await supabase
-    .from("workspaces")
-    .select("id, name");
+  const [{ data: workspaces }, platformAdmin] = await Promise.all([
+    supabase.from("workspaces").select("id, name"),
+    isPlatformAdmin(),
+  ]);
 
   return (
     <AppShell
@@ -35,6 +43,7 @@ export default async function Home() {
       org={{ name: org.name }}
       workspaces={workspaces ?? []}
       boards={[]}
+      isPlatformAdmin={platformAdmin}
     >
       <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="bg-surface flex size-12 items-center justify-center rounded-xl border">

@@ -30,4 +30,14 @@ describe("RollupCell", () => {
     const { container } = render(<RollupCell result={{ kind: "blank" }} />);
     expect(container.textContent).toBe("");
   });
+
+  it("renders a checkbox checked/total summary", () => {
+    render(<RollupCell result={{ kind: "checkbox", checked: 2, total: 5 }} />);
+    expect(screen.getByText(/2\/5/)).toBeInTheDocument();
+  });
+
+  it("renders a rating average", () => {
+    render(<RollupCell result={{ kind: "rating", average: 3.5 }} />);
+    expect(screen.getByText(/3\.5/)).toBeInTheDocument();
+  });
 });

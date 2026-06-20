@@ -7,6 +7,10 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
+    // Runs once after the whole run: purges leaked @example.com cloud test
+    // data provisioned by *.integration.test.ts suites. See
+    // src/test/global-teardown.ts (exports a named `teardown`).
+    globalSetup: ["./src/test/global-teardown.ts"],
     globals: true,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["e2e/**", "node_modules/**", ".next/**"],

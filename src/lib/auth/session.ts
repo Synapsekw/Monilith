@@ -19,11 +19,20 @@ export const getUser = cache(async (): Promise<User | null> => {
   return user;
 });
 
+/** Redirect a flagged user to the forced password-change screen.
+ * The flag is set by the platform admin via app_metadata.must_change_password. */
+export function enforcePasswordChange(user: User): void {
+  if (user.app_metadata?.must_change_password === true) {
+    redirect("/change-password");
+  }
+}
+
 /** Returns the authenticated user, redirecting to /login when absent. */
 export async function requireUser(): Promise<User> {
   const user = await getUser();
   // redirect() throws — keep it outside any try/catch.
   if (!user) redirect("/login");
+  enforcePasswordChange(user);
   return user;
 }
 

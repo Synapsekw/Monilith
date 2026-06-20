@@ -1,4 +1,6 @@
+import { Check, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
+import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -113,6 +115,106 @@ export function NumberCell({
   );
 }
 
+export function CheckboxCell({
+  value,
+}: {
+  value: { checked: boolean } | null;
+  settings: Settings;
+}) {
+  const checked = value?.checked ?? false;
+  return (
+    <span
+      aria-label={checked ? "checked" : "unchecked"}
+      className="flex items-center"
+    >
+      <span
+        className={`flex size-4 items-center justify-center rounded border ${checked ? "bg-primary border-primary" : "border-muted-foreground/40"}`}
+      >
+        {checked && <Check className="text-primary-foreground size-3" />}
+      </span>
+    </span>
+  );
+}
+
+export function RatingCell({
+  value,
+}: {
+  value: { rating: number } | null;
+  settings: Settings;
+}) {
+  const r = value?.rating ?? 0;
+  return (
+    <span aria-label={`${r} of 5`} className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`size-3.5 ${i <= r ? "fill-current text-amber-400" : "text-muted-foreground/30"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
+export function LinkCell({
+  value,
+}: {
+  value: { url: string; text?: string } | null;
+  settings: Settings;
+}) {
+  if (!value?.url) return <span className="text-sm" />;
+  // Defense-in-depth: never render a non-http(s) href (e.g. a `javascript:` URL
+  // that slipped past an older boundary) as a clickable anchor.
+  if (!isHttpUrl(value.url))
+    return <span className="truncate text-sm">{value.text || value.url}</span>;
+  return (
+    <a
+      href={value.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="text-primary truncate text-sm underline-offset-2 hover:underline"
+    >
+      {value.text || value.url}
+    </a>
+  );
+}
+
+export function EmailCell({
+  value,
+}: {
+  value: { email: string } | null;
+  settings: Settings;
+}) {
+  if (!value?.email) return <span className="text-sm" />;
+  return (
+    <a
+      href={`mailto:${value.email}`}
+      onClick={(e) => e.stopPropagation()}
+      className="text-primary truncate text-sm hover:underline"
+    >
+      {value.email}
+    </a>
+  );
+}
+
+export function PhoneCell({
+  value,
+}: {
+  value: { phone: string } | null;
+  settings: Settings;
+}) {
+  if (!value?.phone) return <span className="text-sm" />;
+  return (
+    <a
+      href={`tel:${value.phone}`}
+      onClick={(e) => e.stopPropagation()}
+      className="text-primary truncate text-sm hover:underline"
+    >
+      {value.phone}
+    </a>
+  );
+}
+
 /** Dispatch a cell to its kind's renderer. Read-only in 2a. */
 export function CellRenderer({
   kind,
@@ -163,6 +265,45 @@ export function CellRenderer({
       return (
         <NumberCell value={value as { n: number } | null} settings={settings} />
       );
+    case "checkbox":
+      return (
+        <CheckboxCell
+          value={value as { checked: boolean } | null}
+          settings={settings}
+        />
+      );
+    case "rating":
+      return (
+        <RatingCell
+          value={value as { rating: number } | null}
+          settings={settings}
+        />
+      );
+    case "link":
+      return (
+        <LinkCell
+          value={value as { url: string; text?: string } | null}
+          settings={settings}
+        />
+      );
+    case "email":
+      return (
+        <EmailCell
+          value={value as { email: string } | null}
+          settings={settings}
+        />
+      );
+    case "phone":
+      return (
+        <PhoneCell
+          value={value as { phone: string } | null}
+          settings={settings}
+        />
+      );
+    // Files cells are special-cased in BoardTable's EditableCell (they need the
+    // board cache + upload/lightbox wiring), not rendered through this switch.
+    case "files":
+      return null;
     default:
       return null;
   }

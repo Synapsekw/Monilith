@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pulse — Work OS",
+  title: "Monolith — Work OS",
   description:
-    "Pulse — a cloud-native Work OS. Visual boards, deep hierarchy, goals, and automations in one coherent product.",
+    "Monolith — a cloud-native Work OS. Visual boards, deep hierarchy, goals, and automations in one coherent product.",
 };
 
 export default function RootLayout({
