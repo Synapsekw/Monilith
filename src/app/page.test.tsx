@@ -18,6 +18,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/auth/session", () => ({
   getUser: () => getUser(),
   getUserOrgs: () => getUserOrgs(),
+  // No-op for these cases: the test users carry no must_change_password flag.
+  enforcePasswordChange: () => {},
 }));
 vi.mock("@/lib/boards/queries", () => ({ listBoards: () => listBoards() }));
 vi.mock("@/lib/supabase/server", () => ({

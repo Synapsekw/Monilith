@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { MonolithHero } from "@/components/landing/monolith-hero";
 import { AppShell } from "@/components/app-shell";
-import { getUser, getUserOrgs } from "@/lib/auth/session";
+import {
+  getUser,
+  getUserOrgs,
+  enforcePasswordChange,
+} from "@/lib/auth/session";
 import { isPlatformAdmin } from "@/lib/platform/guard";
 import { listBoards } from "@/lib/boards/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -10,6 +14,8 @@ import { createClient } from "@/lib/supabase/server";
 export default async function Home() {
   const user = await getUser();
   if (!user) return <MonolithHero />;
+
+  enforcePasswordChange(user);
 
   const orgs = await getUserOrgs();
   if (orgs.length === 0) redirect("/onboarding");

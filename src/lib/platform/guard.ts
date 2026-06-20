@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { enforcePasswordChange } from "@/lib/auth/session";
 
 /** True if the current authenticated user is a platform super-admin. Fails closed. */
 export const isPlatformAdmin = cache(async (): Promise<boolean> => {
@@ -19,6 +20,7 @@ export async function requirePlatformAdmin(): Promise<User> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  enforcePasswordChange(user);
   if (!(await isPlatformAdmin())) redirect("/");
   return user;
 }
