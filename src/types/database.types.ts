@@ -1626,7 +1626,8 @@ export type Database = {
         | "link"
         | "email"
         | "phone"
-        | "files";
+        | "files"
+        | "time_tracking";
       notification_kind:
         | "mention"
         | "assigned"
@@ -1786,6 +1787,7 @@ export const Constants = {
         "email",
         "phone",
         "files",
+        "time_tracking",
       ],
       notification_kind: [
         "mention",
