@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
-import { listBoards } from "@/lib/boards/queries";
+import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
 import { listDashboards } from "@/lib/dashboards/queries";
 import { requireUser, getUserOrgs } from "@/lib/auth/session";
 import { isPlatformAdmin } from "@/lib/platform/guard";
@@ -13,14 +13,21 @@ export default async function SettingsLayout({
 }) {
   const user = await requireUser();
   const supabase = await createClient();
-  const [orgs, boards, dashboards, { data: workspaces }, platformAdmin] =
-    await Promise.all([
-      getUserOrgs(),
-      listBoards(),
-      listDashboards(),
-      supabase.from("workspaces").select("id, name"),
-      isPlatformAdmin(),
-    ]);
+  const [
+    orgs,
+    boards,
+    sharedBoards,
+    dashboards,
+    { data: workspaces },
+    platformAdmin,
+  ] = await Promise.all([
+    getUserOrgs(),
+    listMyBoards(),
+    listSharedBoards(),
+    listDashboards(),
+    supabase.from("workspaces").select("id, name"),
+    isPlatformAdmin(),
+  ]);
   return (
     <AppShell
       currentUserId={user.id}
@@ -34,6 +41,7 @@ export default async function SettingsLayout({
       org={{ name: orgs[0]?.name ?? "Monolith" }}
       workspaces={workspaces ?? []}
       boards={boards}
+      sharedBoards={sharedBoards}
       dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
       isPlatformAdmin={platformAdmin}
     >

@@ -8,6 +8,7 @@ import { GanttBoard } from "@/components/boards/GanttBoard";
 import { KanbanBoard } from "@/components/boards/KanbanBoard";
 import { ItemPanel } from "@/components/boards/item-panel/ItemPanel";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import type { BoardCache } from "@/lib/boards/cache";
 import type { BoardPayload } from "@/lib/boards/queries";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
@@ -31,11 +32,15 @@ export function BoardViews({
   members,
   initialViewId,
   currentUserId,
+  access,
+  grants,
 }: {
   payload: BoardPayload;
   members: EditorMember[];
   initialViewId: string;
   currentUserId: string;
+  access: BoardAccess;
+  grants: HeaderGrant[];
 }) {
   useBoardCache(payload.board.id, payload as unknown as BoardCache);
   useBoardRealtime(payload.board.id);
@@ -63,18 +68,24 @@ export function BoardViews({
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
+        access={access}
+        grants={grants}
       />
     ) : selected?.kind === "calendar" ? (
       <CalendarBoard
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
+        access={access}
+        grants={grants}
       />
     ) : selected?.kind === "timeline" ? (
       <GanttBoard
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
+        access={access}
+        grants={grants}
       />
     ) : (
       <BoardTable
@@ -82,6 +93,8 @@ export function BoardViews({
         members={members}
         selectedViewId={activeViewId}
         currentUserId={currentUserId}
+        access={access}
+        grants={grants}
       />
     );
 

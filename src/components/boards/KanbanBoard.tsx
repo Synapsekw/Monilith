@@ -35,6 +35,7 @@ import {
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
+import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { CellRenderer } from "@/components/boards/cells";
 import type { EditorMember } from "@/components/boards/cells/editors";
 
@@ -88,6 +89,8 @@ export function KanbanBoard({
   payload,
   selectedViewId,
   members = [],
+  access = "owner",
+  grants = [],
 }: {
   payload: BoardPayload;
   // Accepted for parity with BoardTable / the route's prop contract. The card
@@ -95,6 +98,8 @@ export function KanbanBoard({
   // needed here yet — kept in the signature for the shared call shape.
   members?: EditorMember[];
   selectedViewId: string;
+  access?: BoardAccess;
+  grants?: HeaderGrant[];
 }) {
   // Hydrate the shared ["board", boardId] cache + realtime exactly like
   // BoardTable so optimistic + realtime patches re-render this view too.
@@ -153,6 +158,8 @@ export function KanbanBoard({
           selectedViewId={selectedViewId}
           columns={cache.columns}
           members={members}
+          access={access}
+          grants={grants}
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -199,6 +206,8 @@ export function KanbanBoard({
         selectedViewId={selectedViewId}
         columns={cache.columns}
         members={members}
+        access={access}
+        grants={grants}
       />
 
       {/* Grouping-column picker — native select keeps it dependency-light. */}

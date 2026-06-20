@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const { getUser, getUserOrgs, listBoards, redirect } = vi.hoisted(() => ({
+const { getUser, getUserOrgs, listMyBoards, redirect } = vi.hoisted(() => ({
   getUser: vi.fn(),
   getUserOrgs: vi.fn(),
-  listBoards: vi.fn(),
+  listMyBoards: vi.fn(),
   // Real next/navigation redirect() throws to halt rendering — mirror that.
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
@@ -21,7 +21,9 @@ vi.mock("@/lib/auth/session", () => ({
   // No-op for these cases: the test users carry no must_change_password flag.
   enforcePasswordChange: () => {},
 }));
-vi.mock("@/lib/boards/queries", () => ({ listBoards: () => listBoards() }));
+vi.mock("@/lib/boards/queries", () => ({
+  listMyBoards: () => listMyBoards(),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: () => ({ select: async () => ({ data: [] }) }),
@@ -58,7 +60,7 @@ describe("Home (root route)", () => {
       user_metadata: {},
     });
     getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
-    listBoards.mockResolvedValue([{ id: "b1" }]);
+    listMyBoards.mockResolvedValue([{ id: "b1" }]);
 
     await expect(Home()).rejects.toThrow("REDIRECT:/boards/b1");
     expect(redirect).toHaveBeenCalledWith("/boards/b1");
@@ -83,7 +85,7 @@ describe("Home (root route)", () => {
       user_metadata: {},
     });
     getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
-    listBoards.mockResolvedValue([]);
+    listMyBoards.mockResolvedValue([]);
 
     render(await Home());
 

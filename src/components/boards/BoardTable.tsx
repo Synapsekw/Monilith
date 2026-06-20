@@ -39,6 +39,7 @@ import {
 } from "@/lib/collaboration/actions";
 import { RollupCell } from "@/components/boards/RollupCell";
 import { BoardHeader } from "@/components/boards/BoardHeader";
+import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
 import {
   CellEditor,
@@ -174,11 +175,15 @@ export function BoardTable({
   members = [],
   selectedViewId,
   currentUserId = "",
+  access = "owner",
+  grants = [],
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
   selectedViewId: string;
   currentUserId?: string;
+  access?: BoardAccess;
+  grants?: HeaderGrant[];
 }) {
   // Hydrate the ["board", boardId] cache once from the server payload; read all
   // board data from the cache so optimistic + realtime patches re-render.
@@ -352,6 +357,8 @@ export function BoardTable({
         selectedViewId={selectedViewId}
         columns={columns}
         members={members}
+        access={access}
+        grants={grants}
       />
 
       <div className="flex-1 overflow-auto">

@@ -8,7 +8,7 @@ import {
   enforcePasswordChange,
 } from "@/lib/auth/session";
 import { isPlatformAdmin } from "@/lib/platform/guard";
-import { listBoards } from "@/lib/boards/queries";
+import { listMyBoards } from "@/lib/boards/queries";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function Home() {
@@ -22,7 +22,7 @@ export default async function Home() {
 
   const org = orgs[0];
 
-  const boards = await listBoards();
+  const boards = await listMyBoards();
   if (boards.length > 0) redirect(`/boards/${boards[0].id}`);
 
   const supabase = await createClient();
@@ -43,6 +43,7 @@ export default async function Home() {
       org={{ name: org.name }}
       workspaces={workspaces ?? []}
       boards={[]}
+      sharedBoards={[]}
       isPlatformAdmin={platformAdmin}
     >
       <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
