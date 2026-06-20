@@ -135,6 +135,13 @@ describe("BoardsNav", () => {
             owner_name: "Dana",
             access_level: "viewer",
           },
+          {
+            id: "b4",
+            name: "Editable Plan",
+            position: 1,
+            owner_name: "Mo",
+            access_level: "editor",
+          },
         ]}
         workspaces={[{ id: "w", name: "WS" }]}
       />,
@@ -144,5 +151,12 @@ describe("BoardsNav", () => {
     expect(screen.getByText("Q3 Launch")).toBeInTheDocument();
     expect(screen.getByLabelText("Shared with others")).toBeInTheDocument();
     expect(screen.getByText(/Dana/)).toBeInTheDocument();
+
+    // Viewer-access shared boards get a subtle read-only hint; editor ones don't.
+    const viewerHints = screen.getAllByLabelText("View only");
+    expect(viewerHints).toHaveLength(1);
+    expect(screen.getByText("Q3 Launch").parentElement).toContainElement(
+      viewerHints[0],
+    );
   });
 });

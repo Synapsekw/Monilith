@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FolderKanban, Users2 } from "lucide-react";
+import { Eye, FolderKanban, Users2 } from "lucide-react";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import { cn } from "@/lib/utils";
 import {
@@ -157,7 +157,15 @@ export function BoardsNav({
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
-                <span className="truncate">{b.name}</span>
+                <span className="flex items-center gap-1">
+                  <span className="truncate">{b.name}</span>
+                  {b.access_level === "viewer" ? (
+                    <Eye
+                      aria-label="View only"
+                      className="text-muted-foreground size-3 shrink-0"
+                    />
+                  ) : null}
+                </span>
                 {b.owner_name ? (
                   <span className="text-muted-foreground truncate text-xs">
                     · from {b.owner_name}

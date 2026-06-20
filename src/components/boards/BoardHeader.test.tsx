@@ -24,6 +24,17 @@ vi.mock("@/components/boards/automations/AutomationsDialog", () => ({
   AutomationsDialog: () => <div data-testid="automations-dialog" />,
 }));
 
+// ShareBoardDialog transitively imports the sharing Server Actions module; stub
+// the dialog (we assert on the header's Share trigger, not the dialog body).
+vi.mock("@/components/boards/ShareBoardDialog", () => ({
+  ShareBoardDialog: () => <div data-testid="share-dialog" />,
+}));
+
+vi.mock("@/lib/boards/sharing-actions", () => ({
+  shareBoard: vi.fn(),
+  unshareBoard: vi.fn(),
+}));
+
 const views = [
   { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
 ];
@@ -55,5 +66,73 @@ describe("BoardHeader", () => {
     expect(renameBoard).toHaveBeenCalledWith("Q2 roadmap", {
       onSuccess: expect.any(Function),
     });
+  });
+
+  it("owner: shows the Share affordance, no View only badge, and a rename control", () => {
+    render(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="owner"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Share board" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("View only")).not.toBeInTheDocument();
+    // The board name is an editable control (button), not a static heading.
+    expect(
+      screen.getByRole("button", { name: "Sprint backlog" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Sprint backlog" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("editor: hides Share, shows no View only badge, but keeps the rename control", () => {
+    render(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="editor"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Share board" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("View only")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sprint backlog" }),
+    ).toBeInTheDocument();
+  });
+
+  it("viewer: shows the View only badge, hides Share, and renders the name as a static heading", () => {
+    render(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="viewer"
+      />,
+    );
+
+    expect(screen.getByText("View only")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Share board" }),
+    ).not.toBeInTheDocument();
+    // Rename affordance is absent: the name is a static heading, not a control.
+    expect(
+      screen.getByRole("heading", { name: "Sprint backlog" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sprint backlog" }),
+    ).not.toBeInTheDocument();
   });
 });
