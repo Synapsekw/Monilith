@@ -8,7 +8,7 @@ tags: [session, attachments, preview, planning]
 related:
   - "[[2026-06-20-document-preview-pdf-design]]"
   - "[[2026-06-17-1400-phase4c-attachments]]"
-  - "[[pdf-preview-queued]]"
+  - "[[2026-06-20-2202-phase6f-pdf-preview-build]]"
 ---
 
 # Inline PDF preview — spec + plan (6f)
