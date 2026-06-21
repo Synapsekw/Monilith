@@ -16,6 +16,12 @@ It deliberately does **not** merge task branches (that is `scripts/finish-task.s
 build features. It fills the one real gap in the current workflow: the `develop → main` promotion,
 which AGENTS.md describes as manual today ("open a develop→main PR, merge once CI passes").
 
+**Promotion is all-or-nothing — the whole `develop` branch as one bundle.** Pulse builds many
+features on `develop` and ships them together, never cherry-picked. The command always promotes the
+**complete** `origin/main..origin/develop` delta (whole branch → whole branch via one PR); there is
+no subset/feature-selection mode. Work that should not yet reach production simply must not be merged
+into `develop`.
+
 ## Context (verified against the live repo)
 
 - **Repo slug:** `Synapsekw/Monilith` (note the spelling — it is the real remote, not a typo to fix).
