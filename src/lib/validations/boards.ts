@@ -17,6 +17,7 @@ export const columnKindSchema = z.enum([
   "phone",
   "files",
   "time_tracking",
+  "relation",
 ]);
 
 // --- shared option shape (status + dropdown) ---
@@ -37,6 +38,12 @@ export const numbersSettingsSchema = z.object({
   unit: z.string().optional(),
   precision: z.number().int().min(0).max(10).optional(),
 });
+// Relation column connects to one target board; cells may link one or many
+// items from it. Stored snake_case in columns.settings jsonb.
+export const relationSettingsSchema = z.object({
+  target_board_id: z.string().uuid(),
+  allow_multiple: z.boolean().default(true),
+});
 
 export function columnSettingsSchema(kind: ColumnKind) {
   switch (kind) {
@@ -46,6 +53,8 @@ export function columnSettingsSchema(kind: ColumnKind) {
       return dropdownSettingsSchema;
     case "numbers":
       return numbersSettingsSchema;
+    case "relation":
+      return relationSettingsSchema;
     case "text":
     case "people":
     case "date":
@@ -114,6 +123,10 @@ export const timeTrackingValueSchema = z.object({
   estimateSeconds: z.number().int().positive(),
 });
 
+// Relation cells store no cell_values row (content derives from relation_links);
+// this case exists only to keep the switch exhaustive and is never used by upsertCell.
+export const relationValueSchema = z.object({}).strict();
+
 export function cellValueSchema(kind: ColumnKind) {
   switch (kind) {
     case "text":
@@ -142,5 +155,7 @@ export function cellValueSchema(kind: ColumnKind) {
       return filesValueSchema;
     case "time_tracking":
       return timeTrackingValueSchema;
+    case "relation":
+      return relationValueSchema;
   }
 }

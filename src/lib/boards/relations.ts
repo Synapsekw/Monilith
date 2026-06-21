@@ -13,11 +13,6 @@ export type RelationLink = {
   position: number;
 };
 
-export type RelationSettings = {
-  targetBoardId: string;
-  allowMultiple: boolean;
-};
-
 /** Sort links by stored position (stable for chip rendering). */
 export function sortLinks(links: RelationLink[]): RelationLink[] {
   return [...links].sort((a, b) => a.position - b.position);

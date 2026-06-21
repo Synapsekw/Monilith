@@ -12,6 +12,7 @@ import {
   Phone,
   Paperclip,
   Timer,
+  Waypoints,
 } from "lucide-react";
 
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -37,6 +38,7 @@ export const COLUMN_KIND_META: Record<ColumnKind, KindMeta> = {
   phone: { label: "Phone", Icon: Phone, hasOptions: false },
   files: { label: "Files", Icon: Paperclip, hasOptions: false },
   time_tracking: { label: "Time tracking", Icon: Timer, hasOptions: false },
+  relation: { label: "Relation", Icon: Waypoints, hasOptions: false },
 };
 
 export const COLUMN_KIND_ORDER: ColumnKind[] = [
@@ -53,4 +55,5 @@ export const COLUMN_KIND_ORDER: ColumnKind[] = [
   "phone",
   "files",
   "time_tracking",
+  "relation",
 ];
