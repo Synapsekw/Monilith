@@ -13,6 +13,8 @@ import { Brand } from "@/components/brand/brand";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { PlatformNav } from "@/components/platform/PlatformNav";
+import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
+import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -36,12 +38,14 @@ export function Sidebar({
   workspaces,
   dashboards,
   isPlatformAdmin,
+  isOrgAdmin,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
   workspaces: { id: string; name: string }[];
   dashboards: { id: string; name: string }[];
   isPlatformAdmin?: boolean;
+  isOrgAdmin?: boolean;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
@@ -178,16 +182,19 @@ export function Sidebar({
 
         {!isCollapsed && workspaces.length > 0 ? (
           <div className="mt-2 flex flex-col gap-0.5 px-2">
-            <p className="text-muted-foreground px-3 py-1 text-xs font-medium">
-              Workspaces
-            </p>
+            <div className="flex items-center px-3 py-1">
+              <p className="text-muted-foreground text-xs font-medium">
+                Workspaces
+              </p>
+              <NewWorkspaceDialog />
+            </div>
             {workspaces.map((workspace) => (
-              <span
+              <WorkspaceNavItem
                 key={workspace.id}
-                className="text-muted-foreground truncate rounded-md px-3 py-1.5 text-sm"
-              >
-                {workspace.name}
-              </span>
+                workspace={workspace}
+                isOrgAdmin={!!isOrgAdmin}
+                isLast={workspaces.length <= 1}
+              />
             ))}
           </div>
         ) : null}
