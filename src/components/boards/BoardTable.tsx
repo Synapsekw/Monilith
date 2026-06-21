@@ -832,18 +832,15 @@ function GroupSection({
   const [name, setName] = useState(group.name);
   const rowAreaRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-  // The shared scroll container lives in the parent (BoardTable). Its ref is not
-  // yet attached when this child first commits, so the virtualizer reads a null
-  // scroll element and yields 0 rows. Flip `scrollReady` once the element is
-  // present to force one extra render — the virtualizer re-runs getScrollElement
-  // and binds the now-mounted container.
+  // The shared scroll container is owned by the parent (BoardTable); during this
+  // child's first commit the parent's ref isn't attached yet, so the virtualizer
+  // reads a null scroll element and yields 0 rows. A passive effect populates the
+  // ref, then flips `scrollReady` once to force a single extra render so the
+  // virtualizer re-runs getScrollElement and binds the now-mounted container.
+  // Value is intentionally unused — the state write forces one re-render so the
+  // virtualizer re-runs getScrollElement once the parent ref is attached.
   const [scrollReady, setScrollReady] = useState(false);
 
-  // The shared scroll container is owned by the parent (BoardTable); during this
-  // child's first (layout-phase) commit the parent's ref isn't attached yet, so
-  // the virtualizer reads a null scroll element and yields 0 rows. By a passive
-  // effect the ref is populated — flip `scrollReady` once to force a single
-  // extra render so the virtualizer re-runs getScrollElement and binds it.
   useEffect(() => {
     if (!scrollReady && scrollContainerRef.current) setScrollReady(true);
   }, [scrollReady, scrollContainerRef]);

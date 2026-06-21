@@ -670,6 +670,31 @@ function renderMany(count: number) {
   );
 }
 
+function twoGroupsPayload(perGroup: number) {
+  const mkItems = (gid: string, prefix: string) =>
+    Array.from({ length: perGroup }, (_, i) => ({
+      id: `${prefix}${i + 1}`,
+      board_id: "b1",
+      org_id: "o1",
+      group_id: gid,
+      parent_id: null,
+      name: `${prefix} ${i + 1}`,
+      position: i,
+    }));
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      { id: "g1", board_id: "b1", org_id: "o1", name: "Group 1", color: "#0073ea", position: 0 },
+      { id: "g2", board_id: "b1", org_id: "o1", name: "Group 2", color: "#00c875", position: 1 },
+    ],
+    columns: [],
+    items: [...mkItems("g1", "Alpha"), ...mkItems("g2", "Beta")],
+    cellValues: [],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
 describe("BoardTable frozen Name column", () => {
   it("does not wrap group rows in a nested scroll container (regression: sticky freeze)", () => {
     renderMany(3);
@@ -696,5 +721,24 @@ describe("BoardTable frozen Name column", () => {
     scroller.scrollLeft = 120;
     fireEvent.scroll(scroller);
     expect(scroller).toHaveAttribute("data-scrolledx", "true");
+  });
+
+  it("renders windowed rows for every group against the shared scroll container", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable payload={twoGroupsPayload(30)} selectedViewId="v1" />
+      </QueryClientProvider>,
+    );
+    // Each group has its own non-scrolling row area...
+    expect(screen.getByTestId("group-rows-g1")).toBeInTheDocument();
+    expect(screen.getByTestId("group-rows-g2")).toBeInTheDocument();
+    // ...and BOTH groups actually mount rows (guards the "group 2 renders 0
+    // rows" regression in the shared-scroll / scrollMargin wiring)...
+    expect(screen.getByText("Alpha 1")).toBeInTheDocument();
+    expect(screen.getByText("Beta 1")).toBeInTheDocument();
+    // ...while still windowing (far-bottom rows of each group are virtualized out).
+    expect(screen.queryByText("Alpha 30")).not.toBeInTheDocument();
+    expect(screen.queryByText("Beta 30")).not.toBeInTheDocument();
   });
 });
