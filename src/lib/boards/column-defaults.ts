@@ -14,6 +14,7 @@ const DEFAULT_NAME: Record<ColumnKind, string> = {
   phone: "Phone",
   files: "Files",
   time_tracking: "Time tracking",
+  relation: "Relation",
 };
 
 function opt(label: string, color: string) {

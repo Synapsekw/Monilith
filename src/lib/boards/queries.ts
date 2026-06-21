@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database.types";
+import type { RelationLink } from "@/lib/boards/relations";
 
 export type Board = Tables<"boards">;
 export type Group = Tables<"groups">;
@@ -23,6 +24,7 @@ export type BoardPayload = {
   dependencies: ItemDependency[];
   attachments: Attachment[];
   timeEntries: TimeEntry[];
+  relationLinks: RelationLink[];
 };
 
 export type BoardListEntry = Pick<
@@ -142,6 +144,7 @@ export async function getBoardPayload(
     depsRes,
     attachmentsRes,
     timeEntriesRes,
+    relationLinksRes,
   ] = await Promise.all([
     supabase
       .from("groups")
@@ -186,7 +189,36 @@ export async function getBoardPayload(
       .eq("board_id", boardId)
       .order("created_at", { ascending: false })
       .limit(1000),
+    // Bounded by relation_links_board_idx. Linked-item NAMES are resolved in a
+    // second RLS-scoped query below (the targets live on another board).
+    supabase
+      .from("relation_links")
+      .select("*")
+      .eq("board_id", boardId)
+      .order("position", { ascending: true })
+      .limit(2000),
   ]);
+
+  // Resolve linked-item names (targets are on other boards). RLS auto-filters
+  // to readable boards → a name the caller can't see stays null (chip omitted).
+  const rawLinks = relationLinksRes.data ?? [];
+  const linkedIds = [...new Set(rawLinks.map((l) => l.linked_item_id))];
+  const namesById = new Map<string, string>();
+  if (linkedIds.length > 0) {
+    const { data: linkedItems } = await supabase
+      .from("items")
+      .select("id, name")
+      .in("id", linkedIds);
+    for (const it of linkedItems ?? []) namesById.set(it.id, it.name);
+  }
+  const relationLinks: RelationLink[] = rawLinks.map((l) => ({
+    id: l.id,
+    itemId: l.item_id,
+    columnId: l.column_id,
+    linkedItemId: l.linked_item_id,
+    linkedItemName: namesById.get(l.linked_item_id) ?? null,
+    position: l.position,
+  }));
 
   return {
     board,
@@ -198,6 +230,7 @@ export async function getBoardPayload(
     dependencies: depsRes.data ?? [],
     attachments: attachmentsRes.data ?? [],
     timeEntries: timeEntriesRes.data ?? [],
+    relationLinks,
   };
 }
 

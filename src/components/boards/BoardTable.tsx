@@ -32,6 +32,20 @@ import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
 import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
+import { RelationCell } from "@/components/boards/cells/RelationCell";
+import { RelationColumnConfig } from "@/components/boards/RelationColumnConfig";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  listRelationCandidates,
+  listRelationTargetBoards,
+} from "@/lib/boards/relation-candidates";
+import { relationRollup, type RelationLink } from "@/lib/boards/relations";
 import { FilePreviewLightbox } from "@/components/boards/item-panel/FilePreviewLightbox";
 import {
   getAttachmentDownloadUrl,
@@ -56,6 +70,7 @@ import {
   cellKey,
   filesForCell,
   timeEntriesForCell,
+  relationLinksForCell,
 } from "@/lib/boards/cache";
 import { countOptionUsage } from "@/lib/boards/option-edit";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
@@ -139,6 +154,12 @@ type CellControls = {
     columnId: string,
     estimateSeconds: number | null,
   ) => void;
+  // ─── Relation callbacks ──────────────────────────────────────────────────────
+  setRelationLinks: (vars: {
+    itemId: string;
+    columnId: string;
+    links: RelationLink[];
+  }) => void;
 };
 
 const ROW_HEIGHT = 36; // direction C density
@@ -198,6 +219,12 @@ export function BoardTable({
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
+  // Relation add-column flow: when "Relation" is picked we collect a target
+  // board + allow-multiple before creating the column (settings are required).
+  const [relationConfigOpen, setRelationConfigOpen] = useState(false);
+  const [relationTargetBoards, setRelationTargetBoards] = useState<
+    { id: string; name: string }[]
+  >([]);
 
   // Files-column lightbox state. The viewed cell's attachments and the active
   // index live here; preview URLs are minted lazily on open (only for that
@@ -331,6 +358,7 @@ export function BoardTable({
     editEntry: mutations.editEntry,
     deleteEntry: mutations.deleteEntry,
     setEstimate: mutations.setEstimate,
+    setRelationLinks: mutations.setRelationLinks,
   };
 
   const sensors = useSensors(
@@ -392,7 +420,17 @@ export function BoardTable({
                 onEditOptions={() => setOptionsFor(col)}
               />
             ))}
-            <AddColumnMenu onAdd={(kind) => mutations.addColumn(kind)} />
+            <AddColumnMenu
+              onAdd={(kind) => {
+                if (kind === "relation") {
+                  setRelationTargetBoards([]);
+                  setRelationConfigOpen(true);
+                  listRelationTargetBoards().then(setRelationTargetBoards);
+                } else {
+                  mutations.addColumn(kind);
+                }
+              }}
+            />
           </div>
 
           {groups.length === 0 ? (
@@ -466,6 +504,25 @@ export function BoardTable({
           }}
         />
       )}
+
+      <Dialog open={relationConfigOpen} onOpenChange={setRelationConfigOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Connect boards</DialogTitle>
+            <DialogDescription>
+              Pick the board this column links items to.
+            </DialogDescription>
+          </DialogHeader>
+          <RelationColumnConfig
+            boards={relationTargetBoards.filter((b) => b.id !== board.id)}
+            onConfirm={(settings) => {
+              mutations.addColumn("relation", settings);
+              setRelationConfigOpen(false);
+            }}
+            onCancel={() => setRelationConfigOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {filesLightbox && (
         <FilePreviewLightbox
@@ -1110,6 +1167,21 @@ function ItemRow({
               </div>
             );
           }
+          if (col.kind === "relation") {
+            const childLinks = subitems.flatMap((c) =>
+              relationLinksForCell(controls.cache, c.id, col.id),
+            );
+            return (
+              <div
+                key={col.id}
+                className="flex h-full items-center truncate border-l px-3"
+              >
+                <span className="text-muted-foreground text-xs">
+                  {relationRollup(childLinks)}
+                </span>
+              </div>
+            );
+          }
           const values = subitems.map(
             (c) => cellMap.get(cellKey(c.id, col.id)) ?? null,
           );
@@ -1403,6 +1475,45 @@ function EditableCell({
           onSetEstimate={(secs) =>
             controls.setEstimate(item.id, column.id, secs)
           }
+        />
+      </div>
+    );
+  }
+
+  // Relation cells render linked-item chips + an RLS-scoped picker; links live
+  // in relation_links (not cell_values), so they're special-cased like files.
+  if (column.kind === "relation") {
+    const links = relationLinksForCell(controls.cache, item.id, column.id);
+    const relSettings = (column.settings ?? {}) as {
+      target_board_id?: string;
+      allow_multiple?: boolean;
+    };
+    const targetBoardId = relSettings.target_board_id ?? "";
+    return (
+      <div className="flex h-full items-center border-l px-1">
+        <RelationCell
+          links={links}
+          allowMultiple={relSettings.allow_multiple ?? true}
+          loadCandidates={(search) =>
+            targetBoardId
+              ? listRelationCandidates(targetBoardId, search)
+              : Promise.resolve([])
+          }
+          onChange={(selection) => {
+            const newLinks: RelationLink[] = selection.map((s, i) => ({
+              id: `optimistic-${item.id}-${column.id}-${s.linkedItemId}`,
+              itemId: item.id,
+              columnId: column.id,
+              linkedItemId: s.linkedItemId,
+              linkedItemName: s.linkedItemName,
+              position: i,
+            }));
+            controls.setRelationLinks({
+              itemId: item.id,
+              columnId: column.id,
+              links: newLinks,
+            });
+          }}
         />
       </div>
     );

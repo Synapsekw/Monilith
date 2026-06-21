@@ -51,6 +51,7 @@ function baseCache(): BoardCache {
     dependencies: [],
     attachments: [],
     timeEntries: [],
+    relationLinks: [],
   };
 }
 
@@ -267,6 +268,7 @@ function cache(columns: CacheColumn[]): BoardCache {
     dependencies: [],
     attachments: [],
     timeEntries: [],
+    relationLinks: [],
   };
 }
 
@@ -435,6 +437,7 @@ describe("removeGroup", () => {
       dependencies: [],
       attachments: [],
       timeEntries: [],
+      relationLinks: [],
     };
   }
 

@@ -199,3 +199,27 @@ describe("time_tracking validation", () => {
     expect(s.safeParse({ estimateSeconds: 1.5 }).success).toBe(false);
   });
 });
+
+describe("relation validation", () => {
+  const uuid = "00000000-0000-0000-0000-000000000000";
+
+  it("accepts relation as a kind", () => {
+    expect(columnKindSchema.safeParse("relation").success).toBe(true);
+  });
+  it("settings require a target_board_id uuid", () => {
+    const s = columnSettingsSchema("relation");
+    expect(s.safeParse({ target_board_id: "not-a-uuid" }).success).toBe(false);
+    expect(s.safeParse({ target_board_id: uuid }).success).toBe(true);
+  });
+  it("settings default allow_multiple to true", () => {
+    const parsed = columnSettingsSchema("relation").parse({
+      target_board_id: uuid,
+    });
+    expect(parsed).toMatchObject({ allow_multiple: true });
+  });
+  it("relation cell value carries no data (derives from relation_links)", () => {
+    const s = cellValueSchema("relation");
+    expect(s.safeParse({}).success).toBe(true);
+    expect(s.safeParse({ anything: 1 }).success).toBe(false);
+  });
+});

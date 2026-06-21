@@ -1251,6 +1251,75 @@ export type Database = {
         };
         Relationships: [];
       };
+      relation_links: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          id: string;
+          item_id: string;
+          linked_item_id: string;
+          org_id: string;
+          position: number;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          created_at?: string;
+          id?: string;
+          item_id: string;
+          linked_item_id: string;
+          org_id: string;
+          position?: number;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          created_at?: string;
+          id?: string;
+          item_id?: string;
+          linked_item_id?: string;
+          org_id?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "relation_links_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_linked_item_id_fkey";
+            columns: ["linked_item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       time_entries: {
         Row: {
           board_id: string;
@@ -1732,6 +1801,29 @@ export type Database = {
         };
         Returns: undefined;
       };
+      set_relation_links: {
+        Args: {
+          p_column_id: string;
+          p_item_id: string;
+          p_linked_item_ids: string[];
+        };
+        Returns: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          id: string;
+          item_id: string;
+          linked_item_id: string;
+          org_id: string;
+          position: number;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "relation_links";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       set_widget_layouts: {
         Args: { p_dashboard_id: string; p_layouts: Json };
         Returns: undefined;
@@ -1793,7 +1885,8 @@ export type Database = {
         | "email"
         | "phone"
         | "files"
-        | "time_tracking";
+        | "time_tracking"
+        | "relation";
       notification_kind:
         | "mention"
         | "assigned"
@@ -1955,6 +2048,7 @@ export const Constants = {
         "phone",
         "files",
         "time_tracking",
+        "relation",
       ],
       notification_kind: [
         "mention",

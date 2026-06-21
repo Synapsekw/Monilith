@@ -551,10 +551,25 @@ export async function createColumn(input: {
   boardId: string;
   kind: ColumnKind;
   name?: string;
+  settings?: Record<string, unknown>;
 }): Promise<ActionResult<{ column: Tables<"columns"> }>> {
   const parsed = createColumnSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  // If initial settings were supplied, validate them against the kind's schema
+  // (e.g. a relation column must carry a target_board_id). Otherwise default.
+  let initialSettings: Record<string, unknown> | null = null;
+  if (parsed.data.settings) {
+    const settingsParsed = columnSettingsSchema(parsed.data.kind).safeParse(
+      parsed.data.settings,
+    );
+    if (!settingsParsed.success)
+      return fail(
+        settingsParsed.error.issues[0]?.message ?? "Invalid settings",
+      );
+    initialSettings = settingsParsed.data as Record<string, unknown>;
+  }
 
   const supabase = await createClient();
   const { data: board, error: boardErr } = await supabase
@@ -581,7 +596,7 @@ export async function createColumn(input: {
       board_id: parsed.data.boardId,
       kind: parsed.data.kind,
       name,
-      settings: settings as Tables<"columns">["settings"],
+      settings: (initialSettings ?? settings) as Tables<"columns">["settings"],
       position: midpoint(last?.position ?? null, null),
     })
     .select("*")
