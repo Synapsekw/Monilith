@@ -223,3 +223,26 @@ describe("relation validation", () => {
     expect(s.safeParse({ anything: 1 }).success).toBe(false);
   });
 });
+
+describe("mirror column validation", () => {
+  it("accepts mirror as a column kind", () => {
+    expect(columnKindSchema.safeParse("mirror").success).toBe(true);
+  });
+  it("validates mirror settings", () => {
+    // zod 4's .uuid() enforces a valid version+variant nibble, so use real v4
+    // UUIDs here (the all-1s/all-2s placeholders fail the variant check).
+    const ok = columnSettingsSchema("mirror").safeParse({
+      source_relation_column_id: "11111111-1111-4111-8111-111111111111",
+      target_column_id: "22222222-2222-4222-8222-222222222222",
+    });
+    expect(ok.success).toBe(true);
+    const bad = columnSettingsSchema("mirror").safeParse({
+      source_relation_column_id: "not-a-uuid",
+    });
+    expect(bad.success).toBe(false);
+  });
+  it("mirror cell value is empty-strict (no cell_values row)", () => {
+    expect(cellValueSchema("mirror").safeParse({}).success).toBe(true);
+    expect(cellValueSchema("mirror").safeParse({ x: 1 }).success).toBe(false);
+  });
+});

@@ -620,6 +620,10 @@ export function CellEditor({
     // BoardTable's EditableCell via FilesCell + the lightbox.
     case "files":
       return null;
+    // Mirror cells are read-only reflections of a linked item's value — they are
+    // never edited in place (the source data is owned by the linked board).
+    case "mirror":
+      return null;
     default:
       return null;
   }

@@ -203,6 +203,8 @@ function statusPayload(): BoardPayload {
     attachments: [],
     timeEntries: [],
     relationLinks: [],
+    mirrorTargetCells: [],
+    mirrorTargetColumns: [],
   };
 }
 

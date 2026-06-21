@@ -35,12 +35,18 @@ import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
 import { rollupCell, rollupTimeTracking } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
-import type { ColumnOption } from "@/lib/validations/boards";
+import type { ColumnKind, ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
 import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
 import { RelationCell } from "@/components/boards/cells/RelationCell";
+import { MirrorCell } from "@/components/boards/cells/MirrorCell";
 import { RelationColumnConfig } from "@/components/boards/RelationColumnConfig";
+import { MirrorColumnConfig } from "@/components/boards/MirrorColumnConfig";
+import {
+  mirrorValuesForCell,
+  mirrorTargetColumnFor,
+} from "@/lib/boards/mirror";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +55,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  listMirrorableColumns,
   listRelationCandidates,
   listRelationTargetBoards,
 } from "@/lib/boards/relation-candidates";
@@ -248,6 +255,9 @@ export function BoardTable({
   const [relationTargetBoards, setRelationTargetBoards] = useState<
     { id: string; name: string }[]
   >([]);
+  // Mirror add-column flow: picking "Mirror" opens a dialog to choose a source
+  // relation column on this board + a column on its target board to reflect.
+  const [mirrorConfigOpen, setMirrorConfigOpen] = useState(false);
 
   // Files-column lightbox state. The viewed cell's attachments and the active
   // index live here; preview URLs are minted lazily on open (only for that
@@ -460,6 +470,8 @@ export function BoardTable({
                   setRelationTargetBoards([]);
                   setRelationConfigOpen(true);
                   listRelationTargetBoards().then(setRelationTargetBoards);
+                } else if (kind === "mirror") {
+                  setMirrorConfigOpen(true);
                 } else {
                   mutations.addColumn(kind);
                 }
@@ -556,6 +568,37 @@ export function BoardTable({
               setRelationConfigOpen(false);
             }}
             onCancel={() => setRelationConfigOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={mirrorConfigOpen} onOpenChange={setMirrorConfigOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Mirror a column</DialogTitle>
+            <DialogDescription>
+              Reflect a field from a board you&apos;re connected to through a
+              relation column.
+            </DialogDescription>
+          </DialogHeader>
+          <MirrorColumnConfig
+            relationColumns={columns
+              .filter((c) => c.kind === "relation")
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                target_board_id:
+                  ((c.settings ?? {}) as { target_board_id?: string })
+                    .target_board_id ?? "",
+              }))}
+            loadTargetColumns={(targetBoardId) =>
+              listMirrorableColumns(targetBoardId)
+            }
+            onConfirm={(settings) => {
+              mutations.addColumn("mirror", settings);
+              setMirrorConfigOpen(false);
+            }}
+            onCancel={() => setMirrorConfigOpen(false)}
           />
         </DialogContent>
       </Dialog>
@@ -1262,6 +1305,16 @@ function ItemRow({
               </div>
             );
           }
+          if (col.kind === "mirror") {
+            // Mirror has no parent-rollup aggregate in v1 — render blank, like
+            // relation, while matching the surrounding rollup container shape.
+            return (
+              <div
+                key={col.id}
+                className="flex h-full items-center truncate border-l px-3"
+              />
+            );
+          }
           const values = subitems.map(
             (c) => cellMap.get(cellKey(c.id, col.id)) ?? null,
           );
@@ -1595,6 +1648,26 @@ function EditableCell({
             });
           }}
         />
+      </div>
+    );
+  }
+
+  // Mirror cells reflect a target column's value across linked items; they are
+  // strictly read-only (no editor) and derive from the mirror cache slices.
+  if (column.kind === "mirror") {
+    const values = mirrorValuesForCell(controls.cache, item.id, column);
+    const target = mirrorTargetColumnFor(controls.cache, column);
+    return (
+      <div className="flex h-full items-center border-l px-3">
+        {target ? (
+          <MirrorCell
+            values={values}
+            targetKind={target.kind as ColumnKind}
+            targetSettings={(target.settings ?? {}) as Record<string, unknown>}
+          />
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
+        )}
       </div>
     );
   }
