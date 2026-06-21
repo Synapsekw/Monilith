@@ -631,3 +631,70 @@ describe("BoardTable files column", () => {
     expect(screen.getByLabelText("0 files")).toBeInTheDocument();
   });
 });
+
+function manyItemsPayload(count: number) {
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [],
+    items: Array.from({ length: count }, (_, i) => ({
+      id: `t${i + 1}`,
+      board_id: "b1",
+      org_id: "o1",
+      group_id: "g1",
+      parent_id: null,
+      name: `Task ${i + 1}`,
+      position: i,
+    })),
+    cellValues: [],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderMany(count: number) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardTable payload={manyItemsPayload(count)} selectedViewId="v1" />
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable frozen Name column", () => {
+  it("does not wrap group rows in a nested scroll container (regression: sticky freeze)", () => {
+    renderMany(3);
+    const rows = screen.getByTestId("group-rows-g1");
+    expect(rows.className).not.toMatch(/overflow-(auto|scroll|x|y)/);
+  });
+
+  it("keeps virtualization: a tall group renders a subset of its rows", () => {
+    renderMany(60);
+    expect(screen.getByText("Task 1")).toBeInTheDocument();
+    expect(screen.queryByText("Task 60")).not.toBeInTheDocument();
+  });
+
+  it("marks the Name header and name cells as the freeze edge", () => {
+    renderMany(1);
+    const headers = document.querySelectorAll(".name-freeze-edge");
+    expect(headers.length).toBeGreaterThan(0);
+  });
+
+  it("flips data-scrolledx on the scroll container during horizontal scroll", () => {
+    renderMany(1);
+    const scroller = screen.getByTestId("board-scroll");
+    expect(scroller).toHaveAttribute("data-scrolledx", "false");
+    scroller.scrollLeft = 120;
+    fireEvent.scroll(scroller);
+    expect(scroller).toHaveAttribute("data-scrolledx", "true");
+  });
+});
