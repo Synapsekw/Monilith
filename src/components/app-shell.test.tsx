@@ -10,6 +10,14 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({}),
 }));
 
+// The sidebar now imports the workspace client components, which import the
+// "use server" actions module. Stub it so it doesn't evaluate in jsdom.
+vi.mock("@/lib/workspaces/actions", () => ({
+  createWorkspace: vi.fn(),
+  renameWorkspace: vi.fn(),
+  deleteWorkspace: vi.fn(),
+}));
+
 // Radix's DropdownMenu relies on pointer-capture + scrollIntoView, which jsdom
 // doesn't implement. Polyfill them so the menu can open in tests.
 beforeEach(() => {
