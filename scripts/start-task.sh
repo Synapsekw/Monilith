@@ -38,7 +38,7 @@ fi
 echo "→ fetching latest develop…"
 git -C "$MAIN" fetch origin develop
 
-echo "→ creating worktree $WT on $BRANCH…"
+echo "→ creating worktree ${WT} on ${BRANCH}…"
 git -C "$MAIN" worktree add -b "$BRANCH" "$WT" origin/develop
 
 # Pin the commit identity Vercel deploys from (verified on the Synapsekw account).
