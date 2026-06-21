@@ -55,6 +55,7 @@ export function TimezonePicker({
         <Button
           variant="outline"
           role="combobox"
+          aria-label={triggerLabel}
           aria-expanded={open}
           disabled={disabled}
           className="w-full justify-between font-normal"
