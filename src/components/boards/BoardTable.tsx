@@ -1035,7 +1035,7 @@ function GroupSection({
                         className="absolute top-0 left-0 w-full"
                         style={{
                           transform: `translateY(${
-                            vr.start - virtualizer.options.scrollMargin
+                            vr.start - scrollMargin
                           }px)`,
                         }}
                       >
