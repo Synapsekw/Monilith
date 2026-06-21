@@ -4,12 +4,8 @@ import { useState, useTransition } from "react";
 import { updateOrgTimezone } from "@/lib/org/actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { TimezonePicker } from "@/components/ui/timezone-picker";
 import { cn } from "@/lib/utils";
-
-const ZONES: string[] =
-  typeof Intl !== "undefined" && typeof Intl.supportedValuesOf === "function"
-    ? Intl.supportedValuesOf("timeZone")
-    : ["UTC"];
 
 interface TimezoneFormProps {
   orgId: string;
@@ -41,27 +37,16 @@ export function TimezoneForm({ orgId, currentTimezone }: TimezoneFormProps) {
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <Label htmlFor="timezone-select">Timezone</Label>
-        <select
-          id="timezone-select"
+        <Label>Timezone</Label>
+        <TimezonePicker
           value={tz}
-          onChange={(e) => {
-            setTz(e.target.value);
+          onChange={(v) => {
+            // Org timezone is never "Automatic"; ignore a null selection.
+            if (v) setTz(v);
             setMsg(null);
           }}
-          className={cn(
-            "border-border bg-background text-foreground hover:bg-accent focus-visible:ring-ring/50 focus-visible:border-ring w-full rounded-md border px-3 py-2 text-sm transition-colors",
-            "focus-visible:ring-3 focus-visible:outline-none",
-            "disabled:pointer-events-none disabled:opacity-50",
-          )}
           disabled={pending}
-        >
-          {ZONES.map((zone) => (
-            <option key={zone} value={zone}>
-              {zone}
-            </option>
-          ))}
-        </select>
+        />
         <p className="text-muted-foreground text-xs">
           Date automations fire at 8:00 AM in this timezone.
         </p>
