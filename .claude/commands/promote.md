@@ -121,14 +121,21 @@ gotcha-32; it bit PR #21/#22). Heal it immediately by back-merging `main` into `
 ```bash
 git fetch origin main develop
 # on the main checkout, parked on develop:
-git merge -s ours origin/main -m "Back-merge main after squash promotion (heal divergence)"
+git merge -s ours origin/main -m "Merge origin/main into develop: heal squash divergence (gotcha-32)"
 git push origin develop
 ```
 
 `-s ours` (merge **strategy** ours, not `-X ours`) guarantees the resulting tree is byte-identical
-to `develop`'s tip — the commit exists only to make `origin/main` an ancestor. After this,
+to `develop`'s tip — the commit exists only to make `origin/main` an ancestor. **The message MUST
+start with `Merge `** — commitlint's `defaultIgnores` skips merge commits, so any other prefix is
+rejected by the husky `commit-msg` hook (a `Back-merge …` subject fails). After this,
 `origin/main..origin/develop` is clean again and the next promotion PR is mergeable. (If a future
 promotion ever still shows `CONFLICTING`, this heal was skipped — re-run it.)
+
+> **Pre-merge heal caveat:** if the _previous_ promotion was a squash that was never healed,
+> `develop`/`main` are **already** diverged and the PR opened in step 4 will show `CONFLICTING`
+> before you can merge. Run this same `-s ours` back-merge **then** (before step 6), push, let the
+> PR re-check, and it becomes mergeable. From then on, doing 6b every time prevents recurrence.
 
 ### 7. Watch production
 
