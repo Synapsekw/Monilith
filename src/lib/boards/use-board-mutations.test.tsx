@@ -104,6 +104,7 @@ function seedCache(qc: QueryClient): BoardCache {
     ],
     attachments: [],
     timeEntries: [],
+    relationLinks: [],
   };
   qc.setQueryData(boardKey("b1"), cache);
   return cache;
@@ -497,6 +498,7 @@ function seedWithEntries(qc: QueryClient): BoardCache {
     board: { id: "b1", org_id: "o1", name: "B" } as never,
     groups: [],
     columns: [],
+    relationLinks: [],
     items: [{ id: "i1", board_id: "b1", group_id: "g1", name: "One" } as never],
     cellValues: [],
     dependencies: [],
@@ -564,6 +566,7 @@ describe("useBoardMutations.startTimer", () => {
       board: { id: "b1", org_id: "o1", name: "B" } as never,
       groups: [],
       columns: [],
+      relationLinks: [],
       items: [
         { id: "i1", board_id: "b1", group_id: "g1", name: "One" } as never,
       ],
