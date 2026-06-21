@@ -6,8 +6,12 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from, auth: { getUser } }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
+  removeAttachmentObjects: vi.fn(),
+}));
 
 import { upsertCell } from "@/lib/boards/actions";
+import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 
 const ITEM = "11111111-1111-4111-8111-111111111111";
 const COL = "22222222-2222-4222-8222-222222222222";
@@ -19,6 +23,7 @@ beforeEach(() => {
   from.mockReset();
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
+  vi.mocked(removeAttachmentObjects).mockReset();
 });
 
 describe("upsertCell people-cell assignment fan-out", () => {
@@ -160,7 +165,10 @@ describe("createBoardFromTemplate", () => {
   });
 });
 
-import { addSubitem, deleteItem, reorderItem } from "./actions";
+import { addSubitem, deleteBoard, deleteItem, reorderItem } from "./actions";
+
+const SUB = "33333333-3333-4333-8333-333333333333";
+const BOARD = "44444444-4444-4444-8444-444444444444";
 
 describe("addSubitem", () => {
   it("rejects an empty name", async () => {
@@ -180,6 +188,115 @@ describe("deleteItem", () => {
   it("rejects a non-uuid itemId", async () => {
     const res = await deleteItem({ itemId: "nope" });
     expect(res.ok).toBe(false);
+  });
+
+  it("removes attachment objects for the item and its subitems", async () => {
+    let queriedIds: string[] = [];
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          // subitem-id gather: from("items").select("id").eq("parent_id", X)
+          select: () => ({
+            eq: async () => ({ data: [{ id: SUB }], error: null }),
+          }),
+          // delete: from("items").delete().eq("id", X).select("board_id").maybeSingle()
+          delete: () => ({
+            eq: () => ({
+              select: () => ({
+                maybeSingle: async () => ({
+                  data: { board_id: BOARD },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "attachments")
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => {
+              queriedIds = ids;
+              return {
+                data: [
+                  { storage_path: "o/b/i/1.png" },
+                  { storage_path: "o/b/s/2.png" },
+                ],
+                error: null,
+              };
+            },
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await deleteItem({ itemId: ITEM });
+
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(queriedIds).toContain(ITEM);
+    expect(queriedIds).toContain(SUB);
+    expect(removeAttachmentObjects).toHaveBeenCalledWith([
+      "o/b/i/1.png",
+      "o/b/s/2.png",
+    ]);
+  });
+
+  it("does not remove objects when the item is not found", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: () => ({ eq: async () => ({ data: [], error: null }) }),
+          delete: () => ({
+            eq: () => ({
+              select: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "attachments")
+        return {
+          select: () => ({
+            in: async () => ({ data: [], error: null }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await deleteItem({ itemId: ITEM });
+
+    expect(res.ok).toBe(false);
+    expect(removeAttachmentObjects).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteBoard", () => {
+  it("rejects a non-uuid boardId", async () => {
+    const res = await deleteBoard({ boardId: "nope" });
+    expect(res.ok).toBe(false);
+  });
+
+  it("removes every attachment object on the board", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "attachments")
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: [{ storage_path: "o/b/i/1.png" }],
+              error: null,
+            }),
+          }),
+        } as never;
+      if (table === "boards")
+        return {
+          delete: () => ({ eq: async () => ({ error: null }) }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await deleteBoard({ boardId: BOARD });
+
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(removeAttachmentObjects).toHaveBeenCalledWith(["o/b/i/1.png"]);
   });
 });
 

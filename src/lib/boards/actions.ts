@@ -28,6 +28,7 @@ import {
   updateColumnSettingsSchema,
   removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
+import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -121,11 +122,21 @@ export async function deleteBoard(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
+
+  // Attachment rows cascade with the board; their Storage objects do not. Every
+  // attachment carries a denormalized board_id, so one query covers all items.
+  const { data: attachments } = await supabase
+    .from("attachments")
+    .select("storage_path")
+    .eq("board_id", parsed.data.boardId);
+
   const { error } = await supabase
     .from("boards")
     .delete()
     .eq("id", parsed.data.boardId);
   if (error) return fail(error.message);
+
+  await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
 
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
@@ -351,7 +362,13 @@ export async function addSubitem(input: {
   return { ok: true, data: { item: data } };
 }
 
-/** Delete an item (or subitem). Subitems + cell values cascade via FKs. */
+/**
+ * Delete an item (or subitem). Subitems, cell values, and attachment *rows*
+ * cascade via FKs; the underlying Storage objects do not, so gather their paths
+ * (item + its subitems) before the cascade removes the rows, then free them
+ * after the delete succeeds. See removeAttachmentObjects for why this needs the
+ * service-role client.
+ */
 export async function deleteItem(input: {
   itemId: string;
 }): Promise<ActionResult> {
@@ -360,6 +377,17 @@ export async function deleteItem(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
+
+  const { data: subitems } = await supabase
+    .from("items")
+    .select("id")
+    .eq("parent_id", parsed.data.itemId);
+  const itemIds = [parsed.data.itemId, ...(subitems ?? []).map((s) => s.id)];
+  const { data: attachments } = await supabase
+    .from("attachments")
+    .select("storage_path")
+    .in("item_id", itemIds);
+
   const { data, error } = await supabase
     .from("items")
     .delete()
@@ -368,6 +396,8 @@ export async function deleteItem(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Item not found.");
+
+  await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
 
   revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
