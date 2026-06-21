@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import {
   BarChart3,
   ChevronsLeft,
@@ -25,7 +26,7 @@ import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 
 const nav = [
   { label: "Goals", icon: Target },
-  { label: "Portfolios", icon: BarChart3 },
+  { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
   { label: "Inbox", icon: Inbox },
 ] as const;
 
@@ -123,21 +124,44 @@ export function Sidebar({
             isCollapsed ? "items-center px-2" : "px-2",
           )}
         >
-          {nav.map((item) =>
-            isCollapsed ? (
-              <Tooltip key={item.label}>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    disabled
-                    aria-label={item.label}
-                    className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <item.icon className="size-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">{item.label}</TooltipContent>
-              </Tooltip>
+          {nav.map((item) => {
+            const href = "href" in item ? item.href : undefined;
+            if (isCollapsed) {
+              return (
+                <Tooltip key={item.label}>
+                  <TooltipTrigger asChild>
+                    {href ? (
+                      <Link
+                        href={href}
+                        aria-label={item.label}
+                        className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors"
+                      >
+                        <item.icon className="size-4" />
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        aria-label={item.label}
+                        className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <item.icon className="size-4" />
+                      </button>
+                    )}
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
+              );
+            }
+            return href ? (
+              <Link
+                key={item.label}
+                href={href}
+                className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors"
+              >
+                <item.icon className="size-4" />
+                {item.label}
+              </Link>
             ) : (
               <button
                 key={item.label}
@@ -148,8 +172,8 @@ export function Sidebar({
                 <item.icon className="size-4" />
                 {item.label}
               </button>
-            ),
-          )}
+            );
+          })}
         </nav>
 
         {!isCollapsed && workspaces.length > 0 ? (
