@@ -5,7 +5,11 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session]
-related: ["[[2026-06-17-1126-monolith-landing-page]]"]
+related:
+  [
+    "[[2026-06-17-1126-monolith-landing-page]]",
+    "[[2026-06-17-1858-collapsible-sidebar]]",
+  ]
 ---
 
 # MONOLITH nav brand + sidebar-collapse plan

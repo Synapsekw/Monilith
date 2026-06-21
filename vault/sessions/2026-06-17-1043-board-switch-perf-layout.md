@@ -9,6 +9,7 @@ related:
   - "[[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]]"
   - "[[2026-06-17-gotcha-10-board-payload-unbounded-reads]]"
   - "[[2026-06-17-0920-phase4b-mentions-notifications]]"
+  - "[[2026-06-16-2110-board-view-perf-amplifiers]]"
 ---
 
 # Board-to-board switching perf — shell hoisted to a persistent layout

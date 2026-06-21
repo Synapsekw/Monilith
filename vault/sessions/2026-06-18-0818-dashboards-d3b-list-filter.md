@@ -8,6 +8,7 @@ tags: [session]
 related:
   - "[[2026-06-17-2155-dashboards-d3a-list-widget]]"
   - "[[2026-06-17-dashboards-cross-board-design]]"
+  - "[[2026-06-19-1644-dashboard-rename-and-perf]]"
 ---
 
 # Dashboards D3b — List-widget multi-condition filter

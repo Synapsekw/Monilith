@@ -7,6 +7,27 @@ import type { ChangelogEntry } from "./types";
  */
 export const SEED: ChangelogEntry[] = [
   {
+    date: "2026-06-21",
+    kind: "new",
+    title: "Connect boards",
+    description:
+      "Link items across boards with a new relation column — pick related rows from another board and jump straight to them.",
+  },
+  {
+    date: "2026-06-21",
+    kind: "new",
+    title: "Personal time zone",
+    description:
+      "Set your own time zone in Settings and see every date and time across Monolith in it.",
+  },
+  {
+    date: "2026-06-21",
+    kind: "improved",
+    title: "Item update details",
+    description:
+      "Each item update now shows who made the change and exactly when.",
+  },
+  {
     date: "2026-06-20",
     kind: "new",
     title: "Time tracking",

@@ -109,6 +109,9 @@ export function rollupCell(
     case "phone":
     case "files":
     case "time_tracking":
+    // relation has no cell_values; its collapsed rollup ("N linked") derives
+    // from relation_links and is rendered in BoardTable via relationRollup().
+    case "relation":
       return { kind: "blank" };
   }
 }

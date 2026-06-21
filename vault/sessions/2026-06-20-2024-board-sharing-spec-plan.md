@@ -27,7 +27,7 @@ We're about to start multi-person collaboration. The open question was whether t
 
 ## Open threads
 
-- **Not built.** Plan Task 1 applies a real cloud migration + runs integration tests (auth-gated) — watch for migration-ledger drift ([[supabase-migration-ledger-drift]]) and the integration auth rate-limit ([[2026-06-20-gotcha-24-integration-suite-auth-rate-limit]]).
+- **Not built.** Plan Task 1 applies a real cloud migration + runs integration tests (auth-gated) — watch for migration-ledger drift ([[2026-06-21-1037-migration-ledger-drift-fix]]) and the integration auth rate-limit ([[2026-06-20-gotcha-24-integration-suite-auth-rate-limit]]).
 - Execution approach chosen conceptually (subagent-driven, 5-wide Wave 2 in worktrees) but user deferred the build to later.
 - Residual: per-board storage-object scoping + dashboards still org-scoped (documented follow-ups).
 

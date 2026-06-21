@@ -39,6 +39,8 @@ import {
   createAttachment,
   deleteAttachment,
 } from "@/lib/collaboration/actions";
+import { setRelationLinks } from "@/lib/boards/relation-actions";
+import type { RelationLink } from "@/lib/boards/relations";
 import { createClient } from "@/lib/supabase/client";
 import { buildColumnFilePath } from "@/lib/collaboration/attachments-path";
 import { MAX_FILE_BYTES } from "@/lib/collaboration/use-attachment-mutations";
@@ -55,6 +57,7 @@ import {
   removeGroup,
   removeItem,
   removeTimeEntry,
+  setRelationLinksForCell,
   replaceBoard,
   replaceColumn,
   replaceGroup,
@@ -81,6 +84,11 @@ type RenameBoardVars = { name: string };
 type ResizeNameColumnVars = { width: number | null };
 type AddDependencyVars = { predecessorId: string; successorId: string };
 type RemoveDependencyVars = { dependencyId: string };
+type SetRelationVars = {
+  itemId: string;
+  columnId: string;
+  links: RelationLink[];
+};
 type Ctx = { previous?: BoardCache };
 
 /**
@@ -141,11 +149,15 @@ export function useBoardMutations(boardId: string) {
   const addColumnMutation = useMutation<
     { column: CacheColumn },
     Error,
-    { kind: ColumnKind },
+    { kind: ColumnKind; settings?: Record<string, unknown> },
     Ctx
   >({
     mutationFn: async (vars) => {
-      const res = await createColumn({ boardId, kind: vars.kind });
+      const res = await createColumn({
+        boardId,
+        kind: vars.kind,
+        settings: vars.settings,
+      });
       if (!res.ok) throw new Error(res.error);
       return res.data;
     },
@@ -933,8 +945,46 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
+  /** Replace a relation cell's links. Optimistic; rollback on error. */
+  const setRelationLinksMutation = useMutation<
+    unknown,
+    Error,
+    SetRelationVars,
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await setRelationLinks({
+        itemId: vars.itemId,
+        columnId: vars.columnId,
+        linkedItemIds: vars.links.map((l) => l.linkedItemId),
+      });
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous)
+        qc.setQueryData<BoardCache>(
+          key,
+          setRelationLinksForCell(
+            previous,
+            vars.itemId,
+            vars.columnId,
+            vars.links,
+          ),
+        );
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    },
+  });
+
   return {
     setCell: (vars: SetCellVars) => setCellMutation.mutate(vars),
+    setRelationLinks: (vars: SetRelationVars) =>
+      setRelationLinksMutation.mutate(vars),
     clearCellValue: (vars: ClearCellVars) => clearCellMutation.mutate(vars),
     addItem: (
       vars: AddItemVars,
@@ -1003,7 +1053,8 @@ export function useBoardMutations(boardId: string) {
       }),
     removeDependency: (vars: RemoveDependencyVars) =>
       removeDependencyMutation.mutate(vars),
-    addColumn: (kind: ColumnKind) => addColumnMutation.mutate({ kind }),
+    addColumn: (kind: ColumnKind, settings?: Record<string, unknown>) =>
+      addColumnMutation.mutate({ kind, settings }),
     renameColumn: (columnId: string, name: string) =>
       renameColumnMutation.mutate({ columnId, name }),
     resizeColumn: (columnId: string, width: number) =>

@@ -7,6 +7,7 @@ status: complete
 tags: [session, admin, platform, ui]
 related:
   - "[[2026-06-19-2152-org-admin-platform-console]]"
+  - "[[2026-06-19-2245-admin-ui-fixes-push]]"
 ---
 
 # Platform Admin Console — UI restructure + sidebar nav

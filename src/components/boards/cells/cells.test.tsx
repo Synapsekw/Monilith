@@ -202,6 +202,7 @@ function statusPayload(): BoardPayload {
     dependencies: [],
     attachments: [],
     timeEntries: [],
+    relationLinks: [],
   };
 }
 

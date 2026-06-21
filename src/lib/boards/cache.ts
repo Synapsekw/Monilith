@@ -1,4 +1,5 @@
 import type { Tables } from "@/types/database.types";
+import type { RelationLink } from "@/lib/boards/relations";
 
 export type CacheBoard = Tables<"boards">;
 export type CacheGroup = Tables<"groups">;
@@ -19,6 +20,7 @@ export type BoardCache = {
   dependencies: CacheDependency[];
   attachments: CacheAttachment[];
   timeEntries: CacheTimeEntry[];
+  relationLinks: RelationLink[];
 };
 
 /** Stable lookup key for a cell value (item + column). */
@@ -240,4 +242,29 @@ export function removeTimeEntry(cache: BoardCache, id: string): BoardCache {
     ...cache,
     timeEntries: cache.timeEntries.filter((t) => t.id !== id),
   };
+}
+
+/** All relation links for a given (item, relation-column) cell. */
+export function relationLinksForCell(
+  cache: BoardCache,
+  itemId: string,
+  columnId: string,
+): RelationLink[] {
+  return cache.relationLinks.filter(
+    (l) => l.itemId === itemId && l.columnId === columnId,
+  );
+}
+
+/** Replace a cell's relation links (used optimistically + after the server
+ *  returns). Drops the cell's existing links and appends the new set. Immutable. */
+export function setRelationLinksForCell(
+  cache: BoardCache,
+  itemId: string,
+  columnId: string,
+  links: RelationLink[],
+): BoardCache {
+  const others = cache.relationLinks.filter(
+    (l) => !(l.itemId === itemId && l.columnId === columnId),
+  );
+  return { ...cache, relationLinks: [...others, ...links] };
 }

@@ -5,7 +5,8 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session]
-related: []
+related:
+  - "[[2026-06-19-gotcha-19-set-option-value-shape-per-column-kind]]"
 ---
 
 # Dropdown + People cell editors — trailing Clear affordance
