@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser, getUserOrgs, getUserTimeZone } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -9,12 +9,14 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { TimezoneForm } from "@/components/settings/timezone-form";
+import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-form";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
+  const myTimeZone = await getUserTimeZone();
   const orgs = await getUserOrgs();
   const org = orgs[0];
   if (!org) redirect("/onboarding");
@@ -58,6 +60,18 @@ export default async function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Preferences</CardTitle>
+            <CardDescription>
+              Personal settings for your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PersonalTimezoneForm currentTimezone={myTimeZone} />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Organization</CardTitle>
