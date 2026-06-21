@@ -51,7 +51,9 @@ jobs:
     name: commitlint (PR)
     runs-on: ubuntu-latest
     # Skip for Dependabot — its generated "Bump …" subjects aren't Conventional Commits.
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    # Skip on develop→main promotion PRs: those re-lint the whole develop history,
+    # which was already linted commit-by-commit on the way into develop.
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && github.base_ref != 'main'
     steps:
       - uses: actions/checkout@v6
         with:
