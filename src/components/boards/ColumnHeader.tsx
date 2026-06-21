@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import type { CacheColumn } from "@/lib/boards/cache";
 import { COLUMN_KIND_META } from "@/lib/boards/column-kinds";
+import { clampDragWidth } from "@/lib/boards/name-column-width";
 
 const MIN = 80;
 const MAX = 1200;
@@ -58,7 +59,7 @@ export function ColumnHeader({
     const startW = width;
     let last = width;
     const move = (ev: PointerEvent) => {
-      last = Math.min(MAX, Math.max(MIN, startW + (ev.clientX - startX)));
+      last = clampDragWidth(startW + (ev.clientX - startX), MIN, MAX);
       onResize(last); // live
     };
     const up = () => {

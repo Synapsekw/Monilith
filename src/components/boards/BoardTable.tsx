@@ -79,6 +79,7 @@ import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { ColumnHeader } from "@/components/boards/ColumnHeader";
 import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
 import {
+  clampDragWidth,
   fitNameColumnWidth,
   NAME_COL_MAX,
 } from "@/lib/boards/name-column-width";
@@ -568,9 +569,10 @@ function NameColumnHeader({
     const startW = width;
     let last = width;
     const move = (ev: PointerEvent) => {
-      last = Math.min(
+      last = clampDragWidth(
+        startW + (ev.clientX - startX),
+        NAME_DRAG_MIN,
         NAME_COL_MAX,
-        Math.max(NAME_DRAG_MIN, startW + (ev.clientX - startX)),
       );
       onResize(last);
     };

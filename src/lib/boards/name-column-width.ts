@@ -9,6 +9,17 @@ export const NAME_COL_MAX = 1200;
 const PADDING = 60;
 
 /**
+ * Round + clamp a dragged column width to an integer in `[min, max]`. The resize
+ * server actions validate `z.number().int()`, so a fractional pointer delta — a
+ * sub-pixel `clientX` under browser zoom or fractional display scaling — must be
+ * rounded before it reaches the action. Otherwise the mutation throws, rolls back
+ * the optimistic cache, and the column snaps back to its prior width.
+ */
+export function clampDragWidth(value: number, min: number, max: number): number {
+  return Math.round(Math.min(max, Math.max(min, value)));
+}
+
+/**
  * Auto-fit width for the Name column: the widest measured item name plus cell
  * padding, clamped to [NAME_COL_MIN, NAME_COL_MAX]. `measure` is injected (an
  * offscreen canvas `measureText` in the browser) so the function stays pure and
