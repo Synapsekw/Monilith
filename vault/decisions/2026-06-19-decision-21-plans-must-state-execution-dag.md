@@ -8,7 +8,7 @@ related:
   - "[[00-north-star]]"
   - "[[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]]"
   - "[[2026-06-17-2155-gotcha-15-subagent-scope-overstep-shared-checkout]]"
-  - "[[2026-06-17-gotcha-07-shared-worktree-subagents]]"
+  - "[[2026-06-15-gotcha-07-shared-worktree-subagents]]"
   - "[[2026-06-19-1904-plans-execution-dag]]"
 ---
 
@@ -71,7 +71,7 @@ A plan whose tasks are a flat sequential list with no DAG isn't ready to build.
 - Parallel file-mutating work is steered onto worktrees by the rule itself, closing the
   shared-checkout clobber risk documented in
   [[2026-06-17-2155-gotcha-15-subagent-scope-overstep-shared-checkout]] and
-  [[2026-06-17-gotcha-07-shared-worktree-subagents]].
+  [[2026-06-15-gotcha-07-shared-worktree-subagents]].
 - Survives Superpowers plugin updates, because the enforcement lives in `AGENTS.md`, not in the
   cached skill files.
 
