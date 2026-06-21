@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
@@ -165,6 +172,11 @@ type CellControls = {
 
 const ROW_HEIGHT = 36; // direction C density
 
+// useLayoutEffect warns during SSR; this client component still pre-renders on
+// the server, so fall back to useEffect there.
+const useIsoLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 /**
  * Open the item detail panel by setting `?item=<id>` via the History API — no
  * RSC navigation, so the board page's queries don't re-run (mirrors how
@@ -214,6 +226,10 @@ export function BoardTable({
     payload as unknown as BoardCache,
   );
   const { board, groups, columns, items, cellValues } = cache;
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scrolledX, setScrolledX] = useState(false);
 
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
@@ -390,8 +406,19 @@ export function BoardTable({
         grants={grants}
       />
 
-      <div className="flex-1 overflow-auto">
-        <div className="min-w-fit">
+      <div
+        ref={scrollContainerRef}
+        data-testid="board-scroll"
+        data-scrolledx={scrolledX}
+        onScroll={(e) => {
+          const next = e.currentTarget.scrollLeft > 0;
+          // setState bails out when unchanged, so this only re-renders on the
+          // 0 ⇄ >0 boundary (cheap during scroll).
+          setScrolledX(next);
+        }}
+        className="group/scroll flex-1 overflow-auto"
+      >
+        <div ref={contentRef} className="min-w-fit">
           {/* Column header row */}
           <div
             className="bg-surface-muted text-muted-foreground sticky top-0 z-20 grid border-b text-xs font-medium"
@@ -470,6 +497,8 @@ export function BoardTable({
                     renamingItemId={renamingItemId}
                     onRenameItemSettled={() => setRenamingItemId(null)}
                     onSetRenamingItemId={setRenamingItemId}
+                    scrollContainerRef={scrollContainerRef}
+                    contentRef={contentRef}
                   />
                 ))}
               </SortableContext>
@@ -763,6 +792,8 @@ function GroupSection({
   renamingItemId,
   onRenameItemSettled,
   onSetRenamingItemId,
+  scrollContainerRef,
+  contentRef,
 }: {
   group: Group;
   items: Item[];
@@ -782,11 +813,52 @@ function GroupSection({
   renamingItemId: string | null;
   onRenameItemSettled: () => void;
   onSetRenamingItemId: (id: string) => void;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+  contentRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(autoFocusRename);
   const [name, setName] = useState(group.name);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowAreaRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  // The shared scroll container lives in the parent (BoardTable). Its ref is not
+  // yet attached when this child first commits, so the virtualizer reads a null
+  // scroll element and yields 0 rows. Flip `scrollReady` once the element is
+  // present to force one extra render — the virtualizer re-runs getScrollElement
+  // and binds the now-mounted container.
+  const [scrollReady, setScrollReady] = useState(false);
+
+  // The shared scroll container is owned by the parent (BoardTable); during this
+  // child's first (layout-phase) commit the parent's ref isn't attached yet, so
+  // the virtualizer reads a null scroll element and yields 0 rows. By a passive
+  // effect the ref is populated — flip `scrollReady` once to force a single
+  // extra render so the virtualizer re-runs getScrollElement and binds it.
+  useEffect(() => {
+    if (!scrollReady && scrollContainerRef.current) setScrollReady(true);
+  }, [scrollReady, scrollContainerRef]);
+
+  // The group's row-area offset within the shared scroll content. Re-measured
+  // whenever the content height changes (any group expand/collapse/add/remove)
+  // and on every render (covers DnD reorder, which shifts offsets without
+  // changing total height). Guarded setState avoids a layout-effect loop.
+  useIsoLayoutEffect(() => {
+    const measure = () => {
+      const area = rowAreaRef.current;
+      const scroller = scrollContainerRef.current;
+      if (!area || !scroller) return;
+      const top =
+        area.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop;
+      setScrollMargin((prev) => (prev === top ? prev : top));
+    };
+    measure();
+    const content = contentRef.current;
+    if (!content) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(content);
+    return () => ro.disconnect();
+  });
 
   const {
     setNodeRef,
@@ -817,7 +889,8 @@ function GroupSection({
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollContainerRef.current,
+    scrollMargin,
     estimateSize: () => ROW_HEIGHT,
     overscan: 6,
     // getBoundingClientRect().height returns 0 in jsdom — fall back to ROW_HEIGHT
@@ -826,9 +899,6 @@ function GroupSection({
   });
 
   const virtualRows = virtualizer.getVirtualItems();
-  // Cap the scroll viewport; long/expanded groups scroll inside it.
-  const viewportHeight =
-    Math.min(virtualizer.getTotalSize(), 12 * ROW_HEIGHT) || ROW_HEIGHT;
 
   function openRename() {
     setName(group.name);
@@ -937,26 +1007,27 @@ function GroupSection({
                 strategy={verticalListSortingStrategy}
               >
                 <div
-                  ref={scrollRef}
-                  className="overflow-auto"
-                  style={{ height: viewportHeight }}
+                  ref={rowAreaRef}
+                  data-testid={`group-rows-${group.id}`}
+                  className="relative"
+                  style={{ height: virtualizer.getTotalSize() }}
                 >
-                  <div
-                    className="relative"
-                    style={{ height: virtualizer.getTotalSize() }}
-                  >
-                    {virtualRows.map((vr) => {
-                      const item = items[vr.index];
-                      const children = childrenByParent.get(item.id) ?? [];
-                      const isExpanded = expanded.has(item.id);
-                      return (
-                        <div
-                          key={item.id}
-                          data-index={vr.index}
-                          ref={virtualizer.measureElement}
-                          className="absolute top-0 left-0 w-full"
-                          style={{ transform: `translateY(${vr.start}px)` }}
-                        >
+                  {virtualRows.map((vr) => {
+                    const item = items[vr.index];
+                    const children = childrenByParent.get(item.id) ?? [];
+                    const isExpanded = expanded.has(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        data-index={vr.index}
+                        ref={virtualizer.measureElement}
+                        className="absolute top-0 left-0 w-full"
+                        style={{
+                          transform: `translateY(${
+                            vr.start - virtualizer.options.scrollMargin
+                          }px)`,
+                        }}
+                      >
                           <ItemRow
                             item={item}
                             columns={columns}
@@ -987,7 +1058,6 @@ function GroupSection({
                         </div>
                       );
                     })}
-                  </div>
                 </div>
               </SortableContext>
             </DndContext>
