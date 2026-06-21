@@ -9,15 +9,23 @@ vi.mock("@/lib/org/actions", () => ({
 import { updateOrgTimezone } from "@/lib/org/actions";
 
 describe("TimezoneForm", () => {
-  it("renders the current timezone as the selected value", () => {
+  it("shows the current timezone on the trigger", () => {
     render(<TimezoneForm orgId="o1" currentTimezone="Europe/Belgrade" />);
-    expect(screen.getByDisplayValue("Europe/Belgrade")).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: /belgrade/i }),
+    ).toBeInTheDocument();
   });
 
   it("saves the chosen timezone via the action", async () => {
     render(<TimezoneForm orgId="o1" currentTimezone="UTC" />);
-    const select = screen.getByLabelText(/timezone/i);
-    await userEvent.selectOptions(select, "America/New_York");
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.type(
+      screen.getByPlaceholderText(/search timezone/i),
+      "New York",
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: /new york/i }),
+    );
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(updateOrgTimezone).toHaveBeenCalledWith({
       orgId: "o1",
