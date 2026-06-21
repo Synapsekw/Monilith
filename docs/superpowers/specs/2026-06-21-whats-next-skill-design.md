@@ -81,26 +81,27 @@ computed live):
 
 ### 5. Present the board
 
-Grouped, scannable, every item tagged `[bucket · size · marker]`:
+**Real markdown tables — never ASCII art** — split into two clearly labelled groups so unfinished
+carryover reads separately from new feature work. Rows numbered **continuously across both tables**
+so the picker can reference them. Lead with a one-line snapshot + a colour legend:
 
-```
-READY — PARALLEL BATCH (disjoint files, run together)
-  ① 6d Relations + mirror      [phase-slice · L · critical-path]
-  ② Changelog Tasks 6–7        [in-flight · S]
-  ③ page.tsx listSharedBoards  [deferred-gap · S]
-BLOCKED
-  ④ Promote develop→main       [ops · blocked: manual cross-browser check]
-DRIFT
-  • §3 claims 6f un-pushed — actually on origin (vault stale)
-RECOMMENDATION
-  Dispatch ①②③ in parallel (3 worktrees, no overlap). ④ waits on you.
-  Critical path = ① (6d). Quick win = ③.
-```
+> **🚦 Status:** 🟢 ready now · 🟡 needs input / depends on another row · 🔴 blocked
+> **Type:** ⏳ in-flight · 🐛 deferred-gap · 🛠️ ops · ✨ new feature
+
+- **Group 1 — 🔄 Carryover** (`in-flight` + `deferred-gap` + `ops`): columns `# · 🚦 · Work · Type ·
+Size · Batch · Blocker/note · From`.
+- **Group 2 — ✨ New feature work** (`phase-slice`): columns `# · 🚦 · Work · Phase · Size · Batch ·
+Blocker/note · Critical-path?` (⭐ marks the critical path).
+
+**Batch** = the parallel group from the DAG (same letter ⇒ disjoint footprints, safe to run at once;
+`—` ⇒ blocked/solo). Follow the tables with a **Drift** callout (only if mismatches exist) and a
+plain-prose **Recommendation** naming the batch to dispatch, the critical path, and what's blocked.
 
 ### 6. Interactive pick
 
-Use `AskUserQuestion` (multi-select) listing the batch-eligible items. The user selects which to
-launch.
+Use `AskUserQuestion` (multi-select) listing only the **🟢-status** items. If more than 4 are ready
+(AskUserQuestion caps at 4 options), offer the recommended batch as option 1 + up to 3 single picks,
+and tell the user they can reply with row numbers for a custom set. The user selects which to launch.
 
 ### 7. Dispatch (scope-to-plan, then pause)
 

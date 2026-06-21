@@ -73,26 +73,70 @@ From the footprints (this is AGENTS.md #6, computed live —
 
 ### 5. Present the board
 
-Grouped and scannable; tag each item `[bucket · size · marker]`:
+Render the candidates as **real markdown tables — never ASCII art** — split into **two clearly
+labelled groups** so unfinished carryover reads separately from new feature work. Number rows
+**continuously across both tables** (1, 2, 3 …) so the picker in step 6 can reference them.
 
-```
-READY — PARALLEL BATCH (disjoint files, run together)
-  ① 6d Relations + mirror      [phase-slice · L · critical-path]
-  ② Changelog Tasks 6–7        [in-flight · S]
-  ③ page.tsx listSharedBoards  [deferred-gap · S]
-BLOCKED
-  ④ Promote develop→main       [ops · blocked: manual cross-browser check]
-DRIFT
-  • §3 claims 6f un-pushed — actually on origin (vault stale)
-RECOMMENDATION
-  Dispatch ①②③ in parallel (3 worktrees, no overlap). ④ waits on you.
-  Critical path = ① (6d). Quick win = ③.
-```
+Open with a **one-line snapshot**: branch state (`develop` vs `origin`, any live worktrees) and the
+count of carryover vs new candidates. Example:
+
+> **Snapshot:** `develop` 1 ahead of origin · 1 live worktree (`task/portfolios-7a`) · 3 carryover, 2 new.
+
+**Lead with a colour legend** so the status column reads at a glance:
+
+> **🚦 Status:** 🟢 ready now · 🟡 needs your input / depends on another row · 🔴 blocked
+> **Type:** ⏳ in-flight · 🐛 deferred-gap · 🛠️ ops · ✨ new feature
+
+**Group 1 — 🔄 Carryover (unfinished from prior sessions)** — the `in-flight`, `deferred-gap`, and
+`ops` buckets:
+
+| #   | 🚦  | Work                        | Type            | Size | Batch | Blocker / note                  | From                  |
+| --- | --- | --------------------------- | --------------- | ---- | ----- | ------------------------------- | --------------------- |
+| 1   | 🟢  | Changelog Tasks 6–7         | ⏳ in-flight    | S    | A     | —                               | 2026-06-18 session    |
+| 2   | 🟢  | page.tsx `listSharedBoards` | 🐛 deferred-gap | S    | A     | —                               | board-sharing session |
+| 3   | 🔴  | Promote develop→main        | 🛠️ ops          | —    | —     | WebGL cross-browser check (you) | §3 manual gates       |
+
+**Group 2 — ✨ New feature work (roadmap)** — the `phase-slice` bucket:
+
+| #   | 🚦  | Work           | Phase | Size | Batch | Blocker / note | Critical path? |
+| --- | --- | -------------- | ----- | ---- | ----- | -------------- | -------------- |
+| 4   | 🟢  | Mirror columns | 6d-2  | L    | A     | —              | ⭐ yes         |
+| 5   | 🟡  | Docs           | 6e    | L    | B     | depends on #4  | —              |
+
+Column meanings (state these once, below the tables):
+
+- **🚦 Status** — 🟢 ready now · 🟡 has a dependency or needs your input · 🔴 blocked. Only 🟢 rows
+  are launchable in step 6.
+- **Batch** — the parallel group from the DAG (`A`, `B`, …). Same letter = disjoint footprints, safe
+  to run at once. `—` = not batchable (blocked or solo).
+- **Size** — `S`/`M`/`L` from the Explore footprint.
+- **Critical path** — `⭐ yes` marks the longest dependency chain (the real wall-clock floor).
+
+Then, **only if there are mismatches**, a short **Drift** callout (vault-vs-reality):
+
+> ⚠️ **Drift:** §2 says 6f PDF preview "not pushed", but §3 says "shipped + pushed" and it's on
+> origin — vault is stale.
+
+Then a plain-prose **Recommendation**:
+
+> **Recommended:** dispatch **Batch A** (#1, #2, #4) in parallel — 3 worktrees, no file overlap.
+> Critical path is **#4 (6d-2 mirror)**. #3 is blocked on you (cross-browser check). #5 (6e docs)
+> waits on #4.
+
+(The numbers/rows above are an _illustrative shape_, not fixed content — fill from the live triage.)
 
 ### 6. Interactive pick
 
-Use `AskUserQuestion` (**multiSelect**) listing the batch-eligible items. The user selects which to
-launch. (If invoked from inside a worktree, skip this and the next step per the precondition.)
+Offer only the **🟢-status items** for selection — never 🟡 (dependent) or 🔴 (blocked) rows.
+
+- **≤ 4 🟢 items:** use `AskUserQuestion` (**multiSelect**), one option per 🟢 item, labelled
+  with its row number + name, plus the recommended batch noted in the first option's description.
+- **> 4 🟢 items** (AskUserQuestion caps at 4 options): do **not** truncate silently. Present the
+  recommended batch as the first `AskUserQuestion` option (e.g. "Dispatch recommended Batch A
+  (#1, #2, #4)"), with up to 3 alternative single picks, and tell the user they can instead reply
+  with any row numbers to launch a custom set.
+
+(If invoked from inside a worktree, skip this and the next step per the precondition.)
 
 ### 7. Dispatch — scope-to-plan, then pause
 
