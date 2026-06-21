@@ -43,3 +43,17 @@ export async function getUserOrgs(): Promise<Organization[]> {
   if (error) return [];
   return data ?? [];
 }
+
+/** The signed-in user's personal timezone (null = Automatic / unset). Cached
+ * per request so the layout reads it without an extra round-trip. */
+export const getUserTimeZone = cache(async (): Promise<string | null> => {
+  const user = await getUser();
+  if (!user) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("timezone")
+    .eq("id", user.id)
+    .single();
+  return data?.timezone ?? null;
+});

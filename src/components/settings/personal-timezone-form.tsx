@@ -1,19 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateOrgTimezone } from "@/lib/org/actions";
+import { updateProfileTimezone } from "@/lib/profile/actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { TimezonePicker } from "@/components/ui/timezone-picker";
 import { cn } from "@/lib/utils";
 
-interface TimezoneFormProps {
-  orgId: string;
-  currentTimezone: string;
-}
-
-export function TimezoneForm({ orgId, currentTimezone }: TimezoneFormProps) {
-  const [tz, setTz] = useState(currentTimezone);
+export function PersonalTimezoneForm({
+  currentTimezone,
+}: {
+  currentTimezone: string | null;
+}) {
+  const [tz, setTz] = useState<string | null>(currentTimezone);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
@@ -23,7 +22,7 @@ export function TimezoneForm({ orgId, currentTimezone }: TimezoneFormProps) {
   function save() {
     setMsg(null);
     start(async () => {
-      const res = await updateOrgTimezone({ orgId, timezone: tz });
+      const res = await updateProfileTimezone({ timezone: tz });
       if (res.ok) {
         setMsg("Saved.");
         setIsError(false);
@@ -37,18 +36,18 @@ export function TimezoneForm({ orgId, currentTimezone }: TimezoneFormProps) {
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <Label>Timezone</Label>
+        <Label>Your timezone</Label>
         <TimezonePicker
           value={tz}
           onChange={(v) => {
-            // Org timezone is never "Automatic"; ignore a null selection.
-            if (v) setTz(v);
+            setTz(v);
             setMsg(null);
           }}
+          allowAutomatic
           disabled={pending}
         />
         <p className="text-muted-foreground text-xs">
-          Date automations fire at 8:00 AM in this timezone.
+          Controls how dates and times are shown to you across the app.
         </p>
       </div>
 
