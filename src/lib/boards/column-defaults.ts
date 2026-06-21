@@ -15,6 +15,7 @@ const DEFAULT_NAME: Record<ColumnKind, string> = {
   files: "Files",
   time_tracking: "Time tracking",
   relation: "Relation",
+  mirror: "Mirror",
 };
 
 function opt(label: string, color: string) {

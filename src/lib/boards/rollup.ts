@@ -112,6 +112,9 @@ export function rollupCell(
     // relation has no cell_values; its collapsed rollup ("N linked") derives
     // from relation_links and is rendered in BoardTable via relationRollup().
     case "relation":
+    // mirror has no cell_values either; it derives from relation_links + the
+    // target board's cell_values and has no parent rollup of its own.
+    case "mirror":
       return { kind: "blank" };
   }
 }
