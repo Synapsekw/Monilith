@@ -29,19 +29,60 @@ export const optionSchema = z.object({
 });
 export type ColumnOption = z.infer<typeof optionSchema>;
 
+// --- aggregation catalogue (6d-3) ---
+// Every column may opt into a single column-summary footer aggregation, stored
+// snake_case in columns.settings jsonb (no migration — see 6d-3 spec). The set
+// below is the full vocabulary; `allowedAggregations(kind)` in
+// `@/lib/boards/aggregation` defines which apply to each kind.
+export const aggregationSchema = z.enum([
+  // count family — universal (presence-based)
+  "count",
+  "count_filled",
+  "count_empty",
+  "count_unique",
+  // numeric
+  "sum",
+  "avg",
+  "min",
+  "max",
+  // categorical
+  "distribution",
+  // checkbox
+  "checked_total",
+  "percent_checked",
+  // date
+  "date_range",
+  "earliest",
+  "latest",
+  // time tracking
+  "total_tracked",
+  "total_over_estimate",
+]);
+export type AggregationId = z.infer<typeof aggregationSchema>;
+
+// Shared base merged into every per-kind settings schema so any column can carry
+// a chosen footer aggregation. Optional + backward-compatible (columns created
+// before 6d-3 simply omit it).
+export const baseColumnSettingsSchema = z.object({
+  summary_aggregation: aggregationSchema.optional(),
+});
+
 // --- per-kind settings ---
-export const emptySettingsSchema = z.object({}).strict();
-export const statusSettingsSchema = z.object({
+// `.strict()` is applied AFTER extending the base so the optional
+// `summary_aggregation` is accepted while unknown keys are still rejected
+// (zod 4's `.strict().merge()` drops strictness — see 6d-3 build notes).
+export const emptySettingsSchema = baseColumnSettingsSchema.strict();
+export const statusSettingsSchema = baseColumnSettingsSchema.extend({
   options: z.array(optionSchema).default([]),
 });
 export const dropdownSettingsSchema = statusSettingsSchema;
-export const numbersSettingsSchema = z.object({
+export const numbersSettingsSchema = baseColumnSettingsSchema.extend({
   unit: z.string().optional(),
   precision: z.number().int().min(0).max(10).optional(),
 });
 // Relation column connects to one target board; cells may link one or many
 // items from it. Stored snake_case in columns.settings jsonb.
-export const relationSettingsSchema = z.object({
+export const relationSettingsSchema = baseColumnSettingsSchema.extend({
   target_board_id: z.string().uuid(),
   allow_multiple: z.boolean().default(true),
 });
@@ -49,7 +90,7 @@ export const relationSettingsSchema = z.object({
 // Mirror column rolls up a field from the target board of a relation column on
 // this board: it reads `source_relation_column_id`'s links and shows each linked
 // item's `target_column_id` value. Read-only; stored snake_case in settings jsonb.
-export const mirrorSettingsSchema = z.object({
+export const mirrorSettingsSchema = baseColumnSettingsSchema.extend({
   source_relation_column_id: z.string().uuid(),
   target_column_id: z.string().uuid(),
 });

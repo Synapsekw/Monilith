@@ -246,3 +246,44 @@ describe("mirror column validation", () => {
     expect(cellValueSchema("mirror").safeParse({ x: 1 }).success).toBe(false);
   });
 });
+
+describe("6d-3 summary_aggregation settings", () => {
+  it("accepts a valid summary_aggregation on any kind's settings", () => {
+    // empty-settings kind (text) — the base field merges in
+    expect(
+      columnSettingsSchema("text").safeParse({ summary_aggregation: "count" })
+        .success,
+    ).toBe(true);
+    // numbers
+    expect(
+      columnSettingsSchema("numbers").safeParse({ summary_aggregation: "sum" })
+        .success,
+    ).toBe(true);
+    // status (alongside its own options field)
+    expect(
+      columnSettingsSchema("status").safeParse({
+        options: [],
+        summary_aggregation: "distribution",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("settings without summary_aggregation still validate (backward compatible)", () => {
+    expect(columnSettingsSchema("text").safeParse({}).success).toBe(true);
+    expect(columnSettingsSchema("numbers").safeParse({}).success).toBe(true);
+  });
+
+  it("rejects an unknown aggregation id", () => {
+    expect(
+      columnSettingsSchema("numbers").safeParse({
+        summary_aggregation: "median",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("empty-settings kinds still reject unknown keys", () => {
+    expect(
+      columnSettingsSchema("text").safeParse({ bogus: true }).success,
+    ).toBe(false);
+  });
+});

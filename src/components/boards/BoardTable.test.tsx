@@ -29,6 +29,7 @@ const deleteGroup = vi.fn();
 const addSubitem = vi.fn();
 const deleteItem = vi.fn();
 const reorderItem = vi.fn();
+const updateColumnSettings = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   createGroup: (...a: unknown[]) => createGroup(...a),
   updateGroupColor: (...a: unknown[]) => updateGroupColor(...a),
@@ -36,6 +37,7 @@ vi.mock("@/lib/boards/actions", () => ({
   addSubitem: (...a: unknown[]) => addSubitem(...a),
   deleteItem: (...a: unknown[]) => deleteItem(...a),
   reorderItem: (...a: unknown[]) => reorderItem(...a),
+  updateColumnSettings: (...a: unknown[]) => updateColumnSettings(...a),
 }));
 
 // dependency-actions is a server module pulled in transitively by
@@ -99,6 +101,7 @@ beforeEach(() => {
   addSubitem.mockReset();
   deleteItem.mockReset();
   reorderItem.mockReset();
+  updateColumnSettings.mockReset();
 });
 
 describe("BoardTable add group", () => {
@@ -544,6 +547,100 @@ describe("BoardTable rollup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
     expect(screen.getByText("Design")).toBeInTheDocument();
     expect(screen.queryByText(/Σ\s*13/)).not.toBeInTheDocument();
+  });
+});
+
+function footerPayload(settings: Record<string, unknown>) {
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [
+      {
+        id: "c1",
+        board_id: "b1",
+        org_id: "o1",
+        kind: "numbers",
+        name: "Est",
+        settings,
+        position: 0,
+        width: null,
+      },
+    ],
+    items: [
+      {
+        id: "t1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task One",
+        position: 0,
+      },
+      {
+        id: "t2",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task Two",
+        position: 1,
+      },
+    ],
+    cellValues: [
+      { item_id: "t1", column_id: "c1", org_id: "o1", board_id: "b1", value: { n: 10 } },
+      { item_id: "t2", column_id: "c1", org_id: "o1", board_id: "b1", value: { n: 5 } },
+    ],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderFooter(settings: Record<string, unknown>) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardTable payload={footerPayload(settings)} selectedViewId="v1" />
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable summary footer (6d-3)", () => {
+  it("renders a footer that sums a numbers column over top-level rows", () => {
+    renderFooter({ summary_aggregation: "sum" });
+    const footer = screen.getByTestId("board-summary-footer");
+    expect(footer).toBeInTheDocument();
+    expect(footer).toHaveTextContent("Sum");
+    expect(footer).toHaveTextContent("15");
+  });
+
+  it("shows an editable Summary affordance when no aggregation is chosen", () => {
+    renderFooter({});
+    const footer = screen.getByTestId("board-summary-footer");
+    expect(footer).toHaveTextContent("Summary");
+  });
+
+  it("persists a picked aggregation to column settings (merging existing keys)", async () => {
+    updateColumnSettings.mockResolvedValue({ ok: true, data: undefined });
+    renderFooter({ unit: "$" });
+    // open the footer cell picker (the only dropdown button in the footer)
+    const footer = screen.getByTestId("board-summary-footer");
+    fireEvent.click(footer.querySelector("button")!);
+    fireEvent.click(screen.getByText("Average"));
+    await waitFor(() =>
+      expect(updateColumnSettings).toHaveBeenCalledWith({
+        columnId: "c1",
+        settings: { unit: "$", summary_aggregation: "avg" },
+      }),
+    );
   });
 });
 

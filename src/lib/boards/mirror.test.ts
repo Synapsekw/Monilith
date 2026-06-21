@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mirrorValuesForCell } from "@/lib/boards/mirror";
+import { mirrorFooterValues, mirrorValuesForCell } from "@/lib/boards/mirror";
 import type { BoardCache } from "@/lib/boards/cache";
 
 function baseCache(over: Partial<BoardCache>): BoardCache {
@@ -85,5 +85,53 @@ describe("mirrorValuesForCell", () => {
       settings: { source_relation_column_id: "gone", target_column_id: "tcol" },
     } as typeof mirrorCol;
     expect(mirrorValuesForCell(cache, "i1", broken)).toEqual([]);
+  });
+});
+
+describe("mirrorFooterValues", () => {
+  it("flattens mirrored values across items (RLS-null included as empty)", () => {
+    const cache = baseCache({
+      relationLinks: [
+        {
+          id: "l1",
+          itemId: "i1",
+          columnId: "rel",
+          linkedItemId: "b1",
+          linkedItemName: "B1",
+          position: 0,
+        },
+        {
+          id: "l2",
+          itemId: "i1",
+          columnId: "rel",
+          linkedItemId: "b2",
+          linkedItemName: "B2",
+          position: 1,
+        },
+        {
+          id: "l3",
+          itemId: "i2",
+          columnId: "rel",
+          linkedItemId: "b3",
+          linkedItemName: null,
+          position: 0,
+        },
+      ],
+      mirrorTargetCells: [
+        { item_id: "b1", column_id: "tcol", value: { n: 10 } } as never,
+        { item_id: "b2", column_id: "tcol", value: { n: 5 } } as never,
+        // b3 has no readable target cell → null
+      ],
+    });
+    expect(mirrorFooterValues(cache, mirrorCol, ["i1", "i2"])).toEqual([
+      { n: 10 },
+      { n: 5 },
+      null,
+    ]);
+  });
+
+  it("is empty when no items are linked", () => {
+    const cache = baseCache({ relationLinks: [] });
+    expect(mirrorFooterValues(cache, mirrorCol, ["i1"])).toEqual([]);
   });
 });
