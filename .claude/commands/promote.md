@@ -104,9 +104,31 @@ gate`.
 
 ### 6. Merge (the irreversible step)
 
-- `gh pr merge <number> --merge` (merge commit, matching `main` history). Do **not** delete
-  `develop` (`--delete-branch` must not be passed — `develop` is long-lived).
+- `gh pr merge <number> --squash`. **This repo disallows merge commits** (`allow_merge_commit:
+false` — squash/rebase only), so `--merge` is rejected outright; squash is the only PR-merge mode.
+  Do **not** delete `develop` (`--delete-branch` must not be passed — `develop` is long-lived).
 - Capture the new `main` HEAD: `git fetch origin main && git rev-parse origin/main`.
+
+### 6b. Heal the squash divergence (required — keeps the NEXT promotion clean)
+
+A squash collapses `develop`'s delta into **one new commit on `main` that is not in `develop`'s
+history**, so git can no longer see that `main ⊆ develop`. Left unhealed, the next `develop → main`
+PR 3-way-merges from a stale base and flags every moved file as a conflict → `CONFLICTING` (this is
+gotcha-32; it bit PR #21/#22). Heal it immediately by back-merging `main` into `develop` with the
+**`ours` strategy** — records `origin/main` as an ancestor of `develop` **without changing
+`develop`'s tree at all**:
+
+```bash
+git fetch origin main develop
+# on the main checkout, parked on develop:
+git merge -s ours origin/main -m "Back-merge main after squash promotion (heal divergence)"
+git push origin develop
+```
+
+`-s ours` (merge **strategy** ours, not `-X ours`) guarantees the resulting tree is byte-identical
+to `develop`'s tip — the commit exists only to make `origin/main` an ancestor. After this,
+`origin/main..origin/develop` is clean again and the next promotion PR is mergeable. (If a future
+promotion ever still shows `CONFLICTING`, this heal was skipped — re-run it.)
 
 ### 7. Watch production
 
@@ -167,8 +189,10 @@ Stop (any hard stop above):
 
 - **Read-only until step 4; no merge until step 5 confirms.** Steps 1–3 mutate nothing. Step 4 only
   opens/reuses a PR (reversible). The `main` merge happens **only** after the explicit gate.
-- **Stage/commit nothing.** This command operates via `gh`/`git` on branches and the PR — it does not
-  create local commits or stage files.
+- **Stage/commit nothing — except the step-6b heal.** This command operates via `gh`/`git` on
+  branches and the PR; it stages no files and creates no source commits. The **one** exception is the
+  post-merge back-merge in step 6b (`merge -s ours origin/main` + push), which records a no-op heal
+  commit on `develop` — that is intentional and required, not a content change.
 - **Honest reporting.** Never report success while a check or deploy is red or still running past the
   timeout. Surface the link and the real state.
 - **Bounded waits.** Every watch/poll has a ceiling; on timeout, hand back the link instead of
