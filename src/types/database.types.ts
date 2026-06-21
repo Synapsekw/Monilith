@@ -1635,6 +1635,7 @@ export type Database = {
         };
         Returns: boolean;
       };
+      is_board_member: { Args: { p_board_id: string }; Returns: boolean };
       is_member_of: {
         Args: { p_org_id: string; p_user: string };
         Returns: boolean;
