@@ -65,9 +65,45 @@ Batch D:  Task 8 ── BoardTable wiring + e2e + full gate  (needs 3 + 5 + 6 + 
 - **Dependencies:** 1→{2,3,4,5}; {2,4}→6; 2→7; {3,5,6,7}→8.
 - **Parallel batches:** **[1]** → **[2,3,4,5]** (4-wide) → **[6,7]** (2-wide) → **[8]**.
 - **Critical path:** 1 → 4 → 6 → 8 (four hops) — the real wall-clock floor.
-- **Worktrees:** Batch B and Batch C tasks touch disjoint files but share the `develop` checkout. Dispatch each concurrent task in its own git worktree (`superpowers:using-git-worktrees`), then land sequentially. Task 1 lands first on `develop` and the others branch from it. **NOTE — known trap:** workflow subagents are sandboxed to the project root and cannot write into sibling worktree dirs ([[2026-06-21-gotcha-28-subagents-cant-write-outside-primary-dir]]). If worktree dispatch fails the same way, fall back to running the Batch-B implementers serially in the main checkout, committing each by path — that is the proven path from the invite-acceptance session.
 
-> **Migration application (Tasks 1):** Two cloud migrations are applied via `supabase db push --linked` (manual auth gate — coordinate with Danijel). The enum migration MUST land and commit before the table migration runs, because `alter type … add value` cannot be used in the same transaction that references the new value.
+## Build workflow (worktree, per AGENTS.md #1)
+
+This entire feature is built in **one isolated worktree**, not in the main checkout:
+
+```bash
+scripts/start-task.sh relations-6d1     # → ../Monolith-relations-6d1 on task/relations-6d1
+cd ../Monolith-relations-6d1            # build here; identity pinned to info@synapse-solutions.ai
+# … implement Tasks 1–8, committing by path …
+scripts/finish-task.sh                  # gate → merge --no-ff into develop → push → remove worktree
+```
+
+- All 8 tasks' commits land on `task/relations-6d1`. Nothing is pushed to `develop` mid-build;
+  `finish-task.sh` runs the full `typecheck/lint/test/build` gate once and merges the whole feature
+  in one `--no-ff` merge. **Do not** `git push origin develop` from inside any task (the old plan
+  said to — it's wrong under this workflow).
+- Commit identity is `Danijel Jovanovic <info@synapse-solutions.ai>` (pinned by `start-task.sh`;
+  the old `danijel@` email makes Vercel silently skip the promotion deploy — never override it).
+
+### Parallelism vs. the worktree (the real constraint)
+
+AGENTS.md #6 wants parallel file-mutating tasks in isolated worktrees, but **subagents cannot write
+outside the primary working dir** ([[2026-06-21-gotcha-28-subagents-cant-write-outside-primary-dir]]),
+so dispatched implementers cannot build inside this sibling worktree. The DAG above is therefore the
+**dependency truth** (what _may_ run concurrently), but execution picks ONE of:
+
+- **(Recommended) Orchestrator-builds-in-worktree:** the driving agent implements Tasks 1–8 directly
+  in `../Monolith-relations-6d1`, honoring the DAG order (Batch B tasks done back-to-back since they
+  have no inter-dependency). No sub-dispatch → no sandbox wall. Loses wall-clock parallelism, keeps
+  the worktree isolation the new workflow mandates.
+- **Main-checkout subagent parallelism (only if explicitly chosen):** build on `develop` in the main
+  checkout with disjoint-file subagents + orchestrator-serialized commits (gotcha-28's resolution).
+  Faster, but **violates the new "don't build in the main checkout" rule** and risks colliding with
+  concurrent sessions — use only with the user's explicit go-ahead.
+
+> **Migration application (Task 1):** Two cloud migrations are applied via `supabase db push --linked`
+> (manual auth gate — coordinate with Danijel). The enum migration MUST land and commit before the
+> table migration runs, because `alter type … add value` cannot be used in the same transaction that
+> references the new value.
 
 ---
 
@@ -1212,13 +1248,22 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm build
 
 Expected: typecheck 0 errors; lint clean; unit tests green (integration flakes only on GoTrue 429 — re-run the relation integration file in isolation to confirm, per gotcha-24); build succeeds.
 
-- [ ] **Step 7: Commit + push.**
+- [ ] **Step 7: Commit (on the task branch — do NOT push develop here).**
 
 ```bash
 git add src/components/boards/BoardTable.tsx e2e/relations.spec.ts
 git commit -m "feat(boards): wire RelationCell + picker into the board table; e2e"
-git push origin develop
 ```
+
+- [ ] **Step 8: Finish the task.** From inside the worktree:
+
+```bash
+scripts/finish-task.sh
+```
+
+This re-runs the full gate, merges `task/relations-6d1` into `develop` with `--no-ff`, pushes, and
+removes the worktree + branch. The task is **not done** until this completes. (Step 6's manual gate
+above is a pre-check so `finish-task.sh` doesn't fail late.) Then `/wrapup` the session.
 
 ---
 
