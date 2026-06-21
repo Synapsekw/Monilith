@@ -5,7 +5,11 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session]
-related: ["[[2026-06-17-phase-2c-column-management-design]]"]
+related:
+  [
+    "[[2026-06-17-phase-2c-column-management-design]]",
+    "[[2026-06-17-gotcha-13-realtime-only-insert-needs-optimistic-echo]]",
+  ]
 ---
 
 # Phase 2c — Column management (add/rename/delete/resize)

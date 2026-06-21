@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import {
   BarChart3,
   ChevronsLeft,
@@ -12,6 +13,8 @@ import { Brand } from "@/components/brand/brand";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { PlatformNav } from "@/components/platform/PlatformNav";
+import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
+import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -25,7 +28,7 @@ import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 
 const nav = [
   { label: "Goals", icon: Target },
-  { label: "Portfolios", icon: BarChart3 },
+  { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
   { label: "Inbox", icon: Inbox },
 ] as const;
 
@@ -35,12 +38,14 @@ export function Sidebar({
   workspaces,
   dashboards,
   isPlatformAdmin,
+  isOrgAdmin,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
   workspaces: { id: string; name: string }[];
   dashboards: { id: string; name: string }[];
   isPlatformAdmin?: boolean;
+  isOrgAdmin?: boolean;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
@@ -123,21 +128,44 @@ export function Sidebar({
             isCollapsed ? "items-center px-2" : "px-2",
           )}
         >
-          {nav.map((item) =>
-            isCollapsed ? (
-              <Tooltip key={item.label}>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    disabled
-                    aria-label={item.label}
-                    className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <item.icon className="size-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">{item.label}</TooltipContent>
-              </Tooltip>
+          {nav.map((item) => {
+            const href = "href" in item ? item.href : undefined;
+            if (isCollapsed) {
+              return (
+                <Tooltip key={item.label}>
+                  <TooltipTrigger asChild>
+                    {href ? (
+                      <Link
+                        href={href}
+                        aria-label={item.label}
+                        className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors"
+                      >
+                        <item.icon className="size-4" />
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        aria-label={item.label}
+                        className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <item.icon className="size-4" />
+                      </button>
+                    )}
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                </Tooltip>
+              );
+            }
+            return href ? (
+              <Link
+                key={item.label}
+                href={href}
+                className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors"
+              >
+                <item.icon className="size-4" />
+                {item.label}
+              </Link>
             ) : (
               <button
                 key={item.label}
@@ -148,22 +176,25 @@ export function Sidebar({
                 <item.icon className="size-4" />
                 {item.label}
               </button>
-            ),
-          )}
+            );
+          })}
         </nav>
 
         {!isCollapsed && workspaces.length > 0 ? (
           <div className="mt-2 flex flex-col gap-0.5 px-2">
-            <p className="text-muted-foreground px-3 py-1 text-xs font-medium">
-              Workspaces
-            </p>
+            <div className="flex items-center px-3 py-1">
+              <p className="text-muted-foreground text-xs font-medium">
+                Workspaces
+              </p>
+              <NewWorkspaceDialog />
+            </div>
             {workspaces.map((workspace) => (
-              <span
+              <WorkspaceNavItem
                 key={workspace.id}
-                className="text-muted-foreground truncate rounded-md px-3 py-1.5 text-sm"
-              >
-                {workspace.name}
-              </span>
+                workspace={workspace}
+                isOrgAdmin={!!isOrgAdmin}
+                isLast={workspaces.length <= 1}
+              />
             ))}
           </div>
         ) : null}

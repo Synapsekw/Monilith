@@ -8,6 +8,7 @@ import {
   enforcePasswordChange,
 } from "@/lib/auth/session";
 import { isPlatformAdmin } from "@/lib/platform/guard";
+import { isOrgAdmin } from "@/lib/org/guard";
 import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,9 +33,10 @@ export default async function Home() {
   if (sharedBoards.length > 0) redirect(`/boards/${sharedBoards[0].id}`);
 
   const supabase = await createClient();
-  const [{ data: workspaces }, platformAdmin] = await Promise.all([
+  const [{ data: workspaces }, platformAdmin, orgAdmin] = await Promise.all([
     supabase.from("workspaces").select("id, name"),
     isPlatformAdmin(),
+    isOrgAdmin(),
   ]);
 
   return (
@@ -51,6 +53,7 @@ export default async function Home() {
       boards={[]}
       sharedBoards={[]}
       isPlatformAdmin={platformAdmin}
+      isOrgAdmin={orgAdmin}
     >
       <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="bg-surface flex size-12 items-center justify-center rounded-xl border">

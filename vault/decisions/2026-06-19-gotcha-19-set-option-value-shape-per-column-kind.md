@@ -6,6 +6,7 @@ tags: [adr, gotcha, supabase, postgres, automations, cell-values]
 related:
   - "[[2026-06-19-0957-phase5c1-run-history]]"
   - "[[2026-06-19-gotcha-18-create-or-replace-function-overload]]"
+  - "[[2026-06-19-1727-dropdown-people-clear-affordance]]"
 ---
 
 # Gotcha 19 — `cell_values.value` shape is per column-kind; server-side writers must match it

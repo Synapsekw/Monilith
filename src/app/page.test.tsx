@@ -27,6 +27,10 @@ vi.mock("@/lib/boards/queries", () => ({
   listMyBoards: () => listMyBoards(),
   listSharedBoards: () => listSharedBoards(),
 }));
+// The org-admin guard has its own unit tests; isolate the page from its RPC.
+vi.mock("@/lib/org/guard", () => ({
+  isOrgAdmin: () => Promise.resolve(false),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: () => ({ select: async () => ({ data: [] }) }),

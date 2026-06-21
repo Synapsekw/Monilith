@@ -5,6 +5,7 @@ import { listDashboards } from "@/lib/dashboards/queries";
 import { requireUser, getUserOrgs, getUserTimeZone } from "@/lib/auth/session";
 import { TimeZoneProvider } from "@/lib/datetime/timezone-context";
 import { isPlatformAdmin } from "@/lib/platform/guard";
+import { isOrgAdmin } from "@/lib/org/guard";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -28,6 +29,7 @@ export default async function BoardsLayout({
     { data: workspaces },
     platformAdmin,
     timeZone,
+    orgAdmin,
   ] = await Promise.all([
     getUserOrgs(),
     listMyBoards(),
@@ -36,6 +38,7 @@ export default async function BoardsLayout({
     supabase.from("workspaces").select("id, name"),
     isPlatformAdmin(),
     getUserTimeZone(),
+    isOrgAdmin(),
   ]);
 
   return (
@@ -55,6 +58,7 @@ export default async function BoardsLayout({
         sharedBoards={sharedBoards}
         dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
         isPlatformAdmin={platformAdmin}
+        isOrgAdmin={orgAdmin}
       >
         {children}
       </AppShell>

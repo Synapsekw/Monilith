@@ -10,6 +10,14 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({}),
 }));
 
+// The sidebar now imports the workspace client components, which import the
+// "use server" actions module. Stub it so it doesn't evaluate in jsdom.
+vi.mock("@/lib/workspaces/actions", () => ({
+  createWorkspace: vi.fn(),
+  renameWorkspace: vi.fn(),
+  deleteWorkspace: vi.fn(),
+}));
+
 // Radix's DropdownMenu relies on pointer-capture + scrollIntoView, which jsdom
 // doesn't implement. Polyfill them so the menu can open in tests.
 beforeEach(() => {
@@ -84,20 +92,23 @@ describe("AppShell", () => {
     expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
   });
 
-  it("renders a live Dashboards link and disabled stubs for Goals, Portfolios, Inbox", () => {
+  it("renders live Dashboards and Portfolios links and disabled stubs for Goals, Inbox", () => {
     render(
       <AppShell>
         <div>content</div>
       </AppShell>,
     );
 
-    // Dashboards is now a wired section (a link to /dashboards), not a disabled stub.
+    // Dashboards and Portfolios are wired sections (links), not disabled stubs.
     expect(screen.getByText("Dashboards").closest("a")).toHaveAttribute(
       "href",
       "/dashboards",
     );
+    expect(screen.getByText("Portfolios").closest("a")).toHaveAttribute(
+      "href",
+      "/portfolios",
+    );
     expect(screen.getByText("Goals").closest("button")).toBeDisabled();
-    expect(screen.getByText("Portfolios").closest("button")).toBeDisabled();
     expect(screen.getByText("Inbox").closest("button")).toBeDisabled();
   });
 

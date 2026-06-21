@@ -48,6 +48,8 @@ type AppShellProps = {
   dashboards?: AppShellDashboard[];
   /** When true, the user menu shows a link to the cross-org platform console. */
   isPlatformAdmin?: boolean;
+  /** When true, the sidebar shows workspace Delete actions. */
+  isOrgAdmin?: boolean;
 };
 
 function initialFor(user: AppShellUser): string {
@@ -111,6 +113,7 @@ export function AppShell({
   sharedBoards,
   dashboards,
   isPlatformAdmin,
+  isOrgAdmin,
 }: AppShellProps) {
   return (
     <div className="flex h-svh w-full overflow-hidden">
@@ -120,6 +123,7 @@ export function AppShell({
         workspaces={workspaces ?? []}
         dashboards={dashboards ?? []}
         isPlatformAdmin={isPlatformAdmin}
+        isOrgAdmin={isOrgAdmin}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

@@ -4,6 +4,7 @@ import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
 import { listDashboards } from "@/lib/dashboards/queries";
 import { getUserOrgs } from "@/lib/auth/session";
 import { requirePlatformAdmin } from "@/lib/platform/guard";
+import { isOrgAdmin } from "@/lib/org/guard";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Platform admin" };
@@ -16,13 +17,14 @@ export default async function AdminLayout({
   // The gate: redirects non-admins; never reveals the route (see guard.ts).
   const user = await requirePlatformAdmin();
   const supabase = await createClient();
-  const [orgs, boards, sharedBoards, dashboards, { data: workspaces }] =
+  const [orgs, boards, sharedBoards, dashboards, { data: workspaces }, orgAdmin] =
     await Promise.all([
       getUserOrgs(),
       listMyBoards(),
       listSharedBoards(),
       listDashboards(),
       supabase.from("workspaces").select("id, name"),
+      isOrgAdmin(),
     ]);
 
   // Render the admin console INSIDE the app shell so the collapsible Platform
@@ -44,6 +46,7 @@ export default async function AdminLayout({
       sharedBoards={sharedBoards}
       dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
       isPlatformAdmin
+      isOrgAdmin={orgAdmin}
     >
       <div className="w-full px-6 py-8 lg:px-10">{children}</div>
     </AppShell>
