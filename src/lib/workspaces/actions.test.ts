@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const getUser = vi.fn();
 const getUserOrgs = vi.fn();
-const removeAttachmentObjects = vi.fn(async (_paths: string[]) => {});
+const removeAttachmentObjects = vi.fn<(paths: string[]) => Promise<void>>(
+  async () => {},
+);
 
 vi.mock("@/lib/auth/session", () => ({
   getUser: () => getUser(),

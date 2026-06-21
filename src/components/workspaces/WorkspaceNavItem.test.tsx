@@ -2,14 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const renameWorkspace = vi.fn(async (_a: unknown) => ({
-  ok: true,
-  data: undefined,
-}));
-const deleteWorkspace = vi.fn(async (_a: unknown) => ({
-  ok: true,
-  data: undefined,
-}));
+const renameWorkspace = vi.fn<
+  (a: unknown) => Promise<{ ok: true; data: undefined }>
+>(async () => ({ ok: true, data: undefined }));
+const deleteWorkspace = vi.fn<
+  (a: unknown) => Promise<{ ok: true; data: undefined }>
+>(async () => ({ ok: true, data: undefined }));
 vi.mock("@/lib/workspaces/actions", () => ({
   renameWorkspace: (a: unknown) => renameWorkspace(a),
   deleteWorkspace: (a: unknown) => deleteWorkspace(a),

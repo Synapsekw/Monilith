@@ -2,10 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-const createWorkspace = vi.fn(async (_a: unknown) => ({
-  ok: true,
-  data: undefined,
-}));
+const createWorkspace = vi.fn<
+  (a: unknown) => Promise<{ ok: true; data: undefined }>
+>(async () => ({ ok: true, data: undefined }));
 vi.mock("@/lib/workspaces/actions", () => ({
   createWorkspace: (a: unknown) => createWorkspace(a),
 }));
