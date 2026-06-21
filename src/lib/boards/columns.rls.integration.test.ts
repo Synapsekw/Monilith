@@ -126,6 +126,54 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: columns tenant isolation", () => {
     ).toBeNull();
   });
 
+  it("can delete a column that has logged cell activity (regression: FK 23503)", async () => {
+    // Repro for the pre-existing bug fixed in migration 20260621150000: setting a
+    // cell value logs an item_activities row (tg_log_cell_activity INSERT branch);
+    // deleting the column cascades its cell_values, firing the DELETE branch, which
+    // used to log a row referencing the column being dropped → item_activities
+    // column_id FK (on delete set null) rejected it with 23503 → the delete aborted.
+    const { data: created, error: createErr } = await userA.anon
+      .from("columns")
+      .insert({
+        org_id: userA.orgId,
+        board_id: userA.boardId,
+        kind: "text",
+        name: "Activity Notes",
+        settings: {},
+        position: 98,
+      })
+      .select("id")
+      .single();
+    expect(createErr).toBeNull();
+    const columnId = (created as { id: string }).id;
+
+    // Set a cell value → logs cell activity referencing this column.
+    const { error: cellErr } = await userA.anon.from("cell_values").insert({
+      org_id: userA.orgId,
+      board_id: userA.boardId,
+      item_id: userA.itemId,
+      column_id: columnId,
+      value: { text: "logged" },
+    });
+    expect(cellErr).toBeNull();
+
+    // Deleting the column must now succeed (the cell_values cascade no longer
+    // tries to log against the column being dropped).
+    const { error: delErr } = await userA.anon
+      .from("columns")
+      .delete()
+      .eq("id", columnId);
+    expect(delErr).toBeNull();
+
+    // The cell cascaded away.
+    const { data: cells } = await userA.anon
+      .from("cell_values")
+      .select("column_id")
+      .eq("item_id", userA.itemId)
+      .eq("column_id", columnId);
+    expect(cells ?? []).toHaveLength(0);
+  });
+
   it("a different org cannot create or read another org's column", async () => {
     // userB inserts into userA's board/org → RLS with_check denies.
     const { error: insErr } = await userB.anon.from("columns").insert({

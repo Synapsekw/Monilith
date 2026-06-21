@@ -225,26 +225,15 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: mirror columns (cross-board)", () => {
     expect(data![0].linked_item_id).toBe(b1);
   });
 
-  // KNOWN PRODUCTION BUG — `it.fails`: this asserts the INTENDED contract
-  // (deleting the mirrored target column T succeeds and the cell cascades away,
-  // so the mirror renders empty with no error). It currently FAILS because of a
-  // pre-existing defect OUTSIDE this task's scope (the column-delete path, not
-  // the mirror feature), so it is marked `it.fails` to (a) record the bug
-  // without papering over it and (b) flip red the moment the bug is fixed.
-  //
-  // Root cause: deleting a `columns` row cascades its `cell_values` rows
-  // (FK `on delete cascade`). That fires `tg_log_cell_activity`'s DELETE branch
-  // (migration 20260619230000), whose only guard is "does the item still exist?"
-  // — it does (the item survives a column delete) — so it INSERTs a fresh
-  // `item_activities` row referencing `old.column_id`. But that column is being
-  // deleted in the same statement, so `item_activities_column_id_fkey` (which is
-  // `on delete set null`, not cascade) rejects the insert with SQLSTATE 23503 and
-  // the whole delete aborts. The same raw `.from("columns").delete()` is what the
-  // production `deleteColumn` server action runs (src/lib/boards/actions.ts), so
-  // deleting ANY value-bearing column that has logged cell activity fails in prod.
-  // Fix belongs in the trigger (skip logging when the column is being dropped) or
-  // the delete path — tracked separately; not in scope for the 6d-2 RLS proof.
-  it.fails(
+  // Deleting the mirrored target column T succeeds and the cell cascades away, so
+  // the mirror renders empty with no error. This was a pre-existing production bug
+  // (the column delete aborted with FK 23503 because `tg_log_cell_activity`'s
+  // DELETE branch logged an activity row referencing the column being dropped),
+  // fixed in migration 20260621150000 by also guarding on the column still
+  // existing. This test is the regression proof: T had a value set above (which
+  // logged cell activity), so deleting it exercises the exact path that used to
+  // fail. (Runs last — mutates.)
+  it(
     "deleting the target column T makes the mirror source unresolvable without error (runs last — mutates)",
     async () => {
       const { error: delErr } = await owner
