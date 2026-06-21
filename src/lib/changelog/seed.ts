@@ -7,6 +7,62 @@ import type { ChangelogEntry } from "./types";
  */
 export const SEED: ChangelogEntry[] = [
   {
+    date: "2026-06-21",
+    kind: "new",
+    title: "Connect boards",
+    description:
+      "Link items across boards with a new relation column — pick related rows from another board and jump straight to them.",
+  },
+  {
+    date: "2026-06-21",
+    kind: "new",
+    title: "Personal time zone",
+    description:
+      "Set your own time zone in Settings and see every date and time across Monolith in it.",
+  },
+  {
+    date: "2026-06-21",
+    kind: "improved",
+    title: "Item update details",
+    description:
+      "Each item update now shows who made the change and exactly when.",
+  },
+  {
+    date: "2026-06-20",
+    kind: "new",
+    title: "Time tracking",
+    description:
+      "Track time on any item with a built-in timer or manual entries, set estimates, and watch totals roll up to the parent.",
+  },
+  {
+    date: "2026-06-20",
+    kind: "new",
+    title: "Board sharing",
+    description:
+      "Share individual boards with specific teammates and control who can view or edit — find them under “Shared with me”.",
+  },
+  {
+    date: "2026-06-20",
+    kind: "new",
+    title: "Accept invites in the app",
+    description:
+      "Pending organization invites now show up in your notifications, ready to accept or decline without leaving Monolith.",
+  },
+  {
+    date: "2026-06-20",
+    kind: "new",
+    title: "Inline PDF previews",
+    description:
+      "Open PDF attachments right in the preview lightbox — no download required.",
+  },
+  {
+    date: "2026-06-20",
+    kind: "improved",
+    title: "Branded emails",
+    description:
+      "Invitation and password-reset emails now match Monolith's look.",
+  },
+  {
     date: "2026-06-19",
     kind: "new",
     title: "Subitems",

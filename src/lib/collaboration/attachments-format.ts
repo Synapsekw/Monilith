@@ -36,6 +36,19 @@ function trim(n: number): string {
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
 
+/** True only for application/pdf (case-insensitive). Pure. */
+export function isPdf(mime: string): boolean {
+  return mime.toLowerCase() === "application/pdf";
+}
+
+/** UI affordance gate: which attachments can open an inline lightbox preview
+ *  (raster/video via signed <img>/<video>, PDF via PDF.js byte-fetch). This is
+ *  NOT a signing gate — `isPreviewable` still governs the raster/video signed
+ *  URLs, and PDFs are byte-fetched through `getAttachmentPdfUrl`. Pure. */
+export function canPreviewInline(mime: string): boolean {
+  return isPreviewable(mime) || isPdf(mime);
+}
+
 /** Coarse type bucket for icons/badges — mime first, extension fallback. Pure. */
 export function fileKind(mime: string, name: string): FileKind {
   const m = mime.toLowerCase();

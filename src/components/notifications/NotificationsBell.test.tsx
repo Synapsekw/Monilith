@@ -1,10 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import type { PendingInvitation } from "@/lib/collaboration/invitations";
 
 const markRead = vi.fn();
 const markAllRead = vi.fn();
+const acceptMutate = vi.fn();
+const declineMutate = vi.fn();
 let mockUnread = 0;
 let mockNotifications: unknown[] = [];
+let mockInvites: PendingInvitation[] = [];
 
 vi.mock("@/lib/collaboration/use-notifications", () => ({
   useNotifications: () => ({
@@ -15,21 +19,68 @@ vi.mock("@/lib/collaboration/use-notifications", () => ({
 vi.mock("@/lib/collaboration/use-notification-mutations", () => ({
   useNotificationMutations: () => ({ markRead, markAllRead }),
 }));
+vi.mock("@/lib/collaboration/use-invitations", () => ({
+  useInvitations: () => ({
+    query: { data: mockInvites },
+    invites: mockInvites,
+    count: mockInvites.length,
+  }),
+}));
+vi.mock("@/lib/collaboration/use-invitation-mutations", () => ({
+  useInvitationMutations: () => ({
+    accept: {
+      mutate: acceptMutate,
+      isPending: false,
+      variables: undefined,
+      error: null,
+    },
+    decline: {
+      mutate: declineMutate,
+      isPending: false,
+      variables: undefined,
+      error: null,
+    },
+  }),
+}));
 
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 
+const invite: PendingInvitation = {
+  id: "inv-1",
+  org_id: "org-1",
+  org_name: "Acme Inc",
+  role: "member",
+  created_at: new Date().toISOString(),
+};
+
+beforeEach(() => {
+  mockUnread = 0;
+  mockNotifications = [];
+  mockInvites = [];
+  acceptMutate.mockReset();
+  declineMutate.mockReset();
+});
+
 describe("NotificationsBell", () => {
-  it("shows the unread count on the badge", () => {
+  it("badge counts unread notifications plus pending invites", () => {
     mockUnread = 2;
-    mockNotifications = [];
+    mockInvites = [invite];
     render(<NotificationsBell userId="u1" />);
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 
-  it("renders no badge when there are no unread", () => {
-    mockUnread = 0;
-    mockNotifications = [];
+  it("renders no badge when there are no unread and no invites", () => {
     render(<NotificationsBell userId="u1" />);
     expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
+  });
+
+  it("shows the invitation and accepts it by id", () => {
+    mockInvites = [invite];
+    render(<NotificationsBell userId="u1" />);
+    fireEvent.click(screen.getByLabelText("Notifications"));
+    expect(screen.getByText(/Acme Inc/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    expect(acceptMutate).toHaveBeenCalled();
+    expect(acceptMutate.mock.calls[0][0]).toBe("inv-1");
   });
 });

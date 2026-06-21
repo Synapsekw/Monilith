@@ -355,6 +355,48 @@ export type Database = {
           },
         ];
       };
+      board_members: {
+        Row: {
+          access_level: Database["public"]["Enums"]["board_access"];
+          board_id: string;
+          created_at: string;
+          granted_by: string;
+          org_id: string;
+          user_id: string;
+        };
+        Insert: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          board_id: string;
+          created_at?: string;
+          granted_by: string;
+          org_id: string;
+          user_id: string;
+        };
+        Update: {
+          access_level?: Database["public"]["Enums"]["board_access"];
+          board_id?: string;
+          created_at?: string;
+          granted_by?: string;
+          org_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_members_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_members_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_views: {
         Row: {
           board_id: string;
@@ -1186,6 +1228,7 @@ export type Database = {
           email: string | null;
           full_name: string | null;
           id: string;
+          timezone: string | null;
           updated_at: string;
         };
         Insert: {
@@ -1194,6 +1237,7 @@ export type Database = {
           email?: string | null;
           full_name?: string | null;
           id: string;
+          timezone?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -1202,9 +1246,147 @@ export type Database = {
           email?: string | null;
           full_name?: string | null;
           id?: string;
+          timezone?: string | null;
           updated_at?: string;
         };
         Relationships: [];
+      };
+      relation_links: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          id: string;
+          item_id: string;
+          linked_item_id: string;
+          org_id: string;
+          position: number;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          created_at?: string;
+          id?: string;
+          item_id: string;
+          linked_item_id: string;
+          org_id: string;
+          position?: number;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          created_at?: string;
+          id?: string;
+          item_id?: string;
+          linked_item_id?: string;
+          org_id?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "relation_links_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_linked_item_id_fkey";
+            columns: ["linked_item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "relation_links_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      time_entries: {
+        Row: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          duration_secs: number | null;
+          ended_at: string | null;
+          id: string;
+          item_id: string;
+          org_id: string;
+          started_at: string;
+          user_id: string;
+        };
+        Insert: {
+          board_id: string;
+          column_id: string;
+          created_at?: string;
+          duration_secs?: number | null;
+          ended_at?: string | null;
+          id?: string;
+          item_id: string;
+          org_id: string;
+          started_at: string;
+          user_id: string;
+        };
+        Update: {
+          board_id?: string;
+          column_id?: string;
+          created_at?: string;
+          duration_secs?: number | null;
+          ended_at?: string | null;
+          id?: string;
+          item_id?: string;
+          org_id?: string;
+          started_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_column_id_fkey";
+            columns: ["column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_entries_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       workspaces: {
         Row: {
@@ -1291,11 +1473,14 @@ export type Database = {
         Returns: string;
       };
       _webhook_url_safe: { Args: { p_url: string }; Returns: boolean };
+      accept_invitation: { Args: { p_invite_id: string }; Returns: string };
       auth_user_orgs: { Args: never; Returns: string[] };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
         Returns: boolean;
       };
+      can_edit_board: { Args: { p_board_id: string }; Returns: boolean };
+      can_read_board: { Args: { p_board_id: string }; Returns: boolean };
       column_in_org: {
         Args: { p_column_id: string; p_org_id: string };
         Returns: boolean;
@@ -1494,6 +1679,7 @@ export type Database = {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
       };
+      decline_invitation: { Args: { p_invite_id: string }; Returns: undefined };
       delete_board_view: { Args: { p_view_id: string }; Returns: undefined };
       delete_column_option: {
         Args: { p_column_id: string; p_option_id: string };
@@ -1521,15 +1707,30 @@ export type Database = {
         };
         Returns: boolean;
       };
+      is_board_member: { Args: { p_board_id: string }; Returns: boolean };
       is_member_of: {
         Args: { p_org_id: string; p_user: string };
         Returns: boolean;
       };
       is_org_member: { Args: { p_org_id: string }; Returns: boolean };
+      is_org_member_of: {
+        Args: { p_org_id: string; p_user_id: string };
+        Returns: boolean;
+      };
       is_platform_admin: { Args: never; Returns: boolean };
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
+      };
+      my_pending_invitations: {
+        Args: never;
+        Returns: {
+          created_at: string;
+          id: string;
+          org_id: string;
+          org_name: string;
+          role: Database["public"]["Enums"]["org_role"];
+        }[];
       };
       platform_search_users: {
         Args: { p_limit?: number; p_offset?: number; p_query?: string };
@@ -1600,11 +1801,67 @@ export type Database = {
         };
         Returns: undefined;
       };
+      set_relation_links: {
+        Args: {
+          p_column_id: string;
+          p_item_id: string;
+          p_linked_item_ids: string[];
+        };
+        Returns: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          id: string;
+          item_id: string;
+          linked_item_id: string;
+          org_id: string;
+          position: number;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "relation_links";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       set_widget_layouts: {
         Args: { p_dashboard_id: string; p_layouts: Json };
         Returns: undefined;
       };
+      share_board: {
+        Args: {
+          p_access: Database["public"]["Enums"]["board_access"];
+          p_board_id: string;
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       shares_org_with: { Args: { p_user: string }; Returns: boolean };
+      start_timer: {
+        Args: { p_column_id: string; p_item_id: string };
+        Returns: {
+          board_id: string;
+          column_id: string;
+          created_at: string;
+          duration_secs: number | null;
+          ended_at: string | null;
+          id: string;
+          item_id: string;
+          org_id: string;
+          started_at: string;
+          user_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "time_entries";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      unshare_board: {
+        Args: { p_board_id: string; p_user_id: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       activity_action:
@@ -1614,6 +1871,7 @@ export type Database = {
         | "item_deleted"
         | "cell_changed"
         | "update_added";
+      board_access: "viewer" | "editor";
       column_kind:
         | "text"
         | "status"
@@ -1626,7 +1884,9 @@ export type Database = {
         | "link"
         | "email"
         | "phone"
-        | "files";
+        | "files"
+        | "time_tracking"
+        | "relation";
       notification_kind:
         | "mention"
         | "assigned"
@@ -1773,6 +2033,7 @@ export const Constants = {
         "cell_changed",
         "update_added",
       ],
+      board_access: ["viewer", "editor"],
       column_kind: [
         "text",
         "status",
@@ -1786,6 +2047,8 @@ export const Constants = {
         "email",
         "phone",
         "files",
+        "time_tracking",
+        "relation",
       ],
       notification_kind: [
         "mention",

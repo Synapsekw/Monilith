@@ -3,6 +3,8 @@ import {
   formatSize,
   fileKind,
   isPreviewable,
+  isPdf,
+  canPreviewInline,
 } from "@/lib/collaboration/attachments-format";
 
 describe("formatSize", () => {
@@ -44,5 +46,23 @@ describe("isPreviewable", () => {
   it("treats pdf/other as not previewable inline", () => {
     expect(isPreviewable("application/pdf")).toBe(false);
     expect(isPreviewable("application/octet-stream")).toBe(false);
+  });
+});
+
+describe("isPdf", () => {
+  it("is true only for application/pdf (case-insensitive)", () => {
+    expect(isPdf("application/pdf")).toBe(true);
+    expect(isPdf("APPLICATION/PDF")).toBe(true);
+    expect(isPdf("image/png")).toBe(false);
+  });
+});
+
+describe("canPreviewInline", () => {
+  it("covers the raster/video allow-list plus PDF, nothing else", () => {
+    expect(canPreviewInline("image/png")).toBe(true);
+    expect(canPreviewInline("video/mp4")).toBe(true);
+    expect(canPreviewInline("application/pdf")).toBe(true);
+    expect(canPreviewInline("image/svg+xml")).toBe(false);
+    expect(canPreviewInline("application/zip")).toBe(false);
   });
 });

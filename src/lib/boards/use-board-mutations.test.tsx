@@ -25,9 +25,29 @@ vi.mock("@/lib/boards/dependency-actions", () => ({
   deleteDependency: (...a: unknown[]) => deleteDependency(...a),
 }));
 
+const startTimerFn = vi.fn();
+const stopTimerFn = vi.fn();
+const addManualEntryFn = vi.fn();
+const editEntryFn = vi.fn();
+const deleteEntryFn = vi.fn();
+const setEstimateFn = vi.fn();
+vi.mock("@/lib/boards/time-actions", () => ({
+  startTimer: (...a: unknown[]) => startTimerFn(...a),
+  stopTimer: (...a: unknown[]) => stopTimerFn(...a),
+  addManualEntry: (...a: unknown[]) => addManualEntryFn(...a),
+  editEntry: (...a: unknown[]) => editEntryFn(...a),
+  deleteEntry: (...a: unknown[]) => deleteEntryFn(...a),
+  setEstimate: (...a: unknown[]) => setEstimateFn(...a),
+}));
+
 import { useBoardMutations, stripOption } from "./use-board-mutations";
 import { boardKey } from "./use-board-cache";
-import type { BoardCache, CacheCellValue, CacheDependency } from "./cache";
+import type {
+  BoardCache,
+  CacheCellValue,
+  CacheDependency,
+  CacheTimeEntry,
+} from "./cache";
 
 describe("stripOption", () => {
   function cell(value: CacheCellValue["value"]): CacheCellValue {
@@ -83,6 +103,8 @@ function seedCache(qc: QueryClient): BoardCache {
       } as CacheDependency,
     ],
     attachments: [],
+    timeEntries: [],
+    relationLinks: [],
   };
   qc.setQueryData(boardKey("b1"), cache);
   return cache;
@@ -447,6 +469,146 @@ describe("useBoardMutations.deleteGroup", () => {
       const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
       expect(cache.groups.map((g) => g.id)).toEqual(["g1", "g2"]);
       expect(cache.items).toHaveLength(1);
+    });
+  });
+});
+
+// ─── Time-tracking mutation tests ─────────────────────────────────────────────
+
+const ENTRY_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+function makeEntry(overrides?: Partial<CacheTimeEntry>): CacheTimeEntry {
+  return {
+    id: ENTRY_ID,
+    org_id: "o1",
+    board_id: "b1",
+    item_id: "i1",
+    column_id: "col1",
+    user_id: "u1",
+    started_at: "2026-06-20T12:00:00.000Z",
+    ended_at: "2026-06-20T13:00:00.000Z",
+    duration_secs: 3600,
+    created_at: "2026-06-20T12:00:00.000Z",
+    ...overrides,
+  } as CacheTimeEntry;
+}
+
+function seedWithEntries(qc: QueryClient): BoardCache {
+  const cache: BoardCache = {
+    board: { id: "b1", org_id: "o1", name: "B" } as never,
+    groups: [],
+    columns: [],
+    relationLinks: [],
+    items: [{ id: "i1", board_id: "b1", group_id: "g1", name: "One" } as never],
+    cellValues: [],
+    dependencies: [],
+    attachments: [],
+    timeEntries: [makeEntry()],
+  };
+  qc.setQueryData(boardKey("b1"), cache);
+  return cache;
+}
+
+describe("useBoardMutations.deleteEntry", () => {
+  beforeEach(() => deleteEntryFn.mockReset());
+
+  it("optimistically removes the time entry from cache", async () => {
+    const qc = new QueryClient();
+    seedWithEntries(qc);
+    deleteEntryFn.mockResolvedValue({ ok: true, data: { id: ENTRY_ID } });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.deleteEntry(ENTRY_ID);
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.timeEntries).toHaveLength(0);
+    expect(deleteEntryFn).toHaveBeenCalledWith({ entryId: ENTRY_ID });
+  });
+
+  it("rolls back the time entry when the action fails", async () => {
+    const qc = new QueryClient();
+    seedWithEntries(qc);
+    deleteEntryFn.mockResolvedValue({ ok: false, error: "not found" });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.deleteEntry(ENTRY_ID);
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.timeEntries).toHaveLength(1);
+      expect(cache.timeEntries[0].id).toBe(ENTRY_ID);
+    });
+  });
+});
+
+describe("useBoardMutations.startTimer", () => {
+  beforeEach(() => startTimerFn.mockReset());
+
+  it("upserts all returned entries (stopped + new) into cache on success", async () => {
+    const qc = new QueryClient();
+    // Seed with a running entry that will be stopped by startTimer
+    const runningEntry = makeEntry({
+      id: "running-id",
+      ended_at: null,
+      duration_secs: null,
+    } as Partial<CacheTimeEntry>);
+    const cache: BoardCache = {
+      board: { id: "b1", org_id: "o1", name: "B" } as never,
+      groups: [],
+      columns: [],
+      relationLinks: [],
+      items: [
+        { id: "i1", board_id: "b1", group_id: "g1", name: "One" } as never,
+      ],
+      cellValues: [],
+      dependencies: [],
+      attachments: [],
+      timeEntries: [runningEntry],
+    };
+    qc.setQueryData(boardKey("b1"), cache);
+
+    const stoppedEntry = makeEntry({
+      id: "running-id",
+      ended_at: "2026-06-20T14:00:00.000Z",
+      duration_secs: 7200,
+    });
+    const newEntry = makeEntry({
+      id: "new-timer-id",
+      ended_at: null,
+      duration_secs: null,
+    } as Partial<CacheTimeEntry>);
+
+    startTimerFn.mockResolvedValue({
+      ok: true,
+      data: { entries: [stoppedEntry, newEntry] },
+    });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.startTimer("i1", "col1");
+    });
+
+    await waitFor(() => {
+      const updated = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      const ids = updated.timeEntries.map((t) => t.id);
+      expect(ids).toContain("running-id");
+      expect(ids).toContain("new-timer-id");
+      // Stopped entry should have been updated in-place
+      const stopped = updated.timeEntries.find((t) => t.id === "running-id");
+      expect(stopped?.ended_at).toBe("2026-06-20T14:00:00.000Z");
     });
   });
 });

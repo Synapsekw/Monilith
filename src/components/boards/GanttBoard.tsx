@@ -32,6 +32,7 @@ import {
 import { resolveDateColumn, itemDateRange } from "@/lib/boards/dates";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
+import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -137,10 +138,14 @@ export function GanttBoard({
   payload,
   selectedViewId,
   members = [],
+  access = "owner",
+  grants = [],
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
   selectedViewId: string;
+  access?: BoardAccess;
+  grants?: HeaderGrant[];
 }) {
   const { data: cache } = useBoardCache(
     payload.board.id,
@@ -283,6 +288,8 @@ export function GanttBoard({
           selectedViewId={selectedViewId}
           columns={cache.columns}
           members={members}
+          access={access}
+          grants={grants}
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <div className="flex flex-col items-center gap-3 text-center">
@@ -351,6 +358,8 @@ export function GanttBoard({
         selectedViewId={selectedViewId}
         columns={cache.columns}
         members={members}
+        access={access}
+        grants={grants}
       />
 
       {/* Controls bar */}

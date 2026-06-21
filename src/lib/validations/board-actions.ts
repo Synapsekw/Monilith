@@ -49,6 +49,9 @@ export const createColumnSchema = z.object({
   boardId: uuid,
   kind: columnKindSchema,
   name: name.optional(),
+  // Optional initial settings (e.g. a relation column's target board). Validated
+  // against the kind's settings schema inside the action.
+  settings: z.record(z.string(), z.unknown()).optional(),
 });
 export const renameColumnSchema = z.object({ columnId: uuid, name });
 export const deleteColumnSchema = z.object({ columnId: uuid });
@@ -72,4 +75,39 @@ export const updateColumnSettingsSchema = z.object({
 export const removeColumnOptionSchema = z.object({
   columnId: uuid,
   optionId: z.string().min(1),
+});
+
+// --- time-tracking action schemas ---
+export const startTimerSchema = z.object({ itemId: uuid, columnId: uuid });
+export const stopTimerSchema = z.object({ entryId: uuid });
+export const addManualEntrySchema = z.object({
+  itemId: uuid,
+  columnId: uuid,
+  // local date (YYYY-MM-DD) the session is logged against; defaults today in UI
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  durationSecs: z
+    .number()
+    .int()
+    .positive()
+    .max(86_400 * 366),
+});
+export const editEntrySchema = z.object({
+  entryId: uuid,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  durationSecs: z
+    .number()
+    .int()
+    .positive()
+    .max(86_400 * 366),
+});
+export const deleteEntrySchema = z.object({ entryId: uuid });
+export const setEstimateSchema = z.object({
+  itemId: uuid,
+  columnId: uuid,
+  estimateSeconds: z.number().int().positive().nullable(),
+});
+export const setRelationLinksSchema = z.object({
+  itemId: uuid,
+  columnId: uuid,
+  linkedItemIds: z.array(uuid).max(200),
 });

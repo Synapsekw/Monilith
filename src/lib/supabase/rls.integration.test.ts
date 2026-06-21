@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
 // Load the real dev credentials. `override: true` is required because
@@ -50,7 +51,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS tenant isolation", () => {
     const anon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { error: signInErr } = await anon.auth.signInWithPassword({
+    const { error: signInErr } = await signInWithRetry(anon, {
       email,
       password: PASSWORD,
     });

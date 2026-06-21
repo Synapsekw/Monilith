@@ -45,6 +45,7 @@ describe("InvitePanel", () => {
         id: "inv-1",
         email: "pending@x.com",
         role: "member",
+        status: "pending",
         created_at: new Date().toISOString(),
       },
     ];
@@ -52,5 +53,26 @@ describe("InvitePanel", () => {
     const row = screen.getByText("pending@x.com").closest("li")!;
     fireEvent.click(within(row).getByRole("button", { name: "Revoke" }));
     expect(revokeInvite).toHaveBeenCalledWith({ inviteId: "inv-1" });
+  });
+
+  it("shows Re-invite (not Revoke) for a declined invite and re-invites with the same email/role", () => {
+    const invites: Invite[] = [
+      {
+        id: "inv-2",
+        email: "declined@x.com",
+        role: "member",
+        status: "declined",
+        created_at: new Date().toISOString(),
+      },
+    ];
+    render(<InvitePanel orgId={ORG} invites={invites} />);
+    const row = screen.getByText("declined@x.com").closest("li")!;
+    expect(within(row).queryByRole("button", { name: "Revoke" })).toBeNull();
+    fireEvent.click(within(row).getByRole("button", { name: "Re-invite" }));
+    expect(inviteMember).toHaveBeenCalledWith({
+      orgId: ORG,
+      email: "declined@x.com",
+      role: "member",
+    });
   });
 });

@@ -19,7 +19,9 @@ describe("BoardsNav", () => {
   });
 
   it("shows 'No boards yet' when no boards are provided", () => {
-    render(<BoardsNav boards={[]} workspaces={noWorkspaces} />);
+    render(
+      <BoardsNav boards={[]} sharedBoards={[]} workspaces={noWorkspaces} />,
+    );
 
     expect(screen.getByText("No boards yet")).toBeInTheDocument();
   });
@@ -33,8 +35,10 @@ describe("BoardsNav", () => {
             name: "My Board",
             workspace_id: "w1",
             position: 0,
+            shared_out: false,
           },
         ]}
+        sharedBoards={[]}
         workspaces={noWorkspaces}
       />,
     );
@@ -54,14 +58,17 @@ describe("BoardsNav", () => {
             name: "Active Board",
             workspace_id: "w1",
             position: 0,
+            shared_out: false,
           },
           {
             id: "board-456",
             name: "Other Board",
             workspace_id: "w1",
             position: 1,
+            shared_out: false,
           },
         ]}
+        sharedBoards={[]}
         workspaces={noWorkspaces}
       />,
     );
@@ -86,8 +93,10 @@ describe("BoardsNav", () => {
               name: "Sprint backlog",
               workspace_id: "w1",
               position: 0,
+              shared_out: false,
             },
           ]}
+          sharedBoards={[]}
           workspaces={[{ id: "w1", name: "Acme" }]}
         />
       </TooltipProvider>,
@@ -97,5 +106,57 @@ describe("BoardsNav", () => {
     expect(link).toHaveAttribute("href", "/boards/b1");
     expect(link).toHaveTextContent("S");
     expect(screen.queryByText("Boards")).not.toBeInTheDocument();
+  });
+
+  it("renders My boards with a shared indicator and a Shared with me section", () => {
+    render(
+      <BoardsNav
+        boards={[
+          {
+            id: "b1",
+            name: "Roadmap",
+            workspace_id: "w",
+            position: 0,
+            shared_out: true,
+          },
+          {
+            id: "b2",
+            name: "Personal",
+            workspace_id: "w",
+            position: 1,
+            shared_out: false,
+          },
+        ]}
+        sharedBoards={[
+          {
+            id: "b3",
+            name: "Q3 Launch",
+            position: 0,
+            owner_name: "Dana",
+            access_level: "viewer",
+          },
+          {
+            id: "b4",
+            name: "Editable Plan",
+            position: 1,
+            owner_name: "Mo",
+            access_level: "editor",
+          },
+        ]}
+        workspaces={[{ id: "w", name: "WS" }]}
+      />,
+    );
+    expect(screen.getByText("My boards")).toBeInTheDocument();
+    expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    expect(screen.getByText("Q3 Launch")).toBeInTheDocument();
+    expect(screen.getByLabelText("Shared with others")).toBeInTheDocument();
+    expect(screen.getByText(/Dana/)).toBeInTheDocument();
+
+    // Viewer-access shared boards get a subtle read-only hint; editor ones don't.
+    const viewerHints = screen.getAllByLabelText("View only");
+    expect(viewerHints).toHaveLength(1);
+    expect(screen.getByText("Q3 Launch").parentElement).toContainElement(
+      viewerHints[0],
+    );
   });
 });

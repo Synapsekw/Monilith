@@ -68,7 +68,13 @@ describe("AppShell", () => {
     render(
       <AppShell
         boards={[
-          { id: "b1", name: "Sprint backlog", workspace_id: "w1", position: 0 },
+          {
+            id: "b1",
+            name: "Sprint backlog",
+            workspace_id: "w1",
+            position: 0,
+            shared_out: false,
+          },
         ]}
       >
         <div>content</div>

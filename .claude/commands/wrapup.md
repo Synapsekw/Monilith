@@ -38,6 +38,14 @@ related: []
 
 (1–3 sentences — the context git log can't capture. Why was this work needed? What broader goal does it serve?)
 
+## How to test (for the user)
+
+(Numbered, concrete manual-test steps for a shipped, user-observable feature: where to go, what to
+click/enter, expected result at each step — plus any setup like "pull `develop`" / which env. This
+mirrors the closing-message walkthrough required at task closure, AGENTS.md working agreement #1.
+If the work is NOT user-observable — pure refactor, infra, internal lib — write a single line:
+"No user-facing behavior to test — verified by the test suite.")
+
 ## Open threads
 
 - (anything left unfinished, blockers, follow-ups; bullet list)
@@ -53,7 +61,28 @@ related: []
    - **Bump `last-updated`** in the frontmatter to today's date.
    - Add the new session to the `related:` of anything it closes out, and link it with `[[<session-filename-without-ext>]]` where relevant.
 
-6. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
+6. **Check for link rot (best-effort, via the `obsidian-cli` skill).** Catch broken wikilinks and
+   newly-stranded notes so dev-memory doesn't silently rot. This needs the Obsidian desktop app
+   running, so skip it cleanly when the binary is absent — never block a wrapup on it:
+
+   ```bash
+   command -v obsidian >/dev/null 2>&1 || echo "obsidian CLI not available — skipping link-rot check"
+   ```
+
+   If available:
+   - `obsidian unresolved 2>/dev/null` — broken `[[wikilinks]]`. **Expect false positives** from
+     code blocks and from intentional cross-refs to **auto-memory** slugs (those live in
+     `~/.claude/.../memory/`, not the vault). Only act on links that point at *vault* notes which
+     should exist — fix them, or note them in "Open threads".
+   - `obsidian orphans 2>/dev/null | grep '^vault/'` — vault notes with no links in or out (the
+     whole repo is the Obsidian vault, so `grep '^vault/'` is required to cut the noise). New
+     session notes land here; link the important ones into the graph (north-star, a MOC, or a
+     `related:` entry) rather than leaving them stranded.
+
+   Keep it light — a quick rot check, not a full audit. This is a `pulse` main-thread tool only;
+   subagents in headless worktree builds can't reach the running desktop app.
+
+7. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
    commits its own output:
 
    ```bash
@@ -66,7 +95,7 @@ related: []
    - If there are also source changes in the working tree, leave them staged-out and untouched.
    - Don't push unless the user asks.
 
-7. **Report back** to the user with the session file path, the commit hash, and a one-line
+8. **Report back** to the user with the session file path, the commit hash, and a one-line
    summary, and note what you changed in the north-star.
 
 ## Discipline

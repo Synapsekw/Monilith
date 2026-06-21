@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
-import { listBoards } from "@/lib/boards/queries";
+import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
 import { listDashboards } from "@/lib/dashboards/queries";
 import { getUserOrgs } from "@/lib/auth/session";
 import { requirePlatformAdmin } from "@/lib/platform/guard";
@@ -16,12 +16,14 @@ export default async function AdminLayout({
   // The gate: redirects non-admins; never reveals the route (see guard.ts).
   const user = await requirePlatformAdmin();
   const supabase = await createClient();
-  const [orgs, boards, dashboards, { data: workspaces }] = await Promise.all([
-    getUserOrgs(),
-    listBoards(),
-    listDashboards(),
-    supabase.from("workspaces").select("id, name"),
-  ]);
+  const [orgs, boards, sharedBoards, dashboards, { data: workspaces }] =
+    await Promise.all([
+      getUserOrgs(),
+      listMyBoards(),
+      listSharedBoards(),
+      listDashboards(),
+      supabase.from("workspaces").select("id, name"),
+    ]);
 
   // Render the admin console INSIDE the app shell so the collapsible Platform
   // sidebar section is present on every /admin page (we're past the gate, so the
@@ -39,6 +41,7 @@ export default async function AdminLayout({
       org={{ name: orgs[0]?.name ?? "Monolith" }}
       workspaces={workspaces ?? []}
       boards={boards}
+      sharedBoards={sharedBoards}
       dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
       isPlatformAdmin
     >

@@ -14,6 +14,8 @@ export function operatorsForKind(kind: string): FilterOperator[] {
     case "date":
       return ["before", "after", "on", ...EMPTIES];
     // dropdown/people value-matching is deferred; empties still work.
+    case "time_tracking":
+      return [];
     default:
       return [...EMPTIES];
   }

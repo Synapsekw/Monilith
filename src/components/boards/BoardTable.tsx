@@ -26,11 +26,26 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
-import { rollupCell } from "@/lib/boards/rollup";
+import { rollupCell, rollupTimeTracking } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
+import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
+import { RelationCell } from "@/components/boards/cells/RelationCell";
+import { RelationColumnConfig } from "@/components/boards/RelationColumnConfig";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  listRelationCandidates,
+  listRelationTargetBoards,
+} from "@/lib/boards/relation-candidates";
+import { relationRollup, type RelationLink } from "@/lib/boards/relations";
 import { FilePreviewLightbox } from "@/components/boards/item-panel/FilePreviewLightbox";
 import {
   getAttachmentDownloadUrl,
@@ -38,6 +53,7 @@ import {
 } from "@/lib/collaboration/actions";
 import { RollupCell } from "@/components/boards/RollupCell";
 import { BoardHeader } from "@/components/boards/BoardHeader";
+import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
 import {
   CellEditor,
@@ -49,7 +65,13 @@ import type {
   CacheCellValue,
   CacheColumn,
 } from "@/lib/boards/cache";
-import { buildCellMap, cellKey, filesForCell } from "@/lib/boards/cache";
+import {
+  buildCellMap,
+  cellKey,
+  filesForCell,
+  timeEntriesForCell,
+  relationLinksForCell,
+} from "@/lib/boards/cache";
 import { countOptionUsage } from "@/lib/boards/option-edit";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
@@ -93,6 +115,8 @@ type CellControls = {
   clearCellValue: (vars: { itemId: string; columnId: string }) => void;
   members: EditorMember[];
   boardId: string;
+  /** The signed-in user's id — threaded from the board page server component. */
+  currentUserId: string;
   addItem: (
     vars: { groupId: string; name: string },
     callbacks?: { onSuccess?: () => void; onError?: (err: Error) => void },
@@ -114,6 +138,28 @@ type CellControls = {
   uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
   /** Open the Files lightbox over a cell's attachments at the given index. */
   openFilesLightbox: (files: readonly CacheAttachment[], index: number) => void;
+  // ─── Time-tracking callbacks ───────────────────────────────────────────────
+  startTimer: (itemId: string, columnId: string) => void;
+  stopTimer: (entryId: string) => void;
+  addManualEntry: (
+    itemId: string,
+    columnId: string,
+    date: string,
+    durationSecs: number,
+  ) => void;
+  editEntry: (entryId: string, date: string, durationSecs: number) => void;
+  deleteEntry: (entryId: string) => void;
+  setEstimate: (
+    itemId: string,
+    columnId: string,
+    estimateSeconds: number | null,
+  ) => void;
+  // ─── Relation callbacks ──────────────────────────────────────────────────────
+  setRelationLinks: (vars: {
+    itemId: string;
+    columnId: string;
+    links: RelationLink[];
+  }) => void;
 };
 
 const ROW_HEIGHT = 36; // direction C density
@@ -150,11 +196,15 @@ export function BoardTable({
   members = [],
   selectedViewId,
   currentUserId = "",
+  access = "owner",
+  grants = [],
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
   selectedViewId: string;
   currentUserId?: string;
+  access?: BoardAccess;
+  grants?: HeaderGrant[];
 }) {
   // Hydrate the ["board", boardId] cache once from the server payload; read all
   // board data from the cache so optimistic + realtime patches re-render.
@@ -169,6 +219,12 @@ export function BoardTable({
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
+  // Relation add-column flow: when "Relation" is picked we collect a target
+  // board + allow-multiple before creating the column (settings are required).
+  const [relationConfigOpen, setRelationConfigOpen] = useState(false);
+  const [relationTargetBoards, setRelationTargetBoards] = useState<
+    { id: string; name: string }[]
+  >([]);
 
   // Files-column lightbox state. The viewed cell's attachments and the active
   // index live here; preview URLs are minted lazily on open (only for that
@@ -283,6 +339,7 @@ export function BoardTable({
     clearCellValue,
     members,
     boardId: payload.board.id,
+    currentUserId,
     addItem,
     renameItemInCache: renameItemMutation,
     addSubitem: (parentId, name, cbs) =>
@@ -295,6 +352,13 @@ export function BoardTable({
     cache,
     uploadColumnFile: mutations.uploadColumnFile,
     openFilesLightbox,
+    startTimer: mutations.startTimer,
+    stopTimer: mutations.stopTimer,
+    addManualEntry: mutations.addManualEntry,
+    editEntry: mutations.editEntry,
+    deleteEntry: mutations.deleteEntry,
+    setEstimate: mutations.setEstimate,
+    setRelationLinks: mutations.setRelationLinks,
   };
 
   const sensors = useSensors(
@@ -321,6 +385,8 @@ export function BoardTable({
         selectedViewId={selectedViewId}
         columns={columns}
         members={members}
+        access={access}
+        grants={grants}
       />
 
       <div className="flex-1 overflow-auto">
@@ -354,7 +420,17 @@ export function BoardTable({
                 onEditOptions={() => setOptionsFor(col)}
               />
             ))}
-            <AddColumnMenu onAdd={(kind) => mutations.addColumn(kind)} />
+            <AddColumnMenu
+              onAdd={(kind) => {
+                if (kind === "relation") {
+                  setRelationTargetBoards([]);
+                  setRelationConfigOpen(true);
+                  listRelationTargetBoards().then(setRelationTargetBoards);
+                } else {
+                  mutations.addColumn(kind);
+                }
+              }}
+            />
           </div>
 
           {groups.length === 0 ? (
@@ -428,6 +504,25 @@ export function BoardTable({
           }}
         />
       )}
+
+      <Dialog open={relationConfigOpen} onOpenChange={setRelationConfigOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Connect boards</DialogTitle>
+            <DialogDescription>
+              Pick the board this column links items to.
+            </DialogDescription>
+          </DialogHeader>
+          <RelationColumnConfig
+            boards={relationTargetBoards.filter((b) => b.id !== board.id)}
+            onConfirm={(settings) => {
+              mutations.addColumn("relation", settings);
+              setRelationConfigOpen(false);
+            }}
+            onCancel={() => setRelationConfigOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {filesLightbox && (
         <FilePreviewLightbox
@@ -934,6 +1029,12 @@ function ItemRow({
   onRenameSettled: () => void;
   onSubitemAdded?: (id: string) => void;
 }) {
+  // Collapsed-parent time rollup needs a "now" for any running child entry, but
+  // a bare Date.now() in render violates react-hooks/purity. Snapshot it at mount
+  // via a lazy initializer (same idiom as TimeTrackingCell): the Σ of a running
+  // child's elapsed time is approximate while collapsed — the live tick happens in
+  // the expanded child cell — and it refreshes whenever this (virtualized) row remounts.
+  const [rollupNowMs] = useState(() => Date.now());
   const {
     setNodeRef,
     attributes,
@@ -1038,6 +1139,49 @@ function ItemRow({
       />
       {columns.map((col) => {
         if (childCount > 0 && !isExpanded) {
+          if (col.kind === "time_tracking") {
+            const childEntries = subitems.flatMap((c) =>
+              timeEntriesForCell(controls.cache, c.id, col.id),
+            );
+            const estimates = subitems
+              .map(
+                (c) =>
+                  (
+                    cellMap.get(cellKey(c.id, col.id)) as
+                      | { estimateSeconds?: number }
+                      | undefined
+                  )?.estimateSeconds,
+              )
+              .filter((n): n is number => typeof n === "number");
+            const result = rollupTimeTracking(
+              childEntries,
+              estimates,
+              rollupNowMs,
+            );
+            return (
+              <div
+                key={col.id}
+                className="flex h-full items-center truncate border-l px-3"
+              >
+                <RollupCell result={result} />
+              </div>
+            );
+          }
+          if (col.kind === "relation") {
+            const childLinks = subitems.flatMap((c) =>
+              relationLinksForCell(controls.cache, c.id, col.id),
+            );
+            return (
+              <div
+                key={col.id}
+                className="flex h-full items-center truncate border-l px-3"
+              >
+                <span className="text-muted-foreground text-xs">
+                  {relationRollup(childLinks)}
+                </span>
+              </div>
+            );
+          }
           const values = subitems.map(
             (c) => cellMap.get(cellKey(c.id, col.id)) ?? null,
           );
@@ -1304,6 +1448,72 @@ function EditableCell({
           previewUrls={{}}
           onOpen={(i) => controls.openFilesLightbox(files, i)}
           onUpload={(f) => controls.uploadColumnFile(item.id, column.id, f)}
+        />
+      </div>
+    );
+  }
+
+  // Time-tracking cells need the board cache + timer callbacks — special-cased
+  // like files; not routed through CellRenderer or the isEditing/inline branch.
+  if (column.kind === "time_tracking") {
+    const entries = timeEntriesForCell(controls.cache, item.id, column.id);
+    const estimate =
+      (value as { estimateSeconds?: number } | null)?.estimateSeconds ?? null;
+    return (
+      <div className="flex h-full items-center border-l px-3">
+        <TimeTrackingCell
+          entries={entries}
+          estimateSeconds={estimate}
+          currentUserId={controls.currentUserId}
+          onStart={() => controls.startTimer(item.id, column.id)}
+          onStop={(id) => controls.stopTimer(id)}
+          onAddManual={(date, secs) =>
+            controls.addManualEntry(item.id, column.id, date, secs)
+          }
+          onEdit={(id, date, secs) => controls.editEntry(id, date, secs)}
+          onDelete={(id) => controls.deleteEntry(id)}
+          onSetEstimate={(secs) =>
+            controls.setEstimate(item.id, column.id, secs)
+          }
+        />
+      </div>
+    );
+  }
+
+  // Relation cells render linked-item chips + an RLS-scoped picker; links live
+  // in relation_links (not cell_values), so they're special-cased like files.
+  if (column.kind === "relation") {
+    const links = relationLinksForCell(controls.cache, item.id, column.id);
+    const relSettings = (column.settings ?? {}) as {
+      target_board_id?: string;
+      allow_multiple?: boolean;
+    };
+    const targetBoardId = relSettings.target_board_id ?? "";
+    return (
+      <div className="flex h-full items-center border-l px-1">
+        <RelationCell
+          links={links}
+          allowMultiple={relSettings.allow_multiple ?? true}
+          loadCandidates={(search) =>
+            targetBoardId
+              ? listRelationCandidates(targetBoardId, search)
+              : Promise.resolve([])
+          }
+          onChange={(selection) => {
+            const newLinks: RelationLink[] = selection.map((s, i) => ({
+              id: `optimistic-${item.id}-${column.id}-${s.linkedItemId}`,
+              itemId: item.id,
+              columnId: column.id,
+              linkedItemId: s.linkedItemId,
+              linkedItemName: s.linkedItemName,
+              position: i,
+            }));
+            controls.setRelationLinks({
+              itemId: item.id,
+              columnId: column.id,
+              links: newLinks,
+            });
+          }}
         />
       </div>
     );

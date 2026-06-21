@@ -2,6 +2,8 @@ import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+const sharedExclude = ["e2e/**", "node_modules/**", ".next/**"];
+
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -12,8 +14,33 @@ export default defineConfig({
     // src/test/global-teardown.ts (exports a named `teardown`).
     globalSetup: ["./src/test/global-teardown.ts"],
     globals: true,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
-    exclude: ["e2e/**", "node_modules/**", ".next/**"],
+    // Two projects (both inherit the options above via `extends: true`):
+    //   - unit: fast, parallel, everything except the integration suites.
+    //   - integration: the *.integration.test.ts suites, which hit the live
+    //     cloud Supabase project. Run serially — concurrent files collectively
+    //     trip GoTrue's auth rate limit (429 over_request_rate_limit), which
+    //     surfaces either loudly or silently as a null org from
+    //     create_organization. Pairs with signInWithRetry() in
+    //     src/test/integration-auth.ts.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["src/**/*.{test,spec}.{ts,tsx}"],
+          exclude: [...sharedExclude, "src/**/*.integration.test.{ts,tsx}"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "integration",
+          include: ["src/**/*.integration.test.{ts,tsx}"],
+          exclude: sharedExclude,
+          fileParallelism: false,
+        },
+      },
+    ],
   },
   resolve: {
     alias: {

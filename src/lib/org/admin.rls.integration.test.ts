@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
 // Load the real dev credentials. `override: true` is required because
@@ -58,7 +59,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("admin RLS + RPCs", () => {
     const anon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { error: signInErr } = await anon.auth.signInWithPassword({
+    const { error: signInErr } = await signInWithRetry(anon, {
       email,
       password: PW,
     });
@@ -270,7 +271,20 @@ describe.skipIf(!SERVICE_ROLE_KEY)("admin RLS + RPCs", () => {
   });
 
   it("deactivated member is denied org data; reactivation restores it", async () => {
-    // Baseline: active member sees their org + board.
+    // Board reads are per-board now (board_members), so grant the member access
+    // first; deactivation must still revoke it. Seed via the service client
+    // (setup; not the RPC under test). Cleaned up at the end so later cases see
+    // the member without board access.
+    const { error: shareErr } = await admin.from("board_members").insert({
+      org_id: orgId,
+      board_id: boardId,
+      user_id: member.id,
+      access_level: "viewer" as const,
+      granted_by: owner.id,
+    });
+    expect(shareErr).toBeNull();
+
+    // Baseline: active, shared member sees their org + board.
     const { data: orgsBefore } = await member.anon
       .from("organizations")
       .select("id")
@@ -317,6 +331,13 @@ describe.skipIf(!SERVICE_ROLE_KEY)("admin RLS + RPCs", () => {
     expect((orgsBack ?? []).map((r) => (r as { id: string }).id)).toEqual([
       orgId,
     ]);
+
+    // Cleanup: drop the board share so later cases see the member board-less.
+    await admin
+      .from("board_members")
+      .delete()
+      .eq("board_id", boardId)
+      .eq("user_id", member.id);
   });
 
   it("invitations visibility per role", async () => {
@@ -465,7 +486,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("admin RLS + RPCs", () => {
     const newAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { error: signInErr } = await newAnon.auth.signInWithPassword({
+    const { error: signInErr } = await signInWithRetry(newAnon, {
       email: newEmail,
       password: PW,
     });

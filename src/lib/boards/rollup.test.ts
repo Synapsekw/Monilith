@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rollupCell } from "./rollup";
+import { rollupCell, rollupTimeTracking } from "./rollup";
 
 describe("rollupCell", () => {
   it("returns blank when no values are present", () => {
@@ -73,4 +73,29 @@ describe("rollupCell", () => {
   it("is blank for text", () => {
     expect(rollupCell("text", [{ text: "hi" }]).kind).toBe("blank");
   });
+});
+
+it("sums child tracked totals + estimates into a duration rollup", () => {
+  const now = Date.UTC(2026, 5, 20, 12, 0, 0);
+  const r = rollupTimeTracking(
+    [
+      { started_at: "x", ended_at: "y", duration_secs: 3600 },
+      { started_at: "x", ended_at: "y", duration_secs: 1800 },
+    ],
+    [7200],
+    now,
+  );
+  expect(r).toEqual({ kind: "duration", totalSecs: 5400, estimateSecs: 7200 });
+});
+it("returns blank when both tracked and estimate are zero", () => {
+  const r = rollupTimeTracking([], [], Date.now());
+  expect(r).toEqual({ kind: "blank" });
+});
+it("omits estimateSecs when no estimates provided", () => {
+  const r = rollupTimeTracking(
+    [{ started_at: "x", ended_at: "y", duration_secs: 1800 }],
+    [],
+    Date.now(),
+  );
+  expect(r).toEqual({ kind: "duration", totalSecs: 1800 });
 });

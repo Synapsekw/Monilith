@@ -1,0 +1,49 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import {
+  shareBoardSchema,
+  unshareBoardSchema,
+} from "@/lib/validations/board-sharing";
+
+export type ShareActionResult = { ok: true } | { ok: false; error: string };
+const fail = (error: string): ShareActionResult => ({ ok: false, error });
+
+function friendly(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("board owner"))
+    return "Only the board owner can manage sharing.";
+  if (m.includes("not a member"))
+    return "That person isn't in your organization yet.";
+  return "Something went wrong. Please try again.";
+}
+
+export async function shareBoard(input: unknown): Promise<ShareActionResult> {
+  const parsed = shareBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("share_board", {
+    p_board_id: parsed.data.boardId,
+    p_user_id: parsed.data.userId,
+    p_access: parsed.data.access,
+  });
+  if (error) return fail(friendly(error.message));
+  revalidatePath("/boards", "layout");
+  return { ok: true };
+}
+
+export async function unshareBoard(input: unknown): Promise<ShareActionResult> {
+  const parsed = unshareBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("unshare_board", {
+    p_board_id: parsed.data.boardId,
+    p_user_id: parsed.data.userId,
+  });
+  if (error) return fail(friendly(error.message));
+  revalidatePath("/boards", "layout");
+  return { ok: true };
+}

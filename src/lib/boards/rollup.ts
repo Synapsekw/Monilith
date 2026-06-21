@@ -1,4 +1,5 @@
 import type { ColumnKind, ColumnOption } from "@/lib/validations/boards";
+import { trackedSeconds, type TimeEntryLike } from "@/lib/boards/time-format";
 
 export type RollupResult =
   | { kind: "blank" }
@@ -11,7 +12,8 @@ export type RollupResult =
   | { kind: "dateSpan"; start: string; end: string }
   | { kind: "people"; count: number }
   | { kind: "checkbox"; checked: number; total: number }
-  | { kind: "rating"; average: number };
+  | { kind: "rating"; average: number }
+  | { kind: "duration"; totalSecs: number; estimateSecs?: number };
 
 type Options = readonly ColumnOption[] | undefined;
 
@@ -106,8 +108,29 @@ export function rollupCell(
     case "email":
     case "phone":
     case "files":
+    case "time_tracking":
+    // relation has no cell_values; its collapsed rollup ("N linked") derives
+    // from relation_links and is rendered in BoardTable via relationRollup().
+    case "relation":
       return { kind: "blank" };
   }
+}
+
+/**
+ * Parent rollup for a time-tracking column. Sums subitem tracked totals (from
+ * time_entries) + estimates (from the subitems' estimate cell values). Pure.
+ */
+export function rollupTimeTracking(
+  entries: readonly TimeEntryLike[],
+  estimateSecsList: readonly number[],
+  nowMs: number,
+): RollupResult {
+  const totalSecs = trackedSeconds(entries, nowMs);
+  const estimateSecs = estimateSecsList.reduce((a, b) => a + b, 0);
+  if (totalSecs === 0 && estimateSecs === 0) return { kind: "blank" };
+  return estimateSecs > 0
+    ? { kind: "duration", totalSecs, estimateSecs }
+    : { kind: "duration", totalSecs };
 }
 
 function distribution(

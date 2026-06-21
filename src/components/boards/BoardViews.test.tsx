@@ -70,6 +70,8 @@ describe("BoardViews", () => {
         members={[]}
         initialViewId="v1"
         currentUserId="u1"
+        access="owner"
+        grants={[]}
       />,
     );
     expect(screen.getByTestId("table")).toHaveTextContent("table:v1");
@@ -84,6 +86,8 @@ describe("BoardViews", () => {
         members={[]}
         initialViewId="v1"
         currentUserId="u1"
+        access="owner"
+        grants={[]}
       />,
     );
     expect(screen.getByTestId("kanban")).toHaveTextContent("kanban:v2");
@@ -98,6 +102,8 @@ describe("BoardViews", () => {
         members={[]}
         initialViewId="v2"
         currentUserId="u1"
+        access="owner"
+        grants={[]}
       />,
     );
     expect(screen.getByTestId("kanban")).toHaveTextContent("kanban:v2");
@@ -111,6 +117,8 @@ describe("BoardViews", () => {
         members={[]}
         initialViewId="v1"
         currentUserId="u1"
+        access="owner"
+        grants={[]}
       />,
     );
     expect(screen.getByTestId("calendar")).toHaveTextContent("calendar:v3");
@@ -126,6 +134,8 @@ describe("BoardViews", () => {
         members={[]}
         initialViewId="v1"
         currentUserId="u1"
+        access="owner"
+        grants={[]}
       />,
     );
     expect(screen.getByTestId("gantt")).toHaveTextContent("gantt:v4");

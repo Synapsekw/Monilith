@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
 config({ path: ".env.local", override: true });
@@ -89,7 +90,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5c-2 webhook", () => {
     userAAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await userAAnon.auth.signInWithPassword({
+    await signInWithRetry(userAAnon, {
       email: emailA,
       password: PASSWORD,
     });
@@ -159,7 +160,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5c-2 webhook", () => {
     userMAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await userMAnon.auth.signInWithPassword({
+    await signInWithRetry(userMAnon, {
       email: emailM,
       password: PASSWORD,
     });
@@ -169,6 +170,20 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5c-2 webhook", () => {
       org_id: orgAId,
       user_id: userMId,
       role: "member",
+    });
+
+    // Grant userM editor access on Board A. Since board-level sharing,
+    // automations writes require can_edit_board(board_id) — without a board
+    // grant userM (a plain org member) could not create ANY automation here.
+    // This isolates the webhook admin-gate as the behavior under test: the
+    // webhook rule is still blocked by the admin-gate trigger, while the
+    // non-webhook rule is allowed.
+    await admin.from("board_members").insert({
+      org_id: orgAId,
+      board_id: boardAId,
+      user_id: userMId,
+      access_level: "editor",
+      granted_by: userAId,
     });
 
     // ── create userB in a separate org (for RLS test 7) ──────────────────
@@ -185,7 +200,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5c-2 webhook", () => {
     userBAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await userBAnon.auth.signInWithPassword({
+    await signInWithRetry(userBAnon, {
       email: emailB,
       password: PASSWORD,
     });

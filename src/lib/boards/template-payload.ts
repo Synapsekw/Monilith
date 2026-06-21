@@ -99,6 +99,9 @@ export function buildTemplatePayload(template: BoardTemplate): TemplatePayload {
         case "text":
           value = { text: (tv as { text: string }).text };
           break;
+        case "time_tracking":
+          value = {};
+          break;
         default:
           value = {};
       }

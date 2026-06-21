@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
-import type { BoardListEntry } from "@/lib/boards/queries";
+import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 
 const nav = [
   { label: "Goals", icon: Target },
@@ -31,11 +31,13 @@ const nav = [
 
 export function Sidebar({
   boards,
+  sharedBoards,
   workspaces,
   dashboards,
   isPlatformAdmin,
 }: {
   boards: BoardListEntry[];
+  sharedBoards: SharedBoardEntry[];
   workspaces: { id: string; name: string }[];
   dashboards: { id: string; name: string }[];
   isPlatformAdmin?: boolean;
@@ -104,6 +106,7 @@ export function Sidebar({
 
         <BoardsNav
           boards={boards}
+          sharedBoards={sharedBoards}
           workspaces={workspaces}
           collapsed={isCollapsed}
         />

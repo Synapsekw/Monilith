@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { BoardListEntry } from "@/lib/boards/queries";
+import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 
 export type AppShellUser = {
   email?: string | null;
@@ -44,6 +44,7 @@ type AppShellProps = {
   org?: AppShellOrg;
   workspaces?: AppShellWorkspace[];
   boards?: BoardListEntry[];
+  sharedBoards?: SharedBoardEntry[];
   dashboards?: AppShellDashboard[];
   /** When true, the user menu shows a link to the cross-org platform console. */
   isPlatformAdmin?: boolean;
@@ -107,6 +108,7 @@ export function AppShell({
   currentUserId,
   workspaces,
   boards,
+  sharedBoards,
   dashboards,
   isPlatformAdmin,
 }: AppShellProps) {
@@ -114,6 +116,7 @@ export function AppShell({
     <div className="flex h-svh w-full overflow-hidden">
       <Sidebar
         boards={boards ?? []}
+        sharedBoards={sharedBoards ?? []}
         workspaces={workspaces ?? []}
         dashboards={dashboards ?? []}
         isPlatformAdmin={isPlatformAdmin}

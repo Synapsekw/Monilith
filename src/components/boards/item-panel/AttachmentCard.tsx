@@ -2,6 +2,7 @@
 
 import { Download, Eye, Trash2, Play, FileText } from "lucide-react";
 import {
+  canPreviewInline,
   fileKind,
   formatSize,
   isPreviewable,
@@ -33,6 +34,7 @@ export function AttachmentCard({
     members.find((m) => m.userId === attachment.uploaded_by)?.fullName ??
     "Someone";
   const previewable = isPreviewable(attachment.mime_type);
+  const canPreview = canPreviewInline(attachment.mime_type);
 
   return (
     <div className="group bg-surface relative flex flex-col overflow-hidden rounded-md border">
@@ -58,7 +60,7 @@ export function AttachmentCard({
 
         {!uploading && (
           <div className="bg-background/70 absolute inset-0 flex items-center justify-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-            {previewable && (
+            {canPreview && (
               <button
                 onClick={onPreview}
                 aria-label="Preview"

@@ -28,6 +28,7 @@ import {
 import { resolveDateColumn, itemDateRange } from "@/lib/boards/dates";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
+import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { CellRenderer } from "@/components/boards/cells";
 import type { EditorMember } from "@/components/boards/cells/editors";
 
@@ -89,10 +90,14 @@ export function CalendarBoard({
   payload,
   selectedViewId,
   members = [],
+  access = "owner",
+  grants = [],
 }: {
   payload: BoardPayload;
   members?: EditorMember[];
   selectedViewId: string;
+  access?: BoardAccess;
+  grants?: HeaderGrant[];
 }) {
   const { data: cache } = useBoardCache(
     payload.board.id,
@@ -180,6 +185,8 @@ export function CalendarBoard({
           selectedViewId={selectedViewId}
           columns={cache.columns}
           members={members}
+          access={access}
+          grants={grants}
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -256,6 +263,8 @@ export function CalendarBoard({
         selectedViewId={selectedViewId}
         columns={cache.columns}
         members={members}
+        access={access}
+        grants={grants}
       />
 
       {/* Controls bar */}

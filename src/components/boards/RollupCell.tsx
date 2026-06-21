@@ -1,4 +1,5 @@
 import type { RollupResult } from "@/lib/boards/rollup";
+import { formatDuration } from "@/lib/boards/time-format";
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -63,6 +64,15 @@ export function RollupCell({ result }: { result: RollupResult }) {
               }}
             />
           ))}
+        </span>
+      );
+    case "duration":
+      return (
+        <span className="text-muted-foreground text-sm tabular-nums">
+          Σ {formatDuration(result.totalSecs)}
+          {result.estimateSecs
+            ? ` / ${formatDuration(result.estimateSecs)}`
+            : ""}
         </span>
       );
   }

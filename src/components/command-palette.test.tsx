@@ -12,8 +12,20 @@ vi.mock("next-themes", () => ({
 }));
 
 const boards = [
-  { id: "b1", name: "Sprint backlog", workspace_id: "ws1", position: 0 },
-  { id: "b2", name: "Roadmap", workspace_id: "ws1", position: 1 },
+  {
+    id: "b1",
+    name: "Sprint backlog",
+    workspace_id: "ws1",
+    position: 0,
+    shared_out: false,
+  },
+  {
+    id: "b2",
+    name: "Roadmap",
+    workspace_id: "ws1",
+    position: 1,
+    shared_out: false,
+  },
 ];
 const dashboards = [{ id: "d1", name: "Team overview" }];
 const workspaces = [{ id: "ws1", name: "WS" }];

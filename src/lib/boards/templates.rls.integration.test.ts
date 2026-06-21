@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { signInWithRetry } from "@/test/integration-auth";
 import type { Database, Json } from "@/types/database.types";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import { getTemplate } from "@/lib/boards/templates";
@@ -35,7 +36,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS: create_board_from_template", () => {
     const anon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await anon.auth.signInWithPassword({ email, password: PASSWORD });
+    await signInWithRetry(anon, { email, password: PASSWORD });
     const { data: org, error: orgErr } = await anon.rpc("create_organization", {
       p_name: `Org ${label}`,
       p_slug: `rls-t-${label.toLowerCase()}-${randomUUID().slice(0, 8)}`,

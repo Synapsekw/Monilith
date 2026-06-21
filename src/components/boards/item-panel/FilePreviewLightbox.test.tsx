@@ -3,6 +3,18 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { FilePreviewLightbox } from "@/components/boards/item-panel/FilePreviewLightbox";
 import type { Tables } from "@/types/database.types";
 
+vi.mock("next/dynamic", () => ({
+  default: () => (props: { src: string }) => (
+    <div data-testid="pdf-preview" data-src={props.src} />
+  ),
+}));
+vi.mock("@/lib/collaboration/actions", () => ({
+  getAttachmentPdfUrl: vi.fn(async () => ({
+    ok: true,
+    data: { url: "https://signed/pdf" },
+  })),
+}));
+
 function att(
   id: string,
   over: Partial<Tables<"attachments">> = {},
@@ -49,6 +61,26 @@ describe("FilePreviewLightbox", () => {
   });
 
   it("renders a Download fallback for a non-previewable file", () => {
+    const zip = [
+      att("z", { mime_type: "application/zip", file_name: "z.zip" }),
+    ];
+    render(
+      <FilePreviewLightbox
+        attachments={zip}
+        index={0}
+        previewUrls={{}}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/No inline preview/i)).toBeInTheDocument();
+  });
+
+  it("renders the PDF preview branch for a pdf attachment", async () => {
+    const { getAttachmentPdfUrl } = await import("@/lib/collaboration/actions");
     const pdf = [
       att("p", { mime_type: "application/pdf", file_name: "p.pdf" }),
     ];
@@ -64,6 +96,8 @@ describe("FilePreviewLightbox", () => {
         onDelete={vi.fn()}
       />,
     );
-    expect(screen.getByText(/No inline preview/i)).toBeInTheDocument();
+    const node = await screen.findByTestId("pdf-preview");
+    expect(node).toHaveAttribute("data-src", "https://signed/pdf");
+    expect(getAttachmentPdfUrl).toHaveBeenCalledWith({ attachmentId: "p" });
   });
 });

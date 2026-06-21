@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser, getUserOrgs, getUserTimeZone } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -9,18 +9,20 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { TimezoneForm } from "@/components/settings/timezone-form";
+import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-form";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
+  const myTimeZone = await getUserTimeZone();
   const orgs = await getUserOrgs();
   const org = orgs[0];
   if (!org) redirect("/onboarding");
 
-  // First paint: members (bounded ~50 via the RPC), pending invites, and a
-  // bounded audit slice. Tab switches in the console are History-API only
+  // First paint: members (bounded ~50 via the RPC), pending + declined invites,
+  // and a bounded audit slice. Tab switches in the console are History-API only
   // (0 server round-trips) — see OrgAdminConsole / spec §12.
   const supabase = await createClient();
   const { data: members } = await supabase.rpc("get_org_members", {
@@ -33,9 +35,9 @@ export default async function SettingsPage() {
     ? await Promise.all([
         supabase
           .from("org_invitations")
-          .select("id, email, role, created_at")
+          .select("id, email, role, status, created_at")
           .eq("org_id", org.id)
-          .eq("status", "pending")
+          .in("status", ["pending", "declined"])
           .order("created_at", { ascending: false }),
         supabase
           .from("admin_audit_log")
@@ -58,6 +60,18 @@ export default async function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Preferences</CardTitle>
+            <CardDescription>
+              Personal settings for your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PersonalTimezoneForm currentTimezone={myTimeZone} />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Organization</CardTitle>
@@ -94,7 +108,10 @@ export default async function SettingsPage() {
               <OrgAdminConsole
                 orgId={org.id}
                 members={members ?? []}
-                invites={invites ?? []}
+                invites={(invites ?? []).map((i) => ({
+                  ...i,
+                  status: i.status as "pending" | "declined",
+                }))}
                 audit={audit ?? []}
                 currentUserId={user.id}
                 currentUserRole={me.role}
