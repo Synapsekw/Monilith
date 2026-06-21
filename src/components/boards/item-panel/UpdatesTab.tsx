@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
+import { DateTime } from "@/components/datetime/date-time";
 import type { UpdatesCache } from "@/lib/collaboration/cache";
 import type { Member } from "@/lib/collaboration/activity";
 
@@ -80,9 +81,12 @@ export function UpdatesTab({
           {cache.updates.map((u) => (
             <li key={u.id} className="rounded-md border p-3 text-sm">
               <div className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
-                <span className="text-foreground font-medium">
-                  {members.find((m) => m.userId === u.author_id)?.fullName ??
-                    "Someone"}
+                <span className="flex items-center gap-2">
+                  <span className="text-foreground font-medium">
+                    {members.find((m) => m.userId === u.author_id)?.fullName ??
+                      "Someone"}
+                  </span>
+                  <DateTime value={u.created_at} />
                 </span>
                 <button
                   className="opacity-60 hover:opacity-100"
