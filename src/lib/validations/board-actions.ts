@@ -49,6 +49,9 @@ export const createColumnSchema = z.object({
   boardId: uuid,
   kind: columnKindSchema,
   name: name.optional(),
+  // Optional initial settings (e.g. a relation column's target board). Validated
+  // against the kind's settings schema inside the action.
+  settings: z.record(z.string(), z.unknown()).optional(),
 });
 export const renameColumnSchema = z.object({ columnId: uuid, name });
 export const deleteColumnSchema = z.object({ columnId: uuid });

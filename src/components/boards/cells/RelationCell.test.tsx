@@ -14,9 +14,8 @@ const mk = (id: string, name: string | null, pos: number): RelationLink => ({
 
 const base = {
   allowMultiple: true,
-  candidates: [],
-  onSearch: () => {},
-  onToggle: () => {},
+  loadCandidates: async () => [],
+  onChange: () => {},
 };
 
 describe("RelationCell", () => {
@@ -30,7 +29,12 @@ describe("RelationCell", () => {
       <RelationCell
         {...base}
         maxChips={2}
-        links={[mk("c", "C", 2), mk("a", "A", 0), mk("b", "B", 1), mk("d", "D", 3)]}
+        links={[
+          mk("c", "C", 2),
+          mk("a", "A", 0),
+          mk("b", "B", 1),
+          mk("d", "D", 3),
+        ]}
       />,
     );
     // sorted by position → A,B shown; C,D collapsed
@@ -50,5 +54,12 @@ describe("RelationCell", () => {
     expect(
       screen.getByRole("button", { name: "Edit linked items" }),
     ).toBeInTheDocument();
+  });
+
+  it("read-only cells render chips but no editor button is disabled-interactive", () => {
+    render(<RelationCell {...base} readOnly links={[mk("a", "A", 0)]} />);
+    expect(
+      screen.getByRole("button", { name: "Edit linked items" }),
+    ).toBeDisabled();
   });
 });
