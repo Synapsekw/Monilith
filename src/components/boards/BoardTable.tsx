@@ -177,6 +177,12 @@ const ROW_HEIGHT = 36; // direction C density
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
+// Right-edge shadow for the frozen Name column. The `group/scroll` ancestor
+// (the scroll container) toggles `data-scrolledx`; the ::after only shows once
+// scrolled, so it reads as a floating frozen pane over the data columns.
+const NAME_FREEZE_EDGE =
+  "name-freeze-edge after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-black/15 after:to-transparent after:opacity-0 after:transition-opacity after:content-[''] group-data-[scrolledx=true]/scroll:after:opacity-100";
+
 /**
  * Open the item detail panel by setting `?item=<id>` via the History API — no
  * RSC navigation, so the board page's queries don't re-run (mirrors how
@@ -615,7 +621,12 @@ function NameColumnHeader({
   }
 
   return (
-    <div className="bg-surface-muted sticky left-0 z-10 flex items-center truncate px-4 py-1.5">
+    <div
+      className={cn(
+        "bg-surface-muted sticky left-0 z-10 flex items-center truncate px-4 py-1.5",
+        NAME_FREEZE_EDGE,
+      )}
+    >
       Name
       <div
         role="separator"
@@ -1674,7 +1685,12 @@ function NameCell({
 
   if (editing) {
     return (
-      <div className="bg-surface sticky left-0 z-10 flex items-center px-4">
+      <div
+        className={cn(
+          "bg-surface sticky left-0 z-10 flex items-center px-4",
+          NAME_FREEZE_EDGE,
+        )}
+      >
         {leading}
         <Input
           autoFocus
@@ -1700,7 +1716,12 @@ function NameCell({
   }
 
   return (
-    <div className="group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors">
+    <div
+      className={cn(
+        "group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
+        NAME_FREEZE_EDGE,
+      )}
+    >
       {leading}
       <div
         role="button"
