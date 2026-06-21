@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedAggregations, COUNT_FAMILY } from "./aggregation";
+import { aggregate, allowedAggregations, COUNT_FAMILY } from "./aggregation";
 import type { ColumnKind } from "@/lib/validations/boards";
 
 const ALL_KINDS: ColumnKind[] = [
@@ -76,5 +76,122 @@ describe("allowedAggregations", () => {
 
   it("mirror does not recurse on a mirror target", () => {
     expect(allowedAggregations("mirror", "mirror")).toEqual([...COUNT_FAMILY]);
+  });
+});
+
+describe("aggregate", () => {
+  const nums = [{ n: 10 }, { n: 5 }, null, { n: 15 }];
+
+  it("count family counts presence", () => {
+    expect(aggregate("numbers", "count", nums)).toEqual({
+      kind: "number",
+      value: 4,
+    });
+    expect(aggregate("numbers", "count_filled", nums)).toEqual({
+      kind: "number",
+      value: 3,
+    });
+    expect(aggregate("numbers", "count_empty", nums)).toEqual({
+      kind: "number",
+      value: 1,
+    });
+  });
+
+  it("count_unique dedupes, flattening people", () => {
+    const people = [{ userIds: ["a", "b"] }, { userIds: ["b"] }, null];
+    expect(aggregate("people", "count_unique", people)).toEqual({
+      kind: "number",
+      value: 2,
+    });
+    expect(aggregate("text", "count_unique", [{ text: "x" }, { text: "x" }])).toEqual(
+      { kind: "number", value: 1 },
+    );
+  });
+
+  it("sum/avg/min/max over numbers", () => {
+    expect(aggregate("numbers", "sum", nums)).toEqual({ kind: "number", value: 30 });
+    expect(aggregate("numbers", "avg", nums)).toEqual({ kind: "number", value: 10 });
+    expect(aggregate("numbers", "min", nums)).toEqual({ kind: "number", value: 5 });
+    expect(aggregate("numbers", "max", nums)).toEqual({ kind: "number", value: 15 });
+  });
+
+  it("avg rounds to two decimals", () => {
+    const r = aggregate("numbers", "avg", [{ n: 1 }, { n: 2 }]);
+    expect(r).toEqual({ kind: "number", value: 1.5 });
+  });
+
+  it("numeric aggs are empty when nothing is filled", () => {
+    expect(aggregate("numbers", "sum", [null, null])).toEqual({ kind: "empty" });
+  });
+
+  it("checked_total and percent_checked over checkboxes", () => {
+    const boxes = [{ checked: true }, { checked: false }, { checked: true }, null];
+    expect(aggregate("checkbox", "checked_total", boxes)).toEqual({
+      kind: "checkbox",
+      checked: 2,
+      total: 3,
+    });
+    expect(aggregate("checkbox", "percent_checked", boxes)).toEqual({
+      kind: "number",
+      value: 67,
+      style: "percent",
+    });
+  });
+
+  it("status distribution reuses the rollup engine with options", () => {
+    const options = [
+      { id: "d", label: "Done", color: "#0f0" },
+      { id: "w", label: "WIP", color: "#ff0" },
+    ];
+    const r = aggregate(
+      "status",
+      "distribution",
+      [{ optionId: "d" }, { optionId: "d" }, { optionId: "w" }, null],
+      options,
+    );
+    expect(r.kind).toBe("distribution");
+    if (r.kind === "distribution") {
+      expect(r.total).toBe(3);
+      expect(r.segments[0]).toMatchObject({ id: "d", count: 2, label: "Done" });
+    }
+  });
+
+  it("date range / earliest / latest", () => {
+    const dates = [{ date: "2026-03-01" }, { date: "2026-01-15", end: "2026-06-30" }, null];
+    expect(aggregate("date", "date_range", dates)).toEqual({
+      kind: "dateSpan",
+      start: "2026-01-15",
+      end: "2026-06-30",
+    });
+    expect(aggregate("date", "earliest", dates)).toEqual({
+      kind: "date",
+      date: "2026-01-15",
+    });
+    expect(aggregate("date", "latest", dates)).toEqual({
+      kind: "date",
+      date: "2026-06-30",
+    });
+  });
+
+  it("time tracking totals (pre-reduced trackedSecs/estimateSecs)", () => {
+    const tt = [
+      { trackedSecs: 3600, estimateSecs: 7200 },
+      { trackedSecs: 1800 },
+      null,
+    ];
+    expect(aggregate("time_tracking", "total_tracked", tt)).toEqual({
+      kind: "duration",
+      totalSecs: 5400,
+    });
+    expect(aggregate("time_tracking", "total_over_estimate", tt)).toEqual({
+      kind: "duration",
+      totalSecs: 5400,
+      estimateSecs: 7200,
+    });
+  });
+
+  it("empty input yields an empty result", () => {
+    expect(aggregate("numbers", "sum", [])).toEqual({ kind: "empty" });
+    expect(aggregate("status", "distribution", [])).toEqual({ kind: "empty" });
   });
 });
