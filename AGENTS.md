@@ -51,24 +51,39 @@ ADRs in `vault/decisions/`.
 
 These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the full workflow.
 
-1. **Two long-lived branches: `develop` (integration) and `main` (production).** All day-to-day
-   work — features, fixes, debugging, every session — happens on **`develop`**. Do **not** create
-   per-feature branches. Commit and push to `develop`; CI runs there. When `develop` is green and
-   you're happy with it, **promote to `main`** (open a `develop → main` PR, merge once CI passes) —
-   that, and only that, deploys production on Vercel. `develop` never deploys to production.
+1. **Two long-lived branches (`develop` = integration, `main` = production); every building
+   session works in its own worktree on a temporary `task/<name>` branch.** The main checkout
+   (`/Users/danijeljovanovic/Dev/Monolith`) stays parked on `develop` and is the **integration
+   home** — you do not build directly in it. Each building session creates its own **git worktree**
+   (a separate sibling folder, separate files on disk) on a short-lived `task/<name>` branch cut
+   from `develop`. This is what lets multiple parallel sessions build different things at once
+   without stomping each other's files. When `develop` is green, **promote to `main`** (open a
+   `develop → main` PR, merge once CI passes) — that, and only that, deploys production on Vercel.
+   `develop` never deploys to production.
 
-   - **One working directory, one branch.** A git branch belongs to the checkout, not to a
-     terminal/agent — two sessions in the same folder share one branch and one set of files. So:
-     **never `git checkout` to a different branch or `git stash`-and-switch in a shared checkout**
-     (it clobbers other live sessions). All sessions simply stay on `develop`. If you genuinely
-     need isolation for parallel work, use a **git worktree** (a separate folder per branch), not a
-     branch switch in the shared checkout.
-   - **Commit your own work only.** That same shared checkout may hold changes from other
-     concurrent sessions, the editor, or tooling. **Stage explicitly by path** (`git add <paths>`)
-     — never `git add -A` / `git add .` / `git commit -a`, which sweep in everything in the tree.
-     Run `git status` first and confirm every staged path is yours; leave unrelated changes
-     unstaged (don't `git stash` or revert them — that clobbers live work). Sweep in unrelated
-     changes **only** when I explicitly ask. Full reference: `CONTRIBUTING.md` → "Commit hygiene".
+   - **One folder per session — use the helpers.** A git branch belongs to a _folder_, not a
+     terminal/agent: two sessions in one folder share one branch and one set of files, so **never
+     `git checkout` to another branch or `git stash`-and-switch in the main checkout** (it clobbers
+     live sessions). Instead, start a building session with **`scripts/start-task.sh <name>`** (cuts
+     `task/<name>` in a fresh worktree `../Monolith-<name>` off the latest `origin/develop` and pins
+     the commit identity), then `cd` into that folder and build there.
+   - **A task is NOT complete until it is merged into `develop` AND cleaned up.** "Done" =
+     `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass → the `task/<name>` branch is
+     **merged directly into `develop`**, pushed → **the worktree is removed and the branch deleted**.
+     Run **`scripts/finish-task.sh`** from inside the worktree; it does all of this. An agent that
+     leaves a `task/*` branch un-merged or a worktree lying around has **not finished its job and
+     must say so explicitly** — never report a task as complete with the branch still open.
+   - **Trivial edits are exempt.** A typo, one-liner, or other obviously-trivial change can go
+     straight on `develop` in the main checkout — no worktree needed.
+   - **Commit identity is pinned.** Every commit must be authored as
+     **`Danijel Jovanovic <info@synapse-solutions.ai>`** — that email is verified on the
+     **Synapsekw** GitHub account that Vercel deploys from. Committing under any other email (e.g.
+     `danijel@…`) makes Vercel **silently skip the deploy**. `start-task.sh` re-asserts this in
+     every worktree; do not override it.
+   - **Commit your own work only.** **Stage explicitly by path** (`git add <paths>`) — never
+     `git add -A` / `git add .` / `git commit -a`, which sweep in everything in the tree. Run
+     `git status` first and confirm every staged path is yours. Sweep in unrelated changes **only**
+     when I explicitly ask. Full reference: `CONTRIBUTING.md` → "Commit hygiene".
    - `main` is protected: no direct pushes — it only advances via the promotion PR.
 
 2. **Use Superpowers skills for non-trivial work — but don't overthink trivial changes.** For
