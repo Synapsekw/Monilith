@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
@@ -28,12 +35,18 @@ import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
 import { rollupCell, rollupTimeTracking } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
-import type { ColumnOption } from "@/lib/validations/boards";
+import type { ColumnKind, ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
 import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
 import { RelationCell } from "@/components/boards/cells/RelationCell";
+import { MirrorCell } from "@/components/boards/cells/MirrorCell";
 import { RelationColumnConfig } from "@/components/boards/RelationColumnConfig";
+import { MirrorColumnConfig } from "@/components/boards/MirrorColumnConfig";
+import {
+  mirrorValuesForCell,
+  mirrorTargetColumnFor,
+} from "@/lib/boards/mirror";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +55,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  listMirrorableColumns,
   listRelationCandidates,
   listRelationTargetBoards,
 } from "@/lib/boards/relation-candidates";
@@ -79,6 +93,7 @@ import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import { ColumnHeader } from "@/components/boards/ColumnHeader";
 import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
 import {
+  clampDragWidth,
   fitNameColumnWidth,
   NAME_COL_MAX,
 } from "@/lib/boards/name-column-width";
@@ -164,6 +179,17 @@ type CellControls = {
 
 const ROW_HEIGHT = 36; // direction C density
 
+// useLayoutEffect warns during SSR; this client component still pre-renders on
+// the server, so fall back to useEffect there.
+const useIsoLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+// Right-edge shadow for the frozen Name column. The `group/scroll` ancestor
+// (the scroll container) toggles `data-scrolledx`; the ::after only shows once
+// scrolled, so it reads as a floating frozen pane over the data columns.
+const NAME_FREEZE_EDGE =
+  "name-freeze-edge after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-black/15 after:to-transparent after:opacity-0 after:transition-opacity after:content-[''] group-data-[scrolledx=true]/scroll:after:opacity-100";
+
 /**
  * Open the item detail panel by setting `?item=<id>` via the History API — no
  * RSC navigation, so the board page's queries don't re-run (mirrors how
@@ -214,6 +240,10 @@ export function BoardTable({
   );
   const { board, groups, columns, items, cellValues } = cache;
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scrolledX, setScrolledX] = useState(false);
+
   const [editing, setEditing] = useState<EditingCell | null>(null);
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
@@ -225,6 +255,9 @@ export function BoardTable({
   const [relationTargetBoards, setRelationTargetBoards] = useState<
     { id: string; name: string }[]
   >([]);
+  // Mirror add-column flow: picking "Mirror" opens a dialog to choose a source
+  // relation column on this board + a column on its target board to reflect.
+  const [mirrorConfigOpen, setMirrorConfigOpen] = useState(false);
 
   // Files-column lightbox state. The viewed cell's attachments and the active
   // index live here; preview URLs are minted lazily on open (only for that
@@ -389,8 +422,19 @@ export function BoardTable({
         grants={grants}
       />
 
-      <div className="flex-1 overflow-auto">
-        <div className="min-w-fit">
+      <div
+        ref={scrollContainerRef}
+        data-testid="board-scroll"
+        data-scrolledx={scrolledX}
+        onScroll={(e) => {
+          const next = e.currentTarget.scrollLeft > 0;
+          // setState bails out when unchanged, so this only re-renders on the
+          // 0 ⇄ >0 boundary (cheap during scroll).
+          setScrolledX(next);
+        }}
+        className="group/scroll flex-1 overflow-auto"
+      >
+        <div ref={contentRef} className="min-w-fit">
           {/* Column header row */}
           <div
             className="bg-surface-muted text-muted-foreground sticky top-0 z-20 grid border-b text-xs font-medium"
@@ -426,6 +470,8 @@ export function BoardTable({
                   setRelationTargetBoards([]);
                   setRelationConfigOpen(true);
                   listRelationTargetBoards().then(setRelationTargetBoards);
+                } else if (kind === "mirror") {
+                  setMirrorConfigOpen(true);
                 } else {
                   mutations.addColumn(kind);
                 }
@@ -469,6 +515,8 @@ export function BoardTable({
                     renamingItemId={renamingItemId}
                     onRenameItemSettled={() => setRenamingItemId(null)}
                     onSetRenamingItemId={setRenamingItemId}
+                    scrollContainerRef={scrollContainerRef}
+                    contentRef={contentRef}
                   />
                 ))}
               </SortableContext>
@@ -524,6 +572,37 @@ export function BoardTable({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={mirrorConfigOpen} onOpenChange={setMirrorConfigOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Mirror a column</DialogTitle>
+            <DialogDescription>
+              Reflect a field from a board you&apos;re connected to through a
+              relation column.
+            </DialogDescription>
+          </DialogHeader>
+          <MirrorColumnConfig
+            relationColumns={columns
+              .filter((c) => c.kind === "relation")
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                target_board_id:
+                  ((c.settings ?? {}) as { target_board_id?: string })
+                    .target_board_id ?? "",
+              }))}
+            loadTargetColumns={(targetBoardId) =>
+              listMirrorableColumns(targetBoardId)
+            }
+            onConfirm={(settings) => {
+              mutations.addColumn("mirror", settings);
+              setMirrorConfigOpen(false);
+            }}
+            onCancel={() => setMirrorConfigOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
       {filesLightbox && (
         <FilePreviewLightbox
           attachments={filesLightbox.files}
@@ -568,9 +647,10 @@ function NameColumnHeader({
     const startW = width;
     let last = width;
     const move = (ev: PointerEvent) => {
-      last = Math.min(
+      last = clampDragWidth(
+        startW + (ev.clientX - startX),
+        NAME_DRAG_MIN,
         NAME_COL_MAX,
-        Math.max(NAME_DRAG_MIN, startW + (ev.clientX - startX)),
       );
       onResize(last);
     };
@@ -584,7 +664,12 @@ function NameColumnHeader({
   }
 
   return (
-    <div className="bg-surface-muted sticky left-0 z-10 flex items-center truncate px-4 py-1.5">
+    <div
+      className={cn(
+        "bg-surface-muted sticky left-0 z-10 flex items-center truncate px-4 py-1.5",
+        NAME_FREEZE_EDGE,
+      )}
+    >
       Name
       <div
         role="separator"
@@ -761,6 +846,8 @@ function GroupSection({
   renamingItemId,
   onRenameItemSettled,
   onSetRenamingItemId,
+  scrollContainerRef,
+  contentRef,
 }: {
   group: Group;
   items: Item[];
@@ -780,11 +867,49 @@ function GroupSection({
   renamingItemId: string | null;
   onRenameItemSettled: () => void;
   onSetRenamingItemId: (id: string) => void;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
+  contentRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [renaming, setRenaming] = useState(autoFocusRename);
   const [name, setName] = useState(group.name);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowAreaRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  // The shared scroll container is owned by the parent (BoardTable); during this
+  // child's first commit the parent's ref isn't attached yet, so the virtualizer
+  // reads a null scroll element and yields 0 rows. A passive effect populates the
+  // ref, then flips `scrollReady` once to force a single extra render so the
+  // virtualizer re-runs getScrollElement and binds the now-mounted container.
+  // Value is intentionally unused — the state write forces one re-render so the
+  // virtualizer re-runs getScrollElement once the parent ref is attached.
+  const [scrollReady, setScrollReady] = useState(false);
+
+  useEffect(() => {
+    if (!scrollReady && scrollContainerRef.current) setScrollReady(true);
+  }, [scrollReady, scrollContainerRef]);
+
+  // The group's row-area offset within the shared scroll content. Re-measured
+  // whenever the content height changes (any group expand/collapse/add/remove)
+  // and on every render (covers DnD reorder, which shifts offsets without
+  // changing total height). Guarded setState avoids a layout-effect loop.
+  useIsoLayoutEffect(() => {
+    const measure = () => {
+      const area = rowAreaRef.current;
+      const scroller = scrollContainerRef.current;
+      if (!area || !scroller) return;
+      const top =
+        area.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop;
+      setScrollMargin((prev) => (prev === top ? prev : top));
+    };
+    measure();
+    const content = contentRef.current;
+    if (!content) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(content);
+    return () => ro.disconnect();
+  });
 
   const {
     setNodeRef,
@@ -815,7 +940,8 @@ function GroupSection({
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollContainerRef.current,
+    scrollMargin,
     estimateSize: () => ROW_HEIGHT,
     overscan: 6,
     // getBoundingClientRect().height returns 0 in jsdom — fall back to ROW_HEIGHT
@@ -824,9 +950,6 @@ function GroupSection({
   });
 
   const virtualRows = virtualizer.getVirtualItems();
-  // Cap the scroll viewport; long/expanded groups scroll inside it.
-  const viewportHeight =
-    Math.min(virtualizer.getTotalSize(), 12 * ROW_HEIGHT) || ROW_HEIGHT;
 
   function openRename() {
     setName(group.name);
@@ -935,26 +1058,27 @@ function GroupSection({
                 strategy={verticalListSortingStrategy}
               >
                 <div
-                  ref={scrollRef}
-                  className="overflow-auto"
-                  style={{ height: viewportHeight }}
+                  ref={rowAreaRef}
+                  data-testid={`group-rows-${group.id}`}
+                  className="relative"
+                  style={{ height: virtualizer.getTotalSize() }}
                 >
-                  <div
-                    className="relative"
-                    style={{ height: virtualizer.getTotalSize() }}
-                  >
-                    {virtualRows.map((vr) => {
-                      const item = items[vr.index];
-                      const children = childrenByParent.get(item.id) ?? [];
-                      const isExpanded = expanded.has(item.id);
-                      return (
-                        <div
-                          key={item.id}
-                          data-index={vr.index}
-                          ref={virtualizer.measureElement}
-                          className="absolute top-0 left-0 w-full"
-                          style={{ transform: `translateY(${vr.start}px)` }}
-                        >
+                  {virtualRows.map((vr) => {
+                    const item = items[vr.index];
+                    const children = childrenByParent.get(item.id) ?? [];
+                    const isExpanded = expanded.has(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        data-index={vr.index}
+                        ref={virtualizer.measureElement}
+                        className="absolute top-0 left-0 w-full"
+                        style={{
+                          transform: `translateY(${
+                            vr.start - scrollMargin
+                          }px)`,
+                        }}
+                      >
                           <ItemRow
                             item={item}
                             columns={columns}
@@ -985,7 +1109,6 @@ function GroupSection({
                         </div>
                       );
                     })}
-                  </div>
                 </div>
               </SortableContext>
             </DndContext>
@@ -1180,6 +1303,16 @@ function ItemRow({
                   {relationRollup(childLinks)}
                 </span>
               </div>
+            );
+          }
+          if (col.kind === "mirror") {
+            // Mirror has no parent-rollup aggregate in v1 — render blank, like
+            // relation, while matching the surrounding rollup container shape.
+            return (
+              <div
+                key={col.id}
+                className="flex h-full items-center truncate border-l px-3"
+              />
             );
           }
           const values = subitems.map(
@@ -1519,6 +1652,26 @@ function EditableCell({
     );
   }
 
+  // Mirror cells reflect a target column's value across linked items; they are
+  // strictly read-only (no editor) and derive from the mirror cache slices.
+  if (column.kind === "mirror") {
+    const values = mirrorValuesForCell(controls.cache, item.id, column);
+    const target = mirrorTargetColumnFor(controls.cache, column);
+    return (
+      <div className="flex h-full items-center border-l px-3">
+        {target ? (
+          <MirrorCell
+            values={values}
+            targetKind={target.kind as ColumnKind}
+            targetSettings={(target.settings ?? {}) as Record<string, unknown>}
+          />
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
+        )}
+      </div>
+    );
+  }
+
   if (isEditing) {
     return (
       <div className="relative flex items-center border-l px-3">
@@ -1602,7 +1755,12 @@ function NameCell({
 
   if (editing) {
     return (
-      <div className="bg-surface sticky left-0 z-10 flex items-center px-4">
+      <div
+        className={cn(
+          "bg-surface sticky left-0 z-10 flex items-center px-4",
+          NAME_FREEZE_EDGE,
+        )}
+      >
         {leading}
         <Input
           autoFocus
@@ -1628,7 +1786,12 @@ function NameCell({
   }
 
   return (
-    <div className="group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors">
+    <div
+      className={cn(
+        "group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
+        NAME_FREEZE_EDGE,
+      )}
+    >
       {leading}
       <div
         role="button"

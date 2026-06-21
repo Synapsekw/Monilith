@@ -13,6 +13,7 @@ import {
   Paperclip,
   Timer,
   Waypoints,
+  FoldHorizontal,
 } from "lucide-react";
 
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -39,6 +40,7 @@ export const COLUMN_KIND_META: Record<ColumnKind, KindMeta> = {
   files: { label: "Files", Icon: Paperclip, hasOptions: false },
   time_tracking: { label: "Time tracking", Icon: Timer, hasOptions: false },
   relation: { label: "Relation", Icon: Waypoints, hasOptions: false },
+  mirror: { label: "Mirror", Icon: FoldHorizontal, hasOptions: false },
 };
 
 export const COLUMN_KIND_ORDER: ColumnKind[] = [
@@ -56,4 +58,5 @@ export const COLUMN_KIND_ORDER: ColumnKind[] = [
   "files",
   "time_tracking",
   "relation",
+  "mirror",
 ];

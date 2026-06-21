@@ -9,6 +9,20 @@ export const SEED: ChangelogEntry[] = [
   {
     date: "2026-06-21",
     kind: "new",
+    title: "Portfolios",
+    description:
+      "Roll up boards into an org-wide portfolio grid — track progress, timelines, health, and owners across every board in one place, with manual overrides where you need them.",
+  },
+  {
+    date: "2026-06-21",
+    kind: "new",
+    title: "Manage workspaces",
+    description:
+      "Create, rename, and delete workspaces right from the sidebar to organize your boards however you work.",
+  },
+  {
+    date: "2026-06-21",
+    kind: "new",
     title: "Connect boards",
     description:
       "Link items across boards with a new relation column — pick related rows from another board and jump straight to them.",

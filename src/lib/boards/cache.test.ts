@@ -52,6 +52,8 @@ function baseCache(): BoardCache {
     attachments: [],
     timeEntries: [],
     relationLinks: [],
+    mirrorTargetCells: [],
+    mirrorTargetColumns: [],
   };
 }
 
@@ -269,6 +271,8 @@ function cache(columns: CacheColumn[]): BoardCache {
     attachments: [],
     timeEntries: [],
     relationLinks: [],
+    mirrorTargetCells: [],
+    mirrorTargetColumns: [],
   };
 }
 
@@ -438,6 +442,8 @@ describe("removeGroup", () => {
       attachments: [],
       timeEntries: [],
       relationLinks: [],
+      mirrorTargetCells: [],
+      mirrorTargetColumns: [],
     };
   }
 
