@@ -14,6 +14,130 @@ export type Database = {
   };
   public: {
     Tables: {
+      portfolio_boards: {
+        Row: {
+          board_id: string;
+          budget: number | null;
+          created_at: string;
+          done_column_id: string | null;
+          done_option_ids: Json;
+          health_override:
+            | Database["public"]["Enums"]["portfolio_health"]
+            | null;
+          id: string;
+          org_id: string;
+          owner_user_id: string | null;
+          portfolio_id: string;
+          position: number;
+          priority: Database["public"]["Enums"]["portfolio_priority"] | null;
+          status_note: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          budget?: number | null;
+          created_at?: string;
+          done_column_id?: string | null;
+          done_option_ids?: Json;
+          health_override?:
+            | Database["public"]["Enums"]["portfolio_health"]
+            | null;
+          id?: string;
+          org_id: string;
+          owner_user_id?: string | null;
+          portfolio_id: string;
+          position?: number;
+          priority?: Database["public"]["Enums"]["portfolio_priority"] | null;
+          status_note?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          budget?: number | null;
+          created_at?: string;
+          done_column_id?: string | null;
+          done_option_ids?: Json;
+          health_override?:
+            | Database["public"]["Enums"]["portfolio_health"]
+            | null;
+          id?: string;
+          org_id?: string;
+          owner_user_id?: string | null;
+          portfolio_id?: string;
+          position?: number;
+          priority?: Database["public"]["Enums"]["portfolio_priority"] | null;
+          status_note?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "portfolio_boards_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "portfolio_boards_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "portfolio_boards_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "portfolio_boards_portfolio_id_fkey";
+            columns: ["portfolio_id"];
+            isOneToOne: false;
+            referencedRelation: "portfolios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      portfolios: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          description?: string | null;
+          id?: string;
+          name: string;
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          description?: string | null;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "portfolios_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       admin_audit_log: {
         Row: {
           action: string;
@@ -1359,6 +1483,72 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      add_portfolio_board: {
+        Args: {
+          p_board_id: string;
+          p_done_column_id: string;
+          p_done_option_ids: Json;
+          p_portfolio_id: string;
+        };
+        Returns: {
+          board_id: string;
+          budget: number | null;
+          created_at: string;
+          done_column_id: string | null;
+          done_option_ids: Json;
+          health_override:
+            | Database["public"]["Enums"]["portfolio_health"]
+            | null;
+          id: string;
+          org_id: string;
+          owner_user_id: string | null;
+          portfolio_id: string;
+          position: number;
+          priority: Database["public"]["Enums"]["portfolio_priority"] | null;
+          status_note: string | null;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "portfolio_boards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      can_edit_portfolio: {
+        Args: { p_portfolio_id: string };
+        Returns: boolean;
+      };
+      create_portfolio: {
+        Args: { p_name: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "portfolios";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      portfolio_rollup: {
+        Args: { p_portfolio_id: string; p_today: string };
+        Returns: {
+          board_id: string;
+          done_items: number;
+          name: string;
+          overdue_items: number;
+          timeline_end: string;
+          timeline_start: string;
+          total_items: number;
+        }[];
+      };
       _admin_audit: {
         Args: {
           p_action: string;
@@ -1772,6 +1962,8 @@ export type Database = {
       };
     };
     Enums: {
+      portfolio_health: "on_track" | "at_risk" | "off_track";
+      portfolio_priority: "low" | "medium" | "high" | "critical";
       activity_action:
         | "item_created"
         | "item_renamed"
@@ -1932,6 +2124,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      portfolio_health: ["on_track", "at_risk", "off_track"],
+      portfolio_priority: ["low", "medium", "high", "critical"],
       activity_action: [
         "item_created",
         "item_renamed",
