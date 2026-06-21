@@ -67,6 +67,16 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
      live sessions). Instead, start a building session with **`scripts/start-task.sh <name>`** (cuts
      `task/<name>` in a fresh worktree `../Monolith-<name>` off the latest `origin/develop` and pins
      the commit identity), then `cd` into that folder and build there.
+   - **Your worktree is an isolated snapshot — you see a frozen `develop`, not other sessions' work.**
+     When you explore or learn the codebase, your search/read tools only see **this worktree's
+     files**: `develop` as it was when the worktree was created, plus your own changes. You do **not**
+     see the in-flight, unmerged work in sibling worktrees (`../Monolith-*`) — and subagents are
+     sandboxed to this folder, so they can't read them either. This is deliberate: reason about one
+     coherent snapshot, never a mix of half-finished branches. The trade-off is you can be slightly
+     **behind** (never ahead): if another task merges into `develop` mid-session and you need that
+     just-landed code, run `git -C <main-checkout> fetch origin develop` then rebase your branch
+     (`git rebase origin/develop`). Truly dependent work should run **after** its dependency merges,
+     not in parallel — this is the execution-DAG thinking in rule #6.
    - **A task is NOT complete until it is merged into `develop` AND cleaned up.** "Done" =
      `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass → the `task/<name>` branch is
      **merged directly into `develop`**, pushed → **the worktree is removed and the branch deleted**.
