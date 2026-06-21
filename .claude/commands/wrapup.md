@@ -38,6 +38,14 @@ related: []
 
 (1–3 sentences — the context git log can't capture. Why was this work needed? What broader goal does it serve?)
 
+## How to test (for the user)
+
+(Numbered, concrete manual-test steps for a shipped, user-observable feature: where to go, what to
+click/enter, expected result at each step — plus any setup like "pull `develop`" / which env. This
+mirrors the closing-message walkthrough required at task closure, AGENTS.md working agreement #1.
+If the work is NOT user-observable — pure refactor, infra, internal lib — write a single line:
+"No user-facing behavior to test — verified by the test suite.")
+
 ## Open threads
 
 - (anything left unfinished, blockers, follow-ups; bullet list)

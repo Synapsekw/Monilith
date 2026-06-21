@@ -93,6 +93,14 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
      Run **`scripts/finish-task.sh`** from inside the worktree; it does all of this. An agent that
      leaves a `task/*` branch un-merged or a worktree lying around has **not finished its job and
      must say so explicitly** — never report a task as complete with the branch still open.
+   - **After a successful merge, hand the user a "How to test this" walkthrough.** The very last
+     step of closure — once `finish-task.sh` has merged to `develop` — is a **numbered, concrete
+     manual-test guide for the user**: where to go (URL/page), what to click/enter, and the expected
+     result at each step (mention any setup like "pull `develop`" / which env). Put it **both** in
+     your closing message and in the `/wrapup` session note ("How to test" section). If the change
+     is **not user-observable** (pure refactor, infra, internal lib), say so in one line instead
+     ("No user-facing behavior to test — verified by the test suite"). This is the automated gate
+     (`typecheck/lint/test/build`) **plus** a human acceptance path, not a replacement for it.
    - **Trivial edits are exempt.** A typo, one-liner, or other obviously-trivial change can go
      straight on `develop` in the main checkout — no worktree needed.
    - **Commit identity is pinned.** Every commit must be authored as
