@@ -28,7 +28,6 @@ import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
 import { rollupCell, rollupTimeTracking } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
-import { listMirrorableColumns } from "@/lib/boards/queries";
 import type { ColumnKind, ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
@@ -49,6 +48,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  listMirrorableColumns,
   listRelationCandidates,
   listRelationTargetBoards,
 } from "@/lib/boards/relation-candidates";
