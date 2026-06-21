@@ -45,16 +45,20 @@ which AGENTS.md describes as manual today ("open a develop→main PR, merge once
 
 ## Preconditions
 
-- Runs from the **main checkout** parked on `develop`. If invoked from a task worktree, or on a
-  dirty / un-pushed `develop`, it **warns and surfaces the issue** in the report rather than guessing.
+- Runs from the **main checkout** parked on `develop`. If invoked from a task worktree, it **stops**.
+- A **dirty working tree is not a stop** — promotion ships only what is on `origin/develop`
+  (committed **and pushed**), so uncommitted local edits never reach `main`. Dirty paths are reported
+  as a note, with `.obsidian/*` ignored (perpetual editor-config noise). The hard stop is **un-pushed
+  local `develop` commits** — that work genuinely won't be promoted.
 - Requires `gh` authenticated and network reachable. If not, it stops early with a clear message.
 
 ## Flow (8 steps, each a TodoWrite item)
 
 1. **Preflight (read-only, autonomous).** Confirm `gh` auth + repo; `git fetch origin develop main`;
    compute the delta `origin/main..origin/develop`. **Nothing to promote → friendly stop** ("main is
-   already up to date with develop"). Collect branch-hygiene notes: stale `task/*` branches, and any
-   local `develop` commits not pushed to `origin/develop`.
+   already up to date with develop"). Collect branch-hygiene **notes** (not stops): stale `task/*`
+   branches and a dirty working tree (excluding `.obsidian/*`). **Hard stop:** local `develop` commits
+   not pushed to `origin/develop` (that work won't be promoted).
 2. **Validate `develop` is green.** Resolve `origin/develop` HEAD SHA; check its `verify` CI run via
    `gh run list`/check-runs. Still running → watch it (`gh run watch`). **Red → stop** with the
    failing-run link. (No promotion of an un-green develop.)

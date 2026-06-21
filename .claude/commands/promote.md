@@ -18,8 +18,13 @@ Design spec: `docs/superpowers/specs/2026-06-21-promote-command-design.md`.
 ## Precondition — run from the main checkout on `develop`
 
 Run from the **main checkout** (`/Users/danijeljovanovic/Dev/Monolith`, parked on `develop`). If
-invoked from inside a `task/*` worktree, or on a dirty / un-pushed `develop`, **surface that in the
-report and stop** rather than guessing — do not promote from an ambiguous state.
+invoked from inside a `task/*` worktree, **surface that and stop** — do not promote from an ambiguous
+state.
+
+A **dirty working tree is NOT a stop** — promotion ships only what is on `origin/develop` (committed
+**and pushed**), so uncommitted local edits never reach `main`. Report dirty paths as a note, and
+ignore `.obsidian/*` entirely (perpetual editor-config noise). The check that genuinely matters is
+**un-pushed local `develop` commits** (step 1) — those won't be promoted, so that is the hard stop.
 
 Repo slug is **`Synapsekw/Monilith`** (that spelling is the real remote). `gh` is authed as
 `Synapsekw`.
@@ -39,10 +44,11 @@ is the link" rather than blocking.
 - Compute the delta: `git log --oneline origin/main..origin/develop`. **Empty → friendly stop**
   ("`main` is already up to date with `develop` — nothing to promote.").
 - Collect **branch-hygiene notes** (reported, never auto-fixed): stale local `task/*` branches
-  (`git branch --list 'task/*'`) and any local `develop` commits not pushed
-  (`git log --oneline origin/develop..develop`). If local `develop` is ahead of `origin/develop`,
-  **stop** and tell the user to push or run `finish-task.sh` first — promotion ships only what is on
-  the remote.
+  (`git branch --list 'task/*'`) and a dirty working tree (`git status --porcelain`, **excluding
+  `.obsidian/*`**) — both are notes, **not** stops.
+- **Hard stop:** if local `develop` is ahead of `origin/develop`
+  (`git log --oneline origin/develop..develop` is non-empty), **stop** and tell the user to push or
+  run `finish-task.sh` first — promotion ships only what is on the remote.
 
 ### 2. Validate `develop` is green
 
@@ -173,4 +179,6 @@ Stop (any hard stop above):
 - **Offline / `gh` down** — stop early at step 1 with a clear message.
 - **CI still pending after the bounded wait** — report "still running after N min — <url>", do not
   merge / do not claim done.
-- **Invoked from a worktree or dirty `develop`** — surface it and stop (precondition).
+- **Invoked from a worktree** — surface it and stop (precondition).
+- **Dirty working tree** — report as a note (ignoring `.obsidian/*`), never a stop; it does not
+  affect what gets promoted.
