@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { getBoardStatusColumns, type StatusColumn } from "@/lib/portfolios/queries";
 import {
   addBoardSchema,
   createPortfolioSchema,
@@ -119,6 +121,16 @@ export async function updatePortfolioPlacement(input: {
 
   revalidatePath(`/portfolios/${input.portfolioId}`);
   return { ok: true, data: null };
+}
+
+export async function getStatusColumnsForBoard(
+  boardId: string,
+): Promise<ActionResult<{ columns: StatusColumn[] }>> {
+  const parsed = z.string().uuid().safeParse(boardId);
+  if (!parsed.success) return fail("Invalid board");
+
+  const columns = await getBoardStatusColumns(parsed.data);
+  return { ok: true, data: { columns } };
 }
 
 export async function updatePortfolioMapping(input: {
