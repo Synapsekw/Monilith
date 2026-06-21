@@ -51,6 +51,31 @@ function toGoalRow(r: GoalDbRow): GoalRow {
   };
 }
 
+export interface GoalLink {
+  boardId: string;
+  doneColumnId: string | null;
+  doneOptionIds: string[];
+}
+
+/** Board links per goal (for the auto_boards mapping editor in the drawer). */
+export async function getGoalLinks(): Promise<Map<string, GoalLink[]>> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("goal_links")
+    .select("goal_id, board_id, done_column_id, done_option_ids");
+  const map = new Map<string, GoalLink[]>();
+  for (const r of data ?? []) {
+    const list = map.get(r.goal_id) ?? [];
+    list.push({
+      boardId: r.board_id,
+      doneColumnId: r.done_column_id,
+      doneOptionIds: Array.isArray(r.done_option_ids) ? (r.done_option_ids as string[]) : [],
+    });
+    map.set(r.goal_id, list);
+  }
+  return map;
+}
+
 /** The current user's owner map (keyed by userId), for the New Goal owner picker. */
 export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
   const orgs = await getUserOrgs();
@@ -61,7 +86,8 @@ export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
 }
 
 /** One bounded pass: goals SELECT + goals_rollup() RPC + members → assembled tree. */
-export async function getGoalsTree(now: number): Promise<GoalNode[]> {
+export async function getGoalsTree(): Promise<GoalNode[]> {
+  const now = Date.now();
   const supabase = await createClient();
   const [{ data: goals }, { data: aggs }, owners] = await Promise.all([
     supabase
