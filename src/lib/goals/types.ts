@@ -5,7 +5,7 @@ export type GoalStatus = Tables<"goals">["status"];
 export type GoalHealth = "on_track" | "at_risk" | "off_track";
 
 export interface RowOwner {
-  id: string;
+  userId: string;
   fullName: string | null;
   email: string | null;
   avatarUrl: string | null;
