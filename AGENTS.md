@@ -55,8 +55,9 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
    session works in its own worktree on a temporary `task/<name>` branch.** The main checkout
    (`/Users/danijeljovanovic/Dev/Monolith`) stays parked on `develop` and is the **integration
    home** — you do not build directly in it. Each building session creates its own **git worktree**
-   (a separate sibling folder, separate files on disk) on a short-lived `task/<name>` branch cut
-   from `develop`. This is what lets multiple parallel sessions build different things at once
+   — a folder **nested at `.claude/worktrees/<name>`** (separate files on disk) — on a short-lived
+   `task/<name>` branch cut from `develop`. This is what lets multiple parallel sessions build
+   different things at once
    without stomping each other's files. When `develop` is green, **promote to `main`** (open a
    `develop → main` PR, merge once CI passes) — that, and only that, deploys production on Vercel.
    `develop` never deploys to production.
@@ -65,13 +66,22 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
      terminal/agent: two sessions in one folder share one branch and one set of files, so **never
      `git checkout` to another branch or `git stash`-and-switch in the main checkout** (it clobbers
      live sessions). Instead, start a building session with **`scripts/start-task.sh <name>`** (cuts
-     `task/<name>` in a fresh worktree `../Monolith-<name>` off the latest `origin/develop` and pins
-     the commit identity), then `cd` into that folder and build there.
+     `task/<name>` in a fresh worktree `.claude/worktrees/<name>` off the latest `origin/develop`
+     and pins the commit identity), then `cd` into that folder and build there.
+   - **The worktree is nested inside the project on purpose — so subagent-driven development works.**
+     A worktree at `.claude/worktrees/<name>` is **inside** the primary working dir, hence inside the
+     subagent sandbox, so dispatched subagents can read/write into it (a sibling `../Monolith-<name>`
+     cannot — that was [[2026-06-21-gotcha-28-subagents-cant-write-outside-primary-dir]]). For a
+     subagent-driven session, call **`EnterWorktree({ path: ".claude/worktrees/<name>" })`** to
+     re-root the session into the worktree, so the orchestrator and all subagents operate on the one
+     `task/<name>` branch with natural relative paths. The worktree also **inherits the main
+     checkout's `node_modules`** (Node upward resolution), so `pnpm` runs there with no install.
    - **Your worktree is an isolated snapshot — you see a frozen `develop`, not other sessions' work.**
      When you explore or learn the codebase, your search/read tools only see **this worktree's
      files**: `develop` as it was when the worktree was created, plus your own changes. You do **not**
-     see the in-flight, unmerged work in sibling worktrees (`../Monolith-*`) — and subagents are
-     sandboxed to this folder, so they can't read them either. This is deliberate: reason about one
+     see the in-flight, unmerged work in other task worktrees — once you re-root into your own
+     worktree (via `EnterWorktree`, recommended for subagent-driven work), it and its subagents are
+     sandboxed to that folder. This is deliberate: reason about one
      coherent snapshot, never a mix of half-finished branches. The trade-off is you can be slightly
      **behind** (never ahead): if another task merges into `develop` mid-session and you need that
      just-landed code, run `git -C <main-checkout> fetch origin develop` then rebase your branch

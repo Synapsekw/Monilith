@@ -42,8 +42,12 @@ Replace working agreement #1. Two changes, one workflow:
 1. **One worktree + one temporary `task/<name>` branch per building session.** The main checkout
    stays parked on `develop` as the **integration home** (no building in it). Each building session
    runs `scripts/start-task.sh <name>`, which cuts `task/<name>` off the latest `origin/develop` in
-   a sibling worktree `../Monolith-<name>` and pins the commit identity. Separate folders =
-   separate files = no live stomping between parallel sessions. **A task is not complete until it is
+   a worktree nested at `.claude/worktrees/<name>` and pins the commit identity. Separate folders =
+   separate files = no live stomping between parallel sessions. (Nested — not a sibling
+   `../Monolith-<name>` — so the worktree stays inside the subagent sandbox and subagent-driven
+   development can write into it; see [[2026-06-21-gotcha-28-subagents-cant-write-outside-primary-dir]].
+   `.claude/worktrees/` is gitignored; a subagent-driven session re-roots via `EnterWorktree({ path })`.)
+   **A task is not complete until it is
    merged into `develop` AND cleaned up:** the four green checks pass → `task/<name>` merges
    **directly into `develop`** (local merge; CI on `develop` is the safety net) → the worktree is
    removed and the branch deleted. `scripts/finish-task.sh` does all of this. An agent that leaves

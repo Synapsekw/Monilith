@@ -1,14 +1,37 @@
 ---
 type: adr
-status: accepted
+status: resolved
 date: 2026-06-21
 tags: [adr, gotcha, subagents, worktrees, parallel]
 related:
   - "[[2026-06-19-decision-21-plans-must-state-execution-dag]]"
   - "[[2026-06-21-0020-in-app-invite-acceptance]]"
+  - "[[2026-06-21-decision-22-worktree-temp-branches-and-pinned-commit-identity]]"
 ---
 
 # Gotcha 28 — Subagents can't Write/Bash outside the primary working dir → git-worktree parallel dispatch fails
+
+## Update (2026-06-21) — RESOLVED: nest the worktree inside the project
+
+The "untested" escape hatch below was tested and **works**. The blocker was worktree _location_,
+not worktrees per se: a **sibling** `../Monolith-<name>` is outside the primary dir → outside the
+subagent sandbox. A worktree **nested at `.claude/worktrees/<name>`** is _inside_ the primary dir →
+inside the sandbox, so dispatched subagents Read/Write/Edit into it freely.
+
+Verified empirically: a `general-purpose` subagent dispatched from a main-rooted session
+successfully `Write`/`Read`/`Edit`-ed a file under `.claude/worktrees/sandbox-probe/` with zero
+permission errors. Bonus: the nested worktree resolves the **main checkout's `node_modules`** via
+Node's upward module resolution (`require.resolve('next')` → `/Monolith/node_modules/...`), so no
+install/symlink is needed.
+
+The "shared-index races on commit" worry was unfounded — each git worktree has its **own** index
+and HEAD, so committing in a worktree never races the main checkout's index.
+
+The fix is now the standard workflow (`scripts/start-task.sh` creates `.claude/worktrees/<name>`;
+`.claude/worktrees/` is gitignored; a subagent-driven session re-roots via
+`EnterWorktree({ path })`). The original mitigation below (disjoint files in the main checkout) is
+no longer necessary, but is kept for the record. See
+[[2026-06-21-decision-22-worktree-temp-branches-and-pinned-commit-identity]] and AGENTS.md #1.
 
 ## Context
 

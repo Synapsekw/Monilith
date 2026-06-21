@@ -4,8 +4,13 @@
 #
 # Begins a building session in its own isolated git worktree so parallel
 # sessions never stomp each other's files. Creates branch `task/<name>` off the
-# latest origin/develop in a sibling folder `../Monolith-<name>`, and pins the
-# commit identity Vercel expects.
+# latest origin/develop in a NESTED folder `.claude/worktrees/<name>`, and pins
+# the commit identity Vercel expects.
+#
+# Why nested (not a sibling ../Monolith-<name>): a worktree inside the project is
+# inside the subagent sandbox, so subagent-driven development can write into it;
+# a sibling cannot. It also inherits the main checkout's node_modules via Node's
+# upward module resolution — no install needed. (.claude/worktrees/ is gitignored.)
 #
 # Finish the session with scripts/finish-task.sh (merges into develop + cleans up).
 
@@ -24,7 +29,7 @@ fi
 # Resolve the main checkout (the dir whose .git is the common git dir).
 MAIN="$(cd "$(dirname "$(git rev-parse --git-common-dir)")" && pwd)"
 BRANCH="task/$NAME"
-WT="$MAIN/../Monolith-$NAME"
+WT="$MAIN/.claude/worktrees/$NAME"
 
 if git -C "$MAIN" show-ref --verify --quiet "refs/heads/$BRANCH"; then
   echo "error: branch $BRANCH already exists — pick another name or finish the existing task." >&2
@@ -51,4 +56,6 @@ echo "✓ ready. branch $BRANCH in $WT_ABS"
 echo "  identity: $(git -C "$WT_ABS" config user.name) <$(git -C "$WT_ABS" config user.email)>"
 echo ""
 echo "  next:  cd \"$WT_ABS\""
+echo "  dev:   pnpm dev -p 3001   (inherits the main checkout's node_modules)"
+echo "  agent: EnterWorktree({ path: \".claude/worktrees/$NAME\" }) to re-root + use subagents"
 echo "  done:  scripts/finish-task.sh   (run from inside the worktree)"

@@ -72,6 +72,9 @@ next-env.d.ts
 # Claude Code — share project settings + commands/hooks, but never machine-local settings.
 .claude/settings.local.json
 
+# Per-session task worktrees (scripts/start-task.sh) live here; never part of the main tree.
+.claude/worktrees/
+
 # Volatile Obsidian graph view-state (not knowledge)
 .obsidian/graph.json
 
