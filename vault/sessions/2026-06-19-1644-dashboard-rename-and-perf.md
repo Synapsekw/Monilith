@@ -5,7 +5,9 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session]
-related: []
+related:
+  - "[[2026-06-17-2048-dashboards-d1-foundation]]"
+  - "[[2026-06-18-0818-dashboards-d3b-list-filter]]"
 ---
 
 # Dashboard + widget rename, dashboard-load perf

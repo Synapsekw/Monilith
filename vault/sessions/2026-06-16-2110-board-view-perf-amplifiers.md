@@ -5,7 +5,11 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session, performance]
-related: ["[[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]]"]
+related:
+  [
+    "[[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]]",
+    "[[2026-06-17-1043-board-switch-perf-layout]]",
+  ]
 ---
 
 # Board view performance: quick win + deferred amplifiers

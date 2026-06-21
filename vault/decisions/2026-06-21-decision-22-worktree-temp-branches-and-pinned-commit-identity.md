@@ -10,6 +10,7 @@ related:
   - "[[2026-06-15-gotcha-07-shared-worktree-subagents]]"
   - "[[2026-06-17-2155-gotcha-15-subagent-scope-overstep-shared-checkout]]"
   - "[[2026-06-20-gotcha-25-auth-email-prod-deploy]]"
+  - "[[2026-06-17-1947-develop-main-promotion]]"
 ---
 
 # Decision 22 — Worktree + temporary `task/<name>` branches per session; pinned commit identity

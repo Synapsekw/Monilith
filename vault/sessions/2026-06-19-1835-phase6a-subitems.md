@@ -8,6 +8,7 @@ tags: [session, phase/6, boards, subitems]
 related:
   - "[[2026-06-19-phase-6a-subitems-design]]"
   - "[[2026-06-19-phase-6a-subitems]]"
+  - "[[2026-06-19-1906-item-drag-reorder]]"
 ---
 
 # Phase 6a — Subitems (single-level, shared columns, rollups, drag-reorder)
