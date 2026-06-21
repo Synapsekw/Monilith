@@ -18,6 +18,7 @@ export const columnKindSchema = z.enum([
   "files",
   "time_tracking",
   "relation",
+  "mirror",
 ]);
 
 // --- shared option shape (status + dropdown) ---
@@ -45,6 +46,14 @@ export const relationSettingsSchema = z.object({
   allow_multiple: z.boolean().default(true),
 });
 
+// Mirror column rolls up a field from the target board of a relation column on
+// this board: it reads `source_relation_column_id`'s links and shows each linked
+// item's `target_column_id` value. Read-only; stored snake_case in settings jsonb.
+export const mirrorSettingsSchema = z.object({
+  source_relation_column_id: z.string().uuid(),
+  target_column_id: z.string().uuid(),
+});
+
 export function columnSettingsSchema(kind: ColumnKind) {
   switch (kind) {
     case "status":
@@ -55,6 +64,8 @@ export function columnSettingsSchema(kind: ColumnKind) {
       return numbersSettingsSchema;
     case "relation":
       return relationSettingsSchema;
+    case "mirror":
+      return mirrorSettingsSchema;
     case "text":
     case "people":
     case "date":
@@ -127,6 +138,11 @@ export const timeTrackingValueSchema = z.object({
 // this case exists only to keep the switch exhaustive and is never used by upsertCell.
 export const relationValueSchema = z.object({}).strict();
 
+// Mirror cells store no cell_values row (content derives from relation_links +
+// the target board's cell_values); this case exists only to keep the switch
+// exhaustive and is never used by upsertCell.
+export const mirrorValueSchema = z.object({}).strict();
+
 export function cellValueSchema(kind: ColumnKind) {
   switch (kind) {
     case "text":
@@ -157,5 +173,7 @@ export function cellValueSchema(kind: ColumnKind) {
       return timeTrackingValueSchema;
     case "relation":
       return relationValueSchema;
+    case "mirror":
+      return mirrorValueSchema;
   }
 }

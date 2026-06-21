@@ -21,6 +21,11 @@ export type BoardCache = {
   attachments: CacheAttachment[];
   timeEntries: CacheTimeEntry[];
   relationLinks: RelationLink[];
+  /** (linked item, target column) values the caller can read, for mirror cells.
+   *  Read-only at runtime (no mutators) — refreshed via revalidatePath re-hydration. */
+  mirrorTargetCells: CacheCellValue[];
+  /** Referenced target columns' render metadata (kind + settings). Read-only. */
+  mirrorTargetColumns: Pick<CacheColumn, "id" | "kind" | "settings">[];
 };
 
 /** Stable lookup key for a cell value (item + column). */
