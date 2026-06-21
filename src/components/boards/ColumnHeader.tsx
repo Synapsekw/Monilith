@@ -98,7 +98,7 @@ export function ColumnHeader({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {COLUMN_KIND_META[column.kind].hasOptions && onEditOptions && (
+              {COLUMN_KIND_META[column.kind]?.hasOptions && onEditOptions && (
                 <DropdownMenuItem onSelect={() => onEditOptions()}>
                   Edit labels
                 </DropdownMenuItem>
