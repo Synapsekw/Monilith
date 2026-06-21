@@ -103,3 +103,8 @@ export const setEstimateSchema = z.object({
   columnId: uuid,
   estimateSeconds: z.number().int().positive().nullable(),
 });
+export const setRelationLinksSchema = z.object({
+  itemId: uuid,
+  columnId: uuid,
+  linkedItemIds: z.array(uuid).max(200),
+});
