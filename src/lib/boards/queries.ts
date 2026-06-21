@@ -25,6 +25,10 @@ export type BoardPayload = {
   attachments: Attachment[];
   timeEntries: TimeEntry[];
   relationLinks: RelationLink[];
+  /** (linked item, target column) cell values for mirror columns, RLS-scoped. */
+  mirrorTargetCells: CellValue[];
+  /** Render metadata for the columns referenced by mirror columns. */
+  mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[];
 };
 
 export type BoardListEntry = Pick<
@@ -120,8 +124,11 @@ export async function getBoardAccess(
 
 /**
  * Batched read of a board's full payload. Returns null when the board is not
- * visible (RLS) or does not exist. Seven parallel RLS-scoped reads — no joins,
+ * visible (RLS) or does not exist. Nine parallel RLS-scoped reads — no joins,
  * no N+1. Attachments are bounded to the most recent 200 files-column rows.
+ * Relation links and mirror cells trigger two further bounded follow-up reads
+ * (linked-item names; mirror target cells + target-column metadata) only when
+ * the board actually has those columns.
  */
 export async function getBoardPayload(
   boardId: string,
@@ -220,6 +227,59 @@ export async function getBoardPayload(
     position: l.position,
   }));
 
+  // Mirror source hydration: read the (linked item, target column) cells the
+  // caller can see — RLS auto-filters unreadable target boards → mirror renders
+  // empty for those, mirroring how unreadable linked-item names stay null above.
+  // Two bounded queries; no N+1 / per-cell fetch.
+  const cols = columnsRes.data ?? [];
+  const mirrorCols = cols.filter((c) => c.kind === "mirror");
+  let mirrorTargetCells: CellValue[] = [];
+  let mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[] = [];
+  if (mirrorCols.length > 0) {
+    const targetColumnIds = [
+      ...new Set(
+        mirrorCols
+          .map(
+            (c) => (c.settings as { target_column_id?: string })?.target_column_id,
+          )
+          .filter((x): x is string => Boolean(x)),
+      ),
+    ];
+    const sourceRelIds = new Set(
+      mirrorCols
+        .map(
+          (c) =>
+            (c.settings as { source_relation_column_id?: string })
+              ?.source_relation_column_id,
+        )
+        .filter((x): x is string => Boolean(x)),
+    );
+    const linkedItemIds = [
+      ...new Set(
+        rawLinks
+          .filter((l) => sourceRelIds.has(l.column_id))
+          .map((l) => l.linked_item_id),
+      ),
+    ];
+    if (targetColumnIds.length > 0 && linkedItemIds.length > 0) {
+      const [cellsRes2, colsRes2] = await Promise.all([
+        // RLS-scoped, bounded over the (item_id, column_id) index.
+        supabase
+          .from("cell_values")
+          .select("*")
+          .in("item_id", linkedItemIds)
+          .in("column_id", targetColumnIds)
+          .limit(4000),
+        supabase
+          .from("columns")
+          .select("id, kind, settings")
+          .in("id", targetColumnIds),
+      ]);
+      mirrorTargetCells = cellsRes2.data ?? [];
+      mirrorTargetColumns = colsRes2.data ?? [];
+    }
+  }
+
   return {
     board,
     groups: groupsRes.data ?? [],
@@ -231,7 +291,24 @@ export async function getBoardPayload(
     attachments: attachmentsRes.data ?? [],
     timeEntries: timeEntriesRes.data ?? [],
     relationLinks,
+    mirrorTargetCells,
+    mirrorTargetColumns,
   };
+}
+
+/** Mirrorable (cell_values-backed) columns on a target board, for the mirror
+ *  config's target-column picker. RLS-scoped. Excludes derived/side-table kinds. */
+export async function listMirrorableColumns(
+  targetBoardId: string,
+): Promise<{ id: string; name: string; kind: string }[]> {
+  const supabase = await createClient();
+  const NON_MIRRORABLE = ["files", "time_tracking", "relation", "mirror"];
+  const { data } = await supabase
+    .from("columns")
+    .select("id, name, kind")
+    .eq("board_id", targetBoardId)
+    .order("position", { ascending: true });
+  return (data ?? []).filter((c) => !NON_MIRRORABLE.includes(c.kind));
 }
 
 export type OrgMember = {
