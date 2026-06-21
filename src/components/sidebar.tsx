@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 
 const nav = [
-  { label: "Goals", icon: Target },
+  { label: "Goals", icon: Target, href: "/goals" },
   { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
   { label: "Inbox", icon: Inbox },
 ] as const;
