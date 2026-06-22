@@ -601,8 +601,20 @@ function footerPayload(settings: Record<string, unknown>) {
       },
     ],
     cellValues: [
-      { item_id: "t1", column_id: "c1", org_id: "o1", board_id: "b1", value: { n: 10 } },
-      { item_id: "t2", column_id: "c1", org_id: "o1", board_id: "b1", value: { n: 5 } },
+      {
+        item_id: "t1",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { n: 10 },
+      },
+      {
+        item_id: "t2",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { n: 5 },
+      },
     ],
     dependencies: [],
     views: [],
@@ -840,8 +852,22 @@ function twoGroupsPayload(perGroup: number) {
   return {
     board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
     groups: [
-      { id: "g1", board_id: "b1", org_id: "o1", name: "Group 1", color: "#0073ea", position: 0 },
-      { id: "g2", board_id: "b1", org_id: "o1", name: "Group 2", color: "#00c875", position: 1 },
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+      {
+        id: "g2",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 2",
+        color: "#00c875",
+        position: 1,
+      },
     ],
     columns: [],
     items: [...mkItems("g1", "Alpha"), ...mkItems("g2", "Beta")],
@@ -896,5 +922,111 @@ describe("BoardTable frozen Name column", () => {
     // ...while still windowing (far-bottom rows of each group are virtualized out).
     expect(screen.queryByText("Alpha 30")).not.toBeInTheDocument();
     expect(screen.queryByText("Beta 30")).not.toBeInTheDocument();
+  });
+});
+
+// ── Per-group column headers (Monday-style) ──────────────────────────────────
+// Columns are board-scoped + shared, but every group renders its OWN interactive
+// header so empty/new groups still show the columns (the reported bug). Fixture:
+// 3 board columns, two groups, and the SECOND group is EMPTY (no items).
+function payloadWithColumns() {
+  const col = (id: string, name: string, kind = "text", position = 0) => ({
+    id,
+    board_id: "b1",
+    org_id: "o1",
+    kind,
+    name,
+    settings: {},
+    position,
+    width: null,
+  });
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+      {
+        id: "g2",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 2",
+        color: "#e2445c",
+        position: 1,
+      },
+    ],
+    columns: [
+      col("c_status", "Status", "status", 0),
+      col("c_owner", "Owner", "people", 1),
+      col("c_date", "Due Date", "date", 2),
+    ],
+    items: [
+      {
+        id: "i1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        name: "Item 1",
+        position: 0,
+        parent_id: null,
+      },
+    ],
+    cellValues: [],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderBoardWithColumns() {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardTable payload={payloadWithColumns()} selectedViewId="v1" />
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable per-group column headers", () => {
+  it("renders every column header inside EVERY group, including the empty one", () => {
+    // The core bug: an empty group (g2) used to show no columns. Now each of
+    // the two groups renders all three column names → 2 of each.
+    renderBoardWithColumns();
+    expect(screen.getAllByText("Status")).toHaveLength(2);
+    expect(screen.getAllByText("Owner")).toHaveLength(2);
+    expect(screen.getAllByText("Due Date")).toHaveLength(2);
+  });
+
+  it("renders an Add-column control in every group header (no single global one)", () => {
+    renderBoardWithColumns();
+    expect(screen.getAllByRole("button", { name: /add column/i })).toHaveLength(
+      2,
+    );
+  });
+
+  it("renders one Name-column resize handle per group (global header is gone)", () => {
+    // The old single global header had exactly one Name resize handle. Per-group
+    // headers give one each — two groups → two, never one.
+    renderBoardWithColumns();
+    expect(
+      screen.getAllByRole("separator", { name: /^Resize Name column/i }),
+    ).toHaveLength(2);
+  });
+
+  it("exposes a column resize handle per column per group (resize from any group)", () => {
+    renderBoardWithColumns();
+    expect(
+      screen.getAllByRole("separator", { name: "Resize Status" }),
+    ).toHaveLength(2);
+  });
+
+  it("keeps the column headers visible when a group is collapsed", () => {
+    renderBoardWithColumns();
+    fireEvent.click(screen.getByRole("button", { name: /Collapse Group 2/i }));
+    expect(screen.getAllByText("Status")).toHaveLength(2);
   });
 });
