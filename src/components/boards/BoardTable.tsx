@@ -41,6 +41,10 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { FlashHighlight } from "@/components/boards/presence/FlashHighlight";
+import { PresenceRing } from "@/components/boards/presence/PresenceRing";
+import { presenceTarget } from "@/lib/boards/presence-target";
+import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
 import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
 import { RelationCell } from "@/components/boards/cells/RelationCell";
@@ -225,6 +229,26 @@ function gridTemplate(
   return `${nameWidth}px ${tracks} ${ADD_COL_WIDTH}px`;
 }
 
+/**
+ * Board-level column-management surface, shared by every group's header row.
+ * Columns are board-scoped, so a resize/add/rename/delete from ANY group must
+ * reflow all groups + the footer — the width state (`liveWidths`/name width)
+ * therefore lives in {@link BoardTable} and is threaded down through this bundle
+ * (mirrors the {@link CellControls} pattern).
+ */
+type ColumnHeaderControls = {
+  nameWidth: number;
+  liveWidths: Record<string, number>;
+  setLiveWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  setLiveNameWidth: (w: number | null) => void;
+  renameColumn: (id: string, name: string) => void;
+  deleteColumn: (id: string) => void;
+  resizeColumn: (id: string, w: number) => void;
+  resizeNameColumn: (w: number | null) => void;
+  onAddColumn: (kind: ColumnKind) => void;
+  onEditOptions: (col: Column) => void;
+};
+
 /** The kind to aggregate a column AS (a mirror delegates to its target column's
  *  kind) plus the options used for distribution rendering. */
 function footerColumnMeta(
@@ -256,10 +280,7 @@ function footerColumnValues(
   if (col.kind === "mirror") return mirrorFooterValues(cache, col, itemIds);
   if (col.kind === "time_tracking") {
     return itemIds.map((id) => ({
-      trackedSecs: trackedSeconds(
-        timeEntriesForCell(cache, id, col.id),
-        nowMs,
-      ),
+      trackedSecs: trackedSeconds(timeEntriesForCell(cache, id, col.id), nowMs),
       estimateSecs: (
         cellMap.get(cellKey(id, col.id)) as
           | { estimateSeconds?: number }
@@ -503,6 +524,32 @@ export function BoardTable({
     mutations.updateColumnSettings(col.id, next);
   }
 
+  // Board-level column-management surface shared by every group's header row
+  // (columns are board-scoped). Width state stays here so a resize/add/rename
+  // from any group reflows all groups + the footer.
+  const columnControls: ColumnHeaderControls = {
+    nameWidth,
+    liveWidths,
+    setLiveWidths,
+    setLiveNameWidth,
+    renameColumn: mutations.renameColumn,
+    deleteColumn: mutations.deleteColumn,
+    resizeColumn: mutations.resizeColumn,
+    resizeNameColumn: mutations.resizeNameColumn,
+    onAddColumn: (kind) => {
+      if (kind === "relation") {
+        setRelationTargetBoards([]);
+        setRelationConfigOpen(true);
+        listRelationTargetBoards().then(setRelationTargetBoards);
+      } else if (kind === "mirror") {
+        setMirrorConfigOpen(true);
+      } else {
+        mutations.addColumn(kind);
+      }
+    },
+    onEditOptions: (c) => setOptionsFor(c),
+  };
+
   const controls: CellControls = {
     editing,
     setEditing,
@@ -556,6 +603,7 @@ export function BoardTable({
         selectedViewId={selectedViewId}
         columns={columns}
         members={members}
+        groups={groups.map((g) => ({ id: g.id, name: g.name }))}
         access={access}
         grants={grants}
       />
@@ -573,50 +621,6 @@ export function BoardTable({
         className="group/scroll flex-1 overflow-auto"
       >
         <div ref={contentRef} className="min-w-fit">
-          {/* Column header row */}
-          <div
-            className="bg-surface-muted text-muted-foreground sticky top-0 z-20 grid border-b text-xs font-medium"
-            style={{ gridTemplateColumns: template }}
-          >
-            <NameColumnHeader
-              width={nameWidth}
-              onResize={(w) => setLiveNameWidth(w)}
-              onResizeEnd={(w) => {
-                setLiveNameWidth(null);
-                mutations.resizeNameColumn(w);
-              }}
-              onAutoFit={() => {
-                setLiveNameWidth(null);
-                mutations.resizeNameColumn(null);
-              }}
-            />
-            {columns.map((col) => (
-              <ColumnHeader
-                key={col.id}
-                column={col}
-                width={liveWidths[col.id] ?? col.width ?? VALUE_COL_WIDTH}
-                onRename={(name) => mutations.renameColumn(col.id, name)}
-                onDelete={() => mutations.deleteColumn(col.id)}
-                onResize={(w) => setLiveWidths((m) => ({ ...m, [col.id]: w }))}
-                onResizeEnd={(w) => mutations.resizeColumn(col.id, w)}
-                onEditOptions={() => setOptionsFor(col)}
-              />
-            ))}
-            <AddColumnMenu
-              onAdd={(kind) => {
-                if (kind === "relation") {
-                  setRelationTargetBoards([]);
-                  setRelationConfigOpen(true);
-                  listRelationTargetBoards().then(setRelationTargetBoards);
-                } else if (kind === "mirror") {
-                  setMirrorConfigOpen(true);
-                } else {
-                  mutations.addColumn(kind);
-                }
-              }}
-            />
-          </div>
-
           {groups.length === 0 ? (
             <p className="text-muted-foreground px-4 py-6 text-sm">
               This board has no groups yet.
@@ -638,6 +642,7 @@ export function BoardTable({
                     group={group}
                     items={itemsByGroup.get(group.id) ?? []}
                     columns={columns}
+                    col={columnControls}
                     cellMap={cellMap}
                     template={template}
                     controls={controls}
@@ -781,7 +786,13 @@ export function BoardTable({
  * round-trips) and persists the px width on release; double-clicking the handle
  * clears the manual width so the column returns to auto-fit.
  */
-function NameColumnHeader({
+/**
+ * The Name-column resize separator (drag to resize, double-click to auto-fit).
+ * Lives on the right edge of each group header's frozen Name cell. Extracted
+ * from the old global header's NameColumnHeader so every group can resize the
+ * shared Name column.
+ */
+function NameResizeHandle({
   width,
   onResize,
   onResizeEnd,
@@ -816,21 +827,13 @@ function NameColumnHeader({
 
   return (
     <div
-      className={cn(
-        "bg-surface-muted sticky left-0 z-10 flex items-center truncate px-4 py-1.5",
-        NAME_FREEZE_EDGE,
-      )}
-    >
-      Name
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize Name column (double-click to auto-fit)"
-        onPointerDown={onPointerDown}
-        onDoubleClick={onAutoFit}
-        className="hover:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize"
-      />
-    </div>
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize Name column (double-click to auto-fit)"
+      onPointerDown={onPointerDown}
+      onDoubleClick={onAutoFit}
+      className="hover:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize"
+    />
   );
 }
 
@@ -978,10 +981,163 @@ function RowMenu({
   );
 }
 
+/**
+ * A group's header row (Monday-style): a grid aligned to the shared column
+ * `template`, with the group controls in a frozen Name cell and an interactive
+ * {@link ColumnHeader} per board column + {@link AddColumnMenu}. Rendered by
+ * EVERY group (there is no single global header), so empty/new groups still
+ * show the board's columns. Column width/options/dialog state is shared via
+ * {@link ColumnHeaderControls} so a change from any group reflows all groups.
+ */
+function GroupHeaderRow({
+  group,
+  columns,
+  template,
+  collapsed,
+  onToggleCollapse,
+  renaming,
+  name,
+  onNameChange,
+  onCommitRename,
+  onCancelRename,
+  onOpenRename,
+  itemCount,
+  dragAttributes,
+  dragListeners,
+  onSetColor,
+  onDelete,
+  col,
+}: {
+  group: Group;
+  columns: Column[];
+  template: string;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  renaming: boolean;
+  name: string;
+  onNameChange: (v: string) => void;
+  onCommitRename: () => void;
+  onCancelRename: () => void;
+  onOpenRename: () => void;
+  itemCount: number;
+  dragAttributes: ReturnType<typeof useSortable>["attributes"];
+  dragListeners: ReturnType<typeof useSortable>["listeners"];
+  onSetColor: (color: string) => void;
+  onDelete: () => void;
+  col: ColumnHeaderControls;
+}) {
+  return (
+    <div
+      className="group/grouphdr bg-surface text-muted-foreground grid border-b text-xs font-medium"
+      style={{ gridTemplateColumns: template }}
+    >
+      {/* Frozen group/Name cell — group controls + Name-column resize handle. */}
+      <div
+        className={cn(
+          "bg-surface text-foreground relative sticky left-0 z-10 flex items-center gap-2 px-3 py-1.5 text-sm font-semibold",
+          NAME_FREEZE_EDGE,
+        )}
+        style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
+      >
+        <button
+          type="button"
+          aria-label={`Reorder ${group.name}`}
+          {...dragAttributes}
+          {...dragListeners}
+          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-4" />
+          ) : (
+            <ChevronDown className="size-4" />
+          )}
+        </button>
+        <span
+          className="inline-block size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: group.color }}
+          aria-hidden
+        />
+        {renaming ? (
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            onBlur={onCommitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onCommitRename();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                onCancelRename();
+              }
+            }}
+            aria-label={`Rename ${group.name}`}
+            className="h-7 max-w-xs"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenRename}
+            className="focus-visible:ring-ring min-w-0 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
+          >
+            {group.name}
+          </button>
+        )}
+        <span className="text-muted-foreground text-xs font-normal">
+          {itemCount}
+        </span>
+        <GroupMenu
+          group={group}
+          onRename={onOpenRename}
+          onSetColor={onSetColor}
+          onDelete={onDelete}
+        />
+        <NameResizeHandle
+          width={col.nameWidth}
+          onResize={(w) => col.setLiveNameWidth(w)}
+          onResizeEnd={(w) => {
+            col.setLiveNameWidth(null);
+            col.resizeNameColumn(w);
+          }}
+          onAutoFit={() => {
+            col.setLiveNameWidth(null);
+            col.resizeNameColumn(null);
+          }}
+        />
+      </div>
+
+      {columns.map((c) => (
+        <ColumnHeader
+          key={c.id}
+          column={c}
+          width={col.liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}
+          onRename={(n) => col.renameColumn(c.id, n)}
+          onDelete={() => col.deleteColumn(c.id)}
+          onResize={(w) => col.setLiveWidths((m) => ({ ...m, [c.id]: w }))}
+          onResizeEnd={(w) => col.resizeColumn(c.id, w)}
+          onEditOptions={() => col.onEditOptions(c)}
+        />
+      ))}
+      <AddColumnMenu onAdd={col.onAddColumn} />
+    </div>
+  );
+}
+
 function GroupSection({
   group,
   items,
   columns,
+  col,
   cellMap,
   template,
   controls,
@@ -1003,6 +1159,7 @@ function GroupSection({
   group: Group;
   items: Item[];
   columns: Column[];
+  col: ColumnHeaderControls;
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
@@ -1124,76 +1281,28 @@ function GroupSection({
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(isDragging && "relative z-20 shadow-lg")}
     >
-      {/* Colored band header — group.color tints the left rail + label. */}
-      <div
-        className="group/grouphdr bg-surface hover:bg-accent sticky left-0 flex w-full items-center gap-2 border-b px-3 py-1.5 text-sm font-semibold transition-colors"
-        style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
-      >
-        <button
-          type="button"
-          aria-label={`Reorder ${group.name}`}
-          {...attributes}
-          {...listeners}
-          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing"
-        >
-          <GripVertical className="size-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-expanded={!collapsed}
-          aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
-        >
-          {collapsed ? (
-            <ChevronRight className="size-4" />
-          ) : (
-            <ChevronDown className="size-4" />
-          )}
-        </button>
-        <span
-          className="inline-block size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: group.color }}
-          aria-hidden
-        />
-        {renaming ? (
-          <Input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitRename();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setRenaming(false);
-                onRenameSettled();
-              }
-            }}
-            aria-label={`Rename ${group.name}`}
-            className="h-7 max-w-xs"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={openRename}
-            className="focus-visible:ring-ring min-w-0 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
-          >
-            {group.name}
-          </button>
-        )}
-        <span className="text-muted-foreground text-xs font-normal">
-          {items.length}
-        </span>
-        <GroupMenu
-          group={group}
-          onRename={openRename}
-          onSetColor={onSetColor}
-          onDelete={onDelete}
-        />
-      </div>
+      <GroupHeaderRow
+        group={group}
+        columns={columns}
+        template={template}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((c) => !c)}
+        renaming={renaming}
+        name={name}
+        onNameChange={setName}
+        onCommitRename={commitRename}
+        onCancelRename={() => {
+          setRenaming(false);
+          onRenameSettled();
+        }}
+        onOpenRename={openRename}
+        itemCount={items.length}
+        dragAttributes={attributes}
+        dragListeners={listeners}
+        onSetColor={onSetColor}
+        onDelete={onDelete}
+        col={col}
+      />
 
       {!collapsed && (
         <>
@@ -1225,41 +1334,39 @@ function GroupSection({
                         ref={virtualizer.measureElement}
                         className="absolute top-0 left-0 w-full"
                         style={{
-                          transform: `translateY(${
-                            vr.start - scrollMargin
-                          }px)`,
+                          transform: `translateY(${vr.start - scrollMargin}px)`,
                         }}
                       >
-                          <ItemRow
-                            item={item}
+                        <ItemRow
+                          item={item}
+                          columns={columns}
+                          cellMap={cellMap}
+                          template={template}
+                          controls={controls}
+                          subitems={children}
+                          childCount={children.length}
+                          isExpanded={isExpanded}
+                          onToggle={() => onToggleExpand(item.id)}
+                          autoFocusRename={item.id === renamingItemId}
+                          onRenameSettled={onRenameItemSettled}
+                          onSubitemAdded={onSetRenamingItemId}
+                        />
+                        {isExpanded && children.length > 0 && (
+                          <SubitemBlock
+                            parentId={item.id}
+                            subitems={children}
                             columns={columns}
                             cellMap={cellMap}
                             template={template}
                             controls={controls}
-                            subitems={children}
-                            childCount={children.length}
-                            isExpanded={isExpanded}
-                            onToggle={() => onToggleExpand(item.id)}
-                            autoFocusRename={item.id === renamingItemId}
+                            renamingItemId={renamingItemId}
                             onRenameSettled={onRenameItemSettled}
-                            onSubitemAdded={onSetRenamingItemId}
+                            onAdded={(id) => onSetRenamingItemId(id)}
                           />
-                          {isExpanded && children.length > 0 && (
-                            <SubitemBlock
-                              parentId={item.id}
-                              subitems={children}
-                              columns={columns}
-                              cellMap={cellMap}
-                              template={template}
-                              controls={controls}
-                              renamingItemId={renamingItemId}
-                              onRenameSettled={onRenameItemSettled}
-                              onAdded={(id) => onSetRenamingItemId(id)}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </SortableContext>
             </DndContext>
@@ -1719,6 +1826,11 @@ function EditableCell({
     editing?.itemId === item.id && editing.columnId === column.id;
   const settings = (column.settings ?? {}) as Settings;
   const accessibleName = `${item.name} ${column.name}`;
+  const target = presenceTarget.cell(item.id, column.id);
+  // Broadcast the local user's focus on this cell while they're editing it; the
+  // hook clears it on blur/unmount. Called unconditionally (once per cell) so it
+  // stays valid across the kind-specific early returns below.
+  usePresenceFocus({ viewKind: "table", targetId: target }, isEditing);
 
   // Files cells are not inline-edited like other kinds: they render a thumbnail
   // strip + upload affordance, and open a lightbox on click. Thumbnails use
@@ -1841,6 +1953,8 @@ function EditableCell({
           }}
           onCancel={() => setEditing(null)}
         />
+        <PresenceRing target={target} />
+        <FlashHighlight target={target} />
       </div>
     );
   }
@@ -1857,9 +1971,11 @@ function EditableCell({
           setEditing({ itemId: item.id, columnId: column.id });
         }
       }}
-      className="hover:bg-surface-muted focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      className="hover:bg-surface-muted focus-visible:ring-ring relative flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
     >
       <CellRenderer kind={column.kind} value={value} settings={settings} />
+      <PresenceRing target={target} />
+      <FlashHighlight target={target} />
     </div>
   );
 }

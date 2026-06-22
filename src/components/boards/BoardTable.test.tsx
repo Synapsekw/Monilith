@@ -3,6 +3,11 @@ import { reorderPosition } from "@/lib/boards/group-reorder";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
+import {
+  BoardPresenceProvider,
+  type BoardPresenceContextValue,
+} from "@/lib/boards/presence-context";
+import type { RosterOccupant } from "@/lib/boards/presence-types";
 
 // The tanstack virtualizer reads the scroll container's offsetWidth/offsetHeight
 // to compute which rows are in-viewport. jsdom always returns 0 for these,
@@ -596,8 +601,20 @@ function footerPayload(settings: Record<string, unknown>) {
       },
     ],
     cellValues: [
-      { item_id: "t1", column_id: "c1", org_id: "o1", board_id: "b1", value: { n: 10 } },
-      { item_id: "t2", column_id: "c1", org_id: "o1", board_id: "b1", value: { n: 5 } },
+      {
+        item_id: "t1",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { n: 10 },
+      },
+      {
+        item_id: "t2",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { n: 5 },
+      },
     ],
     dependencies: [],
     views: [],
@@ -641,6 +658,60 @@ describe("BoardTable summary footer (6d-3)", () => {
         settings: { unit: "$", summary_aggregation: "avg" },
       }),
     );
+  });
+});
+
+function occupant(over: Partial<RosterOccupant>): RosterOccupant {
+  return {
+    userId: "u2",
+    name: "Sam",
+    avatarUrl: null,
+    color: "#2d9cdb",
+    isSelf: false,
+    ...over,
+  };
+}
+
+function presenceValue(
+  focusMap: Map<string, RosterOccupant[]>,
+  selfUserId = "self",
+): BoardPresenceContextValue {
+  return {
+    roster: [],
+    focusMap,
+    setFocus: vi.fn(),
+    selfUserId,
+    selfFocusTargetId: null,
+    channelStatus: "SUBSCRIBED",
+    flashTargetId: null,
+  };
+}
+
+function renderFooterWithPresence(presence: BoardPresenceContextValue) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardPresenceProvider value={presence}>
+        <BoardTable payload={footerPayload({})} selectedViewId="v1" />
+      </BoardPresenceProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable cell presence ring (8a)", () => {
+  it("shows an editing indicator on a cell another user is focused on", () => {
+    // footerPayload has item t1 / column c1 → target cell:t1:c1
+    const focusMap = new Map([["cell:t1:c1", [occupant({ name: "Sam" })]]]);
+    renderFooterWithPresence(presenceValue(focusMap));
+    expect(screen.getByLabelText(/Sam is editing/i)).toBeInTheDocument();
+  });
+
+  it("does not show a ring for the local (self) user's own focus", () => {
+    const focusMap = new Map([
+      ["cell:t1:c1", [occupant({ userId: "self", isSelf: true })]],
+    ]);
+    renderFooterWithPresence(presenceValue(focusMap, "self"));
+    expect(screen.queryByLabelText(/is editing/i)).not.toBeInTheDocument();
   });
 });
 
@@ -781,8 +852,22 @@ function twoGroupsPayload(perGroup: number) {
   return {
     board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
     groups: [
-      { id: "g1", board_id: "b1", org_id: "o1", name: "Group 1", color: "#0073ea", position: 0 },
-      { id: "g2", board_id: "b1", org_id: "o1", name: "Group 2", color: "#00c875", position: 1 },
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+      {
+        id: "g2",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 2",
+        color: "#00c875",
+        position: 1,
+      },
     ],
     columns: [],
     items: [...mkItems("g1", "Alpha"), ...mkItems("g2", "Beta")],
@@ -837,5 +922,111 @@ describe("BoardTable frozen Name column", () => {
     // ...while still windowing (far-bottom rows of each group are virtualized out).
     expect(screen.queryByText("Alpha 30")).not.toBeInTheDocument();
     expect(screen.queryByText("Beta 30")).not.toBeInTheDocument();
+  });
+});
+
+// ── Per-group column headers (Monday-style) ──────────────────────────────────
+// Columns are board-scoped + shared, but every group renders its OWN interactive
+// header so empty/new groups still show the columns (the reported bug). Fixture:
+// 3 board columns, two groups, and the SECOND group is EMPTY (no items).
+function payloadWithColumns() {
+  const col = (id: string, name: string, kind = "text", position = 0) => ({
+    id,
+    board_id: "b1",
+    org_id: "o1",
+    kind,
+    name,
+    settings: {},
+    position,
+    width: null,
+  });
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+      {
+        id: "g2",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 2",
+        color: "#e2445c",
+        position: 1,
+      },
+    ],
+    columns: [
+      col("c_status", "Status", "status", 0),
+      col("c_owner", "Owner", "people", 1),
+      col("c_date", "Due Date", "date", 2),
+    ],
+    items: [
+      {
+        id: "i1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        name: "Item 1",
+        position: 0,
+        parent_id: null,
+      },
+    ],
+    cellValues: [],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderBoardWithColumns() {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardTable payload={payloadWithColumns()} selectedViewId="v1" />
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable per-group column headers", () => {
+  it("renders every column header inside EVERY group, including the empty one", () => {
+    // The core bug: an empty group (g2) used to show no columns. Now each of
+    // the two groups renders all three column names → 2 of each.
+    renderBoardWithColumns();
+    expect(screen.getAllByText("Status")).toHaveLength(2);
+    expect(screen.getAllByText("Owner")).toHaveLength(2);
+    expect(screen.getAllByText("Due Date")).toHaveLength(2);
+  });
+
+  it("renders an Add-column control in every group header (no single global one)", () => {
+    renderBoardWithColumns();
+    expect(screen.getAllByRole("button", { name: /add column/i })).toHaveLength(
+      2,
+    );
+  });
+
+  it("renders one Name-column resize handle per group (global header is gone)", () => {
+    // The old single global header had exactly one Name resize handle. Per-group
+    // headers give one each — two groups → two, never one.
+    renderBoardWithColumns();
+    expect(
+      screen.getAllByRole("separator", { name: /^Resize Name column/i }),
+    ).toHaveLength(2);
+  });
+
+  it("exposes a column resize handle per column per group (resize from any group)", () => {
+    renderBoardWithColumns();
+    expect(
+      screen.getAllByRole("separator", { name: "Resize Status" }),
+    ).toHaveLength(2);
+  });
+
+  it("keeps the column headers visible when a group is collapsed", () => {
+    renderBoardWithColumns();
+    fireEvent.click(screen.getByRole("button", { name: /Collapse Group 2/i }));
+    expect(screen.getAllByText("Status")).toHaveLength(2);
   });
 });

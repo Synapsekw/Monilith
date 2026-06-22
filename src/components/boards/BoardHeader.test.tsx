@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BoardHeader } from "./BoardHeader";
+import type { ReactElement } from "react";
+import {
+  BoardPresenceProvider,
+  type BoardPresenceContextValue,
+} from "@/lib/boards/presence-context";
+import type { BoardPresence } from "@/lib/boards/use-board-presence";
 
 const renameBoard = vi.fn();
 const refresh = vi.fn();
@@ -39,6 +45,30 @@ const views = [
   { id: "v1", board_id: "b1", kind: "table", name: "Main Table" } as never,
 ];
 
+// BoardHeader renders <BoardPresenceBar />, which reads presence from context and
+// throws without a provider. Wrap every render in a provider; an empty roster
+// makes the bar self-hide, keeping the rename/access assertions unaffected.
+function makePresence(roster: BoardPresence["roster"] = []): BoardPresenceContextValue {
+  return {
+    roster,
+    focusMap: new Map(),
+    setFocus: vi.fn(),
+    selfUserId: "self",
+    selfFocusTargetId: null,
+    channelStatus: "SUBSCRIBED",
+    flashTargetId: null,
+  };
+}
+
+function renderHeader(
+  ui: ReactElement,
+  presence: BoardPresenceContextValue = makePresence(),
+) {
+  return render(
+    <BoardPresenceProvider value={presence}>{ui}</BoardPresenceProvider>,
+  );
+}
+
 beforeEach(() => {
   renameBoard.mockReset();
   refresh.mockReset();
@@ -46,7 +76,7 @@ beforeEach(() => {
 
 describe("BoardHeader", () => {
   it("renames the board when the title is edited", async () => {
-    render(
+    renderHeader(
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
@@ -69,7 +99,7 @@ describe("BoardHeader", () => {
   });
 
   it("owner: shows the Share affordance, no View only badge, and a rename control", () => {
-    render(
+    renderHeader(
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
@@ -93,7 +123,7 @@ describe("BoardHeader", () => {
   });
 
   it("editor: hides Share, shows no View only badge, but keeps the rename control", () => {
-    render(
+    renderHeader(
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
@@ -113,7 +143,7 @@ describe("BoardHeader", () => {
   });
 
   it("viewer: shows the View only badge, hides Share, and renders the name as a static heading", () => {
-    render(
+    renderHeader(
       <BoardHeader
         boardId="b1"
         boardName="Sprint backlog"
@@ -134,5 +164,32 @@ describe("BoardHeader", () => {
     expect(
       screen.queryByRole("button", { name: "Sprint backlog" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("renders the presence avatar bar with a face per occupant in the roster", () => {
+    const presence = makePresence([
+      {
+        userId: "self",
+        name: "Ada Lovelace",
+        avatarUrl: null,
+        color: "#2d9cdb",
+        isSelf: true,
+      },
+    ]);
+
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+      />,
+      presence,
+    );
+
+    // The bar self-hides on an empty roster; with one occupant it shows the
+    // labelled stack and that person's initials.
+    expect(screen.getByLabelText("People on this board")).toBeInTheDocument();
+    expect(screen.getByText("AL")).toBeInTheDocument();
   });
 });

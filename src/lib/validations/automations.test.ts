@@ -165,3 +165,28 @@ describe("call_webhook action", () => {
     expect(r.success).toBe(false);
   });
 });
+
+describe("move_to_group action", () => {
+  const GROUP = "00000000-0000-4000-8000-000000000003";
+
+  it("accepts a valid groupId", () => {
+    const r = automationActionSchema.safeParse({
+      type: "move_to_group",
+      groupId: GROUP,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects a missing groupId", () => {
+    const r = automationActionSchema.safeParse({ type: "move_to_group" });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects a non-uuid groupId", () => {
+    const r = automationActionSchema.safeParse({
+      type: "move_to_group",
+      groupId: "not-a-uuid",
+    });
+    expect(r.success).toBe(false);
+  });
+});

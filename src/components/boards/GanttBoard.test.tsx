@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
+import {
+  BoardPresenceProvider,
+  type BoardPresenceContextValue,
+} from "@/lib/boards/presence-context";
+import type { RosterOccupant } from "@/lib/boards/presence-types";
 
 const setCell = vi.fn();
 const addItem = vi.fn();
@@ -144,6 +149,65 @@ describe("GanttBoard", () => {
   it("shows the board name in the header", () => {
     renderGantt();
     expect(screen.getByText("My Board")).toBeInTheDocument();
+  });
+});
+
+function occupant(over: Partial<RosterOccupant>): RosterOccupant {
+  return {
+    userId: "u2",
+    name: "Sam",
+    avatarUrl: null,
+    color: "#2d9cdb",
+    isSelf: false,
+    ...over,
+  };
+}
+
+function presenceValue(
+  focusMap: Map<string, RosterOccupant[]>,
+  selfUserId = "self",
+): BoardPresenceContextValue {
+  return {
+    roster: [],
+    focusMap,
+    setFocus: vi.fn(),
+    selfUserId,
+    selfFocusTargetId: null,
+    channelStatus: "SUBSCRIBED",
+    flashTargetId: null,
+  };
+}
+
+function renderGanttWithPresence(presence: BoardPresenceContextValue) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardPresenceProvider value={presence}>
+        <GanttBoard
+          payload={payloadFixture()}
+          members={[]}
+          selectedViewId={VIEW_ID}
+        />
+      </BoardPresenceProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("GanttBoard bar presence ring (8c)", () => {
+  it("shows an editing indicator on a bar another user is manipulating", () => {
+    // payloadFixture schedules item i1 (Item Alpha) → target event:i1
+    const focusMap = new Map([["event:i1", [occupant({ name: "Sam" })]]]);
+    renderGanttWithPresence(presenceValue(focusMap));
+    expect(screen.getByLabelText(/Sam is editing/i)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/is editing/i)).toHaveLength(1);
+  });
+
+  it("does not show a ring for the local (self) user's own focus", () => {
+    const focusMap = new Map([
+      ["event:i1", [occupant({ userId: "self", isSelf: true })]],
+    ]);
+    renderGanttWithPresence(presenceValue(focusMap, "self"));
+    expect(screen.queryByLabelText(/is editing/i)).not.toBeInTheDocument();
   });
 });
 

@@ -7,12 +7,19 @@ import { CalendarBoard } from "@/components/boards/CalendarBoard";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import { KanbanBoard } from "@/components/boards/KanbanBoard";
 import { ItemPanel } from "@/components/boards/item-panel/ItemPanel";
+import { PresenceFlashMessage } from "@/components/boards/presence/PresenceFlashMessage";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import type { BoardCache } from "@/lib/boards/cache";
 import type { BoardPayload } from "@/lib/boards/queries";
+import {
+  BoardPresenceProvider,
+  type BoardPresenceContextValue,
+} from "@/lib/boards/presence-context";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { useBoardPresence } from "@/lib/boards/use-board-presence";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
+import { useLwwFlash } from "@/lib/boards/use-lww-flash";
 import { resolveSelectedView } from "@/lib/boards/views";
 
 /**
@@ -43,7 +50,27 @@ export function BoardViews({
   grants: HeaderGrant[];
 }) {
   useBoardCache(payload.board.id, payload as unknown as BoardCache);
-  useBoardRealtime(payload.board.id);
+
+  const selfMember = members.find((m) => m.userId === currentUserId);
+  const self = {
+    userId: currentUserId,
+    name: selfMember?.fullName ?? selfMember?.email ?? "Someone",
+    avatarUrl: selfMember?.avatarUrl ?? null,
+  };
+  const presence = useBoardPresence(payload.board.id, self);
+
+  // Last-write-wins flash: when a remote change lands on the cell the local user
+  // currently has focused, briefly highlight it and surface an attributed
+  // message. The realtime channel feeds `onRemoteChange`; `flashTargetId` flows
+  // into the presence context so `FlashHighlight` can pick it up per-cell.
+  const flash = useLwwFlash(presence);
+  useBoardRealtime(payload.board.id, { onRemoteChange: flash.onRemoteChange });
+
+  const presenceValue: BoardPresenceContextValue = {
+    ...presence,
+    flashTargetId: flash.flashTargetId,
+  };
+
   const searchParams = useSearchParams();
   const requested = searchParams.get("view") ?? initialViewId;
   const selected = resolveSelectedView(payload.views, requested || undefined);
@@ -99,8 +126,9 @@ export function BoardViews({
     );
 
   return (
-    <>
+    <BoardPresenceProvider value={presenceValue}>
       {view}
+      <PresenceFlashMessage message={flash.lastMessage} />
       <ItemPanel
         itemId={openItem?.id ?? null}
         itemName={openItem?.name ?? ""}
@@ -114,6 +142,6 @@ export function BoardViews({
         }))}
         onClose={closeItem}
       />
-    </>
+    </BoardPresenceProvider>
   );
 }

@@ -35,6 +35,10 @@ export const automationActionSchema = z.discriminatedUnion("type", [
     optionId: z.string().min(1),
   }),
   z.object({
+    type: z.literal("move_to_group"),
+    groupId: z.string().uuid(),
+  }),
+  z.object({
     type: z.literal("call_webhook"),
     url: z
       .string()
