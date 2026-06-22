@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CalendarBoard } from "@/components/boards/CalendarBoard";
+import { BoardPresenceProvider } from "@/lib/boards/presence-context";
+import type { BoardPresence } from "@/lib/boards/use-board-presence";
+import type { RosterOccupant } from "@/lib/boards/presence-types";
 
 const setCell = vi.fn();
 const addItem = vi.fn();
@@ -124,6 +127,63 @@ describe("CalendarBoard", () => {
   it("shows the board name in the header", () => {
     renderCalendar();
     expect(screen.getByText("My Board")).toBeInTheDocument();
+  });
+});
+
+function occupant(over: Partial<RosterOccupant>): RosterOccupant {
+  return {
+    userId: "u2",
+    name: "Sam",
+    avatarUrl: null,
+    color: "#2d9cdb",
+    isSelf: false,
+    ...over,
+  };
+}
+
+function presenceValue(
+  focusMap: Map<string, RosterOccupant[]>,
+  selfUserId = "self",
+): BoardPresence {
+  return {
+    roster: [],
+    focusMap,
+    setFocus: vi.fn(),
+    selfUserId,
+    channelStatus: "SUBSCRIBED",
+  };
+}
+
+function renderCalendarWithPresence(presence: BoardPresence) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardPresenceProvider value={presence}>
+        <CalendarBoard
+          payload={payloadFixture()}
+          members={[]}
+          selectedViewId={VIEW_ID}
+        />
+      </BoardPresenceProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("CalendarBoard event presence ring (8c)", () => {
+  it("shows an editing indicator on an event another user is manipulating", () => {
+    // payloadFixture dates item i1 → target event:i1
+    const focusMap = new Map([["event:i1", [occupant({ name: "Sam" })]]]);
+    renderCalendarWithPresence(presenceValue(focusMap));
+    expect(screen.getByLabelText(/Sam is editing/i)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/is editing/i)).toHaveLength(1);
+  });
+
+  it("does not show a ring for the local (self) user's own focus", () => {
+    const focusMap = new Map([
+      ["event:i1", [occupant({ userId: "self", isSelf: true })]],
+    ]);
+    renderCalendarWithPresence(presenceValue(focusMap, "self"));
+    expect(screen.queryByLabelText(/is editing/i)).not.toBeInTheDocument();
   });
 });
 

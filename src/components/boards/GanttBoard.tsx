@@ -31,8 +31,11 @@ import {
 } from "@/lib/boards/gantt";
 import { resolveDateColumn, itemDateRange } from "@/lib/boards/dates";
 import { updateBoardView } from "@/lib/boards/view-actions";
+import { presenceTarget } from "@/lib/boards/presence-target";
+import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
+import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -601,6 +604,11 @@ function GanttRowItem({
       data: dragData,
     });
 
+  // In-view presence signal: someone is dragging this bar/milestone. Broadcast
+  // focus while dragged; the ring surfaces other users' drags on the same event.
+  const target = presenceTarget.event(row.itemId);
+  usePresenceFocus({ viewKind: "timeline", targetId: target }, isDragging);
+
   const barStyle = transform
     ? { transform: `translate3d(${transform.x}px, 0, 0)` }
     : undefined;
@@ -749,7 +757,9 @@ function GanttRowItem({
               isDragging && "opacity-50",
             )}
             title={row.name}
-          />
+          >
+            <PresenceRing target={target} className="rounded-sm" />
+          </div>
         ) : (
           <div
             ref={setNodeRef}
@@ -765,6 +775,7 @@ function GanttRowItem({
               isDragging && "opacity-50",
             )}
           >
+            <PresenceRing target={target} />
             {/* Drag handle covering most of the bar */}
             <div
               {...listeners}
