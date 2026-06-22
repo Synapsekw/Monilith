@@ -30,6 +30,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + rollup: workload", () => {
   let aMemberId: string;
   let seededBoardId: string;
   let seededItemId: string;
+  let seededTtColumnId: string;
 
   // Provision a user who owns their own fresh org (used for org A owner + org B outsider).
   async function provisionUser(label: string): Promise<{
@@ -160,6 +161,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + rollup: workload", () => {
       .single();
     expect(ttColErr, "insert time_tracking column").toBeNull();
     const ttColumnId = (ttCol as { id: string }).id;
+    seededTtColumnId = ttColumnId;
 
     // -- one dated, assigned, estimated item --
     const { data: group } = await aAnon
@@ -191,6 +193,31 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + rollup: workload", () => {
       });
       expect(error, `cell ${c.column_id}`).toBeNull();
     }
+
+    // -- logged time on the item: one COMPLETED entry (counts) + one RUNNING (excluded) --
+    const { error: doneErr } = await aAnon.from("time_entries").insert({
+      org_id: orgAId,
+      board_id: seededBoardId,
+      item_id: seededItemId,
+      column_id: seededTtColumnId,
+      user_id: aOwnerId,
+      started_at: `${SEED_DATE}T09:00:00Z`,
+      ended_at: `${SEED_DATE}T10:00:00Z`,
+      duration_secs: 3600,
+    });
+    expect(doneErr, "insert completed time entry").toBeNull();
+
+    const { error: runErr } = await aAnon.from("time_entries").insert({
+      org_id: orgAId,
+      board_id: seededBoardId,
+      item_id: seededItemId,
+      column_id: seededTtColumnId,
+      user_id: aOwnerId,
+      started_at: `${SEED_DATE}T11:00:00Z`,
+      ended_at: null,
+      duration_secs: null,
+    });
+    expect(runErr, "insert running time entry").toBeNull();
 
     // -- outsider in a separate org B --
     const b = await provisionUser("b");
@@ -231,6 +258,38 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + rollup: workload", () => {
       p_to: TO,
     });
     expect((data ?? []).every((r) => r.item_id !== seededItemId)).toBe(true);
+  });
+
+  it("workload_actuals_rollup returns completed logged time for the board creator, excluding the running timer", async () => {
+    const { data, error } = await aAnon.rpc("workload_actuals_rollup", {
+      p_from: FROM,
+      p_to: TO,
+    });
+    expect(error).toBeNull();
+    const rows = (data ?? []).filter(
+      (r) => r.user_id === aOwnerId && r.board_id === seededBoardId,
+    );
+    // exactly one (user, board, day) bucket: the completed 3600s entry.
+    // The running timer (ended_at null) must NOT contribute.
+    expect(rows).toHaveLength(1);
+    expect(rows[0].day).toBe(SEED_DATE);
+    expect(Number(rows[0].secs)).toBe(3600);
+  });
+
+  it("actuals cross-org isolation: org B does not see org A's logged time", async () => {
+    const { data } = await bAnon.rpc("workload_actuals_rollup", {
+      p_from: FROM,
+      p_to: TO,
+    });
+    expect((data ?? []).every((r) => r.board_id !== seededBoardId)).toBe(true);
+  });
+
+  it("actuals can_read_board gating: a same-org member who can't read the board sees none of its actuals", async () => {
+    const { data } = await aMember.rpc("workload_actuals_rollup", {
+      p_from: FROM,
+      p_to: TO,
+    });
+    expect((data ?? []).every((r) => r.board_id !== seededBoardId)).toBe(true);
   });
 
   it("capacity edit: self can upsert, but cannot edit another member's row", async () => {
