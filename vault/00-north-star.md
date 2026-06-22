@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-22-1441
+last-updated: 2026-06-22-1530
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -72,8 +72,8 @@ run tests + advisors + regenerate types before moving on.**
   _**Dashboards** cross-board workspace widgets: **D1** `dashboards`/`dashboard_widgets` + `dashboard_aggregate` RPC spine + `react-grid-layout` v2 canvas (0-refetch-on-drag) + Number widget · **D2** Chart (bar/pie) + Battery (status-distribution) · **D3a** List widget (bounded latest-N rows) · **D3b** flat AND/OR List filter (`dashboard_list_rows` RPC + FilterBuilder), closing the widget subsystem. See [[2026-06-17-2048-dashboards-d1-foundation]], [[2026-06-17-2119-dashboards-d2-chart-battery]], [[2026-06-17-2155-dashboards-d3a-list-widget]], [[2026-06-18-0818-dashboards-d3b-list-filter]]._
   _**Board templates** built-in catalog (Blank/Sprint/Content/CRM) → atomic `create_board_from_template` RPC + sidebar picker. See [[2026-06-18-1128-phase8-board-templates]]._
   _**⌘K polish** (closes Phase 8): palette Navigation (jump to any board/dashboard, 0 fetch) + Create (new board/dashboard). See [[2026-06-18-1323-phase8-cmdk-polish]]._
-- **9 — Hardening** — **[Not started]**
-  Performance (virtualization, indexes), advisors clean, tests, a11y audit, Vercel deploy.
+- **9 — Hardening & Optimization** — <span style="color:#eab308">**[In progress — design locked; 9.1 next]**</span>
+  Performance + perceived-performance program. Now has an **umbrella design** (`docs/superpowers/specs/2026-06-22-phase-9-performance-optimization-design.md`) decomposing it into sequenced sub-projects across two tracks. **Track A (actual speed):** 9.1 auth fast-path (`getClaims` local JWT verify — kills the double `auth.getUser()` network round-trip; **first, foundational**), 9.2 streaming shell (Next 16 PPR/Cache Components), 9.3 cache semi-static sidebar data, 9.5 bundle/render code-split (recharts/pdfjs/grid-layout/dnd-kit). **Track B (perceived speed):** 9.4 content-shaped skeletons + `loading.tsx` for every section + pending states + intent-prefetch + zero-CLS. **Closing gate 9.6:** Lighthouse CI + Web Vitals budget (TTFB<200ms · LCP<1.5s · INP<200ms · CLS<0.1), advisors clean, a11y audit, Vercel deploy. Motivated by the landing-TTFB win (#28) — goal is the authed app _feeling_ as instant as the static landing. **Next: 9.1 auth fast-path.**
 
 **RS — Design refresh (dark-first reskin)** — <span style="color:#22c55e">**[Done — dark + light]**</span>
 Dark-first near-black palette as `.dark` `@theme`/OKLch tokens (+ elevation, scrollbar, animations,
