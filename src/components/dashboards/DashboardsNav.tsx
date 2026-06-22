@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { LayoutGrid, Plus } from "lucide-react";
 import { createDashboard } from "@/lib/dashboards/actions";
+import { DashboardItemMenu } from "@/components/dashboards/DashboardItemMenu";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,7 +91,7 @@ export function DashboardsNav({
         <div className="flex items-center justify-between px-3 py-1">
           <Link
             href="/dashboards"
-            className="text-muted-foreground hover:text-foreground flex items-center gap-2.5 text-sm transition-colors"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-xs font-medium transition-colors"
           >
             <LayoutGrid className="size-4" />
             Dashboards
@@ -177,19 +178,27 @@ export function DashboardsNav({
               <TooltipContent side="right">{d.name}</TooltipContent>
             </Tooltip>
           ) : (
-            <Link
+            <div
               key={d.id}
-              href={`/dashboards/${d.id}`}
-              aria-current={d.id === activeDashboardId ? "page" : undefined}
               className={cn(
-                "truncate rounded-md px-3 py-1 text-sm transition-colors",
+                "group/row flex items-center rounded-md pr-1 transition-colors",
                 d.id === activeDashboardId
                   ? "bg-surface text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
-              {d.name}
-            </Link>
+              <Link
+                href={`/dashboards/${d.id}`}
+                aria-current={d.id === activeDashboardId ? "page" : undefined}
+                className="min-w-0 flex-1 truncate px-3 py-1 text-sm"
+              >
+                {d.name}
+              </Link>
+              <DashboardItemMenu
+                dashboard={{ id: d.id, name: d.name }}
+                isActive={d.id === activeDashboardId}
+              />
+            </div>
           ),
         )
       )}

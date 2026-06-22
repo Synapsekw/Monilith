@@ -13,6 +13,10 @@ import { useUpdateMutations } from "@/lib/collaboration/use-update-mutations";
 import { useItemAttachments } from "@/lib/collaboration/use-item-attachments";
 import { useAttachmentMutations } from "@/lib/collaboration/use-attachment-mutations";
 import type { Column, Member } from "@/lib/collaboration/activity";
+import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
+import { presenceTarget } from "@/lib/boards/presence-target";
+import { itemPresenceTargetSchema } from "@/lib/validations/presence";
+import { ItemViewersBar } from "@/components/boards/presence/ItemViewersBar";
 import { ActivityTab } from "./ActivityTab";
 import { UpdatesTab } from "./UpdatesTab";
 import { FilesTab } from "./FilesTab";
@@ -57,11 +61,29 @@ export function ItemPanel({
     { orgId, boardId },
   );
 
+  // While the panel is open, broadcast a "viewing this item" focus over the
+  // existing presence channel so other open panels can show us. Ephemeral —
+  // no DB write, no server round-trip (gotcha-09 / spec perf budget). Validate
+  // the id at the boundary before it flows into a presence-channel `track`.
+  const validItemId =
+    itemId && itemPresenceTargetSchema.safeParse(itemId).success
+      ? itemId
+      : null;
+  usePresenceFocus(
+    validItemId
+      ? { viewKind: "panel", targetId: presenceTarget.item(validItemId) }
+      : null,
+    validItemId != null,
+  );
+
   return (
     <Sheet open={!!itemId} onOpenChange={(o) => !o && onClose()}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>{itemName}</SheetTitle>
+          <div className="flex items-center justify-between gap-3">
+            <SheetTitle>{itemName}</SheetTitle>
+            <ItemViewersBar itemId={itemId} />
+          </div>
           <SheetDescription className="sr-only">
             Item details, updates, and activity.
           </SheetDescription>

@@ -56,3 +56,24 @@ still present).
   `supabase start`) for integration runs, or make the webhook-delivery assertions
   poll-for-state instead of asserting an instantaneous `pending` snapshot. Deferred
   — not worth it until the flake rate justifies the cost.
+
+## Addendum 2026-06-22 — 4+ concurrent sessions: teardown-purge + hand-merge fallback
+
+Recurred at higher concurrency (3-task `/whats-next` batch + 2 other sessions = 5+ worktrees) during
+[[2026-06-22-1602-whats-next-batch-7c-7b-6h]]. Two refinements to the above:
+
+- **New failure mode — cross-run teardown purge.** Beyond timing races, each run's `globalSetup`
+  teardown purges throwaway test users **org-wide**; the log shows foreign data ("purged 19
+  candidate org-owners" = _another_ session's run). So a sibling run deletes your run's seeded rows
+  mid-flight → `null.id` NPEs + RLS/FK/`no_data_found` failures across many unrelated files (25–33
+  failures, shifting run-to-run). Same innocent-code signature as gotcha-24, third distinct cause.
+- **Re-running finish isn't always enough.** With 4+ active sessions the quiet window may never come,
+  so "re-run finish-task.sh on green" can loop forever. **Documented fallback:** if `typecheck ·
+lint · build` pass and `pnpm vitest run --project unit` is green, and the only failures are this
+  cross-session race (confirm the failing files don't import anything in `git diff --name-only
+develop...HEAD`), **hand-merge** replicating finish-task's steps (`rebase develop` → `merge
+--no-ff` → `push` → `worktree remove` + `branch -d`). The deterministic gate passed, so this does
+  not weaken it. Used this session for 6h (unit 992/992; failing files were `subitems`/board RLS —
+  unrelated to a UI-only presence change).
+- **Serialize finishes.** Run one `finish-task.sh` at a time; check `ps aux | grep vitest` is ~0
+  before starting so the integration suite gets a clean cloud window (worked for 7c + 7b this batch).

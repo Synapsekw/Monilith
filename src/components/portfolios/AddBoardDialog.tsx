@@ -20,9 +20,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import {
+  DoneMappingFields,
+  defaultDoneOptionIds,
+} from "@/components/goals/DoneMappingFields";
 
-const DONE_RE = /done|complete|closed/i;
 const SELECT_CLASS =
   "border-input bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30";
 
@@ -64,9 +66,7 @@ export function AddBoardDialog({
       return;
     }
     setDoneColumnId(column.id);
-    setDoneOptionIds(
-      column.options.filter((o) => DONE_RE.test(o.label)).map((o) => o.id),
-    );
+    setDoneOptionIds(defaultDoneOptionIds(column));
   }
 
   async function onBoardChange(nextBoardId: string) {
@@ -88,24 +88,6 @@ export function AddBoardDialog({
     applyColumnDefaults(res.data.columns[0]);
   }
 
-  function onColumnChange(value: string) {
-    if (value === "") {
-      // "No mapping" — progress stays n/a for this board.
-      setDoneColumnId(null);
-      setDoneOptionIds([]);
-      return;
-    }
-    applyColumnDefaults(columns.find((c) => c.id === value));
-  }
-
-  function toggleOption(optionId: string) {
-    setDoneOptionIds((prev) =>
-      prev.includes(optionId)
-        ? prev.filter((id) => id !== optionId)
-        : [...prev, optionId],
-    );
-  }
-
   function submit() {
     if (!boardId) return;
     setError(null);
@@ -124,8 +106,6 @@ export function AddBoardDialog({
       router.refresh();
     });
   }
-
-  const activeColumn = columns.find((c) => c.id === doneColumnId) ?? null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,75 +151,25 @@ export function AddBoardDialog({
           </div>
 
           {boardId ? (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="add-board-status-column">
-                Completion status
-              </Label>
-              {loadingColumns ? (
-                <p className="text-muted-foreground text-xs">
-                  Loading status columns…
-                </p>
-              ) : columns.length === 0 ? (
-                <p className="text-muted-foreground text-xs">
-                  This board has no status columns — progress will show as n/a.
-                </p>
-              ) : (
-                <>
-                  <select
-                    id="add-board-status-column"
-                    className={SELECT_CLASS}
-                    value={doneColumnId ?? ""}
-                    onChange={(e) => onColumnChange(e.target.value)}
-                  >
-                    <option value="">No mapping (progress n/a)</option>
-                    {columns.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  {activeColumn ? (
-                    <fieldset className="mt-1 flex flex-col gap-1.5">
-                      <legend className="text-muted-foreground mb-1 text-xs">
-                        Statuses that count as done
-                      </legend>
-                      {activeColumn.options.length === 0 ? (
-                        <p className="text-muted-foreground text-xs">
-                          No statuses defined on this column.
-                        </p>
-                      ) : (
-                        activeColumn.options.map((o) => {
-                          const checked = doneOptionIds.includes(o.id);
-                          return (
-                            <label
-                              key={o.id}
-                              className={cn(
-                                "hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-                                checked && "bg-accent/50",
-                              )}
-                            >
-                              <input
-                                type="checkbox"
-                                className="accent-primary size-3.5"
-                                checked={checked}
-                                onChange={() => toggleOption(o.id)}
-                              />
-                              <span
-                                aria-hidden
-                                className="size-2.5 rounded-full"
-                                style={{ backgroundColor: o.color }}
-                              />
-                              {o.label}
-                            </label>
-                          );
-                        })
-                      )}
-                    </fieldset>
-                  ) : null}
-                </>
-              )}
-            </div>
+            <DoneMappingFields
+              idPrefix="add-board"
+              columns={columns}
+              loading={loadingColumns}
+              doneColumnId={doneColumnId}
+              doneOptionIds={doneOptionIds}
+              onColumnChange={(columnId) =>
+                columnId === null
+                  ? applyColumnDefaults(undefined)
+                  : applyColumnDefaults(columns.find((c) => c.id === columnId))
+              }
+              onToggleOption={(optionId) =>
+                setDoneOptionIds((prev) =>
+                  prev.includes(optionId)
+                    ? prev.filter((id) => id !== optionId)
+                    : [...prev, optionId],
+                )
+              }
+            />
           ) : null}
 
           {error ? (

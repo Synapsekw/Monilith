@@ -6,6 +6,7 @@ import {
   BarChart3,
   ChevronsLeft,
   ChevronsRight,
+  Gauge,
   Inbox,
   Target,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { PlatformNav } from "@/components/platform/PlatformNav";
 import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
 import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -29,6 +31,7 @@ import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 const nav = [
   { label: "Goals", icon: Target, href: "/goals" },
   { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
+  { label: "Workload", icon: Gauge, href: "/workload" },
   { label: "Inbox", icon: Inbox },
 ] as const;
 
@@ -116,11 +119,15 @@ export function Sidebar({
           collapsed={isCollapsed}
         />
 
+        {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
+
         <DashboardsNav
           dashboards={dashboards}
           workspaces={workspaces}
           collapsed={isCollapsed}
         />
+
+        {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
 
         <nav
           className={cn(
@@ -179,6 +186,8 @@ export function Sidebar({
             );
           })}
         </nav>
+
+        {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
 
         {!isCollapsed && workspaces.length > 0 ? (
           <div className="mt-2 flex flex-col gap-0.5 px-2">

@@ -11,6 +11,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
+import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 
 export function BoardsNav({
   boards,
@@ -51,7 +52,7 @@ export function BoardsNav({
         </>
       ) : (
         <div className="flex items-center justify-between px-3 py-1">
-          <span className="text-muted-foreground flex items-center gap-2.5 text-sm">
+          <span className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
             <FolderKanban className="size-4" />
             Boards
           </span>
@@ -94,25 +95,33 @@ export function BoardsNav({
               <TooltipContent side="right">{b.name}</TooltipContent>
             </Tooltip>
           ) : (
-            <Link
+            <div
               key={b.id}
-              href={`/boards/${b.id}`}
-              aria-current={b.id === activeBoardId ? "page" : undefined}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1 text-sm transition-colors",
+                "group/row flex items-center rounded-md pr-1 transition-colors",
                 b.id === activeBoardId
                   ? "bg-surface text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
-              <span className="truncate">{b.name}</span>
-              {b.shared_out ? (
-                <Users2
-                  aria-label="Shared with others"
-                  className="text-muted-foreground size-3.5 shrink-0"
-                />
-              ) : null}
-            </Link>
+              <Link
+                href={`/boards/${b.id}`}
+                aria-current={b.id === activeBoardId ? "page" : undefined}
+                className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-1 text-sm"
+              >
+                <span className="truncate">{b.name}</span>
+                {b.shared_out ? (
+                  <Users2
+                    aria-label="Shared with others"
+                    className="text-muted-foreground size-3.5 shrink-0"
+                  />
+                ) : null}
+              </Link>
+              <BoardItemMenu
+                board={{ id: b.id, name: b.name }}
+                isActive={b.id === activeBoardId}
+              />
+            </div>
           ),
         )
       )}

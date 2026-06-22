@@ -89,6 +89,7 @@ export function configSchemaForKind(kind: z.infer<typeof widgetKindSchema>) {
 export const createDashboardSchema = z.object({ workspaceId: uuid, name });
 export const renameDashboardSchema = z.object({ dashboardId: uuid, name });
 export const deleteDashboardSchema = z.object({ dashboardId: uuid });
+export const duplicateDashboardSchema = z.object({ dashboardId: uuid });
 
 export const createWidgetSchema = z.object({
   dashboardId: uuid,
