@@ -24,6 +24,8 @@ export type BuilderMember = {
   email: string | null;
 };
 
+export type BuilderGroup = { id: string; name: string };
+
 /** Read the option list off a column's JSON settings (status/dropdown only). */
 export function columnOptions(column: CacheColumn): ColumnOption[] {
   const settings = column.settings as { options?: ColumnOption[] } | null;
@@ -65,7 +67,9 @@ function isActionComplete(a: AutomationAction): boolean {
   if (a.type === "set_option") {
     return !!a.columnId && !!a.optionId;
   }
-  // move_to_group has no builder UI yet (added in a later task).
+  if (a.type === "move_to_group") {
+    return !!a.groupId;
+  }
   return false;
 }
 function memberLabel(m: BuilderMember): string {
@@ -79,6 +83,7 @@ function isConditionComplete(c: FilterCondition, kind: string): boolean {
 export function AutomationBuilder({
   columns,
   members,
+  groups = [],
   initial,
   canWebhook = false,
   onSubmit,
@@ -86,6 +91,7 @@ export function AutomationBuilder({
 }: {
   columns: CacheColumn[];
   members: BuilderMember[];
+  groups?: BuilderGroup[];
   initial?: Draft;
   canWebhook?: boolean;
   onSubmit: (draft: Draft) => void;
@@ -213,6 +219,12 @@ export function AutomationBuilder({
     setActions((prev) => [
       ...prev,
       { _id: nextId(), type: "call_webhook", url: "" },
+    ]);
+  }
+  function addMoveToGroup() {
+    setActions((prev) => [
+      ...prev,
+      { _id: nextId(), type: "move_to_group", groupId: "" },
     ]);
   }
 
@@ -465,6 +477,12 @@ export function AutomationBuilder({
                     statusColumns={statusColumns}
                     onChange={(next) => updateAction(action._id, next)}
                   />
+                ) : action.type === "move_to_group" ? (
+                  <MoveToGroupRow
+                    action={action}
+                    groups={groups}
+                    onChange={(next) => updateAction(action._id, next)}
+                  />
                 ) : null}
               </div>
               <Button
@@ -491,6 +509,14 @@ export function AutomationBuilder({
             onClick={addSetOption}
           >
             <Plus className="size-3.5" /> Set a column
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addMoveToGroup}
+          >
+            <Plus className="size-3.5" /> Move to group
           </Button>
           {canWebhook ? (
             <Button
@@ -663,6 +689,37 @@ function SetOptionRow({
         </select>
       </label>
     </>
+  );
+}
+
+function MoveToGroupRow({
+  action,
+  groups,
+  onChange,
+}: {
+  action: Extract<AutomationAction, { type: "move_to_group" }>;
+  groups: BuilderGroup[];
+  onChange: (next: AutomationAction) => void;
+}) {
+  return (
+    <label className="col-span-2 text-sm">
+      <span className="text-muted-foreground">Move to group</span>
+      <select
+        aria-label="Target group"
+        className={selectClass}
+        value={action.groupId}
+        onChange={(e) =>
+          onChange({ type: "move_to_group", groupId: e.target.value })
+        }
+      >
+        <option value="">Select…</option>
+        {groups.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

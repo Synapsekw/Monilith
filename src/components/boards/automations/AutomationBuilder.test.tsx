@@ -482,6 +482,36 @@ describe("5c-2 webhook action", () => {
   });
 });
 
+describe("move_to_group action", () => {
+  it("adds a move_to_group action and submits it", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={[]}
+        groups={[{ id: "g-done", name: "Done" }]}
+        canWebhook={false}
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+    // status trigger is the default when a status column exists
+    await userEvent.click(
+      screen.getByRole("button", { name: /move to group/i }),
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText(/target group/i),
+      "g-done",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actions: [{ type: "move_to_group", groupId: "g-done" }],
+      }),
+    );
+  });
+});
+
 describe("5b-1 recipes", () => {
   it("recipeItemCreatedSetOption builds an item_created → set_option draft", () => {
     const d = recipeItemCreatedSetOption("col-1", "opt-1");

@@ -22,6 +22,8 @@ export type HeaderMember = {
 
 export type HeaderGrant = { userId: string; access: "viewer" | "editor" };
 
+export type HeaderGroup = { id: string; name: string };
+
 export type BoardAccess = "owner" | "editor" | "viewer";
 
 export function BoardHeader({
@@ -31,6 +33,7 @@ export function BoardHeader({
   selectedViewId,
   columns = [],
   members = [],
+  groups = [],
   access = "owner",
   grants = [],
 }: {
@@ -40,6 +43,8 @@ export function BoardHeader({
   selectedViewId: string;
   columns?: CacheColumn[];
   members?: HeaderMember[];
+  /** Board groups, threaded into the automations builder (move-to-group action). */
+  groups?: HeaderGroup[];
   /** The current user's access to this board. Owners can share; viewers are read-only. */
   access?: BoardAccess;
   /** Existing share grants, seeding the share dialog. Only meaningful for owners. */
@@ -146,6 +151,7 @@ export function BoardHeader({
         boardId={boardId}
         columns={columns}
         members={members}
+        groups={groups}
         open={automationsOpen}
         onOpenChange={setAutomationsOpen}
       />

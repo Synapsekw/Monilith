@@ -161,6 +161,7 @@ export function KanbanBoard({
           selectedViewId={selectedViewId}
           columns={cache.columns}
           members={members}
+          groups={cache.groups.map((g) => ({ id: g.id, name: g.name }))}
           access={access}
           grants={grants}
         />
@@ -209,6 +210,7 @@ export function KanbanBoard({
         selectedViewId={selectedViewId}
         columns={cache.columns}
         members={members}
+        groups={cache.groups.map((g) => ({ id: g.id, name: g.name }))}
         access={access}
         grants={grants}
       />
