@@ -10,6 +10,7 @@ import {
   createGroupSchema,
   createItemSchema,
   deleteBoardSchema,
+  duplicateBoardSchema,
   deleteGroupSchema,
   renameBoardSchema,
   renameGroupSchema,
@@ -140,6 +141,25 @@ export async function deleteBoard(input: {
 
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
+}
+
+/** Duplicate a board's full structure (groups, columns, items, cells) via RPC. */
+export async function duplicateBoard(input: {
+  boardId: string;
+}): Promise<ActionResult<{ boardId: string }>> {
+  const parsed = duplicateBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("duplicate_board_structure", {
+    p_board_id: parsed.data.boardId,
+  });
+  if (error || !data)
+    return fail(error?.message ?? "Could not duplicate board.");
+
+  revalidatePath("/", "layout");
+  return { ok: true, data: { boardId: data.id } };
 }
 
 export async function renameGroup(input: {
