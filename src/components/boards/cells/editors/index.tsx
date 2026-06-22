@@ -10,6 +10,8 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
 import { cn } from "@/lib/utils";
 import { pillTextColor } from "@/lib/boards/contrast";
 
@@ -282,31 +284,71 @@ export function PeopleEditor({
   );
 }
 
+/** Parse a `YYYY-MM-DD` string into a *local* Date so the calendar shows the
+ * intended calendar day regardless of timezone (UTC parsing drifts a day in
+ * negative-offset zones). */
+function isoToLocalDate(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Format a *local* Date back to `YYYY-MM-DD` using local getters, matching
+ * {@link isoToLocalDate} so the round-trip never shifts a day. */
+function localDateToISO(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function DateEditor({
   value,
   onCommit,
   onCancel,
   onClear,
 }: EditorProps<{ date: string; end?: string }>) {
-  const [date, setDate] = useState(value?.date ?? "");
-  function commit() {
-    // Emptying a previously-set date clears it (deletes the row).
-    if (date.trim() === "") return (onClear ?? onCancel)();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return onCancel();
-    onCommit({ date });
+  const selected = value?.date ? isoToLocalDate(value.date) : undefined;
+  function commit(picked: Date) {
+    const date = localDateToISO(picked);
+    // Preserve an existing range end by shifting it the same number of days, so
+    // editing a multi-day item's start doesn't silently collapse its Gantt /
+    // Calendar span. Single-day values stay date-only (no synthesised end).
+    if (value?.date && value.end && value.end > value.date) {
+      const span = diffDaysISO(value.date, value.end);
+      onCommit({ date, end: addDaysISO(date, span) });
+    } else {
+      onCommit({ date });
+    }
   }
-  const onKey = useCommitKeys(commit, onCancel);
   return (
-    <Input
-      type="date"
-      aria-label="Date"
-      autoFocus
-      value={date}
-      onChange={(e) => setDate(e.target.value)}
-      onKeyDown={onKey}
-      onBlur={commit}
-      className="h-8"
-    />
+    <Popover
+      open
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
+    >
+      {/* Anchors the floating surface to the cell it edits. */}
+      <PopoverAnchor className="absolute inset-0" aria-hidden />
+      <PopoverContent
+        aria-label="Pick a date"
+        align="start"
+        sideOffset={4}
+        className="w-auto p-2"
+      >
+        <Calendar
+          mode="single"
+          autoFocus
+          defaultMonth={selected}
+          selected={selected}
+          onSelect={(picked) => {
+            if (picked) commit(picked);
+          }}
+        />
+        <div className="mt-1 flex justify-end border-t pt-1">
+          <ClearButton onClear={() => (onClear ?? onCancel)()} />
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
