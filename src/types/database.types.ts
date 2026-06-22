@@ -1172,6 +1172,47 @@ export type Database = {
           },
         ];
       };
+      member_capacity: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          hours_per_day: number;
+          id: string;
+          org_id: string;
+          updated_at: string;
+          user_id: string;
+          working_days: number[];
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          hours_per_day?: number;
+          id?: string;
+          org_id: string;
+          updated_at?: string;
+          user_id: string;
+          working_days?: number[];
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          hours_per_day?: number;
+          id?: string;
+          org_id?: string;
+          updated_at?: string;
+          user_id?: string;
+          working_days?: number[];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "member_capacity_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       notifications: {
         Row: {
           actor_id: string | null;
@@ -1321,6 +1362,38 @@ export type Database = {
             foreignKeyName: "org_members_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      org_workload_settings: {
+        Row: {
+          default_hours_per_day: number;
+          default_per_item_hours: number;
+          default_working_days: number[];
+          org_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          default_hours_per_day?: number;
+          default_per_item_hours?: number;
+          default_working_days?: number[];
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          default_hours_per_day?: number;
+          default_per_item_hours?: number;
+          default_working_days?: number[];
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_workload_settings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
             referencedRelation: "organizations";
             referencedColumns: ["id"];
           },
@@ -1787,6 +1860,10 @@ export type Database = {
       };
       can_edit_board: { Args: { p_board_id: string }; Returns: boolean };
       can_edit_goal: { Args: { p_goal_id: string }; Returns: boolean };
+      can_edit_member_capacity: {
+        Args: { p_org_id: string; p_user_id: string };
+        Returns: boolean;
+      };
       can_edit_portfolio: {
         Args: { p_portfolio_id: string };
         Returns: boolean;
@@ -2274,6 +2351,18 @@ export type Database = {
       unshare_board: {
         Args: { p_board_id: string; p_user_id: string };
         Returns: undefined;
+      };
+      workload_rollup: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          board_id: string;
+          end_date: string;
+          estimate_secs: number;
+          item_id: string;
+          item_name: string;
+          start_date: string;
+          user_id: string;
+        }[];
       };
     };
     Enums: {

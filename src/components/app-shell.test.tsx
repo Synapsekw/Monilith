@@ -92,14 +92,14 @@ describe("AppShell", () => {
     expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
   });
 
-  it("renders live Dashboards, Portfolios and Goals links and a disabled Inbox stub", () => {
+  it("renders live Dashboards, Portfolios, Goals and Workload links and a disabled Inbox stub", () => {
     render(
       <AppShell>
         <div>content</div>
       </AppShell>,
     );
 
-    // Dashboards, Portfolios and Goals are wired sections (links), not disabled stubs.
+    // Dashboards, Portfolios, Goals and Workload are wired sections (links), not disabled stubs.
     expect(screen.getByText("Dashboards").closest("a")).toHaveAttribute(
       "href",
       "/dashboards",
@@ -111,6 +111,10 @@ describe("AppShell", () => {
     expect(screen.getByText("Goals").closest("a")).toHaveAttribute(
       "href",
       "/goals",
+    );
+    expect(screen.getByText("Workload").closest("a")).toHaveAttribute(
+      "href",
+      "/workload",
     );
     expect(screen.getByText("Inbox").closest("button")).toBeDisabled();
   });
