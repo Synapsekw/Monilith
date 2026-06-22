@@ -39,6 +39,19 @@ That is **only half true**, and the gap broke the gate during the Phase 7a build
   worktree (or at least print the instruction), and drop the "no install needed" claim from
   AGENTS.md / decision-22.
 
+## Implemented 2026-06-22 (commit `d70f5bb`)
+
+The recommendation above sat un-wired for a day, so agents kept hitting `vitest: command not found`
+in fresh worktrees (it surfaced again via a `/whats-next`-dispatched session). Now actually fixed in
+tooling: `scripts/start-task.sh` runs `pnpm install --prefer-offline` after `worktree add`, **and**
+symlinks `.env.local` from the main checkout so `*.integration.test.ts` run live instead of silently
+skipping. The stale "inherits node*modules, no install needed" claim is corrected in both
+`start-task.sh` and AGENTS.md. Verified end-to-end in a throwaway worktree: `vitest`/`tsc` resolve on
+PATH, `pnpm typecheck` + `pnpm build` pass, `.env.local` present. Pre-fix worktrees need a one-time
+backfill (`pnpm install --prefer-offline` + the `.env.local` symlink). **Meta-lesson:** a documented
+gotcha whose fix stays a \_recommendation* keeps biting — turn the fix into code (the helper script),
+not just prose. See [[2026-06-22-1241-worktree-install-gate-fix]].
+
 ## Bonus trap (same session): `finish-task.sh` vs a diverged main checkout
 
 `finish-task.sh` merges through the **main checkout's** `develop` (`checkout` → `pull --ff-only` →
