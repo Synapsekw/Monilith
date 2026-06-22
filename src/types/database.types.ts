@@ -721,6 +721,156 @@ export type Database = {
           },
         ];
       };
+      goal_links: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          done_column_id: string | null;
+          done_option_ids: Json;
+          goal_id: string;
+          id: string;
+          org_id: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          done_column_id?: string | null;
+          done_option_ids?: Json;
+          goal_id: string;
+          id?: string;
+          org_id: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          done_column_id?: string | null;
+          done_option_ids?: Json;
+          goal_id?: string;
+          id?: string;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "goal_links_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "goal_links_done_column_id_fkey";
+            columns: ["done_column_id"];
+            isOneToOne: false;
+            referencedRelation: "columns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "goal_links_goal_id_fkey";
+            columns: ["goal_id"];
+            isOneToOne: false;
+            referencedRelation: "goals";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "goal_links_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      goals: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          current_value: number | null;
+          description: string | null;
+          due_date: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          owner_id: string;
+          parent_goal_id: string | null;
+          percent: number | null;
+          position: number;
+          progress_mode: Database["public"]["Enums"]["goal_progress_mode"];
+          start_date: string | null;
+          start_value: number | null;
+          status: Database["public"]["Enums"]["goal_status"];
+          target_value: number | null;
+          unit: string | null;
+          updated_at: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          current_value?: number | null;
+          description?: string | null;
+          due_date?: string | null;
+          id?: string;
+          name: string;
+          org_id: string;
+          owner_id: string;
+          parent_goal_id?: string | null;
+          percent?: number | null;
+          position?: number;
+          progress_mode: Database["public"]["Enums"]["goal_progress_mode"];
+          start_date?: string | null;
+          start_value?: number | null;
+          status?: Database["public"]["Enums"]["goal_status"];
+          target_value?: number | null;
+          unit?: string | null;
+          updated_at?: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          current_value?: number | null;
+          description?: string | null;
+          due_date?: string | null;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          owner_id?: string;
+          parent_goal_id?: string | null;
+          percent?: number | null;
+          position?: number;
+          progress_mode?: Database["public"]["Enums"]["goal_progress_mode"];
+          start_date?: string | null;
+          start_value?: number | null;
+          status?: Database["public"]["Enums"]["goal_status"];
+          target_value?: number | null;
+          unit?: string | null;
+          updated_at?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "goals_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "goals_parent_goal_id_fkey";
+            columns: ["parent_goal_id"];
+            isOneToOne: false;
+            referencedRelation: "goals";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "goals_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       groups: {
         Row: {
           board_id: string;
@@ -1636,6 +1786,7 @@ export type Database = {
         Returns: boolean;
       };
       can_edit_board: { Args: { p_board_id: string }; Returns: boolean };
+      can_edit_goal: { Args: { p_goal_id: string }; Returns: boolean };
       can_edit_portfolio: {
         Args: { p_portfolio_id: string };
         Returns: boolean;
@@ -1759,6 +1910,51 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_goal: {
+        Args: {
+          p_current_value: number;
+          p_due_date: string;
+          p_name: string;
+          p_owner_id: string;
+          p_parent_goal_id: string;
+          p_percent: number;
+          p_progress_mode: Database["public"]["Enums"]["goal_progress_mode"];
+          p_start_date: string;
+          p_start_value: number;
+          p_status: Database["public"]["Enums"]["goal_status"];
+          p_target_value: number;
+          p_unit: string;
+          p_workspace_id: string;
+        };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          current_value: number | null;
+          description: string | null;
+          due_date: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          owner_id: string;
+          parent_goal_id: string | null;
+          percent: number | null;
+          position: number;
+          progress_mode: Database["public"]["Enums"]["goal_progress_mode"];
+          start_date: string | null;
+          start_value: number | null;
+          status: Database["public"]["Enums"]["goal_status"];
+          target_value: number | null;
+          unit: string | null;
+          updated_at: string;
+          workspace_id: string | null;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "goals";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_item: {
         Args: { p_group_id: string; p_name: string };
         Returns: {
@@ -1874,6 +2070,15 @@ export type Database = {
           user_id: string;
         }[];
       };
+      goals_rollup: {
+        Args: never;
+        Returns: {
+          board_id: string;
+          done_items: number;
+          goal_id: string;
+          total_items: number;
+        }[];
+      };
       group_in_org: {
         Args: { p_group_id: string; p_org_id: string };
         Returns: boolean;
@@ -1983,6 +2188,24 @@ export type Database = {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
       };
+      set_goal_links: {
+        Args: { p_goal_id: string; p_links: Json };
+        Returns: {
+          board_id: string;
+          created_at: string;
+          done_column_id: string | null;
+          done_option_ids: Json;
+          goal_id: string;
+          id: string;
+          org_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "goal_links";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       set_member_role: {
         Args: {
           p_new_role: Database["public"]["Enums"]["org_role"];
@@ -2078,6 +2301,12 @@ export type Database = {
         | "time_tracking"
         | "relation"
         | "mirror";
+      goal_progress_mode:
+        | "manual_number"
+        | "manual_percent"
+        | "auto_subgoals"
+        | "auto_boards";
+      goal_status: "on_track" | "at_risk" | "off_track" | "done";
       notification_kind:
         | "mention"
         | "assigned"
@@ -2244,6 +2473,13 @@ export const Constants = {
         "relation",
         "mirror",
       ],
+      goal_progress_mode: [
+        "manual_number",
+        "manual_percent",
+        "auto_subgoals",
+        "auto_boards",
+      ],
+      goal_status: ["on_track", "at_risk", "off_track", "done"],
       notification_kind: [
         "mention",
         "assigned",
