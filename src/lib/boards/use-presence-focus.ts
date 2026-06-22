@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useBoardPresenceContext } from "./presence-context";
+import { useBoardPresenceContextOptional } from "./presence-context";
 import type { PresenceFocus } from "./presence-types";
 
 /** Call from an editable element. Reports focus when `active` is true and clears
- *  on blur/unmount. */
+ *  on blur/unmount. No-ops when rendered outside a presence provider (e.g.
+ *  isolated component tests) — nothing to broadcast to. */
 export function usePresenceFocus(target: PresenceFocus | null, active: boolean) {
-  const { setFocus } = useBoardPresenceContext();
+  const setFocus = useBoardPresenceContextOptional()?.setFocus;
   const prev = useRef(false);
   useEffect(() => {
+    if (!setFocus) return;
     if (active && target) {
       setFocus(target);
       prev.current = true;

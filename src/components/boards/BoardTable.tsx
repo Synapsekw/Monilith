@@ -41,6 +41,9 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { PresenceRing } from "@/components/boards/presence/PresenceRing";
+import { presenceTarget } from "@/lib/boards/presence-target";
+import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
 import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
 import { RelationCell } from "@/components/boards/cells/RelationCell";
@@ -1719,6 +1722,11 @@ function EditableCell({
     editing?.itemId === item.id && editing.columnId === column.id;
   const settings = (column.settings ?? {}) as Settings;
   const accessibleName = `${item.name} ${column.name}`;
+  const target = presenceTarget.cell(item.id, column.id);
+  // Broadcast the local user's focus on this cell while they're editing it; the
+  // hook clears it on blur/unmount. Called unconditionally (once per cell) so it
+  // stays valid across the kind-specific early returns below.
+  usePresenceFocus({ viewKind: "table", targetId: target }, isEditing);
 
   // Files cells are not inline-edited like other kinds: they render a thumbnail
   // strip + upload affordance, and open a lightbox on click. Thumbnails use
@@ -1841,6 +1849,7 @@ function EditableCell({
           }}
           onCancel={() => setEditing(null)}
         />
+        <PresenceRing target={target} />
       </div>
     );
   }
@@ -1857,9 +1866,10 @@ function EditableCell({
           setEditing({ itemId: item.id, columnId: column.id });
         }
       }}
-      className="hover:bg-surface-muted focus-visible:ring-ring flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+      className="hover:bg-surface-muted focus-visible:ring-ring relative flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
     >
       <CellRenderer kind={column.kind} value={value} settings={settings} />
+      <PresenceRing target={target} />
     </div>
   );
 }

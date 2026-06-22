@@ -1,6 +1,6 @@
 "use client";
 
-import { useBoardPresenceContext } from "@/lib/boards/presence-context";
+import { useBoardPresenceContextOptional } from "@/lib/boards/presence-context";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,7 +18,9 @@ export function PresenceRing({
   target: string;
   className?: string;
 }) {
-  const { focusMap, selfUserId } = useBoardPresenceContext();
+  const presence = useBoardPresenceContextOptional();
+  if (!presence) return null;
+  const { focusMap, selfUserId } = presence;
   const others = (focusMap.get(target) ?? []).filter((o) => o.userId !== selfUserId);
   if (others.length === 0) return null;
 

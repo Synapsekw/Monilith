@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PresenceRing } from "./PresenceRing";
 
 vi.mock("@/lib/boards/presence-context", () => ({
-  useBoardPresenceContext: () => ({
+  useBoardPresenceContextOptional: () => ({
     selfUserId: "self",
     focusMap: new Map([
       ["cell:i1:c1", [{ userId: "u2", name: "Sam", avatarUrl: null, color: "#2d9cdb", isSelf: false }]],
