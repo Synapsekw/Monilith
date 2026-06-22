@@ -53,3 +53,25 @@ Pick one durable fix and bake it into the `/promote` command + spec:
 
 Until then: a promotion is **back-merge-heal → squash-merge → (with (a)) back-merge-heal again**.
 The `commitlint`-skip-on-`base_ref==main` rule is already shipped and is independent of the above.
+
+## Resolution — option (a) shipped 2026-06-22 (promotion #23)
+
+Implemented **(a)** in `.claude/commands/promote.md`:
+
+- **Step 6** now uses `gh pr merge --squash` (was `--merge`, which the repo rejects outright).
+- **New step 6b** auto-heals after every squash: `git merge -s ours origin/main` + push, so
+  `origin/main` is recorded as an ancestor of `develop` (tree byte-identical) and the **next**
+  promotion PR is mergeable instead of `CONFLICTING`.
+- **New sub-gotcha:** the heal commit message **must start with `Merge `**. commitlint's
+  `defaultIgnores` skips merge commits, so a `Back-merge …` subject is parsed as a normal commit and
+  **rejected by the husky `commit-msg` hook**. Use `Merge origin/main into develop: …` (or
+  `--no-verify`).
+
+Note on strategy: the ADR originally said `-X ours`; the command standardised on **`-s ours`** (merge
+**strategy** ours), which guarantees the tree equals develop's tip rather than doing a content merge —
+the correct semantics for a pure ancestry heal.
+
+Promotion #23 (2026-06-22) was the first run on the fixed command: it still hit a **pre-merge**
+`CONFLICTING` because the _previous_ promotion (#22) predated the fix and never healed — resolved by
+running the same `-s ours` back-merge before merging. From #23 onward, step 6b runs every time, so the
+recurrence is closed. Status: **resolved.** See [[2026-06-22-0909-promote-command-fix-and-promotion]].
