@@ -22,6 +22,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -128,6 +129,9 @@ export function DashboardItemMenu({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename dashboard</DialogTitle>
+            <DialogDescription>
+              Give this dashboard a new name.
+            </DialogDescription>
           </DialogHeader>
           <form
             className="flex flex-col gap-3"

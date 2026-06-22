@@ -18,6 +18,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -121,6 +122,7 @@ export function BoardItemMenu({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename board</DialogTitle>
+            <DialogDescription>Give this board a new name.</DialogDescription>
           </DialogHeader>
           <form
             className="flex flex-col gap-3"
