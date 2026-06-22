@@ -90,7 +90,7 @@ export function DashboardsNav({
         <div className="flex items-center justify-between px-3 py-1">
           <Link
             href="/dashboards"
-            className="text-muted-foreground hover:text-foreground flex items-center gap-2.5 text-sm transition-colors"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-xs font-medium transition-colors"
           >
             <LayoutGrid className="size-4" />
             Dashboards

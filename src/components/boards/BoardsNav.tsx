@@ -51,7 +51,7 @@ export function BoardsNav({
         </>
       ) : (
         <div className="flex items-center justify-between px-3 py-1">
-          <span className="text-muted-foreground flex items-center gap-2.5 text-sm">
+          <span className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
             <FolderKanban className="size-4" />
             Boards
           </span>
