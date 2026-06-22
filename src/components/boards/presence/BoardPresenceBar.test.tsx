@@ -7,7 +7,7 @@ const occ = (id: string, name: string) => ({
 });
 
 vi.mock("@/lib/boards/presence-context", () => ({
-  useBoardPresenceContext: () => ({
+  useBoardPresenceContextOptional: () => ({
     selfUserId: "self",
     roster: [occ("self", "Me"), ...Array.from({ length: 8 }, (_, i) => occ(`u${i}`, `User ${i}`))],
   }),

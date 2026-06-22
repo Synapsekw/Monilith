@@ -1,6 +1,6 @@
 "use client";
 
-import { useBoardPresenceContext } from "@/lib/boards/presence-context";
+import { useBoardPresenceContextOptional } from "@/lib/boards/presence-context";
 import {
   Tooltip,
   TooltipContent,
@@ -16,7 +16,8 @@ import type { RosterOccupant } from "@/lib/boards/presence-types";
  * Presentational only — reads the roster from presence context.
  */
 export function BoardPresenceBar({ maxFaces = 5 }: { maxFaces?: number }) {
-  const { roster } = useBoardPresenceContext();
+  const presence = useBoardPresenceContextOptional();
+  const roster = presence?.roster ?? [];
   if (roster.length === 0) return null;
 
   const shown = roster.slice(0, maxFaces);

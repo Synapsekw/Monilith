@@ -11,7 +11,9 @@ import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import type { BoardCache } from "@/lib/boards/cache";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { BoardPresenceProvider } from "@/lib/boards/presence-context";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { useBoardPresence } from "@/lib/boards/use-board-presence";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import { resolveSelectedView } from "@/lib/boards/views";
 
@@ -44,6 +46,15 @@ export function BoardViews({
 }) {
   useBoardCache(payload.board.id, payload as unknown as BoardCache);
   useBoardRealtime(payload.board.id);
+
+  const selfMember = members.find((m) => m.userId === currentUserId);
+  const self = {
+    userId: currentUserId,
+    name: selfMember?.fullName ?? selfMember?.email ?? "Someone",
+    avatarUrl: selfMember?.avatarUrl ?? null,
+  };
+  const presence = useBoardPresence(payload.board.id, self);
+
   const searchParams = useSearchParams();
   const requested = searchParams.get("view") ?? initialViewId;
   const selected = resolveSelectedView(payload.views, requested || undefined);
@@ -99,7 +110,7 @@ export function BoardViews({
     );
 
   return (
-    <>
+    <BoardPresenceProvider value={presence}>
       {view}
       <ItemPanel
         itemId={openItem?.id ?? null}
@@ -114,6 +125,6 @@ export function BoardViews({
         }))}
         onClose={closeItem}
       />
-    </>
+    </BoardPresenceProvider>
   );
 }

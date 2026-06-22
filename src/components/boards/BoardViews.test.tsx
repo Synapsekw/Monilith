@@ -15,6 +15,18 @@ vi.mock("@/lib/boards/use-board-cache", () => ({ useBoardCache: vi.fn() }));
 vi.mock("@/lib/boards/use-board-realtime", () => ({
   useBoardRealtime: vi.fn(),
 }));
+// Presence opens its own realtime channel + reads the Query client; out of scope
+// for this routing test, so stub it to an empty roster (same spirit as the
+// cache/realtime mocks above).
+vi.mock("@/lib/boards/use-board-presence", () => ({
+  useBoardPresence: () => ({
+    roster: [],
+    focusMap: new Map(),
+    setFocus: vi.fn(),
+    selfUserId: "u1",
+    channelStatus: "SUBSCRIBED",
+  }),
+}));
 
 // Stub the heavy view components so this test isolates the routing decision
 // (which view renders) from cache/realtime/render concerns.
