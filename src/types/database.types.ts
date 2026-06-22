@@ -2136,6 +2136,45 @@ export type Database = {
         Args: { p_column_id: string; p_option_id: string };
         Returns: number;
       };
+      duplicate_board_structure: {
+        Args: { p_board_id: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          description: string | null;
+          id: string;
+          name: string;
+          name_column_width: number | null;
+          org_id: string;
+          position: number;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "boards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      duplicate_dashboard: {
+        Args: { p_dashboard_id: string };
+        Returns: {
+          created_at: string;
+          created_by: string;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "dashboards";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       get_org_members: {
         Args: { p_limit?: number; p_offset?: number; p_org_id: string };
         Returns: {

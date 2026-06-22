@@ -12,6 +12,8 @@ import {
   configSchemaForKind,
   createDashboardSchema,
   createWidgetSchema,
+  deleteDashboardSchema,
+  duplicateDashboardSchema,
   deleteWidgetSchema,
   getWidgetDataSchema,
   renameDashboardSchema,
@@ -69,6 +71,44 @@ export async function renameDashboard(input: {
   revalidatePath(`/dashboards/${parsed.data.dashboardId}`);
   revalidatePath("/dashboards");
   return { ok: true, data: { dashboard: data as Tables<"dashboards"> } };
+}
+
+/** Delete a dashboard. Widgets cascade via the dashboard_id FK. */
+export async function deleteDashboard(input: {
+  dashboardId: string;
+}): Promise<ActionResult<undefined>> {
+  const parsed = deleteDashboardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("dashboards")
+    .delete()
+    .eq("id", parsed.data.dashboardId);
+  if (error) return fail(error.message);
+
+  revalidatePath("/", "layout");
+  return { ok: true, data: undefined };
+}
+
+/** Duplicate a dashboard's structure (its widgets) via RPC. */
+export async function duplicateDashboard(input: {
+  dashboardId: string;
+}): Promise<ActionResult<{ dashboardId: string }>> {
+  const parsed = duplicateDashboardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("duplicate_dashboard", {
+    p_dashboard_id: parsed.data.dashboardId,
+  });
+  if (error || !data)
+    return fail(error?.message ?? "Could not duplicate dashboard.");
+
+  revalidatePath("/", "layout");
+  return { ok: true, data: { dashboardId: data.id } };
 }
 
 /** Add a widget. Validates the kind-specific config, returns the full row. */

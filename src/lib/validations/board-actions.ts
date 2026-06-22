@@ -14,6 +14,7 @@ export const createBoardFromTemplateSchema = z.object({
 });
 export const renameBoardSchema = z.object({ boardId: uuid, name });
 export const deleteBoardSchema = z.object({ boardId: uuid });
+export const duplicateBoardSchema = z.object({ boardId: uuid });
 export const createGroupSchema = z.object({ boardId: uuid, name });
 export const renameGroupSchema = z.object({ groupId: uuid, name });
 export const deleteGroupSchema = z.object({ groupId: uuid });
