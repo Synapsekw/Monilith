@@ -30,6 +30,9 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
     /** orgB context — userB is NOT a member of orgA */
     let userBAnon: SupabaseClient<Database>;
 
+    /** userC IS a member of orgA but does NOT own board A and has no share grant */
+    let userCAnon: SupabaseClient<Database>;
+
     beforeAll(async () => {
       admin = createClient<Database>(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
         auth: { autoRefreshToken: false, persistSession: false },
@@ -129,6 +132,32 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
         p_name: "Org B (dup-board)",
         p_slug: `dupb-b-${randomUUID().slice(0, 8)}`,
       });
+
+      // ── userC: a member of orgA, but NOT the owner of board A and no share ───
+      const emailC = `rls-dupboard-c-${randomUUID()}@example.com`;
+      const { data: createdC, error: errC } = await admin.auth.admin.createUser(
+        {
+          email: emailC,
+          password: PASSWORD,
+          email_confirm: true,
+        },
+      );
+      expect(errC, "createUser(C)").toBeNull();
+      const userCId = createdC.user!.id;
+      createdUserIds.push(userCId);
+
+      // Add userC to orgA as a plain member via service-role (bypasses RLS).
+      const { error: addCErr } = await admin.from("org_members").insert({
+        org_id: orgAId,
+        user_id: userCId,
+        role: "member",
+      });
+      expect(addCErr, "add userC to orgA").toBeNull();
+
+      userCAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      await signInWithRetry(userCAnon, { email: emailC, password: PASSWORD });
     }, 90_000);
 
     afterAll(async () => {
@@ -164,6 +193,13 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
 
     it("denies duplication to a non-member (cross-tenant)", async () => {
       const { error } = await userBAnon.rpc("duplicate_board_structure", {
+        p_board_id: boardAId,
+      });
+      expect(error).not.toBeNull();
+    });
+
+    it("denies duplication to an org member who cannot read the board", async () => {
+      const { error } = await userCAnon.rpc("duplicate_board_structure", {
         p_board_id: boardAId,
       });
       expect(error).not.toBeNull();

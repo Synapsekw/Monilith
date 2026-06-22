@@ -1,8 +1,9 @@
 -- Structure-only duplication for boards and dashboards.
 -- Boards: copies groups + columns + views, NOT items/cell_values.
 -- Dashboards: copies all widgets (config + layout).
--- Both are security-definer + org-scoped: the caller must be a member of the
--- source's organization (mirrors public.create_board).
+-- Both are security-definer. Boards gate on can_read_board() (org member AND
+-- board owner or a board_members share grant) — the board's RLS read boundary.
+-- Dashboards have no per-row sharing, so org membership is the boundary there.
 
 create or replace function public.duplicate_board_structure(p_board_id uuid)
 returns public.boards
@@ -23,16 +24,17 @@ begin
   if v_src.id is null then
     raise exception 'board not found' using errcode = 'P0002';
   end if;
-  if not public.is_org_member(v_src.org_id) then
-    raise exception 'not a member of this organization' using errcode = '42501';
+  if not public.can_read_board(p_board_id) then
+    raise exception 'not authorized to read this board' using errcode = '42501';
   end if;
 
   insert into public.boards
     (org_id, workspace_id, name, position, created_by, name_column_width)
   values
     (v_src.org_id, v_src.workspace_id,
-     left(v_src.name || ' (copy)', 100),
-     v_src.position, v_uid, v_src.name_column_width)
+     left(v_src.name, 93) || ' (copy)',
+     (select coalesce(max(position), 0) + 1 from public.boards where org_id = v_src.org_id),
+     v_uid, v_src.name_column_width)
   returning * into v_new;
 
   insert into public.groups (org_id, board_id, name, color, position)
@@ -78,7 +80,7 @@ begin
 
   insert into public.dashboards (org_id, workspace_id, name, created_by)
   values (v_src.org_id, v_src.workspace_id,
-          left(v_src.name || ' (copy)', 100), v_uid)
+          left(v_src.name, 93) || ' (copy)', v_uid)
   returning * into v_new;
 
   insert into public.dashboard_widgets
