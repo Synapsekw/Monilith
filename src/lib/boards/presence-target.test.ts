@@ -8,4 +8,12 @@ describe("presenceTarget", () => {
     expect(presenceTarget.event("i1")).toBe("event:i1");
     expect(presenceTarget.field("i1", "name")).toBe("field:i1:name");
   });
+
+  it("builds an item target keyed on the item id", () => {
+    expect(presenceTarget.item("abc")).toBe("item:abc");
+  });
+
+  it("item targets are distinct from card targets for the same id", () => {
+    expect(presenceTarget.item("abc")).not.toBe(presenceTarget.card("abc"));
+  });
 });
