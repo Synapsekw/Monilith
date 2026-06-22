@@ -38,6 +38,9 @@ import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { CellRenderer } from "@/components/boards/cells";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import { presenceTarget } from "@/lib/boards/presence-target";
+import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
+import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 
 /**
  * Estimated per-slot height for virtualizing Kanban card lists.
@@ -379,6 +382,12 @@ function KanbanCard({
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: item.id, data: dragData });
 
+  // The in-view presence signal for a Kanban card is "someone is dragging it":
+  // two people grabbing the same card is a real collision. Broadcast focus
+  // while this card is being dragged; the ring surfaces other users' drags.
+  const target = presenceTarget.card(item.id);
+  usePresenceFocus({ viewKind: "kanban", targetId: target }, isDragging);
+
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
@@ -390,10 +399,11 @@ function KanbanCard({
       {...listeners}
       {...attributes}
       className={cn(
-        "bg-surface focus-visible:ring-ring shadow-card cursor-grab rounded-md border p-2 text-left transition-shadow focus-visible:ring-2 focus-visible:outline-none",
+        "bg-surface focus-visible:ring-ring shadow-card relative cursor-grab rounded-md border p-2 text-left transition-shadow focus-visible:ring-2 focus-visible:outline-none",
         isDragging && "opacity-50",
       )}
     >
+      <PresenceRing target={target} />
       <p className="truncate text-sm font-medium">{item.name}</p>
       {summaryColumns.length > 0 && (
         <div className="mt-1 flex flex-wrap items-center gap-1.5">

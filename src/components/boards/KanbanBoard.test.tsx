@@ -23,6 +23,30 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
 }));
 
+// Presence: simulate another user focused (dragging) the card:i1 target so the
+// per-card PresenceRing overlay renders. usePresenceFocus reads setFocus from
+// the same context, so provide a no-op there too.
+vi.mock("@/lib/boards/presence-context", () => ({
+  useBoardPresenceContextOptional: () => ({
+    selfUserId: "self",
+    setFocus: vi.fn(),
+    focusMap: new Map([
+      [
+        "card:i1",
+        [
+          {
+            userId: "u2",
+            name: "Sam",
+            avatarUrl: null,
+            color: "#2d9cdb",
+            isSelf: false,
+          },
+        ],
+      ],
+    ]),
+  }),
+}));
+
 // @tanstack/react-virtual reads offsetHeight to measure the scroll container.
 // jsdom always returns 0, so the virtualizer would render no cards. Stub it to
 // return a realistic value so every card falls within the visible viewport.
@@ -119,6 +143,14 @@ describe("KanbanBoard", () => {
     // Card A (o1=Working) and Card B (No status)
     expect(screen.getByText("Card A")).toBeInTheDocument();
     expect(screen.getByText("Card B")).toBeInTheDocument();
+  });
+
+  it("shows a presence indicator on a card another user is manipulating", () => {
+    renderKanban();
+    // The mocked focusMap has another occupant (Sam) on card:i1 (Card A) but
+    // none on card:i2 (Card B), so exactly one "is editing" ring renders.
+    expect(screen.getByLabelText(/Sam is editing/i)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/is editing/i)).toHaveLength(1);
   });
 
   it("sets the column's status when adding via an option column's + Add", () => {
