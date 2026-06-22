@@ -35,7 +35,11 @@ import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
 import { rollupCell, rollupTimeTracking } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
-import type { ColumnKind, ColumnOption } from "@/lib/validations/boards";
+import type {
+  AggregationId,
+  ColumnKind,
+  ColumnOption,
+} from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { FilesCell } from "@/components/boards/cells/FilesCell";
 import { TimeTrackingCell } from "@/components/boards/cells/TimeTrackingCell";
@@ -46,7 +50,11 @@ import { MirrorColumnConfig } from "@/components/boards/MirrorColumnConfig";
 import {
   mirrorValuesForCell,
   mirrorTargetColumnFor,
+  mirrorFooterValues,
 } from "@/lib/boards/mirror";
+import { allowedAggregations } from "@/lib/boards/aggregation";
+import { FooterCell } from "@/components/boards/FooterCell";
+import { trackedSeconds } from "@/lib/boards/time-format";
 import {
   Dialog,
   DialogContent,
@@ -217,6 +225,121 @@ function gridTemplate(
   return `${nameWidth}px ${tracks} ${ADD_COL_WIDTH}px`;
 }
 
+/** The kind to aggregate a column AS (a mirror delegates to its target column's
+ *  kind) plus the options used for distribution rendering. */
+function footerColumnMeta(
+  col: Column,
+  cache: BoardCache,
+): { aggregateKind: ColumnKind; options?: ColumnOption[] } {
+  if (col.kind === "mirror") {
+    const target = mirrorTargetColumnFor(cache, col);
+    return {
+      aggregateKind: target?.kind ?? "mirror",
+      options: (target?.settings as { options?: ColumnOption[] } | null)
+        ?.options,
+    };
+  }
+  return {
+    aggregateKind: col.kind,
+    options: (col.settings as { options?: ColumnOption[] } | null)?.options,
+  };
+}
+
+/** The per-item values for a column's footer, shaped for `aggregate`. */
+function footerColumnValues(
+  col: Column,
+  itemIds: readonly string[],
+  cellMap: Map<string, CacheCellValue["value"]>,
+  cache: BoardCache,
+  nowMs: number,
+): unknown[] {
+  if (col.kind === "mirror") return mirrorFooterValues(cache, col, itemIds);
+  if (col.kind === "time_tracking") {
+    return itemIds.map((id) => ({
+      trackedSecs: trackedSeconds(
+        timeEntriesForCell(cache, id, col.id),
+        nowMs,
+      ),
+      estimateSecs: (
+        cellMap.get(cellKey(id, col.id)) as
+          | { estimateSeconds?: number }
+          | undefined
+      )?.estimateSeconds,
+    }));
+  }
+  return itemIds.map((id) => cellMap.get(cellKey(id, col.id)) ?? null);
+}
+
+/**
+ * The column-summary footer (6d-3): a sticky bottom row aligned to the column
+ * grid where every column can show one aggregate over the loaded top-level rows.
+ * Aggregation math is pure + client-side (0 round-trips); only the choice
+ * persists. Reuses the same `template` + Name-freeze tokens as the header/data
+ * rows so it stays aligned under horizontal scroll + resize.
+ */
+function SummaryFooter({
+  columns,
+  itemIds,
+  cellMap,
+  cache,
+  template,
+  nameWidth,
+  canEdit,
+  nowMs,
+  onChange,
+}: {
+  columns: Column[];
+  itemIds: string[];
+  cellMap: Map<string, CacheCellValue["value"]>;
+  cache: BoardCache;
+  template: string;
+  nameWidth: number;
+  canEdit: boolean;
+  nowMs: number;
+  onChange: (col: Column, agg: AggregationId | null) => void;
+}) {
+  return (
+    <div
+      data-testid="board-summary-footer"
+      className="bg-surface-muted sticky bottom-0 z-[15] grid border-t"
+      style={{ gridTemplateColumns: template }}
+    >
+      <div
+        className={cn(
+          "bg-surface-muted text-muted-foreground sticky left-0 z-10 flex items-center px-4 py-1.5 text-xs font-medium",
+          NAME_FREEZE_EDGE,
+        )}
+        style={{ width: nameWidth }}
+      >
+        Summary
+      </div>
+      {columns.map((col) => {
+        const { aggregateKind, options } = footerColumnMeta(col, cache);
+        const current = (
+          col.settings as { summary_aggregation?: AggregationId } | null
+        )?.summary_aggregation;
+        return (
+          <div
+            key={col.id}
+            className="flex min-w-0 items-center border-l py-1.5"
+          >
+            <FooterCell
+              aggregateKind={aggregateKind}
+              values={footerColumnValues(col, itemIds, cellMap, cache, nowMs)}
+              options={options}
+              current={current}
+              allowed={allowedAggregations(aggregateKind)}
+              canEdit={canEdit}
+              onChange={(agg) => onChange(col, agg)}
+            />
+          </div>
+        );
+      })}
+      <div />
+    </div>
+  );
+}
+
 export function BoardTable({
   payload,
   members = [],
@@ -364,6 +487,21 @@ export function BoardTable({
     () => gridTemplate(columns, liveWidths, nameWidth),
     [columns, liveWidths, nameWidth],
   );
+
+  // Viewers see footer values read-only; editors can pick the aggregation.
+  const canEdit = access !== "viewer";
+  // Snapshot now once at mount for time-tracking footer totals — a bare Date.now()
+  // in render violates react-hooks/purity (same pattern as the rollup cells).
+  const [footerNowMs] = useState(() => Date.now());
+
+  // Persist a column's chosen footer aggregation into columns.settings jsonb
+  // (migration-free). The update action replaces settings wholesale, so merge.
+  function setColumnSummary(col: Column, agg: AggregationId | null) {
+    const next = { ...((col.settings as Record<string, unknown>) ?? {}) };
+    if (agg) next.summary_aggregation = agg;
+    else delete next.summary_aggregation;
+    mutations.updateColumnSettings(col.id, next);
+  }
 
   const controls: CellControls = {
     editing,
@@ -531,6 +669,19 @@ export function BoardTable({
               })
             }
           />
+          {columns.length > 0 && (
+            <SummaryFooter
+              columns={columns}
+              itemIds={topLevel.map((it) => it.id)}
+              cellMap={cellMap}
+              cache={cache}
+              template={template}
+              nameWidth={nameWidth}
+              canEdit={canEdit}
+              nowMs={footerNowMs}
+              onChange={setColumnSummary}
+            />
+          )}
         </div>
       </div>
 

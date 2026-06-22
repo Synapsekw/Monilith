@@ -51,3 +51,24 @@ export function mirrorTargetColumnFor(
 export function mirrorRollup(): "" {
   return "";
 }
+
+/**
+ * Flatten the mirrored target values across `itemIds` into a single array, for
+ * column-summary footer aggregation (6d-3). Each link on each item contributes
+ * its target cell value; a value the caller cannot read (RLS) or that is unset
+ * contributes null (counted as empty by the aggregator). The result feeds
+ * `aggregate(targetKind, ...)` where `targetKind` comes from
+ * `mirrorTargetColumnFor`. Pure. */
+export function mirrorFooterValues(
+  cache: BoardCache,
+  mirrorColumn: Pick<CacheColumn, "settings">,
+  itemIds: readonly string[],
+): (CacheCellValue["value"] | null)[] {
+  const out: (CacheCellValue["value"] | null)[] = [];
+  for (const id of itemIds) {
+    for (const mv of mirrorValuesForCell(cache, id, mirrorColumn)) {
+      out.push(mv.value);
+    }
+  }
+  return out;
+}
