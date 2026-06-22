@@ -135,11 +135,14 @@ function summarize(
     if (a.type === "call_webhook") {
       return "call a webhook";
     }
-    return `set ${colName(columns, a.columnId)} to ${optName(
-      columns,
-      a.columnId,
-      a.optionId,
-    )}`;
+    if (a.type === "set_option") {
+      return `set ${colName(columns, a.columnId)} to ${optName(
+        columns,
+        a.columnId,
+        a.optionId,
+      )}`;
+    }
+    return "move the item to a group";
   });
 
   return `${when}${condClause(condition, columns)}, ${thens.join(" and ")}.`;

@@ -62,7 +62,11 @@ function isActionComplete(a: AutomationAction): boolean {
   if (a.type === "call_webhook") {
     return /^https:\/\/.+/.test(a.url);
   }
-  return !!a.columnId && !!a.optionId;
+  if (a.type === "set_option") {
+    return !!a.columnId && !!a.optionId;
+  }
+  // move_to_group has no builder UI yet (added in a later task).
+  return false;
 }
 function memberLabel(m: BuilderMember): string {
   return m.fullName ?? m.email ?? m.userId;
@@ -455,13 +459,13 @@ export function AutomationBuilder({
                     action={action}
                     onChange={(next) => updateAction(action._id, next)}
                   />
-                ) : (
+                ) : action.type === "set_option" ? (
                   <SetOptionRow
                     action={action}
                     statusColumns={statusColumns}
                     onChange={(next) => updateAction(action._id, next)}
                   />
-                )}
+                ) : null}
               </div>
               <Button
                 type="button"
