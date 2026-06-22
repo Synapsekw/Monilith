@@ -97,9 +97,34 @@ describe("cell renderers (read-only, 2a)", () => {
     expect(screen.getByText("Done")).toBeInTheDocument();
   });
 
-  it("PeopleCell shows the count of assignees", () => {
+  it("PeopleCell shows assignee names when members are provided", () => {
+    render(
+      <PeopleCell
+        value={{ userIds: ["u1", "u2"] }}
+        settings={{}}
+        members={[
+          {
+            userId: "u1",
+            fullName: "Ada Lovelace",
+            email: null,
+            avatarUrl: null,
+          },
+          {
+            userId: "u2",
+            fullName: null,
+            email: "grace@hopper.dev",
+            avatarUrl: null,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/Ada Lovelace/)).toBeInTheDocument();
+    expect(screen.getByText(/grace@hopper\.dev/)).toBeInTheDocument();
+  });
+
+  it("PeopleCell falls back to the count when no members are provided", () => {
     render(<PeopleCell value={{ userIds: ["u1", "u2"] }} settings={{}} />);
-    expect(screen.getByText(/2/)).toBeInTheDocument();
+    expect(screen.getByText(/2 people/)).toBeInTheDocument();
   });
 
   it("DateCell shows the formatted date", () => {
