@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
@@ -30,8 +30,19 @@ import { boardKey } from "@/lib/boards/use-board-cache";
  * (+ groups/columns) changes into the ["board", boardId] cache. De-dupes echoes
  * from our own optimistic writes by skipping no-op cell value patches.
  */
-export function useBoardRealtime(boardId: string) {
+export function useBoardRealtime(
+  boardId: string,
+  opts?: {
+    onRemoteChange?: (e: { targetId: string; valueChanged: boolean }) => void;
+  },
+) {
   const qc = useQueryClient();
+  // Keep latest callback in a ref so a new identity each render does NOT
+  // resubscribe the channel (effect deps stay [boardId, qc]).
+  const cbRef = useRef(opts?.onRemoteChange);
+  useEffect(() => {
+    cbRef.current = opts?.onRemoteChange;
+  });
 
   useEffect(() => {
     const supabase = createClient();
@@ -55,6 +66,7 @@ export function useBoardRealtime(boardId: string) {
         return;
       }
       const row = p.new as CacheCellValue;
+      let changed = false;
       patch((prev) => {
         // Echo-dedupe: if the value already matches, skip (no re-render churn).
         const existing = prev.cellValues.find(
@@ -65,8 +77,15 @@ export function useBoardRealtime(boardId: string) {
           JSON.stringify(existing.value) === JSON.stringify(row.value)
         )
           return prev;
+        changed = true;
         return upsertCellValue(prev, row);
       });
+      if (changed) {
+        cbRef.current?.({
+          targetId: `cell:${row.item_id}:${row.column_id}`,
+          valueChanged: true,
+        });
+      }
     }
 
     function onItem(p: RealtimePostgresChangesPayload<CacheItem>) {

@@ -3,6 +3,11 @@ import { reorderPosition } from "@/lib/boards/group-reorder";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
+import {
+  BoardPresenceProvider,
+  type BoardPresenceContextValue,
+} from "@/lib/boards/presence-context";
+import type { RosterOccupant } from "@/lib/boards/presence-types";
 
 // The tanstack virtualizer reads the scroll container's offsetWidth/offsetHeight
 // to compute which rows are in-viewport. jsdom always returns 0 for these,
@@ -641,6 +646,60 @@ describe("BoardTable summary footer (6d-3)", () => {
         settings: { unit: "$", summary_aggregation: "avg" },
       }),
     );
+  });
+});
+
+function occupant(over: Partial<RosterOccupant>): RosterOccupant {
+  return {
+    userId: "u2",
+    name: "Sam",
+    avatarUrl: null,
+    color: "#2d9cdb",
+    isSelf: false,
+    ...over,
+  };
+}
+
+function presenceValue(
+  focusMap: Map<string, RosterOccupant[]>,
+  selfUserId = "self",
+): BoardPresenceContextValue {
+  return {
+    roster: [],
+    focusMap,
+    setFocus: vi.fn(),
+    selfUserId,
+    selfFocusTargetId: null,
+    channelStatus: "SUBSCRIBED",
+    flashTargetId: null,
+  };
+}
+
+function renderFooterWithPresence(presence: BoardPresenceContextValue) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardPresenceProvider value={presence}>
+        <BoardTable payload={footerPayload({})} selectedViewId="v1" />
+      </BoardPresenceProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable cell presence ring (8a)", () => {
+  it("shows an editing indicator on a cell another user is focused on", () => {
+    // footerPayload has item t1 / column c1 → target cell:t1:c1
+    const focusMap = new Map([["cell:t1:c1", [occupant({ name: "Sam" })]]]);
+    renderFooterWithPresence(presenceValue(focusMap));
+    expect(screen.getByLabelText(/Sam is editing/i)).toBeInTheDocument();
+  });
+
+  it("does not show a ring for the local (self) user's own focus", () => {
+    const focusMap = new Map([
+      ["cell:t1:c1", [occupant({ userId: "self", isSelf: true })]],
+    ]);
+    renderFooterWithPresence(presenceValue(focusMap, "self"));
+    expect(screen.queryByLabelText(/is editing/i)).not.toBeInTheDocument();
   });
 });
 

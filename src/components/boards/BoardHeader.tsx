@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Eye, UserPlus, Zap } from "lucide-react";
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
+import { BoardPresenceBar } from "@/components/boards/presence/BoardPresenceBar";
 import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
 import { ShareBoardDialog } from "@/components/boards/ShareBoardDialog";
 import { Button } from "@/components/ui/button";
@@ -117,7 +118,8 @@ export function BoardHeader({
           views={views}
           selectedViewId={selectedViewId}
         />
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <BoardPresenceBar />
           <Button
             type="button"
             variant="ghost"

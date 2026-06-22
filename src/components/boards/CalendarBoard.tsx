@@ -27,9 +27,12 @@ import {
 } from "@/lib/boards/calendar";
 import { resolveDateColumn, itemDateRange } from "@/lib/boards/dates";
 import { updateBoardView } from "@/lib/boards/view-actions";
+import { presenceTarget } from "@/lib/boards/presence-target";
+import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { CellRenderer } from "@/components/boards/cells";
+import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 import type { EditorMember } from "@/components/boards/cells/editors";
 
 // ---------------------------------------------------------------------------
@@ -481,6 +484,11 @@ function EventChip({
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: `${event.itemId}-${fromDayISO}`, data: dragData });
 
+  // In-view presence signal: someone is dragging this event. Broadcast focus
+  // while this chip is dragged; the ring surfaces other users' drags.
+  const target = presenceTarget.event(event.itemId);
+  usePresenceFocus({ viewKind: "calendar", targetId: target }, isDragging);
+
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
@@ -497,11 +505,12 @@ function EventChip({
       {...attributes}
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        "bg-surface shadow-card flex cursor-grab items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium",
+        "bg-surface shadow-card relative flex cursor-grab items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium",
         "focus-visible:ring-ring border hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none",
         isDragging && "opacity-50",
       )}
     >
+      <PresenceRing target={target} />
       <span className="truncate">{event.name}</span>
       {statusColumn && (
         <span className="shrink-0">
