@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Play, Square, Plus, Clock, Pencil, Trash2 } from "lucide-react";
+import {
+  Play,
+  Square,
+  Plus,
+  Clock,
+  Pencil,
+  Trash2,
+  Calendar as CalendarIcon,
+} from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -9,6 +17,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import {
   parseDuration,
@@ -16,6 +25,7 @@ import {
   trackedSeconds,
   type TimeEntryLike,
 } from "@/lib/boards/time-format";
+import { isoToLocalDate, localDateToISO } from "@/lib/boards/iso-date";
 import type { CacheTimeEntry } from "@/lib/boards/cache";
 
 export type TimeTrackingCellProps = {
@@ -307,12 +317,10 @@ function TimeTrackingPopover({
                       )}
                       aria-invalid={editError}
                     />
-                    <Input
-                      type="date"
-                      aria-label="Edit date"
+                    <DatePickerButton
+                      ariaLabel="Edit date"
                       value={editDate}
-                      onChange={(ev) => setEditDate(ev.target.value)}
-                      className="h-6 w-28 px-1.5 text-xs"
+                      onChange={setEditDate}
                     />
                     <Button
                       size="xs"
@@ -403,12 +411,10 @@ function TimeTrackingPopover({
             )}
             aria-invalid={addError}
           />
-          <Input
-            type="date"
-            aria-label="Date for manual entry"
+          <DatePickerButton
+            ariaLabel="Date for manual entry"
             value={addDate}
-            onChange={(e) => setAddDate(e.target.value)}
-            className="h-6 w-28 px-1.5 text-xs"
+            onChange={setAddDate}
           />
           <Button
             type="button"
@@ -428,6 +434,64 @@ function TimeTrackingPopover({
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Date picker (Calendar primitive, replaces native <input type=date>) ─────
+// Click-to-open child popover anchored to a compact trigger — the date is one
+// field among several in a dense row, so unlike DateEditor (which auto-opens
+// because the cell *is* the editor) this opens on click. Renders identical,
+// polished DOM in every browser (Safari draws no native calendar glyph).
+
+function DatePickerButton({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  /** Current date as `YYYY-MM-DD` (may be empty). */
+  value: string;
+  onChange: (iso: string) => void;
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = value ? isoToLocalDate(value) : undefined;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className={cn(
+            "border-input flex h-6 w-28 items-center gap-1 rounded-md border px-1.5 text-xs",
+            "hover:bg-accent focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+          )}
+        >
+          <CalendarIcon className="text-muted-foreground size-3.5 shrink-0" />
+          <span className="tabular-nums">
+            {selected
+              ? selected.toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })
+              : "Date"}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={4} className="w-auto p-2">
+        <Calendar
+          mode="single"
+          autoFocus
+          defaultMonth={selected}
+          selected={selected}
+          onSelect={(picked) => {
+            if (picked) {
+              onChange(localDateToISO(picked));
+              setOpen(false);
+            }
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 
