@@ -23,6 +23,16 @@
 
 ---
 
+## Build-time findings & deviations (from integration scoping)
+
+Discovered while scoping the real components — these adjust the plan:
+
+1. **Header mount point.** `BoardViews` does not render the header directly; each view renders `<BoardHeader … members={…} />` (e.g. `BoardTable.tsx`). So `<BoardPresenceBar>` goes inside **`BoardHeader`** (it already receives `members`) — one insertion covers all views. The `BoardPresenceProvider` + `useBoardPresence` still live in `BoardViews` (wraps everything).
+2. **Self identity.** Derive the presence `self` in `BoardViews` from `members.find(m => m.userId === currentUserId)` → `{ userId: currentUserId, name: fullName ?? email ?? "Someone", avatarUrl }`. `EditorMember = { userId, fullName, email, avatarUrl }` (camelCase).
+3. **T8d (item-panel field indicators) is DROPPED for v1.** The item panel's "fields" tab is a placeholder — *"Inline field editing in the panel is a fast-follow."* There are **no editable field components** to attach a focus/indicator to. Per-field presence is impossible until field editing exists. Documented as a fast-follow (revisit when the panel gains inline field editors). Avatar-stack presence still appears in the panel's surrounding board (the bar is board-wide).
+4. **Toast primitive does not exist** (the repo deliberately has none — see the comment in `members-table.tsx`). To honor "visible LWW" without adding an unrequested dependency, T9 ships as: (a) a **visual flash highlight** on the changed-under-you element (the core "seen" signal), plus (b) a **self-contained ephemeral message** rendered by `BoardViews` from flash state (a tiny inline "toast-lite"), NOT `sonner`. Attribution comes from presence (`focusMap`). If the team later adds a toast lib, the message can move to it.
+5. **`onRemoteChange` wiring.** `useBoardRealtime(boardId)`'s `onCell` handler (the existing data hook) has `p.new = { item_id, column_id, value }` and echo-dedups at the value level; fire an additive optional `onRemoteChange?({ targetId: cell:${item_id}:${column_id}, valueChanged: true })` only when it actually patches (i.e. not an echo). To know the local user's focused target for the flash, extend `useBoardPresence` to also expose `selfFocusTargetId: string | null` (state mirror of its focus ref).
+
 ## File Structure
 
 **Create:**
