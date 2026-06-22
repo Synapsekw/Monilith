@@ -75,7 +75,12 @@ export async function getWorkloadGrid(
   weeksBack = 1,
   weeksFwd = 4,
   weekStartsOn = 1,
-): Promise<{ grid: WorkloadGrid; orgId: string }> {
+): Promise<{
+  grid: WorkloadGrid;
+  orgId: string;
+  capacities: MemberCapacity[];
+  defaults: OrgWorkloadDefaults;
+}> {
   const orgs = await getUserOrgs();
   const orgId = orgs[0]?.id ?? "";
   const supabase = await createClient();
@@ -106,5 +111,37 @@ export async function getWorkloadGrid(
     weeksFwd,
     weekStartsOn,
   );
-  return { grid, orgId };
+  return { grid, orgId, capacities: caps, defaults };
+}
+
+const DAY = 86_400_000;
+
+/**
+ * Page-level data fetch. Owns the server clock so `Date.now()` never runs in the
+ * RSC render body (the project's react-hooks rule forbids impure calls during
+ * render). The loaded horizon (Q2) is today − 2 weeks … today + 10 weeks
+ * (≈12 weeks) so the visible 6-week window can pan client-side with 0 refetch;
+ * a from/to override only arrives when paging BEYOND the horizon (genuine RSC nav).
+ */
+export async function getWorkloadPageData(override?: {
+  from?: string;
+  to?: string;
+}): Promise<{
+  grid: WorkloadGrid;
+  capacities: MemberCapacity[];
+  defaults: OrgWorkloadDefaults;
+}> {
+  const now = Date.now();
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const from = override?.from ?? iso(now - 14 * DAY);
+  const to = override?.to ?? iso(now + 70 * DAY);
+  const { grid, capacities, defaults } = await getWorkloadGrid(
+    from,
+    to,
+    now,
+    1,
+    4,
+    1,
+  );
+  return { grid, capacities, defaults };
 }

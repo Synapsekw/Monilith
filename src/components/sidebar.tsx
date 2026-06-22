@@ -6,6 +6,7 @@ import {
   BarChart3,
   ChevronsLeft,
   ChevronsRight,
+  Gauge,
   Inbox,
   Target,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 const nav = [
   { label: "Goals", icon: Target, href: "/goals" },
   { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
+  { label: "Workload", icon: Gauge, href: "/workload" },
   { label: "Inbox", icon: Inbox },
 ] as const;
 
