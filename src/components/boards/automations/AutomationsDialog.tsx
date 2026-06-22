@@ -32,6 +32,7 @@ import {
 import {
   AutomationBuilder,
   columnOptions,
+  type BuilderGroup,
   type BuilderMember,
 } from "@/components/boards/automations/AutomationBuilder";
 import { RecentRuns } from "./RecentRuns";
@@ -71,6 +72,11 @@ function memberName(members: BuilderMember[], userId: string): string {
   return m?.fullName ?? m?.email ?? "someone";
 }
 
+/** Resolve a group name (falls back to a generic label). */
+function groupName(groups: BuilderGroup[], id: string): string {
+  return groups.find((g) => g.id === id)?.name ?? "a group";
+}
+
 function condClause(
   condition: ListFilter | null,
   columns: CacheColumn[],
@@ -96,6 +102,7 @@ function summarize(
   rule: Automation,
   columns: CacheColumn[],
   members: BuilderMember[],
+  groups: BuilderGroup[],
 ): string {
   const trigger = rule.trigger as unknown as AutomationTrigger;
   const actions = rule.actions as unknown as AutomationAction[];
@@ -135,11 +142,17 @@ function summarize(
     if (a.type === "call_webhook") {
       return "call a webhook";
     }
-    return `set ${colName(columns, a.columnId)} to ${optName(
-      columns,
-      a.columnId,
-      a.optionId,
-    )}`;
+    if (a.type === "set_option") {
+      return `set ${colName(columns, a.columnId)} to ${optName(
+        columns,
+        a.columnId,
+        a.optionId,
+      )}`;
+    }
+    if (a.type === "move_to_group") {
+      return `move to ${groupName(groups, a.groupId)}`;
+    }
+    return "do nothing";
   });
 
   return `${when}${condClause(condition, columns)}, ${thens.join(" and ")}.`;
@@ -149,12 +162,14 @@ export function AutomationsDialog({
   boardId,
   columns,
   members,
+  groups = [],
   open,
   onOpenChange,
 }: {
   boardId: string;
   columns: CacheColumn[];
   members: BuilderMember[];
+  groups?: BuilderGroup[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -424,6 +439,7 @@ export function AutomationsDialog({
               key={builderKey}
               columns={columns}
               members={members}
+              groups={groups}
               initial={initialDraft}
               canWebhook={isAdmin}
               onSubmit={(draft) => create.mutate(draft)}
@@ -483,7 +499,7 @@ export function AutomationsDialog({
                         {rule.name ? (
                           <span className="font-medium">{rule.name}: </span>
                         ) : null}
-                        {summarize(rule, columns, members)}
+                        {summarize(rule, columns, members, groups)}
                       </p>
                       <Button
                         type="button"

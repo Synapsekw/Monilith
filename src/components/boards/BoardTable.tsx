@@ -603,6 +603,7 @@ export function BoardTable({
         selectedViewId={selectedViewId}
         columns={columns}
         members={members}
+        groups={groups.map((g) => ({ id: g.id, name: g.name }))}
         access={access}
         grants={grants}
       />

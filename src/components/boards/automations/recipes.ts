@@ -128,3 +128,22 @@ export function recipeDueSoonNotifyOwner(
     actions: [{ type: "notify", recipient: { kind: "owner", peopleColumnId } }],
   };
 }
+
+/**
+ * "When status changes (to X), move the item to a group."
+ * `optionId === null` means the trigger fires on any value change.
+ */
+export function recipeStatusChangedMoveToGroup(
+  statusColumnId: string,
+  optionId: string | null,
+  groupId: string,
+): Draft {
+  return {
+    trigger: {
+      type: "status_changed",
+      columnId: statusColumnId,
+      toOptionId: optionId,
+    },
+    actions: [{ type: "move_to_group", groupId }],
+  };
+}

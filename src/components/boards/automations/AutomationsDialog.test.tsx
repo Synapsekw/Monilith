@@ -277,6 +277,54 @@ describe("AutomationsDialog", () => {
     });
   });
 
+  describe("summarize() for move_to_group action", () => {
+    function renderWithMoveRule() {
+      const rule = {
+        id: "auto-mg",
+        board_id: "board-1",
+        org_id: "o1",
+        name: null,
+        enabled: true,
+        trigger: {
+          type: "status_changed",
+          columnId: "c-status",
+          toOptionId: "opt-done",
+        },
+        actions: [{ type: "move_to_group", groupId: "g-done" }],
+        condition: null,
+        created_at: "",
+        updated_at: "",
+      };
+      getAutomations.mockResolvedValue([rule]);
+
+      const qc = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false },
+        },
+      });
+      const Wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      );
+      render(
+        <AutomationsDialog
+          open
+          boardId="board-1"
+          columns={columns}
+          members={members}
+          groups={[{ id: "g-done", name: "Done" }]}
+          onOpenChange={vi.fn()}
+        />,
+        { wrapper: Wrapper },
+      );
+    }
+
+    it("renders 'move to <GroupName>' for a move_to_group action", async () => {
+      renderWithMoveRule();
+      expect(await screen.findByText(/move to Done/i)).toBeInTheDocument();
+    });
+  });
+
   it("passes canWebhook=true to the builder for an admin", async () => {
     getBoardAdminStatus.mockResolvedValue(true);
     renderDialog();
