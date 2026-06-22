@@ -7,6 +7,27 @@ import type { ChangelogEntry } from "./types";
  */
 export const SEED: ChangelogEntry[] = [
   {
+    date: "2026-06-22",
+    kind: "new",
+    title: "Real-time collaboration",
+    description:
+      "See who else is on a board with live presence avatars, watch teammates' edits as they happen across table, kanban, calendar, and gantt, and get a quick highlight when someone's change lands.",
+  },
+  {
+    date: "2026-06-22",
+    kind: "new",
+    title: "Move items between groups automatically",
+    description:
+      "Add a “move to group” step to any automation so items land in the right group the moment your rule fires.",
+  },
+  {
+    date: "2026-06-22",
+    kind: "improved",
+    title: "Column headers in every group",
+    description:
+      "Each group now shows its own interactive column header, so you can sort and resize without scrolling back to the top.",
+  },
+  {
     date: "2026-06-21",
     kind: "new",
     title: "Portfolios",
