@@ -65,6 +65,8 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
   let boardAId: string;
   /** Default group in boardA — items are created here. */
   let groupAId: string;
+  /** Second group in boardA — target for move_to_group tests. */
+  let targetGroupId: string;
   /** One persistent item used for cell-value-triggered tests. */
   let itemAId: string;
 
@@ -148,6 +150,18 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
       .eq("board_id", boardAId)
       .single();
     groupAId = (groupData as { id: string }).id;
+
+    const { data: g2 } = await admin
+      .from("groups")
+      .insert({
+        org_id: orgAId,
+        board_id: boardAId,
+        name: "Done group",
+        position: 100,
+      })
+      .select("id")
+      .single();
+    targetGroupId = (g2 as { id: string }).id;
 
     const { data: itemData } = await userAAnon.rpc("create_item", {
       p_group_id: groupAId,
@@ -355,6 +369,16 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
     });
     expect(error, "createFreshItem").toBeNull();
     return (data as { id: string }).id;
+  }
+
+  /** Read the current group_id for an item. */
+  async function itemGroup(itemId: string): Promise<string | null> {
+    const { data } = await admin
+      .from("items")
+      .select("group_id")
+      .eq("id", itemId)
+      .single();
+    return (data as { group_id: string } | null)?.group_id ?? null;
   }
 
   // =========================================================================
@@ -1142,6 +1166,116 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
         actions: [] as never,
       });
       expect(error, "cross-org item_created insert rejected").not.toBeNull();
+    });
+  });
+
+  // =========================================================================
+  // 13. move_to_group action
+  // =========================================================================
+  describe("move_to_group action", () => {
+    it("status_changed → move_to_group moves the item to the target group", async () => {
+      const itemId = await createFreshItem();
+      const automationId = await insertAutomation({
+        trigger: {
+          type: "status_changed",
+          columnId: colSId,
+          toOptionId: optDoneId,
+        },
+        actions: [{ type: "move_to_group", groupId: targetGroupId }],
+      });
+
+      const writeErr = await setCell(itemId, colSId, { optionId: optDoneId });
+      expect(writeErr, "set S=Done (move)").toBeNull();
+
+      const moved = await poll(async () => {
+        return (await itemGroup(itemId)) === targetGroupId ? true : null;
+      });
+      expect(moved, "item moved to target group").toBe(true);
+
+      await admin.from("automations").delete().eq("id", automationId);
+      await admin.from("cell_values").delete().eq("item_id", itemId);
+      await admin.from("items").delete().eq("id", itemId);
+    });
+
+    it("does not move when the trigger option does not match", async () => {
+      const itemId = await createFreshItem();
+      const automationId = await insertAutomation({
+        trigger: {
+          type: "status_changed",
+          columnId: colSId,
+          toOptionId: optDoneId,
+        },
+        actions: [{ type: "move_to_group", groupId: targetGroupId }],
+      });
+
+      const writeErr = await setCell(itemId, colSId, {
+        optionId: optWorkingId,
+      });
+      expect(writeErr, "set S=Working (no match)").toBeNull();
+
+      await new Promise((r) => setTimeout(r, 800));
+      expect(await itemGroup(itemId), "item stays in original group").toBe(
+        groupAId,
+      );
+
+      await admin.from("automations").delete().eq("id", automationId);
+      await admin.from("cell_values").delete().eq("item_id", itemId);
+      await admin.from("items").delete().eq("id", itemId);
+    });
+
+    it("is a no-op when the target group does not exist / is on another board", async () => {
+      const itemId = await createFreshItem();
+      const automationId = await insertAutomation({
+        trigger: {
+          type: "status_changed",
+          columnId: colSId,
+          toOptionId: null,
+        },
+        actions: [{ type: "move_to_group", groupId: randomUUID() }],
+      });
+
+      const writeErr = await setCell(itemId, colSId, { optionId: optDoneId });
+      expect(writeErr, "set S=Done (bogus group)").toBeNull();
+
+      await new Promise((r) => setTimeout(r, 800));
+      expect(
+        await itemGroup(itemId),
+        "item unchanged for nonexistent target group",
+      ).toBe(groupAId);
+
+      await admin.from("automations").delete().eq("id", automationId);
+      await admin.from("cell_values").delete().eq("item_id", itemId);
+      await admin.from("items").delete().eq("id", itemId);
+    });
+
+    it("respects the condition gate (no move when condition fails)", async () => {
+      const itemId = await createFreshItem();
+      const automationId = await insertAutomation({
+        trigger: {
+          type: "status_changed",
+          columnId: colSId,
+          toOptionId: null,
+        },
+        actions: [{ type: "move_to_group", groupId: targetGroupId }],
+        condition: {
+          combinator: "and",
+          conditions: [{ columnId: colPId, operator: "is", value: optHighId }],
+        },
+      });
+
+      // P is unset → condition fails
+      const writeErr = await setCell(itemId, colSId, { optionId: optDoneId });
+      expect(writeErr, "set S=Done (condition fails)").toBeNull();
+
+      await new Promise((r) => setTimeout(r, 800));
+      expect(
+        await itemGroup(itemId),
+        "item not moved when condition fails",
+      ).toBe(groupAId);
+
+      await admin.from("automations").delete().eq("id", automationId);
+      await admin.from("cell_values").delete().eq("item_id", itemId);
+      await admin.from("items").delete().eq("id", itemId);
     });
   });
 });
