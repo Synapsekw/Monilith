@@ -405,16 +405,24 @@ git commit -m "feat(presence): pure reducer — roster dedup, focus map, flash d
 -- private channels are not actually enforced. Proven by the non-member-denied
 -- integration test in this phase.
 
--- Receive presence broadcasts on a board presence topic.
+-- RLS is already enabled on realtime.messages by default — do NOT `enable rls` here
+-- (and the migration role may not own the table). Just add policies.
+-- extension is gated on both 'presence' AND 'broadcast': supabase-js Presence rides
+-- the broadcast transport, and this is the docs' combined pattern. (select ...) wraps
+-- the helpers for RLS initplan caching (per Supabase Realtime Authorization docs).
+
+-- Receive presence on a board presence topic.
 create policy "presence: read if can read board"
   on realtime.messages
   for select
   to authenticated
   using (
-    realtime.messages.extension = 'presence'
-    and realtime.topic() like 'presence:board:%'
-    and public.can_read_board(
-      (split_part(realtime.topic(), ':', 3))::uuid
+    realtime.messages.extension in ('broadcast', 'presence')
+    and (select realtime.topic()) like 'presence:board:%'
+    and (
+      select public.can_read_board(
+        (split_part((select realtime.topic()), ':', 3))::uuid
+      )
     )
   );
 
@@ -424,15 +432,17 @@ create policy "presence: write if can read board"
   for insert
   to authenticated
   with check (
-    realtime.messages.extension = 'presence'
-    and realtime.topic() like 'presence:board:%'
-    and public.can_read_board(
-      (split_part(realtime.topic(), ':', 3))::uuid
+    realtime.messages.extension in ('broadcast', 'presence')
+    and (select realtime.topic()) like 'presence:board:%'
+    and (
+      select public.can_read_board(
+        (split_part((select realtime.topic()), ':', 3))::uuid
+      )
     )
   );
 ```
 
-> The `like 'presence:board:%'` guard ensures a malformed/foreign topic never reaches the `::uuid` cast and fails closed (no policy match → denied). Confirm whether the installed Realtime version exposes the extension as `presence` for `track()` traffic; some versions route presence under `broadcast` — if so, gate on `extension in ('presence','broadcast')` and adjust the test. Verify against docs in pre-flight.
+> Confirmed against the Supabase Realtime Authorization docs (pre-flight): Presence traffic on `realtime.messages` carries `extension = 'presence'`, broadcast carries `'broadcast'`; gating on the **set** authorizes both. Topic `presence:board:<uuid>` → `split_part(topic, ':', 3)` is the uuid. The `like 'presence:board:%'` guard makes a malformed/foreign topic fail closed (no policy match → denied). `can_read_board` is read-only SECURITY DEFINER (Realtime runs the policy query then rolls it back — no side effects allowed). The policy is evaluated at join/JWT-refresh time and cached per connection.
 
 - [ ] **Step 2: Apply the migration**
 
@@ -459,13 +469,16 @@ export function boardPresenceTopic(boardId: string): string {
   return `presence:board:${boardId}`;
 }
 
-/** Private presence channel for a board. The @supabase/ssr browser client
- *  already carries the auth JWT used to evaluate realtime.messages RLS. */
-export function createBoardPresenceChannel(
+/** Private presence channel for a board. `setAuth()` is REQUIRED before subscribing
+ *  to a private channel — it pushes the current session JWT into the Realtime socket
+ *  so the realtime.messages RLS policy can evaluate can_read_board (confirmed in
+ *  pre-flight; do not rely on @supabase/ssr to do this implicitly). */
+export async function createBoardPresenceChannel(
   boardId: string,
   selfKey: string,
-): RealtimeChannel {
+): Promise<RealtimeChannel> {
   const supabase = createClient();
+  await supabase.realtime.setAuth(); // Needed for Realtime Authorization
   return supabase.channel(boardPresenceTopic(boardId), {
     config: { private: true, presence: { key: selfKey } },
   });
@@ -492,7 +505,7 @@ git commit -m "feat(presence): private presence channel + realtime.messages RLS 
 - [ ] **Step 1: Write the failing test** (mock the channel so no socket is needed)
 
 ```tsx
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const trackMock = vi.fn();
@@ -500,28 +513,38 @@ const onMock = vi.fn().mockReturnThis();
 const subscribeMock = vi.fn();
 const presenceStateMock = vi.fn().mockReturnValue({});
 
+// createBoardPresenceChannel is async (awaits setAuth) → mock returns a Promise.
 vi.mock("./presence-channel", () => ({
   boardPresenceTopic: (id: string) => `presence:board:${id}`,
-  createBoardPresenceChannel: () => ({
+  createBoardPresenceChannel: vi.fn(async () => ({
     on: onMock,
     subscribe: subscribeMock,
     track: trackMock,
     untrack: vi.fn(),
     presenceState: presenceStateMock,
     unsubscribe: vi.fn(),
-  }),
+  })),
 }));
 
+// Wrap the QueryClientProvider so useQueryClient() resolves in the hook.
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useBoardPresence } from "./use-board-presence";
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  const qc = new QueryClient();
+  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 describe("useBoardPresence", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("tracks the local presence state on subscribe", () => {
-    renderHook(() =>
-      useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+  it("tracks the local presence state on subscribe", async () => {
+    renderHook(
+      () => useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+      { wrapper },
     );
-    // simulate SUBSCRIBED
+    // async channel creation → wait until subscribe is wired
+    await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
     const cb = subscribeMock.mock.calls[0][0];
     act(() => cb("SUBSCRIBED"));
     expect(trackMock).toHaveBeenCalledWith(
@@ -529,14 +552,19 @@ describe("useBoardPresence", () => {
     );
   });
 
-  it("setFocus re-tracks with the new focus", () => {
-    const { result } = renderHook(() =>
-      useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+  it("setFocus re-tracks with the new focus (throttled)", async () => {
+    const { result } = renderHook(
+      () => useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+      { wrapper },
     );
+    await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
     act(() => subscribeMock.mock.calls[0][0]("SUBSCRIBED"));
     act(() => result.current.setFocus({ viewKind: "table", targetId: "cell:i1:c1" }));
-    expect(trackMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ focus: { viewKind: "table", targetId: "cell:i1:c1" } }),
+    // setFocus is throttled (~150ms) → assert eventually
+    await waitFor(() =>
+      expect(trackMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ focus: { viewKind: "table", targetId: "cell:i1:c1" } }),
+      ),
     );
   });
 });
@@ -593,29 +621,41 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
   );
 
   useEffect(() => {
-    const channel = createBoardPresenceChannel(boardId, self.userId);
-    channelRef.current = channel;
-    const sync = () => setRaw(channel.presenceState() as Record<string, PresenceState[]>);
-    channel
-      .on("presence", { event: "sync" }, sync)
-      .on("presence", { event: "join" }, sync)
-      .on("presence", { event: "leave" }, sync)
-      .subscribe((status) => {
-        setStatus(status);
-        if (status === "SUBSCRIBED") {
-          void channel.track(buildState(focusRef.current));
-          // reconnect resync: catch up any data missed while offline
-          if (hadDropRef.current) {
-            void qc.invalidateQueries({ queryKey: ["board", boardId] });
-            hadDropRef.current = false;
+    let channel: RealtimeChannel | null = null;
+    let cancelled = false;
+    // createBoardPresenceChannel is async (it awaits realtime.setAuth() for
+    // Realtime Authorization), so build + subscribe inside an async IIFE with a
+    // cancellation guard for unmount-before-ready.
+    void (async () => {
+      const ch = await createBoardPresenceChannel(boardId, self.userId);
+      if (cancelled) {
+        void ch.unsubscribe();
+        return;
+      }
+      channel = ch;
+      channelRef.current = ch;
+      const sync = () => setRaw(ch.presenceState() as Record<string, PresenceState[]>);
+      ch.on("presence", { event: "sync" }, sync)
+        .on("presence", { event: "join" }, sync)
+        .on("presence", { event: "leave" }, sync)
+        .subscribe((status) => {
+          setStatus(status);
+          if (status === "SUBSCRIBED") {
+            void ch.track(buildState(focusRef.current));
+            // reconnect resync: catch up any data missed while offline
+            if (hadDropRef.current) {
+              void qc.invalidateQueries({ queryKey: ["board", boardId] });
+              hadDropRef.current = false;
+            }
           }
-        }
-        if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          hadDropRef.current = true;
-        }
-      });
+          if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            hadDropRef.current = true;
+          }
+        });
+    })();
     return () => {
-      void channel.unsubscribe();
+      cancelled = true;
+      if (channel) void channel.unsubscribe();
       channelRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1116,7 +1156,7 @@ git commit -m "test(presence): live presence sync + non-member RLS-denied gate"
 
 - **Spec coverage:** U1→T4, U2→T1+T2+T3, U3→T5, U4→T6, U5→T7+T8a–d, U6→T9, U7→T10. All spec units mapped. ✅
 - **Type consistency:** `PresenceState`/`PresenceFocus`/`RosterOccupant` defined in T2, consumed unchanged in T3/T5/T6/T9. `presenceTarget` (T2) used in T8. `flashDecision` signature `{incomingTargetId, focusedTargetId, valueChanged}` consistent T3↔T9. ✅
-- **Open risks to confirm at build time:** (1) the `realtime.messages` `extension` value for `track()` traffic (`presence` vs `broadcast`) — verify in pre-flight and adjust the migration predicate + Task 10 accordingly; (2) the repo's toast primitive (the plan assumes `sonner` — swap to the actual one); (3) exact item-panel field component paths for T8d.
+- **Open risks to confirm at build time:** (1) ~~`extension` value~~ RESOLVED in pre-flight — gate on `extension in ('broadcast','presence')`, call `await supabase.realtime.setAuth()` before subscribe, and the manual project setting "Allow public access" must be OFF (verified by the Task 10 non-member-denied test); (2) the repo's toast primitive (the plan assumes `sonner` — swap to the actual one used in the codebase); (3) exact item-panel field component paths for T8d.
 
 ## How to test (manual, two browsers)
 
