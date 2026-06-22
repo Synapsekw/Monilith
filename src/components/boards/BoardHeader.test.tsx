@@ -51,6 +51,7 @@ function makePresence(roster: BoardPresence["roster"] = []): BoardPresence {
     focusMap: new Map(),
     setFocus: vi.fn(),
     selfUserId: "self",
+    selfFocusTargetId: null,
     channelStatus: "SUBSCRIBED",
   };
 }

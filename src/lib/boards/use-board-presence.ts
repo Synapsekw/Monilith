@@ -15,6 +15,7 @@ export type BoardPresence = {
   focusMap: Map<string, RosterOccupant[]>;
   setFocus: (focus: PresenceFocus | null) => void;
   selfUserId: string;
+  selfFocusTargetId: string | null;
   channelStatus: string;
 };
 
@@ -24,6 +25,7 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
   const [channelStatus, setStatus] = useState("INIT");
   const channelRef = useRef<RealtimeChannel | null>(null);
   const focusRef = useRef<PresenceFocus | null>(null);
+  const [selfFocusTargetId, setSelfFocusTargetId] = useState<string | null>(null);
   const hadDropRef = useRef(false);
 
   const color = useMemo(() => presenceColor(self.userId), [self.userId]);
@@ -80,6 +82,7 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
   const setFocus = useCallback(
     (focus: PresenceFocus | null) => {
       focusRef.current = focus;
+      setSelfFocusTargetId(focus?.targetId ?? null);
       if (throttleRef.current) return;
       throttleRef.current = setTimeout(() => {
         throttleRef.current = null;
@@ -92,5 +95,5 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
   const roster = useMemo(() => toRoster(raw, self.userId), [raw, self.userId]);
   const focusMap = useMemo(() => toFocusMap(raw), [raw]);
 
-  return { roster, focusMap, setFocus, selfUserId: self.userId, channelStatus };
+  return { roster, focusMap, setFocus, selfUserId: self.userId, selfFocusTargetId, channelStatus };
 }

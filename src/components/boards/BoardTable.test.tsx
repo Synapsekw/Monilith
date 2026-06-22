@@ -667,6 +667,7 @@ function presenceValue(
     focusMap,
     setFocus: vi.fn(),
     selfUserId,
+    selfFocusTargetId: null,
     channelStatus: "SUBSCRIBED",
   };
 }
