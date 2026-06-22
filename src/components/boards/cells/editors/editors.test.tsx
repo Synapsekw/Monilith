@@ -227,38 +227,81 @@ describe("PeopleEditor", () => {
 });
 
 describe("DateEditor", () => {
-  it("commits an ISO date", async () => {
+  it("opens the calendar immediately on edit", () => {
+    render(
+      <DateEditor
+        value={{ date: "2026-06-10" }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+  });
+
+  it("commits the picked day as a local ISO date (no off-by-one)", async () => {
     const onCommit = vi.fn();
     render(
       <DateEditor
-        value={null}
+        value={{ date: "2026-06-10" }}
         settings={{}}
         onCommit={onCommit}
         onCancel={vi.fn()}
       />,
     );
-    const input = screen.getByLabelText(/date/i);
-    await userEvent.type(input, "2026-06-15");
-    await userEvent.type(input, "{Enter}");
+    await userEvent.click(screen.getByText("15"));
+    // Exact equality also proves no `end` is synthesised for a single day.
     expect(onCommit).toHaveBeenCalledWith({ date: "2026-06-15" });
   });
 
-  it("clears via onClear when an existing date is emptied", async () => {
+  it("preserves an existing range end by shifting it the same span", async () => {
+    const onCommit = vi.fn();
+    render(
+      <DateEditor
+        value={{ date: "2026-06-10", end: "2026-06-13" }}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByText("15"));
+    // 3-day span (10→13) shifts forward with the new start (15→18).
+    expect(onCommit).toHaveBeenCalledWith({
+      date: "2026-06-15",
+      end: "2026-06-18",
+    });
+  });
+
+  it("clears the cell via the Clear affordance", async () => {
     const onCommit = vi.fn();
     const onClear = vi.fn();
     render(
       <DateEditor
-        value={{ date: "2026-06-15" }}
+        value={{ date: "2026-06-10" }}
         settings={{}}
         onCommit={onCommit}
         onCancel={vi.fn()}
         onClear={onClear}
       />,
     );
-    const input = screen.getByLabelText(/date/i);
-    await userEvent.clear(input);
-    await userEvent.type(input, "{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: /clear/i }));
     expect(onClear).toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("cancels on Escape without committing", async () => {
+    const onCommit = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <DateEditor
+        value={{ date: "2026-06-10" }}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={onCancel}
+      />,
+    );
+    await userEvent.keyboard("{Escape}");
+    expect(onCancel).toHaveBeenCalled();
     expect(onCommit).not.toHaveBeenCalled();
   });
 });
