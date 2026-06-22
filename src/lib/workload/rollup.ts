@@ -5,6 +5,7 @@ import type {
   MemberRow,
   OrgWorkloadDefaults,
   WeekBucket,
+  WorkloadActualRow,
   WorkloadGrid,
   WorkloadMember,
   WorkloadRawRow,
@@ -124,7 +125,38 @@ function resolveCapacity(
     : { hoursPerDay: defaults.hoursPerDay, workingDays: defaults.workingDays };
 }
 
-/** Top-level assembler: raw rows → per-member week-bucketed effort vs. capacity. */
+/** Subset rows (raw or actual) to a set of board ids; `null` ⇒ no filter (all).
+ * Pure so workspace/board filtering recomputes the grid client-side with 0
+ * round-trips (AGENTS.md §5). */
+export function filterByBoards<T extends { boardId: string }>(
+  rows: T[],
+  boardIds: Set<string> | null,
+): T[] {
+  if (boardIds === null) return rows;
+  return rows.filter((r) => boardIds.has(r.boardId));
+}
+
+/** Fold day-granular logged actuals into per-user week buckets. */
+export function foldActualRows(
+  actuals: WorkloadActualRow[],
+  weekStartsOn: number,
+): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  for (const a of actuals) {
+    let byWeek = out.get(a.userId);
+    if (!byWeek) {
+      byWeek = new Map<string, number>();
+      out.set(a.userId, byWeek);
+    }
+    const key = weekStartOf(a.day, weekStartsOn);
+    byWeek.set(key, (byWeek.get(key) ?? 0) + a.secs);
+  }
+  return out;
+}
+
+/** Top-level assembler: raw rows → per-member week-bucketed effort vs. capacity.
+ * `actuals` (v2) fold logged time into each cell's `actualSecs`; omit for v1
+ * planned-only behavior. */
 export function buildWorkloadGrid(
   rows: WorkloadRawRow[],
   members: WorkloadMember[],
@@ -134,9 +166,13 @@ export function buildWorkloadGrid(
   weeksBack: number,
   weeksFwd: number,
   weekStartsOn: number,
+  actuals: WorkloadActualRow[] = [],
 ): WorkloadGrid {
   const window = buildWindow(today, weeksBack, weeksFwd, weekStartsOn);
   const windowKeys = new Set(window.map((b) => b.weekKey));
+
+  // logged actuals per userId per weekKey (v2 overlay)
+  const actualByUser = foldActualRows(actuals, weekStartsOn);
 
   // effort per (userId|null) per weekKey
   const effort = new Map<string | null, Map<string, number>>();
@@ -177,12 +213,18 @@ export function buildWorkloadGrid(
     member: WorkloadMember | null,
   ): MemberRow => {
     const eMap = effort.get(userId) ?? new Map<string, number>();
+    const aMap =
+      userId === null
+        ? new Map<string, number>()
+        : (actualByUser.get(userId) ?? new Map<string, number>());
     const cap =
       userId === null ? null : resolveCapacity(userId, caps, defaults);
     let totalEffort = 0;
     let totalCap = 0;
+    let totalActual = 0;
     const cells: BucketCell[] = window.map((b) => {
       const effortSecs = eMap.get(b.weekKey) ?? 0;
+      const actualSecs = aMap.get(b.weekKey) ?? 0;
       const capacitySecs =
         cap === null
           ? 0
@@ -191,10 +233,12 @@ export function buildWorkloadGrid(
             3600;
       totalEffort += effortSecs;
       totalCap += capacitySecs;
+      totalActual += actualSecs;
       return {
         weekKey: b.weekKey,
         effortSecs,
         capacitySecs,
+        actualSecs,
         ratio: capacitySecs > 0 ? effortSecs / capacitySecs : null,
         state: capacityState(effortSecs, capacitySecs),
       };
@@ -205,6 +249,7 @@ export function buildWorkloadGrid(
       cells,
       totalEffortSecs: totalEffort,
       totalCapacitySecs: totalCap,
+      totalActualSecs: totalActual,
     };
   };
 

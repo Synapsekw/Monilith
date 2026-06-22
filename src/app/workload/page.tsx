@@ -11,19 +11,28 @@ export default async function WorkloadPage({
   const [user, sp] = await Promise.all([requireUser(), searchParams]);
 
   // from/to in the URL only changes when paging BEYOND the loaded horizon (rare,
-  // genuine RSC nav for more data). In-window sort/pan is client-side, 0 refetch.
-  const [{ grid, capacities, defaults }, orgAdmin] = await Promise.all([
+  // genuine RSC nav for more data). In-window sort/pan/filter/metric is
+  // client-side over the raw payload, 0 refetch.
+  const [data, orgAdmin] = await Promise.all([
     getWorkloadPageData({ from: sp.from, to: sp.to }),
     isOrgAdmin(),
   ]);
 
   return (
     <WorkloadGrid
-      grid={grid}
+      rawRows={data.rawRows}
+      actuals={data.actuals}
+      members={data.members}
+      capacities={data.capacities}
+      defaults={data.defaults}
+      boards={data.boards}
+      workspaces={data.workspaces}
+      today={data.today}
+      weeksBack={data.weeksBack}
+      weeksFwd={data.weeksFwd}
+      weekStartsOn={data.weekStartsOn}
       currentUserId={user.id}
       isOrgAdmin={orgAdmin}
-      capacities={capacities}
-      defaults={defaults}
     />
   );
 }
