@@ -61,3 +61,9 @@ push. **Fallback:** if your branch already merged current `origin/develop` into 
 branch tip straight to `origin/develop` (a fast-forward containing only your commits), then
 `git worktree remove --force` + `git branch -d` manually. Worth teaching `finish-task.sh` to detect
 divergence and offer this path.
+
+**Resolved 2026-06-22 (commit `4c847de`).** `finish-task.sh` now refreshes develop with
+`-c rebase.autoStash=true pull --rebase origin develop` (replays local unpushed commits onto origin,
+no `--ff-only` abort, dirty `.obsidian/*` auto-stashed) and rebases the task branch onto the fresh
+develop _before_ gating — so the gates run against the integrated state and the merge is conflict-free.
+No more manual fallback. Spec + session: [[2026-06-22-1255-finish-task-auto-rebase]].
