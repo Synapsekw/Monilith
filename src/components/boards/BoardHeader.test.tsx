@@ -3,7 +3,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BoardHeader } from "./BoardHeader";
 import type { ReactElement } from "react";
-import { BoardPresenceProvider } from "@/lib/boards/presence-context";
+import {
+  BoardPresenceProvider,
+  type BoardPresenceContextValue,
+} from "@/lib/boards/presence-context";
 import type { BoardPresence } from "@/lib/boards/use-board-presence";
 
 const renameBoard = vi.fn();
@@ -45,7 +48,7 @@ const views = [
 // BoardHeader renders <BoardPresenceBar />, which reads presence from context and
 // throws without a provider. Wrap every render in a provider; an empty roster
 // makes the bar self-hide, keeping the rename/access assertions unaffected.
-function makePresence(roster: BoardPresence["roster"] = []): BoardPresence {
+function makePresence(roster: BoardPresence["roster"] = []): BoardPresenceContextValue {
   return {
     roster,
     focusMap: new Map(),
@@ -53,12 +56,13 @@ function makePresence(roster: BoardPresence["roster"] = []): BoardPresence {
     selfUserId: "self",
     selfFocusTargetId: null,
     channelStatus: "SUBSCRIBED",
+    flashTargetId: null,
   };
 }
 
 function renderHeader(
   ui: ReactElement,
-  presence: BoardPresence = makePresence(),
+  presence: BoardPresenceContextValue = makePresence(),
 ) {
   return render(
     <BoardPresenceProvider value={presence}>{ui}</BoardPresenceProvider>,

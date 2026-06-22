@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CalendarBoard } from "@/components/boards/CalendarBoard";
-import { BoardPresenceProvider } from "@/lib/boards/presence-context";
-import type { BoardPresence } from "@/lib/boards/use-board-presence";
+import {
+  BoardPresenceProvider,
+  type BoardPresenceContextValue,
+} from "@/lib/boards/presence-context";
 import type { RosterOccupant } from "@/lib/boards/presence-types";
 
 const setCell = vi.fn();
@@ -144,7 +146,7 @@ function occupant(over: Partial<RosterOccupant>): RosterOccupant {
 function presenceValue(
   focusMap: Map<string, RosterOccupant[]>,
   selfUserId = "self",
-): BoardPresence {
+): BoardPresenceContextValue {
   return {
     roster: [],
     focusMap,
@@ -152,10 +154,11 @@ function presenceValue(
     selfUserId,
     selfFocusTargetId: null,
     channelStatus: "SUBSCRIBED",
+    flashTargetId: null,
   };
 }
 
-function renderCalendarWithPresence(presence: BoardPresence) {
+function renderCalendarWithPresence(presence: BoardPresenceContextValue) {
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>

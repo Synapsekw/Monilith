@@ -41,6 +41,7 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { FlashHighlight } from "@/components/boards/presence/FlashHighlight";
 import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
@@ -1850,6 +1851,7 @@ function EditableCell({
           onCancel={() => setEditing(null)}
         />
         <PresenceRing target={target} />
+        <FlashHighlight target={target} />
       </div>
     );
   }
@@ -1870,6 +1872,7 @@ function EditableCell({
     >
       <CellRenderer kind={column.kind} value={value} settings={settings} />
       <PresenceRing target={target} />
+      <FlashHighlight target={target} />
     </div>
   );
 }
