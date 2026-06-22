@@ -4,9 +4,15 @@
 -- Reuses the existing can_read_board() SECURITY DEFINER function so presence
 -- access == data-read access (one security boundary, org-scoped, no cross-tenant).
 --
--- PREREQUISITE (manual, not SQL): Realtime "Allow public access" must be OFF for
--- the project (dashboard → Realtime settings) or private channels are not enforced.
--- Proven by the non-member-denied integration test in this phase.
+-- NO global project setting needed. A channel created with `private: true` is
+-- ALWAYS authorized against these realtime.messages policies, independent of the
+-- "Channel Restrictions / Allow public access" toggle. We deliberately LEAVE that
+-- toggle on "allow public" so the app's existing PUBLIC channels (board:<id>,
+-- notifications:<id>, item:<id> for postgres_changes) keep working untouched —
+-- switching the project to "private only" would break those (they have no policies).
+-- The non-member-denied integration test proves enforcement with the toggle left on.
+-- (A same-named *public* presence:board:<id> channel is a separate channel and never
+-- receives this private channel's traffic, so there is no bypass leak.)
 --
 -- RLS is already enabled on realtime.messages by default — do NOT enable it here.
 -- extension is gated on both 'presence' AND 'broadcast' (supabase-js Presence rides

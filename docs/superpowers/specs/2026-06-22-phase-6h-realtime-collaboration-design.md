@@ -109,9 +109,10 @@ type PresenceState = {
     The topic is `presence:board:<uuid>`, so `split_part(topic, ':', 3)` is the uuid. Guard the
     cast so a malformed topic fails closed (no policy match → denied), e.g. only treat the topic
     when it matches `presence:board:%`.
-  - A short comment notes the prerequisite: Realtime "Allow public access" must be **off** for the
-    project so private channels are actually enforced (project setting, recorded here for
-    traceability — not click-ops schema).
+  - **No project-setting change is required** (research-confirmed): a `private: true` channel is
+    always authorized against these `realtime.messages` policies on its own, independent of the
+    "Allow public access" toggle. Leave that toggle ON — switching to "private only" would break
+    the app's existing PUBLIC channels (`board:`/`notifications:`/`item:`), which have no policies.
 - **Client helper** `src/lib/boards/presence-channel.ts`:
   - `boardPresenceTopic(boardId: string): string` → `presence:board:${boardId}`.
   - `createBoardPresenceChannel(boardId)` → builds the private channel from the browser client
@@ -229,13 +230,13 @@ is on a board they cannot see — a cross-tenant leak. So:
 - The channel is **private** (`config: { private: true }`). Realtime evaluates RLS policies on
   `realtime.messages` at connect/join time using the client's auth JWT and the channel topic.
 - Two policies (SELECT to receive, INSERT to publish), both:
-  `extension = 'presence'` **AND** `public.can_read_board((split_part(realtime.topic(), ':', 3))::uuid)`.
+  `extension in ('broadcast','presence')` **AND** `public.can_read_board((split_part(realtime.topic(), ':', 3))::uuid)` (both wrapped in `(select …)` for initplan caching).
 - `can_read_board` is the same SECURITY DEFINER function the data tables already trust (owner or
   `board_members` row). This keeps presence access **identical** to data-read access — one
   security boundary, org-scoped, no cross-tenant. A non-member's join is **denied** at the socket.
-- Malformed topics fail closed (no policy match → no access). "Allow public access" must be
-  **disabled** on the project's Realtime settings for private enforcement to take effect (noted in
-  the migration comment and the plan's manual steps).
+- Malformed topics fail closed (no policy match → no access). **No project-setting change is
+  needed**: the `private: true` channel is enforced by these policies on its own; the "Allow public
+  access" toggle is left ON so existing public channels keep working (research-confirmed).
 
 ## Data flow
 
@@ -296,9 +297,11 @@ is on a board they cannot see — a cross-tenant leak. So:
 
 ## Risks
 
-- **Project setting dependency.** Private enforcement requires Realtime "Allow public access" =
-  off. If left on, the policies exist but the channel isn't actually private. → Call this out as
-  an explicit manual step + verify via the non-member-denied integration test.
+- **No project-setting dependency (resolved).** Research confirmed a `private: true` channel is
+  authorized by the `realtime.messages` policies regardless of the "Allow public access" toggle, so
+  there is NO manual setting and NO regression to existing public channels. Residual: the toggle, if
+  ever switched to "private only" later, WOULD break the existing public channels until they too are
+  made private + policied — so leave it on. Enforcement verified by the non-member-denied test.
 - **Realtime RLS latency.** Per the docs, RLS on `realtime.messages` adds connect-time cost.
   `can_read_board` is `stable` + indexed on `board_members`/`boards`, so the predicate is cheap;
   still, keep the policy minimal (single function call) — covered.

@@ -19,7 +19,7 @@
   - CLI bins aren't on PATH inside the worktree — `export PATH="$(git -C . rev-parse --show-toplevel)/../../node_modules/.bin:$PATH"` or run via `pnpm`.
   - `*.integration.test.ts` **silently skip** without `.env.local` — symlink it from the main checkout before running live tests: `ln -s ../../../.env.local .env.local` (verify the relative depth).
   - `next build` cannot run from the worktree — run `pnpm build` in the **main checkout** before merge.
-- **Manual project setting (record now, verify in Task 8):** Supabase Realtime "Allow public access" must be **OFF** for private-channel RLS to be enforced. The non-member-denied integration test (Task 8) is the gate that proves it.
+- **No project setting change (RESOLVED by research).** A `private: true` channel is ALWAYS authorized against the `realtime.messages` policies on its own merits, independent of the "Channel Restrictions / Allow public access" toggle. **Leave the toggle on "allow public"** — switching to "private only" would break the app's existing PUBLIC channels (`board:`/`notifications:`/`item:` postgres_changes), which have no policies. The non-member-denied integration test (Task 10) proves enforcement with the toggle left on. (A same-named *public* `presence:board:` channel is a separate channel and never receives the private channel's traffic, so there is no bypass leak.)
 
 ---
 
@@ -411,9 +411,10 @@ git commit -m "feat(presence): pure reducer — roster dedup, focus map, flash d
 -- Reuses the existing can_read_board() SECURITY DEFINER function so presence
 -- access == data-read access (one security boundary, org-scoped, no cross-tenant).
 --
--- PREREQUISITE: Realtime "Allow public access" must be OFF for the project, or
--- private channels are not actually enforced. Proven by the non-member-denied
--- integration test in this phase.
+-- NO global setting change needed: a `private: true` channel is always authorized
+-- against these policies regardless of the "Allow public access" toggle. Leave that
+-- toggle ON so the app's existing PUBLIC channels keep working ("private only" would
+-- break them). Proven by the non-member-denied integration test in this phase.
 
 -- RLS is already enabled on realtime.messages by default — do NOT `enable rls` here
 -- (and the migration role may not own the table). Just add policies.
@@ -1120,7 +1121,7 @@ git commit -m "test(presence): live presence sync + non-member RLS-denied gate"
 
 - [ ] **Step 1:** In the worktree: `pnpm typecheck && pnpm lint && pnpm test`. Expected: all green.
 - [ ] **Step 2:** In the **main checkout** (build can't run from worktree): `pnpm build`. Expected: clean production build.
-- [ ] **Step 3:** Verify Realtime "Allow public access" is OFF (Supabase dashboard / project settings) — the non-member-denied test must pass with it off.
+- [ ] **Step 3:** No dashboard change. Leave Realtime "Allow public access" ON (default) — the private channel is enforced by its RLS policies regardless; the non-member-denied test (Task 10) proves it. (Do NOT switch to "private only" — it would break existing public channels.)
 - [ ] **Step 4:** Two-browser manual acceptance (see "How to test" below).
 - [ ] **Step 5:** `scripts/finish-task.sh` from inside the worktree (merges to `develop`, pushes, removes worktree + branch). Then `/wrapup`.
 
@@ -1166,7 +1167,7 @@ git commit -m "test(presence): live presence sync + non-member RLS-denied gate"
 
 - **Spec coverage:** U1→T4, U2→T1+T2+T3, U3→T5, U4→T6, U5→T7+T8a–d, U6→T9, U7→T10. All spec units mapped. ✅
 - **Type consistency:** `PresenceState`/`PresenceFocus`/`RosterOccupant` defined in T2, consumed unchanged in T3/T5/T6/T9. `presenceTarget` (T2) used in T8. `flashDecision` signature `{incomingTargetId, focusedTargetId, valueChanged}` consistent T3↔T9. ✅
-- **Open risks to confirm at build time:** (1) ~~`extension` value~~ RESOLVED in pre-flight — gate on `extension in ('broadcast','presence')`, call `await supabase.realtime.setAuth()` before subscribe, and the manual project setting "Allow public access" must be OFF (verified by the Task 10 non-member-denied test); (2) the repo's toast primitive (the plan assumes `sonner` — swap to the actual one used in the codebase); (3) exact item-panel field component paths for T8d.
+- **Open risks to confirm at build time:** (1) ~~`extension` value / public-access toggle~~ RESOLVED by research — gate on `extension in ('broadcast','presence')`, call `await supabase.realtime.setAuth()` before subscribe, and **no project-setting change** (the private channel is enforced by RLS on its own; leave "allow public" ON so existing public channels keep working); verified by the Task 10 non-member-denied test; (2) ~~toast primitive~~ RESOLVED — repo has no toast lib, shipped as flash + self-rendered ephemeral message (no `sonner`); (3) ~~item-panel field paths~~ RESOLVED — T8d dropped (no field editors exist yet).
 
 ## How to test (manual, two browsers)
 
