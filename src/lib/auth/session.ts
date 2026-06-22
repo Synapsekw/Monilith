@@ -7,28 +7,54 @@ import type { Tables } from "@/types/database.types";
 export type Organization = Tables<"organizations">;
 
 /**
- * Returns the authenticated Supabase user, or null when unauthenticated.
- * Wrapped in React `cache()` so the layout and page in one request share a
- * single `auth.getUser()` round-trip instead of two.
+ * The session identity derived from the verified access-token claims — the
+ * subset of Supabase's `User` carried in the JWT. Everything the app reads off
+ * the session (id, email, the two metadata bags) lives here; no consumer needs
+ * the server-only `User` fields (created_at, identities, …).
  */
-export const getUser = cache(async (): Promise<User | null> => {
+export type SessionUser = Pick<
+  User,
+  "id" | "email" | "user_metadata" | "app_metadata"
+>;
+
+/**
+ * Returns the authenticated user derived from the access-token claims, or null
+ * when unauthenticated.
+ *
+ * Uses `getClaims()`, NOT `getUser()`: this project has asymmetric (ES256) JWT
+ * signing keys enabled, so the token is verified **locally** against the cached
+ * JWKS — no per-request round-trip to the Supabase auth server (which
+ * `getUser()` made on every call). Token *refresh* still happens once per
+ * request in `proxy.ts` (which keeps `getUser()` precisely because it refreshes
+ * expiring sessions); by the time an RSC renders, the cookie is fresh, so a
+ * local verify here is both correct and ~1 network round-trip cheaper per page.
+ *
+ * Wrapped in React `cache()` so the layout and page in one request share a
+ * single verification.
+ */
+export const getUser = cache(async (): Promise<SessionUser | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data) return null;
+  const { claims } = data;
+  return {
+    id: claims.sub,
+    email: claims.email,
+    user_metadata: claims.user_metadata ?? {},
+    app_metadata: claims.app_metadata ?? {},
+  };
 });
 
 /** Redirect a flagged user to the forced password-change screen.
  * The flag is set by the platform admin via app_metadata.must_change_password. */
-export function enforcePasswordChange(user: User): void {
+export function enforcePasswordChange(user: SessionUser): void {
   if (user.app_metadata?.must_change_password === true) {
     redirect("/change-password");
   }
 }
 
 /** Returns the authenticated user, redirecting to /login when absent. */
-export async function requireUser(): Promise<User> {
+export async function requireUser(): Promise<SessionUser> {
   const user = await getUser();
   // redirect() throws — keep it outside any try/catch.
   if (!user) redirect("/login");
