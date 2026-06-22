@@ -5,9 +5,17 @@
 # Completes the current task worktree. Run it from INSIDE a `task/<name>`
 # worktree (the folder start-task.sh created). It:
 #   1. verifies the worktree is committed and clean
-#   2. runs typecheck / lint / test / build
-#   3. merges task/<name> directly into develop and pushes
-#   4. removes the worktree and deletes the branch
+#   2. refreshes develop and rebases task/<name> onto it (auto-integration)
+#   3. runs typecheck / lint / test / build AGAINST the integrated state
+#   4. merges task/<name> directly into develop and pushes
+#   5. removes the worktree and deletes the branch
+#
+# Why integrate before gating: develop moves while you work (other sessions
+# merge; the main checkout itself gains doc/vault commits). Gating the task tip
+# in isolation can pass while the *merged* result is red. So we rebase onto the
+# latest develop FIRST, then gate, so the checks see exactly what lands. This
+# also replaces the brittle `pull --ff-only` (which aborts the moment local
+# develop has diverged from origin) with `pull --rebase`.
 #
 # A task is not "done" until this completes successfully.
 
@@ -32,24 +40,57 @@ fi
 WT="$(git rev-parse --show-toplevel)"
 MAIN="$(cd "$(dirname "$(git rev-parse --git-common-dir)")" && pwd)"
 
-echo "→ running checks (typecheck / lint / test / build)…"
+# 1. Refresh the integration target. `pull --rebase` covers every case in one go:
+#    local behind → fast-forward · local ahead (unpushed vault/doc commits) → no-op ·
+#    local diverged → replays local commits onto origin (the gotcha-31 bonus trap).
+#    autoStash protects the persistently-dirty .obsidian/* tree in the main checkout.
+echo "→ refreshing develop (fetch + rebase local onto origin)…"
+git -C "$MAIN" fetch origin develop
+git -C "$MAIN" checkout develop
+if ! git -C "$MAIN" -c rebase.autoStash=true pull --rebase origin develop; then
+  echo "error: local develop in the main checkout conflicts with origin/develop." >&2
+  echo "       resolve it in $MAIN (git status), then re-run finish-task.sh." >&2
+  exit 1
+fi
+
+# 2. Rebase the task branch onto the fresh develop, IN THE WORKTREE, so any
+#    conflicts surface here and the gates below see the integrated state.
+echo "→ rebasing $BRANCH onto the latest develop…"
+if ! git rebase develop; then
+  CONFLICTS="$(git diff --name-only --diff-filter=U | tr '\n' ' ')"
+  git rebase --abort
+  echo "" >&2
+  echo "error: develop moved and auto-rebase hit conflicts: ${CONFLICTS:-<see above>}" >&2
+  echo "       the rebase was aborted — your worktree is clean and unchanged." >&2
+  echo "       resolve manually:  git rebase develop  (fix conflicts, git rebase --continue)" >&2
+  echo "       then re-run finish-task.sh." >&2
+  exit 1
+fi
+
+# 3. Gates — now against the integrated (rebased) state.
+echo "→ running checks (typecheck / lint / test / build) against integrated state…"
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
 
+# 4. Merge + push. The task is already rebased onto develop, so --no-ff is
+#    conflict-free and keeps the merge-commit convention. Retry the push once if
+#    origin advanced again in the gap.
 echo "→ merging $BRANCH into develop…"
-git -C "$MAIN" checkout develop
-git -C "$MAIN" pull --ff-only origin develop
 git -C "$MAIN" merge --no-ff "$BRANCH" -m "Merge $BRANCH into develop"
-git -C "$MAIN" push origin develop
+if ! git -C "$MAIN" push origin develop; then
+  echo "→ push rejected (origin moved) — re-syncing develop and retrying once…"
+  git -C "$MAIN" -c rebase.autoStash=true pull --rebase origin develop
+  git -C "$MAIN" push origin develop
+fi
 
 echo "→ cleaning up worktree + branch…"
 git -C "$MAIN" worktree remove "$WT"
 git -C "$MAIN" branch -d "$BRANCH"
 
 echo ""
-echo "✓ done: $BRANCH merged into develop, pushed, worktree removed, branch deleted."
+echo "✓ done: $BRANCH rebased onto develop, gated, merged, pushed, worktree removed, branch deleted."
 echo "  your shell is in a folder that no longer exists — cd \"$MAIN\""
 echo ""
 echo "  NEXT (closure): give the user a numbered 'How to test this' walkthrough"

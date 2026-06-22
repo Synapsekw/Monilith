@@ -94,9 +94,14 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
    - **A task is NOT complete until it is merged into `develop` AND cleaned up.** "Done" =
      `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass → the `task/<name>` branch is
      **merged directly into `develop`**, pushed → **the worktree is removed and the branch deleted**.
-     Run **`scripts/finish-task.sh`** from inside the worktree; it does all of this. An agent that
-     leaves a `task/*` branch un-merged or a worktree lying around has **not finished its job and
-     must say so explicitly** — never report a task as complete with the branch still open.
+     Run **`scripts/finish-task.sh`** from inside the worktree; it does all of this. **It now
+     auto-integrates**: before gating it fetches and rebases your `task/<name>` onto the latest
+     `develop` (so the gates run against the _merged_ state, not your branch in isolation), and uses
+     `pull --rebase` so a diverged main checkout no longer breaks the finish. You do **not** hand-rebase
+     anymore — the only time it stops is a real rebase conflict, where it aborts cleanly and tells you
+     to resolve `git rebase develop` and re-run. An agent that leaves a `task/*` branch un-merged or a
+     worktree lying around has **not finished its job and must say so explicitly** — never report a
+     task as complete with the branch still open.
    - **After a successful merge, hand the user a "How to test this" walkthrough.** The very last
      step of closure — once `finish-task.sh` has merged to `develop` — is a **numbered, concrete
      manual-test guide for the user**: where to go (URL/page), what to click/enter, and the expected
