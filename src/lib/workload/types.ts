@@ -62,8 +62,15 @@ export interface WorkloadWorkspace {
   name: string;
 }
 
-/** Which value the grid foregrounds — planned effort, logged actuals, or both. */
-export type WorkloadMetric = "planned" | "actual" | "both";
+/** Which value the grid foregrounds — planned effort, logged actuals, both, or
+ * the planned-vs-actual delta. */
+export type WorkloadMetric = "planned" | "actual" | "both" | "variance";
+
+/** One day's logged actuals inside a week, for the drill-down popover. */
+export interface DayActual {
+  day: string; // ISO date
+  secs: number; // total logged that day (across boards, after any board filter)
+}
 
 export type CapacityState = "under" | "at" | "over" | "none";
 

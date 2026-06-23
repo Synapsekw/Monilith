@@ -1,6 +1,7 @@
 import type {
   BucketCell,
   CapacityState,
+  DayActual,
   MemberCapacity,
   MemberRow,
   OrgWorkloadDefaults,
@@ -112,6 +113,75 @@ export function capacityState(
   if (effortSecs > capacitySecs) return "over";
   if (effortSecs === capacitySecs) return "at";
   return "under";
+}
+
+/** Whole-hour readout for a dense grid cell (e.g. "8h"). */
+export function hours(secs: number): string {
+  return `${Math.round(secs / 3600)}h`;
+}
+
+/** Signed whole-hour readout for a variance delta (e.g. "+3h" / "−2h" / "0h"). */
+export function signedHours(secs: number): string {
+  const h = Math.round(secs / 3600);
+  return `${h > 0 ? "+" : ""}${h}h`;
+}
+
+/** Signed whole-percent readout for a variance fraction; em dash when null. */
+export function signedPct(pct: number | null): string {
+  if (pct === null) return "—";
+  const v = Math.round(pct * 100);
+  return `${v > 0 ? "+" : ""}${v}%`;
+}
+
+/** ±band (fraction of plan) within which variance reads as neutral "on plan". */
+const VARIANCE_BAND = 0.1;
+
+/** Signed planned-vs-actual delta in seconds (+ = over plan). */
+export function varianceSecs(actualSecs: number, plannedSecs: number): number {
+  return actualSecs - plannedSecs;
+}
+
+/** Signed variance as a fraction of plan; null when there's no planned baseline. */
+export function variancePct(
+  actualSecs: number,
+  plannedSecs: number,
+): number | null {
+  if (plannedSecs <= 0) return null;
+  return (actualSecs - plannedSecs) / plannedSecs;
+}
+
+/** Tri-state for variance coloring: over / under / on (within band) / none. */
+export function varianceState(
+  actualSecs: number,
+  plannedSecs: number,
+): "over" | "under" | "on" | "none" {
+  if (plannedSecs <= 0) return actualSecs > 0 ? "over" : "none";
+  const pct = (actualSecs - plannedSecs) / plannedSecs;
+  if (pct > VARIANCE_BAND) return "over";
+  if (pct < -VARIANCE_BAND) return "under";
+  return "on";
+}
+
+/** The day-by-day actuals behind one (member, week) cell, aggregated across
+ * boards (after the active board filter), sorted by day. Pure filter over the
+ * already-loaded actuals array → 0 round-trips (spec §5). */
+export function actualsForCell(
+  actuals: WorkloadActualRow[],
+  userId: string,
+  weekKey: string,
+  weekStartsOn: number,
+  boardIds: Set<string> | null,
+): DayActual[] {
+  const byDay = new Map<string, number>();
+  for (const a of actuals) {
+    if (a.userId !== userId) continue;
+    if (boardIds !== null && !boardIds.has(a.boardId)) continue;
+    if (weekStartOf(a.day, weekStartsOn) !== weekKey) continue;
+    byDay.set(a.day, (byDay.get(a.day) ?? 0) + a.secs);
+  }
+  return [...byDay.entries()]
+    .map(([day, secs]) => ({ day, secs }))
+    .sort((x, y) => x.day.localeCompare(y.day));
 }
 
 function resolveCapacity(

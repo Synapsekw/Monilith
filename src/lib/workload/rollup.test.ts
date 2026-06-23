@@ -7,6 +7,12 @@ import {
   buildWorkloadGrid,
   filterByBoards,
   foldActualRows,
+  varianceSecs,
+  variancePct,
+  varianceState,
+  actualsForCell,
+  signedHours,
+  signedPct,
 } from "@/lib/workload/rollup";
 import type {
   MemberCapacity,
@@ -391,5 +397,78 @@ describe("foldActualRows", () => {
     expect(folded.get("u1")!.get("2026-06-01")).toBe(3 * H);
     expect(folded.get("u1")!.get("2026-06-08")).toBe(4 * H);
     expect(folded.get("u2")!.get("2026-06-01")).toBe(5 * H);
+  });
+});
+
+describe("varianceSecs", () => {
+  it("is signed: positive when over plan, negative when under", () => {
+    expect(varianceSecs(10 * H, 6 * H)).toBe(4 * H); // logged 10h vs planned 6h
+    expect(varianceSecs(4 * H, 6 * H)).toBe(-2 * H);
+    expect(varianceSecs(6 * H, 6 * H)).toBe(0);
+  });
+});
+
+describe("variancePct", () => {
+  it("is the signed fraction of plan", () => {
+    expect(variancePct(9 * H, 6 * H)).toBeCloseTo(0.5);
+    expect(variancePct(3 * H, 6 * H)).toBeCloseTo(-0.5);
+  });
+  it("is null when there is no planned baseline (no divide-by-zero)", () => {
+    expect(variancePct(4 * H, 0)).toBeNull();
+  });
+});
+
+describe("varianceState", () => {
+  it("reads neutral 'on' within the ±10% tolerance band", () => {
+    expect(varianceState(6 * H, 6 * H)).toBe("on");
+    expect(varianceState(6.5 * H, 6 * H)).toBe("on"); // +8.3%
+  });
+  it("reads over / under beyond the band", () => {
+    expect(varianceState(9 * H, 6 * H)).toBe("over");
+    expect(varianceState(3 * H, 6 * H)).toBe("under");
+  });
+  it("treats actuals against zero plan as 'over', and zero/zero as 'none'", () => {
+    expect(varianceState(4 * H, 0)).toBe("over");
+    expect(varianceState(0, 0)).toBe("none");
+  });
+});
+
+describe("actualsForCell", () => {
+  const rows: WorkloadActualRow[] = [
+    { userId: "u1", boardId: "b1", day: "2026-06-01", secs: 2 * H }, // Mon, week of Jun 1
+    { userId: "u1", boardId: "b2", day: "2026-06-01", secs: 1 * H }, // same day, other board
+    { userId: "u1", boardId: "b1", day: "2026-06-05", secs: 3 * H }, // Fri, same week
+    { userId: "u1", boardId: "b1", day: "2026-06-08", secs: 9 * H }, // next Mon, different week
+    { userId: "u2", boardId: "b1", day: "2026-06-01", secs: 5 * H }, // different user
+  ];
+  it("returns only the target user's in-week days, aggregated across boards, sorted", () => {
+    const out = actualsForCell(rows, "u1", "2026-06-01", 1, null);
+    expect(out).toEqual([
+      { day: "2026-06-01", secs: 3 * H },
+      { day: "2026-06-05", secs: 3 * H },
+    ]);
+  });
+  it("respects the active board filter", () => {
+    const out = actualsForCell(rows, "u1", "2026-06-01", 1, new Set(["b1"]));
+    expect(out).toEqual([
+      { day: "2026-06-01", secs: 2 * H },
+      { day: "2026-06-05", secs: 3 * H },
+    ]);
+  });
+  it("is empty when the user has no actuals in that week", () => {
+    expect(actualsForCell(rows, "u1", "2026-06-15", 1, null)).toEqual([]);
+  });
+});
+
+describe("variance formatters", () => {
+  it("signedHours prefixes a + only when positive", () => {
+    expect(signedHours(3 * H)).toBe("+3h");
+    expect(signedHours(-2 * H)).toBe("-2h");
+    expect(signedHours(0)).toBe("0h");
+  });
+  it("signedPct renders a signed percent, or an em dash when null", () => {
+    expect(signedPct(0.5)).toBe("+50%");
+    expect(signedPct(-0.5)).toBe("-50%");
+    expect(signedPct(null)).toBe("—");
   });
 });

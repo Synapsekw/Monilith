@@ -38,4 +38,36 @@ describe("CapacityCell", () => {
       "none",
     );
   });
+
+  it("variance metric shows the signed delta, pct, and an over state", () => {
+    render(
+      <CapacityCell
+        effortSecs={6 * 3600}
+        capacitySecs={8 * 3600}
+        actualSecs={9 * 3600}
+        state="under"
+        metric="variance"
+      />,
+    );
+    const cell = screen.getByTestId("capacity-cell");
+    expect(cell).toHaveAttribute("data-state", "over"); // logged 9h vs planned 6h
+    expect(cell).toHaveTextContent("+3h");
+    expect(cell).toHaveTextContent("+50%");
+  });
+
+  it("variance metric renders an em dash for pct when there is no plan", () => {
+    render(
+      <CapacityCell
+        effortSecs={0}
+        capacitySecs={8 * 3600}
+        actualSecs={4 * 3600}
+        state="none"
+        metric="variance"
+      />,
+    );
+    const cell = screen.getByTestId("capacity-cell");
+    expect(cell).toHaveAttribute("data-state", "over");
+    expect(cell).toHaveTextContent("+4h");
+    expect(cell).toHaveTextContent("—");
+  });
 });
