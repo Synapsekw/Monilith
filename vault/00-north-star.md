@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-1012
+last-updated: 2026-06-23-1016
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -49,7 +49,7 @@ advisors + regenerate types before moving on.**
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c done + Workload analytics v3 (variance + per-day drill-down) shipped · Phase 9 (Hardening) in progress — 9.1 auth fast-path + 9.2 streaming shell shipped, 9.3/9.4 next.
 - **Branch:** `develop == origin/develop` at `54b5b68`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell + Workload analytics v3 not yet promoted).
-- **In flight:** two scope-to-plan gap worktrees from the 2026-06-23 `/whats-next` triage — `task/kanban-member-names` + `task/auth-hardening-9x` (specs written + approved, builds pending). _(9.2 streaming shell and Workload v2 analytics both merged.)_
+- **In flight:** two scope-to-plan gap worktrees from the 2026-06-23 `/whats-next` triage — `task/kanban-member-names` + `task/auth-hardening-9x` (specs written + approved, builds pending). _(9.2 streaming shell merged — [[2026-06-23-1016-phase-9-2-streaming-shell-build]]; Workload v2 analytics merged.)_
 - **Next:** 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
 - **Owed:** migration-ledger reconciliation — `20260622170000_workload_actuals` is live on cloud but was applied via the SQL editor (not in the ledger) → `supabase db push` needs a user-run `migration repair` ([[migration-apply-blocked-by-classifier]]).
 
