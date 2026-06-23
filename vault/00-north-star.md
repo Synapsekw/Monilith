@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-1953
+last-updated: 2026-06-23-2017
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -48,8 +48,8 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c done + Workload analytics v3 (variance + per-day drill-down) shipped · Phase 9 (Hardening) in progress — 9.1 auth fast-path + 9.2 streaming shell shipped, 9.3/9.4 next.
-- **Branch:** `develop == origin/develop` at `5364f3b`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, Feedback bug/feature-request reporting, **Dashboards v2 polish** — none promoted yet).
-- **In flight:** none — **Dashboards Polish (v2)** (9 chart types + `dashboard_series` aggregation + unified edit drawer + reskin) merged ([[2026-06-23-1953-dashboards-polish-v2]]); Feedback reporting merged ([[2026-06-23-1943-feedback-bugs-feature-requests]]); sidebar board drag-reorder merged ([[2026-06-23-1546-sidebar-board-reorder]]).
+- **Branch:** `develop == origin/develop` at `f0a3850`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, Feedback bug/feature-request reporting, Dashboards v2 polish, **percent (progress) column** — none promoted yet).
+- **In flight:** none — **percent (progress) board column** (fill bar + subitem-average rollup + enum migration) merged ([[2026-06-23-2017-percent-progress-board-column]]); Dashboards Polish v2 merged ([[2026-06-23-1953-dashboards-polish-v2]]); Feedback reporting merged ([[2026-06-23-1943-feedback-bugs-feature-requests]]).
 - **Next:** run `/promote` to ship the `develop` bundle → then 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
 - **Owed:** production promotion of the `develop` bundle (run `/promote`). _(Migration ledger reconciled 2026-06-23 — 5 live migrations marked applied + 6 throwaway orphans reverted; `db push --dry-run` clean. [[migration-apply-blocked-by-classifier]].)_
 
