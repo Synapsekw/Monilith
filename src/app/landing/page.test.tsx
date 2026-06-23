@@ -10,7 +10,9 @@ vi.mock("@/components/landing/monolith-hero", () => ({
   ),
 }));
 
-import LandingPage from "./page";
+// The page is a sync Suspense wrapper; the cookie-bound logic lives in the inner
+// async server component, which the project pattern renders by awaiting it.
+import { LandingInner } from "./page";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -19,13 +21,13 @@ beforeEach(() => {
 describe("LandingPage (/landing splash)", () => {
   it("renders the logged-out hero for visitors", async () => {
     getUser.mockResolvedValue(null);
-    render(await LandingPage());
+    render(await LandingInner());
     expect(screen.getByText("monolith:out")).toBeInTheDocument();
   });
 
   it("renders the signed-in hero for authenticated viewers", async () => {
     getUser.mockResolvedValue({ id: "u1" });
-    render(await LandingPage());
+    render(await LandingInner());
     expect(screen.getByText("monolith:in")).toBeInTheDocument();
   });
 });
