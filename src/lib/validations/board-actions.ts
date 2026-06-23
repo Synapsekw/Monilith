@@ -13,6 +13,10 @@ export const createBoardFromTemplateSchema = z.object({
   name,
 });
 export const renameBoardSchema = z.object({ boardId: uuid, name });
+export const reorderBoardSchema = z.object({
+  boardId: uuid,
+  position: z.number().finite(),
+});
 export const deleteBoardSchema = z.object({ boardId: uuid });
 export const duplicateBoardSchema = z.object({ boardId: uuid });
 export const createGroupSchema = z.object({ boardId: uuid, name });
