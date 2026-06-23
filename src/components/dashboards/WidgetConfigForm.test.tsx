@@ -48,4 +48,37 @@ describe("WidgetConfigForm", () => {
       }),
     );
   });
+
+  it("auto-selects the first number column when switching the measure to Sum", () => {
+    const onChange = vi.fn();
+    render(
+      <WidgetConfigForm boards={boards} value={draft()} onChange={onChange} />,
+    );
+    fireEvent.change(screen.getByLabelText("Measure"), {
+      target: { value: "sum" },
+    });
+    // Without this, the chart is saved with no valueColumnId and the server
+    // rejects it ("Sum and average need a numbers column."). The form must
+    // never produce an unsavable measure.
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          measure: { agg: "sum", valueColumnId: "n1" },
+        }),
+      }),
+    );
+  });
+
+  it("offers only Count when the board has no number columns", () => {
+    const noNumbers: BoardOption[] = [{ ...boards[0], numbersColumns: [] }];
+    render(
+      <WidgetConfigForm
+        boards={noNumbers}
+        value={draft()}
+        onChange={vi.fn()}
+      />,
+    );
+    const measure = screen.getByLabelText("Measure") as HTMLSelectElement;
+    expect(Array.from(measure.options).map((o) => o.value)).toEqual(["count"]);
+  });
 });
