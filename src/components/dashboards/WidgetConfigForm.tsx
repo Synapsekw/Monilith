@@ -319,36 +319,62 @@ function MeasureFields({
     agg: string;
     valueColumnId?: string;
   };
+  const numbers = board?.numbersColumns ?? [];
+  const hasNumbers = numbers.length > 0;
+  // Sum/Average are impossible without a number column — only offer them when
+  // one exists, and coerce the display to Count otherwise so the select never
+  // shows a value it can't satisfy.
+  const agg = hasNumbers ? measure.agg : "count";
   return (
     <>
       <label className="text-sm">
         Measure
         <select
           className={selectClass}
-          value={measure.agg}
-          onChange={(e) =>
-            patchConfig({ measure: { ...measure, agg: e.target.value } })
-          }
+          value={agg}
+          onChange={(e) => {
+            const next = e.target.value;
+            // Switching to sum/avg auto-selects the first number column so the
+            // measure is always savable — the server rejects sum/avg with no
+            // valueColumnId ("Sum and average need a numbers column.").
+            patchConfig({
+              measure:
+                next === "count"
+                  ? { agg: "count" }
+                  : {
+                      agg: next,
+                      valueColumnId: measure.valueColumnId ?? numbers[0]?.id,
+                    },
+            });
+          }}
         >
           <option value="count">Count of items</option>
-          <option value="sum">Sum of a number column</option>
-          <option value="avg">Average of a number column</option>
+          {hasNumbers ? (
+            <>
+              <option value="sum">Sum of a number column</option>
+              <option value="avg">Average of a number column</option>
+            </>
+          ) : null}
         </select>
       </label>
-      {measure.agg !== "count" ? (
+      {!hasNumbers ? (
+        <p className="text-muted-foreground text-xs">
+          Add a Number column to this board to use Sum or Average.
+        </p>
+      ) : null}
+      {hasNumbers && agg !== "count" ? (
         <label className="text-sm">
           Number column
           <select
             className={selectClass}
-            value={measure.valueColumnId ?? ""}
+            value={measure.valueColumnId ?? numbers[0]?.id ?? ""}
             onChange={(e) =>
               patchConfig({
                 measure: { ...measure, valueColumnId: e.target.value },
               })
             }
           >
-            <option value="">Select…</option>
-            {(board?.numbersColumns ?? []).map((c) => (
+            {numbers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -369,7 +395,9 @@ function NumberFields({
   cfg: Record<string, unknown>;
   patchConfig: (n: Record<string, unknown>) => void;
 }) {
-  const agg = (cfg.agg as string) ?? "count";
+  const numbers = board?.numbersColumns ?? [];
+  const hasNumbers = numbers.length > 0;
+  const agg = hasNumbers ? ((cfg.agg as string) ?? "count") : "count";
   const display = (cfg.display as string) ?? "plain";
   return (
     <>
@@ -378,23 +406,44 @@ function NumberFields({
         <select
           className={selectClass}
           value={agg}
-          onChange={(e) => patchConfig({ agg: e.target.value })}
+          onChange={(e) => {
+            const next = e.target.value;
+            // Auto-select the first number column for sum/avg so the metric is
+            // always savable (server rejects sum/avg without a numbers column).
+            patchConfig(
+              next === "count"
+                ? { agg: "count" }
+                : {
+                    agg: next,
+                    valueColumnId:
+                      (cfg.valueColumnId as string) ?? numbers[0]?.id,
+                  },
+            );
+          }}
         >
           <option value="count">Count of items</option>
-          <option value="sum">Sum of a number column</option>
-          <option value="avg">Average of a number column</option>
+          {hasNumbers ? (
+            <>
+              <option value="sum">Sum of a number column</option>
+              <option value="avg">Average of a number column</option>
+            </>
+          ) : null}
         </select>
       </label>
-      {agg !== "count" ? (
+      {!hasNumbers ? (
+        <p className="text-muted-foreground text-xs">
+          Add a Number column to this board to use Sum or Average.
+        </p>
+      ) : null}
+      {hasNumbers && agg !== "count" ? (
         <label className="text-sm">
           Number column
           <select
             className={selectClass}
-            value={(cfg.valueColumnId as string) ?? ""}
+            value={(cfg.valueColumnId as string) ?? numbers[0]?.id ?? ""}
             onChange={(e) => patchConfig({ valueColumnId: e.target.value })}
           >
-            <option value="">Select…</option>
-            {(board?.numbersColumns ?? []).map((c) => (
+            {numbers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
