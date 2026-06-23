@@ -11,6 +11,8 @@ import {
   variancePct,
   varianceState,
   actualsForCell,
+  signedHours,
+  signedPct,
 } from "@/lib/workload/rollup";
 import type {
   MemberCapacity,
@@ -455,5 +457,18 @@ describe("actualsForCell", () => {
   });
   it("is empty when the user has no actuals in that week", () => {
     expect(actualsForCell(rows, "u1", "2026-06-15", 1, null)).toEqual([]);
+  });
+});
+
+describe("variance formatters", () => {
+  it("signedHours prefixes a + only when positive", () => {
+    expect(signedHours(3 * H)).toBe("+3h");
+    expect(signedHours(-2 * H)).toBe("-2h");
+    expect(signedHours(0)).toBe("0h");
+  });
+  it("signedPct renders a signed percent, or an em dash when null", () => {
+    expect(signedPct(0.5)).toBe("+50%");
+    expect(signedPct(-0.5)).toBe("-50%");
+    expect(signedPct(null)).toBe("—");
   });
 });

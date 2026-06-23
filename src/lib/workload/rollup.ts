@@ -115,6 +115,24 @@ export function capacityState(
   return "under";
 }
 
+/** Whole-hour readout for a dense grid cell (e.g. "8h"). */
+export function hours(secs: number): string {
+  return `${Math.round(secs / 3600)}h`;
+}
+
+/** Signed whole-hour readout for a variance delta (e.g. "+3h" / "−2h" / "0h"). */
+export function signedHours(secs: number): string {
+  const h = Math.round(secs / 3600);
+  return `${h > 0 ? "+" : ""}${h}h`;
+}
+
+/** Signed whole-percent readout for a variance fraction; em dash when null. */
+export function signedPct(pct: number | null): string {
+  if (pct === null) return "—";
+  const v = Math.round(pct * 100);
+  return `${v > 0 ? "+" : ""}${v}%`;
+}
+
 /** ±band (fraction of plan) within which variance reads as neutral "on plan". */
 const VARIANCE_BAND = 0.1;
 
