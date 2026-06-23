@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth/session";
 import { isPlatformAdmin } from "@/lib/platform/guard";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { FeedbackButton } from "@/components/feedback/FeedbackButton";
 import { UserMenu } from "@/components/shell/user-menu";
 
 /**
@@ -19,6 +20,7 @@ export async function HeaderUserData() {
   return (
     <>
       <NotificationsBell userId={user.id} />
+      <FeedbackButton />
       <UserMenu
         user={{ email: user.email, full_name: fullName }}
         isPlatformAdmin={platformAdmin}
