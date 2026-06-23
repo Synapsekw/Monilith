@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-0957
+last-updated: 2026-06-23-1012
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -42,15 +42,15 @@ advisors + regenerate types before moving on.**
 - **6 — ClickUp depth** — <span style="color:#eab308">**[In progress — 6a–6h done; 6e Docs deferred]**</span> — Subitems, custom fields/statuses, time tracking, relations + mirror columns + aggregation, workspace management, real-time presence. 6e Docs deferred ([[2026-06-21-decision-24-defer-phase-6e-docs]]: too complex + not fully cloud-native).
 - **7 — Asana polish** — <span style="color:#eab308">**[In progress — 7a + 7b + 7c done]**</span> — Portfolios, Goals/OKRs, Workload/capacity (v2: workspace/board filtering + planned/actual metric).
 - **8 — Dashboards + templates + ⌘K polish** — <span style="color:#22c55e">**[Done]**</span> — Cross-board widgets (Number/Chart/Battery/List + filter), board templates, ⌘K navigation + create.
-- **9 — Hardening & Optimization** — <span style="color:#eab308">**[In progress — design locked; 9.1 done; 9.2 next]**</span> — Perf + perceived-perf program (Track A actual speed, Track B perceived speed, closing Web-Vitals gate 9.6). 9.1 auth fast-path (`getClaims` local JWT verify) shipped; 9.2 streaming shell (PPR) next. Spec `docs/superpowers/specs/2026-06-22-phase-9-performance-optimization-design.md`.
+- **9 — Hardening & Optimization** — <span style="color:#eab308">**[In progress — 9.1 + 9.2 done; 9.3/9.4 next]**</span> — Perf + perceived-perf program (Track A actual speed, Track B perceived speed, closing Web-Vitals gate 9.6). 9.1 auth fast-path (`getClaims` local JWT verify) + 9.2 streaming shell (PPR/Cache Components) shipped; 9.3 cache + 9.4 skeletons next. Spec `docs/superpowers/specs/2026-06-22-phase-9-performance-optimization-design.md`.
 - **RS — Design refresh (dark-first reskin)** — <span style="color:#22c55e">**[Done — dark + light]**</span> — Dark-first near-black palette as `.dark` OKLch tokens (dark default); light-mode pass shipped. ([[2026-06-16-decision-08-dark-first-monday-reskin]])
 
 ## 3. Now
 
-- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c shipped · Phase 9 (Hardening) in progress — design locked, 9.1 shipped, 9.2 next.
-- **Branch:** `develop == origin/develop == main` at `f22ac4d` (post-#30 + an origin/main heal back-merge). **🚀 Promotion #30** (2026-06-23, `f10cd8c`) shipped the whole `develop` bundle to production — headlining Workload v2 (filtering + actuals), time-tracking date Calendar, and people-cell names.
-- **In flight:** `task/streaming-shell-9-2` (Phase 9.2 streaming shell — separate session) + three scope-to-plan gap worktrees from the 2026-06-23 `/whats-next` triage (`task/kanban-member-names`, `task/workload-v2-analytics`, `task/auth-hardening-9x` — specs written + approved, builds pending).
-- **Next:** 9.2 streaming shell lands → 9.3 cache + 9.4 skeletons (both blocked on 9.2's layout rewrite) → 9.6 Web-Vitals gate.
+- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c done + Workload analytics v3 (variance + per-day drill-down) shipped · Phase 9 (Hardening) in progress — 9.1 auth fast-path + 9.2 streaming shell shipped, 9.3/9.4 next.
+- **Branch:** `develop == origin/develop` at `54b5b68`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell + Workload analytics v3 not yet promoted).
+- **In flight:** two scope-to-plan gap worktrees from the 2026-06-23 `/whats-next` triage — `task/kanban-member-names` + `task/auth-hardening-9x` (specs written + approved, builds pending). _(9.2 streaming shell and Workload v2 analytics both merged.)_
+- **Next:** 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
 - **Owed:** migration-ledger reconciliation — `20260622170000_workload_actuals` is live on cloud but was applied via the SQL editor (not in the ledger) → `supabase db push` needs a user-run `migration repair` ([[migration-apply-blocked-by-classifier]]).
 
 ### Last session
