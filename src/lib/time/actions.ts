@@ -6,6 +6,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrgs } from "@/lib/auth/session";
 import {
+  searchAllocatableItems as searchAllocatableItemsQuery,
+  type AllocatableItem,
+} from "@/lib/time/queries";
+import {
   upsertTimeAllocationSchema,
   deleteTimeAllocationSchema,
 } from "@/lib/validations/time";
@@ -56,6 +60,15 @@ export async function upsertTimeAllocation(
   revalidatePath("/time");
   revalidatePath("/workload");
   return { ok: true, data: null };
+}
+
+/** Server-action wrapper around the server-only item search so the client
+ * AddRowPicker can call it directly (a client component cannot import the
+ * "server-only" queries module). */
+export async function searchAllocatableItems(
+  query: string,
+): Promise<AllocatableItem[]> {
+  return searchAllocatableItemsQuery(query);
 }
 
 /** Delete one card cell (self-only), keyed by (workDate, itemId|category). */

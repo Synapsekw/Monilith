@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Gauge, Inbox, Target } from "lucide-react";
+import { BarChart3, Clock, Gauge, Inbox, Target } from "lucide-react";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { PlatformNav } from "@/components/platform/PlatformNav";
@@ -22,6 +22,7 @@ const nav = [
   { label: "Goals", icon: Target, href: "/goals" },
   { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
   { label: "Workload", icon: Gauge, href: "/workload" },
+  { label: "My Time", icon: Clock, href: "/time" },
   { label: "Inbox", icon: Inbox },
 ] as const;
 
