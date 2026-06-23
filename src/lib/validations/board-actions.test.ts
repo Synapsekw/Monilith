@@ -8,6 +8,7 @@ import {
   renameBoardSchema,
   renameGroupSchema,
   renameItemSchema,
+  reorderBoardSchema,
   reorderGroupSchema,
   resizeNameColumnSchema,
   updateGroupColorSchema,
@@ -167,6 +168,22 @@ describe("group management schemas", () => {
   it("deleteGroup requires a uuid groupId", () => {
     expect(deleteGroupSchema.safeParse({ groupId }).success).toBe(true);
     expect(deleteGroupSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("reorderBoard requires a uuid boardId and a finite position", () => {
+    expect(
+      reorderBoardSchema.safeParse({ boardId: groupId, position: 1.5 }).success,
+    ).toBe(true);
+    expect(
+      reorderBoardSchema.safeParse({ boardId: "x", position: 1 }).success,
+    ).toBe(false);
+    expect(
+      reorderBoardSchema.safeParse({ boardId: groupId, position: "x" }).success,
+    ).toBe(false);
+    expect(
+      reorderBoardSchema.safeParse({ boardId: groupId, position: Infinity })
+        .success,
+    ).toBe(false);
   });
 
   it("reorderGroup requires a numeric position", () => {
