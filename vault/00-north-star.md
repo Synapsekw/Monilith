@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-1943
+last-updated: 2026-06-23-1953
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -41,15 +41,15 @@ advisors + regenerate types before moving on.**
 - **5 — Automations + Rules** — <span style="color:#22c55e">**[Done]**</span> — Trigger/condition/action builder on Postgres triggers + `pg_cron`/`pg_net` (no Edge Functions); recipes, run-history, webhook actions. _(5a → 5c-2 + move_to_group)_
 - **6 — ClickUp depth** — <span style="color:#eab308">**[In progress — 6a–6h done; 6e Docs deferred]**</span> — Subitems, custom fields/statuses, time tracking, relations + mirror columns + aggregation, workspace management, real-time presence. 6e Docs deferred ([[2026-06-21-decision-24-defer-phase-6e-docs]]: too complex + not fully cloud-native).
 - **7 — Asana polish** — <span style="color:#eab308">**[In progress — 7a + 7b + 7c done]**</span> — Portfolios, Goals/OKRs, Workload/capacity (v2: workspace/board filtering + planned/actual metric; v3: variance + per-day actuals drill-down).
-- **8 — Dashboards + templates + ⌘K polish** — <span style="color:#22c55e">**[Done]**</span> — Cross-board widgets (Number/Chart/Battery/List + filter), board templates, ⌘K navigation + create.
+- **8 — Dashboards + templates + ⌘K polish** — <span style="color:#22c55e">**[Done + v2 polish]**</span> — Cross-board widgets (Number/Chart/Battery/List + filter), board templates, ⌘K nav + create. v2 polish: 9 chart types (line/area/stacked/grouped/combo/donut/radial) via `dashboard_series` (date-bucket + multi-series; group by date/status/dropdown/people), unified edit drawer w/ live preview, bordered-card reskin. ([[2026-06-23-1953-dashboards-polish-v2]])
 - **9 — Hardening & Optimization** — <span style="color:#eab308">**[In progress — 9.1 + 9.2 done; 9.3/9.4 next]**</span> — Perf + perceived-perf program (Track A actual speed, Track B perceived speed, closing Web-Vitals gate 9.6). 9.1 auth fast-path (`getClaims` local JWT verify) + 9.2 streaming shell (PPR/Cache Components) shipped; 9.3 cache + 9.4 skeletons next. Spec `docs/superpowers/specs/2026-06-22-phase-9-performance-optimization-design.md`.
 - **RS — Design refresh (dark-first reskin)** — <span style="color:#22c55e">**[Done — dark + light]**</span> — Dark-first near-black palette as `.dark` OKLch tokens (dark default); light-mode pass shipped. ([[2026-06-16-decision-08-dark-first-monday-reskin]])
 
 ## 3. Now
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c done + Workload analytics v3 (variance + per-day drill-down) shipped · Phase 9 (Hardening) in progress — 9.1 auth fast-path + 9.2 streaming shell shipped, 9.3/9.4 next.
-- **Branch:** `develop == origin/develop` at `20bc461`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, **Feedback bug/feature-request reporting** — none promoted yet).
-- **In flight:** none — **Feedback** (in-app bug & feature-request reporting + `/admin/feedback` triage) merged ([[2026-06-23-1943-feedback-bugs-feature-requests]]); sidebar board drag-reorder merged ([[2026-06-23-1546-sidebar-board-reorder]]); the 2026-06-23 `/whats-next` Group-1 gap-closers (Kanban card names, Workload analytics v3, auth `getClaims` proxy) all merged to `develop` ([[2026-06-23-1358-whats-next-group1-gaps-ledger-repair]]).
+- **Branch:** `develop == origin/develop` at `5364f3b`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, Feedback bug/feature-request reporting, **Dashboards v2 polish** — none promoted yet).
+- **In flight:** none — **Dashboards Polish (v2)** (9 chart types + `dashboard_series` aggregation + unified edit drawer + reskin) merged ([[2026-06-23-1953-dashboards-polish-v2]]); Feedback reporting merged ([[2026-06-23-1943-feedback-bugs-feature-requests]]); sidebar board drag-reorder merged ([[2026-06-23-1546-sidebar-board-reorder]]).
 - **Next:** run `/promote` to ship the `develop` bundle → then 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
 - **Owed:** production promotion of the `develop` bundle (run `/promote`). _(Migration ledger reconciled 2026-06-23 — 5 live migrations marked applied + 6 throwaway orphans reverted; `db push --dry-run` clean. [[migration-apply-blocked-by-classifier]].)_
 
