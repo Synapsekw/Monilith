@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TimeTrackingCell } from "./TimeTrackingCell";
 
 const base = {
@@ -121,5 +121,79 @@ describe("TimeTrackingCell expanded popover", () => {
       screen.getByRole("button", { name: /delete entry/i }),
     );
     expect(onDelete).toHaveBeenCalledWith("del-entry");
+  });
+});
+
+describe("TimeTrackingCell date pickers (Calendar primitive)", () => {
+  // Pin "today" so the add-manual picker opens on a known month deterministically.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 5, 20)); // local 2026-06-20
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("renders no native date inputs in the popover (migration guard)", async () => {
+    render(<TimeTrackingCell {...base} nowMs={undefined} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /open time tracking/i }),
+    );
+    // Popover content portals to document.body, so query the whole document.
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+  });
+
+  it("add-manual: picking a day commits the correct local ISO via onAddManual", async () => {
+    const onAddManual = vi.fn();
+    render(
+      <TimeTrackingCell
+        {...base}
+        nowMs={undefined}
+        onAddManual={onAddManual}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /open time tracking/i }),
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: /duration to add/i }),
+      "1h",
+    );
+    // Open the date picker popover, then pick June 15 from the calendar grid.
+    await userEvent.click(
+      screen.getByRole("button", { name: /date for manual entry/i }),
+    );
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("15"));
+    await userEvent.click(screen.getByRole("button", { name: /add time/i }));
+    expect(onAddManual).toHaveBeenCalledWith("2026-06-15", 3600);
+  });
+
+  it("edit: picking a day calls onEdit with the correct local ISO + duration", async () => {
+    const onEdit = vi.fn();
+    render(
+      <TimeTrackingCell
+        {...base}
+        onEdit={onEdit}
+        entries={[
+          {
+            id: "edit-entry",
+            user_id: "u1",
+            started_at: "2026-06-20T08:00:00Z",
+            ended_at: "2026-06-20T09:30:00Z",
+            duration_secs: 5400,
+          } as never,
+        ]}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /open time tracking/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit entry/i }));
+    await userEvent.click(screen.getByRole("button", { name: /edit date/i }));
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("15"));
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(onEdit).toHaveBeenCalledWith("edit-entry", "2026-06-15", 5400);
   });
 });

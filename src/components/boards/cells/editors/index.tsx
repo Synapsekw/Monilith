@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
+import { isoToLocalDate, localDateToISO } from "@/lib/boards/iso-date";
 import { cn } from "@/lib/utils";
 import { pillTextColor } from "@/lib/boards/contrast";
 
@@ -282,23 +283,6 @@ export function PeopleEditor({
       <ClearButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
-}
-
-/** Parse a `YYYY-MM-DD` string into a *local* Date so the calendar shows the
- * intended calendar day regardless of timezone (UTC parsing drifts a day in
- * negative-offset zones). */
-function isoToLocalDate(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-/** Format a *local* Date back to `YYYY-MM-DD` using local getters, matching
- * {@link isoToLocalDate} so the round-trip never shifts a day. */
-function localDateToISO(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 export function DateEditor({

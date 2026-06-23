@@ -1973,7 +1973,12 @@ function EditableCell({
       }}
       className="hover:bg-surface-muted focus-visible:ring-ring relative flex h-full cursor-pointer items-center truncate border-l px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
     >
-      <CellRenderer kind={column.kind} value={value} settings={settings} />
+      <CellRenderer
+        kind={column.kind}
+        value={value}
+        settings={settings}
+        members={members}
+      />
       <PresenceRing target={target} />
       <FlashHighlight target={target} />
     </div>

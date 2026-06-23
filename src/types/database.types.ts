@@ -2391,6 +2391,15 @@ export type Database = {
         Args: { p_board_id: string; p_user_id: string };
         Returns: undefined;
       };
+      workload_actuals_rollup: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          board_id: string;
+          day: string;
+          secs: number;
+          user_id: string;
+        }[];
+      };
       workload_rollup: {
         Args: { p_from: string; p_to: string };
         Returns: {

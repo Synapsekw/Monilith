@@ -2,6 +2,7 @@ import { Check, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
+import type { EditorMember } from "./editors";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -65,19 +66,32 @@ export function DropdownCell({
   );
 }
 
+function memberLabel(member: EditorMember | undefined) {
+  return member?.fullName || member?.email || "Unknown";
+}
+
 export function PeopleCell({
   value,
+  members = [],
 }: {
   value: { userIds: string[] } | null;
   settings: Settings;
+  members?: EditorMember[];
 }) {
-  const count = value?.userIds.length ?? 0;
-  if (count === 0) return <span className="text-sm" />;
-  return (
-    <span className="text-muted-foreground text-sm">
-      {count} {count === 1 ? "person" : "people"}
-    </span>
-  );
+  const userIds = value?.userIds ?? [];
+  if (userIds.length === 0) return <span className="text-sm" />;
+  // Without a member directory to resolve ids → names (e.g. mirrored people
+  // cells), fall back to the count so we never render a row of "Unknown".
+  if (members.length === 0) {
+    return (
+      <span className="text-muted-foreground text-sm">
+        {userIds.length} {userIds.length === 1 ? "person" : "people"}
+      </span>
+    );
+  }
+  const byId = new Map(members.map((m) => [m.userId, m]));
+  const names = userIds.map((id) => memberLabel(byId.get(id)));
+  return <span className="truncate text-sm">{names.join(", ")}</span>;
 }
 
 export function DateCell({
@@ -220,10 +234,12 @@ export function CellRenderer({
   kind,
   value,
   settings,
+  members,
 }: {
   kind: string;
   value: unknown;
   settings: Settings;
+  members?: EditorMember[];
 }) {
   switch (kind) {
     case "text":
@@ -252,6 +268,7 @@ export function CellRenderer({
         <PeopleCell
           value={value as { userIds: string[] } | null}
           settings={settings}
+          members={members}
         />
       );
     case "date":

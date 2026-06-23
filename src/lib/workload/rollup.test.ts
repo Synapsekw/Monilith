@@ -5,9 +5,12 @@ import {
   buildWindow,
   capacityState,
   buildWorkloadGrid,
+  filterByBoards,
+  foldActualRows,
 } from "@/lib/workload/rollup";
 import type {
   MemberCapacity,
+  WorkloadActualRow,
   WorkloadMember,
   WorkloadRawRow,
 } from "@/lib/workload/types";
@@ -283,5 +286,110 @@ describe("buildWorkloadGrid", () => {
     const ann = grid.rows.find((r) => r.userId === "u1")!;
     const cell = ann.cells.find((c) => c.weekKey === "2026-06-01")!;
     expect(cell.capacitySecs).toBe(5 * 8 * H); // from defaults
+  });
+
+  it("populates actualSecs on cells from logged time entries (v2)", () => {
+    const rows: WorkloadRawRow[] = [
+      {
+        itemId: "i1",
+        boardId: "b1",
+        itemName: "Task",
+        userId: "u1",
+        startDate: "2026-06-01",
+        endDate: "2026-06-01",
+        estimateSecs: 8 * H,
+      },
+    ];
+    const actuals: WorkloadActualRow[] = [
+      { userId: "u1", boardId: "b1", day: "2026-06-02", secs: 3 * H },
+      { userId: "u1", boardId: "b1", day: "2026-06-04", secs: 2 * H },
+    ];
+    const grid = buildWorkloadGrid(
+      rows,
+      members,
+      caps,
+      defaults,
+      "2026-06-17",
+      4,
+      4,
+      1,
+      actuals,
+    );
+    const ann = grid.rows.find((r) => r.userId === "u1")!;
+    const cell = ann.cells.find((c) => c.weekKey === "2026-06-01")!;
+    expect(cell.actualSecs).toBe(5 * H); // both days fall in the week of Jun 1
+    expect(ann.totalActualSecs).toBe(5 * H);
+  });
+
+  it("defaults actualSecs to 0 when no actuals are supplied", () => {
+    const grid = buildWorkloadGrid(
+      [],
+      members,
+      caps,
+      defaults,
+      "2026-06-17",
+      4,
+      4,
+      1,
+    );
+    const ann = grid.rows.find((r) => r.userId === "u1")!;
+    expect(ann.cells.every((c) => c.actualSecs === 0)).toBe(true);
+    expect(ann.totalActualSecs).toBe(0);
+  });
+});
+
+describe("filterByBoards", () => {
+  const rows: WorkloadRawRow[] = [
+    {
+      itemId: "i1",
+      boardId: "b1",
+      itemName: "A",
+      userId: "u1",
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
+      estimateSecs: null,
+    },
+    {
+      itemId: "i2",
+      boardId: "b2",
+      itemName: "B",
+      userId: "u1",
+      startDate: "2026-06-01",
+      endDate: "2026-06-01",
+      estimateSecs: null,
+    },
+  ];
+
+  it("returns all rows when the board set is null (no filter)", () => {
+    expect(filterByBoards(rows, null)).toHaveLength(2);
+  });
+  it("subsets rows to the given board ids", () => {
+    const out = filterByBoards(rows, new Set(["b1"]));
+    expect(out).toHaveLength(1);
+    expect(out[0].boardId).toBe("b1");
+  });
+  it("works for actual rows too (generic over boardId)", () => {
+    const actuals: WorkloadActualRow[] = [
+      { userId: "u1", boardId: "b1", day: "2026-06-02", secs: 3600 },
+      { userId: "u1", boardId: "b2", day: "2026-06-02", secs: 3600 },
+    ];
+    expect(filterByBoards(actuals, new Set(["b2"]))).toEqual([
+      { userId: "u1", boardId: "b2", day: "2026-06-02", secs: 3600 },
+    ]);
+  });
+});
+
+describe("foldActualRows", () => {
+  it("folds day-granular actuals into per-user week buckets", () => {
+    const actuals: WorkloadActualRow[] = [
+      { userId: "u1", boardId: "b1", day: "2026-06-02", secs: 2 * H }, // wk of Jun 1
+      { userId: "u1", boardId: "b1", day: "2026-06-05", secs: 1 * H }, // same wk
+      { userId: "u1", boardId: "b1", day: "2026-06-08", secs: 4 * H }, // wk of Jun 8
+      { userId: "u2", boardId: "b1", day: "2026-06-02", secs: 5 * H },
+    ];
+    const folded = foldActualRows(actuals, 1);
+    expect(folded.get("u1")!.get("2026-06-01")).toBe(3 * H);
+    expect(folded.get("u1")!.get("2026-06-08")).toBe(4 * H);
+    expect(folded.get("u2")!.get("2026-06-01")).toBe(5 * H);
   });
 });
