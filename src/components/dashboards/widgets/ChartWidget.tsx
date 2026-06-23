@@ -1,83 +1,213 @@
 "use client";
 
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
+  RadialBar,
+  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
+  YAxis,
 } from "recharts";
 
-import { useWidgetData } from "@/lib/dashboards/use-widget-data";
-import { shapeBuckets } from "@/lib/dashboards/widget-data";
+import { useWidgetSeries } from "@/lib/dashboards/use-widget-series";
+import { pivotSeries } from "@/lib/dashboards/series";
+import {
+  AXIS_PROPS,
+  GRID_STROKE,
+  TOOLTIP_STYLE,
+} from "@/components/dashboards/widgets/chart-theme";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 
-export function ChartWidget({ widget }: { widget: CacheWidget }) {
-  const config = (widget.config ?? {}) as {
-    groupColumnId?: string;
-    chartStyle?: "bar" | "pie";
-  };
-  const { data, isLoading, isError } = useWidgetData(
-    widget.id,
-    widget.config as Record<string, unknown>,
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-muted-foreground flex h-full items-center justify-center text-center text-sm">
+      {children}
+    </div>
   );
+}
 
-  if (!widget.source_board_id || !config.groupColumnId)
-    return (
-      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-        Configure a source board and group column
-      </div>
-    );
+export function ChartWidget({ widget }: { widget: CacheWidget }) {
+  const config = (widget.config ?? {}) as Record<string, unknown>;
+  const { data, isLoading, isError } = useWidgetSeries(widget.id, config);
+
+  if (!widget.source_board_id) return <Empty>Pick a source board</Empty>;
   if (isLoading)
     return <div className="bg-muted/40 h-full animate-pulse rounded-md" />;
-  if (isError || !data?.columnMeta)
-    return <div className="text-destructive text-sm">Failed to load</div>;
+  if (isError || !data) return <Empty>Failed to load</Empty>;
+  if (data.points.length === 0) return <Empty>No data yet</Empty>;
 
-  const rows = shapeBuckets(data.buckets, data.columnMeta).filter(
-    (r) => r.count > 0,
-  );
-  if (rows.length === 0)
+  const { rows, series } = pivotSeries(data);
+  const ct = data.chartType;
+
+  // ── circular charts ──
+  if (ct === "pie" || ct === "donut") {
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-        No data yet
-      </div>
-    );
-
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      {config.chartStyle === "pie" ? (
+      <ResponsiveContainer width="100%" height="100%">
         <PieChart>
-          <Tooltip />
+          <Tooltip {...TOOLTIP_STYLE} />
           <Pie
             data={rows}
-            dataKey="count"
-            nameKey="label"
-            innerRadius="45%"
+            dataKey="Value"
+            nameKey="__label"
+            innerRadius={ct === "donut" ? "55%" : 0}
             outerRadius="80%"
           >
             {rows.map((r) => (
-              <Cell key={r.key ?? "none"} fill={r.color} />
+              <Cell
+                key={String(r.__label)}
+                fill={String(r[`__color_${r.__label}`] ?? "var(--brand)")}
+              />
             ))}
           </Pie>
         </PieChart>
-      ) : (
-        <BarChart data={rows}>
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 11 }}
-            stroke="var(--muted-foreground)"
-          />
-          <Tooltip cursor={{ fill: "var(--muted)" }} />
-          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (ct === "radial") {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <RadialBarChart data={rows} innerRadius="25%" outerRadius="95%">
+          <Tooltip {...TOOLTIP_STYLE} />
+          <RadialBar dataKey="Value" background>
             {rows.map((r) => (
-              <Cell key={r.key ?? "none"} fill={r.color} />
+              <Cell
+                key={String(r.__label)}
+                fill={String(r[`__color_${r.__label}`] ?? "var(--brand)")}
+              />
             ))}
+          </RadialBar>
+        </RadialBarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  // ── line / area ──
+  if (ct === "line" || ct === "area") {
+    const Chart = ct === "line" ? LineChart : AreaChart;
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <Chart data={rows}>
+          <CartesianGrid
+            stroke={GRID_STROKE}
+            strokeDasharray="3 3"
+            vertical={false}
+          />
+          <XAxis dataKey="__label" {...AXIS_PROPS} />
+          <YAxis {...AXIS_PROPS} width={32} />
+          <Tooltip {...TOOLTIP_STYLE} />
+          {series.length > 1 ? (
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+          ) : null}
+          {series.map((s) =>
+            ct === "line" ? (
+              <Line
+                key={s.key}
+                dataKey={s.key}
+                stroke={s.color}
+                strokeWidth={2}
+                dot={false}
+              />
+            ) : (
+              <Area
+                key={s.key}
+                dataKey={s.key}
+                stroke={s.color}
+                fill={s.color}
+                fillOpacity={0.2}
+              />
+            ),
+          )}
+        </Chart>
+      </ResponsiveContainer>
+    );
+  }
+
+  // ── combo (bar + line) ──
+  if (ct === "combo") {
+    const comboMap = (config.comboMap ?? {}) as Record<string, "bar" | "line">;
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={rows}>
+          <CartesianGrid
+            stroke={GRID_STROKE}
+            strokeDasharray="3 3"
+            vertical={false}
+          />
+          <XAxis dataKey="__label" {...AXIS_PROPS} />
+          <YAxis {...AXIS_PROPS} width={32} />
+          <Tooltip {...TOOLTIP_STYLE} />
+          {series.length > 1 ? (
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+          ) : null}
+          {series.map((s, i) =>
+            (comboMap[s.key] ?? (i === 0 ? "bar" : "line")) === "bar" ? (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                fill={s.color}
+                radius={[4, 4, 0, 0]}
+              />
+            ) : (
+              <Line
+                key={s.key}
+                dataKey={s.key}
+                stroke={s.color}
+                strokeWidth={2}
+                dot={false}
+              />
+            ),
+          )}
+        </ComposedChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  // ── bar family (bar / stackedBar / groupedBar) ──
+  const stack = ct === "stackedBar";
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={rows}>
+        <CartesianGrid
+          stroke={GRID_STROKE}
+          strokeDasharray="3 3"
+          vertical={false}
+        />
+        <XAxis dataKey="__label" {...AXIS_PROPS} />
+        <YAxis {...AXIS_PROPS} width={32} />
+        <Tooltip {...TOOLTIP_STYLE} />
+        {series.length > 1 ? <Legend wrapperStyle={{ fontSize: 11 }} /> : null}
+        {series.map((s) => (
+          <Bar
+            key={s.key}
+            dataKey={s.key}
+            stackId={stack ? "a" : undefined}
+            fill={s.color}
+            radius={stack ? undefined : [4, 4, 0, 0]}
+          >
+            {series.length === 1
+              ? rows.map((r) => (
+                  <Cell
+                    key={String(r.__label)}
+                    fill={String(r[`__color_${r.__label}`] ?? s.color)}
+                  />
+                ))
+              : null}
           </Bar>
-        </BarChart>
-      )}
+        ))}
+      </BarChart>
     </ResponsiveContainer>
   );
 }
