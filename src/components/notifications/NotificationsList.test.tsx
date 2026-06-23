@@ -32,6 +32,7 @@ describe("NotificationsList", () => {
     ["assigned", /assigned you to an item/i],
     ["update_on_item", /updated an item you follow/i],
     ["automation", /an automation ran on an item/i],
+    ["feedback_response", /updated your feedback request/i],
   ] as const)("renders the %s kind", (kind, matcher) => {
     render(
       <NotificationsList
