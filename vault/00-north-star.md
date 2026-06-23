@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-1546
+last-updated: 2026-06-23-1943
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -48,8 +48,8 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c done + Workload analytics v3 (variance + per-day drill-down) shipped · Phase 9 (Hardening) in progress — 9.1 auth fast-path + 9.2 streaming shell shipped, 9.3/9.4 next.
-- **Branch:** `develop == origin/develop` at `55fa30d`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder — none promoted yet).
-- **In flight:** none — sidebar board drag-reorder merged ([[2026-06-23-1546-sidebar-board-reorder]]); the 2026-06-23 `/whats-next` Group-1 gap-closers (Kanban card names, Workload analytics v3, auth `getClaims` proxy) all merged to `develop` ([[2026-06-23-1358-whats-next-group1-gaps-ledger-repair]]). 9.2 streaming shell also merged ([[2026-06-23-1016-phase-9-2-streaming-shell-build]]).
+- **Branch:** `develop == origin/develop` at `20bc461`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, **Feedback bug/feature-request reporting** — none promoted yet).
+- **In flight:** none — **Feedback** (in-app bug & feature-request reporting + `/admin/feedback` triage) merged ([[2026-06-23-1943-feedback-bugs-feature-requests]]); sidebar board drag-reorder merged ([[2026-06-23-1546-sidebar-board-reorder]]); the 2026-06-23 `/whats-next` Group-1 gap-closers (Kanban card names, Workload analytics v3, auth `getClaims` proxy) all merged to `develop` ([[2026-06-23-1358-whats-next-group1-gaps-ledger-repair]]).
 - **Next:** run `/promote` to ship the `develop` bundle → then 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
 - **Owed:** production promotion of the `develop` bundle (run `/promote`). _(Migration ledger reconciled 2026-06-23 — 5 live migrations marked applied + 6 throwaway orphans reverted; `db push --dry-run` clean. [[migration-apply-blocked-by-classifier]].)_
 
