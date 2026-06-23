@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-2059
+last-updated: 2026-06-23-2110
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -48,8 +48,8 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation (`/time` My Time card + full-canvas Workload)** shipped · Phase 9 (Hardening) in progress — 9.1 auth fast-path + 9.2 streaming shell shipped, 9.3/9.4 next.
-- **Branch:** `develop == origin/develop` at `aabda5a`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, Feedback reporting, Dashboards v2 polish, percent (progress) column, **time allocation** — none promoted yet).
-- **In flight:** **time allocation** merged ([[2026-06-23-2059-time-allocation-my-time-card]]). Two other task worktrees active (other sessions): `task/column-add-error-surface`, `task/dash-chart-measure-fix`.
+- **Branch:** `develop == origin/develop` at `354c0a0`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, Feedback reporting, Dashboards v2 polish, percent (progress) column, time allocation, **column-add error surface** — none promoted yet).
+- **In flight:** **column-add error surface** merged ([[2026-06-23-2110-column-add-error-surface]]) — failed column adds now show a dismissible banner instead of silently doing nothing. One other task worktree active (other session): `task/dash-chart-measure-fix`.
 - **Next:** run `/promote` to ship the `develop` bundle → then 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
 - **Owed:** production promotion of the `develop` bundle (run `/promote`). **Integration-test gate is flaky** — the live-DB `*.integration.test.ts` suites fail nondeterministically under `pnpm test`; make them serial / use a dedicated DB so `finish-task.sh`'s gate is reliable ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]]).
 
