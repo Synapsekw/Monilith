@@ -3,6 +3,7 @@ import { listDashboards } from "@/lib/dashboards/queries";
 import { createClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/platform/guard";
 import { isOrgAdmin } from "@/lib/org/guard";
+import { countNewFeedback } from "@/lib/feedback/queries";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 
 /**
@@ -29,6 +30,10 @@ export async function SidebarNavData() {
     isOrgAdmin(),
   ]);
 
+  // Only fetch the new-feedback count for platform admins — avoids an
+  // unnecessary RLS-gated query for regular users (it would return 0 anyway).
+  const newFeedbackCount = platformAdmin ? await countNewFeedback() : 0;
+
   return (
     <SidebarNav
       boards={boards}
@@ -37,6 +42,7 @@ export async function SidebarNavData() {
       dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
       isPlatformAdmin={platformAdmin}
       isOrgAdmin={orgAdmin}
+      newFeedbackCount={newFeedbackCount}
     />
   );
 }
