@@ -7,6 +7,69 @@ import type { ChangelogEntry } from "./types";
  */
 export const SEED: ChangelogEntry[] = [
   {
+    date: "2026-06-23",
+    kind: "new",
+    title: "Dashboards",
+    description:
+      "Turn board data into dashboards — number widgets with gauge displays and charts in every shape (line, area, stacked, grouped, combo, donut, and radial), all built in a single drawer with a live preview.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "new",
+    title: "My Time",
+    description:
+      "Log how your time is spent across categories with a quick decimal-hours grid, right from the sidebar.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "improved",
+    title: "Workload insights",
+    description:
+      "The workload view now fills the canvas with utilization percentages, capacity bars, and per-day drill-downs into planned-vs-actual variance.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "new",
+    title: "Progress columns",
+    description:
+      "Track completion with a new percent column that automatically averages the progress of its subitems.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "new",
+    title: "Send feedback in-app",
+    description:
+      "Report a bug or request a feature from the new Feedback button in the header — and get a notification in the bell when we respond.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "improved",
+    title: "Reorder boards in the sidebar",
+    description:
+      "Drag your boards into whatever order suits you; the arrangement sticks.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "improved",
+    title: "Names on kanban cards",
+    description:
+      "Kanban cards now show assignee names in the people summary, not just avatars.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "fixed",
+    title: "Clearer column errors",
+    description:
+      "Adding a column now surfaces a clear message when something goes wrong instead of failing silently.",
+  },
+  {
+    date: "2026-06-23",
+    kind: "fixed",
+    title: "Steadier dashboard widgets",
+    description:
+      "Sum and Average widgets can no longer get stuck in a state you can't save.",
+  },
+  {
     date: "2026-06-22",
     kind: "new",
     title: "Real-time collaboration",
