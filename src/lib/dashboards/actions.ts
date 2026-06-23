@@ -382,7 +382,6 @@ export async function getWidgetRows(input: { widgetId: string }): Promise<
   return { ok: true, data: { columns, rows } };
 }
 
-const MUTED = "var(--muted-foreground)";
 const PALETTE = [
   "var(--brand)",
   "var(--status-green)",
@@ -413,7 +412,7 @@ export async function getWidgetSeries(input: {
   const supabase = await createClient();
   const { data: widget } = await supabase
     .from("dashboard_widgets")
-    .select("config, source_board_id")
+    .select("config, source_board_id, org_id")
     .eq("id", parsed.data.widgetId)
     .maybeSingle();
   if (!widget) return fail("Widget not found.");
@@ -451,6 +450,8 @@ export async function getWidgetSeries(input: {
   if (rpcResult.error) return fail(rpcResult.error.message);
   const raw = rpcResult.data;
 
+  const orgId = widget.org_id;
+
   // Resolve a key -> {label,color} map for a dimension.
   // NOTE: org_members → profiles has no declared FK in database.types.ts (user_id
   // references auth.users, not profiles), so a PostgREST embed won't typecheck.
@@ -472,10 +473,14 @@ export async function getWidgetSeries(input: {
           .data ?? [];
       opts.forEach((o) => map.set(o.id, { label: o.label, color: o.color }));
     } else if (dim.kind === "people") {
-      // Two-query JS join: fetch org_members user_ids, then fetch profiles by id.
+      // Two-query JS join: fetch org_members user_ids (scoped to this widget's
+      // org, matching src/lib/boards/queries.ts::listOrgMembers), then fetch
+      // profiles by id. The org_id filter keeps the member set + palette indices
+      // deterministic for multi-org users (RLS alone would merge orgs).
       const { data: members } = await supabase
         .from("org_members")
-        .select("user_id");
+        .select("user_id")
+        .eq("org_id", orgId);
       const userIds = (members ?? []).map((m) => m.user_id);
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
@@ -531,6 +536,3 @@ export async function getWidgetSeries(input: {
     data: { ...empty, points },
   };
 }
-
-// Suppress "unused variable" for MUTED — it's reserved for future use in label coloring.
-void MUTED;
