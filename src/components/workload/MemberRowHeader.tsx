@@ -1,5 +1,12 @@
 import { cn } from "@/lib/utils";
-import type { WorkloadMember } from "@/lib/workload/types";
+import {
+  hours,
+  signedHours,
+  signedPct,
+  variancePct,
+  varianceSecs,
+} from "@/lib/workload/rollup";
+import type { WorkloadMember, WorkloadMetric } from "@/lib/workload/types";
 
 function initials(member: WorkloadMember | null): string {
   if (!member) return "—";
@@ -15,28 +22,30 @@ function displayName(member: WorkloadMember | null): string {
   return member.fullName ?? member.email ?? "Unnamed member";
 }
 
-/** Whole-hour readout. */
-function hours(secs: number): string {
-  return `${Math.round(secs / 3600)}h`;
-}
-
 /**
  * Sticky-left member identity for a workload row: avatar initials, name, and the
- * row's total effort across the visible window. The synthetic Unassigned row
+ * row's total effort across the visible window. When the `variance` metric is
+ * active the metadata line shows the row's total planned-vs-actual delta (signed
+ * hours + pct) instead of effort / capacity. The synthetic Unassigned row
  * (member === null) is visually distinct.
  */
 export function MemberRowHeader({
   member,
   totalEffortSecs,
   totalCapacitySecs,
+  totalActualSecs = 0,
+  metric = "planned",
   trailing,
 }: {
   member: WorkloadMember | null;
   totalEffortSecs: number;
   totalCapacitySecs: number;
+  totalActualSecs?: number;
+  metric?: WorkloadMetric;
   trailing?: React.ReactNode;
 }) {
   const isUnassigned = member === null;
+  const showVariance = metric === "variance" && !isUnassigned;
   return (
     <div className="flex items-center gap-2.5">
       <div
@@ -60,10 +69,20 @@ export function MemberRowHeader({
           {displayName(member)}
         </p>
         <p className="text-muted-foreground text-[11px] tabular-nums">
-          {hours(totalEffortSecs)}
-          {!isUnassigned && totalCapacitySecs > 0
-            ? ` / ${hours(totalCapacitySecs)}`
-            : ""}
+          {showVariance ? (
+            <>
+              {signedHours(varianceSecs(totalActualSecs, totalEffortSecs))}
+              {" · "}
+              {signedPct(variancePct(totalActualSecs, totalEffortSecs))}
+            </>
+          ) : (
+            <>
+              {hours(totalEffortSecs)}
+              {!isUnassigned && totalCapacitySecs > 0
+                ? ` / ${hours(totalCapacitySecs)}`
+                : ""}
+            </>
+          )}
         </p>
       </div>
       {trailing}

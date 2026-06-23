@@ -168,7 +168,7 @@ export function DashboardsNav({
                   className={cn(
                     "flex size-9 items-center justify-center rounded-md text-sm font-medium uppercase transition-colors",
                     d.id === activeDashboardId
-                      ? "bg-surface text-foreground"
+                      ? "bg-primary/80 text-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
@@ -183,7 +183,7 @@ export function DashboardsNav({
               className={cn(
                 "group/row flex items-center rounded-md pr-1 transition-colors",
                 d.id === activeDashboardId
-                  ? "bg-surface text-foreground"
+                  ? "bg-primary/80 text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >

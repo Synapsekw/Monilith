@@ -55,9 +55,16 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
 (1–2 sentences pointing the next session at where to start.)
 ```
 
-5. **Bump the north-star** (`vault/00-north-star.md`):
-   - Update **§3 "Now"** — `Phase`, `Branch`, and the `Latest:` line to reflect this session's end state, and point `Next:` at what comes next.
-   - If a build phase closed or its status changed, update **§2** (the phase's status tag + one-line note) and the **"Where we are"** line.
+5. **Bump the north-star** (`vault/00-north-star.md`). The north-star is a **concise live snapshot,
+   not a changelog** — session-by-session history lives in `vault/sessions/` and is surfaced
+   automatically by the dataview blocks in §3. So **overwrite, never append:**
+   - Update **§3 "Now"** in place — refresh the `Phase`, `Branch`, `In flight`, `Next`, and `Owed`
+     bullets to this session's end state. **Do NOT add a per-session "Latest:" line** — replace the
+     existing bullets, don't accumulate. If a bullet is now stale (e.g. an "In flight" item shipped,
+     an "Owed" item was cleared), edit or delete it.
+   - If a build phase closed or its status changed, update **§2** — the phase's **status tag +
+     one-line outcome only** (per-slice detail belongs in [[platform-roadmap]] and the session note,
+     not here). There is no "Where we are" paragraph; don't reintroduce one.
    - **Bump `last-updated`** in the frontmatter to today's date.
    - Add the new session to the `related:` of anything it closes out, and link it with `[[<session-filename-without-ext>]]` where relevant.
 
@@ -72,7 +79,7 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    If available:
    - `obsidian unresolved 2>/dev/null` — broken `[[wikilinks]]`. **Expect false positives** from
      code blocks and from intentional cross-refs to **auto-memory** slugs (those live in
-     `~/.claude/.../memory/`, not the vault). Only act on links that point at *vault* notes which
+     `~/.claude/.../memory/`, not the vault). Only act on links that point at _vault_ notes which
      should exist — fix them, or note them in "Open threads".
    - `obsidian orphans 2>/dev/null | grep '^vault/'` — vault notes with no links in or out (the
      whole repo is the Obsidian vault, so `grep '^vault/'` is required to cut the noise). New
@@ -101,6 +108,7 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
 ## Discipline
 
 - **Keep it tight.** If the summary is more than ~30 lines, the work belonged in a spec or ADR, not a session note. Trim and split rather than expanding.
+- **The north-star is a snapshot, not a log.** §3 "Now" is overwritten each wrapup, never appended to; §2 stays at status + one-liner per phase. History is carried by the session notes + the §3 dataview blocks — if you feel the urge to add a dated "Latest" entry to the north-star, that's the session note's job.
 - **Commit vault paths only.** The standing "never commit unless asked" preference protects
   _source code_ from surprise commits/deploys — it does **not** apply to the vault, whose whole
   point is durable dev-memory. So `/wrapup` commits `vault/` (and only `vault/`) per step 6. Never

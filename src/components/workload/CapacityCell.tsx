@@ -1,19 +1,35 @@
 import { cn } from "@/lib/utils";
-import { capacityState } from "@/lib/workload/rollup";
+import {
+  capacityState,
+  hours,
+  signedHours,
+  signedPct,
+  variancePct,
+  varianceSecs,
+  varianceState,
+} from "@/lib/workload/rollup";
 import type { CapacityState, WorkloadMetric } from "@/lib/workload/types";
 
-/** Whole-hour readout for a dense grid cell. */
-function hours(secs: number): string {
-  return `${Math.round(secs / 3600)}h`;
+/** Map a variance state onto the existing cell color states: over/under keep
+ * their visuals; "on" (within band) and "none" read as a neutral surface. */
+function varianceColorState(
+  actualSecs: number,
+  plannedSecs: number,
+): CapacityState {
+  const v = varianceState(actualSecs, plannedSecs);
+  if (v === "over") return "over";
+  if (v === "under") return "under";
+  return "none";
 }
 
 /**
- * One person × one week cell. Shows planned effort, logged actuals, or both,
- * over capacity, with a capacity-state color. Color is paired with the numeric
- * text (never color-only) for AA + colorblind safety. State semantics follow
- * pulse-ui: under = muted, at = brand accent, over = destructive; none = no
- * capacity (e.g. the Unassigned row). In `actual` mode the color reflects
- * actuals-vs-capacity; in `planned`/`both` it reflects planned-vs-capacity.
+ * One person × one week cell. Shows planned effort, logged actuals, both, or the
+ * planned-vs-actual variance, over capacity, with a capacity-state color. Color
+ * is paired with the numeric text (never color-only) for AA + colorblind safety.
+ * State semantics follow pulse-ui: under = muted, at = brand accent, over =
+ * destructive; none = no capacity (e.g. the Unassigned row). In `actual` mode the
+ * color reflects actuals-vs-capacity; in `planned`/`both` it reflects
+ * planned-vs-capacity; in `variance` it reflects actuals-vs-planned.
  */
 export function CapacityCell({
   effortSecs,
@@ -28,6 +44,38 @@ export function CapacityCell({
   state: CapacityState;
   metric?: WorkloadMetric;
 }) {
+  if (metric === "variance") {
+    const delta = varianceSecs(actualSecs, effortSecs);
+    const pct = variancePct(actualSecs, effortSecs);
+    const vState = varianceColorState(actualSecs, effortSecs);
+    const empty = delta === 0 && vState === "none";
+    return (
+      <div
+        data-testid="capacity-cell"
+        data-state={vState}
+        data-metric="variance"
+        className={cn(
+          "flex h-9 flex-col items-center justify-center rounded-md px-2 text-center tabular-nums transition-colors",
+          empty && "text-muted-foreground/50",
+          !empty && vState === "under" && "bg-surface-muted text-foreground",
+          !empty &&
+            vState === "over" &&
+            "bg-destructive/15 text-destructive ring-destructive/30 ring-1",
+          !empty &&
+            vState === "none" &&
+            "bg-surface-muted text-muted-foreground",
+        )}
+      >
+        <span className="text-xs leading-tight font-medium">
+          {signedHours(delta)}
+        </span>
+        <span className="text-muted-foreground text-[10px] leading-tight">
+          {signedPct(pct)}
+        </span>
+      </div>
+    );
+  }
+
   const displayState: CapacityState =
     metric === "actual" ? capacityState(actualSecs, capacitySecs) : state;
   const primarySecs = metric === "actual" ? actualSecs : effortSecs;

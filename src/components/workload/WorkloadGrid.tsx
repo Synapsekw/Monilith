@@ -12,8 +12,13 @@ import {
 import { CapacityCell } from "./CapacityCell";
 import { MemberRowHeader } from "./MemberRowHeader";
 import { CapacityEditor } from "./CapacityEditor";
+import { DayActualsPopover } from "./DayActualsPopover";
 import { WorkloadDefaultsDialog } from "./WorkloadDefaultsDialog";
-import { buildWorkloadGrid, filterByBoards } from "@/lib/workload/rollup";
+import {
+  actualsForCell,
+  buildWorkloadGrid,
+  filterByBoards,
+} from "@/lib/workload/rollup";
 import type {
   MemberCapacity,
   OrgWorkloadDefaults,
@@ -36,6 +41,7 @@ const METRIC_LABEL: Record<WorkloadMetric, string> = {
   planned: "Planned",
   actual: "Actual",
   both: "Both",
+  variance: "Variance",
 };
 
 /**
@@ -159,7 +165,9 @@ export function WorkloadGrid({
   const sort: SortKey = params.get("sort") === "load" ? "load" : "name";
   const rawMetric = params.get("metric");
   const metric: WorkloadMetric =
-    rawMetric === "actual" || rawMetric === "both" ? rawMetric : "planned";
+    rawMetric === "actual" || rawMetric === "both" || rawMetric === "variance"
+      ? rawMetric
+      : "planned";
   const wsId = params.get("ws");
   const boardId = params.get("board");
 
@@ -273,7 +281,9 @@ export function WorkloadGrid({
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground text-xs">Show</span>
             <div className="flex gap-1">
-              {(["planned", "actual", "both"] as WorkloadMetric[]).map((m) => (
+              {(
+                ["planned", "actual", "both", "variance"] as WorkloadMetric[]
+              ).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -365,6 +375,8 @@ export function WorkloadGrid({
                       member={row.member}
                       totalEffortSecs={row.totalEffortSecs}
                       totalCapacitySecs={row.totalCapacitySecs}
+                      totalActualSecs={row.totalActualSecs}
+                      metric={metric}
                       trailing={
                         canEdit && row.userId ? (
                           <CapacityEditor
@@ -382,11 +394,17 @@ export function WorkloadGrid({
                       }
                     />
                   </td>
-                  {row.cells.map((cell) => (
-                    <td
-                      key={cell.weekKey}
-                      className="border-b px-1.5 py-1.5 align-middle"
-                    >
+                  {row.cells.map((cell) => {
+                    const drillable =
+                      row.userId !== null &&
+                      cell.actualSecs > 0 &&
+                      (metric === "actual" ||
+                        metric === "both" ||
+                        metric === "variance");
+                    const weekLabel =
+                      grid.window.find((b) => b.weekKey === cell.weekKey)
+                        ?.label ?? cell.weekKey;
+                    const cellEl = (
                       <CapacityCell
                         effortSecs={cell.effortSecs}
                         capacitySecs={cell.capacitySecs}
@@ -394,8 +412,38 @@ export function WorkloadGrid({
                         state={cell.state}
                         metric={metric}
                       />
-                    </td>
-                  ))}
+                    );
+                    return (
+                      <td
+                        key={cell.weekKey}
+                        className="border-b px-1.5 py-1.5 align-middle"
+                      >
+                        {drillable && row.userId ? (
+                          <DayActualsPopover
+                            weekLabel={weekLabel}
+                            memberName={memberName}
+                            days={actualsForCell(
+                              actuals,
+                              row.userId,
+                              cell.weekKey,
+                              weekStartsOn,
+                              boardIds,
+                            )}
+                          >
+                            <button
+                              type="button"
+                              className="focus-visible:ring-ring w-full rounded focus-visible:ring-2 focus-visible:outline-none"
+                              aria-label={`Show daily actuals for ${memberName}, week of ${weekLabel}`}
+                            >
+                              {cellEl}
+                            </button>
+                          </DayActualsPopover>
+                        ) : (
+                          cellEl
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}

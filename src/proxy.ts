@@ -41,9 +41,18 @@ export async function proxy(request: NextRequest) {
   );
 
   // Do NOT run any DB/org lookups here — session refresh + redirect only.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  //
+  // getClaims() verifies the JWT LOCALLY against the cached JWKS (asymmetric
+  // ES256 signing keys are enabled), so it adds NO network call in the common
+  // case. Crucially it still routes through getSession() → __loadSession(),
+  // which is where near-expiry token refresh happens and where the refreshed
+  // cookies get written back via the cookie adapter above — so swapping
+  // getUser() (which paid an extra unconditional GET /user every request) for
+  // getClaims() keeps refresh intact while dropping that round-trip.
+  // NB: never pass a token into getClaims() — the one-arg form skips
+  // getSession() and would DISABLE refresh (silent logout). Call it with ().
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const isAuthenticated = !!claimsData?.claims;
 
   const { pathname } = request.nextUrl;
 
@@ -51,7 +60,7 @@ export async function proxy(request: NextRequest) {
   // dynamic /home dispatcher (orgs/boards lookup → board, onboarding, or welcome
   // shell). This is what lets `/` itself stay a static, edge-cached page for
   // anonymous traffic instead of a per-request server render.
-  if (pathname === "/" && user) {
+  if (pathname === "/" && isAuthenticated) {
     return NextResponse.redirect(new URL("/home", request.url));
   }
 
@@ -60,7 +69,7 @@ export async function proxy(request: NextRequest) {
   );
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
 
-  if (!user && !isAuthRoute && !isPublicRoute) {
+  if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -73,8 +82,9 @@ export const config = {
     // the public marketing/auth routes that never gate on a server-resolved
     // `user` (`/login`, `/signup`, `/updates`). Dropping those lets Vercel serve
     // them straight from the CDN with zero proxy invocation — the TTFB win.
-    // `/` stays matched (the authed → /home redirect above needs `user`); so
-    // does `/auth/*` (the OAuth callback needs session-refresh cookies).
+    // `/` stays matched (the authed → /home redirect above needs the resolved
+    // identity); so does `/auth/*` (the OAuth callback needs session-refresh
+    // cookies).
     "/((?!_next/static|_next/image|favicon.ico|login|signup|updates|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|otf|map)$).*)",
   ],
 };
