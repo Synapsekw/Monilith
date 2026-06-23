@@ -109,22 +109,41 @@ import {
 
 describe("chartConfigSchema", () => {
   const col = "11111111-1111-4111-8111-111111111111";
-  it("requires a groupColumnId and a valid chartStyle", () => {
+  it("requires a chartType and a primary dimension", () => {
     expect(
-      chartConfigSchema.safeParse({ groupColumnId: col, chartStyle: "bar" })
-        .success,
+      chartConfigSchema.safeParse({
+        chartType: "bar",
+        primary: { kind: "status", columnId: col },
+      }).success,
     ).toBe(true);
     expect(
-      chartConfigSchema.safeParse({ groupColumnId: col, chartStyle: "pie" })
-        .success,
+      chartConfigSchema.safeParse({
+        chartType: "pie",
+        primary: { kind: "status", columnId: col },
+      }).success,
     ).toBe(true);
+    // unknown chartType is rejected
     expect(
-      chartConfigSchema.safeParse({ groupColumnId: col, chartStyle: "line" })
-        .success,
+      chartConfigSchema.safeParse({
+        chartType: "scatter",
+        primary: { kind: "status", columnId: col },
+      }).success,
     ).toBe(false);
-    expect(chartConfigSchema.safeParse({ chartStyle: "bar" }).success).toBe(
+    // a primary dimension is required
+    expect(chartConfigSchema.safeParse({ chartType: "bar" }).success).toBe(
       false,
     );
+  });
+
+  it("defaults measure to count when omitted", () => {
+    const parsed = chartConfigSchema.safeParse({
+      chartType: "bar",
+      primary: { kind: "status", columnId: col },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.measure).toEqual({ agg: "count" });
+    }
   });
 });
 
@@ -144,14 +163,14 @@ describe("configSchemaForKind (D2)", () => {
     const col = "11111111-1111-4111-8111-111111111111";
     expect(
       configSchemaForKind("chart").safeParse({
-        groupColumnId: col,
-        chartStyle: "bar",
+        chartType: "bar",
+        primary: { kind: "status", columnId: col },
       }).success,
     ).toBe(true);
     expect(
       configSchemaForKind("battery").safeParse({ groupColumnId: col }).success,
     ).toBe(true);
-    // chart without a group column is rejected (no longer the permissive default)
+    // chart without a chartType/primary is rejected (no longer the permissive default)
     expect(configSchemaForKind("chart").safeParse({}).success).toBe(false);
   });
 });

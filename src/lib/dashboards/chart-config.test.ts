@@ -36,7 +36,10 @@ describe("normalizeChartConfig", () => {
   it("defaults missing measure to count", () => {
     const out = normalizeChartConfig({
       chartType: "donut",
-      primary: { kind: "status", columnId: "c" },
+      primary: {
+        kind: "status",
+        columnId: "11111111-1111-4111-8111-111111111111",
+      },
     });
     expect(out.measure).toEqual({ agg: "count" });
   });
