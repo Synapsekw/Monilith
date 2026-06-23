@@ -1053,8 +1053,15 @@ export function useBoardMutations(boardId: string) {
       }),
     removeDependency: (vars: RemoveDependencyVars) =>
       removeDependencyMutation.mutate(vars),
-    addColumn: (kind: ColumnKind, settings?: Record<string, unknown>) =>
-      addColumnMutation.mutate({ kind, settings }),
+    addColumn: (
+      kind: ColumnKind,
+      settings?: Record<string, unknown>,
+      callbacks?: { onError?: (err: Error) => void },
+    ) =>
+      addColumnMutation.mutate(
+        { kind, settings },
+        { onError: (err) => callbacks?.onError?.(err) },
+      ),
     renameColumn: (columnId: string, name: string) =>
       renameColumnMutation.mutate({ columnId, name }),
     resizeColumn: (columnId: string, width: number) =>
