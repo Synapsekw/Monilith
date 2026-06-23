@@ -11,6 +11,8 @@ export const numberConfigSchema = z
   .object({
     agg: z.enum(["count", "sum", "avg"]),
     valueColumnId: uuid.optional(),
+    display: z.enum(["plain", "gauge"]).default("plain"),
+    target: z.number().positive().optional(),
   })
   .refine((c) => c.agg === "count" || !!c.valueColumnId, {
     message: "Sum and average need a numbers column.",
@@ -19,9 +21,43 @@ export const numberConfigSchema = z
 
 export type NumberConfig = z.infer<typeof numberConfigSchema>;
 
+export const chartTypeSchema = z.enum([
+  "bar",
+  "stackedBar",
+  "groupedBar",
+  "line",
+  "area",
+  "combo",
+  "pie",
+  "donut",
+  "radial",
+]);
+export type ChartType = z.infer<typeof chartTypeSchema>;
+
+export const seriesDimensionSchema = z.object({
+  kind: z.enum(["status", "dropdown", "people", "date"]),
+  columnId: uuid.optional(), // omitted for date-on-created_at
+  bucket: z.enum(["day", "week", "month"]).optional(), // date only
+});
+export type SeriesDimension = z.infer<typeof seriesDimensionSchema>;
+
+export const measureSchema = z
+  .object({
+    agg: z.enum(["count", "sum", "avg"]),
+    valueColumnId: uuid.optional(),
+  })
+  .refine((m) => m.agg === "count" || !!m.valueColumnId, {
+    message: "Sum and average need a numbers column.",
+    path: ["valueColumnId"],
+  });
+export type Measure = z.infer<typeof measureSchema>;
+
 export const chartConfigSchema = z.object({
-  groupColumnId: uuid,
-  chartStyle: z.enum(["bar", "pie"]),
+  chartType: chartTypeSchema,
+  primary: seriesDimensionSchema,
+  series: seriesDimensionSchema.optional(),
+  measure: measureSchema.default({ agg: "count" }),
+  comboMap: z.record(z.string(), z.enum(["bar", "line"])).optional(),
 });
 export type ChartConfig = z.infer<typeof chartConfigSchema>;
 
