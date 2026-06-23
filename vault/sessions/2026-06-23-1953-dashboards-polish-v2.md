@@ -20,6 +20,7 @@ related:
 - **Charts + reskin:** `ChartWidget` rewritten to render bar/stacked/grouped/line/area/combo/pie/donut/radial via recharts; Number widget gauge mode + gradient numeral; bordered-card shell + accent-dot header across all widgets.
 - **Edit drawer:** unified `WidgetConfigForm` + right-side `WidgetConfigSheet` with debounced live preview; every widget kind now editable; removed `AddWidgetDialog` + `EditListWidgetDialog`.
 - Decisions: Number/Battery keep `dashboard_aggregate` (Number ungrouped, Battery status-distribution); `dashboard_series` powers Chart only — so `dashboard_aggregate` was NOT retired (spec D5 superseded). Multi-assignee = count-per-assignee. Whole feature merged as one unit (T1 alone would break chart creation in the old UI).
+- **Follow-up fix** (`3fd2c4b`, branch `task/dash-chart-measure-fix`): the config drawer let you pick Measure = Sum/Average without a number column, so saving was rejected with "Sum and average need a numbers column." (a save-time Zod refine, surfaced as a broken chart). Fixed in `WidgetConfigForm`: switching to sum/avg auto-selects the first number column, and sum/avg are only offered when the board has one (else a hint). Same trap fixed in the Number widget metric. +3 tests.
 
 ## Why
 
