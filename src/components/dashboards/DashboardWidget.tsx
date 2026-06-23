@@ -50,42 +50,48 @@ export function DashboardWidget({
 
   return (
     <>
-      <div className="bg-card flex h-full flex-col rounded-lg border">
+      <div className="bg-card relative flex h-full flex-col overflow-hidden rounded-xl border [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          {editing && renaming ? (
-            <Input
-              autoFocus
-              value={titleDraft}
-              disabled={editWidget.isPending}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={commitRename}
-              onMouseDown={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  commitRename();
-                } else if (e.key === "Escape") {
-                  e.preventDefault();
-                  setRenaming(false);
-                }
-              }}
-              aria-label="Widget title"
-              className="h-7 max-w-[12rem] text-sm font-medium"
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="size-1.5 shrink-0 rounded-[3px] bg-[var(--brand)]"
+              aria-hidden
             />
-          ) : editing ? (
-            <button
-              type="button"
-              onClick={openRename}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="hover:text-muted-foreground focus-visible:ring-ring truncate rounded-sm text-left text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-            >
-              {widget.title || "Untitled"}
-            </button>
-          ) : (
-            <span className="truncate text-sm font-medium">
-              {widget.title || "Untitled"}
-            </span>
-          )}
+            {editing && renaming ? (
+              <Input
+                autoFocus
+                value={titleDraft}
+                disabled={editWidget.isPending}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={commitRename}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitRename();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setRenaming(false);
+                  }
+                }}
+                aria-label="Widget title"
+                className="h-7 max-w-[12rem] text-sm font-medium"
+              />
+            ) : editing ? (
+              <button
+                type="button"
+                onClick={openRename}
+                onMouseDown={(e) => e.stopPropagation()}
+                className="hover:text-muted-foreground focus-visible:ring-ring truncate rounded-sm text-left text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {widget.title || "Untitled"}
+              </button>
+            ) : (
+              <span className="truncate text-sm font-medium">
+                {widget.title || "Untitled"}
+              </span>
+            )}
+          </div>
           {editing ? (
             <DropdownMenu>
               <DropdownMenuTrigger
