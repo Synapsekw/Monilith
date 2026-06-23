@@ -150,6 +150,54 @@ export function CheckboxCell({
   );
 }
 
+/**
+ * Shared progress/fill bar for the percent column — used by both the leaf cell
+ * (PercentCell) and the collapsed-parent rollup (RollupCell), so a manually-set
+ * value and an averaged rollup read identically. Monochrome track; the brand
+ * accent (`bg-primary`) earns the fill. `muted` dims it for the rollup variant.
+ * The numeric label carries the value (never color alone — AA + colorblind).
+ */
+export function PercentBar({
+  percent,
+  muted = false,
+}: {
+  percent: number;
+  muted?: boolean;
+}) {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  return (
+    <span className="flex w-full items-center gap-2">
+      <span
+        role="progressbar"
+        aria-valuenow={clamped}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${clamped}%`}
+        className="bg-muted relative h-1.5 w-full max-w-[120px] min-w-[2.5rem] overflow-hidden rounded-full"
+      >
+        <span
+          className={`absolute inset-y-0 left-0 rounded-full ${muted ? "bg-muted-foreground/50" : "bg-primary"}`}
+          style={{ width: `${clamped}%` }}
+        />
+      </span>
+      <span className="text-muted-foreground text-xs tabular-nums">
+        {clamped}%
+      </span>
+    </span>
+  );
+}
+
+export function PercentCell({
+  value,
+}: {
+  value: { percent: number } | null;
+  settings: Settings;
+}) {
+  if (value == null || typeof value.percent !== "number")
+    return <span className="text-sm" />;
+  return <PercentBar percent={value.percent} />;
+}
+
 export function RatingCell({
   value,
 }: {
@@ -293,6 +341,13 @@ export function CellRenderer({
       return (
         <RatingCell
           value={value as { rating: number } | null}
+          settings={settings}
+        />
+      );
+    case "percent":
+      return (
+        <PercentCell
+          value={value as { percent: number } | null}
           settings={settings}
         />
       );

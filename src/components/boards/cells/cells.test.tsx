@@ -11,6 +11,7 @@ import {
   LinkCell,
   NumberCell,
   PeopleCell,
+  PercentCell,
   PhoneCell,
   RatingCell,
   StatusCell,
@@ -170,6 +171,19 @@ describe("cell renderers (read-only, 2a)", () => {
       "href",
       "mailto:a@x.io",
     );
+  });
+
+  it("PercentCell renders a progressbar at the given percent and a label", () => {
+    render(<PercentCell value={{ percent: 75 }} settings={{}} />);
+    const bar = screen.getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "75");
+    expect(screen.getByText("75%")).toBeInTheDocument();
+  });
+
+  it("PercentCell renders an empty cell when value is null", () => {
+    const { container } = render(<PercentCell value={null} settings={{}} />);
+    expect(container.textContent).toBe("");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
   it("PhoneCell renders a tel link", () => {

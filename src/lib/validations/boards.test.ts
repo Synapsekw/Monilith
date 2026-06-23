@@ -247,6 +247,24 @@ describe("mirror column validation", () => {
   });
 });
 
+describe("percent column validation", () => {
+  it("accepts percent as a column kind", () => {
+    expect(columnKindSchema.safeParse("percent").success).toBe(true);
+  });
+  it("percent cell value requires a number in 0..100", () => {
+    const s = cellValueSchema("percent");
+    expect(s.safeParse({ percent: 0 }).success).toBe(true);
+    expect(s.safeParse({ percent: 75 }).success).toBe(true);
+    expect(s.safeParse({ percent: 100 }).success).toBe(true);
+    expect(s.safeParse({ percent: -1 }).success).toBe(false);
+    expect(s.safeParse({ percent: 101 }).success).toBe(false);
+    expect(s.safeParse({ percent: "50" }).success).toBe(false);
+  });
+  it("percent uses empty settings", () => {
+    expect(columnSettingsSchema("percent").safeParse({}).success).toBe(true);
+  });
+});
+
 describe("6d-3 summary_aggregation settings", () => {
   it("accepts a valid summary_aggregation on any kind's settings", () => {
     // empty-settings kind (text) — the base field merges in

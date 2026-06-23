@@ -18,6 +18,7 @@ const ALL_KINDS: ColumnKind[] = [
   "time_tracking",
   "relation",
   "mirror",
+  "percent",
 ];
 
 describe("allowedAggregations", () => {
@@ -51,6 +52,13 @@ describe("allowedAggregations", () => {
     for (const kind of ["text", "link", "email", "phone"] as ColumnKind[]) {
       expect(allowedAggregations(kind)).toEqual([...COUNT_FAMILY]);
     }
+  });
+
+  it("percent defaults to avg and exposes the numeric aggregations", () => {
+    const allowed = allowedAggregations("percent");
+    expect(allowed[0]).toBe("avg");
+    expect(allowed).toContain("min");
+    expect(allowed).toContain("max");
   });
 
   it("numbers exposes the numeric aggregations", () => {
@@ -103,16 +111,28 @@ describe("aggregate", () => {
       kind: "number",
       value: 2,
     });
-    expect(aggregate("text", "count_unique", [{ text: "x" }, { text: "x" }])).toEqual(
-      { kind: "number", value: 1 },
-    );
+    expect(
+      aggregate("text", "count_unique", [{ text: "x" }, { text: "x" }]),
+    ).toEqual({ kind: "number", value: 1 });
   });
 
   it("sum/avg/min/max over numbers", () => {
-    expect(aggregate("numbers", "sum", nums)).toEqual({ kind: "number", value: 30 });
-    expect(aggregate("numbers", "avg", nums)).toEqual({ kind: "number", value: 10 });
-    expect(aggregate("numbers", "min", nums)).toEqual({ kind: "number", value: 5 });
-    expect(aggregate("numbers", "max", nums)).toEqual({ kind: "number", value: 15 });
+    expect(aggregate("numbers", "sum", nums)).toEqual({
+      kind: "number",
+      value: 30,
+    });
+    expect(aggregate("numbers", "avg", nums)).toEqual({
+      kind: "number",
+      value: 10,
+    });
+    expect(aggregate("numbers", "min", nums)).toEqual({
+      kind: "number",
+      value: 5,
+    });
+    expect(aggregate("numbers", "max", nums)).toEqual({
+      kind: "number",
+      value: 15,
+    });
   });
 
   it("avg rounds to two decimals", () => {
@@ -120,12 +140,28 @@ describe("aggregate", () => {
     expect(r).toEqual({ kind: "number", value: 1.5 });
   });
 
+  it("averages a percent column with a percent style", () => {
+    const pcts = [{ percent: 100 }, { percent: 50 }, null];
+    expect(aggregate("percent", "avg", pcts)).toEqual({
+      kind: "number",
+      value: 75,
+      style: "percent",
+    });
+  });
+
   it("numeric aggs are empty when nothing is filled", () => {
-    expect(aggregate("numbers", "sum", [null, null])).toEqual({ kind: "empty" });
+    expect(aggregate("numbers", "sum", [null, null])).toEqual({
+      kind: "empty",
+    });
   });
 
   it("checked_total and percent_checked over checkboxes", () => {
-    const boxes = [{ checked: true }, { checked: false }, { checked: true }, null];
+    const boxes = [
+      { checked: true },
+      { checked: false },
+      { checked: true },
+      null,
+    ];
     expect(aggregate("checkbox", "checked_total", boxes)).toEqual({
       kind: "checkbox",
       checked: 2,
@@ -157,7 +193,11 @@ describe("aggregate", () => {
   });
 
   it("date range / earliest / latest", () => {
-    const dates = [{ date: "2026-03-01" }, { date: "2026-01-15", end: "2026-06-30" }, null];
+    const dates = [
+      { date: "2026-03-01" },
+      { date: "2026-01-15", end: "2026-06-30" },
+      null,
+    ];
     expect(aggregate("date", "date_range", dates)).toEqual({
       kind: "dateSpan",
       start: "2026-01-15",

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   CheckboxEditor,
@@ -8,6 +8,7 @@ import {
   LinkEditor,
   NumbersEditor,
   PeopleEditor,
+  PercentEditor,
   RatingEditor,
   StatusEditor,
   TextEditor,
@@ -69,6 +70,62 @@ describe("NumbersEditor", () => {
     );
     await userEvent.type(screen.getByRole("spinbutton"), "42{Enter}");
     expect(onCommit).toHaveBeenCalledWith({ n: 42 });
+  });
+});
+
+describe("PercentEditor", () => {
+  it("commits a parsed percent on Enter", async () => {
+    const onCommit = vi.fn();
+    render(
+      <PercentEditor
+        value={null}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.type(screen.getByRole("spinbutton"), "75{Enter}");
+    expect(onCommit).toHaveBeenCalledWith({ percent: 75 });
+  });
+
+  it("clamps values above 100 and below 0", () => {
+    // Drive the number input with fireEvent.change so the whole string is set
+    // at once — jsdom sanitizes negatives away when typed key-by-key.
+    const onCommit = vi.fn();
+    render(
+      <PercentEditor
+        value={null}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    const input = screen.getByRole("spinbutton");
+
+    fireEvent.change(input, { target: { value: "150" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommit).toHaveBeenLastCalledWith({ percent: 100 });
+
+    fireEvent.change(input, { target: { value: "-5" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommit).toHaveBeenLastCalledWith({ percent: 0 });
+  });
+
+  it("clears the cell when emptied", async () => {
+    const onClear = vi.fn();
+    render(
+      <PercentEditor
+        value={{ percent: 40 }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    const input = screen.getByRole("spinbutton");
+    await userEvent.clear(input);
+    await userEvent.type(input, "{Enter}");
+    expect(onClear).toHaveBeenCalled();
   });
 });
 

@@ -156,6 +156,39 @@ export function NumbersEditor({
   );
 }
 
+export function PercentEditor({
+  value,
+  onCommit,
+  onCancel,
+  onClear,
+}: EditorProps<{ percent: number }>) {
+  const [raw, setRaw] = useState(value ? String(value.percent) : "");
+  function commit() {
+    const trimmed = raw.trim();
+    // Emptying a previously-set cell clears it (deletes the row).
+    if (trimmed === "") return (onClear ?? onCancel)();
+    const n = Number(trimmed);
+    if (Number.isNaN(n)) return onCancel();
+    // A percent is bounded 0..100 — clamp rather than reject so a fat-fingered
+    // 150 still commits a sensible value.
+    onCommit({ percent: Math.max(0, Math.min(100, n)) });
+  }
+  const onKey = useCommitKeys(commit, onCancel);
+  return (
+    <Input
+      type="number"
+      min={0}
+      max={100}
+      autoFocus
+      value={raw}
+      onChange={(e) => setRaw(e.target.value)}
+      onKeyDown={onKey}
+      onBlur={commit}
+      className="h-8 tabular-nums"
+    />
+  );
+}
+
 export function StatusEditor({
   value,
   settings,
@@ -606,6 +639,16 @@ export function CellEditor({
       return (
         <RatingEditor
           value={value as { rating: number } | null}
+          settings={settings}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          onClear={onClear}
+        />
+      );
+    case "percent":
+      return (
+        <PercentEditor
+          value={value as { percent: number } | null}
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
