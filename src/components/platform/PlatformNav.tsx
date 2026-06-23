@@ -64,7 +64,7 @@ export function PlatformNav({
                 className={cn(
                   "flex size-9 items-center justify-center rounded-md transition-colors",
                   isActive(pathname, l.href, l.exact)
-                    ? "bg-surface text-foreground"
+                    ? "bg-primary/80 text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
@@ -108,7 +108,7 @@ export function PlatformNav({
               className={cn(
                 "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors",
                 isActive(pathname, l.href, l.exact)
-                  ? "border-primary bg-surface text-foreground border-l-2"
+                  ? "border-primary bg-primary/80 text-foreground border-l-2"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground border-l-2 border-transparent",
               )}
             >

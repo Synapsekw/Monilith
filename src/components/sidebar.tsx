@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BarChart3,
   ChevronsLeft,
@@ -53,6 +54,7 @@ export function Sidebar({
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const pathname = usePathname();
 
   // Render the SSR-safe default (expanded) until the persisted value hydrates,
   // and only animate width afterwards so there's no first-paint jump.
@@ -137,6 +139,8 @@ export function Sidebar({
         >
           {nav.map((item) => {
             const href = "href" in item ? item.href : undefined;
+            const isActive =
+              !!href && (pathname === href || pathname.startsWith(`${href}/`));
             if (isCollapsed) {
               return (
                 <Tooltip key={item.label}>
@@ -145,7 +149,13 @@ export function Sidebar({
                       <Link
                         href={href}
                         aria-label={item.label}
-                        className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors"
+                        aria-current={isActive ? "page" : undefined}
+                        className={cn(
+                          "flex size-9 items-center justify-center rounded-md transition-colors",
+                          isActive
+                            ? "bg-primary/80 text-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        )}
                       >
                         <item.icon className="size-4" />
                       </Link>
@@ -168,7 +178,13 @@ export function Sidebar({
               <Link
                 key={item.label}
                 href={href}
-                className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors"
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                  isActive
+                    ? "bg-primary/80 text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
               >
                 <item.icon className="size-4" />
                 {item.label}

@@ -108,7 +108,7 @@ describe("BoardsNav", () => {
     expect(screen.queryByText("Boards")).not.toBeInTheDocument();
   });
 
-  it("renders My boards with a shared indicator and a Shared with me section", () => {
+  it("renders boards with a shared indicator and a Shared with me section", () => {
     render(
       <BoardsNav
         boards={[
@@ -146,7 +146,6 @@ describe("BoardsNav", () => {
         workspaces={[{ id: "w", name: "WS" }]}
       />,
     );
-    expect(screen.getByText("My boards")).toBeInTheDocument();
     expect(screen.getByText("Shared with me")).toBeInTheDocument();
     expect(screen.getByText("Q3 Launch")).toBeInTheDocument();
     expect(screen.getByLabelText("Shared with others")).toBeInTheDocument();

@@ -60,13 +60,6 @@ export function BoardsNav({
         </div>
       )}
 
-      {/* My boards */}
-      {!collapsed && (
-        <p className="text-muted-foreground px-3 pt-1 text-xs font-medium">
-          My boards
-        </p>
-      )}
-
       {boards.length === 0 ? (
         collapsed ? null : (
           <p className="text-muted-foreground px-3 py-1 text-xs">
@@ -85,7 +78,7 @@ export function BoardsNav({
                   className={cn(
                     "flex size-9 items-center justify-center rounded-md text-sm font-medium uppercase transition-colors",
                     b.id === activeBoardId
-                      ? "bg-surface text-foreground"
+                      ? "bg-primary/80 text-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
@@ -100,14 +93,14 @@ export function BoardsNav({
               className={cn(
                 "group/row flex items-center rounded-md pr-1 transition-colors",
                 b.id === activeBoardId
-                  ? "bg-surface text-foreground"
+                  ? "bg-primary/80 text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               <Link
                 href={`/boards/${b.id}`}
                 aria-current={b.id === activeBoardId ? "page" : undefined}
-                className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-1 text-sm"
+                className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-1 text-xs"
               >
                 <span className="truncate">{b.name}</span>
                 {b.shared_out ? (
@@ -139,7 +132,7 @@ export function BoardsNav({
                   className={cn(
                     "flex size-9 items-center justify-center rounded-md text-sm font-medium uppercase transition-colors",
                     b.id === activeBoardId
-                      ? "bg-surface text-foreground"
+                      ? "bg-primary/80 text-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
@@ -160,9 +153,9 @@ export function BoardsNav({
                 href={`/boards/${b.id}`}
                 aria-current={b.id === activeBoardId ? "page" : undefined}
                 className={cn(
-                  "flex flex-col rounded-md px-3 py-1 text-sm transition-colors",
+                  "flex flex-col rounded-md px-3 py-1 text-xs transition-colors",
                   b.id === activeBoardId
-                    ? "bg-surface text-foreground"
+                    ? "bg-primary/80 text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
