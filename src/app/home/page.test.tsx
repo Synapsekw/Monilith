@@ -40,11 +40,15 @@ vi.mock("@/lib/supabase/server", () => ({
     rpc: async () => ({ data: false, error: null }),
   }),
 }));
-vi.mock("@/components/app-shell", () => ({
-  AppShell: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+vi.mock("@/components/shell/authenticated-shell", () => ({
+  AuthenticatedShell: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
-import Home from "./page";
+// The page is a sync Suspense wrapper; the cookie-bound dispatch logic lives in
+// the inner async server component, which the project pattern renders/awaits.
+import { HomeDispatch } from "./page";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -54,7 +58,7 @@ describe("Home dispatcher (/home)", () => {
   it("redirects a logged-out visitor to /login", async () => {
     getUser.mockResolvedValue(null);
 
-    await expect(Home()).rejects.toThrow("REDIRECT:/login");
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/login");
     expect(redirect).toHaveBeenCalledWith("/login");
   });
 
@@ -67,7 +71,7 @@ describe("Home dispatcher (/home)", () => {
     getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
     listMyBoards.mockResolvedValue([{ id: "b1" }]);
 
-    await expect(Home()).rejects.toThrow("REDIRECT:/boards/b1");
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/boards/b1");
     expect(redirect).toHaveBeenCalledWith("/boards/b1");
   });
 
@@ -79,7 +83,7 @@ describe("Home dispatcher (/home)", () => {
     });
     getUserOrgs.mockResolvedValue([]);
 
-    await expect(Home()).rejects.toThrow("REDIRECT:/onboarding");
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/onboarding");
     expect(redirect).toHaveBeenCalledWith("/onboarding");
   });
 
@@ -93,7 +97,7 @@ describe("Home dispatcher (/home)", () => {
     listMyBoards.mockResolvedValue([]);
     listSharedBoards.mockResolvedValue([{ id: "s1" }]);
 
-    await expect(Home()).rejects.toThrow("REDIRECT:/boards/s1");
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/boards/s1");
     expect(redirect).toHaveBeenCalledWith("/boards/s1");
   });
 
@@ -107,7 +111,7 @@ describe("Home dispatcher (/home)", () => {
     listMyBoards.mockResolvedValue([]);
     listSharedBoards.mockResolvedValue([]);
 
-    render(await Home());
+    render(await HomeDispatch());
 
     expect(screen.getByText("Welcome to Acme")).toBeInTheDocument();
     expect(redirect).not.toHaveBeenCalled();
