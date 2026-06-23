@@ -21,7 +21,7 @@ We want a first-class, low-friction capture point in the product, plus a single 
 4. **Text only.** Captured fields are `kind`, `title`, `body`. **No** auto page/browser context and **no** screenshot upload in v1 (explicitly deferred — see Non-goals).
 5. **Status lifecycle:** `new → triaged → planned → in_progress → resolved`, plus `declined` as a terminal "won't do". Visible to both the submitter and the admin.
 6. **Public response field.** The admin can attach a short public note (e.g. "Fixed in today's release") that the submitter sees next to their request.
-7. **Notifications: submitter-only (direction B).** When the admin changes status or posts/edits a response, the submitter gets an in-app notification. The admin is **not** notified per submission; instead the admin nav item carries a count badge of `new` feedback.
+7. **Notifications: submitter-only (direction B), via the existing bell.** When the admin changes status or posts/edits a response, the submitter gets an in-app notification in the **existing notifications bell**. The admin is **not** notified per submission; instead the admin nav item carries a count badge of `new` feedback. Integrating into the bell requires three deliberate extensions, decided at plan-time (see §5): (a) a new `notification_kind` value `feedback_response`; (b) a nullable `feedback_id` link column on `notifications`; (c) a **service-client insert** (server-only `SUPABASE_SERVICE_ROLE_KEY`) because the platform admin is not a member of the submitter's org, so the notifications-insert RLS policy (`actor must be org member`) would otherwise block a cross-tenant notification.
 
 ## Goal / non-goals
 
@@ -107,9 +107,15 @@ All actions return the project's `ActionResult<T> = { ok: true; data: T } | { ok
 - The header pill (above) — global.
 - A **"Feedback"** item in the platform-admin sidebar section (`src/components/shell/sidebar-nav.tsx`, alongside `/admin/organizations` etc.), and optionally the admin user-menu, **carrying a count badge of `status='new'` rows** (one cheap `count` query in the admin layout/nav data).
 
-### 5. Notifications integration
+### 5. Notifications integration (full bell integration — chosen at plan-time)
 
-On every `adminUpdateFeedback` the action writes one in-app notification addressed to the row's `submitted_by`, summarizing the change (e.g. _"Your request 'Export to CSV' is now In progress"_, and/or _"… has a new response"_). **Plan-time task:** inspect the existing notifications table/insert path and reuse it verbatim (type/payload shape, any helper) rather than inventing a parallel mechanism. No new notification _table_ — only a new notification _kind/source_ if the system distinguishes them.
+The submitter is notified through the **existing notifications bell** (`NotificationsBell` + the `public.notifications` table). Grounding established that the current schema does not accommodate feedback as-is, so v1 makes three scoped extensions:
+
+1. **Enum value.** Extend `public.notification_kind` (`mention | assigned | update_on_item`) with **`feedback_response`**.
+2. **Link column.** Add a nullable `feedback_id uuid references public.feedback(id) on delete cascade` to `public.notifications` (the existing `board_id` / `item_id` link columns don't apply to feedback). The bell uses it to label/route the notification.
+3. **Cross-tenant insert via the service client.** The existing notifications-insert RLS policy requires `actor_id = auth.uid()` **and** `is_org_member(org_id)`. The platform admin is **not** a member of the submitter's org, so a normal authenticated insert is denied. `adminUpdateFeedback` therefore writes the notification with the **server-only service client** (`createServiceClient`, `SUPABASE_SERVICE_ROLE_KEY` — never reaches the browser), which bypasses RLS for this one trusted, server-controlled insert. Row shape: `{ org_id: feedback.org_id, recipient_id: feedback.submitted_by, actor_id: <admin uid>, kind: 'feedback_response', feedback_id: feedback.id }`. Self-notification is skipped when the admin submitted the feedback (`recipient_id === actor_id`).
+
+On every `adminUpdateFeedback` that changes `status` or sets/edits `admin_response`, exactly one such notification row is written for `submitted_by`. `AppNotification` is the plain `notifications` row and `NotificationsList` renders via a `label(kind)` switch, so the bell needs **no query change**: T5 just adds a `feedback_response` case returning generic copy (_"updated your feedback request"_) and marks-read on click. The `feedback_id` column is stored for future routing (deep-linking the click into the My-requests popover is a Non-goal for v1).
 
 ---
 
@@ -128,34 +134,37 @@ On every `adminUpdateFeedback` the action writes one in-app notification address
 
 **Tasks**
 
-- **T1 — Schema:** migration creating `public.feedback` (columns, checks, indexes), RLS policies (select/insert/update/delete), and the `is_platform_admin()` SQL predicate if not already callable from SQL. Run `pnpm db:types`, commit generated types.
-  - _Produces:_ `feedback` table + RLS + regenerated `database.types.ts`.
-- **T2 — Server layer:** `src/lib/validations/feedback.ts` + `src/lib/feedback/actions.ts` (`submitFeedback`, `listMyFeedback`, `adminUpdateFeedback`) **including notification wiring** (§5).
-  - _Consumes:_ T1 types/table + existing notifications insert path. _Produces:_ the three actions + schemas.
-- **T3 — User popover surface:** `FeedbackButton` + `FeedbackPopover` (New + My requests tabs) wired into the app-shell header.
+- **T1 — Schema:** one migration creating `public.feedback` (columns, checks, indexes) + RLS (select/insert/update/delete), **plus** the two notifications extensions from §5 — `alter type public.notification_kind add value 'feedback_response'` and `alter table public.notifications add column feedback_id uuid references public.feedback(id) on delete cascade`. Run `pnpm db:types`, commit generated types. (`is_platform_admin()` / `is_org_member()` already exist as SQL functions — reuse directly in policies.)
+  - _Produces:_ `feedback` table + RLS + extended `notifications` schema + regenerated `database.types.ts`.
+- **T2 — Server layer:** `src/lib/validations/feedback.ts` + `src/lib/feedback/actions.ts` (`submitFeedback`, `listMyFeedback`, `adminUpdateFeedback`). `adminUpdateFeedback` writes the cross-tenant notification via `createServiceClient` (§5).
+  - _Consumes:_ T1 types/schema + `@/lib/supabase/service`. _Produces:_ the three actions + schemas.
+- **T3 — User popover surface:** `FeedbackButton` + `FeedbackPopover` (New + My requests tabs) wired into `HeaderUserData` (between the bell and the user menu).
   - _Consumes:_ `submitFeedback`, `listMyFeedback`.
-- **T4 — Admin surface:** `src/app/admin/feedback/` list + detail (status/response editing) + the sidebar "Feedback" item with the `new` count badge.
+- **T4 — Admin surface:** `src/app/admin/feedback/` list + detail (status/response editing) + the `/admin/feedback` item in `PlatformNav` with the `new` count badge.
   - _Consumes:_ `adminUpdateFeedback`, the admin list read, platform guard.
+- **T5 — Bell rendering:** add a `feedback_response` case to the `label()` switch in `src/components/notifications/NotificationsList.tsx` (generic copy; mark-read on click already handled by the list). No notifications-query change.
+  - _Consumes:_ T1 `feedback_response` kind. Independent of T3/T4 (different files: notifications UI vs. feedback popover vs. admin route).
 
 **Dependency graph**
 
 - T1 → T2 → {T3, T4}
+- T1 → T5 (T5 needs only the schema extension + a feedback-title join, not the actions)
 
 **Parallel batches**
 
 - **Batch 1:** T1 (foundation; everything depends on it).
-- **Batch 2:** T2 (depends on T1).
-- **Batch 3 (parallel):** T3 and T4 — both depend only on T2, are independent of each other (disjoint files: header client surface vs. `/admin` RSC). Run as concurrent agents in **isolated git worktrees** to avoid clobbering shared files.
+- **Batch 2:** T2 **and** T5 — both depend only on T1 and touch disjoint files (`src/lib/feedback/*` vs. `NotificationsBell` UI), so they run concurrently.
+- **Batch 3 (parallel):** T3 and T4 — both depend on T2, independent of each other (header client surface vs. `/admin` RSC). Concurrent agents in **isolated git worktrees**.
 
-**Critical path:** T1 → T2 → (T3 ‖ T4) — depth **3**; the real wall-clock floor is one schema task + one server task + the slower of the two UI tasks.
+**Critical path:** T1 → T2 → (T3 ‖ T4) — depth **3** (T5 rides along in Batch 2, off the critical path). Real wall-clock floor: one schema task + one server task + the slower of the two UI tasks.
 
 ---
 
 ## Testing (working-agreement #4 — written and executed)
 
 - **Zod:** `submitFeedbackSchema` / `adminUpdateFeedbackSchema` — accept valid, reject empty/over-length/bad-enum.
-- **Server actions / RLS:** a member can insert and read **only their own** rows; a member cannot read another user's feedback; a non-admin `adminUpdateFeedback` is rejected; an admin update sets status/response/`responded_*` **and** creates exactly one notification for `submitted_by`.
-- **Components:** _New_ form validation + success path (switches to My requests); _My requests_ renders status pill + response; admin detail status/response Save calls the action with the right payload.
+- **Server actions / RLS:** a member can insert and read **only their own** rows; a member cannot read another user's feedback; a non-admin `adminUpdateFeedback` is rejected; an admin update sets status/response/`responded_*` **and** writes exactly one `feedback_response` notification for `submitted_by` (via the service client), skipping self-notification when admin == submitter.
+- **Components:** _New_ form validation + success path (switches to My requests); _My requests_ renders status pill + response; admin detail status/response Save calls the action with the right payload; `NotificationsList.label()` returns the feedback copy for a `feedback_response` kind.
 - **Gates (must pass before "done"):** `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
 
 ---

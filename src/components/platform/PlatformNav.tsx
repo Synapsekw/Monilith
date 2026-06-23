@@ -11,6 +11,7 @@ import {
   Users,
   ScrollText,
   Shield,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -31,6 +32,7 @@ const LINKS: readonly PlatformLink[] = [
   { href: "/admin/organizations", label: "Organizations", icon: Building2 },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText },
+  { href: "/admin/feedback", label: "Feedback", icon: MessageSquare },
 ];
 
 function isActive(pathname: string, href: string, exact?: boolean): boolean {
@@ -40,9 +42,11 @@ function isActive(pathname: string, href: string, exact?: boolean): boolean {
 export function PlatformNav({
   isPlatformAdmin = false,
   collapsed = false,
+  newCount = 0,
 }: {
   isPlatformAdmin?: boolean;
   collapsed?: boolean;
+  newCount?: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(true);
@@ -114,6 +118,11 @@ export function PlatformNav({
             >
               <l.icon className="size-4" />
               {l.label}
+              {l.href === "/admin/feedback" && newCount > 0 ? (
+                <span className="bg-primary/15 text-primary ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider tabular-nums">
+                  {newCount}
+                </span>
+              ) : null}
             </Link>
           ))
         : null}

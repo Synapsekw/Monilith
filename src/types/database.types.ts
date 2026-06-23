@@ -721,6 +721,59 @@ export type Database = {
           },
         ];
       };
+      feedback: {
+        Row: {
+          admin_response: string | null;
+          body: string;
+          created_at: string;
+          id: string;
+          kind: string;
+          org_id: string;
+          responded_at: string | null;
+          responded_by: string | null;
+          status: string;
+          submitted_by: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          admin_response?: string | null;
+          body: string;
+          created_at?: string;
+          id?: string;
+          kind: string;
+          org_id: string;
+          responded_at?: string | null;
+          responded_by?: string | null;
+          status?: string;
+          submitted_by: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          admin_response?: string | null;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          org_id?: string;
+          responded_at?: string | null;
+          responded_by?: string | null;
+          status?: string;
+          submitted_by?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedback_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       goal_links: {
         Row: {
           board_id: string;
@@ -1219,6 +1272,7 @@ export type Database = {
           automation_id: string | null;
           board_id: string | null;
           created_at: string;
+          feedback_id: string | null;
           id: string;
           item_id: string | null;
           kind: Database["public"]["Enums"]["notification_kind"];
@@ -1232,6 +1286,7 @@ export type Database = {
           automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
+          feedback_id?: string | null;
           id?: string;
           item_id?: string | null;
           kind: Database["public"]["Enums"]["notification_kind"];
@@ -1245,6 +1300,7 @@ export type Database = {
           automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
+          feedback_id?: string | null;
           id?: string;
           item_id?: string | null;
           kind?: Database["public"]["Enums"]["notification_kind"];
@@ -1266,6 +1322,13 @@ export type Database = {
             columns: ["board_id"];
             isOneToOne: false;
             referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_feedback_id_fkey";
+            columns: ["feedback_id"];
+            isOneToOne: false;
+            referencedRelation: "feedback";
             referencedColumns: ["id"];
           },
           {
@@ -2448,7 +2511,8 @@ export type Database = {
         | "mention"
         | "assigned"
         | "update_on_item"
-        | "automation";
+        | "automation"
+        | "feedback_response";
       org_role: "owner" | "admin" | "member" | "guest";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
@@ -2622,6 +2686,7 @@ export const Constants = {
         "assigned",
         "update_on_item",
         "automation",
+        "feedback_response",
       ],
       org_role: ["owner", "admin", "member", "guest"],
       portfolio_health: ["on_track", "at_risk", "off_track"],

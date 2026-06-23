@@ -38,6 +38,7 @@ export function SidebarNav({
   dashboards,
   isPlatformAdmin,
   isOrgAdmin,
+  newFeedbackCount,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
@@ -45,6 +46,7 @@ export function SidebarNav({
   dashboards: { id: string; name: string }[];
   isPlatformAdmin?: boolean;
   isOrgAdmin?: boolean;
+  newFeedbackCount?: number;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
@@ -167,6 +169,7 @@ export function SidebarNav({
         <PlatformNav
           isPlatformAdmin={isPlatformAdmin}
           collapsed={isCollapsed}
+          newCount={newFeedbackCount}
         />
       </div>
     </div>
