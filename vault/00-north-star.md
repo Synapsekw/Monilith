@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-1016
+last-updated: 2026-06-23-1358
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -40,7 +40,7 @@ advisors + regenerate types before moving on.**
 - **4 — Collaboration** — <span style="color:#22c55e">**[Done]**</span> — Item detail panel, updates/comments/@mentions, attachments, activity log, notifications inbox. _(4a panel+updates+activity · 4b mentions+notifications · 4c attachments — spec [[2026-06-16-phase-4-collaboration-design]])_
 - **5 — Automations + Rules** — <span style="color:#22c55e">**[Done]**</span> — Trigger/condition/action builder on Postgres triggers + `pg_cron`/`pg_net` (no Edge Functions); recipes, run-history, webhook actions. _(5a → 5c-2 + move_to_group)_
 - **6 — ClickUp depth** — <span style="color:#eab308">**[In progress — 6a–6h done; 6e Docs deferred]**</span> — Subitems, custom fields/statuses, time tracking, relations + mirror columns + aggregation, workspace management, real-time presence. 6e Docs deferred ([[2026-06-21-decision-24-defer-phase-6e-docs]]: too complex + not fully cloud-native).
-- **7 — Asana polish** — <span style="color:#eab308">**[In progress — 7a + 7b + 7c done]**</span> — Portfolios, Goals/OKRs, Workload/capacity (v2: workspace/board filtering + planned/actual metric).
+- **7 — Asana polish** — <span style="color:#eab308">**[In progress — 7a + 7b + 7c done]**</span> — Portfolios, Goals/OKRs, Workload/capacity (v2: workspace/board filtering + planned/actual metric; v3: variance + per-day actuals drill-down).
 - **8 — Dashboards + templates + ⌘K polish** — <span style="color:#22c55e">**[Done]**</span> — Cross-board widgets (Number/Chart/Battery/List + filter), board templates, ⌘K navigation + create.
 - **9 — Hardening & Optimization** — <span style="color:#eab308">**[In progress — 9.1 + 9.2 done; 9.3/9.4 next]**</span> — Perf + perceived-perf program (Track A actual speed, Track B perceived speed, closing Web-Vitals gate 9.6). 9.1 auth fast-path (`getClaims` local JWT verify) + 9.2 streaming shell (PPR/Cache Components) shipped; 9.3 cache + 9.4 skeletons next. Spec `docs/superpowers/specs/2026-06-22-phase-9-performance-optimization-design.md`.
 - **RS — Design refresh (dark-first reskin)** — <span style="color:#22c55e">**[Done — dark + light]**</span> — Dark-first near-black palette as `.dark` OKLch tokens (dark default); light-mode pass shipped. ([[2026-06-16-decision-08-dark-first-monday-reskin]])
@@ -48,10 +48,10 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c done + Workload analytics v3 (variance + per-day drill-down) shipped · Phase 9 (Hardening) in progress — 9.1 auth fast-path + 9.2 streaming shell shipped, 9.3/9.4 next.
-- **Branch:** `develop == origin/develop` at `54b5b68`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell + Workload analytics v3 not yet promoted).
-- **In flight:** two scope-to-plan gap worktrees from the 2026-06-23 `/whats-next` triage — `task/kanban-member-names` + `task/auth-hardening-9x` (specs written + approved, builds pending). _(9.2 streaming shell merged — [[2026-06-23-1016-phase-9-2-streaming-shell-build]]; Workload v2 analytics merged.)_
-- **Next:** 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
-- **Owed:** migration-ledger reconciliation — `20260622170000_workload_actuals` is live on cloud but was applied via the SQL editor (not in the ledger) → `supabase db push` needs a user-run `migration repair` ([[migration-apply-blocked-by-classifier]]).
+- **Branch:** `develop == origin/develop` at `db9bfb2`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy — none promoted yet).
+- **In flight:** none — the 2026-06-23 `/whats-next` Group-1 gap-closers (Kanban card names, Workload analytics v3, auth `getClaims` proxy) all merged to `develop`. See [[2026-06-23-1358-whats-next-group1-gaps-ledger-repair]]. 9.2 streaming shell also merged ([[2026-06-23-1016-phase-9-2-streaming-shell-build]]).
+- **Next:** run `/promote` to ship the `develop` bundle → then 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
+- **Owed:** production promotion of the `develop` bundle (run `/promote`). _(Migration ledger reconciled 2026-06-23 — 5 live migrations marked applied + 6 throwaway orphans reverted; `db push --dry-run` clean. [[migration-apply-blocked-by-classifier]].)_
 
 ### Last session
 
