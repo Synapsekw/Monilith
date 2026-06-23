@@ -9,10 +9,8 @@ import {
   type ResponsiveLayouts,
 } from "react-grid-layout";
 
-import {
-  AddWidgetDialog,
-  type BoardOption,
-} from "@/components/dashboards/AddWidgetDialog";
+import { WidgetConfigSheet } from "@/components/dashboards/WidgetConfigSheet";
+import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { DashboardWidget } from "@/components/dashboards/DashboardWidget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +34,7 @@ export function DashboardCanvas({
   const { data: cache } = useDashboardCache(dashboardId, initialData);
   const { persistLayout, renameDashboard } = useDashboardMutations(dashboardId);
   const [editing, setEditing] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dashboardName = cache.dashboard.name;
@@ -132,7 +131,13 @@ export function DashboardCanvas({
         )}
         <div className="flex items-center gap-2">
           {editing ? (
-            <AddWidgetDialog dashboardId={dashboardId} boards={boards} />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAddOpen(true)}
+            >
+              Add widget
+            </Button>
           ) : null}
           <Button
             size="sm"
@@ -178,6 +183,12 @@ export function DashboardCanvas({
           ) : null}
         </div>
       )}
+      <WidgetConfigSheet
+        dashboardId={dashboardId}
+        boards={boards}
+        open={addOpen}
+        onOpenChange={setAddOpen}
+      />
     </div>
   );
 }

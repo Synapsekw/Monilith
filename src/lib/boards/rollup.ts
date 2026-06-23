@@ -115,6 +115,9 @@ export function rollupCell(
     // mirror has no cell_values either; it derives from relation_links + the
     // target board's cell_values and has no parent rollup of its own.
     case "mirror":
+    // percent stores a numeric value like "numbers" but is displayed as a
+    // percentage; parent rollups are not yet implemented for this kind.
+    case "percent":
       return { kind: "blank" };
   }
 }

@@ -117,6 +117,7 @@ export function columnSettingsSchema(kind: ColumnKind) {
     case "phone":
     case "files":
     case "time_tracking":
+    case "percent":
       return emptySettingsSchema;
   }
 }
@@ -216,5 +217,7 @@ export function cellValueSchema(kind: ColumnKind) {
       return relationValueSchema;
     case "mirror":
       return mirrorValueSchema;
+    case "percent":
+      return numbersValueSchema;
   }
 }

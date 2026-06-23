@@ -35,7 +35,7 @@ export function BatteryWidget({ widget }: { widget: CacheWidget }) {
 
   return (
     <div className="flex h-full flex-col justify-center gap-3">
-      <div className="flex h-7 w-full overflow-hidden rounded-md">
+      <div className="ring-border flex h-7 w-full overflow-hidden rounded-lg ring-1">
         {visible.map((r) => (
           <div
             key={r.key ?? "none"}

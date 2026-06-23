@@ -53,6 +53,8 @@ export function allowedAggregations(
     case "email":
     case "phone":
       return [...COUNT_FAMILY];
+    case "percent":
+      return ["sum", "avg", "min", "max", ...COUNT_FAMILY];
     case "mirror":
       if (!targetKind || targetKind === "mirror") return [...COUNT_FAMILY];
       return allowedAggregations(targetKind);
@@ -159,7 +161,11 @@ export function aggregate(
       if (aggId === "earliest")
         return { kind: "date", date: starts.reduce((a, b) => (a < b ? a : b)) };
       const ends = present
-        .map((v) => (v as { end?: string; date?: string }).end ?? (v as { date?: string }).date)
+        .map(
+          (v) =>
+            (v as { end?: string; date?: string }).end ??
+            (v as { date?: string }).date,
+        )
         .filter((d): d is string => typeof d === "string");
       return { kind: "date", date: ends.reduce((a, b) => (a > b ? a : b)) };
     }
@@ -215,6 +221,8 @@ function isFilled(kind: ColumnKind, v: unknown): boolean {
         (typeof o.trackedSecs === "number" && o.trackedSecs > 0) ||
         (typeof o.estimateSecs === "number" && o.estimateSecs > 0)
       );
+    case "percent":
+      return typeof o.n === "number" && Number.isFinite(o.n);
     // derived kinds: the caller passes presence (non-null = filled)
     case "files":
     case "relation":
@@ -224,7 +232,10 @@ function isFilled(kind: ColumnKind, v: unknown): boolean {
 }
 
 /** Extract the numeric scalars for sum/avg/min/max from filled values. */
-function numericValues(kind: ColumnKind, present: readonly unknown[]): number[] {
+function numericValues(
+  kind: ColumnKind,
+  present: readonly unknown[],
+): number[] {
   const key = kind === "rating" ? "rating" : "n";
   const out: number[] = [];
   for (const v of present) {

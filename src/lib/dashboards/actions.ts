@@ -8,6 +8,8 @@ import {
   type AggregateBucket,
   type ColumnMeta,
 } from "@/lib/dashboards/widget-data";
+import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
+import type { SeriesData, SeriesPoint } from "@/lib/dashboards/series";
 import {
   configSchemaForKind,
   createDashboardSchema,
@@ -378,4 +380,159 @@ export async function getWidgetRows(input: { widgetId: string }): Promise<
   }));
 
   return { ok: true, data: { columns, rows } };
+}
+
+const PALETTE = [
+  "var(--brand)",
+  "var(--status-green)",
+  "var(--status-orange)",
+  "var(--status-purple)",
+  "var(--status-teal)",
+  "var(--status-red)",
+  "var(--status-yellow)",
+  "var(--status-blue)",
+];
+
+function formatBucketLabel(key: string, bucket: string): string {
+  // key is "YYYY-MM-DD" (start of bucket)
+  const d = new Date(key);
+  if (Number.isNaN(d.getTime())) return key;
+  if (bucket === "month")
+    return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export async function getWidgetSeries(input: {
+  widgetId: string;
+}): Promise<ActionResult<SeriesData>> {
+  const parsed = getWidgetDataSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data: widget } = await supabase
+    .from("dashboard_widgets")
+    .select("config, source_board_id, org_id")
+    .eq("id", parsed.data.widgetId)
+    .maybeSingle();
+  if (!widget) return fail("Widget not found.");
+
+  const cfg = normalizeChartConfig(
+    (widget.config ?? {}) as Record<string, unknown>,
+  );
+  const empty: SeriesData = {
+    chartType: cfg.chartType,
+    primaryKind: cfg.primary.kind,
+    seriesKind: cfg.series?.kind ?? null,
+    points: [],
+  };
+  if (
+    !widget.source_board_id ||
+    (cfg.primary.kind !== "date" && !cfg.primary.columnId)
+  )
+    return { ok: true, data: empty };
+
+  // `dashboard_series` is not yet in database.types.ts — Task 1.5 regenerates it.
+  // Until then we use an `any` cast (justified: the type will be added in T1.5).
+  type SeriesRow = {
+    primary_key: string | null;
+    series_key: string | null;
+    value: number;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpcResult = (await (supabase as any).rpc("dashboard_series", {
+    p_board_id: widget.source_board_id,
+    p_primary: cfg.primary as Json,
+    p_series: (cfg.series ?? null) as Json,
+    p_measure: cfg.measure as Json,
+    p_limit: 12,
+  })) as { data: SeriesRow[] | null; error: { message: string } | null };
+  if (rpcResult.error) return fail(rpcResult.error.message);
+  const raw = rpcResult.data;
+
+  const orgId = widget.org_id;
+
+  // Resolve a key -> {label,color} map for a dimension.
+  // NOTE: org_members → profiles has no declared FK in database.types.ts (user_id
+  // references auth.users, not profiles), so a PostgREST embed won't typecheck.
+  // We use a two-query JS join instead, matching the existing pattern in
+  // src/lib/boards/queries.ts::listOrgMembers.
+  async function resolver(dim: { kind: string; columnId?: string }) {
+    const map = new Map<string, { label: string; color: string }>();
+    if (dim.kind === "status" || dim.kind === "dropdown") {
+      if (!dim.columnId) return map;
+      const { data: col } = await supabase
+        .from("columns")
+        .select("settings")
+        .eq("id", dim.columnId)
+        .maybeSingle();
+      const opts =
+        optionSchema
+          .array()
+          .safeParse((col?.settings as { options?: unknown })?.options ?? [])
+          .data ?? [];
+      opts.forEach((o) => map.set(o.id, { label: o.label, color: o.color }));
+    } else if (dim.kind === "people") {
+      // Two-query JS join: fetch org_members user_ids (scoped to this widget's
+      // org, matching src/lib/boards/queries.ts::listOrgMembers), then fetch
+      // profiles by id. The org_id filter keeps the member set + palette indices
+      // deterministic for multi-org users (RLS alone would merge orgs).
+      const { data: members } = await supabase
+        .from("org_members")
+        .select("user_id")
+        .eq("org_id", orgId);
+      const userIds = (members ?? []).map((m) => m.user_id);
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", userIds);
+        (profiles ?? []).forEach((p, i) =>
+          map.set(p.id, {
+            label: p.full_name ?? "Member",
+            color: PALETTE[i % PALETTE.length],
+          }),
+        );
+      }
+    }
+    return map;
+  }
+
+  const primaryMap = await resolver(cfg.primary);
+  const seriesMap = cfg.series ? await resolver(cfg.series) : new Map();
+
+  const points: SeriesPoint[] = (raw ?? []).map((r, i) => {
+    const pk = r.primary_key;
+    const sk = r.series_key;
+    const primaryLabel =
+      pk === null
+        ? "None"
+        : pk === "__other__"
+          ? "Other"
+          : cfg.primary.kind === "date"
+            ? formatBucketLabel(pk, cfg.primary.bucket ?? "month")
+            : (primaryMap.get(pk)?.label ?? "Unknown");
+    const seriesLabel =
+      sk === null
+        ? null
+        : (seriesMap.get(sk)?.label ??
+          (sk === "__other__" ? "Other" : "Unknown"));
+    const seriesColor =
+      (sk !== null
+        ? seriesMap.get(sk!)?.color
+        : primaryMap.get(pk ?? "")?.color) ?? PALETTE[i % PALETTE.length];
+    return {
+      primaryKey: pk,
+      primaryLabel,
+      seriesKey: sk,
+      seriesLabel,
+      seriesColor,
+      value: Number(r.value),
+    };
+  });
+
+  return {
+    ok: true,
+    data: { ...empty, points },
+  };
 }
