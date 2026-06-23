@@ -16,6 +16,7 @@ import {
   Maximize2,
   MoreHorizontal,
   Plus,
+  X,
 } from "lucide-react";
 import {
   DndContext,
@@ -443,6 +444,11 @@ export function BoardTable({
     });
 
   const mutations = useBoardMutations(payload.board.id);
+  // Board-level error surface for column-add failures. The Add-column menu is a
+  // header dropdown with no inline spot, so failures (which were previously
+  // swallowed silently) surface as a dismissible banner. Mirrors AddItemRow's
+  // inline role="alert" pattern; the project has no toast primitive yet.
+  const [columnError, setColumnError] = useState<string | null>(null);
   const {
     setCell,
     clearCellValue,
@@ -544,7 +550,10 @@ export function BoardTable({
       } else if (kind === "mirror") {
         setMirrorConfigOpen(true);
       } else {
-        mutations.addColumn(kind);
+        setColumnError(null);
+        mutations.addColumn(kind, undefined, {
+          onError: (err) => setColumnError(err.message),
+        });
       }
     },
     onEditOptions: (c) => setOptionsFor(c),
@@ -607,6 +616,25 @@ export function BoardTable({
         access={access}
         grants={grants}
       />
+
+      {columnError ? (
+        <div
+          role="alert"
+          className="bg-surface flex items-center gap-2 border-b px-4 py-2"
+        >
+          <p className="text-destructive flex-1 text-sm">
+            Couldn&apos;t add column: {columnError}
+          </p>
+          <button
+            type="button"
+            aria-label="Dismiss error"
+            onClick={() => setColumnError(null)}
+            className="text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 shrink-0 items-center justify-center rounded-md"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
 
       <div
         ref={scrollContainerRef}
@@ -720,7 +748,10 @@ export function BoardTable({
           <RelationColumnConfig
             boards={relationTargetBoards.filter((b) => b.id !== board.id)}
             onConfirm={(settings) => {
-              mutations.addColumn("relation", settings);
+              setColumnError(null);
+              mutations.addColumn("relation", settings, {
+                onError: (err) => setColumnError(err.message),
+              });
               setRelationConfigOpen(false);
             }}
             onCancel={() => setRelationConfigOpen(false)}
@@ -751,7 +782,10 @@ export function BoardTable({
               listMirrorableColumns(targetBoardId)
             }
             onConfirm={(settings) => {
-              mutations.addColumn("mirror", settings);
+              setColumnError(null);
+              mutations.addColumn("mirror", settings, {
+                onError: (err) => setColumnError(err.message),
+              });
               setMirrorConfigOpen(false);
             }}
             onCancel={() => setMirrorConfigOpen(false)}

@@ -9,6 +9,7 @@ const createGroup = vi.fn();
 const reorderGroup = vi.fn();
 const updateGroupColor = vi.fn();
 const deleteGroup = vi.fn();
+const createColumn = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
@@ -16,6 +17,7 @@ vi.mock("@/lib/boards/actions", () => ({
   reorderGroup: (...a: unknown[]) => reorderGroup(...a),
   updateGroupColor: (...a: unknown[]) => updateGroupColor(...a),
   deleteGroup: (...a: unknown[]) => deleteGroup(...a),
+  createColumn: (...a: unknown[]) => createColumn(...a),
 }));
 
 const createDependency = vi.fn();
@@ -285,6 +287,74 @@ describe("useBoardMutations.addDependency", () => {
         }),
       );
     });
+  });
+});
+
+describe("useBoardMutations.addColumn", () => {
+  beforeEach(() => {
+    createColumn.mockReset();
+  });
+
+  it("inserts the created column into the cache on success", async () => {
+    const qc = new QueryClient();
+    seedCache(qc); // columns: []
+    createColumn.mockResolvedValue({
+      ok: true,
+      data: {
+        column: {
+          id: "col-pct",
+          board_id: "b1",
+          org_id: "o1",
+          kind: "percent",
+          name: "Percent",
+          settings: {},
+          position: 1,
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.addColumn("percent");
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.columns.map((c) => c.id)).toContain("col-pct");
+    });
+    expect(createColumn).toHaveBeenCalledWith({
+      boardId: "b1",
+      kind: "percent",
+      settings: undefined,
+    });
+  });
+
+  it("surfaces errors via onError callback and leaves the cache untouched", async () => {
+    const qc = new QueryClient();
+    seedCache(qc); // columns: []
+    createColumn.mockResolvedValue({ ok: false, error: "boom" });
+
+    const onError = vi.fn();
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.addColumn("percent", undefined, { onError });
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "boom" }),
+      );
+    });
+
+    // Patch-on-success (no optimistic insert), so a failure leaves columns empty.
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.columns).toHaveLength(0);
   });
 });
 
