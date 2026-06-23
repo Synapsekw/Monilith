@@ -96,9 +96,9 @@ export function KanbanBoard({
   grants = [],
 }: {
   payload: BoardPayload;
-  // Accepted for parity with BoardTable / the route's prop contract. The card
-  // People summary is count-only (CellRenderer), so member identities aren't
-  // needed here yet — kept in the signature for the shared call shape.
+  // Org member directory, threaded down to each card's read-only People
+  // summary so it renders resolved assignee names (full name → email), with a
+  // count-fallback when the directory is empty — matching the Table cell.
   members?: EditorMember[];
   selectedViewId: string;
   access?: BoardAccess;
@@ -249,6 +249,7 @@ export function KanbanBoard({
               column={col}
               cellMap={cellMap}
               summaryColumns={summaryColumns}
+              members={members}
               firstGroupId={firstGroupId}
               groupColumnId={groupColumn.id}
               addItem={addItem}
@@ -265,6 +266,7 @@ function KanbanColumnView({
   column,
   cellMap,
   summaryColumns,
+  members,
   firstGroupId,
   groupColumnId,
   addItem,
@@ -273,6 +275,7 @@ function KanbanColumnView({
   column: KanbanColumn;
   cellMap: Map<string, CacheCellValue["value"]>;
   summaryColumns: CacheColumn[];
+  members: EditorMember[];
   firstGroupId: string | undefined;
   groupColumnId: string;
   addItem: (
@@ -349,6 +352,7 @@ function KanbanColumnView({
                   fromColId={column.id}
                   cellMap={cellMap}
                   summaryColumns={summaryColumns}
+                  members={members}
                 />
               </div>
             );
@@ -374,11 +378,13 @@ function KanbanCard({
   fromColId,
   cellMap,
   summaryColumns,
+  members,
 }: {
   item: CacheItem;
   fromColId: string;
   cellMap: Map<string, CacheCellValue["value"]>;
   summaryColumns: CacheColumn[];
+  members: EditorMember[];
 }) {
   const dragData: CardDragData = { itemId: item.id, fromColId };
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -419,6 +425,7 @@ function KanbanCard({
                 kind={col.kind}
                 value={value}
                 settings={(col.settings ?? {}) as Settings}
+                members={members}
               />
             );
           })}

@@ -88,16 +88,26 @@ function payloadFixture() {
       ],
     },
   };
+  const owner = {
+    id: "owner",
+    board_id: "b1",
+    org_id: "o1",
+    kind: "people",
+    name: "Owner",
+    position: 1,
+    settings: {},
+  };
   return {
     board: { id: "b1", org_id: "o1", name: "Board" },
     groups: [{ id: "g1", board_id: "b1" }],
-    columns: [status],
+    columns: [status, owner],
     items: [
       { id: "i1", name: "Card A", group_id: "g1", position: 0 },
       { id: "i2", name: "Card B", group_id: "g1", position: 1 },
     ],
     cellValues: [
       { item_id: "i1", column_id: "status", value: { optionId: "o1" } },
+      { item_id: "i1", column_id: "owner", value: { userIds: ["u1", "u2"] } },
     ],
     views: [
       {
@@ -110,14 +120,21 @@ function payloadFixture() {
   } as never;
 }
 
-function renderKanban() {
+type TestMember = {
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+};
+
+function renderKanban(members: TestMember[] = []) {
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>
       <KanbanBoard
         payload={payloadFixture()}
         selectedViewId="v2"
-        members={[]}
+        members={members}
       />
     </QueryClientProvider>,
   );
@@ -188,6 +205,47 @@ describe("KanbanBoard", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(setCell).not.toHaveBeenCalled();
+  });
+
+  it("renders assignee names on the card when a member directory is provided", () => {
+    renderKanban([
+      {
+        userId: "u1",
+        fullName: "Ada Lovelace",
+        email: "ada@x.com",
+        avatarUrl: null,
+      },
+      { userId: "u2", fullName: null, email: "grace@x.com", avatarUrl: null },
+    ]);
+    // fullName for u1, email fallback for u2, joined with ", "
+    expect(screen.getByText("Ada Lovelace, grace@x.com")).toBeInTheDocument();
+  });
+
+  it("falls back to a people count on the card when no directory is provided", () => {
+    renderKanban([]); // empty directory
+    expect(screen.getByText("2 people")).toBeInTheDocument();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+  });
+
+  it("uses singular 'person' for a single assignee in the count-fallback", () => {
+    const qc = new QueryClient();
+    const payload = payloadFixture() as unknown as {
+      cellValues: Array<{ item_id: string; column_id: string; value: unknown }>;
+    };
+    // Override card i1's owner cell to a single assignee.
+    payload.cellValues = payload.cellValues.map((c) =>
+      c.column_id === "owner" ? { ...c, value: { userIds: ["u1"] } } : c,
+    );
+    render(
+      <QueryClientProvider client={qc}>
+        <KanbanBoard
+          payload={payload as never}
+          selectedViewId="v2"
+          members={[]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("1 person")).toBeInTheDocument();
   });
 });
 
