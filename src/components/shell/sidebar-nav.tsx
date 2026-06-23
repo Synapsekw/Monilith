@@ -62,7 +62,9 @@ export function SidebarNav({
         collapsed={isCollapsed}
       />
 
-      {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
+      {!isCollapsed ? (
+        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
+      ) : null}
 
       <DashboardsNav
         dashboards={dashboards}
@@ -70,7 +72,9 @@ export function SidebarNav({
         collapsed={isCollapsed}
       />
 
-      {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
+      {!isCollapsed ? (
+        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
+      ) : null}
 
       <nav
         className={cn(
@@ -144,7 +148,9 @@ export function SidebarNav({
         })}
       </nav>
 
-      {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
+      {!isCollapsed ? (
+        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
+      ) : null}
 
       {!isCollapsed && workspaces.length > 0 ? (
         <div className="mt-2 flex flex-col gap-0.5 px-2">
@@ -165,7 +171,7 @@ export function SidebarNav({
         </div>
       ) : null}
 
-      <div className="mt-auto">
+      <div className="mt-auto pb-4">
         <PlatformNav
           isPlatformAdmin={isPlatformAdmin}
           collapsed={isCollapsed}
