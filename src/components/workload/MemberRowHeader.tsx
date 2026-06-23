@@ -3,6 +3,7 @@ import {
   hours,
   signedHours,
   signedPct,
+  utilizationPct,
   variancePct,
   varianceSecs,
 } from "@/lib/workload/rollup";
@@ -78,9 +79,14 @@ export function MemberRowHeader({
           ) : (
             <>
               {hours(totalEffortSecs)}
-              {!isUnassigned && totalCapacitySecs > 0
-                ? ` / ${hours(totalCapacitySecs)}`
-                : ""}
+              {!isUnassigned && totalCapacitySecs > 0 ? (
+                <>
+                  {` / ${hours(totalCapacitySecs)}`}
+                  {` · ${utilizationPct(totalEffortSecs, totalCapacitySecs)}%`}
+                </>
+              ) : (
+                ""
+              )}
             </>
           )}
         </p>
