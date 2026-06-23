@@ -146,4 +146,48 @@ describe("WorkloadGrid metric overlay (v2)", () => {
     expect(hasActual).toBe(true);
     expect(screen.getByText("5h")).toBeInTheDocument();
   });
+
+  it("metric=variance renders variance cells with a signed delta", () => {
+    searchParamsString = "metric=variance";
+    renderGrid({
+      actuals: [
+        // 12h logged on b1 vs 8h planned on b1 ⇒ +4h variance that week.
+        { userId: "u1", boardId: "b1", day: "2026-06-15", secs: 12 * H },
+      ],
+    });
+    const cells = screen.getAllByTestId("capacity-cell");
+    expect(
+      cells.some((c) => c.getAttribute("data-metric") === "variance"),
+    ).toBe(true);
+    // The week-of-Jun-15 cell: 12h actual − 16h planned (8h b1 + 8h b2) = −4h.
+    expect(screen.getByText("-4h")).toBeInTheDocument();
+  });
+});
+
+describe("WorkloadGrid per-day drill-down (v3)", () => {
+  beforeEach(() => {
+    searchParamsString = "";
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("opens a per-day actuals popover when a cell with logged time is clicked", async () => {
+    searchParamsString = "metric=actual";
+    renderGrid({
+      actuals: [
+        { userId: "u1", boardId: "b1", day: "2026-06-15", secs: 3 * H }, // Mon
+        { userId: "u1", boardId: "b1", day: "2026-06-17", secs: 2 * H }, // Wed
+      ],
+    });
+    const trigger = screen.getByRole("button", {
+      name: /show daily actuals for ann, week of jun 15/i,
+    });
+    await userEvent.click(trigger);
+    // Popover lists each in-week day with its hours.
+    expect(screen.getByText(/Mon/)).toBeInTheDocument();
+    expect(screen.getByText(/Wed/)).toBeInTheDocument();
+    expect(screen.getByText("3h")).toBeInTheDocument();
+    expect(screen.getByText("2h")).toBeInTheDocument();
+  });
 });
