@@ -16,6 +16,7 @@ const DEFAULT_NAME: Record<ColumnKind, string> = {
   time_tracking: "Time tracking",
   relation: "Relation",
   mirror: "Mirror",
+  percent: "Percent",
 };
 
 function opt(label: string, color: string) {

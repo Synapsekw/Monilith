@@ -1730,6 +1730,70 @@ export type Database = {
           },
         ];
       };
+      time_allocations: {
+        Row: {
+          board_id: string | null;
+          category: string | null;
+          created_at: string;
+          duration_secs: number;
+          id: string;
+          item_id: string | null;
+          note: string | null;
+          org_id: string;
+          updated_at: string;
+          user_id: string;
+          work_date: string;
+        };
+        Insert: {
+          board_id?: string | null;
+          category?: string | null;
+          created_at?: string;
+          duration_secs: number;
+          id?: string;
+          item_id?: string | null;
+          note?: string | null;
+          org_id: string;
+          updated_at?: string;
+          user_id: string;
+          work_date: string;
+        };
+        Update: {
+          board_id?: string | null;
+          category?: string | null;
+          created_at?: string;
+          duration_secs?: number;
+          id?: string;
+          item_id?: string | null;
+          note?: string | null;
+          org_id?: string;
+          updated_at?: string;
+          user_id?: string;
+          work_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "time_allocations_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_allocations_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_allocations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       time_entries: {
         Row: {
           board_id: string;
@@ -2189,6 +2253,20 @@ export type Database = {
           name: string;
         }[];
       };
+      dashboard_series: {
+        Args: {
+          p_board_id: string;
+          p_limit?: number;
+          p_measure?: Json;
+          p_primary: Json;
+          p_series?: Json;
+        };
+        Returns: {
+          primary_key: string;
+          series_key: string;
+          value: number;
+        }[];
+      };
       deactivate_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
@@ -2500,7 +2578,8 @@ export type Database = {
         | "files"
         | "time_tracking"
         | "relation"
-        | "mirror";
+        | "mirror"
+        | "percent";
       goal_progress_mode:
         | "manual_number"
         | "manual_percent"
@@ -2673,6 +2752,7 @@ export const Constants = {
         "time_tracking",
         "relation",
         "mirror",
+        "percent",
       ],
       goal_progress_mode: [
         "manual_number",
