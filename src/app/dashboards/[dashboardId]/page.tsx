@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { DashboardCanvas } from "@/components/dashboards/DashboardCanvas";
-import type { BoardOption } from "@/components/dashboards/AddWidgetDialog";
+import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getDashboardPayload } from "@/lib/dashboards/queries";
@@ -46,6 +46,15 @@ export default async function DashboardPage({
         .map((c) => ({ id: c.id, name: c.name })),
       statusColumns: cols
         .filter((c) => c.kind === "status")
+        .map((c) => ({ id: c.id, name: c.name })),
+      dateColumns: cols
+        .filter((c) => c.kind === "date")
+        .map((c) => ({ id: c.id, name: c.name })),
+      peopleColumns: cols
+        .filter((c) => c.kind === "people")
+        .map((c) => ({ id: c.id, name: c.name })),
+      dropdownColumns: cols
+        .filter((c) => c.kind === "dropdown")
         .map((c) => ({ id: c.id, name: c.name })),
       allColumns: cols.map((c) => ({
         id: c.id,

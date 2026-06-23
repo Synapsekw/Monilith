@@ -14,11 +14,11 @@ import { NumberWidget } from "@/components/dashboards/widgets/NumberWidget";
 import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
 import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
-import { EditListWidgetDialog } from "@/components/dashboards/EditListWidgetDialog";
+import { WidgetConfigSheet } from "@/components/dashboards/WidgetConfigSheet";
 import { Input } from "@/components/ui/input";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
 import type { CacheWidget } from "@/lib/dashboards/cache";
-import type { BoardOption } from "@/components/dashboards/AddWidgetDialog";
+import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 
 export function DashboardWidget({
   widget,
@@ -103,14 +103,10 @@ export function DashboardWidget({
                 <MoreVertical className="size-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {widget.kind === "list" ? (
-                  <>
-                    <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                      <Pencil className="mr-2 size-4" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                ) : null}
+                <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                  <Pencil className="mr-2 size-4" /> Edit
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive"
                   onClick={() => removeWidget.mutate({ widgetId: widget.id })}
@@ -137,15 +133,13 @@ export function DashboardWidget({
           )}
         </div>
       </div>
-      {widget.kind === "list" ? (
-        <EditListWidgetDialog
-          widget={widget}
-          board={boards.find((b) => b.id === widget.source_board_id)}
-          dashboardId={dashboardId}
-          open={editOpen}
-          onOpenChange={setEditOpen}
-        />
-      ) : null}
+      <WidgetConfigSheet
+        dashboardId={dashboardId}
+        boards={boards}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        editWidget={widget}
+      />
     </>
   );
 }
