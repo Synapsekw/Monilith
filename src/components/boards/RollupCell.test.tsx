@@ -26,6 +26,15 @@ describe("RollupCell", () => {
     expect(screen.getByRole("img", { name: /Done: 2/ })).toBeInTheDocument();
   });
 
+  it("renders a percent average as a progressbar with a label", () => {
+    render(<RollupCell result={{ kind: "percent", average: 75 }} />);
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "75",
+    );
+    expect(screen.getByText("75%")).toBeInTheDocument();
+  });
+
   it("renders nothing meaningful when blank", () => {
     const { container } = render(<RollupCell result={{ kind: "blank" }} />);
     expect(container.textContent).toBe("");

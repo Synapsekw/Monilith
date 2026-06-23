@@ -11,6 +11,20 @@ describe("rollupCell", () => {
     expect(r).toEqual({ kind: "number", total: 13 });
   });
 
+  it("averages percent subitems, ignoring empty cells", () => {
+    const r = rollupCell("percent", [{ percent: 100 }, { percent: 50 }, null]);
+    expect(r).toEqual({ kind: "percent", average: 75 });
+  });
+
+  it("rounds the percent average to a whole number", () => {
+    const r = rollupCell("percent", [{ percent: 33 }, { percent: 34 }]);
+    expect(r).toEqual({ kind: "percent", average: 34 });
+  });
+
+  it("returns blank for a percent column with no filled subitems", () => {
+    expect(rollupCell("percent", [null, undefined]).kind).toBe("blank");
+  });
+
   it("builds a status distribution sorted by count, with option meta", () => {
     const options = [
       { id: "done", label: "Done", color: "#0f0" },

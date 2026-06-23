@@ -34,6 +34,9 @@ export function allowedAggregations(
       return ["sum", "avg", "min", "max", ...COUNT_FAMILY];
     case "rating":
       return ["avg", "min", "max", ...COUNT_FAMILY];
+    case "percent":
+      // Average completion is the natural summary for a progress column.
+      return ["avg", "min", "max", ...COUNT_FAMILY];
     case "status":
     case "dropdown":
       return ["distribution", ...COUNT_FAMILY];
@@ -53,8 +56,6 @@ export function allowedAggregations(
     case "email":
     case "phone":
       return [...COUNT_FAMILY];
-    case "percent":
-      return ["sum", "avg", "min", "max", ...COUNT_FAMILY];
     case "mirror":
       if (!targetKind || targetKind === "mirror") return [...COUNT_FAMILY];
       return allowedAggregations(targetKind);
@@ -118,11 +119,17 @@ export function aggregate(
     case "max": {
       const nums = numericValues(kind, present);
       if (nums.length === 0) return EMPTY;
-      if (aggId === "sum") return num(nums.reduce((a, b) => a + b, 0));
-      if (aggId === "min") return num(Math.min(...nums));
-      if (aggId === "max") return num(Math.max(...nums));
+      // A percent column renders its numeric summaries with a "%" suffix.
+      const style = kind === "percent" ? "percent" : undefined;
+      if (aggId === "sum")
+        return num(
+          nums.reduce((a, b) => a + b, 0),
+          style,
+        );
+      if (aggId === "min") return num(Math.min(...nums), style);
+      if (aggId === "max") return num(Math.max(...nums), style);
       const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-      return num(Math.round(avg * 100) / 100);
+      return num(Math.round(avg * 100) / 100, style);
     }
     case "distribution": {
       const r = rollupCell(kind, values, options);
@@ -212,6 +219,8 @@ function isFilled(kind: ColumnKind, v: unknown): boolean {
       return typeof o.date === "string" && o.date.length > 0;
     case "numbers":
       return typeof o.n === "number" && Number.isFinite(o.n);
+    case "percent":
+      return typeof o.percent === "number" && Number.isFinite(o.percent);
     case "checkbox":
       return o.checked === true;
     case "rating":
@@ -221,8 +230,6 @@ function isFilled(kind: ColumnKind, v: unknown): boolean {
         (typeof o.trackedSecs === "number" && o.trackedSecs > 0) ||
         (typeof o.estimateSecs === "number" && o.estimateSecs > 0)
       );
-    case "percent":
-      return typeof o.n === "number" && Number.isFinite(o.n);
     // derived kinds: the caller passes presence (non-null = filled)
     case "files":
     case "relation":
@@ -236,7 +243,8 @@ function numericValues(
   kind: ColumnKind,
   present: readonly unknown[],
 ): number[] {
-  const key = kind === "rating" ? "rating" : "n";
+  const key =
+    kind === "rating" ? "rating" : kind === "percent" ? "percent" : "n";
   const out: number[] = [];
   for (const v of present) {
     const n = (v as Record<string, unknown>)[key];

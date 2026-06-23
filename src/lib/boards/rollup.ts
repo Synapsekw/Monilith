@@ -13,6 +13,7 @@ export type RollupResult =
   | { kind: "people"; count: number }
   | { kind: "checkbox"; checked: number; total: number }
   | { kind: "rating"; average: number }
+  | { kind: "percent"; average: number }
   | { kind: "duration"; totalSecs: number; estimateSecs?: number };
 
 type Options = readonly ColumnOption[] | undefined;
@@ -103,6 +104,22 @@ export function rollupCell(
         ? { kind: "rating", average: Math.round((sum / n) * 10) / 10 }
         : { kind: "blank" };
     }
+    case "percent": {
+      // A parent's collapsed percent cell shows the AVERAGE completion of its
+      // subitems (filled cells only) — rounded to a whole percent.
+      let sum = 0;
+      let n = 0;
+      for (const v of present) {
+        const p = (v as { percent?: number }).percent;
+        if (typeof p === "number" && Number.isFinite(p)) {
+          sum += p;
+          n++;
+        }
+      }
+      return n
+        ? { kind: "percent", average: Math.round(sum / n) }
+        : { kind: "blank" };
+    }
     case "text":
     case "link":
     case "email":
@@ -115,9 +132,6 @@ export function rollupCell(
     // mirror has no cell_values either; it derives from relation_links + the
     // target board's cell_values and has no parent rollup of its own.
     case "mirror":
-    // percent stores a numeric value like "numbers" but is displayed as a
-    // percentage; parent rollups are not yet implemented for this kind.
-    case "percent":
       return { kind: "blank" };
   }
 }
