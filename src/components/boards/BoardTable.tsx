@@ -34,7 +34,6 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
-import { rollupCell, rollupTimeTracking } from "@/lib/boards/rollup";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type {
   AggregationId,
@@ -72,13 +71,13 @@ import {
   listRelationCandidates,
   listRelationTargetBoards,
 } from "@/lib/boards/relation-candidates";
-import { relationRollup, type RelationLink } from "@/lib/boards/relations";
+import { type RelationLink } from "@/lib/boards/relations";
 import { FilePreviewLightbox } from "@/components/boards/item-panel/FilePreviewLightbox";
 import {
   getAttachmentDownloadUrl,
   getAttachmentPreviewUrls,
 } from "@/lib/collaboration/actions";
-import { RollupCell } from "@/components/boards/RollupCell";
+import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
@@ -1167,6 +1166,57 @@ function GroupHeaderRow({
   );
 }
 
+/**
+ * Read-only per-column rollup row shown under a collapsed group's header, so a
+ * collapsed group summarizes all its items the same way a collapsed parent
+ * summarizes its subitems (percent → averaged color bar, number → sum, etc.).
+ * Computed client-side from already-loaded cell values — no extra round-trips.
+ */
+function GroupRollupRow({
+  group,
+  items,
+  columns,
+  cellMap,
+  cache,
+  template,
+}: {
+  group: Group;
+  items: Item[];
+  columns: Column[];
+  cellMap: Map<string, CacheCellValue["value"]>;
+  cache: BoardCache;
+  template: string;
+}) {
+  // Snapshot "now" for any running time-tracking entry (keeps render pure).
+  const [nowMs] = useState(() => Date.now());
+  return (
+    <div
+      className="bg-surface grid w-full border-b"
+      style={{ height: ROW_HEIGHT, gridTemplateColumns: template }}
+    >
+      <div
+        className={cn(
+          "bg-surface text-muted-foreground sticky left-0 z-10 flex items-center px-3 text-xs",
+          NAME_FREEZE_EDGE,
+        )}
+        style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
+      >
+        Average
+      </div>
+      {columns.map((col) => (
+        <RollupValueCell
+          key={col.id}
+          col={col}
+          items={items}
+          cellMap={cellMap}
+          cache={cache}
+          nowMs={nowMs}
+        />
+      ))}
+    </div>
+  );
+}
+
 function GroupSection({
   group,
   items,
@@ -1337,6 +1387,17 @@ function GroupSection({
         onDelete={onDelete}
         col={col}
       />
+
+      {collapsed && items.length > 0 && (
+        <GroupRollupRow
+          group={group}
+          items={items}
+          columns={columns}
+          cellMap={cellMap}
+          cache={controls.cache}
+          template={template}
+        />
+      )}
 
       {!collapsed && (
         <>
@@ -1553,71 +1614,15 @@ function ItemRow({
       />
       {columns.map((col) => {
         if (childCount > 0 && !isExpanded) {
-          if (col.kind === "time_tracking") {
-            const childEntries = subitems.flatMap((c) =>
-              timeEntriesForCell(controls.cache, c.id, col.id),
-            );
-            const estimates = subitems
-              .map(
-                (c) =>
-                  (
-                    cellMap.get(cellKey(c.id, col.id)) as
-                      | { estimateSeconds?: number }
-                      | undefined
-                  )?.estimateSeconds,
-              )
-              .filter((n): n is number => typeof n === "number");
-            const result = rollupTimeTracking(
-              childEntries,
-              estimates,
-              rollupNowMs,
-            );
-            return (
-              <div
-                key={col.id}
-                className="flex h-full items-center truncate border-l px-3"
-              >
-                <RollupCell result={result} />
-              </div>
-            );
-          }
-          if (col.kind === "relation") {
-            const childLinks = subitems.flatMap((c) =>
-              relationLinksForCell(controls.cache, c.id, col.id),
-            );
-            return (
-              <div
-                key={col.id}
-                className="flex h-full items-center truncate border-l px-3"
-              >
-                <span className="text-muted-foreground text-xs">
-                  {relationRollup(childLinks)}
-                </span>
-              </div>
-            );
-          }
-          if (col.kind === "mirror") {
-            // Mirror has no parent-rollup aggregate in v1 — render blank, like
-            // relation, while matching the surrounding rollup container shape.
-            return (
-              <div
-                key={col.id}
-                className="flex h-full items-center truncate border-l px-3"
-              />
-            );
-          }
-          const values = subitems.map(
-            (c) => cellMap.get(cellKey(c.id, col.id)) ?? null,
-          );
-          const settings = (col.settings ?? {}) as Settings;
-          const result = rollupCell(col.kind, values, settings.options);
           return (
-            <div
+            <RollupValueCell
               key={col.id}
-              className="flex h-full items-center truncate border-l px-3"
-            >
-              <RollupCell result={result} />
-            </div>
+              col={col}
+              items={subitems}
+              cellMap={cellMap}
+              cache={controls.cache}
+              nowMs={rollupNowMs}
+            />
           );
         }
         return (
