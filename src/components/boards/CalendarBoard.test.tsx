@@ -114,6 +114,7 @@ describe("CalendarBoard", () => {
   it("does not render an Unscheduled section", () => {
     renderCalendar();
     expect(screen.queryByText(/unscheduled/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Undated Item")).not.toBeInTheDocument();
   });
 
   it("switches to Week mode without any router navigation", () => {
