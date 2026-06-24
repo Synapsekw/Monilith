@@ -12,10 +12,16 @@ related:
 ## Context
 
 While building the percent-column colorization, the spec and plan (`docs/superpowers/specs|plans/…md`)
-were committed to `develop` with **placeholder** arbitrary-value classes written in prose, e.g.
-`` `bg-[var(--progress-…)]` `` (ellipsis) and `` `bg-[var(--progress-*)]` ``. The main-checkout dev
-server then threw `Parsing CSS source code failed … Unexpected token Delim('*')`, with a generated
-rule `.bg-[var(--progress-*)] { background-color: var(--progress-*) }`.
+were committed to `develop` with **placeholder** arbitrary-value classes written in prose — a
+`bg-[var(--progress-NAME)]` utility where `NAME` was a non-token placeholder (an ellipsis, or a literal
+asterisk). The main-checkout dev server then threw `Parsing CSS source code failed … Unexpected token
+Delim`: Tailwind compiled the placeholder into a `background-color: var(--progress-` + placeholder rule,
+which is invalid CSS.
+
+(Note: this very ADR re-broke the build once, because spelling the bad utility out literally — a `bg-`
+arbitrary-value bracket wrapped around an invalid value — made Tailwind generate it again, hence `NAME`
+above. Never write a complete `bg-`-bracket token around an invalid value in a tracked doc; use a
+letters-only stand-in like `NAME`, or plain prose.)
 
 Root cause: **Tailwind v4 automatic content detection scans every non-gitignored file — including
 `.md`/`.mdx`** (it only excludes `.gitignore`d paths, `node_modules`, binaries, CSS, lockfiles). A
@@ -42,8 +48,8 @@ gets both: useful docs and a build that can't be broken by prose.
 ## Consequences
 
 - Positive: `develop` build restored (`a54b582`); the convention costs nothing.
-- Watch: any future doc with a `bg-[…]`/arbitrary-value example that isn't a _valid_ class can re-break
-  the build. A repo-wide hardening (Tailwind `@source not "docs"` / exclude `*.md`) would prevent the
+- Watch: any future doc with a `bg-`-style arbitrary-value example that isn't a _valid_ class can
+  re-break the build. A repo-wide hardening (Tailwind `@source not "docs"` / exclude `*.md`) would prevent the
   whole class of bug but is a separate, broader change — not done here.
 
 ## Related

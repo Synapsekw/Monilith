@@ -23,7 +23,7 @@ related:
   parent. Client-side over loaded cells, 0 round-trips. Test: new collapsed-group case in
   `BoardTable.test.tsx`.
 - **Two bugfixes:** committed spec/plan `.md` held placeholder Tailwind classes
-  (`bg-[var(--progress-…)]`) that Tailwind compiled to invalid CSS → broke the `develop` dev build;
+  (a `bg-[var(--progress-NAME)]` form with a non-token name) that Tailwind compiled to invalid CSS → broke the `develop` dev build;
   fixed in `a54b582` (see [[2026-06-24-gotcha-46-tailwind-scans-markdown-classes]]). Separately, a
   stale Turbopack CSS cache served the new tokens undefined (grey bars) — cleared `.next` + restart.
 
