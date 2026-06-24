@@ -25,3 +25,50 @@ export function itemDateRange(
   if (!value?.date) return null;
   return { start: value.date, end: value.end ?? value.date };
 }
+
+export type TimelineSpan = { start: string; end: string; isMilestone: boolean };
+
+/**
+ * Resolve an item's timeline span from a start column and an optional end
+ * column. When endColumnId is null, falls back to the start column's own
+ * `.end` (legacy single-column range). See the timeline-spans design.
+ */
+export function resolveTimelineSpan(
+  itemId: string,
+  cellValues: CacheCellValue[],
+  startColumnId: string,
+  endColumnId: string | null,
+): TimelineSpan | null {
+  const startCell = cellValues.find(
+    (c) => c.item_id === itemId && c.column_id === startColumnId,
+  );
+  const startVal = startCell?.value as
+    | { date?: string; end?: string }
+    | undefined;
+  const startDate = startVal?.date;
+
+  let endDate: string | undefined;
+  if (endColumnId) {
+    const endCell = cellValues.find(
+      (c) => c.item_id === itemId && c.column_id === endColumnId,
+    );
+    endDate = (endCell?.value as { date?: string } | undefined)?.date;
+  } else {
+    endDate = startVal?.end;
+  }
+
+  if (!startDate && !endDate) return null;
+
+  // Exactly one date → a milestone dot at that date.
+  if (!startDate || !endDate) {
+    const d = (startDate ?? endDate) as string;
+    return { start: d, end: d, isMilestone: true };
+  }
+
+  // Inverted range → clamp to a dot at the start (never a negative-width bar).
+  if (endDate < startDate) {
+    return { start: startDate, end: startDate, isMilestone: true };
+  }
+
+  return { start: startDate, end: endDate, isMilestone: startDate === endDate };
+}
