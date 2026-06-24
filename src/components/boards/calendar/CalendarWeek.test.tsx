@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { DndContext } from "@dnd-kit/core";
 import { CalendarWeek } from "./CalendarWeek";
 import { buildCellMap } from "@/lib/boards/cache";
@@ -37,5 +37,26 @@ describe("CalendarWeek", () => {
     for (const name of ["Span A", "Span B", "Span C", "Span D"]) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
+  });
+
+  it("fires onDayClick with the clicked day's ISO, not the week start", () => {
+    const onDayClick = vi.fn();
+    render(
+      <DndContext>
+        <CalendarWeek
+          weekStartISO="2026-06-07"
+          today="2026-06-16"
+          items={[]}
+          cellValues={[] as never}
+          dateColumnId="d1"
+          statusColumn={undefined}
+          cellMap={new Map()}
+          onDayClick={onDayClick}
+          onOpenItem={vi.fn()}
+        />
+      </DndContext>,
+    );
+    fireEvent.click(screen.getByLabelText("Add item on 2026-06-09"));
+    expect(onDayClick).toHaveBeenCalledWith("2026-06-09");
   });
 });

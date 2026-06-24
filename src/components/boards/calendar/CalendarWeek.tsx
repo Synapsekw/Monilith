@@ -68,10 +68,28 @@ export function CalendarWeek({
       </div>
 
       <div
-        className="relative grid grid-cols-7 gap-px rounded-b-md border border-t-0"
+        className="relative grid grid-cols-7 rounded-b-md border border-t-0"
         style={{ minHeight: `${Math.max(laneCount, 4) * 26 + 16}px` }}
-        onClick={() => onDayClick(weekStartISO)}
       >
+        {days.map((iso) => (
+          <div
+            key={iso}
+            role="button"
+            tabIndex={0}
+            aria-label={`Add item on ${iso}`}
+            onClick={() => onDayClick(iso)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onDayClick(iso);
+              }
+            }}
+            className={cn(
+              "hover:bg-accent/10 cursor-pointer border-r last:border-r-0",
+              iso === today && "bg-primary/8",
+            )}
+          />
+        ))}
         <div
           className="pointer-events-none absolute inset-x-1.5 top-2 grid grid-cols-7 gap-px"
           style={{ gridAutoRows: "24px" }}
