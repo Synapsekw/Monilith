@@ -3,6 +3,7 @@ import {
   resolveDateColumn,
   itemDateRange,
   resolveTimelineSpan,
+  defaultTimelineColumns,
 } from "@/lib/boards/dates";
 import type { CacheCellValue } from "@/lib/boards/cache";
 
@@ -109,6 +110,40 @@ describe("resolveTimelineSpan", () => {
       start: "2026-06-02",
       end: "2026-06-04",
       isMilestone: false,
+    });
+  });
+});
+
+describe("defaultTimelineColumns", () => {
+  it("matches start and end columns by name", () => {
+    const cols = [
+      { id: "a", name: "Start Date" },
+      { id: "b", name: "Due Date" },
+      { id: "c", name: "Other" },
+    ];
+    expect(defaultTimelineColumns(cols)).toEqual({
+      startColumnId: "a",
+      endColumnId: "b",
+    });
+  });
+  it("falls back to the first date column for start and null for end", () => {
+    const cols = [{ id: "x", name: "When" }];
+    expect(defaultTimelineColumns(cols)).toEqual({
+      startColumnId: "x",
+      endColumnId: null,
+    });
+  });
+  it("never reuses the start column as the end column", () => {
+    const cols = [{ id: "a", name: "Start / End" }];
+    expect(defaultTimelineColumns(cols)).toEqual({
+      startColumnId: "a",
+      endColumnId: null,
+    });
+  });
+  it("returns nulls for no date columns", () => {
+    expect(defaultTimelineColumns([])).toEqual({
+      startColumnId: null,
+      endColumnId: null,
     });
   });
 });

@@ -72,3 +72,22 @@ export function resolveTimelineSpan(
 
   return { start: startDate, end: endDate, isMilestone: startDate === endDate };
 }
+
+/**
+ * Pick sensible default start/end columns for a timeline view by column name.
+ * Used only to seed the pickers when the view config has no explicit choice;
+ * an explicit pick always overrides and is persisted.
+ */
+export function defaultTimelineColumns(
+  dateColumns: { id: string; name: string }[],
+): { startColumnId: string | null; endColumnId: string | null } {
+  const startRe = /start|begin/i;
+  const endRe = /due|end|finish|target/i;
+
+  const start =
+    dateColumns.find((c) => startRe.test(c.name)) ?? dateColumns[0] ?? null;
+  const end =
+    dateColumns.find((c) => endRe.test(c.name) && c.id !== start?.id) ?? null;
+
+  return { startColumnId: start?.id ?? null, endColumnId: end?.id ?? null };
+}
