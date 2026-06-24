@@ -598,6 +598,95 @@ describe("BoardTable rollup", () => {
   });
 });
 
+function groupPercentPayload() {
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+    ],
+    columns: [
+      {
+        id: "c1",
+        board_id: "b1",
+        org_id: "o1",
+        kind: "percent",
+        name: "Progress",
+        settings: {},
+        position: 0,
+        width: null,
+      },
+    ],
+    items: [
+      {
+        id: "t1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task One",
+        position: 0,
+      },
+      {
+        id: "t2",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        parent_id: null,
+        name: "Task Two",
+        position: 1,
+      },
+    ],
+    cellValues: [
+      {
+        item_id: "t1",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { percent: 40 },
+      },
+      {
+        item_id: "t2",
+        column_id: "c1",
+        org_id: "o1",
+        board_id: "b1",
+        value: { percent: 80 },
+      },
+    ],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+describe("BoardTable collapsed-group rollup", () => {
+  it("shows the group's averaged percent bar when the group is collapsed", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <BoardTable payload={groupPercentPayload()} selectedViewId="v1" />
+      </QueryClientProvider>,
+    );
+    // Expanded by default → items visible, no group Average row.
+    expect(screen.getByText("Task One")).toBeInTheDocument();
+    expect(screen.queryByText("Average")).not.toBeInTheDocument();
+
+    // Collapse the group.
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Group 1" }));
+
+    // Items hidden; the group's average bar (avg of 40 and 80 = 60) shows.
+    expect(screen.queryByText("Task One")).not.toBeInTheDocument();
+    expect(screen.getByText("Average")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
+      "60",
+    );
+  });
+});
+
 function footerPayload(settings: Record<string, unknown>) {
   return {
     board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
