@@ -1,4 +1,4 @@
-import { itemDateRange, resolveTimelineSpan } from "@/lib/boards/dates";
+import { resolveTimelineSpan } from "@/lib/boards/dates";
 import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
 import type { CacheCellValue } from "@/lib/boards/cache";
 
