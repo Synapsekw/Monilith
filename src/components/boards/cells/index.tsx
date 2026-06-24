@@ -2,6 +2,7 @@ import { Check, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
+import { percentBandColor } from "@/lib/boards/percent-color";
 import type { EditorMember } from "./editors";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -153,17 +154,11 @@ export function CheckboxCell({
 /**
  * Shared progress/fill bar for the percent column — used by both the leaf cell
  * (PercentCell) and the collapsed-parent rollup (RollupCell), so a manually-set
- * value and an averaged rollup read identically. Monochrome track; the brand
- * accent (`bg-primary`) earns the fill. `muted` dims it for the rollup variant.
+ * value and an averaged rollup read identically. Monochrome track; the fill
+ * color comes from percentBandColor(value) — red near 0, green near 100.
  * The numeric label carries the value (never color alone — AA + colorblind).
  */
-export function PercentBar({
-  percent,
-  muted = false,
-}: {
-  percent: number;
-  muted?: boolean;
-}) {
+export function PercentBar({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, Math.round(percent)));
   return (
     <span className="flex w-full items-center gap-2">
@@ -176,7 +171,7 @@ export function PercentBar({
         className="bg-muted relative h-1.5 w-full max-w-[120px] min-w-[2.5rem] overflow-hidden rounded-full"
       >
         <span
-          className={`absolute inset-y-0 left-0 rounded-full ${muted ? "bg-muted-foreground/50" : "bg-primary"}`}
+          className={`absolute inset-y-0 left-0 rounded-full ${percentBandColor(clamped)}`}
           style={{ width: `${clamped}%` }}
         />
       </span>
