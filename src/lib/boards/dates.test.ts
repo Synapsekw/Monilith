@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { resolveDateColumn, itemDateRange } from "@/lib/boards/dates";
+import {
+  resolveDateColumn,
+  itemDateRange,
+  resolveTimelineSpan,
+  defaultTimelineColumns,
+} from "@/lib/boards/dates";
+import type { CacheCellValue } from "@/lib/boards/cache";
 
 const cols = [
   { id: "c1", kind: "text" },
@@ -45,5 +51,99 @@ describe("itemDateRange", () => {
   });
   it("returns null when the item has no date cell", () => {
     expect(itemDateRange("i3", cells, "d1")).toBeNull();
+  });
+});
+
+describe("resolveTimelineSpan", () => {
+  const cells = [
+    { item_id: "both", column_id: "start", value: { date: "2026-06-02" } },
+    { item_id: "both", column_id: "end", value: { date: "2026-06-05" } },
+    { item_id: "startonly", column_id: "start", value: { date: "2026-06-02" } },
+    { item_id: "endonly", column_id: "end", value: { date: "2026-06-09" } },
+    { item_id: "inverted", column_id: "start", value: { date: "2026-06-10" } },
+    { item_id: "inverted", column_id: "end", value: { date: "2026-06-01" } },
+    {
+      item_id: "legacy",
+      column_id: "start",
+      value: { date: "2026-06-02", end: "2026-06-04" },
+    },
+  ] as unknown as CacheCellValue[];
+
+  it("draws a span when both dates exist", () => {
+    expect(resolveTimelineSpan("both", cells, "start", "end")).toEqual({
+      start: "2026-06-02",
+      end: "2026-06-05",
+      isMilestone: false,
+    });
+  });
+
+  it("draws a dot at the start when only start exists", () => {
+    expect(resolveTimelineSpan("startonly", cells, "start", "end")).toEqual({
+      start: "2026-06-02",
+      end: "2026-06-02",
+      isMilestone: true,
+    });
+  });
+
+  it("draws a dot at the end when only end exists", () => {
+    expect(resolveTimelineSpan("endonly", cells, "start", "end")).toEqual({
+      start: "2026-06-09",
+      end: "2026-06-09",
+      isMilestone: true,
+    });
+  });
+
+  it("returns null when neither date exists", () => {
+    expect(resolveTimelineSpan("none", cells, "start", "end")).toBeNull();
+  });
+
+  it("clamps an inverted range to a dot at the start", () => {
+    expect(resolveTimelineSpan("inverted", cells, "start", "end")).toEqual({
+      start: "2026-06-10",
+      end: "2026-06-10",
+      isMilestone: true,
+    });
+  });
+
+  it("uses the legacy single-column .end when endColumnId is null", () => {
+    expect(resolveTimelineSpan("legacy", cells, "start", null)).toEqual({
+      start: "2026-06-02",
+      end: "2026-06-04",
+      isMilestone: false,
+    });
+  });
+});
+
+describe("defaultTimelineColumns", () => {
+  it("matches start and end columns by name", () => {
+    const cols = [
+      { id: "a", name: "Start Date" },
+      { id: "b", name: "Due Date" },
+      { id: "c", name: "Other" },
+    ];
+    expect(defaultTimelineColumns(cols)).toEqual({
+      startColumnId: "a",
+      endColumnId: "b",
+    });
+  });
+  it("falls back to the first date column for start and null for end", () => {
+    const cols = [{ id: "x", name: "When" }];
+    expect(defaultTimelineColumns(cols)).toEqual({
+      startColumnId: "x",
+      endColumnId: null,
+    });
+  });
+  it("never reuses the start column as the end column", () => {
+    const cols = [{ id: "a", name: "Start / End" }];
+    expect(defaultTimelineColumns(cols)).toEqual({
+      startColumnId: "a",
+      endColumnId: null,
+    });
+  });
+  it("returns nulls for no date columns", () => {
+    expect(defaultTimelineColumns([])).toEqual({
+      startColumnId: null,
+      endColumnId: null,
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import {
@@ -226,5 +226,165 @@ describe("GanttBoard (no date column)", () => {
       </QueryClientProvider>,
     );
     expect(screen.getByText(/add a date column/i)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Two-column span + colorization fixtures
+// ---------------------------------------------------------------------------
+
+const START_COL = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const END_COL = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const STATUS_COL = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+function twoColPayload() {
+  return {
+    board: { id: "b1", org_id: "o1", name: "My Board" },
+    groups: [{ id: "g1", board_id: "b1" }],
+    columns: [
+      {
+        id: START_COL,
+        board_id: "b1",
+        org_id: "o1",
+        kind: "date",
+        name: "Start Date",
+        position: 0,
+        settings: {},
+      },
+      {
+        id: END_COL,
+        board_id: "b1",
+        org_id: "o1",
+        kind: "date",
+        name: "Due Date",
+        position: 1,
+        settings: {},
+      },
+      {
+        id: STATUS_COL,
+        board_id: "b1",
+        org_id: "o1",
+        kind: "status",
+        name: "Status",
+        position: 2,
+        settings: { options: [{ id: "o1", label: "Done", color: "#00c875" }] },
+      },
+    ],
+    items: [
+      { id: "i1", name: "Spanned", group_id: "g1", position: 0 },
+      { id: "i2", name: "DotOnly", group_id: "g1", position: 1 },
+      { id: "i3", name: "Nothing", group_id: "g1", position: 2 },
+    ],
+    cellValues: [
+      {
+        item_id: "i1",
+        column_id: START_COL,
+        value: { date: "2026-06-02" },
+        board_id: "b1",
+        org_id: "o1",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+      {
+        item_id: "i1",
+        column_id: END_COL,
+        value: { date: "2026-06-06" },
+        board_id: "b1",
+        org_id: "o1",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+      {
+        item_id: "i1",
+        column_id: STATUS_COL,
+        value: { optionId: "o1" },
+        board_id: "b1",
+        org_id: "o1",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+      {
+        item_id: "i2",
+        column_id: START_COL,
+        value: { date: "2026-06-03" },
+        board_id: "b1",
+        org_id: "o1",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+    ],
+    views: [
+      {
+        id: VIEW_ID,
+        kind: "timeline",
+        name: "Timeline",
+        config: {
+          date_column_id: START_COL,
+          end_column_id: END_COL,
+          // Pre-select the status column so the bar renders with its color
+          // on first paint — no picker interaction needed to assert colorization.
+          color_column_id: STATUS_COL,
+          zoom: "month",
+        },
+        board_id: "b1",
+        org_id: "o1",
+        position: 0,
+        created_at: "2026-06-01T00:00:00Z",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+    ],
+    dependencies: [],
+    attachments: [],
+    timeEntries: [],
+    relationLinks: [],
+    mirrorTargetCells: [],
+    mirrorTargetColumns: [],
+  } as never;
+}
+
+/** Shared render helper for the two-column tests — mirrors renderGantt. */
+function renderBoard(payload: ReturnType<typeof twoColPayload>) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <GanttBoard payload={payload} members={[]} selectedViewId={VIEW_ID} />
+    </QueryClientProvider>,
+  );
+}
+
+describe("GanttBoard — two-column spans + color", () => {
+  beforeEach(() => {
+    setCell.mockClear();
+    refresh.mockClear();
+  });
+
+  it("renders a spanned item, a dot, and an unscheduled item", () => {
+    renderBoard(twoColPayload());
+    // Each scheduled item name appears in both the label rail and the bar;
+    // assert at least one match per item.
+    expect(screen.getAllByText("Spanned").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("DotOnly").length).toBeGreaterThan(0);
+    // i3 has no dates → Unscheduled section
+    expect(screen.getByText(/Unscheduled \(1\)/)).toBeInTheDocument();
+  });
+
+  it("colors the spanned bar from its status option", () => {
+    renderBoard(twoColPayload());
+    // The bar span (smaller text-[11px]) is the element inside the colored bar div.
+    // Find it by matching the exact bar text class — it's the only span at 11px.
+    const barSpan = screen
+      .getAllByText("Spanned")
+      .find(
+        (el) => el.tagName === "SPAN" && el.className.includes("text-[11px]"),
+      );
+    expect(barSpan).toBeDefined();
+    // Walk up to the bar div that carries the inline backgroundColor
+    const bar = barSpan!.closest("[style*='background']") as HTMLElement;
+    expect(bar).not.toBeNull();
+    expect(bar.style.backgroundColor).toBe("rgb(0, 200, 117)"); // #00c875
+  });
+
+  it("does not call router.refresh when changing the Color by picker", () => {
+    renderBoard(twoColPayload());
+    fireEvent.change(screen.getByLabelText("Color by column"), {
+      target: { value: STATUS_COL },
+    });
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

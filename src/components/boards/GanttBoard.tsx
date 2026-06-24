@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition, useRef, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import {
   DndContext,
   useDraggable,
@@ -29,7 +28,9 @@ import {
   onBarResized,
   type GanttRow,
 } from "@/lib/boards/gantt";
-import { resolveDateColumn, itemDateRange } from "@/lib/boards/dates";
+import { itemDateRange, defaultTimelineColumns } from "@/lib/boards/dates";
+import { colorForItem } from "@/lib/boards/timeline-color";
+import { pillTextColor } from "@/lib/boards/contrast";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
@@ -129,8 +130,9 @@ type BarDragData = {
   itemId: string;
   startISO: string;
   endISO: string;
-  dateColumnId: string;
-  startDayOffset: number; // day offset of the bar's left edge when drag started
+  startColumnId: string;
+  endColumnId: string | null;
+  startDayOffset: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -156,19 +158,41 @@ export function GanttBoard({
   );
   const mutations = useBoardMutations(payload.board.id);
 
-  const router = useRouter();
   const [, startTransition] = useTransition();
 
   // Resolve the selected view and its config
   const selectedView = payload.views.find((v) => v.id === selectedViewId);
   const config = (selectedView?.config ?? null) as {
     date_column_id?: string | null;
+    end_column_id?: string | null;
+    color_column_id?: string | null;
     zoom?: "week" | "month";
   } | null;
 
-  const zoom: "week" | "month" = config?.zoom ?? "month";
-  const dateColumn = resolveDateColumn(cache.columns, config);
   const dateColumns = cache.columns.filter((c) => c.kind === "date");
+  const colorColumns = cache.columns.filter(
+    (c) => c.kind === "status" || c.kind === "dropdown",
+  );
+
+  // Smart defaults when the view has never set start/end explicitly.
+  const seeded = defaultTimelineColumns(
+    dateColumns.map((c) => ({ id: c.id, name: c.name })),
+  );
+
+  const [zoom, setZoom] = useState<"week" | "month">(config?.zoom ?? "month");
+  const [startColId, setStartColId] = useState<string | null>(
+    config?.date_column_id ?? seeded.startColumnId,
+  );
+  const [endColId, setEndColId] = useState<string | null>(
+    config?.end_column_id ?? seeded.endColumnId,
+  );
+  const [colorColId, setColorColId] = useState<string | null>(
+    config?.color_column_id ?? null,
+  );
+
+  const dateColumn =
+    dateColumns.find((c) => c.id === startColId) ?? dateColumns[0] ?? null;
+  const colorColumn = colorColumns.find((c) => c.id === colorColId) ?? null;
 
   // dnd-kit sensors
   const sensors = useSensors(
@@ -179,12 +203,14 @@ export function GanttBoard({
 
   // Earliest scheduled item start date for range anchoring.
   // Guard: returns "" when no dateColumn (we'll be in the early-return path).
+  // Use startColId (stable state) rather than the derived dateColumn object as dep.
   const rangeStartISO = useMemo(() => {
     if (!dateColumn) return "";
+    const colId = dateColumn.id;
     const sorted = cache.cellValues
       .filter(
         (cv) =>
-          cv.column_id === dateColumn.id &&
+          cv.column_id === colId &&
           typeof (cv.value as Record<string, unknown>)?.date === "string",
       )
       .map((cv) => (cv.value as { date: string }).date)
@@ -192,7 +218,8 @@ export function GanttBoard({
     if (sorted.length > 0) return sorted[0];
     const t = new Date();
     return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
-  }, [dateColumn, cache.cellValues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startColId, cache.cellValues]);
 
   // Build Gantt row layout (positions all items on the timeline).
   const ganttResult = useMemo(() => {
@@ -201,12 +228,15 @@ export function GanttBoard({
       cache.items,
       cache.cellValues,
       dateColumn.id,
+      endColId,
       rangeStartISO,
       dayCount,
       zoom,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    dateColumn,
+    startColId,
+    endColId,
     rangeStartISO,
     cache.items,
     cache.cellValues,
@@ -227,6 +257,17 @@ export function GanttBoard({
     () => rows.filter((r) => !r.scheduled),
     [rows],
   );
+
+  const rowColors = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const r of rows) {
+      map.set(r.itemId, colorForItem(r.itemId, colorColumn, cache.cellValues));
+    }
+    return map;
+    // colorColumn is derived from colorColId which is stable state; colorColumn object identity
+    // is stable for the same id within a render. Dep array uses colorColId to avoid object ref issues.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, colorColId, cache.cellValues, cache.columns]);
 
   // Month tick labels for the timeline header.
   const monthTicks = useMemo(
@@ -312,24 +353,44 @@ export function GanttBoard({
 
   const resolvedDateColumn = dateColumn;
 
-  function handleZoomChange(newZoom: "week" | "month") {
-    startTransition(async () => {
-      await updateBoardView({
-        viewId: selectedViewId,
-        config: { zoom: newZoom },
-      });
-      router.refresh();
+  function persistConfig(next: {
+    date_column_id?: string | null;
+    end_column_id?: string | null;
+    color_column_id?: string | null;
+    zoom?: "week" | "month";
+  }) {
+    const merged = {
+      date_column_id: startColId,
+      end_column_id: endColId,
+      color_column_id: colorColId,
+      zoom,
+      ...next,
+    };
+    // In-page change over already-loaded data: update local state instantly
+    // (0 server round-trips) and persist config in the background. No
+    // router.refresh() — see gotcha-09.
+    startTransition(() => {
+      void updateBoardView({ viewId: selectedViewId, config: merged });
     });
   }
 
-  function handleDateColumnChange(columnId: string) {
-    startTransition(async () => {
-      await updateBoardView({
-        viewId: selectedViewId,
-        config: { date_column_id: columnId },
-      });
-      router.refresh();
-    });
+  function handleZoomChange(newZoom: "week" | "month") {
+    setZoom(newZoom);
+    persistConfig({ zoom: newZoom });
+  }
+  function handleStartColumnChange(columnId: string) {
+    setStartColId(columnId);
+    persistConfig({ date_column_id: columnId });
+  }
+  function handleEndColumnChange(columnId: string) {
+    const next = columnId === "" ? null : columnId;
+    setEndColId(next);
+    persistConfig({ end_column_id: next });
+  }
+  function handleColorColumnChange(columnId: string) {
+    const next = columnId === "" ? null : columnId;
+    setColorColId(next);
+    persistConfig({ color_column_id: next });
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -341,15 +402,16 @@ export function GanttBoard({
     const range = itemDateRange(
       data.itemId,
       cache.cellValues,
-      data.dateColumnId,
+      data.startColumnId,
     );
     if (!range) return;
     onBarMoved(
       data.itemId,
       deltaDays,
       range,
-      data.dateColumnId,
-      mutations.setCell as Parameters<typeof onBarMoved>[4],
+      data.startColumnId,
+      data.endColumnId,
+      mutations.setCell as Parameters<typeof onBarMoved>[5],
     );
   }
 
@@ -388,23 +450,64 @@ export function GanttBoard({
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          {/* Date column picker */}
+        <div className="ml-auto flex items-center gap-3">
           <label
-            htmlFor="gantt-date-column"
+            htmlFor="gantt-start-column"
             className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium"
           >
             <CalendarDays className="size-3.5" aria-hidden />
-            Date by
+            Start
           </label>
           <select
-            id="gantt-date-column"
-            aria-label="Date column"
-            value={resolvedDateColumn.id}
-            onChange={(e) => handleDateColumnChange(e.target.value)}
+            id="gantt-start-column"
+            aria-label="Start date column"
+            value={dateColumn?.id ?? ""}
+            onChange={(e) => handleStartColumnChange(e.target.value)}
             className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
           >
             {dateColumns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <label
+            htmlFor="gantt-end-column"
+            className="text-muted-foreground text-xs font-medium"
+          >
+            End
+          </label>
+          <select
+            id="gantt-end-column"
+            aria-label="End date column"
+            value={endColId ?? ""}
+            onChange={(e) => handleEndColumnChange(e.target.value)}
+            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <option value="">None</option>
+            {dateColumns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <label
+            htmlFor="gantt-color-column"
+            className="text-muted-foreground text-xs font-medium"
+          >
+            Color by
+          </label>
+          <select
+            id="gantt-color-column"
+            aria-label="Color by column"
+            value={colorColId ?? ""}
+            onChange={(e) => handleColorColumnChange(e.target.value)}
+            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <option value="">None</option>
+            {colorColumns.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -463,7 +566,9 @@ export function GanttBoard({
                   totalW={totalW}
                   todayOffset={todayOffset}
                   dayCount={dayCount}
-                  dateColumnId={resolvedDateColumn.id}
+                  startColumnId={resolvedDateColumn.id}
+                  endColumnId={endColId}
+                  color={rowColors.get(row.itemId) ?? null}
                   allRows={scheduledRows}
                   dependencies={cache.dependencies}
                   violations={violations}
@@ -473,7 +578,8 @@ export function GanttBoard({
                       newEndISO,
                       range,
                       resolvedDateColumn.id,
-                      mutations.setCell as Parameters<typeof onBarResized>[4],
+                      endColId,
+                      mutations.setCell as Parameters<typeof onBarResized>[5],
                     )
                   }
                   addDependency={mutations.addDependency}
@@ -559,7 +665,9 @@ function GanttRowItem({
   totalW,
   todayOffset,
   dayCount,
-  dateColumnId,
+  startColumnId,
+  endColumnId,
+  color,
   allRows,
   dependencies,
   violations,
@@ -572,7 +680,9 @@ function GanttRowItem({
   totalW: number;
   todayOffset: number;
   dayCount: number;
-  dateColumnId: string;
+  startColumnId: string;
+  endColumnId: string | null;
+  color: string | null;
   allRows: GanttRow[];
   dependencies: CacheDependency[];
   violations: Set<string>;
@@ -596,7 +706,8 @@ function GanttRowItem({
     itemId: row.itemId,
     startISO: row.startISO ?? "",
     endISO: row.endISO ?? "",
-    dateColumnId,
+    startColumnId,
+    endColumnId,
     startDayOffset: row.startCol ?? 0,
   };
 
@@ -743,21 +854,21 @@ function GanttRowItem({
         {row.isMilestone ? (
           <div
             ref={setNodeRef}
+            className={cn(
+              "absolute rotate-45 cursor-grab rounded-sm",
+              color ? "" : "bg-primary",
+              isDragging && "opacity-50",
+            )}
             style={{
-              // Center the diamond within its day column so the rotated tips of
-              // the earliest marker (barLeft = 0) don't get clipped at the edge.
               left: barLeft + DAY_W / 2 - MILESTONE / 2,
               top: ROW_H / 2 - MILESTONE / 2,
               width: MILESTONE,
               height: MILESTONE,
+              ...(color ? { backgroundColor: color } : {}),
               ...barStyle,
             }}
             {...listeners}
             {...attributes}
-            className={cn(
-              "bg-primary absolute rotate-45 cursor-grab rounded-sm",
-              isDragging && "opacity-50",
-            )}
             title={row.name}
           >
             <PresenceRing target={target} className="rounded-sm" />
@@ -765,17 +876,19 @@ function GanttRowItem({
         ) : (
           <div
             ref={setNodeRef}
+            className={cn(
+              "absolute flex cursor-grab items-center rounded-md shadow-sm",
+              color ? "" : "bg-primary",
+              isDragging && "opacity-50",
+            )}
             style={{
               left: barLeft,
               top: ROW_H / 2 - BAR_H / 2,
               width: barWidth,
               height: BAR_H,
+              ...(color ? { backgroundColor: color } : {}),
               ...barStyle,
             }}
-            className={cn(
-              "bg-primary absolute flex cursor-grab items-center rounded-md shadow-sm",
-              isDragging && "opacity-50",
-            )}
           >
             <PresenceRing target={target} />
             {/* Drag handle covering most of the bar */}
@@ -784,7 +897,13 @@ function GanttRowItem({
               {...attributes}
               className="flex h-full flex-1 items-center overflow-hidden px-2"
             >
-              <span className="text-primary-foreground truncate text-[11px] font-medium">
+              <span
+                className={cn(
+                  "truncate text-[11px] font-medium",
+                  color ? "" : "text-primary-foreground",
+                )}
+                style={color ? { color: pillTextColor(color) } : undefined}
+              >
                 {row.name}
               </span>
             </div>
