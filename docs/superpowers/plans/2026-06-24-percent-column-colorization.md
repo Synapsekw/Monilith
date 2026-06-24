@@ -158,7 +158,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Interfaces:**
 
 - Consumes: nothing.
-- Produces: six CSS custom properties — `--progress-red`, `--progress-orange`, `--progress-amber`, `--progress-lime`, `--progress-green`, `--progress-complete` — defined in both `:root` and `.dark`. Consumed by Task 3 via `bg-[var(--progress-*)]`. No `@theme inline` entry is needed (arbitrary-value utilities resolve the vars directly).
+- Produces: six CSS custom properties — `--progress-red`, `--progress-orange`, `--progress-amber`, `--progress-lime`, `--progress-green`, `--progress-complete` — defined in both `:root` and `.dark`. Consumed by Task 3 via an arbitrary-value utility backed by `--progress-<band>`. No `@theme inline` entry is needed (arbitrary-value utilities resolve the vars directly).
 
 There is no unit test for raw CSS variables; this task is verified by `pnpm build` (Step 3) and visually in Task 3's manual check. The values harmonize with the existing `--status-*` palette (same lightness/chroma family) and are perceptually-even across the red→green hue arc; the "complete" band is a deeper, more saturated green than the `80–99` green.
 

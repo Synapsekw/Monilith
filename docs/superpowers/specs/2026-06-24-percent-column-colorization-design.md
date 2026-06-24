@@ -51,7 +51,7 @@ the system:
 
 1. **Helper — `src/lib/boards/percent-color.ts` (new).** Pure function
    `percentBandColor(percent: number): string` that clamps `0–100` and returns the
-   Tailwind class wired to the band's CSS variable (e.g. `bg-[var(--progress-band-…)]`).
+   Tailwind class wired to the band's CSS variable (e.g. an arbitrary-value utility backed by `--progress-<band>`).
    No side effects, no data access.
 2. **Tokens — `src/app/globals.css`.** Add the six band variables under both the
    light and dark blocks.
