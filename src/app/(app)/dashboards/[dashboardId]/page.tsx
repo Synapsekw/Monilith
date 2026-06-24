@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { DashboardCanvas } from "@/components/dashboards/DashboardCanvas";
+import { AiReviewBanner } from "@/components/dashboards/ai/AiReviewBanner";
 import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -9,10 +10,13 @@ import { optionSchema } from "@/lib/validations/boards";
 
 export default async function DashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ dashboardId: string }>;
+  searchParams: Promise<{ [k: string]: string | string[] | undefined }>;
 }) {
   const { dashboardId } = await params;
+  const sp = await searchParams;
   await requireUser();
 
   const payload = await getDashboardPayload(dashboardId);
@@ -69,5 +73,14 @@ export default async function DashboardPage({
     };
   });
 
-  return <DashboardCanvas initialData={payload} boards={boards} />;
+  return (
+    <>
+      {sp.review === "1" && (
+        <div className="px-4 pt-4">
+          <AiReviewBanner dashboardId={dashboardId} />
+        </div>
+      )}
+      <DashboardCanvas initialData={payload} boards={boards} />
+    </>
+  );
 }
