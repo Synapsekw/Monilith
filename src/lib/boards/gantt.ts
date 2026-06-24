@@ -1,4 +1,4 @@
-import { itemDateRange } from "@/lib/boards/dates";
+import { itemDateRange, resolveTimelineSpan } from "@/lib/boards/dates";
 import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
 import type { CacheCellValue } from "@/lib/boards/cache";
 
@@ -34,11 +34,12 @@ export type SetCellArg = {
 // ---------------------------------------------------------------------------
 
 /**
- * Build one GanttRow per item using a date column's cell values.
+ * Build one GanttRow per item using a start (and optional end) date column.
  *
  * @param items          Board items (must have id + name)
  * @param cellValues     All cell values for this board
- * @param dateColumnId   The date column to read from
+ * @param startColumnId  The date column that supplies the start (and end when endColumnId is null)
+ * @param endColumnId    When non-null, a separate column supplying the end date
  * @param rangeStartISO  The first day displayed in the Gantt (YYYY-MM-DD)
  * @param dayCount       Total visible days (accepted for signature compat)
  * @param zoom           Zoom level (accepted for signature compat)
@@ -46,7 +47,8 @@ export type SetCellArg = {
 export function buildGanttRows(
   items: { id: string; name: string }[],
   cellValues: CacheCellValue[],
-  dateColumnId: string,
+  startColumnId: string,
+  endColumnId: string | null,
   rangeStartISO: string,
   dayCount: number,
   zoom: string,
@@ -55,15 +57,19 @@ export function buildGanttRows(
   void zoom;
 
   const rows: GanttRow[] = items.map((item) => {
-    const range = itemDateRange(item.id, cellValues, dateColumnId);
+    const span = resolveTimelineSpan(
+      item.id,
+      cellValues,
+      startColumnId,
+      endColumnId,
+    );
 
-    if (!range) {
+    if (!span) {
       return { itemId: item.id, name: item.name, scheduled: false };
     }
 
-    const startCol = diffDaysISO(rangeStartISO, range.start);
-    const spanCols = diffDaysISO(range.start, range.end) + 1;
-    const isMilestone = range.start === range.end;
+    const startCol = diffDaysISO(rangeStartISO, span.start);
+    const spanCols = diffDaysISO(span.start, span.end) + 1;
 
     return {
       itemId: item.id,
@@ -71,9 +77,9 @@ export function buildGanttRows(
       scheduled: true,
       startCol,
       spanCols,
-      isMilestone,
-      startISO: range.start,
-      endISO: range.end,
+      isMilestone: span.isMilestone,
+      startISO: span.start,
+      endISO: span.end,
     };
   });
 

@@ -21,11 +21,17 @@ const cells = [
   // i3 unscheduled
 ] as never;
 
+const twoColCells = [
+  { item_id: "i1", column_id: "s1", value: { date: "2026-06-02" } },
+  { item_id: "i1", column_id: "e1", value: { date: "2026-06-06" } },
+] as never;
+
 describe("buildGanttRows", () => {
   const { rows } = buildGanttRows(
     items,
     cells,
     "d1",
+    null,
     "2026-06-01",
     30,
     "month",
@@ -45,6 +51,23 @@ describe("buildGanttRows", () => {
   it("marks date-less items unscheduled", () => {
     expect(rows.find((r) => r.itemId === "i3")!.scheduled).toBe(false);
   });
+  it("builds a span from two separate columns", () => {
+    const { rows: r2 } = buildGanttRows(
+      items,
+      twoColCells,
+      "s1",
+      "e1",
+      "2026-06-01",
+      30,
+      "month",
+    );
+    expect(r2.find((r) => r.itemId === "i1")).toMatchObject({
+      startCol: 1,
+      spanCols: 5,
+      isMilestone: false,
+      scheduled: true,
+    });
+  });
 });
 
 describe("detectViolations", () => {
@@ -53,6 +76,7 @@ describe("detectViolations", () => {
       items,
       cells,
       "d1",
+      null,
       "2026-06-01",
       30,
       "month",
