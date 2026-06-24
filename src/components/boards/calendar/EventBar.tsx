@@ -41,6 +41,7 @@ export function statusOptionColor(
 export function EventBar({
   interval,
   fromDayISO,
+  weekStartISO,
   dateColumnId,
   statusColumn,
   cellMap,
@@ -48,6 +49,7 @@ export function EventBar({
 }: {
   interval: PlacedInterval;
   fromDayISO: string;
+  weekStartISO: string;
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
@@ -59,7 +61,7 @@ export function EventBar({
     dateColumnId,
   };
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: `${interval.itemId}-${fromDayISO}`, data: dragData });
+    useDraggable({ id: `${interval.itemId}-${weekStartISO}`, data: dragData });
 
   const target = presenceTarget.event(interval.itemId);
   usePresenceFocus({ viewKind: "calendar", targetId: target }, isDragging);
@@ -99,6 +101,7 @@ export function EventBar({
         {...listeners}
         {...attributes}
         tabIndex={0}
+        aria-label={interval.name}
         onClick={(e) => {
           e.stopPropagation();
           onOpen?.(interval.itemId);
@@ -131,6 +134,7 @@ export function EventBar({
       {...listeners}
       {...attributes}
       tabIndex={0}
+      aria-label={interval.name}
       onClick={(e) => {
         e.stopPropagation();
         onOpen?.(interval.itemId);

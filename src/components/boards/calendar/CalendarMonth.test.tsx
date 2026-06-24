@@ -87,4 +87,32 @@ describe("CalendarMonth", () => {
     // Wed Jun 10 carries 2 hidden items (Span D + Single E) → "+2 more".
     expect(screen.getByText("+2 more")).toBeInTheDocument();
   });
+
+  it("renders a week-crossing span as two accessibly-named segments", () => {
+    const items = [{ id: "x", name: "Cross Span" }];
+    const cv = [
+      {
+        item_id: "x",
+        column_id: "d1",
+        value: { date: "2026-06-11", end: "2026-06-17" },
+      },
+    ] as never;
+    render(
+      <DndContext>
+        <CalendarMonth
+          monthISO="2026-06-01"
+          today="2026-06-16"
+          items={items}
+          cellValues={cv}
+          dateColumnId="d1"
+          statusColumn={undefined}
+          cellMap={buildCellMap(cv)}
+          onDayClick={vi.fn()}
+          onOpenItem={vi.fn()}
+        />
+      </DndContext>,
+    );
+    // One segment in the week of Jun 7 (Thu–Sat), one in the week of Jun 14 (Sun–Wed).
+    expect(screen.getAllByLabelText("Cross Span")).toHaveLength(2);
+  });
 });

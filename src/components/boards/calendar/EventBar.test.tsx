@@ -31,6 +31,7 @@ const renderBar = (interval: PlacedInterval, cellMap = new Map()) =>
       <EventBar
         interval={interval}
         fromDayISO="2026-06-10"
+        weekStartISO="2026-06-07"
         dateColumnId="d1"
         statusColumn={statusColumn}
         cellMap={cellMap}
@@ -76,6 +77,7 @@ describe("EventBar", () => {
         <EventBar
           interval={placed({ name: "Clickable" })}
           fromDayISO="2026-06-10"
+          weekStartISO="2026-06-07"
           dateColumnId="d1"
           statusColumn={statusColumn}
           cellMap={new Map()}
@@ -95,6 +97,7 @@ describe("EventBar", () => {
         <EventBar
           interval={placed({ name: "KeyboardItem" })}
           fromDayISO="2026-06-10"
+          weekStartISO="2026-06-07"
           dateColumnId="d1"
           statusColumn={statusColumn}
           cellMap={new Map()}

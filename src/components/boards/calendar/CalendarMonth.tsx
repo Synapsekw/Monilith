@@ -214,6 +214,7 @@ function BarForDay({
     <EventBar
       interval={interval}
       fromDayISO={fromDayISO}
+      weekStartISO={weekStartISO}
       dateColumnId={dateColumnId}
       statusColumn={statusColumn}
       cellMap={cellMap}

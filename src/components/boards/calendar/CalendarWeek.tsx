@@ -108,6 +108,7 @@ export function CalendarWeek({
                 <EventBar
                   interval={iv}
                   fromDayISO={range?.start ?? weekStartISO}
+                  weekStartISO={weekStartISO}
                   dateColumnId={dateColumnId}
                   statusColumn={statusColumn}
                   cellMap={cellMap}
