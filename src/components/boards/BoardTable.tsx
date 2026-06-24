@@ -1395,7 +1395,6 @@ function GroupSection({
                             controls={controls}
                             renamingItemId={renamingItemId}
                             onRenameSettled={onRenameItemSettled}
-                            onAdded={(id) => onSetRenamingItemId(id)}
                           />
                         )}
                       </div>
@@ -1730,7 +1729,6 @@ function SubitemBlock({
   controls,
   renamingItemId,
   onRenameSettled,
-  onAdded,
 }: {
   parentId: string;
   subitems: Item[];
@@ -1740,7 +1738,6 @@ function SubitemBlock({
   controls: CellControls;
   renamingItemId: string | null;
   onRenameSettled: () => void;
-  onAdded: (id: string) => void;
 }) {
   const subitemSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1758,7 +1755,9 @@ function SubitemBlock({
   }
 
   return (
-    <div>
+    // Recessed band so the nested subitems read as visually distinct from
+    // top-level item rows and the parent-level "Add item" row below them.
+    <div className="bg-surface-sunken">
       <DndContext
         id={`subitems-${parentId}`}
         sensors={subitemSensors}
@@ -1783,11 +1782,7 @@ function SubitemBlock({
           ))}
         </SortableContext>
       </DndContext>
-      <AddSubitemRow
-        parentId={parentId}
-        controls={controls}
-        onAdded={onAdded}
-      />
+      <AddSubitemRow parentId={parentId} controls={controls} />
     </div>
   );
 }
@@ -1796,30 +1791,42 @@ function SubitemBlock({
 function AddSubitemRow({
   parentId,
   controls,
-  onAdded,
 }: {
   parentId: string;
   controls: CellControls;
-  onAdded: (id: string) => void;
 }) {
   const [name, setName] = useState("");
   const [isPending, startTransition] = useTransition();
+  const inputRef = useRef<HTMLInputElement>(null);
+  // After a successful add, refocus this input so the user can type the next
+  // subitem and commit it with Enter alone. The input is disabled mid-flight
+  // (which blurs it), so we wait for the transition to settle before refocusing.
+  const refocusAfterAdd = useRef(false);
+  useEffect(() => {
+    if (!isPending && refocusAfterAdd.current) {
+      refocusAfterAdd.current = false;
+      inputRef.current?.focus();
+    }
+  }, [isPending]);
   function commit() {
     const trimmed = name.trim();
     if (!trimmed) return;
     startTransition(() =>
       controls.addSubitem(parentId, trimmed, {
-        onSuccess: (id) => {
+        onSuccess: () => {
+          // The name is already set from what the user typed — do NOT drop the
+          // new row into rename mode (that required a second Enter to dismiss).
           setName("");
-          onAdded(id);
+          refocusAfterAdd.current = true;
         },
       }),
     );
   }
   return (
-    <div className="bg-surface sticky left-0 flex items-center gap-2 border-b py-1.5 pr-4 pl-12">
+    <div className="bg-surface-sunken sticky left-0 flex items-center gap-2 border-b py-1.5 pr-4 pl-12">
       <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
       <input
+        ref={inputRef}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
@@ -2063,7 +2070,8 @@ function NameCell({
     return (
       <div
         className={cn(
-          "bg-surface sticky left-0 z-10 flex items-center px-4",
+          "sticky left-0 z-10 flex items-center px-4",
+          indented ? "bg-surface-sunken" : "bg-surface",
           NAME_FREEZE_EDGE,
         )}
       >
@@ -2094,7 +2102,10 @@ function NameCell({
   return (
     <div
       className={cn(
-        "group/name bg-surface hover:bg-surface-muted sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
+        "group/name sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
+        indented
+          ? "bg-surface-sunken hover:bg-surface"
+          : "bg-surface hover:bg-surface-muted",
         NAME_FREEZE_EDGE,
       )}
     >

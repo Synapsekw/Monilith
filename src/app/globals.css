@@ -29,6 +29,7 @@
   /* Surfaces (brief's semantic names) */
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
 
   /* Status palette */
   --color-status-gray: var(--status-gray);
@@ -115,6 +116,9 @@
   --foreground: oklch(0.145 0 0);
   --surface: oklch(1 0 0);
   --surface-muted: oklch(0.97 0 0);
+  /* Recessed/nested band (e.g. subitems) — darker than -muted so it reads
+     clearly against white surfaces in light mode. */
+  --surface-sunken: oklch(0.94 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -181,6 +185,7 @@
   --foreground: oklch(0.925 0.003 286); /* #e7e7ea */
   --surface: oklch(0.205 0.005 286); /* #16161a primary panel */
   --surface-muted: oklch(0.245 0.006 286); /* #1f1f24 elevated */
+  --surface-sunken: oklch(0.245 0.006 286); /* nested band — elevated in dark */
   --card: oklch(0.205 0.005 286);
   --card-foreground: oklch(0.925 0.003 286);
   --popover: oklch(

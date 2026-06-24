@@ -252,6 +252,49 @@ describe("BoardTable subitems", () => {
     expect(screen.getByLabelText("Add subitem")).toBeInTheDocument();
   });
 
+  it("saves an inline subitem on a single Enter without entering rename mode", async () => {
+    addSubitem.mockResolvedValue({
+      ok: true,
+      data: {
+        item: {
+          id: "s3",
+          board_id: "b1",
+          org_id: "o1",
+          group_id: "g1",
+          parent_id: "p1",
+          name: "Wireframes",
+          position: 3,
+        },
+      },
+    });
+
+    renderNested();
+    fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
+
+    const input = screen.getByLabelText("Add subitem");
+    fireEvent.change(input, { target: { value: "Wireframes" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    // A single Enter commits the add with the typed name…
+    await waitFor(() =>
+      expect(addSubitem).toHaveBeenCalledWith({
+        parentId: "p1",
+        name: "Wireframes",
+      }),
+    );
+
+    // …and the new subitem is NOT dropped into rename mode (which previously
+    // required a second Enter to dismiss), so no rename input appears…
+    expect(
+      screen.queryByLabelText("Rename Wireframes"),
+    ).not.toBeInTheDocument();
+
+    // …and the add-subitem input clears, ready for the next entry.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Add subitem")).toHaveValue(""),
+    );
+  });
+
   it("deletes a subitem from its row menu", async () => {
     deleteItem.mockResolvedValue({ ok: true, data: undefined });
     renderNested();
