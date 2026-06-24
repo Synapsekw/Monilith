@@ -249,6 +249,63 @@ describe("KanbanBoard", () => {
   });
 });
 
+describe("KanbanCard fields", () => {
+  it("surfaces a non-grouping status pill, a date, and a percent on the card", () => {
+    const qc = new QueryClient();
+    const base = payloadFixture() as unknown as {
+      columns: Array<Record<string, unknown>>;
+      cellValues: Array<{ item_id: string; column_id: string; value: unknown }>;
+    };
+    base.columns.push(
+      {
+        id: "stakeholder",
+        board_id: "b1",
+        org_id: "o1",
+        kind: "status",
+        name: "Stakeholder",
+        position: 2,
+        settings: { options: [{ id: "s1", label: "Acme", color: "#66ccff" }] },
+      },
+      {
+        id: "due",
+        board_id: "b1",
+        org_id: "o1",
+        kind: "date",
+        name: "Due",
+        position: 3,
+        settings: {},
+      },
+      {
+        id: "progress",
+        board_id: "b1",
+        org_id: "o1",
+        kind: "percent",
+        name: "Progress",
+        position: 4,
+        settings: {},
+      },
+    );
+    base.cellValues.push(
+      { item_id: "i1", column_id: "stakeholder", value: { optionId: "s1" } },
+      { item_id: "i1", column_id: "due", value: { date: "2026-06-10" } },
+      { item_id: "i1", column_id: "progress", value: { percent: 40 } },
+    );
+
+    render(
+      <QueryClientProvider client={qc}>
+        <KanbanBoard payload={base as never} selectedViewId="v2" members={[]} />
+      </QueryClientProvider>,
+    );
+
+    // Non-grouping status renders as a pill; the grouping "Status" column is the
+    // lane and is not duplicated as a card pill.
+    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.getByText("40%")).toBeInTheDocument();
+    // Date is formatted (month short) — assert the year/day survive formatting.
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+});
+
 describe("onCardDropped", () => {
   it("drop on an option writes the status cell", () => {
     const setCellFn = vi.fn();

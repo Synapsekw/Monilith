@@ -22,9 +22,12 @@ export const calendarConfigSchema = z
   })
   .strict();
 
-// Timeline config: date column id + optional zoom level.
+// Timeline config: start date column id, optional end date column id,
+// optional color-by column id (status/dropdown), and optional zoom level.
 export const timelineConfigSchema = z.object({
   date_column_id: z.string().uuid().nullable().optional(),
+  end_column_id: z.string().uuid().nullable().optional(),
+  color_column_id: z.string().uuid().nullable().optional(),
   zoom: z.enum(["week", "month"]).optional(),
 });
 

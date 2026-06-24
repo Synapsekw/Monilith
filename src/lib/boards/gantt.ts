@@ -1,4 +1,4 @@
-import { itemDateRange } from "@/lib/boards/dates";
+import { resolveTimelineSpan } from "@/lib/boards/dates";
 import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
 import type { CacheCellValue } from "@/lib/boards/cache";
 
@@ -26,19 +26,38 @@ export type GanttDependency = {
 export type SetCellArg = {
   itemId: string;
   columnId: string;
-  value: { date: string; end: string };
+  value: { date: string; end?: string };
 };
+
+/**
+ * Days the timeline grid must cover. At least `floorDays` (the zoom window),
+ * extended to fit the latest date (inclusive) plus a few days of padding so
+ * bars beyond the zoom window aren't clipped off-screen. Capped at ~10 years so
+ * a typo'd far-future date can't blow up the grid width.
+ */
+export function timelineDayCount(
+  rangeStartISO: string,
+  rangeEndISO: string,
+  floorDays: number,
+): number {
+  if (!rangeStartISO || !rangeEndISO) return floorDays;
+  const PAD = 3;
+  const MAX = 3660; // ~10 years
+  const span = diffDaysISO(rangeStartISO, rangeEndISO) + 1 + PAD;
+  return Math.min(MAX, Math.max(floorDays, span));
+}
 
 // ---------------------------------------------------------------------------
 // buildGanttRows
 // ---------------------------------------------------------------------------
 
 /**
- * Build one GanttRow per item using a date column's cell values.
+ * Build one GanttRow per item using a start (and optional end) date column.
  *
  * @param items          Board items (must have id + name)
  * @param cellValues     All cell values for this board
- * @param dateColumnId   The date column to read from
+ * @param startColumnId  The date column that supplies the start (and end when endColumnId is null)
+ * @param endColumnId    When non-null, a separate column supplying the end date
  * @param rangeStartISO  The first day displayed in the Gantt (YYYY-MM-DD)
  * @param dayCount       Total visible days (accepted for signature compat)
  * @param zoom           Zoom level (accepted for signature compat)
@@ -46,7 +65,8 @@ export type SetCellArg = {
 export function buildGanttRows(
   items: { id: string; name: string }[],
   cellValues: CacheCellValue[],
-  dateColumnId: string,
+  startColumnId: string,
+  endColumnId: string | null,
   rangeStartISO: string,
   dayCount: number,
   zoom: string,
@@ -55,15 +75,19 @@ export function buildGanttRows(
   void zoom;
 
   const rows: GanttRow[] = items.map((item) => {
-    const range = itemDateRange(item.id, cellValues, dateColumnId);
+    const span = resolveTimelineSpan(
+      item.id,
+      cellValues,
+      startColumnId,
+      endColumnId,
+    );
 
-    if (!range) {
+    if (!span) {
       return { itemId: item.id, name: item.name, scheduled: false };
     }
 
-    const startCol = diffDaysISO(rangeStartISO, range.start);
-    const spanCols = diffDaysISO(range.start, range.end) + 1;
-    const isMilestone = range.start === range.end;
+    const startCol = diffDaysISO(rangeStartISO, span.start);
+    const spanCols = diffDaysISO(span.start, span.end) + 1;
 
     return {
       itemId: item.id,
@@ -71,9 +95,9 @@ export function buildGanttRows(
       scheduled: true,
       startCol,
       spanCols,
-      isMilestone,
-      startISO: range.start,
-      endISO: range.end,
+      isMilestone: span.isMilestone,
+      startISO: span.start,
+      endISO: span.end,
     };
   });
 
@@ -122,23 +146,30 @@ export function detectViolations(
 // ---------------------------------------------------------------------------
 
 /**
- * Shift both start and end of a bar by deltaDays (positive = forward,
- * negative = backward).
+ * Shift a bar by deltaDays. With a separate end column, writes the new start to
+ * the start column and the new end to the end column. In legacy single-column
+ * mode (endColumnId null), writes { date, end } to the start column.
  */
 export function onBarMoved(
   itemId: string,
   deltaDays: number,
   range: { start: string; end: string },
-  dateColumnId: string,
+  startColumnId: string,
+  endColumnId: string | null,
   setCell: (arg: SetCellArg) => void,
 ): void {
   const newStart = addDaysISO(range.start, deltaDays);
   const newEnd = addDaysISO(range.end, deltaDays);
-  setCell({
-    itemId,
-    columnId: dateColumnId,
-    value: { date: newStart, end: newEnd },
-  });
+  if (endColumnId) {
+    setCell({ itemId, columnId: startColumnId, value: { date: newStart } });
+    setCell({ itemId, columnId: endColumnId, value: { date: newEnd } });
+  } else {
+    setCell({
+      itemId,
+      columnId: startColumnId,
+      value: { date: newStart, end: newEnd },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -146,19 +177,25 @@ export function onBarMoved(
 // ---------------------------------------------------------------------------
 
 /**
- * Update only the end date of a bar (right-edge resize).
- * Start date is preserved from the current range.
+ * Update the end of a bar (right-edge resize). With a separate end column,
+ * writes only the end column. In legacy single-column mode, writes
+ * { date: range.start, end: newEndISO } to the start column.
  */
 export function onBarResized(
   itemId: string,
   newEndISO: string,
   range: { start: string; end: string },
-  dateColumnId: string,
+  startColumnId: string,
+  endColumnId: string | null,
   setCell: (arg: SetCellArg) => void,
 ): void {
-  setCell({
-    itemId,
-    columnId: dateColumnId,
-    value: { date: range.start, end: newEndISO },
-  });
+  if (endColumnId) {
+    setCell({ itemId, columnId: endColumnId, value: { date: newEndISO } });
+  } else {
+    setCell({
+      itemId,
+      columnId: startColumnId,
+      value: { date: range.start, end: newEndISO },
+    });
+  }
 }

@@ -29,6 +29,7 @@
   /* Surfaces (brief's semantic names) */
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
 
   /* Status palette */
   --color-status-gray: var(--status-gray);
@@ -115,6 +116,9 @@
   --foreground: oklch(0.145 0 0);
   --surface: oklch(1 0 0);
   --surface-muted: oklch(0.97 0 0);
+  /* Recessed/nested band (e.g. subitems) — darker than -muted so it reads
+     clearly against white surfaces in light mode. */
+  --surface-sunken: oklch(0.94 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
@@ -145,6 +149,16 @@
   --status-red: oklch(0.63 0.23 25);
   --status-purple: oklch(0.6 0.2 300);
   --status-teal: oklch(0.71 0.11 190);
+
+  /* Progress band ramp — value-based percent-column fill (red → green).
+     Harmonized with --status-* (same L/C family); --progress-complete is a
+     deeper, more saturated green than --progress-green for the 100% reward. */
+  --progress-red: oklch(0.63 0.23 25);
+  --progress-orange: oklch(0.7 0.18 50);
+  --progress-amber: oklch(0.8 0.16 85);
+  --progress-lime: oklch(0.78 0.17 125);
+  --progress-green: oklch(0.72 0.17 150);
+  --progress-complete: oklch(0.62 0.19 152);
 
   --chart-1: oklch(0.72 0 0);
   --chart-2: oklch(0.58 0 0);
@@ -181,6 +195,7 @@
   --foreground: oklch(0.925 0.003 286); /* #e7e7ea */
   --surface: oklch(0.205 0.005 286); /* #16161a primary panel */
   --surface-muted: oklch(0.245 0.006 286); /* #1f1f24 elevated */
+  --surface-sunken: oklch(0.245 0.006 286); /* nested band — elevated in dark */
   --card: oklch(0.205 0.005 286);
   --card-foreground: oklch(0.925 0.003 286);
   --popover: oklch(
@@ -210,6 +225,14 @@
   --status-red: oklch(0.68 0.2 25);
   --status-purple: oklch(0.66 0.18 300);
   --status-teal: oklch(0.75 0.1 190);
+
+  /* Progress band ramp (dark) — lifted lightness to read on the dark track */
+  --progress-red: oklch(0.68 0.2 25);
+  --progress-orange: oklch(0.73 0.16 50);
+  --progress-amber: oklch(0.82 0.15 85);
+  --progress-lime: oklch(0.8 0.16 125);
+  --progress-green: oklch(0.76 0.16 150);
+  --progress-complete: oklch(0.68 0.18 152);
 
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);

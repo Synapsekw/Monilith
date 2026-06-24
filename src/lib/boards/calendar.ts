@@ -154,3 +154,85 @@ export function onEventDropped(
     value: { date: newStart, end: newEnd },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Lane packing (Month / Week views)
+// ---------------------------------------------------------------------------
+
+export type WeekInterval = {
+  itemId: string;
+  name: string;
+  /** 1-based column, Sun=1 .. Sat=7, clipped to the visible week. */
+  startCol: number;
+  endCol: number;
+  /** True when the real range began before this week's Sunday. */
+  continuesLeft: boolean;
+  /** True when the real range ends after this week's Saturday. */
+  continuesRight: boolean;
+  /** True when the item's real range is a single day (start === end). */
+  isSingle: boolean;
+};
+
+export type PlacedInterval = WeekInterval & { lane: number };
+
+/**
+ * Greedy interval packing within one week. Sort by (startCol asc, endCol asc,
+ * itemId) for determinism — shorter intervals first among equal starts, so a
+ * brief item frees its lane for a later one in the same week — then assign each
+ * interval the lowest lane whose last occupant ends before this one starts.
+ */
+export function packLanes(intervals: WeekInterval[]): PlacedInterval[] {
+  const sorted = [...intervals].sort(
+    (a, b) =>
+      a.startCol - b.startCol ||
+      a.endCol - b.endCol ||
+      a.itemId.localeCompare(b.itemId),
+  );
+  const laneEnd: number[] = []; // last endCol occupied per lane
+  const placed: PlacedInterval[] = [];
+  for (const iv of sorted) {
+    let lane = 0;
+    while (laneEnd[lane] !== undefined && laneEnd[lane] >= iv.startCol) lane++;
+    laneEnd[lane] = iv.endCol;
+    placed.push({ ...iv, lane });
+  }
+  return placed;
+}
+
+/** The Sunday on or before dateISO (YYYY-MM-DD). */
+export function weekStartOnOrBefore(dateISO: string): string {
+  const dow = new Date(parseISO(dateISO)).getUTCDay(); // 0 = Sunday
+  return addDaysISO(dateISO, -dow);
+}
+
+/**
+ * Lay out every item whose date range overlaps the 7-day week beginning at
+ * weekStartISO (a Sunday). Returns packed lane assignments for rendering bars
+ * with CSS-grid column spans.
+ */
+export function layOutWeek(
+  weekStartISO: string,
+  items: { id: string; name: string }[],
+  cellValues: CacheCellValue[],
+  dateColumnId: string,
+): PlacedInterval[] {
+  const weekEndISO = addDaysISO(weekStartISO, 6);
+  const intervals: WeekInterval[] = [];
+  for (const item of items) {
+    const range = itemDateRange(item.id, cellValues, dateColumnId);
+    if (!range) continue;
+    if (range.end < weekStartISO || range.start > weekEndISO) continue; // no overlap
+    const startOffset = diffDaysISO(weekStartISO, range.start); // may be < 0
+    const endOffset = diffDaysISO(weekStartISO, range.end); // may be > 6
+    intervals.push({
+      itemId: item.id,
+      name: item.name,
+      startCol: Math.max(1, startOffset + 1),
+      endCol: Math.min(7, endOffset + 1),
+      continuesLeft: startOffset < 0,
+      continuesRight: endOffset > 6,
+      isSingle: range.start === range.end,
+    });
+  }
+  return packLanes(intervals);
+}

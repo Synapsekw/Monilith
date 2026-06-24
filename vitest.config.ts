@@ -38,6 +38,22 @@ export default defineConfig({
           include: ["src/**/*.integration.test.{ts,tsx}"],
           exclude: sharedExclude,
           fileParallelism: false,
+          // These suites are NETWORK-bound (live cloud Supabase), not
+          // compute-bound: individual ops already run 3–5s in isolation, and
+          // `beforeAll` provisioning (createUser + signInWithRetry, which can
+          // back off up to ~31s on a 429 + create_organization + workspace)
+          // is slower still. Vitest's compute-tier defaults (5s test / 10s
+          // hook) leave no headroom, so when a full `pnpm test` interleaves
+          // the 200+ parallel unit files the live round-trips slow under CPU
+          // contention and tip over the defaults. A timed-out `beforeAll`
+          // fails the WHOLE file with no per-test failures — the "N failed
+          // files but fewer failed tests" signature of this flake. Generous
+          // explicit timeouts remove the load-induced flake without masking
+          // real bugs (assertions still fail fast); `retry: 1` absorbs a
+          // genuine one-off cloud/network blip.
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
+          retry: 1,
         },
       },
     ],
