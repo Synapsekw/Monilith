@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CalendarBoard } from "@/components/boards/CalendarBoard";
 import {
@@ -111,12 +111,22 @@ describe("CalendarBoard", () => {
     expect(screen.getByText("Dated Item")).toBeInTheDocument();
   });
 
-  it("shows an Unscheduled section listing undated items", () => {
+  it("does not render an Unscheduled section", () => {
     renderCalendar();
-    // "Unscheduled" label (with count) must be visible.
-    expect(screen.getByText(/unscheduled/i)).toBeInTheDocument();
-    // The undated item should appear in the unscheduled section.
-    expect(screen.getByText("Undated Item")).toBeInTheDocument();
+    expect(screen.queryByText(/unscheduled/i)).not.toBeInTheDocument();
+  });
+
+  it("switches to Week mode without any router navigation", () => {
+    renderCalendar();
+    fireEvent.click(screen.getByRole("tab", { name: /week/i }));
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("switches to Agenda mode and lists the dated item", () => {
+    renderCalendar();
+    fireEvent.click(screen.getByRole("tab", { name: /agenda/i }));
+    expect(screen.getByText("Dated Item")).toBeInTheDocument();
   });
 
   it("renders a date-column picker with the configured column selected", () => {
