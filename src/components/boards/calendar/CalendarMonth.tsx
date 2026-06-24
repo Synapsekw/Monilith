@@ -86,8 +86,9 @@ export function CalendarMonth({
               className="relative grid grid-cols-7 gap-px"
             >
               {/* Day cells */}
-              {week.map((day) => {
+              {week.map((day, dayIdx) => {
                 const count = day.events.length;
+                const isWeekend = dayIdx === 0 || dayIdx === 6;
                 return (
                   <div
                     key={day.dateISO}
@@ -104,6 +105,7 @@ export function CalendarMonth({
                     className={cn(
                       "bg-surface hover:bg-accent/20 flex min-h-[6.5rem] cursor-pointer flex-col p-1.5",
                       !day.inMonth && "bg-surface-muted opacity-50",
+                      day.inMonth && isWeekend && "bg-surface-muted/40",
                       day.dateISO === today &&
                         "ring-primary/50 ring-1 ring-inset",
                     )}
@@ -164,7 +166,7 @@ export function CalendarMonth({
                 style={{ top: `calc(1.75rem + ${MONTH_LANE_CAP * 20}px)` }}
               >
                 {overflow.map((hidden, c) =>
-                  hidden.length > 0 && hidden[0].startCol === c + 1 ? (
+                  hidden.length > 0 ? (
                     <DayMorePopover
                       key={c}
                       colIndex={c}

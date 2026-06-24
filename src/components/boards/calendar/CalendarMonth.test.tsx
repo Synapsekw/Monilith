@@ -50,4 +50,41 @@ describe("CalendarMonth", () => {
     fireEvent.click(screen.getAllByText(/\+1 more/)[0]);
     expect(screen.getByText("Span D")).toBeInTheDocument();
   });
+
+  it("counts per-day overflow for a hidden item on an interior day of a hidden span", () => {
+    // 4 full-week spans fill lanes 0-3 (lane 3 overflows the cap); a single-day
+    // item on Wed adds a 2nd hidden item to that one day.
+    const items = [
+      { id: "a", name: "Span A" },
+      { id: "b", name: "Span B" },
+      { id: "c", name: "Span C" },
+      { id: "d", name: "Span D" },
+      { id: "e", name: "Single E" },
+    ];
+    const cv = [
+      ...["a", "b", "c", "d"].map((id) => ({
+        item_id: id,
+        column_id: "d1",
+        value: { date: "2026-06-07", end: "2026-06-13" }, // full week Sun..Sat
+      })),
+      { item_id: "e", column_id: "d1", value: { date: "2026-06-10" } }, // Wed, interior
+    ] as never;
+    render(
+      <DndContext>
+        <CalendarMonth
+          monthISO="2026-06-01"
+          today="2026-06-16"
+          items={items}
+          cellValues={cv}
+          dateColumnId="d1"
+          statusColumn={undefined}
+          cellMap={buildCellMap(cv)}
+          onDayClick={vi.fn()}
+          onOpenItem={vi.fn()}
+        />
+      </DndContext>,
+    );
+    // Wed Jun 10 carries 2 hidden items (Span D + Single E) → "+2 more".
+    expect(screen.getByText("+2 more")).toBeInTheDocument();
+  });
 });
