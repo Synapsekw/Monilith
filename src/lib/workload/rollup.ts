@@ -133,6 +133,16 @@ export function signedPct(pct: number | null): string {
   return `${v > 0 ? "+" : ""}${v}%`;
 }
 
+/** Whole-percent utilization (effort / capacity) over a window; null when no
+ * capacity. Used for the Workload member column readout. */
+export function utilizationPct(
+  effortSecs: number,
+  capacitySecs: number,
+): number | null {
+  if (capacitySecs <= 0) return null;
+  return Math.round((effortSecs / capacitySecs) * 100);
+}
+
 /** ±band (fraction of plan) within which variance reads as neutral "on plan". */
 const VARIANCE_BAND = 0.1;
 

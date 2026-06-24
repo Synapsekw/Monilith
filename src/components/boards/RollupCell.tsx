@@ -1,5 +1,6 @@
 import type { RollupResult } from "@/lib/boards/rollup";
 import { formatDuration } from "@/lib/boards/time-format";
+import { PercentBar } from "@/components/boards/cells";
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -37,6 +38,8 @@ export function RollupCell({ result }: { result: RollupResult }) {
           ★ {result.average}
         </span>
       );
+    case "percent":
+      return <PercentBar percent={result.average} muted />;
     case "dateSpan":
       return (
         <span className="text-muted-foreground text-sm">

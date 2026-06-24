@@ -19,6 +19,7 @@ export const columnKindSchema = z.enum([
   "time_tracking",
   "relation",
   "mirror",
+  "percent",
 ]);
 
 // --- shared option shape (status + dropdown) ---
@@ -117,6 +118,7 @@ export function columnSettingsSchema(kind: ColumnKind) {
     case "phone":
     case "files":
     case "time_tracking":
+    case "percent":
       return emptySettingsSchema;
   }
 }
@@ -142,6 +144,11 @@ export const numbersValueSchema = z.object({
   n: z.number().finite(),
 });
 export const checkboxValueSchema = z.object({ checked: z.boolean() });
+// Percent cells store a manually-set completion 0..100. Parent rows roll up the
+// average of their subitems' percent values when collapsed (see rollupCell).
+export const percentValueSchema = z.object({
+  percent: z.number().min(0).max(100),
+});
 export const ratingValueSchema = z.object({
   rating: z.number().int().min(1).max(5),
 });
@@ -200,6 +207,8 @@ export function cellValueSchema(kind: ColumnKind) {
       return numbersValueSchema;
     case "checkbox":
       return checkboxValueSchema;
+    case "percent":
+      return percentValueSchema;
     case "rating":
       return ratingValueSchema;
     case "link":

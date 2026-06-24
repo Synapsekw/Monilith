@@ -30,7 +30,7 @@ export function ListWidget({ widget }: { widget: CacheWidget }) {
   return (
     <div className="h-full overflow-auto">
       <table className="w-full text-sm">
-        <thead className="text-muted-foreground bg-card sticky top-0 text-left text-xs">
+        <thead className="text-muted-foreground bg-card sticky top-0 border-b text-left text-xs">
           <tr>
             <th className="px-2 py-1 font-medium">Item</th>
             {data.columns.map((c) => (

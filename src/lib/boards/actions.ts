@@ -14,6 +14,7 @@ import {
   deleteGroupSchema,
   renameBoardSchema,
   renameGroupSchema,
+  reorderBoardSchema,
   reorderGroupSchema,
   updateGroupColorSchema,
   renameItemSchema,
@@ -112,6 +113,44 @@ export async function renameBoard(input: {
 
   revalidatePath(`/boards/${parsed.data.boardId}`);
   revalidatePath("/", "layout");
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Reorder a board in the current user's own sidebar list. `position` is a float
+ * (midpoint strategy) computed client-side. Scoped to `created_by = me`: a user
+ * can only reorder boards they own, and that column is read only by the owner —
+ * so the order is personal per-user with no shared-order side effects.
+ */
+export async function reorderBoard(input: {
+  boardId: string;
+  position: number;
+}): Promise<ActionResult> {
+  const parsed = reorderBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Not authenticated.");
+
+  const { data, error } = await supabase
+    .from("boards")
+    .update({ position: parsed.data.position })
+    .eq("id", parsed.data.boardId)
+    .eq("created_by", user.id)
+    .select("id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Board not found.");
+
+  // No revalidate: the sidebar shows the new order optimistically and the
+  // position is persisted, so a fresh load reads it back. Busting the shared
+  // (app) layout here would reload the whole sidebar on the next navigation
+  // (gotcha-44). create/rename/delete still revalidate — they change the list
+  // membership/labels the optimistic state can't cover on its own.
   return { ok: true, data: undefined };
 }
 

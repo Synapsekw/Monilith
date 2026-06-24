@@ -14,6 +14,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/",
   useParams: () => ({}),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // The workspace client components import the "use server" actions module; stub

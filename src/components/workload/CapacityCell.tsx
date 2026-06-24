@@ -115,6 +115,30 @@ export function CapacityCell({
           / {hours(capacitySecs)}
         </span>
       )}
+      {displayState !== "none" ? (
+        <div
+          data-testid="capacity-bar"
+          aria-hidden
+          className="bg-border/60 mt-1 h-1 w-full overflow-hidden rounded-full"
+        >
+          <div
+            className={cn(
+              "h-full rounded-full transition-[width]",
+              displayState === "under" && "bg-foreground/40",
+              displayState === "at" && "bg-primary",
+              displayState === "over" && "bg-destructive",
+            )}
+            style={{
+              width: `${Math.min(
+                100,
+                capacitySecs > 0
+                  ? Math.round((primarySecs / capacitySecs) * 100)
+                  : 0,
+              )}%`,
+            }}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

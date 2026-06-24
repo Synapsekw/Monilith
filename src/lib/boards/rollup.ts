@@ -13,6 +13,7 @@ export type RollupResult =
   | { kind: "people"; count: number }
   | { kind: "checkbox"; checked: number; total: number }
   | { kind: "rating"; average: number }
+  | { kind: "percent"; average: number }
   | { kind: "duration"; totalSecs: number; estimateSecs?: number };
 
 type Options = readonly ColumnOption[] | undefined;
@@ -101,6 +102,22 @@ export function rollupCell(
       }
       return n
         ? { kind: "rating", average: Math.round((sum / n) * 10) / 10 }
+        : { kind: "blank" };
+    }
+    case "percent": {
+      // A parent's collapsed percent cell shows the AVERAGE completion of its
+      // subitems (filled cells only) — rounded to a whole percent.
+      let sum = 0;
+      let n = 0;
+      for (const v of present) {
+        const p = (v as { percent?: number }).percent;
+        if (typeof p === "number" && Number.isFinite(p)) {
+          sum += p;
+          n++;
+        }
+      }
+      return n
+        ? { kind: "percent", average: Math.round(sum / n) }
         : { kind: "blank" };
     }
     case "text":

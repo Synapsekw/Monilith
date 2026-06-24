@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Gauge, Inbox, Target } from "lucide-react";
+import { BarChart3, Clock, Gauge, Inbox, Target } from "lucide-react";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { PlatformNav } from "@/components/platform/PlatformNav";
@@ -22,6 +22,7 @@ const nav = [
   { label: "Goals", icon: Target, href: "/goals" },
   { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
   { label: "Workload", icon: Gauge, href: "/workload" },
+  { label: "My Time", icon: Clock, href: "/time" },
   { label: "Inbox", icon: Inbox },
 ] as const;
 
@@ -38,6 +39,7 @@ export function SidebarNav({
   dashboards,
   isPlatformAdmin,
   isOrgAdmin,
+  newFeedbackCount,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
@@ -45,6 +47,7 @@ export function SidebarNav({
   dashboards: { id: string; name: string }[];
   isPlatformAdmin?: boolean;
   isOrgAdmin?: boolean;
+  newFeedbackCount?: number;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
@@ -60,7 +63,9 @@ export function SidebarNav({
         collapsed={isCollapsed}
       />
 
-      {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
+      {!isCollapsed ? (
+        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
+      ) : null}
 
       <DashboardsNav
         dashboards={dashboards}
@@ -68,7 +73,9 @@ export function SidebarNav({
         collapsed={isCollapsed}
       />
 
-      {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
+      {!isCollapsed ? (
+        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
+      ) : null}
 
       <nav
         className={cn(
@@ -142,7 +149,9 @@ export function SidebarNav({
         })}
       </nav>
 
-      {!isCollapsed ? <Separator className="mx-3 my-1 w-auto" /> : null}
+      {!isCollapsed ? (
+        <Separator className="mx-3 my-1 data-horizontal:w-auto" />
+      ) : null}
 
       {!isCollapsed && workspaces.length > 0 ? (
         <div className="mt-2 flex flex-col gap-0.5 px-2">
@@ -163,10 +172,11 @@ export function SidebarNav({
         </div>
       ) : null}
 
-      <div className="mt-auto">
+      <div className="mt-auto pb-4">
         <PlatformNav
           isPlatformAdmin={isPlatformAdmin}
           collapsed={isCollapsed}
+          newCount={newFeedbackCount}
         />
       </div>
     </div>

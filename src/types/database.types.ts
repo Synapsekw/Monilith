@@ -721,6 +721,59 @@ export type Database = {
           },
         ];
       };
+      feedback: {
+        Row: {
+          admin_response: string | null;
+          body: string;
+          created_at: string;
+          id: string;
+          kind: string;
+          org_id: string;
+          responded_at: string | null;
+          responded_by: string | null;
+          status: string;
+          submitted_by: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          admin_response?: string | null;
+          body: string;
+          created_at?: string;
+          id?: string;
+          kind: string;
+          org_id: string;
+          responded_at?: string | null;
+          responded_by?: string | null;
+          status?: string;
+          submitted_by: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          admin_response?: string | null;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          kind?: string;
+          org_id?: string;
+          responded_at?: string | null;
+          responded_by?: string | null;
+          status?: string;
+          submitted_by?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feedback_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       goal_links: {
         Row: {
           board_id: string;
@@ -1219,6 +1272,7 @@ export type Database = {
           automation_id: string | null;
           board_id: string | null;
           created_at: string;
+          feedback_id: string | null;
           id: string;
           item_id: string | null;
           kind: Database["public"]["Enums"]["notification_kind"];
@@ -1232,6 +1286,7 @@ export type Database = {
           automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
+          feedback_id?: string | null;
           id?: string;
           item_id?: string | null;
           kind: Database["public"]["Enums"]["notification_kind"];
@@ -1245,6 +1300,7 @@ export type Database = {
           automation_id?: string | null;
           board_id?: string | null;
           created_at?: string;
+          feedback_id?: string | null;
           id?: string;
           item_id?: string | null;
           kind?: Database["public"]["Enums"]["notification_kind"];
@@ -1266,6 +1322,13 @@ export type Database = {
             columns: ["board_id"];
             isOneToOne: false;
             referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_feedback_id_fkey";
+            columns: ["feedback_id"];
+            isOneToOne: false;
+            referencedRelation: "feedback";
             referencedColumns: ["id"];
           },
           {
@@ -1660,6 +1723,70 @@ export type Database = {
           },
           {
             foreignKeyName: "relation_links_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      time_allocations: {
+        Row: {
+          board_id: string | null;
+          category: string | null;
+          created_at: string;
+          duration_secs: number;
+          id: string;
+          item_id: string | null;
+          note: string | null;
+          org_id: string;
+          updated_at: string;
+          user_id: string;
+          work_date: string;
+        };
+        Insert: {
+          board_id?: string | null;
+          category?: string | null;
+          created_at?: string;
+          duration_secs: number;
+          id?: string;
+          item_id?: string | null;
+          note?: string | null;
+          org_id: string;
+          updated_at?: string;
+          user_id: string;
+          work_date: string;
+        };
+        Update: {
+          board_id?: string | null;
+          category?: string | null;
+          created_at?: string;
+          duration_secs?: number;
+          id?: string;
+          item_id?: string | null;
+          note?: string | null;
+          org_id?: string;
+          updated_at?: string;
+          user_id?: string;
+          work_date?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "time_allocations_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_allocations_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "time_allocations_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -2126,6 +2253,20 @@ export type Database = {
           name: string;
         }[];
       };
+      dashboard_series: {
+        Args: {
+          p_board_id: string;
+          p_limit?: number;
+          p_measure?: Json;
+          p_primary: Json;
+          p_series?: Json;
+        };
+        Returns: {
+          primary_key: string;
+          series_key: string;
+          value: number;
+        }[];
+      };
       deactivate_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
@@ -2437,7 +2578,8 @@ export type Database = {
         | "files"
         | "time_tracking"
         | "relation"
-        | "mirror";
+        | "mirror"
+        | "percent";
       goal_progress_mode:
         | "manual_number"
         | "manual_percent"
@@ -2448,7 +2590,8 @@ export type Database = {
         | "mention"
         | "assigned"
         | "update_on_item"
-        | "automation";
+        | "automation"
+        | "feedback_response";
       org_role: "owner" | "admin" | "member" | "guest";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
@@ -2609,6 +2752,7 @@ export const Constants = {
         "time_tracking",
         "relation",
         "mirror",
+        "percent",
       ],
       goal_progress_mode: [
         "manual_number",
@@ -2622,6 +2766,7 @@ export const Constants = {
         "assigned",
         "update_on_item",
         "automation",
+        "feedback_response",
       ],
       org_role: ["owner", "admin", "member", "guest"],
       portfolio_health: ["on_track", "at_risk", "off_track"],

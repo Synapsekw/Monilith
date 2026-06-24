@@ -10,6 +10,7 @@ vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
   removeAttachmentObjects: vi.fn(),
 }));
 
+import { revalidatePath } from "next/cache";
 import { upsertCell } from "@/lib/boards/actions";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 
@@ -24,6 +25,7 @@ beforeEach(() => {
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
   vi.mocked(removeAttachmentObjects).mockReset();
+  vi.mocked(revalidatePath).mockReset();
 });
 
 describe("upsertCell people-cell assignment fan-out", () => {
@@ -165,7 +167,13 @@ describe("createBoardFromTemplate", () => {
   });
 });
 
-import { addSubitem, deleteBoard, deleteItem, reorderItem } from "./actions";
+import {
+  addSubitem,
+  deleteBoard,
+  deleteItem,
+  reorderBoard,
+  reorderItem,
+} from "./actions";
 
 const SUB = "33333333-3333-4333-8333-333333333333";
 const BOARD = "44444444-4444-4444-8444-444444444444";
@@ -303,6 +311,81 @@ describe("deleteBoard", () => {
 describe("reorderItem", () => {
   it("rejects a non-uuid itemId", async () => {
     const res = await reorderItem({ itemId: "nope", position: 1 });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("reorderBoard", () => {
+  it("rejects a non-uuid boardId before touching Supabase", async () => {
+    const res = await reorderBoard({ boardId: "nope", position: 1 });
+    expect(res.ok).toBe(false);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("updates position scoped to the current user's own board", async () => {
+    const update = vi.fn(() => ({ eq: eq1 }));
+    const eq1 = vi.fn(() => ({ eq: eq2 }));
+    const eq2 = vi.fn(() => ({ select: selectFn }));
+    const selectFn = vi.fn(() => ({ maybeSingle }));
+    const maybeSingle = vi.fn(async () => ({
+      data: { id: BOARD },
+      error: null,
+    }));
+    from.mockImplementation((table: string) => {
+      if (table === "boards") return { update } as never;
+      return {} as never;
+    });
+
+    const res = await reorderBoard({ boardId: BOARD, position: 3.5 });
+
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(update).toHaveBeenCalledWith({ position: 3.5 });
+    expect(eq1).toHaveBeenCalledWith("id", BOARD);
+    expect(eq2).toHaveBeenCalledWith("created_by", USER);
+  });
+
+  it("does NOT revalidate the layout on success (would reload the shell)", async () => {
+    // Reorder is optimistic in the sidebar and the new position is persisted,
+    // so it must not bust the shared (app) layout cache — that reloads the whole
+    // sidebar on the next navigation. Contrast: deleteBoard still revalidates.
+    const maybeSingle = vi.fn(async () => ({
+      data: { id: BOARD },
+      error: null,
+    }));
+    from.mockImplementation((table: string) => {
+      if (table === "boards")
+        return {
+          update: () => ({
+            eq: () => ({ eq: () => ({ select: () => ({ maybeSingle }) }) }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await reorderBoard({ boardId: BOARD, position: 2 });
+
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
+  });
+
+  it("fails when no row matches (board owned by someone else)", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "boards")
+        return {
+          update: () => ({
+            eq: () => ({
+              eq: () => ({
+                select: () => ({
+                  maybeSingle: async () => ({ data: null, error: null }),
+                }),
+              }),
+            }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await reorderBoard({ boardId: BOARD, position: 1 });
     expect(res.ok).toBe(false);
   });
 });

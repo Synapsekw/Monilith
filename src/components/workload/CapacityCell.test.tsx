@@ -55,6 +55,31 @@ describe("CapacityCell", () => {
     expect(cell).toHaveTextContent("+50%");
   });
 
+  it("renders a capacity bar element for a planned cell with capacity", () => {
+    render(
+      <CapacityCell
+        effortSecs={20 * 3600}
+        capacitySecs={40 * 3600}
+        state="under"
+        metric="planned"
+      />,
+    );
+    // the bar is a presentational element marked with a stable test id
+    expect(screen.getByTestId("capacity-bar")).toBeInTheDocument();
+  });
+
+  it("omits the capacity bar when there is no capacity (none state)", () => {
+    render(
+      <CapacityCell
+        effortSecs={0}
+        capacitySecs={0}
+        state="none"
+        metric="planned"
+      />,
+    );
+    expect(screen.queryByTestId("capacity-bar")).not.toBeInTheDocument();
+  });
+
   it("variance metric renders an em dash for pct when there is no plan", () => {
     render(
       <CapacityCell

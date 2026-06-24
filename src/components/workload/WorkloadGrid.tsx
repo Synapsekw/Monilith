@@ -335,7 +335,7 @@ export function WorkloadGrid({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="border-separate border-spacing-0 text-sm">
+        <table className="w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-20">
             <tr>
               <th
@@ -348,7 +348,7 @@ export function WorkloadGrid({
                 <th
                   key={b.weekKey}
                   scope="col"
-                  className="bg-card text-muted-foreground w-24 min-w-24 border-b px-2 py-2 text-center text-xs font-medium"
+                  className="bg-card text-muted-foreground min-w-24 border-b px-2 py-2 text-center text-xs font-medium"
                 >
                   {b.label}
                 </th>
