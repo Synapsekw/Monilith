@@ -39,7 +39,7 @@ export function RollupCell({ result }: { result: RollupResult }) {
         </span>
       );
     case "percent":
-      return <PercentBar percent={result.average} muted />;
+      return <PercentBar percent={result.average} />;
     case "dateSpan":
       return (
         <span className="text-muted-foreground text-sm">
