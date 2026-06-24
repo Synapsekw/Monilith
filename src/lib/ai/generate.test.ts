@@ -31,7 +31,7 @@ describe("buildSystemPrompt", () => {
     expect(p).toMatch(/chart/);
     expect(p).toMatch(/battery/);
     expect(p).toMatch(/list/);
-    expect(p).toMatch(/12/); // 12-column grid
+    expect(p).toMatch(/config/i); // instructs the model to populate widget config
   });
 });
 

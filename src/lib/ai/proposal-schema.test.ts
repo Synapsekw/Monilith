@@ -1,6 +1,63 @@
 import { describe, expect, it } from "vitest";
-import { validateProposal, packLayout } from "@/lib/ai/proposal-schema";
+import {
+  validateProposal,
+  packLayout,
+  PROPOSAL_JSON_SCHEMA,
+} from "@/lib/ai/proposal-schema";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
+
+// Regression guards for the structured-output schema. Two bugs are pinned here:
+//  1. A permissive `config: {object}` let the model emit `config: {}` and ignore
+//     the prompt, so every generation collapsed to an empty list. Each oneOf
+//     branch's config MUST require its discriminating field(s).
+//  2. Anthropic's grammar rejects schemas with >24 optional parameters (400).
+//     Adding `layout` back (or other optional fields) must not breach that.
+describe("PROPOSAL_JSON_SCHEMA", () => {
+  type JsonSchema = {
+    type?: string;
+    required?: string[];
+    properties?: Record<string, JsonSchema>;
+    additionalProperties?: boolean;
+    oneOf?: JsonSchema[];
+    items?: JsonSchema;
+    enum?: string[];
+  };
+  const schema = PROPOSAL_JSON_SCHEMA as unknown as JsonSchema;
+  const branches = schema.properties!.widgets.items!.oneOf!;
+
+  it("has one oneOf branch per widget kind", () => {
+    const kinds = branches.map((b) => b.properties!.kind.enum![0]).sort();
+    expect(kinds).toEqual(["battery", "chart", "list", "number"]);
+  });
+
+  it("forces every widget config to require its discriminating field(s)", () => {
+    for (const b of branches) {
+      const cfg = b.properties!.config;
+      expect(cfg.additionalProperties).toBe(false); // not freeform
+      expect(Array.isArray(cfg.required)).toBe(true);
+      expect(cfg.required!.length).toBeGreaterThan(0); // cannot be `{}`
+    }
+  });
+
+  it("stays within Anthropic's 24 optional-parameter grammar limit", () => {
+    const countOptional = (s: JsonSchema | undefined): number => {
+      if (!s || typeof s !== "object") return 0;
+      let n = 0;
+      if (s.type === "object" && s.properties) {
+        const req = new Set<string>(s.required ?? []);
+        for (const [k, v] of Object.entries(s.properties)) {
+          if (!req.has(k)) n += 1;
+          n += countOptional(v);
+        }
+      }
+      if (Array.isArray(s.oneOf))
+        for (const br of s.oneOf) n += countOptional(br);
+      if (s.items) n += countOptional(s.items);
+      return n;
+    };
+    expect(countOptional(schema)).toBeLessThanOrEqual(24);
+  });
+});
 
 const snap: BoardSnapshot = {
   board: { id: "b1", name: "Sprint" },

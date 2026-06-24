@@ -29,8 +29,54 @@ const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
   list: { w: 6, h: 5 },
 };
 
-// JSON schema handed to the model (output_config.format). Keep it permissive on
-// config (object) — the real validation happens here in validateProposal.
+// JSON schema handed to the model (output_config.format).
+//
+// CRITICAL: under strict structured output the model obeys THIS schema, not the
+// prose in the system prompt. A permissive `config: {object}` makes the model
+// emit `config: {}` (the minimal valid value) and ignore the prompt — which is
+// why early versions only ever produced an (empty) list. So each widget kind's
+// config is fully specified here via `oneOf`, with the discriminating fields
+// (agg / chartType+primary / groupColumnId / columnIds) REQUIRED. That forces
+// the model to emit complete, usable configs. `columnId`s stay plain strings;
+// validateProposal() re-checks them against the snapshot.
+// NOTE: `layout` is intentionally NOT part of the model schema. Anthropic's
+// structured-output grammar caps optional parameters at 24; a per-widget layout
+// (x/y/w/h × 4 oneOf branches = 16 optional) blew past it. packLayout() re-flows
+// the grid from per-kind default sizes anyway, so the model never needed it.
+const DIMENSION_SCHEMA = {
+  type: "object",
+  required: ["kind"],
+  additionalProperties: false,
+  properties: {
+    kind: { type: "string", enum: ["status", "dropdown", "people", "date"] },
+    columnId: { type: "string" },
+    bucket: { type: "string", enum: ["day", "week", "month"] },
+  },
+} as const;
+
+const MEASURE_SCHEMA = {
+  type: "object",
+  required: ["agg"],
+  additionalProperties: false,
+  properties: {
+    agg: { type: "string", enum: ["count", "sum", "avg"] },
+    valueColumnId: { type: "string" },
+  },
+} as const;
+
+function widgetBranch(kind: string, configSchema: object) {
+  return {
+    type: "object",
+    required: ["kind", "title", "config"],
+    additionalProperties: false,
+    properties: {
+      kind: { type: "string", enum: [kind] },
+      title: { type: "string", maxLength: 100 },
+      config: configSchema,
+    },
+  };
+}
+
 export const PROPOSAL_JSON_SCHEMA = {
   type: "object",
   required: ["name", "widgets"],
@@ -39,29 +85,65 @@ export const PROPOSAL_JSON_SCHEMA = {
     name: { type: "string", maxLength: 100 },
     widgets: {
       type: "array",
+      minItems: 3,
       maxItems: 8,
       items: {
-        type: "object",
-        required: ["kind", "title", "config"],
-        additionalProperties: false,
-        properties: {
-          kind: {
-            type: "string",
-            enum: ["number", "chart", "battery", "list"],
-          },
-          title: { type: "string", maxLength: 100 },
-          config: { type: "object", additionalProperties: true },
-          layout: {
+        oneOf: [
+          widgetBranch("number", {
             type: "object",
+            required: ["agg"],
             additionalProperties: false,
             properties: {
-              x: { type: "integer", minimum: 0, maximum: 11 },
-              y: { type: "integer", minimum: 0 },
-              w: { type: "integer", minimum: 1, maximum: 12 },
-              h: { type: "integer", minimum: 1, maximum: 20 },
+              agg: { type: "string", enum: ["count", "sum", "avg"] },
+              valueColumnId: { type: "string" },
+              display: { type: "string", enum: ["plain", "gauge"] },
+              target: { type: "number" },
             },
-          },
-        },
+          }),
+          widgetBranch("chart", {
+            type: "object",
+            required: ["chartType", "primary", "measure"],
+            additionalProperties: false,
+            properties: {
+              chartType: {
+                type: "string",
+                enum: [
+                  "bar",
+                  "stackedBar",
+                  "groupedBar",
+                  "line",
+                  "area",
+                  "combo",
+                  "pie",
+                  "donut",
+                  "radial",
+                ],
+              },
+              primary: DIMENSION_SCHEMA,
+              series: DIMENSION_SCHEMA,
+              measure: MEASURE_SCHEMA,
+            },
+          }),
+          widgetBranch("battery", {
+            type: "object",
+            required: ["groupColumnId"],
+            additionalProperties: false,
+            properties: { groupColumnId: { type: "string" } },
+          }),
+          widgetBranch("list", {
+            type: "object",
+            required: ["columnIds"],
+            additionalProperties: false,
+            properties: {
+              columnIds: {
+                type: "array",
+                items: { type: "string" },
+                maxItems: 8,
+              },
+              limit: { type: "integer", minimum: 1, maximum: 100 },
+            },
+          }),
+        ],
       },
     },
   },

@@ -16,15 +16,14 @@ import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
 export function buildSystemPrompt(): string {
   return [
     "You design analytics dashboards for a Monday-style work board.",
-    "Output a dashboard proposal: a name and up to 8 widgets on a 12-column grid.",
+    "Output a dashboard proposal: a name and 4-6 widgets. Every widget MUST have a fully-populated config (the grid layout is handled by the app, not you).",
     "Widget kinds and their config:",
     "- number: { agg: 'count'|'sum'|'avg', valueColumnId?, display?: 'plain'|'gauge', target? }. sum/avg need a numbers column.",
     "- chart: { chartType: 'bar'|'stackedBar'|'groupedBar'|'line'|'area'|'combo'|'pie'|'donut'|'radial', primary: {kind:'status'|'dropdown'|'people'|'date', columnId?, bucket?}, series?: <same>, measure: {agg, valueColumnId?} }.",
     "- battery: { groupColumnId } — must be a status or dropdown column.",
     "- list: { columnIds: string[] (<=8), limit?: number }.",
     "Rules: only reference columnId values that exist in the snapshot. primary/series.kind MUST equal the referenced column's kind. Only status/dropdown/people/date are chartable dimensions; sum/avg measures need a numbers column.",
-    "Design well: lead with 1-2 headline number widgets, then charts. Prefer pie/donut for low-cardinality status; bar for categories; line/area for date trends. Don't chart near-empty columns. Give each widget a short human title.",
-    "Provide a sensible layout {x,y,w,h} per widget on the 12-column grid (number 3x2, chart 6x4).",
+    "Design well: lead with 1-2 headline number widgets (e.g. total count), then 2-4 charts over the status/date columns, optionally a battery or list. Prefer pie/donut for low-cardinality status; bar for categories; line/area for date trends. Don't chart near-empty columns. Give each widget a short human title.",
   ].join("\n");
 }
 
