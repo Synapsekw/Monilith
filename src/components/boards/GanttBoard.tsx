@@ -267,7 +267,7 @@ export function GanttBoard({
     // colorColumn is derived from colorColId which is stable state; colorColumn object identity
     // is stable for the same id within a render. Dep array uses colorColId to avoid object ref issues.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, colorColId, cache.cellValues]);
+  }, [rows, colorColId, cache.cellValues, cache.columns]);
 
   // Month tick labels for the timeline header.
   const monthTicks = useMemo(
