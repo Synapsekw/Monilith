@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildCalendarMonth, onEventDropped } from "@/lib/boards/calendar";
+import {
+  buildCalendarMonth,
+  onEventDropped,
+  packLanes,
+  layOutWeek,
+  weekStartOnOrBefore,
+  type WeekInterval,
+} from "@/lib/boards/calendar";
 
 const items = [
   { id: "i1", name: "A" },
@@ -50,13 +57,6 @@ describe("onEventDropped", () => {
     });
   });
 });
-
-import {
-  packLanes,
-  layOutWeek,
-  weekStartOnOrBefore,
-  type WeekInterval,
-} from "@/lib/boards/calendar";
 
 describe("packLanes", () => {
   const iv = (over: Partial<WeekInterval>): WeekInterval => ({
@@ -125,6 +125,26 @@ describe("layOutWeek", () => {
     expect(span.continuesLeft).toBe(true);
     expect(span.continuesRight).toBe(false);
     expect(span.isSingle).toBe(false);
+  });
+
+  it("clips a span that runs past Saturday and flags continuesRight", () => {
+    const cellsPast = [
+      {
+        item_id: "i1",
+        column_id: "d1",
+        value: { date: "2026-06-12", end: "2026-06-20" },
+      },
+    ] as never;
+    const out = layOutWeek(
+      "2026-06-07",
+      [{ id: "i1", name: "Span" }],
+      cellsPast,
+      "d1",
+    );
+    const span = out.find((p) => p.itemId === "i1")!;
+    expect(span.endCol).toBe(7); // clamped to Saturday
+    expect(span.continuesRight).toBe(true);
+    expect(span.continuesLeft).toBe(false);
   });
 
   it("places a single-day item in one column flagged isSingle", () => {
