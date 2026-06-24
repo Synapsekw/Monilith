@@ -5,6 +5,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/boards",
   useParams: () => ({}),
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/workspaces/actions", () => ({
   createWorkspace: vi.fn(),
