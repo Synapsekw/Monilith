@@ -146,7 +146,11 @@ export async function reorderBoard(input: {
   if (error) return fail(error.message);
   if (!data) return fail("Board not found.");
 
-  revalidatePath("/", "layout");
+  // No revalidate: the sidebar shows the new order optimistically and the
+  // position is persisted, so a fresh load reads it back. Busting the shared
+  // (app) layout here would reload the whole sidebar on the next navigation
+  // (gotcha-44). create/rename/delete still revalidate — they change the list
+  // membership/labels the optimistic state can't cover on its own.
   return { ok: true, data: undefined };
 }
 

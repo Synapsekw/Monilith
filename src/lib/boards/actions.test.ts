@@ -10,6 +10,7 @@ vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
   removeAttachmentObjects: vi.fn(),
 }));
 
+import { revalidatePath } from "next/cache";
 import { upsertCell } from "@/lib/boards/actions";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 
@@ -24,6 +25,7 @@ beforeEach(() => {
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
   vi.mocked(removeAttachmentObjects).mockReset();
+  vi.mocked(revalidatePath).mockReset();
 });
 
 describe("upsertCell people-cell assignment fan-out", () => {
@@ -340,6 +342,30 @@ describe("reorderBoard", () => {
     expect(update).toHaveBeenCalledWith({ position: 3.5 });
     expect(eq1).toHaveBeenCalledWith("id", BOARD);
     expect(eq2).toHaveBeenCalledWith("created_by", USER);
+  });
+
+  it("does NOT revalidate the layout on success (would reload the shell)", async () => {
+    // Reorder is optimistic in the sidebar and the new position is persisted,
+    // so it must not bust the shared (app) layout cache — that reloads the whole
+    // sidebar on the next navigation. Contrast: deleteBoard still revalidates.
+    const maybeSingle = vi.fn(async () => ({
+      data: { id: BOARD },
+      error: null,
+    }));
+    from.mockImplementation((table: string) => {
+      if (table === "boards")
+        return {
+          update: () => ({
+            eq: () => ({ eq: () => ({ select: () => ({ maybeSingle }) }) }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await reorderBoard({ boardId: BOARD, position: 2 });
+
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
   });
 
   it("fails when no row matches (board owned by someone else)", async () => {

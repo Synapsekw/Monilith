@@ -109,8 +109,11 @@ export function BoardsNav({
 
   // Optimistic order for the owned list: seeded from server props, re-synced
   // (during render, per React's "adjust state when a prop changes" pattern)
-  // whenever the server sends a new ordering after a reorder revalidates. The
-  // prop identity only changes on a server re-render, so a client-only re-render
+  // whenever the server sends a new list — e.g. after a create/rename/delete
+  // revalidates the shell. Reorder itself is NOT revalidated (that would reload
+  // the whole sidebar, gotcha-44); the optimistic order here is authoritative
+  // and the new position is persisted, so a fresh load reads it back. The prop
+  // identity only changes on a server re-render, so a client-only re-render
   // (e.g. our own optimistic setState) does not clobber the optimistic order.
   const [ordered, setOrdered] = useState(boards);
   const [syncedBoards, setSyncedBoards] = useState(boards);
