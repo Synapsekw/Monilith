@@ -35,7 +35,12 @@ export default async function GoalsIndex() {
       <div className="min-h-0 flex-1">
         <GoalTree tree={tree} />
       </div>
-      <GoalDetailDrawer tree={tree} members={members} boards={boardOptions} links={links} />
+      <GoalDetailDrawer
+        tree={tree}
+        members={members}
+        boards={boardOptions}
+        links={links}
+      />
     </div>
   );
 }
