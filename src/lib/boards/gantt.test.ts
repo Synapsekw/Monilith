@@ -88,35 +88,73 @@ describe("detectViolations", () => {
   });
 });
 
-describe("onBarMoved / onBarResized", () => {
-  it("move shifts date+end by delta", () => {
-    const setCell = vi.fn();
+describe("onBarMoved (two columns)", () => {
+  it("shifts both the start and end column by the delta", () => {
+    const writes: unknown[] = [];
     onBarMoved(
       "i1",
       2,
-      { start: "2026-06-02", end: "2026-06-04" },
-      "d1",
-      setCell,
+      { start: "2026-06-02", end: "2026-06-05" },
+      "s1",
+      "e1",
+      (a) => writes.push(a),
     );
-    expect(setCell).toHaveBeenCalledWith({
-      itemId: "i1",
-      columnId: "d1",
-      value: { date: "2026-06-04", end: "2026-06-06" },
-    });
+    expect(writes).toEqual([
+      { itemId: "i1", columnId: "s1", value: { date: "2026-06-04" } },
+      { itemId: "i1", columnId: "e1", value: { date: "2026-06-07" } },
+    ]);
   });
-  it("resize writes the new end", () => {
-    const setCell = vi.fn();
+  it("writes a single-column range when endColumnId is null (legacy)", () => {
+    const writes: unknown[] = [];
+    onBarMoved(
+      "i1",
+      1,
+      { start: "2026-06-02", end: "2026-06-05" },
+      "d1",
+      null,
+      (a) => writes.push(a),
+    );
+    expect(writes).toEqual([
+      {
+        itemId: "i1",
+        columnId: "d1",
+        value: { date: "2026-06-03", end: "2026-06-06" },
+      },
+    ]);
+  });
+});
+
+describe("onBarResized (two columns)", () => {
+  it("writes only the end column when endColumnId is set", () => {
+    const writes: unknown[] = [];
     onBarResized(
       "i1",
-      "2026-06-06",
-      { start: "2026-06-02", end: "2026-06-04" },
-      "d1",
-      setCell,
+      "2026-06-09",
+      { start: "2026-06-02", end: "2026-06-05" },
+      "s1",
+      "e1",
+      (a) => writes.push(a),
     );
-    expect(setCell).toHaveBeenCalledWith({
-      itemId: "i1",
-      columnId: "d1",
-      value: { date: "2026-06-02", end: "2026-06-06" },
-    });
+    expect(writes).toEqual([
+      { itemId: "i1", columnId: "e1", value: { date: "2026-06-09" } },
+    ]);
+  });
+  it("writes a single-column range when endColumnId is null (legacy)", () => {
+    const writes: unknown[] = [];
+    onBarResized(
+      "i1",
+      "2026-06-09",
+      { start: "2026-06-02", end: "2026-06-05" },
+      "d1",
+      null,
+      (a) => writes.push(a),
+    );
+    expect(writes).toEqual([
+      {
+        itemId: "i1",
+        columnId: "d1",
+        value: { date: "2026-06-02", end: "2026-06-09" },
+      },
+    ]);
   });
 });

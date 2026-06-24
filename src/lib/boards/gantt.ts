@@ -26,7 +26,7 @@ export type GanttDependency = {
 export type SetCellArg = {
   itemId: string;
   columnId: string;
-  value: { date: string; end: string };
+  value: { date: string; end?: string };
 };
 
 // ---------------------------------------------------------------------------
@@ -128,23 +128,30 @@ export function detectViolations(
 // ---------------------------------------------------------------------------
 
 /**
- * Shift both start and end of a bar by deltaDays (positive = forward,
- * negative = backward).
+ * Shift a bar by deltaDays. With a separate end column, writes the new start to
+ * the start column and the new end to the end column. In legacy single-column
+ * mode (endColumnId null), writes { date, end } to the start column.
  */
 export function onBarMoved(
   itemId: string,
   deltaDays: number,
   range: { start: string; end: string },
-  dateColumnId: string,
+  startColumnId: string,
+  endColumnId: string | null,
   setCell: (arg: SetCellArg) => void,
 ): void {
   const newStart = addDaysISO(range.start, deltaDays);
   const newEnd = addDaysISO(range.end, deltaDays);
-  setCell({
-    itemId,
-    columnId: dateColumnId,
-    value: { date: newStart, end: newEnd },
-  });
+  if (endColumnId) {
+    setCell({ itemId, columnId: startColumnId, value: { date: newStart } });
+    setCell({ itemId, columnId: endColumnId, value: { date: newEnd } });
+  } else {
+    setCell({
+      itemId,
+      columnId: startColumnId,
+      value: { date: newStart, end: newEnd },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -152,19 +159,25 @@ export function onBarMoved(
 // ---------------------------------------------------------------------------
 
 /**
- * Update only the end date of a bar (right-edge resize).
- * Start date is preserved from the current range.
+ * Update the end of a bar (right-edge resize). With a separate end column,
+ * writes only the end column. In legacy single-column mode, writes
+ * { date: range.start, end: newEndISO } to the start column.
  */
 export function onBarResized(
   itemId: string,
   newEndISO: string,
   range: { start: string; end: string },
-  dateColumnId: string,
+  startColumnId: string,
+  endColumnId: string | null,
   setCell: (arg: SetCellArg) => void,
 ): void {
-  setCell({
-    itemId,
-    columnId: dateColumnId,
-    value: { date: range.start, end: newEndISO },
-  });
+  if (endColumnId) {
+    setCell({ itemId, columnId: endColumnId, value: { date: newEndISO } });
+  } else {
+    setCell({
+      itemId,
+      columnId: startColumnId,
+      value: { date: range.start, end: newEndISO },
+    });
+  }
 }
