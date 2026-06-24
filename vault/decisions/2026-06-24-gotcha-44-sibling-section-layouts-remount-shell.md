@@ -5,6 +5,7 @@ status: accepted
 tags: [decision, gotcha, app-router, performance, shell, nextjs]
 related:
   - "[[2026-06-24-0812-shared-app-shell-layout]]"
+  - "[[2026-06-24-0907-reorder-board-no-shell-reload]]"
   - "[[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]]"
 ---
 
@@ -45,6 +46,8 @@ Rules of thumb:
 - Guard it with a structural test (`src/app/app-shell-structure.test.ts`): exactly one layout under
   `(app)/` may import `AuthenticatedShell`. Prevents silently re-introducing a per-section mount.
 
-Not fixed here: `revalidatePath("/", "layout")` in `src/lib/boards/actions.ts` still invalidates the
-whole shell after a board mutation (reloads sidebar on the _next_ nav) — separate follow-up, narrow
-to a scoped `revalidateTag`.
+Sequel: the same `revalidatePath("/", "layout")` in `src/lib/boards/actions.ts` reloaded the shell
+after a board mutation (sidebar reloads on the _next_ nav). The **reorder** slice was fixed in
+[[2026-06-24-0907-reorder-board-no-shell-reload]] (dropped the revalidate — reorder is optimistic +
+persisted, so it never needed it). rename/delete/create/duplicate still revalidate; killing those
+reloads needs a shared client boards store (optimistic membership/labels), still open.
