@@ -29,6 +29,24 @@ export type SetCellArg = {
   value: { date: string; end?: string };
 };
 
+/**
+ * Days the timeline grid must cover. At least `floorDays` (the zoom window),
+ * extended to fit the latest date (inclusive) plus a few days of padding so
+ * bars beyond the zoom window aren't clipped off-screen. Capped at ~10 years so
+ * a typo'd far-future date can't blow up the grid width.
+ */
+export function timelineDayCount(
+  rangeStartISO: string,
+  rangeEndISO: string,
+  floorDays: number,
+): number {
+  if (!rangeStartISO || !rangeEndISO) return floorDays;
+  const PAD = 3;
+  const MAX = 3660; // ~10 years
+  const span = diffDaysISO(rangeStartISO, rangeEndISO) + 1 + PAD;
+  return Math.min(MAX, Math.max(floorDays, span));
+}
+
 // ---------------------------------------------------------------------------
 // buildGanttRows
 // ---------------------------------------------------------------------------

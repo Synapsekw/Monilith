@@ -4,6 +4,7 @@ import {
   detectViolations,
   onBarMoved,
   onBarResized,
+  timelineDayCount,
 } from "@/lib/boards/gantt";
 
 const items = [
@@ -156,5 +157,22 @@ describe("onBarResized (two columns)", () => {
         value: { date: "2026-06-02", end: "2026-06-09" },
       },
     ]);
+  });
+});
+
+describe("timelineDayCount", () => {
+  it("returns the zoom floor when the data fits inside it", () => {
+    expect(timelineDayCount("2026-01-01", "2026-01-05", 90)).toBe(90);
+  });
+  it("extends to fit the latest date (inclusive) plus padding", () => {
+    // 2026-01-01 → 2026-06-01 is 151 days; +1 inclusive +3 pad = 155.
+    expect(timelineDayCount("2026-01-01", "2026-06-01", 90)).toBe(155);
+  });
+  it("falls back to the floor when either bound is empty", () => {
+    expect(timelineDayCount("", "2026-06-01", 90)).toBe(90);
+    expect(timelineDayCount("2026-01-01", "", 90)).toBe(90);
+  });
+  it("caps a far-future end date to guard against typos", () => {
+    expect(timelineDayCount("2026-01-01", "2100-01-01", 90)).toBe(3660);
   });
 });

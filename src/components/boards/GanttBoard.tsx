@@ -26,6 +26,7 @@ import {
   detectViolations,
   onBarMoved,
   onBarResized,
+  timelineDayCount,
   type GanttRow,
 } from "@/lib/boards/gantt";
 import { itemDateRange, defaultTimelineColumns } from "@/lib/boards/dates";
@@ -199,8 +200,6 @@ export function GanttBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  const dayCount = ZOOM_DAY_COUNT[zoom];
-
   // Earliest scheduled item start date for range anchoring.
   // Guard: returns "" when no dateColumn (we'll be in the early-return path).
   // Use startColId (stable state) rather than the derived dateColumn object as dep.
@@ -220,6 +219,25 @@ export function GanttBoard({
     return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startColId, cache.cellValues]);
+
+  // Latest date across the start and end columns — how far the last bar reaches.
+  const rangeEndISO = useMemo(() => {
+    let max = "";
+    for (const cv of cache.cellValues) {
+      if (cv.column_id !== startColId && cv.column_id !== endColId) continue;
+      const d = (cv.value as { date?: string } | null)?.date;
+      if (typeof d === "string" && d > max) max = d;
+    }
+    return max;
+  }, [startColId, endColId, cache.cellValues]);
+
+  // Grid width in days: the zoom window, extended to fit the full data range so
+  // bars beyond the window aren't clipped off-screen.
+  const dayCount = timelineDayCount(
+    rangeStartISO,
+    rangeEndISO,
+    ZOOM_DAY_COUNT[zoom],
+  );
 
   // Build Gantt row layout (positions all items on the timeline).
   const ganttResult = useMemo(() => {
