@@ -193,15 +193,16 @@ export type WeekInterval = {
 export type PlacedInterval = WeekInterval & { lane: number };
 
 /**
- * Greedy interval packing within one week. Sort by (startCol asc, width desc,
- * itemId) for determinism, then assign each interval the lowest lane whose last
- * occupant ends strictly before this interval starts.
+ * Greedy interval packing within one week. Sort by (startCol asc, endCol asc,
+ * itemId) for determinism — shorter intervals first among equal starts, so a
+ * brief item frees its lane for a later one in the same week — then assign each
+ * interval the lowest lane whose last occupant ends before this one starts.
  */
 export function packLanes(intervals: WeekInterval[]): PlacedInterval[] {
   const sorted = [...intervals].sort(
     (a, b) =>
       a.startCol - b.startCol ||
-      b.endCol - b.startCol - (a.endCol - a.startCol) ||
+      a.endCol - b.endCol ||
       a.itemId.localeCompare(b.itemId),
   );
   const laneEnd: number[] = []; // last endCol occupied per lane
@@ -723,8 +724,9 @@ function renderMonth(onOpenItem = vi.fn()) {
 describe("CalendarMonth", () => {
   it("renders at most the lane cap of bars and a +N more trigger", () => {
     renderMonth();
-    // 3 of the 4 overlapping spans render as named bars; the 4th overflows.
-    expect(screen.getAllByText(/Span [ABC]/)).toHaveLength(3 * 4); // 4 covered days each
+    // Each span renders as ONE grid bar (not one chip per day). 3 of the 4
+    // overlapping spans are visible (lanes 0-2); the 4th overflows the cap.
+    expect(screen.getAllByText(/Span [ABC]/)).toHaveLength(3);
     expect(screen.getAllByText(/\+1 more/).length).toBeGreaterThan(0);
   });
 
