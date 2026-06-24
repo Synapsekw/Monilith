@@ -6,6 +6,7 @@ tags: [decision, gotcha, testing, supabase, integration-tests, ci]
 related:
   - "[[2026-06-23-2059-time-allocation-my-time-card]]"
   - "[[2026-06-24-0751-test-fixture-prod-db-cleanup]]"
+  - "[[2026-06-24-2311-integration-test-timeout-flake]]"
 ---
 
 # Gotcha 43: the live-DB integration suite is nondeterministically flaky under `pnpm test`
@@ -50,3 +51,21 @@ happened for [[2026-06-23-2059-time-allocation-my-time-card]] (merged at `aabda5
 
 **Follow-up worth doing:** make the integration suite deterministic (serial + isolated DB) so
 `finish-task.sh`'s gate is reliable instead of routinely red.
+
+## Update 2026-06-24: one more mechanism + a partial mitigation
+
+A third flake mechanism on top of the parallel-teardown races above: **default-timeout breach
+under CPU load.** The integration suites are network-bound (live cloud), with individual ops
+already running 3–5.3s in isolation and `beforeAll` provisioning slower still, yet they relied on
+Vitest's compute-tier defaults (5s test / 10s hook) with no explicit override. When a full
+`pnpm test` interleaves the 200+ parallel unit files, the live round-trips slow under contention
+and tip over the defaults; a timed-out `beforeAll` fails the whole file with no per-test failures —
+the "N failed files but fewer failed tests" signature. A diagnostic run reproduced the symptom
+purely by load: the failing run was 45% slower (649s vs 446s) than the clean re-runs, and both
+projects pass 100% in isolation and combined.
+
+Mitigation shipped (`vitest.config.ts`, integration project): `testTimeout: 30_000`,
+`hookTimeout: 60_000`, `retry: 1`. Removes the load-induced timeout flake and lets `retry: 1`
+absorb a transient setup blip (FK `23503` / `P0002`) without masking real bugs (assertions still
+fail fast). This is a band-aid, **not** the real fix — the isolated/local-DB follow-up above still
+stands. See [[2026-06-24-2311-integration-test-timeout-flake]].
