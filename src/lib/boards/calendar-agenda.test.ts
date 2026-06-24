@@ -39,3 +39,16 @@ describe("agendaGroups", () => {
     );
   });
 });
+
+describe("agendaGroups", () => {
+  it("includes a single-day item whose start equals toISO (inclusive boundary)", () => {
+    const items = [{ id: "edge", name: "Last day" }];
+    const cells = [
+      { item_id: "edge", column_id: "d1", value: { date: "2026-06-30" } },
+    ] as never;
+    const groups = agendaGroups("2026-06-01", "2026-06-30", items, cells, "d1");
+    expect(groups).toHaveLength(1);
+    expect(groups[0].dateISO).toBe("2026-06-30");
+    expect(groups[0].items[0].itemId).toBe("edge");
+  });
+});
