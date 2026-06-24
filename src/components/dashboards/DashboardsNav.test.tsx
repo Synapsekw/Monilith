@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/ui";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   useParams: () => ({}),
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/dashboards/actions", () => ({
   createDashboard: vi.fn(),

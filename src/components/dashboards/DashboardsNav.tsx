@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { LayoutGrid, Plus } from "lucide-react";
 import { createDashboard } from "@/lib/dashboards/actions";
 import { DashboardItemMenu } from "@/components/dashboards/DashboardItemMenu";
+import { GenerateWithAiButton } from "@/components/dashboards/ai/GenerateWithAiButton";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -96,16 +97,19 @@ export function DashboardsNav({
             <LayoutGrid className="size-4" />
             Dashboards
           </Link>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="New dashboard"
-            className="size-6"
-            onClick={() => setOpen(true)}
-          >
-            <Plus className="size-4" />
-          </Button>
+          <div className="flex items-center gap-0.5">
+            <GenerateWithAiButton workspaceId={workspaceId} />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="New dashboard"
+              className="size-6"
+              onClick={() => setOpen(true)}
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
 
