@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { DndContext } from "@dnd-kit/core";
 import { EventBar, statusOptionColor } from "./EventBar";
 import type { PlacedInterval } from "@/lib/boards/calendar";
@@ -67,5 +67,44 @@ describe("EventBar", () => {
       }),
     );
     expect(screen.queryByText("Carryover")).not.toBeInTheDocument();
+  });
+
+  it("calls onOpen with the item id when clicked", () => {
+    const onOpen = vi.fn();
+    render(
+      <DndContext>
+        <EventBar
+          interval={placed({ name: "Clickable" })}
+          fromDayISO="2026-06-10"
+          dateColumnId="d1"
+          statusColumn={statusColumn}
+          cellMap={new Map()}
+          onOpen={onOpen}
+        />
+      </DndContext>,
+    );
+    fireEvent.click(screen.getByText("Clickable"));
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(onOpen).toHaveBeenCalledWith("i1");
+  });
+
+  it("calls onOpen with the item id when Enter is pressed", () => {
+    const onOpen = vi.fn();
+    render(
+      <DndContext>
+        <EventBar
+          interval={placed({ name: "KeyboardItem" })}
+          fromDayISO="2026-06-10"
+          dateColumnId="d1"
+          statusColumn={statusColumn}
+          cellMap={new Map()}
+          onOpen={onOpen}
+        />
+      </DndContext>,
+    );
+    const bar = screen.getByText("KeyboardItem").closest("div[tabindex]")!;
+    fireEvent.keyDown(bar, { key: "Enter" });
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(onOpen).toHaveBeenCalledWith("i1");
   });
 });

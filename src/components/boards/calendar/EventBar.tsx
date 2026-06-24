@@ -1,6 +1,7 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
+import type { KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { cellKey } from "@/lib/boards/cache";
@@ -74,6 +75,14 @@ export function EventBar({
   // The name renders once, at the visible start of the span.
   const showName = !interval.continuesLeft;
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      e.stopPropagation();
+      onOpen?.(interval.itemId);
+    }
+  };
+
   const common = cn(
     "relative flex h-[18px] min-w-0 cursor-grab items-center gap-1.5 px-1.5 text-[11px] font-medium",
     "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
@@ -89,10 +98,12 @@ export function EventBar({
         style={style}
         {...listeners}
         {...attributes}
+        tabIndex={0}
         onClick={(e) => {
           e.stopPropagation();
           onOpen?.(interval.itemId);
         }}
+        onKeyDown={handleKeyDown}
         className={cn(common, "bg-surface-muted border")}
       >
         <PresenceRing target={target} />
@@ -119,10 +130,12 @@ export function EventBar({
       }}
       {...listeners}
       {...attributes}
+      tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
         onOpen?.(interval.itemId);
       }}
+      onKeyDown={handleKeyDown}
       className={cn(common, !color && "bg-surface-muted border")}
     >
       <PresenceRing target={target} />
