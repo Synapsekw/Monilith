@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-23-2225
+last-updated: 2026-06-24-0751
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,7 +51,7 @@ advisors + regenerate types before moving on.**
 - **Branch:** `develop == origin/develop` at `036da4b`. Last production promotion is **#30** (2026-06-23, `f10cd8c` on `main` — Workload v2 filtering+actuals, time-tracking date Calendar, people-cell names). `develop` is **ahead of `main`** since #30 (Phase 9.2 streaming shell, Workload analytics v3, Kanban card names, auth `getClaims` proxy, sidebar board drag-reorder, Feedback reporting, Dashboards v2 polish, percent (progress) column, time allocation, column-add error surface, Sum/Average measure fix, **`/updates` changelog backfill** — none promoted yet).
 - **In flight:** nothing open. Last edit: **`/updates` changelog backfilled to 2026-06-23** ([[2026-06-23-2225-updates-changelog-2026-06-23]]) — 9 new entries on the public What's-new page. `task/dash-chart-measure-fix` merged (`3fd2c4b`); no task worktrees active.
 - **Next:** run `/promote` to ship the `develop` bundle → then 9.3 cache + 9.4 skeletons (now unblocked — 9.2's layout rewrite landed) → 9.6 Web-Vitals gate.
-- **Owed:** production promotion of the `develop` bundle (run `/promote`). **Integration-test gate is flaky** — the live-DB `*.integration.test.ts` suites fail nondeterministically under `pnpm test`; make them serial / use a dedicated DB so `finish-task.sh`'s gate is reliable ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]]).
+- **Owed:** production promotion of the `develop` bundle (run `/promote`). **Integration-test gate is flaky AND writes to production** — the live-DB `*.integration.test.ts` suites run against the **remote/prod** Supabase (Vitest loads `.env.local`), so they fail nondeterministically _and_ leak fixtures (`*@example.com` users, `Org a`/`rls-*`/`eng5b1-*` orgs) into real tenant data when a test throws before teardown. Fix once: local Docker Supabase (`supabase start` → `127.0.0.1:54321`) via `.env.test` — isolates + makes the gate reliable ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]], [[2026-06-24-0751-test-fixture-prod-db-cleanup]]).
 
 ### Last session
 

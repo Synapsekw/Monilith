@@ -5,6 +5,7 @@ status: accepted
 tags: [decision, gotcha, testing, supabase, integration-tests, ci]
 related:
   - "[[2026-06-23-2059-time-allocation-my-time-card]]"
+  - "[[2026-06-24-0751-test-fixture-prod-db-cleanup]]"
 ---
 
 # Gotcha 43: the live-DB integration suite is nondeterministically flaky under `pnpm test`
