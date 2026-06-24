@@ -12,10 +12,15 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { Plus } from "lucide-react";
+import { Plus, Calendar, Users, Hash } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { pillTextColor } from "@/lib/boards/contrast";
+import {
+  selectCardColumns,
+  isCardCellEmpty,
+  type CardColumns,
+} from "@/lib/boards/kanban-card";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type {
   BoardCache,
@@ -43,11 +48,24 @@ import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
 import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 
 /**
- * Estimated per-slot height for virtualizing Kanban card lists.
- * Breakdown: p-2 vertical padding (16 px) + name line (~20 px) + optional
- * summary row (~20 px) + gap-2 between cards (8 px) = 64 px.
+ * Initial per-slot height estimate for virtualizing Kanban card lists. Cards
+ * are variable height (1–2 line title + optional pill row + optional meta
+ * footer), so this is only a seed — `measureElement` corrects each slot to its
+ * real height once mounted, which keeps absolutely-positioned cards from
+ * overlapping. Breakdown of a typical card: p-3 padding (24 px) + two-line
+ * title (~38 px) + meta footer (~22 px) + pb-2 gap (8 px) ≈ 92 px.
  */
-const CARD_HEIGHT = 64;
+const CARD_HEIGHT = 92;
+
+/** Leading icon for a card's meta-footer field; null when the value is self-describing. */
+function MetaIcon({ kind }: { kind: string }) {
+  const cls = "size-3.5 shrink-0";
+  if (kind === "date") return <Calendar className={cls} aria-hidden />;
+  if (kind === "people") return <Users className={cls} aria-hidden />;
+  if (kind === "numbers") return <Hash className={cls} aria-hidden />;
+  // percent renders as a labelled bar — an icon would be redundant.
+  return null;
+}
 
 type Settings = Record<string, unknown>;
 
@@ -140,10 +158,12 @@ export function KanbanBoard({
     [cache, groupColumn],
   );
 
-  // People/Date columns surfaced read-only on each card.
-  const summaryColumns = useMemo(
-    () => cache.columns.filter((c) => c.kind === "people" || c.kind === "date"),
-    [cache.columns],
+  // Columns surfaced read-only on each card, split into a status/label pill row
+  // and a quiet meta footer (date · people · percent · number). The grouping
+  // column is excluded — the lane already represents it.
+  const cardColumns = useMemo(
+    () => selectCardColumns(cache.columns, groupColumn?.id ?? ""),
+    [cache.columns, groupColumn?.id],
   );
 
   const cellMap = useMemo(
@@ -248,7 +268,7 @@ export function KanbanBoard({
               key={col.id}
               column={col}
               cellMap={cellMap}
-              summaryColumns={summaryColumns}
+              cardColumns={cardColumns}
               members={members}
               firstGroupId={firstGroupId}
               groupColumnId={groupColumn.id}
@@ -265,7 +285,7 @@ export function KanbanBoard({
 function KanbanColumnView({
   column,
   cellMap,
-  summaryColumns,
+  cardColumns,
   members,
   firstGroupId,
   groupColumnId,
@@ -274,7 +294,7 @@ function KanbanColumnView({
 }: {
   column: KanbanColumn;
   cellMap: Map<string, CacheCellValue["value"]>;
-  summaryColumns: CacheColumn[];
+  cardColumns: CardColumns;
   members: EditorMember[];
   firstGroupId: string | undefined;
   groupColumnId: string;
@@ -299,6 +319,10 @@ function KanbanColumnView({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => CARD_HEIGHT,
     overscan: 8,
+    // Cards are variable height; measure each so absolutely-positioned slots
+    // don't overlap. getBoundingClientRect().height is 0 in jsdom — fall back
+    // to the estimate so tests don't collapse every card to 0px.
+    measureElement: (el) => el.getBoundingClientRect().height || CARD_HEIGHT,
   });
 
   return (
@@ -306,12 +330,14 @@ function KanbanColumnView({
       ref={setNodeRef}
       aria-label={column.label}
       className={cn(
-        "bg-surface-muted flex w-72 shrink-0 flex-col rounded-md border",
+        // Lane is sunken so the raised cards lift off it (the previous
+        // surface-muted lane sat lighter than the cards, making them recede).
+        "bg-surface-sunken flex w-72 shrink-0 flex-col rounded-lg border",
         isOver && "ring-ring ring-2",
       )}
     >
       {/* Column header — outside the scroll container */}
-      <header className="flex items-center gap-2 px-3 py-2">
+      <header className="flex items-center gap-2 px-3 py-2.5">
         {column.color ? (
           <span
             className="inline-flex items-center truncate rounded-md px-2 py-0.5 text-xs font-medium"
@@ -323,11 +349,17 @@ function KanbanColumnView({
             {column.label}
           </span>
         ) : (
-          <span className="text-muted-foreground text-xs font-medium">
-            {column.label}
+          <span className="flex items-center gap-2">
+            <span
+              className="bg-muted-foreground/60 size-2 shrink-0 rounded-full"
+              aria-hidden
+            />
+            <span className="text-muted-foreground text-xs font-medium">
+              {column.label}
+            </span>
           </span>
         )}
-        <span className="text-muted-foreground text-xs tabular-nums">
+        <span className="bg-accent text-muted-foreground ml-auto rounded-full px-2 py-0.5 text-xs font-medium tabular-nums">
           {column.cards.length}
         </span>
       </header>
@@ -344,6 +376,8 @@ function KanbanColumnView({
             return (
               <div
                 key={card.id}
+                data-index={vc.index}
+                ref={virtualizer.measureElement}
                 className="absolute top-0 left-0 w-full pb-2"
                 style={{ transform: `translateY(${vc.start}px)` }}
               >
@@ -351,7 +385,7 @@ function KanbanColumnView({
                   item={card}
                   fromColId={column.id}
                   cellMap={cellMap}
-                  summaryColumns={summaryColumns}
+                  cardColumns={cardColumns}
                   members={members}
                 />
               </div>
@@ -377,13 +411,13 @@ function KanbanCard({
   item,
   fromColId,
   cellMap,
-  summaryColumns,
+  cardColumns,
   members,
 }: {
   item: CacheItem;
   fromColId: string;
   cellMap: Map<string, CacheCellValue["value"]>;
-  summaryColumns: CacheColumn[];
+  cardColumns: CardColumns;
   members: EditorMember[];
 }) {
   const dragData: CardDragData = { itemId: item.id, fromColId };
@@ -400,6 +434,17 @@ function KanbanCard({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
 
+  // Only fields with a value reach the card — a present cell, never a lonely
+  // icon or empty pill reserving space.
+  const cellOf = (col: CacheColumn) =>
+    (cellMap.get(cellKey(item.id, col.id)) ?? null) as Json;
+  const pills = cardColumns.pills.filter(
+    (c) => !isCardCellEmpty(c.kind, cellOf(c)),
+  );
+  const meta = cardColumns.meta.filter(
+    (c) => !isCardCellEmpty(c.kind, cellOf(c)),
+  );
+
   return (
     <article
       ref={setNodeRef}
@@ -407,28 +452,61 @@ function KanbanCard({
       {...listeners}
       {...attributes}
       className={cn(
-        "bg-surface focus-visible:ring-ring shadow-card relative cursor-grab rounded-md border p-2 text-left transition-shadow focus-visible:ring-2 focus-visible:outline-none",
+        "bg-surface focus-visible:ring-ring shadow-card relative cursor-grab rounded-lg border p-3 text-left transition-shadow focus-visible:ring-2 focus-visible:outline-none",
         isDragging && "opacity-50",
       )}
     >
       <PresenceRing target={target} />
-      <p className="truncate text-sm font-medium">{item.name}</p>
-      {summaryColumns.length > 0 && (
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {summaryColumns.map((col) => {
-            const value = (cellMap.get(cellKey(item.id, col.id)) ??
-              null) as Json;
-            // No-op for empty cells: CellRenderer renders an empty span.
-            return (
-              <CellRenderer
+      <p className="line-clamp-2 text-sm leading-snug font-medium">
+        {item.name}
+      </p>
+
+      {pills.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {pills.map((col) => (
+            <CellRenderer
+              key={col.id}
+              kind={col.kind}
+              value={cellOf(col)}
+              settings={(col.settings ?? {}) as Settings}
+              members={members}
+            />
+          ))}
+        </div>
+      )}
+
+      {meta.length > 0 && (
+        <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {meta.map((col) =>
+            col.kind === "percent" ? (
+              <span
                 key={col.id}
-                kind={col.kind}
-                value={value}
-                settings={(col.settings ?? {}) as Settings}
-                members={members}
-              />
-            );
-          })}
+                title={col.name}
+                className="flex min-w-[7rem] flex-1 items-center"
+              >
+                <CellRenderer
+                  kind={col.kind}
+                  value={cellOf(col)}
+                  settings={(col.settings ?? {}) as Settings}
+                  members={members}
+                />
+              </span>
+            ) : (
+              <span
+                key={col.id}
+                title={col.name}
+                className="inline-flex min-w-0 items-center gap-1.5 text-xs"
+              >
+                <MetaIcon kind={col.kind} />
+                <CellRenderer
+                  kind={col.kind}
+                  value={cellOf(col)}
+                  settings={(col.settings ?? {}) as Settings}
+                  members={members}
+                />
+              </span>
+            ),
+          )}
         </div>
       )}
     </article>
