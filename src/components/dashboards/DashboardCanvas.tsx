@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import {
   ResponsiveGridLayout,
   useContainerWidth,
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import type { DashboardCache, GridRect } from "@/lib/dashboards/cache";
 import { useDashboardCache } from "@/lib/dashboards/use-dashboard-cache";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
+import { useDebouncedCallback } from "@/lib/hooks/use-debounced-callback";
 
 const DEFAULT_RECT: GridRect = { x: 0, y: 0, w: 3, h: 2 };
 
@@ -35,7 +36,6 @@ export function DashboardCanvas({
   const { persistLayout, renameDashboard } = useDashboardMutations(dashboardId);
   const [editing, setEditing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dashboardName = cache.dashboard.name;
   const [renaming, setRenaming] = useState(false);
@@ -78,22 +78,20 @@ export function DashboardCanvas({
     [widgets],
   );
 
+  // Persist 600ms after the last drag/resize. onMutate patches the cache
+  // immediately, so no data refetch happens here.
+  const persistRects = useDebouncedCallback(
+    (rects: ({ id: string } & GridRect)[]) => persistLayout.mutate(rects),
+    600,
+  );
   const onLayoutChange = useCallback(
     (next: Layout) => {
       if (!editing) return; // ignore layout events while in view mode
-      const rects = next.map((l) => ({
-        id: l.i,
-        x: l.x,
-        y: l.y,
-        w: l.w,
-        h: l.h,
-      }));
-      if (timer.current) clearTimeout(timer.current);
-      // debounce: persist 600ms after the last drag/resize. onMutate patches
-      // the cache immediately, so no data refetch happens here.
-      timer.current = setTimeout(() => persistLayout.mutate(rects), 600);
+      persistRects(
+        next.map((l) => ({ id: l.i, x: l.x, y: l.y, w: l.w, h: l.h })),
+      );
     },
-    [editing, persistLayout],
+    [editing, persistRects],
   );
 
   return (
