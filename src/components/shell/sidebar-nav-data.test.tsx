@@ -12,8 +12,14 @@ vi.mock("@/lib/workspaces/actions", () => ({
   renameWorkspace: vi.fn(),
   deleteWorkspace: vi.fn(),
 }));
-vi.mock("@/lib/boards/queries", () => ({
-  listMyBoards: vi.fn(async () => [
+// Identity reads (cookie-bound, uncached) are mocked to a user + one org.
+vi.mock("@/lib/auth/session", () => ({
+  getUser: vi.fn(async () => ({ id: "u1" })),
+  getUserOrgs: vi.fn(async () => [{ id: "org1", name: "Acme" }]),
+}));
+// Cached shell reads (Phase 9.3) — the component now consumes these.
+vi.mock("@/lib/boards/queries-cached", () => ({
+  listMyBoardsCached: vi.fn(async () => [
     {
       id: "b1",
       name: "Sprint backlog",
@@ -22,29 +28,27 @@ vi.mock("@/lib/boards/queries", () => ({
       shared_out: false,
     },
   ]),
-  listSharedBoards: vi.fn(async () => []),
+  listSharedBoardsCached: vi.fn(async () => []),
 }));
-vi.mock("@/lib/dashboards/queries", () => ({
-  listDashboards: vi.fn(async () => [{ id: "d1", name: "Velocity" }]),
+vi.mock("@/lib/dashboards/queries-cached", () => ({
+  listDashboardsCached: vi.fn(async () => [{ id: "d1", name: "Velocity" }]),
 }));
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({
-    from: () => ({
-      select: async () => ({ data: [{ id: "w1", name: "Eng" }] }),
-    }),
-  })),
+vi.mock("@/lib/workspaces/queries-cached", () => ({
+  listWorkspacesCached: vi.fn(async () => [{ id: "w1", name: "Eng" }]),
 }));
 vi.mock("@/lib/platform/guard", () => ({
-  isPlatformAdmin: vi.fn(async () => false),
+  isPlatformAdminCached: vi.fn(async () => false),
 }));
-vi.mock("@/lib/org/guard", () => ({ isOrgAdmin: vi.fn(async () => false) }));
+vi.mock("@/lib/org/guard", () => ({
+  isOrgAdminCached: vi.fn(async () => false),
+}));
 
 beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {};
 });
 
 describe("SidebarNavData", () => {
-  it("renders boards, dashboards and workspaces from the queries", async () => {
+  it("renders boards, dashboards and workspaces from the cached reads", async () => {
     const { SidebarNavData } = await import("./sidebar-nav-data");
     render(await SidebarNavData());
     expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
