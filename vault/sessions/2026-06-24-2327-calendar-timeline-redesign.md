@@ -7,6 +7,7 @@ status: complete
 tags: [session, boards, calendar]
 related:
   - "[[platform-roadmap]]"
+  - "[[2026-06-25-1530-calendar-canvas-fill]]"
 ---
 
 # Calendar view — timeline (duration-first) redesign
