@@ -6,6 +6,7 @@
 export default function BoardLoading() {
   return (
     <div
+      role="status"
       aria-busy="true"
       aria-label="Loading board"
       className="flex h-full flex-col gap-4 p-6"
