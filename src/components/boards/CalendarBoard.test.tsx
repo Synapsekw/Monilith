@@ -143,6 +143,37 @@ describe("CalendarBoard", () => {
   });
 });
 
+function openItemParam(): string | null {
+  return new URLSearchParams(window.location.search).get("item");
+}
+
+describe("CalendarBoard — open item", () => {
+  beforeEach(() => {
+    // Reset the URL so `?item=` assertions don't leak across tests.
+    window.history.pushState({}, "", "/");
+  });
+
+  it("opens the item panel (sets ?item=<id>) when a month-view event is clicked", () => {
+    renderCalendar();
+    fireEvent.click(screen.getByText("Dated Item"));
+    expect(openItemParam()).toBe("i1");
+  });
+
+  it("opens the item panel when an event is activated with Enter", () => {
+    renderCalendar();
+    const bar = screen.getByText("Dated Item").closest("[tabindex]")!;
+    fireEvent.keyDown(bar, { key: "Enter" });
+    expect(openItemParam()).toBe("i1");
+  });
+
+  it("opens the item panel when an agenda row is clicked", () => {
+    renderCalendar();
+    fireEvent.click(screen.getByRole("tab", { name: /agenda/i }));
+    fireEvent.click(screen.getByText("Dated Item"));
+    expect(openItemParam()).toBe("i1");
+  });
+});
+
 function occupant(over: Partial<RosterOccupant>): RosterOccupant {
   return {
     userId: "u2",

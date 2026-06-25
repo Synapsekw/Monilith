@@ -68,7 +68,7 @@ export function CalendarWeek({
       </div>
 
       <div
-        className="relative grid grid-cols-7 rounded-b-md border border-t-0"
+        className="relative grid min-h-0 flex-1 grid-cols-7 rounded-b-md border border-t-0"
         style={{ minHeight: `${Math.max(laneCount, 4) * 26 + 16}px` }}
       >
         {days.map((iso) => (

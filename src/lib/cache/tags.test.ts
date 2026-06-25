@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+import {
+  boardsTag,
+  sharedBoardsTag,
+  dashboardsTag,
+  workspacesTag,
+  platformAdminTag,
+  orgAdminTag,
+} from "./tags";
+
+describe("cache tag builders", () => {
+  it("produce identity-scoped strings", () => {
+    expect(boardsTag("u1")).toBe("boards:user:u1");
+    expect(sharedBoardsTag("u1")).toBe("shared-boards:user:u1");
+    expect(dashboardsTag("o1")).toBe("dashboards:org:o1");
+    expect(workspacesTag("o1")).toBe("workspaces:org:o1");
+    expect(platformAdminTag("u1")).toBe("platform-admin:user:u1");
+    expect(orgAdminTag("u1", "o1")).toBe("org-admin:user:u1:org:o1");
+  });
+
+  it("are distinct across identities (no collisions)", () => {
+    expect(boardsTag("u1")).not.toBe(boardsTag("u2"));
+    expect(orgAdminTag("u1", "o1")).not.toBe(orgAdminTag("u1", "o2"));
+  });
+});

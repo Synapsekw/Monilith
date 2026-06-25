@@ -83,7 +83,7 @@ export function CalendarMonth({
           return (
             <div
               key={weekStartISO}
-              className="relative grid grid-cols-7 gap-px"
+              className="relative grid min-h-0 flex-1 grid-cols-7 gap-px"
             >
               {/* Day cells */}
               {week.map((day, dayIdx) => {

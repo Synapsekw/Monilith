@@ -71,6 +71,18 @@ function lastOfMonthISO(monthISO: string): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+/**
+ * Open the item detail panel by setting `?item=<id>` via the History API — no
+ * RSC navigation, so the board page's queries don't re-run (mirrors how
+ * `BoardTable`/`ViewSwitcher` set their params). {@link BoardViews} reads the
+ * param and renders the panel.
+ */
+function openItemPanel(itemId: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("item", itemId);
+  window.history.pushState({}, "", url);
+}
+
 export function CalendarBoard({
   payload,
   selectedViewId,
@@ -222,7 +234,7 @@ export function CalendarBoard({
     dateColumnId: resolvedDateColumn.id,
     statusColumn,
     cellMap,
-    onOpenItem: undefined as ((id: string) => void) | undefined,
+    onOpenItem: openItemPanel,
   };
 
   return (
