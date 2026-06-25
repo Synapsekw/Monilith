@@ -18,16 +18,28 @@ vi.mock("@/lib/supabase/service", () => ({
     from: () => ({ insert: svcInsert }),
   }),
 }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const updateTag = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  updateTag: (tag: string) => updateTag(tag),
+}));
 
-import { setMemberRole, inviteMember } from "./admin-actions";
+import {
+  setMemberRole,
+  removeMember,
+  deactivateMember,
+  reactivateMember,
+  inviteMember,
+} from "./admin-actions";
 const uuid = "11111111-1111-4111-8111-111111111111"; // RFC-valid v4 (Zod 4.x enforces version/variant nibbles)
+const orgUuid = "22222222-2222-4222-8222-222222222222";
 
 beforeEach(() => {
   rpc.mockReset();
   getUser.mockReset();
   adminInvite.mockReset();
   svcInsert.mockReset();
+  updateTag.mockReset();
 });
 
 describe("setMemberRole", () => {
@@ -59,6 +71,31 @@ describe("setMemberRole", () => {
       p_user_id: uuid,
       p_new_role: "admin",
     });
+  });
+});
+
+describe("membership invalidation", () => {
+  it.each([
+    [
+      "setMemberRole",
+      () => setMemberRole({ orgId: orgUuid, userId: uuid, role: "admin" }),
+    ],
+    ["removeMember", () => removeMember({ orgId: orgUuid, userId: uuid })],
+    [
+      "deactivateMember",
+      () => deactivateMember({ orgId: orgUuid, userId: uuid }),
+    ],
+    [
+      "reactivateMember",
+      () => reactivateMember({ orgId: orgUuid, userId: uuid }),
+    ],
+  ])("%s updates the target's org-admin tag", async (_name, run) => {
+    rpc.mockResolvedValue({ error: null });
+    const r = await run();
+    expect(r.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith(
+      `org-admin:user:${uuid}:org:${orgUuid}`,
+    );
   });
 });
 

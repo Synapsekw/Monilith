@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { dashboardsTag } from "@/lib/cache/tags";
 import { optionSchema } from "@/lib/validations/boards";
 import {
   type AggregateBucket,
@@ -47,6 +48,8 @@ export async function createDashboard(input: {
   if (error || !data)
     return fail(error?.message ?? "Could not create dashboard.");
 
+  // Invalidate the cached org dashboards list (read-your-own-writes).
+  updateTag(dashboardsTag((data as Tables<"dashboards">).org_id));
   revalidatePath("/dashboards");
   return { ok: true, data: { dashboard: data as Tables<"dashboards"> } };
 }
@@ -70,6 +73,7 @@ export async function renameDashboard(input: {
   if (error || !data)
     return fail(error?.message ?? "Could not rename dashboard.");
 
+  updateTag(dashboardsTag((data as Tables<"dashboards">).org_id));
   revalidatePath(`/dashboards/${parsed.data.dashboardId}`);
   revalidatePath("/dashboards");
   return { ok: true, data: { dashboard: data as Tables<"dashboards"> } };
@@ -84,12 +88,16 @@ export async function deleteDashboard(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { error } = await supabase
+  // Return the deleted row's org_id so we can invalidate the cached list.
+  const { data, error } = await supabase
     .from("dashboards")
     .delete()
-    .eq("id", parsed.data.dashboardId);
+    .eq("id", parsed.data.dashboardId)
+    .select("org_id")
+    .maybeSingle();
   if (error) return fail(error.message);
 
+  if (data) updateTag(dashboardsTag(data.org_id));
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
@@ -103,12 +111,19 @@ export async function duplicateDashboard(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
+  // The copy lands in the same org as the source — read it for the cache tag.
+  const { data: source } = await supabase
+    .from("dashboards")
+    .select("org_id")
+    .eq("id", parsed.data.dashboardId)
+    .maybeSingle();
   const { data, error } = await supabase.rpc("duplicate_dashboard", {
     p_dashboard_id: parsed.data.dashboardId,
   });
   if (error || !data)
     return fail(error?.message ?? "Could not duplicate dashboard.");
 
+  if (source) updateTag(dashboardsTag(source.org_id));
   revalidatePath("/", "layout");
   return { ok: true, data: { dashboardId: data.id } };
 }

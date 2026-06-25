@@ -12,12 +12,30 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ rpc }),
 }));
 
-import { isOrgAdmin } from "@/lib/org/guard";
+// cacheTag/cacheLife throw outside a compiled `use cache` scope under Vitest.
+vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
+
+// Service client for the cached guard: from().select().eq().eq().maybeSingle().
+const maybeSingle = vi.fn();
+const eq2 = vi.fn(() => ({ maybeSingle }));
+const eq1 = vi.fn(() => ({ eq: eq2 }));
+const select = vi.fn(() => ({ eq: eq1 }));
+const from = vi.fn(() => ({ select }));
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({ from }),
+}));
+
+import { isOrgAdmin, isOrgAdminCached } from "@/lib/org/guard";
 
 beforeEach(() => {
   getUser.mockReset();
   getUserOrgs.mockReset();
   rpc.mockReset();
+  from.mockClear();
+  select.mockClear();
+  eq1.mockClear();
+  eq2.mockClear();
+  maybeSingle.mockReset();
 });
 
 describe("isOrgAdmin", () => {
@@ -52,5 +70,30 @@ describe("isOrgAdmin", () => {
     getUserOrgs.mockResolvedValue([{ id: "org1", name: "Acme" }]);
     rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
     expect(await isOrgAdmin()).toBe(false);
+  });
+});
+
+describe("isOrgAdminCached", () => {
+  it("is true when the member row's role is owner", async () => {
+    maybeSingle.mockResolvedValue({ data: { role: "owner" }, error: null });
+    expect(await isOrgAdminCached("u1", "org1")).toBe(true);
+    expect(from).toHaveBeenCalledWith("org_members");
+    expect(eq1).toHaveBeenCalledWith("org_id", "org1");
+    expect(eq2).toHaveBeenCalledWith("user_id", "u1");
+  });
+
+  it("is true when the member row's role is admin", async () => {
+    maybeSingle.mockResolvedValue({ data: { role: "admin" }, error: null });
+    expect(await isOrgAdminCached("u1", "org1")).toBe(true);
+  });
+
+  it("is false for a plain member", async () => {
+    maybeSingle.mockResolvedValue({ data: { role: "member" }, error: null });
+    expect(await isOrgAdminCached("u1", "org1")).toBe(false);
+  });
+
+  it("fails closed (false) on error", async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: { message: "x" } });
+    expect(await isOrgAdminCached("u1", "org1")).toBe(false);
   });
 });

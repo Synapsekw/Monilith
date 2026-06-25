@@ -16,7 +16,7 @@ vi.mock("@/lib/auth/session", () => ({
   })),
 }));
 vi.mock("@/lib/platform/guard", () => ({
-  isPlatformAdmin: vi.fn(async () => true),
+  isPlatformAdminCached: vi.fn(async () => true),
 }));
 // NotificationsBell hits realtime/supabase; stub to a marker.
 vi.mock("@/components/notifications/NotificationsBell", () => ({

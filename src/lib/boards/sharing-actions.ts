@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sharedBoardsTag } from "@/lib/cache/tags";
 import {
   shareBoardSchema,
   unshareBoardSchema,
@@ -30,6 +31,8 @@ export async function shareBoard(input: unknown): Promise<ShareActionResult> {
     p_access: parsed.data.access,
   });
   if (error) return fail(friendly(error.message));
+  // The recipient's cached shared-boards list is what changed.
+  updateTag(sharedBoardsTag(parsed.data.userId));
   revalidatePath("/boards", "layout");
   return { ok: true };
 }
@@ -44,6 +47,7 @@ export async function unshareBoard(input: unknown): Promise<ShareActionResult> {
     p_user_id: parsed.data.userId,
   });
   if (error) return fail(friendly(error.message));
+  updateTag(sharedBoardsTag(parsed.data.userId));
   revalidatePath("/boards", "layout");
   return { ok: true };
 }

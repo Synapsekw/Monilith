@@ -5,7 +5,13 @@ const getUser = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from, auth: { getUser } }),
 }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const sessionGetUser = vi.fn();
+vi.mock("@/lib/auth/session", () => ({ getUser: () => sessionGetUser() }));
+const updateTag = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  updateTag: (tag: string) => updateTag(tag),
+}));
 vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
   removeAttachmentObjects: vi.fn(),
 }));
@@ -24,6 +30,8 @@ beforeEach(() => {
   from.mockReset();
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
+  sessionGetUser.mockReset().mockResolvedValue({ id: "owner-1" });
+  updateTag.mockReset();
   vi.mocked(removeAttachmentObjects).mockReset();
   vi.mocked(revalidatePath).mockReset();
 });
@@ -387,5 +395,81 @@ describe("reorderBoard", () => {
 
     const res = await reorderBoard({ boardId: BOARD, position: 1 });
     expect(res.ok).toBe(false);
+  });
+});
+
+import {
+  createBoard,
+  renameBoard,
+  duplicateBoard,
+  createBoardFromTemplate as createBoardFromTemplateInval,
+} from "./actions";
+
+describe("board mutation invalidation (boards tag)", () => {
+  it("createBoard updates the owner's boards tag", async () => {
+    from.mockReturnValue({});
+    const rpc = vi.fn(async () => ({ data: { id: "b1" }, error: null }));
+    // createBoard uses createClient().rpc — patch the client for this test.
+    vi.mocked(revalidatePath).mockClear();
+    const client = { rpc, from, auth: { getUser } };
+    const mod = await import("@/lib/supabase/server");
+    vi.spyOn(mod, "createClient").mockResolvedValue(client as never);
+
+    const res = await createBoard({ workspaceId: BOARD, name: "B" });
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+  });
+
+  it("renameBoard updates the owner's boards tag", async () => {
+    const updateChain = {
+      update: () => ({ eq: async () => ({ error: null }) }),
+    };
+    from.mockImplementation((t: string) =>
+      t === "boards" ? (updateChain as never) : ({} as never),
+    );
+    const res = await renameBoard({ boardId: BOARD, name: "New" });
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+  });
+
+  it("deleteBoard updates the owner's boards tag", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "attachments")
+        return {
+          select: () => ({ eq: async () => ({ data: [], error: null }) }),
+        } as never;
+      if (table === "boards")
+        return {
+          delete: () => ({ eq: async () => ({ error: null }) }),
+        } as never;
+      return {} as never;
+    });
+    const res = await deleteBoard({ boardId: BOARD });
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+  });
+
+  it("duplicateBoard updates the owner's boards tag", async () => {
+    const rpc = vi.fn(async () => ({ data: { id: "copy" }, error: null }));
+    const client = { rpc, from, auth: { getUser } };
+    const mod = await import("@/lib/supabase/server");
+    vi.spyOn(mod, "createClient").mockResolvedValue(client as never);
+    const res = await duplicateBoard({ boardId: BOARD });
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+  });
+
+  it("createBoardFromTemplate updates the owner's boards tag", async () => {
+    const rpc = vi.fn(async () => ({ data: { id: "tpl" }, error: null }));
+    const client = { rpc, from, auth: { getUser } };
+    const mod = await import("@/lib/supabase/server");
+    vi.spyOn(mod, "createClient").mockResolvedValue(client as never);
+    const res = await createBoardFromTemplateInval({
+      workspaceId: BOARD,
+      templateId: "blank",
+      name: "From template",
+    });
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
   });
 });

@@ -23,16 +23,22 @@ vi.mock("@/lib/supabase/service", () => ({
 
 const isPlatformAdmin = vi.fn();
 vi.mock("./guard", () => ({ isPlatformAdmin: () => isPlatformAdmin() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const updateTag = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  updateTag: (tag: string) => updateTag(tag),
+}));
 
 import {
   platformResetUserPassword,
   platformSetUserPassword,
   platformDeleteUser,
+  platformSetOrgRole,
 } from "./actions";
 
 const actor = "00000000-0000-4000-8000-000000000000";
 const target = "11111111-1111-4111-8111-111111111111";
+const orgUuid = "22222222-2222-4222-8222-222222222222";
 
 beforeEach(() => {
   rpc.mockReset();
@@ -50,6 +56,22 @@ beforeEach(() => {
   deleteUser.mockReset().mockResolvedValue({ error: null });
   svcInsert.mockReset().mockResolvedValue({ error: null });
   isPlatformAdmin.mockReset().mockResolvedValue(true);
+  updateTag.mockReset();
+});
+
+describe("platformSetOrgRole", () => {
+  it("updates the target's org-admin tag on success", async () => {
+    rpc.mockResolvedValue({ error: null });
+    const r = await platformSetOrgRole({
+      orgId: orgUuid,
+      userId: target,
+      role: "admin",
+    });
+    expect(r.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith(
+      `org-admin:user:${target}:org:${orgUuid}`,
+    );
+  });
 });
 
 describe("authorization", () => {

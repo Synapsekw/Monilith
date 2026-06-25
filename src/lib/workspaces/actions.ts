@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserOrgs } from "@/lib/auth/session";
+import { workspacesTag } from "@/lib/cache/tags";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 import {
   createWorkspaceSchema,
@@ -38,6 +39,7 @@ export async function createWorkspace(input: {
   });
   if (error) return fail(error.message);
 
+  updateTag(workspacesTag(orgId));
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
@@ -50,6 +52,10 @@ export async function renameWorkspace(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
+  // Org is derived server-side for the cache tag (single-org scoping, matching
+  // the shell's `orgs[0]`); never trusted from the client.
+  const orgId = (await getUserOrgs())[0]?.id;
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("workspaces")
@@ -57,6 +63,7 @@ export async function renameWorkspace(input: {
     .eq("id", parsed.data.workspaceId);
   if (error) return fail(error.message);
 
+  if (orgId) updateTag(workspacesTag(orgId));
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
@@ -67,6 +74,8 @@ export async function deleteWorkspace(input: {
   const parsed = deleteWorkspaceSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const orgId = (await getUserOrgs())[0]?.id;
 
   const supabase = await createClient();
 
@@ -103,6 +112,7 @@ export async function deleteWorkspace(input: {
 
   await removeAttachmentObjects(storagePaths);
 
+  if (orgId) updateTag(workspacesTag(orgId));
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }

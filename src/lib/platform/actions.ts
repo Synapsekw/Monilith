@@ -1,7 +1,8 @@
 "use server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { orgAdminTag } from "@/lib/cache/tags";
 import { isPlatformAdmin } from "./guard";
 import {
   platformSetOrgRoleSchema,
@@ -35,6 +36,7 @@ export async function platformSetOrgRole(
       return fail("Can't demote the last owner.");
     return fail("Could not change that role.");
   }
+  updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
   revalidatePath(`/admin/organizations/${parsed.data.orgId}`);
   return ok();
 }

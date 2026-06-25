@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth/session";
-import { isPlatformAdmin } from "@/lib/platform/guard";
+import { isPlatformAdminCached } from "@/lib/platform/guard";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { FeedbackButton } from "@/components/feedback/FeedbackButton";
 import { UserMenu } from "@/components/shell/user-menu";
@@ -11,7 +11,7 @@ import { UserMenu } from "@/components/shell/user-menu";
  */
 export async function HeaderUserData() {
   const user = await requireUser();
-  const platformAdmin = await isPlatformAdmin();
+  const platformAdmin = await isPlatformAdminCached(user.id);
   const fullName =
     typeof user.user_metadata?.full_name === "string"
       ? user.user_metadata.full_name
