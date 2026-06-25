@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { LayoutGrid, Plus } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { LayoutGrid, Plus, Sparkles } from "lucide-react";
 import { createDashboard } from "@/lib/dashboards/actions";
 import { DashboardItemMenu } from "@/components/dashboards/DashboardItemMenu";
-import { GenerateWithAiButton } from "@/components/dashboards/ai/GenerateWithAiButton";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +24,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+// Lazy-load the wizard (and its action/SDK imports) only when needed.
+const AiDashboardWizard = dynamic(
+  () =>
+    import("@/components/dashboards/ai/AiDashboardWizard").then(
+      (m) => m.AiDashboardWizard,
+    ),
+  { ssr: false },
+);
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 import {
@@ -36,6 +51,7 @@ export function DashboardsNav({
   collapsed?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { dashboardId: activeDashboardId } = useParams<{
     dashboardId: string;
   }>();
@@ -47,6 +63,11 @@ export function DashboardsNav({
     setLocalOpen(next);
     if (!next) setNewDashboardOpen(false);
   };
+  // Auto-open the AI wizard once when arriving with ?ai=1 (the review banner's
+  // "Regenerate" action routes back here to reopen it). Seeded from the initial
+  // URL via a lazy initializer so later navigations that drop the param don't
+  // force it back open.
+  const [aiOpen, setAiOpen] = useState(() => searchParams.get("ai") === "1");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -97,19 +118,31 @@ export function DashboardsNav({
             <LayoutGrid className="size-4" />
             Dashboards
           </Link>
-          <div className="flex items-center gap-0.5">
-            <GenerateWithAiButton workspaceId={workspaceId} />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="New dashboard"
-              className="size-6"
-              onClick={() => setOpen(true)}
-            >
-              <Plus className="size-4" />
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="New dashboard"
+                className="size-6"
+              >
+                <Plus className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onSelect={() => setOpen(true)}>
+                <Plus className="size-4" />
+                Blank dashboard
+              </DropdownMenuItem>
+              {workspaceId ? (
+                <DropdownMenuItem onSelect={() => setAiOpen(true)}>
+                  <Sparkles className="size-4" />
+                  Generate with AI
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
 
@@ -153,6 +186,14 @@ export function DashboardsNav({
           </form>
         </DialogContent>
       </Dialog>
+
+      {workspaceId && aiOpen ? (
+        <AiDashboardWizard
+          workspaceId={workspaceId}
+          open={aiOpen}
+          onOpenChange={setAiOpen}
+        />
+      ) : null}
 
       {dashboards.length === 0 ? (
         collapsed ? null : (
