@@ -76,4 +76,41 @@ describe("foldBoardEvents", () => {
     const { next } = foldBoardEvents(prev, [ev]);
     expect(next.items).toHaveLength(0);
   });
+
+  it("removes a cell on DELETE (no flash emitted)", () => {
+    const prev = emptyCache({
+      cellValues: [
+        { item_id: "i1", column_id: "c1", value: { text: "x" } },
+      ] as never,
+    });
+    const ev: BoardRealtimeEvent = {
+      table: "cell_values",
+      payload: {
+        eventType: "DELETE",
+        new: {},
+        old: { item_id: "i1", column_id: "c1" },
+      } as never,
+    };
+    const { next, flashes } = foldBoardEvents(prev, [ev]);
+    expect(next.cellValues).toHaveLength(0);
+    expect(flashes).toHaveLength(0);
+  });
+
+  it("mixed echo + real-change batch: one flash for the changed cell only", () => {
+    const prev = emptyCache({
+      cellValues: [
+        { item_id: "i1", column_id: "c1", value: { text: "same" } },
+      ] as never,
+    });
+    const { next, flashes } = foldBoardEvents(prev, [
+      cellEvent("i1", "c1", { text: "same" }), // echo — value unchanged, no flash
+      cellEvent("i2", "c1", { text: "new" }), // real change — new cell, emits flash
+    ]);
+    expect(flashes).toHaveLength(1);
+    expect(flashes[0].targetId).toBe("cell:i2:c1");
+    const i2Cell = next.cellValues.find(
+      (c) => c.item_id === "i2" && c.column_id === "c1",
+    );
+    expect((i2Cell?.value as { text: string }).text).toBe("new");
+  });
 });
