@@ -13,7 +13,11 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
   removeAttachmentObjects: (paths: string[]) => removeAttachmentObjects(paths),
 }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const updateTag = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  updateTag: (tag: string) => updateTag(tag),
+}));
 
 let currentClient: unknown;
 vi.mock("@/lib/supabase/server", () => ({
@@ -75,6 +79,7 @@ beforeEach(() => {
   getUser.mockReset().mockResolvedValue({ id: "user-1" });
   getUserOrgs.mockReset().mockResolvedValue([{ id: "org-1", name: "Acme" }]);
   removeAttachmentObjects.mockClear();
+  updateTag.mockReset();
 });
 
 describe("createWorkspace", () => {
@@ -96,6 +101,7 @@ describe("createWorkspace", () => {
       name: "Marketing",
       created_by: "user-1",
     });
+    expect(updateTag).toHaveBeenCalledWith("workspaces:org:org-1");
   });
 });
 
@@ -110,6 +116,7 @@ describe("renameWorkspace", () => {
     expect(res.ok).toBe(true);
     expect(m.update).toHaveBeenCalledWith({ name: "Renamed" });
     expect(m.updateEq).toHaveBeenCalledWith("id", WS_ID);
+    expect(updateTag).toHaveBeenCalledWith("workspaces:org:org-1");
   });
 });
 
@@ -134,5 +141,6 @@ describe("deleteWorkspace", () => {
     expect(res.ok).toBe(true);
     expect(m.deleteEq).toHaveBeenCalledWith("id", WS_ID);
     expect(removeAttachmentObjects).toHaveBeenCalledWith(["p/1", "p/2"]);
+    expect(updateTag).toHaveBeenCalledWith("workspaces:org:org-1");
   });
 });

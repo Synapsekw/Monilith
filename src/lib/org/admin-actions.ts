@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { orgAdminTag } from "@/lib/cache/tags";
 import {
   setMemberRoleSchema,
   memberTargetSchema,
@@ -41,6 +42,7 @@ export async function setMemberRole(input: unknown): Promise<ActionResult> {
     p_new_role: parsed.data.role,
   });
   if (error) return fail(friendlyMemberError(error.message));
+  updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
   revalidatePath("/settings");
   return ok();
 }
@@ -55,6 +57,7 @@ export async function removeMember(input: unknown): Promise<ActionResult> {
     p_user_id: parsed.data.userId,
   });
   if (error) return fail(friendlyMemberError(error.message));
+  updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
   revalidatePath("/settings");
   return ok();
 }
@@ -69,6 +72,7 @@ export async function deactivateMember(input: unknown): Promise<ActionResult> {
     p_user_id: parsed.data.userId,
   });
   if (error) return fail(friendlyMemberError(error.message));
+  updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
   revalidatePath("/settings");
   return ok();
 }
@@ -83,6 +87,7 @@ export async function reactivateMember(input: unknown): Promise<ActionResult> {
     p_user_id: parsed.data.userId,
   });
   if (error) return fail(friendlyMemberError(error.message));
+  updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
   revalidatePath("/settings");
   return ok();
 }
