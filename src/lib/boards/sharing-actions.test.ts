@@ -5,9 +5,16 @@ const rpc = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ rpc }),
 }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const updateTag = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  updateTag: (tag: string) => updateTag(tag),
+}));
 
-beforeEach(() => rpc.mockReset());
+beforeEach(() => {
+  rpc.mockReset();
+  updateTag.mockReset();
+});
 
 describe("shareBoard", () => {
   it("rejects an invalid access level", async () => {
@@ -43,6 +50,10 @@ describe("shareBoard", () => {
       p_user_id: input.userId,
       p_access: "editor",
     });
+    // The grantee's shared-boards list is what changed.
+    expect(updateTag).toHaveBeenCalledWith(
+      `shared-boards:user:${input.userId}`,
+    );
   });
 
   it("maps a permission error to friendly copy", async () => {
@@ -69,5 +80,8 @@ describe("unshareBoard", () => {
       p_board_id: input.boardId,
       p_user_id: input.userId,
     });
+    expect(updateTag).toHaveBeenCalledWith(
+      `shared-boards:user:${input.userId}`,
+    );
   });
 });

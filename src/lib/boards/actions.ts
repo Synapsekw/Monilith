@@ -1,7 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth/session";
+import { boardsTag } from "@/lib/cache/tags";
 import { midpoint } from "@/lib/boards/position";
 import {
   clearCellSchema,
@@ -49,6 +51,16 @@ function fail(message: string): { ok: false; error: string } {
   return { ok: false, error: message };
 }
 
+/**
+ * Invalidate the current user's cached `boards:user:<me>` list
+ * (read-your-own-writes). Board-list mutations are owner-scoped
+ * (`created_by = me`), so the owner is the current session user.
+ */
+async function invalidateMyBoards(): Promise<void> {
+  const user = await getUser();
+  if (user) updateTag(boardsTag(user.id));
+}
+
 /** Create a board pre-populated from a built-in template via an atomic RPC. */
 export async function createBoardFromTemplate(input: {
   workspaceId: string;
@@ -72,6 +84,7 @@ export async function createBoardFromTemplate(input: {
   });
   if (error || !data) return fail(error?.message ?? "Could not create board.");
 
+  await invalidateMyBoards();
   revalidatePath("/", "layout");
   return { ok: true, data: { boardId: data.id } };
 }
@@ -92,6 +105,7 @@ export async function createBoard(input: {
   });
   if (error || !data) return fail(error?.message ?? "Could not create board.");
 
+  await invalidateMyBoards();
   revalidatePath("/", "layout");
   return { ok: true, data: { boardId: data.id } };
 }
@@ -111,6 +125,7 @@ export async function renameBoard(input: {
     .eq("id", parsed.data.boardId);
   if (error) return fail(error.message);
 
+  await invalidateMyBoards();
   revalidatePath(`/boards/${parsed.data.boardId}`);
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
@@ -178,6 +193,7 @@ export async function deleteBoard(input: {
 
   await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
 
+  await invalidateMyBoards();
   revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
@@ -197,6 +213,7 @@ export async function duplicateBoard(input: {
   if (error || !data)
     return fail(error?.message ?? "Could not duplicate board.");
 
+  await invalidateMyBoards();
   revalidatePath("/", "layout");
   return { ok: true, data: { boardId: data.id } };
 }
