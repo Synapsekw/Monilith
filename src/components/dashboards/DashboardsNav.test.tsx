@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { DashboardsNav } from "./DashboardsNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
@@ -26,6 +26,25 @@ describe("DashboardsNav", () => {
       screen.queryByText("Give your dashboard a name to get started."),
     ).toBeNull();
     useUIStore.setState({ newDashboardOpen: true });
+    await waitFor(() =>
+      expect(
+        screen.getByText("Give your dashboard a name to get started."),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("offers blank and AI options from the + menu, and blank opens the create dialog", async () => {
+    render(<DashboardsNav dashboards={[]} workspaces={workspaces} />);
+
+    // The standalone AI icon is gone — generation lives inside the + menu now.
+    expect(screen.queryByLabelText("Generate dashboard with AI")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "New dashboard" }));
+
+    const blank = await screen.findByText("Blank dashboard");
+    expect(screen.getByText("Generate with AI")).toBeInTheDocument();
+
+    fireEvent.click(blank);
     await waitFor(() =>
       expect(
         screen.getByText("Give your dashboard a name to get started."),
