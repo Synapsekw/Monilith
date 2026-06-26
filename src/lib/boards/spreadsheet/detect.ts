@@ -162,7 +162,7 @@ function isFiniteNumber(v: string): boolean {
 function isDateLike(v: string): boolean {
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return true;
   const d = Date.parse(v);
-  return !isNaN(d);
+  return !Number.isNaN(d);
 }
 
 function synthesizeOptions(samples: string[]): SynthOption[] {
