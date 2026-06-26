@@ -1,12 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useThrottledCallback } from "@/lib/hooks/use-throttled-callback";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createBoardPresenceChannel } from "./presence-channel";
 import { presenceColor } from "./presence-color";
 import { toFocusMap, toRoster } from "./presence-reducer";
-import type { PresenceFocus, PresenceState, RosterOccupant } from "./presence-types";
+import type {
+  PresenceFocus,
+  PresenceState,
+  RosterOccupant,
+} from "./presence-types";
 
 type Self = { userId: string; name: string; avatarUrl: string | null };
 
@@ -25,7 +30,9 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
   const [channelStatus, setStatus] = useState("INIT");
   const channelRef = useRef<RealtimeChannel | null>(null);
   const focusRef = useRef<PresenceFocus | null>(null);
-  const [selfFocusTargetId, setSelfFocusTargetId] = useState<string | null>(null);
+  const [selfFocusTargetId, setSelfFocusTargetId] = useState<string | null>(
+    null,
+  );
   const hadDropRef = useRef(false);
 
   const color = useMemo(() => presenceColor(self.userId), [self.userId]);
@@ -52,7 +59,8 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
       }
       channel = ch;
       channelRef.current = ch;
-      const sync = () => setRaw(ch.presenceState() as Record<string, PresenceState[]>);
+      const sync = () =>
+        setRaw(ch.presenceState() as Record<string, PresenceState[]>);
       ch.on("presence", { event: "sync" }, sync)
         .on("presence", { event: "join" }, sync)
         .on("presence", { event: "leave" }, sync)
@@ -65,7 +73,11 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
               hadDropRef.current = false;
             }
           }
-          if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (
+            status === "CLOSED" ||
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT"
+          ) {
             hadDropRef.current = true;
           }
         });
@@ -78,22 +90,30 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardId, self.userId]);
 
-  const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Trailing-throttle the presence broadcast to ≤1 per 150ms; the synchronous
+  // focusRef update + local highlight happen on every call so self-focus stays
+  // instant. The throttled tracker reads the latest focus via focusRef.
+  const trackFocus = useThrottledCallback(() => {
+    void channelRef.current?.track(buildState(focusRef.current));
+  }, 150);
   const setFocus = useCallback(
     (focus: PresenceFocus | null) => {
       focusRef.current = focus;
       setSelfFocusTargetId(focus?.targetId ?? null);
-      if (throttleRef.current) return;
-      throttleRef.current = setTimeout(() => {
-        throttleRef.current = null;
-        void channelRef.current?.track(buildState(focusRef.current));
-      }, 150);
+      trackFocus();
     },
-    [buildState],
+    [trackFocus],
   );
 
   const roster = useMemo(() => toRoster(raw, self.userId), [raw, self.userId]);
   const focusMap = useMemo(() => toFocusMap(raw), [raw]);
 
-  return { roster, focusMap, setFocus, selfUserId: self.userId, selfFocusTargetId, channelStatus };
+  return {
+    roster,
+    focusMap,
+    setFocus,
+    selfUserId: self.userId,
+    selfFocusTargetId,
+    channelStatus,
+  };
 }

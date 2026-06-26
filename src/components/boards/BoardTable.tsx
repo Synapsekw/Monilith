@@ -128,6 +128,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useRafCallback } from "@/lib/hooks/use-raf-callback";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -836,6 +837,10 @@ function NameResizeHandle({
   onResizeEnd: (w: number) => void;
   onAutoFit: () => void;
 }) {
+  // Coalesce per-pixel live-width updates to one state update per frame so the
+  // drag stays smooth; the persist-on-release path (onResizeEnd) is unchanged.
+  const throttledResize = useRafCallback(onResize);
+
   function onPointerDown(e: React.PointerEvent) {
     e.preventDefault();
     const startX = e.clientX;
@@ -847,7 +852,7 @@ function NameResizeHandle({
         NAME_DRAG_MIN,
         NAME_COL_MAX,
       );
-      onResize(last);
+      throttledResize(last);
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
