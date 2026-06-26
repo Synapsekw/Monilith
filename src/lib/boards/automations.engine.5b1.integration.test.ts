@@ -1331,7 +1331,12 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
     it("does not move a subitem (parent_id is null guard)", async () => {
       const parent = await createFreshItem();
 
-      const { data: subData, error: subErr } = await admin
+      // Insert the subitem as the authenticated actor, not the service-role
+      // admin: items.created_by defaults to auth.uid() and is not directly
+      // insertable by clients (omitted from the generated Insert type), so a
+      // service-role insert leaves it NULL and violates the NOT NULL
+      // constraint. Mirrors the canonical pattern in subitems.integration.test.ts.
+      const { data: subData, error: subErr } = await userAAnon
         .from("items")
         .insert({
           org_id: orgAId,
