@@ -18,17 +18,15 @@ set -a; . "$ROOT/.env.local"; [ -f "$ROOT/.env.prod.local" ] && . "$ROOT/.env.pr
 }
 DUMP="${1:?usage: restore-prod.sh <dev-data.sql>}"
 [ -f "$DUMP" ] || { echo "dump not found: $DUMP" >&2; exit 1; }
-command -v psql >/dev/null || { echo "psql not on PATH — install libpq/postgresql client" >&2; exit 1; }
+[ -n "${PG_BIN:-}" ] && PATH="$PG_BIN:$PATH"
+command -v psql >/dev/null || { echo "psql not found — add the PostgreSQL bin to PATH or set PG_BIN in .env.prod.local" >&2; exit 1; }
 
-# Truncate every table in public + storage, plus auth user tables (skip supabase-managed
-# bookkeeping like *.schema_migrations). Generated dynamically so it tracks schema growth.
-#
-# REHEARSAL ACTION (auth scope): dump-dev.sh dumps the WHOLE auth schema, but this list truncates
-# only 5 auth tables. On a re-sync, any auth table the dump emits but this list omits (e.g.
-# refresh_tokens, flow_state, one_time_tokens) will COPY into a non-truncated table → PK conflict →
-# full rollback (safe, but a failed sync). During the Task-4 Step-5 throwaway-target rehearsal,
-# reconcile the two: either narrow dump-dev.sh's auth scope to these tables, or widen this list to
-# match what the dump actually emits. Record the resolved list here before the first real prod run.
+# Truncate every table in public, plus the auth user tables we load. Storage is intentionally
+# EXCLUDED — it is owned end-to-end by sync-storage.ts (buckets + objects + blobs via the Storage
+# API). Truncating storage.* here hits supabase_storage_admin-owned tables (e.g. storage.migrations)
+# that the connecting postgres role cannot truncate → permission denied → whole restore rolls back.
+# The dump (dump-dev.sh) is scoped to the SAME set — public + these exact 5 auth tables — so every
+# COPY in the dump has a truncated target. Keep the two lists in lockstep.
 TRUNCATE_SQL="$(cat <<'SQL'
 DO $$
 DECLARE r record;
@@ -36,7 +34,7 @@ BEGIN
   FOR r IN
     SELECT format('%I.%I', schemaname, tablename) AS t
     FROM pg_tables
-    WHERE (schemaname IN ('public','storage')
+    WHERE (schemaname = 'public'
            OR (schemaname='auth' AND tablename IN ('users','identities','mfa_factors','mfa_amr_claims','sessions')))
       AND tablename <> 'schema_migrations'
   LOOP
