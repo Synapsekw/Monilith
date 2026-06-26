@@ -140,6 +140,8 @@ export function BoardViews({
           userId: m.userId,
           fullName: m.fullName,
         }))}
+        createdBy={openItem?.created_by ?? null}
+        createdAt={openItem?.created_at ?? null}
         onClose={closeItem}
       />
     </BoardPresenceProvider>
