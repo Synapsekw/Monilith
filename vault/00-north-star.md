@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-26-0822
+last-updated: 2026-06-26-1014
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -48,10 +48,10 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation (`/time` My Time card + full-canvas Workload)** shipped · Phase 9 (Hardening) in progress — 9.1 + 9.2 + **9.3 cache + 9.4 skeletons + 9.5a interaction responsiveness** shipped, 9.3b + 9.6 next.
-- **Branch:** `develop == origin/develop` at `1d7d578` (board-spreadsheet-io merge). Unpromoted on `develop` since **#36**: **9.5a interaction responsiveness** (`3a6880f` — shared timing hooks, per-frame realtime coalescing, server-read dedup) and board spreadsheet import (`1d7d578`). Last production promotion is **#36** (2026-06-25, `564394c` on `main` — dashboards generate-with-AI into the Plus dropdown). `main ⊆ develop`.
-- **In flight:** nothing open; main-checkout tree clean (only an unrelated `.mcp.json` edit pending, left untouched). Three other-session worktrees live (`streaming-shell-9-2` stale, `item-creation-metadata`, `sidebar-share-icons`).
-- **Next:** run `/promote` to ship the unpromoted `develop` bundle (9.5a + spreadsheet import) → 9.3b dashboard-widget aggregation caching (deferred; React-Query-wrapped Server Actions) → 9.6 Web-Vitals gate → optional carryover: make board rename/delete/create/duplicate optimistic (shared client store).
-- **Owed:** Re-run the integration suite for the unit-gated merges once Supabase is stable. **Integration-test gate is flaky AND writes to production** — the live-DB `*.integration.test.ts` suites run against the **remote/prod** Supabase (Vitest loads `.env.local`), so they fail nondeterministically _and_ leak fixtures (`*@example.com` users, `Org a`/`rls-*`/`eng5b1-*` orgs) into real tenant data when a test throws before teardown. Timeout-under-load is now partly mitigated (`testTimeout/hookTimeout/retry` on the integration project, `1e93f03`), but the real fix is unchanged: local Docker Supabase (`supabase start` → `127.0.0.1:54321`) via `.env.test` — isolates + makes the gate reliable ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]], [[2026-06-24-0751-test-fixture-prod-db-cleanup]], [[2026-06-24-2311-integration-test-timeout-flake]]).
+- **Branch:** `develop == origin/develop` at `56180fb` (integration-flake root-cause fix merge). Unpromoted on `develop` since **#36**: **9.5a interaction responsiveness** (`3a6880f`), board spreadsheet import (`1d7d578`), **integration-test flake fix** (`56180fb`), plus `/sync-prod` spec+plan (docs only, not built). Last production promotion is **#36** (2026-06-25, `564394c` on `main` — dashboards generate-with-AI into the Plus dropdown). `main ⊆ develop`.
+- **In flight:** nothing open; main-checkout tree clean (only an unrelated `.mcp.json` edit pending, left untouched). Three other-session worktrees live (`streaming-shell-9-2` stale, `item-creation-metadata`, `sidebar-share-icons`) — **each must `git rebase origin/develop` onto `56180fb` before running integration tests**, or its old by-suffix teardown re-triggers the cross-run flake for everyone.
+- **Next:** run `/promote` to ship the unpromoted `develop` bundle (9.5a + spreadsheet import + flake fix) → 9.3b dashboard-widget aggregation caching (deferred; React-Query-wrapped Server Actions) → 9.6 Web-Vitals gate → optional carryover: make board rename/delete/create/duplicate optimistic (shared client store).
+- **Owed:** Integration-test gate — the **cross-run teardown cascade flake is FIXED** (age-gated `global-teardown` + `signInOrThrow`, `56180fb`; [[2026-06-26-1014-integration-flake-root-cause]]). _Diagnostic refinement:_ a run-alone check is confounded if another worktree runs `--project integration` against the shared DB concurrently — check for that first. **Remaining:** the live-DB `*.integration.test.ts` suites still run against the **remote/prod** Supabase (Vitest loads `.env.local`), so they still write `*@example.com` fixtures into real tenant data; the durable fix is unchanged — local Docker Supabase (`supabase start` → `127.0.0.1:54321`) via `.env.test` ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]], [[2026-06-24-0751-test-fixture-prod-db-cleanup]], [[2026-06-24-2311-integration-test-timeout-flake]]).
 
 ### Last session
 
