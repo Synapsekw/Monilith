@@ -12,12 +12,18 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronDown,
   ChevronRight,
+  Clock,
   GripVertical,
   Maximize2,
   MoreHorizontal,
   Plus,
+  User,
   X,
 } from "lucide-react";
+import {
+  CreatedAtCell,
+  CreatedByCell,
+} from "@/components/boards/cells/created";
 import {
   DndContext,
   PointerSensor,
@@ -217,6 +223,8 @@ function openItemPanel(itemId: string) {
 const VALUE_COL_WIDTH = 180;
 const ADD_COL_WIDTH = 44;
 const NAME_DRAG_MIN = 80; // manual drag floor (matches ColumnHeader MIN)
+const CREATED_BY_WIDTH = 180;
+const CREATED_AT_WIDTH = 180;
 
 /** CSS grid template: pinned Name + one fixed px track per column + the add-column slot. */
 function gridTemplate(
@@ -227,7 +235,7 @@ function gridTemplate(
   const tracks = columns
     .map((c) => `${liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}px`)
     .join(" ");
-  return `${nameWidth}px ${tracks} ${ADD_COL_WIDTH}px`;
+  return `${nameWidth}px ${tracks} ${CREATED_BY_WIDTH}px ${CREATED_AT_WIDTH}px ${ADD_COL_WIDTH}px`;
 }
 
 /**
@@ -357,6 +365,9 @@ function SummaryFooter({
           </div>
         );
       })}
+      {/* Two filler cells to keep the grid aligned with the created-by/created-at tracks */}
+      <div aria-hidden />
+      <div aria-hidden />
       <div />
     </div>
   );
@@ -1019,6 +1030,22 @@ function RowMenu({
   );
 }
 
+/** Read-only static header cell for the two virtual creation-metadata columns. */
+function CreatedHeaderCell({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof User;
+  label: string;
+}) {
+  return (
+    <div className="text-muted-foreground flex items-center gap-1.5 px-2 text-xs font-medium">
+      <Icon className="size-3.5" />
+      <span className="truncate">{label}</span>
+    </div>
+  );
+}
+
 /**
  * A group's header row (Monday-style): a grid aligned to the shared column
  * `template`, with the group controls in a frozen Name cell and an interactive
@@ -1166,6 +1193,8 @@ function GroupHeaderRow({
           onEditOptions={() => col.onEditOptions(c)}
         />
       ))}
+      <CreatedHeaderCell icon={User} label="Created by" />
+      <CreatedHeaderCell icon={Clock} label="Created at" />
       <AddColumnMenu onAdd={col.onAddColumn} />
     </div>
   );
@@ -1218,6 +1247,9 @@ function GroupRollupRow({
           nowMs={nowMs}
         />
       ))}
+      {/* Two filler cells to keep the grid aligned with the created-by/created-at tracks */}
+      <div aria-hidden />
+      <div aria-hidden />
     </div>
   );
 }
@@ -1640,6 +1672,25 @@ function ItemRow({
           />
         );
       })}
+      {/* Virtual created-by / created-at trailing cells */}
+      {(() => {
+        const creator = controls.members.find(
+          (m) => m.userId === item.created_by,
+        );
+        return (
+          <>
+            <div className="flex items-center px-2">
+              <CreatedByCell
+                name={creator?.fullName ?? creator?.email ?? null}
+                avatarUrl={creator?.avatarUrl ?? null}
+              />
+            </div>
+            <div className="flex items-center px-2">
+              <CreatedAtCell iso={item.created_at} />
+            </div>
+          </>
+        );
+      })()}
       <div aria-hidden /> {/* add-column track spacer */}
     </div>
   );
@@ -1724,6 +1775,25 @@ function SortableSubitemRow({
           controls={controls}
         />
       ))}
+      {/* Virtual created-by / created-at trailing cells */}
+      {(() => {
+        const creator = controls.members.find(
+          (m) => m.userId === sub.created_by,
+        );
+        return (
+          <>
+            <div className="flex items-center px-2">
+              <CreatedByCell
+                name={creator?.fullName ?? creator?.email ?? null}
+                avatarUrl={creator?.avatarUrl ?? null}
+              />
+            </div>
+            <div className="flex items-center px-2">
+              <CreatedAtCell iso={sub.created_at} />
+            </div>
+          </>
+        );
+      })()}
       <div aria-hidden />
     </div>
   );
