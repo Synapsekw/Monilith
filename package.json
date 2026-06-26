@@ -17,6 +17,7 @@
     "changelog:gen": "tsx scripts/generate-changelog.ts && prettier --write src/lib/changelog/generated.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lhci": "lhci autorun",
     "e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -70,6 +71,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",

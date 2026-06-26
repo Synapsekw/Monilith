@@ -47,6 +47,40 @@ jobs:
       - name: Build
         run: pnpm build
 
+  lighthouse:
+    name: lighthouse (perf budget)
+    runs-on: ubuntu-latest
+    env:
+      # Same placeholder public env as `verify` — the budget is asserted against
+      # the static landing route (/), which is auth-free and deterministic in CI.
+      # Authenticated routes need a live session + Supabase and are measured by
+      # the real-user Web-Vitals layer instead (see src/components/web-vitals.tsx).
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # lhci autorun: collects 3 runs against `next start` (startServerCommand in
+      # .lighthouserc.json) and asserts the Phase-9 budget. The assert step fails
+      # the job when any threshold (LCP/CLS/TTFB/TBT/JS-size/perf-score) regresses.
+      - name: Lighthouse CI
+        run: pnpm exec lhci autorun
+
   commitlint:
     name: commitlint (PR)
     runs-on: ubuntu-latest
