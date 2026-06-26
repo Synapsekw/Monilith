@@ -20,7 +20,8 @@
     "e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "sync:storage": "tsx scripts/sync-prod/sync-storage.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
