@@ -1039,7 +1039,7 @@ function CreatedHeaderCell({
   label: string;
 }) {
   return (
-    <div className="text-muted-foreground flex items-center gap-1.5 px-2 text-xs font-medium">
+    <div className="text-muted-foreground flex items-center gap-1.5 border-l px-3 text-xs font-medium">
       <Icon className="size-3.5" />
       <span className="truncate">{label}</span>
     </div>
@@ -1679,13 +1679,13 @@ function ItemRow({
         );
         return (
           <>
-            <div className="flex items-center px-2">
+            <div className="flex h-full items-center border-l px-3">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
-            <div className="flex items-center px-2">
+            <div className="flex h-full items-center border-l px-3">
               <CreatedAtCell iso={item.created_at} />
             </div>
           </>
@@ -1782,13 +1782,13 @@ function SortableSubitemRow({
         );
         return (
           <>
-            <div className="flex items-center px-2">
+            <div className="flex h-full items-center border-l px-3">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
-            <div className="flex items-center px-2">
+            <div className="flex h-full items-center border-l px-3">
               <CreatedAtCell iso={sub.created_at} />
             </div>
           </>
