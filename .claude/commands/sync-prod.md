@@ -20,9 +20,10 @@ Design spec: `docs/superpowers/specs/2026-06-26-sync-prod-design.md`.
 
 ## Arguments
 
-- `--dry-run` (in `$ARGUMENTS`): run steps 1–3 read-only (schema parity, independent-prod-data
+- `--dry-run` (in `$ARGUMENTS`): run steps 1–4 read-only (schema parity, independent-prod-data
   guard, plan presentation) plus `pnpm sync:storage -- --dry-run`, then stop — **no prod writes**.
-  Skips the `SYNC PROD` gate entirely. Safe to run anytime.
+  Step 4's command hand-off is a no-op in dry-run (nothing is handed over). Skips the `SYNC PROD`
+  gate entirely. Safe to run anytime.
 - `--force` (in `$ARGUMENTS`): bypass the independent-prod-data guard in step 2. Use only when
   you have explicitly confirmed that overwriting prod-native data is intentional.
 
@@ -66,7 +67,9 @@ Compute the set of versions present in DEV but absent in PROD.
 
 ### 2. Independent-prod-data guard (agent, read-only)
 
-> Skip this step if `--force` was passed — log the bypass and continue.
+> `--force` bypasses the **stop**, not the **check**. Always run the queries below. With
+> `--force`, a non-empty difference logs a named warning (with the offending IDs) and continues
+> instead of stopping — so the bypass is still audited.
 
 Query PROD via `supabase-prod` for all org and auth-user IDs:
 
@@ -84,7 +87,7 @@ SELECT id FROM auth.users;
 
 Find IDs present in PROD but absent in DEV (the set difference).
 
-- **Non-empty difference → loud stop**:
+- **Non-empty difference, without `--force` → loud stop**:
 
   ```
   ⛔ Stopped: PROD contains data not present in DEV.
@@ -118,8 +121,9 @@ Sync plan: dev → prod (full replace)
     4. pnpm sync:storage                         — sync storage blobs dev → prod
 ```
 
-**If `--dry-run`:** print the plan above, then run `pnpm sync:storage -- --dry-run` and stop
-("dry run complete — no prod writes, PROD untouched"). Do not ask for confirmation.
+**If `--dry-run`:** print the plan above, then run `pnpm sync:storage -- --dry-run` and stop —
+emit the `⛔ Stopped` report form (see Report) with the reason "dry run complete — no prod writes,
+PROD untouched". Do not ask for confirmation.
 
 **Otherwise:** ask for explicit typed confirmation via `AskUserQuestion`:
 
