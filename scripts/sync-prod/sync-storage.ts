@@ -102,10 +102,13 @@ async function main() {
       .download(o.name);
     if (error)
       throw new Error(`download ${o.bucket}/${o.name}: ${error.message}`);
-    const buf = Buffer.from(await data.arrayBuffer());
-    const up = await prodClient.storage
-      .from(o.bucket)
-      .upload(o.name, buf, { upsert: true });
+    // Upload the Blob directly so its MIME type is preserved — a Buffer would
+    // make prod re-serve every object as application/octet-stream, breaking
+    // inline image/PDF previews. This is the "full-fidelity" requirement.
+    const up = await prodClient.storage.from(o.bucket).upload(o.name, data, {
+      upsert: true,
+      contentType: data.type || "application/octet-stream",
+    });
     if (up.error)
       throw new Error(`upload ${o.bucket}/${o.name}: ${up.error.message}`);
   }
