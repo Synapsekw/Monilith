@@ -33,9 +33,11 @@ export function CreatedByCell({
   avatarUrl?: string | null;
 }) {
   if (!name)
-    return <span className="text-muted-foreground text-sm">Unknown</span>;
+    return (
+      <span className="text-muted-foreground text-xs opacity-60">Unknown</span>
+    );
   return (
-    <span className="flex items-center gap-2 truncate text-sm">
+    <span className="flex items-center gap-2 truncate text-xs opacity-60">
       <span className="bg-surface-muted flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-medium">
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -51,6 +53,6 @@ export function CreatedByCell({
 
 export function CreatedAtCell({ iso }: { iso: string | null }) {
   const formatted = formatDateTime(iso);
-  if (!formatted) return <span className="text-sm" />;
-  return <span className="text-sm tabular-nums">{formatted}</span>;
+  if (!formatted) return <span className="text-xs" />;
+  return <span className="text-xs tabular-nums opacity-60">{formatted}</span>;
 }

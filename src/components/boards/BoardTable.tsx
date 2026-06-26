@@ -1039,7 +1039,7 @@ function CreatedHeaderCell({
   label: string;
 }) {
   return (
-    <div className="text-muted-foreground flex items-center gap-1.5 border-l px-3 text-xs font-medium">
+    <div className="text-muted-foreground flex items-center gap-1.5 border-l px-3 text-xs font-medium opacity-60">
       <Icon className="size-3.5" />
       <span className="truncate">{label}</span>
     </div>
