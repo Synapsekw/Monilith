@@ -1201,7 +1201,7 @@ export type Database = {
         Insert: {
           board_id: string;
           created_at?: string;
-          created_by: string;
+          created_by?: string;
           group_id: string;
           id?: string;
           name: string;
