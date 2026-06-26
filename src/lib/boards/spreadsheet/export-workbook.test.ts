@@ -199,6 +199,55 @@ describe("buildExportWorkbook — CSV export", () => {
   });
 });
 
+describe("buildExportWorkbook — people column", () => {
+  function makePeoplePayload(): BoardPayload {
+    const p = makePayload();
+    p.columns.push({
+      id: "col-people",
+      name: "Owner",
+      kind: "people",
+      board_id: "board-1",
+      org_id: "org-1",
+      position: 2,
+      settings: {},
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      width: null,
+    } as unknown as BoardPayload["columns"][number]);
+    p.cellValues.push({
+      board_id: "board-1",
+      column_id: "col-people",
+      item_id: "item-1",
+      org_id: "org-1",
+      value: { userIds: ["u1", "u2"] },
+      updated_at: "2024-01-01T00:00:00Z",
+    } as unknown as BoardPayload["cellValues"][number]);
+    return p;
+  }
+
+  it("exports resolved assignee names when a name map is provided", async () => {
+    const payload = makePeoplePayload();
+    const names = new Map([
+      ["u1", "Ada Lovelace"],
+      ["u2", "Alan Turing"],
+    ]);
+    const { buffer } = await buildExportWorkbook(payload, "csv", names);
+    const parsed = await parseWorkbook(buffer, "export.csv");
+    // Owner is the 5th column: [Group, Name, Status, Count, Owner]
+    expect(parsed.header).toContain("Owner");
+    const ownerIdx = parsed.header.indexOf("Owner");
+    expect(parsed.rows[0][ownerIdx]).toBe("Ada Lovelace, Alan Turing");
+  });
+
+  it("exports blank for people columns when no name map is provided", async () => {
+    const payload = makePeoplePayload();
+    const { buffer } = await buildExportWorkbook(payload, "csv");
+    const parsed = await parseWorkbook(buffer, "export.csv");
+    const ownerIdx = parsed.header.indexOf("Owner");
+    expect(parsed.rows[0][ownerIdx] ?? "").toBe("");
+  });
+});
+
 describe("buildExportWorkbook — XLSX export", () => {
   it("emits correct mime and ext for xlsx", async () => {
     const payload = makePayload();
