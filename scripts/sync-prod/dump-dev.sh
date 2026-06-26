@@ -4,7 +4,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 set -a; . "$ROOT/.env.local"; [ -f "$ROOT/.env.prod.local" ] && . "$ROOT/.env.prod.local"; set +a
-: "${DEV_SUPABASE_DB_URL:?set DEV_SUPABASE_DB_URL in .env.local}"
+: "${DEV_SUPABASE_DB_URL:?set DEV_SUPABASE_DB_URL in .env.local or .env.prod.local}"
 OUT_DIR="$ROOT/scripts/sync-prod/.dumps"; mkdir -p "$OUT_DIR"
 TS="$(date +%Y%m%d-%H%M%S)"
 OUT="$OUT_DIR/dev-data-$TS.sql"

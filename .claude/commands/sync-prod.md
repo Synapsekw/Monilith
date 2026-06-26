@@ -55,6 +55,11 @@ Query the applied migration versions on both environments:
 - **PROD** via `supabase-prod`:
   `SELECT version FROM supabase_migrations.schema_migrations ORDER BY version;`
 
+On a never-pushed PROD the `supabase_migrations.schema_migrations` relation may not exist yet, so
+the PROD query **errors** instead of returning zero rows. Treat a "relation does not exist" (or any
+missing-migrations-table) error as **PROD has zero migrations** — i.e. the bootstrap case below, not
+a tool failure.
+
 Compute the set of versions present in DEV but absent in PROD.
 
 - **Non-empty set** (including bootstrap where PROD has zero migrations) → **hard stop**: tell the

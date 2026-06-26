@@ -90,6 +90,9 @@ async function main() {
   }
 
   for (const b of plan.bucketsToCreate) {
+    // Mirrors only the public/private flag. allowedMimeTypes and fileSizeLimit are NOT copied
+    // (and prod-only buckets are not deleted, only their objects) — acceptable for current buckets;
+    // revisit if a bucket relies on server-side MIME/size restrictions.
     const { error } = await prodClient.storage.createBucket(b.id, {
       public: b.public,
     });
