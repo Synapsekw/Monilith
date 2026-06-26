@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-26-1044
+last-updated: 2026-06-26-1112
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -48,9 +48,9 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation (`/time` My Time card + full-canvas Workload)** shipped · Phase 9 (Hardening) in progress — 9.1 + 9.2 + **9.3 cache + 9.4 skeletons + 9.5a interaction responsiveness** shipped, 9.3b + 9.6 next.
-- **Branch:** `develop == origin/develop` at `d46c066`. Unpromoted on `develop` since **#36**: **item creation tracking** (immutable Created by / Created at columns on items + subitems, `c11d4e8`), **9.5a interaction responsiveness** (`3a6880f`), board spreadsheet import/export (`1d7d578`), integration-test flake fix (`56180fb`), updates-page changelog entries for the above, plus `/sync-prod` spec+plan (docs only, not built). Last production promotion is **#36** (2026-06-25, `564394c` on `main` — dashboards generate-with-AI into the Plus dropdown). `main ⊆ develop`.
-- **In flight:** nothing open; main-checkout tree clean (only an unrelated `.mcp.json` edit pending, left untouched). Two other-session worktrees live (`streaming-shell-9-2` stale, `sidebar-share-icons`) — each should `git rebase origin/develop` before running integration tests.
-- **Next:** run `/promote` to ship the unpromoted `develop` bundle (item creation tracking + 9.5a + spreadsheet import/export + flake fix) → 9.3b dashboard-widget aggregation caching (deferred; React-Query-wrapped Server Actions) → 9.6 Web-Vitals gate → optional carryover: make board rename/delete/create/duplicate optimistic (shared client store).
+- **Branch:** `develop == origin/develop` at `274cdf2`. Unpromoted on `develop` since **#36**: **item creation tracking** (immutable Created by / Created at columns on items + subitems, `c11d4e8`), **9.5a interaction responsiveness** (`3a6880f`), board spreadsheet import/export (`1d7d578`), integration-test flake fix (`56180fb`), **sidebar share-icon polish** (right-aligned column + de-cluttered "Shared with me", `274cdf2`), updates-page changelog entries for the above, plus `/sync-prod` spec+plan (docs only, not built). Last production promotion is **#36** (2026-06-25, `564394c` on `main` — dashboards generate-with-AI into the Plus dropdown). `main ⊆ develop`.
+- **In flight:** nothing open; main-checkout tree clean (only an unrelated `.mcp.json` edit pending, left untouched). One other-session worktree live (`streaming-shell-9-2`, stale) — rebase onto `origin/develop` before running integration tests.
+- **Next:** run `/promote` to ship the unpromoted `develop` bundle (item creation tracking + 9.5a + spreadsheet import/export + flake fix + sidebar share-icon polish) → 9.3b dashboard-widget aggregation caching (deferred; React-Query-wrapped Server Actions) → 9.6 Web-Vitals gate → optional carryover: make board rename/delete/create/duplicate optimistic (shared client store).
 - **Owed:** **Migration ledger** — `20260625120000_item_created_by` was applied to the DEV DB via the SQL editor (agent can't run DDL), so it is **not in the migration ledger**; a future `supabase db push` will try to re-apply it. Run `supabase migration repair --status applied 20260625120000` when reconciling the pre-existing ledger drift (the remote already has 3 versions absent locally). See [[2026-06-26-1044-item-creation-metadata]]. _Integration-test gate:_ cross-run teardown cascade flake is FIXED (`56180fb`; [[2026-06-26-1014-integration-flake-root-cause]]); the live-DB suites still run against remote Supabase — durable fix is local Docker Supabase via `.env.test` ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]]).
 
 ### Last session
