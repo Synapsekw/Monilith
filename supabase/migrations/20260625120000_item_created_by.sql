@@ -28,9 +28,10 @@ alter table public.items
 
 -- 4. Attribution on INSERT. Force creator + timestamp from the authenticated
 --    caller, ignoring any client-supplied value (anti-spoofing). When there is
---    no JWT (service-role / system / seed insert) and no creator was supplied,
---    fall back to the organization's creator — mirroring the backfill default —
---    so created_by is never null and the NOT NULL column holds for every path.
+--    no JWT (service-role / migration contexts), keep the provided value so
+--    tooling and seeds still work. Item inserts always run as the authenticated
+--    actor (the create_item RPC, the addSubitem action, and the test suites),
+--    so created_by is set for every real path and the NOT NULL column holds.
 create function public.items_set_creation_metadata()
 returns trigger
 language plpgsql
@@ -41,10 +42,6 @@ begin
   if auth.uid() is not null then
     new.created_by := auth.uid();
     new.created_at := now();
-  elsif new.created_by is null then
-    new.created_by := (
-      select created_by from public.organizations where id = new.org_id
-    );
   end if;
   return new;
 end;
