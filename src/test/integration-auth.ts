@@ -55,3 +55,24 @@ export async function signInWithRetry(
 
   return result;
 }
+
+/**
+ * Provisioning-grade sign-in: rides out 429s via signInWithRetry, then THROWS
+ * if the client is still unauthenticated. The bare signInWithRetry call-sites
+ * discarded the error, so an exhausted backoff yielded a silently-unauthenticated
+ * client whose create_organization returned null — surfacing far away as a
+ * confusing NPE. Throwing here fails loud + immediate; the integration project's
+ * `retry: 1` then gives the file one clean re-run.
+ */
+export async function signInOrThrow(
+  client: AuthCapable,
+  credentials: { email: string; password: string },
+  label?: string,
+): Promise<void> {
+  const { error } = await signInWithRetry(client, credentials);
+  if (error) {
+    throw new Error(
+      `sign-in failed for ${label ?? credentials.email}: ${error.message}`,
+    );
+  }
+}
