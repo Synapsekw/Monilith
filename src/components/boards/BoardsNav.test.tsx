@@ -111,6 +111,58 @@ describe("BoardsNav", () => {
 
   it("renders boards with a shared indicator and a Shared with me section", () => {
     render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[
+            {
+              id: "b1",
+              name: "Roadmap",
+              workspace_id: "w",
+              position: 0,
+              shared_out: true,
+            },
+            {
+              id: "b2",
+              name: "Personal",
+              workspace_id: "w",
+              position: 1,
+              shared_out: false,
+            },
+          ]}
+          sharedBoards={[
+            {
+              id: "b3",
+              name: "Q3 Launch",
+              position: 0,
+              owner_name: "Dana",
+              access_level: "viewer",
+            },
+            {
+              id: "b4",
+              name: "Editable Plan",
+              position: 1,
+              owner_name: "Mo",
+              access_level: "editor",
+            },
+          ]}
+          workspaces={[{ id: "w", name: "WS" }]}
+        />
+      </TooltipProvider>,
+    );
+    expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    expect(screen.getByText("Q3 Launch")).toBeInTheDocument();
+    expect(screen.getByLabelText("Shared with others")).toBeInTheDocument();
+
+    // Viewer-access shared boards get a subtle read-only hint; editor ones don't.
+    const viewerHints = screen.getAllByLabelText("View only");
+    expect(viewerHints).toHaveLength(1);
+    expect(screen.getByText("Q3 Launch").parentElement).toContainElement(
+      viewerHints[0],
+    );
+  });
+
+  it("right-aligns the owned shared-out icon outside the board name link", () => {
+    render(
       <BoardsNav
         boards={[
           {
@@ -120,44 +172,40 @@ describe("BoardsNav", () => {
             position: 0,
             shared_out: true,
           },
-          {
-            id: "b2",
-            name: "Personal",
-            workspace_id: "w",
-            position: 1,
-            shared_out: false,
-          },
         ]}
-        sharedBoards={[
-          {
-            id: "b3",
-            name: "Q3 Launch",
-            position: 0,
-            owner_name: "Dana",
-            access_level: "viewer",
-          },
-          {
-            id: "b4",
-            name: "Editable Plan",
-            position: 1,
-            owner_name: "Mo",
-            access_level: "editor",
-          },
-        ]}
+        sharedBoards={[]}
         workspaces={[{ id: "w", name: "WS" }]}
       />,
     );
-    expect(screen.getByText("Shared with me")).toBeInTheDocument();
-    expect(screen.getByText("Q3 Launch")).toBeInTheDocument();
-    expect(screen.getByLabelText("Shared with others")).toBeInTheDocument();
-    expect(screen.getByText(/Dana/)).toBeInTheDocument();
+    // The name link is exactly "Roadmap" — the share icon is no longer nested
+    // inside it (which would fold its label into the link's accessible name).
+    const link = screen.getByRole("link", { name: "Roadmap" });
+    const sharedIcon = screen.getByLabelText("Shared with others");
+    expect(link).not.toContainElement(sharedIcon);
+  });
 
-    // Viewer-access shared boards get a subtle read-only hint; editor ones don't.
-    const viewerHints = screen.getAllByLabelText("View only");
-    expect(viewerHints).toHaveLength(1);
-    expect(screen.getByText("Q3 Launch").parentElement).toContainElement(
-      viewerHints[0],
+  it("shows who shared a board via a hover icon, not a 'from' text line", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[]}
+          sharedBoards={[
+            {
+              id: "s1",
+              name: "Q3 Launch",
+              position: 0,
+              owner_name: "Dana",
+              access_level: "editor",
+            },
+          ]}
+          workspaces={[{ id: "w", name: "WS" }]}
+        />
+      </TooltipProvider>,
     );
+    // No redundant second line naming the owner…
+    expect(screen.queryByText(/from Dana/)).not.toBeInTheDocument();
+    // …instead an icon whose accessible label / tooltip names the sharer.
+    expect(screen.getByLabelText("Shared by Dana")).toBeInTheDocument();
   });
 });
 
@@ -209,19 +257,21 @@ describe("BoardsNav drag-reorder", () => {
 
   it("renders no reorder handles for shared boards", () => {
     render(
-      <BoardsNav
-        boards={[]}
-        sharedBoards={[
-          {
-            id: "s1",
-            name: "Theirs",
-            position: 0,
-            owner_name: "Dana",
-            access_level: "editor",
-          },
-        ]}
-        workspaces={noWorkspaces}
-      />,
+      <TooltipProvider>
+        <BoardsNav
+          boards={[]}
+          sharedBoards={[
+            {
+              id: "s1",
+              name: "Theirs",
+              position: 0,
+              owner_name: "Dana",
+              access_level: "editor",
+            },
+          ]}
+          workspaces={noWorkspaces}
+        />
+      </TooltipProvider>,
     );
     expect(screen.getByText("Theirs")).toBeInTheDocument();
     expect(
