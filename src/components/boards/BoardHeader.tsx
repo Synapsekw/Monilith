@@ -8,6 +8,7 @@ import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
 import { BoardPresenceBar } from "@/components/boards/presence/BoardPresenceBar";
 import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
 import { ShareBoardDialog } from "@/components/boards/ShareBoardDialog";
+import { ExportMenu } from "@/components/boards/ExportMenu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { BoardView } from "@/lib/boards/queries";
@@ -125,6 +126,7 @@ export function BoardHeader({
         />
         <div className="flex items-center gap-2">
           <BoardPresenceBar />
+          <ExportMenu boardId={boardId} />
           <Button
             type="button"
             variant="ghost"
