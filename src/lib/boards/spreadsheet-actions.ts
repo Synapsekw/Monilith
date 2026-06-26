@@ -196,7 +196,14 @@ export async function commitImport(input: {
     return fail(rpcError?.message ?? "Could not create board.");
   }
 
-  // Phase 2: Insert subitems (they require a board_id that only exists after phase 1)
+  // Phase 2: Insert subitems (they require a board_id that only exists after
+  // phase 1). The phase-1 RPC has already committed, so this is NOT one atomic
+  // transaction — on failure we best-effort delete the just-created board
+  // (cascade) to avoid orphaning a half-built board. The delete runs on the same
+  // RLS-bound client, so it can only ever remove a board the caller may delete.
+  // org_id/board_id come from the membership-checked RPC's return row (never
+  // client input); the client-supplied group_id/parent_id/column_id are confined
+  // to the caller's org by the items/cell_values RLS insert policies.
   if (subitems.length > 0) {
     const subitemRows = subitems.map((s) => ({
       id: s.id,
