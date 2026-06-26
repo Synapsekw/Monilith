@@ -3,7 +3,8 @@
 import { revalidatePath, updateTag } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { dashboardsTag } from "@/lib/cache/tags";
+import { dashboardsTag, widgetAggregationTag } from "@/lib/cache/tags";
+import { getWidgetAggregationCached } from "@/lib/dashboards/queries-cached";
 import { optionSchema } from "@/lib/validations/boards";
 import {
   type AggregateBucket,
@@ -160,8 +161,12 @@ export async function createWidget(input: {
   });
   if (error || !data) return fail(error?.message ?? "Could not add widget.");
 
+  const widget = data as Widget;
+  // Read-your-own-writes: invalidate this widget's cached aggregation so the
+  // first load reflects the brand-new config (not a stale/empty entry).
+  updateTag(widgetAggregationTag(widget.org_id, widget.id));
   revalidatePath(`/dashboards/${parsed.data.dashboardId}`);
-  return { ok: true, data: { widget: data as Widget } };
+  return { ok: true, data: { widget } };
 }
 
 /** Update a widget's title/source/config. Returns the updated row. */
@@ -205,6 +210,9 @@ export async function updateWidgetConfig(input: {
     .maybeSingle();
   if (error || !data) return fail(error?.message ?? "Could not update widget.");
 
+  // Read-your-own-writes: a config edit changes the aggregation inputs, so drop
+  // this widget's cached entry immediately (board-data edits stay TTL-bounded).
+  updateTag(widgetAggregationTag(data.org_id, parsed.data.widgetId));
   revalidatePath(`/dashboards/${data.dashboard_id}`);
   return { ok: true, data: { widget: data as Widget } };
 }
@@ -218,11 +226,15 @@ export async function deleteWidget(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { error } = await supabase
+  // Return the deleted row's org_id so we can drop its cached aggregation.
+  const { data, error } = await supabase
     .from("dashboard_widgets")
     .delete()
-    .eq("id", parsed.data.widgetId);
+    .eq("id", parsed.data.widgetId)
+    .select("org_id")
+    .maybeSingle();
   if (error) return fail(error.message);
+  if (data) updateTag(widgetAggregationTag(data.org_id, parsed.data.widgetId));
 
   return { ok: true, data: { widgetId: parsed.data.widgetId } };
 }
@@ -262,7 +274,7 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
   const supabase = await createClient();
   const { data: widget } = await supabase
     .from("dashboard_widgets")
-    .select("kind, config, source_board_id")
+    .select("kind, config, source_board_id, org_id")
     .eq("id", parsed.data.widgetId)
     .maybeSingle();
   if (!widget) return fail("Widget not found.");
@@ -273,39 +285,29 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
     };
 
   const config = (widget.config ?? {}) as Record<string, unknown>;
-  const agg = (config.agg as string) ?? "count";
-  const { data, error } = await supabase.rpc("dashboard_aggregate", {
-    p_board_id: widget.source_board_id,
-    p_group_column_id: (config.groupColumnId as string) ?? undefined,
-    p_value_column_id: (config.valueColumnId as string) ?? undefined,
-    p_agg: agg,
+  // Delegate the aggregation read to the cached query (Phase 9.3b). The widget's
+  // org + board are resolved above and passed in, so `orgId` is part of the cache
+  // key + tag — cross-tenant isolation holds by construction. The cached fn also
+  // resolves the group column's options server-side (so renames/recolors reflect
+  // without a stale client snapshot), bounded by the short `widget` TTL.
+  const result = await getWidgetAggregationCached({
+    widgetId: parsed.data.widgetId,
+    orgId: widget.org_id,
+    boardId: widget.source_board_id,
+    config,
+    groupColumnId: (config.groupColumnId as string | undefined) ?? null,
   });
-  if (error) return fail(error.message);
+  if (result.error) return fail(result.error);
 
-  const buckets: AggregateBucket[] = (data ?? []).map((r) => ({
-    group_key: r.group_key,
-    metric: Number(r.metric),
-  }));
-
-  // For grouped widgets, resolve the group column's options for label/color
-  // rendering (kept server-side so renames/recolors reflect without a stale snapshot).
-  let columnMeta: ColumnMeta | null = null;
-  const groupColumnId = config.groupColumnId as string | undefined;
-  if (groupColumnId) {
-    const { data: col } = await supabase
-      .from("columns")
-      .select("kind, settings")
-      .eq("id", groupColumnId)
-      .maybeSingle();
-    if (col) {
-      const opts = optionSchema
-        .array()
-        .safeParse((col.settings as { options?: unknown }).options ?? []);
-      columnMeta = { kind: col.kind, options: opts.success ? opts.data : [] };
-    }
-  }
-
-  return { ok: true, data: { kind: widget.kind, config, buckets, columnMeta } };
+  return {
+    ok: true,
+    data: {
+      kind: widget.kind,
+      config,
+      buckets: result.buckets,
+      columnMeta: result.columnMeta,
+    },
+  };
 }
 
 /**
