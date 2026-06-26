@@ -19,6 +19,13 @@ where o.id = i.org_id
 alter table public.items
   alter column created_by set not null;
 
+-- 3b. Default the creator to the authenticated caller. The INSERT trigger below
+--     still overrides any supplied value (anti-spoof), so this default only
+--     applies when created_by is omitted — which lets callers (and the generated
+--     Insert type) treat created_by as optional instead of required.
+alter table public.items
+  alter column created_by set default auth.uid();
+
 -- 4. Attribution on INSERT. Force creator + timestamp from the authenticated
 --    caller, ignoring any client-supplied value (anti-spoofing). When there is
 --    no JWT (service-role / migration contexts), keep the provided value so
