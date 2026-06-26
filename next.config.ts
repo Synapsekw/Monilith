@@ -14,6 +14,13 @@ const nextConfig: NextConfig = {
   cacheLife: {
     nav: { stale: 60, revalidate: 60, expire: 3600 },
     guard: { stale: 60, revalidate: 300, expire: 3600 },
+    // `widget` for dashboard widget aggregations (Phase 9.3b): the board
+    // cell-data feeding them changes from too many sources to tag reliably, so
+    // freshness is bounded by a short TTL (widget *config* edits stay instant
+    // via updateTag on the per-widget tag). revalidate >= 30 / expire >= 300
+    // keeps it from forcing a dynamic hole in the 9.2 streaming shell (see
+    // cacheLife.md, Prerendering behavior).
+    widget: { stale: 30, revalidate: 30, expire: 300 },
   },
   // Move the on-screen dev indicator (the Next.js logo button) to the bottom
   // right; it defaults to bottom-left. See devIndicators.md.
