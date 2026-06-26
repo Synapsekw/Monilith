@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-06-26-1112
+last-updated: 2026-06-26-2155
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -47,10 +47,10 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation (`/time` My Time card + full-canvas Workload)** shipped · Phase 9 (Hardening) in progress — 9.1 + 9.2 + **9.3 cache + 9.4 skeletons + 9.5a interaction responsiveness** shipped, 9.3b + 9.6 next.
-- **Branch:** `develop == origin/develop` at `274cdf2`. Unpromoted on `develop` since **#36**: **item creation tracking** (immutable Created by / Created at columns on items + subitems, `c11d4e8`), **9.5a interaction responsiveness** (`3a6880f`), board spreadsheet import/export (`1d7d578`), integration-test flake fix (`56180fb`), **sidebar share-icon polish** (right-aligned column + de-cluttered "Shared with me", `274cdf2`), updates-page changelog entries for the above, plus `/sync-prod` spec+plan (docs only, not built). Last production promotion is **#36** (2026-06-25, `564394c` on `main` — dashboards generate-with-AI into the Plus dropdown). `main ⊆ develop`.
-- **In flight:** nothing open; main-checkout tree clean (only an unrelated `.mcp.json` edit pending, left untouched). One other-session worktree live (`streaming-shell-9-2`, stale) — rebase onto `origin/develop` before running integration tests.
-- **Next:** run `/promote` to ship the unpromoted `develop` bundle (item creation tracking + 9.5a + spreadsheet import/export + flake fix + sidebar share-icon polish) → 9.3b dashboard-widget aggregation caching (deferred; React-Query-wrapped Server Actions) → 9.6 Web-Vitals gate → optional carryover: make board rename/delete/create/duplicate optimistic (shared client store).
+- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation (`/time` My Time card + full-canvas Workload)** shipped · Phase 9 (Hardening) in progress — 9.1 + 9.2 + **9.3 cache + 9.3b widget-aggregation cache + 9.4 skeletons + 9.5a interaction responsiveness** shipped, 9.6 next.
+- **Branch:** `develop` at `b011b61` (local; verify vs origin before promote). Unpromoted on `develop` since **#36**: **item creation tracking** (`c11d4e8`), **9.5a interaction responsiveness** (`3a6880f`), board spreadsheet import/export (`1d7d578`), integration-test flake fix (`56180fb`), **sidebar share-icon polish** (`274cdf2`), **9.3b dashboard-widget aggregation caching** (dash-widget-cache merge `b546595`), plus docs/tooling: `/sync-prod` spec+plan, **iPad touch-foundation plan**, and **`/roast` adversarial decision-council command** (`.claude/commands/roast.md`, shipped this session). Last production promotion is **#36** (2026-06-25, `564394c` on `main`). `main ⊆ develop`.
+- **In flight:** nothing open; main-checkout tree clean (only unrelated `.obsidian/*` edits pending, left untouched). One other-session worktree noted earlier (`streaming-shell-9-2`, stale) — rebase onto `origin/develop` before running integration tests.
+- **Next:** run `/promote` to ship the unpromoted `develop` bundle (item creation tracking + 9.5a + spreadsheet import/export + flake fix + sidebar share-icon polish + 9.3b widget cache) → 9.6 Web-Vitals gate → optional carryover: make board rename/delete/create/duplicate optimistic (shared client store).
 - **Owed:** **Migration ledger** — `20260625120000_item_created_by` was applied to the DEV DB via the SQL editor (agent can't run DDL), so it is **not in the migration ledger**; a future `supabase db push` will try to re-apply it. Run `supabase migration repair --status applied 20260625120000` when reconciling the pre-existing ledger drift (the remote already has 3 versions absent locally). See [[2026-06-26-1044-item-creation-metadata]]. _Integration-test gate:_ cross-run teardown cascade flake is FIXED (`56180fb`; [[2026-06-26-1014-integration-flake-root-cause]]); the live-DB suites still run against remote Supabase — durable fix is a dedicated isolated test database (a separate test-only Supabase project) via `.env.test` ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]]).
 
 ### Last session
