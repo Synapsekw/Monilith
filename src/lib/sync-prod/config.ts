@@ -12,7 +12,9 @@ export interface StorageEndpoints {
   prod: { url: string; serviceKey: string };
 }
 
-export function loadStorageEndpoints(env: NodeJS.ProcessEnv): StorageEndpoints {
+export function loadStorageEndpoints(
+  env: Record<string, string | undefined>,
+): StorageEndpoints {
   const parsed = envSchema.safeParse(env);
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
