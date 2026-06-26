@@ -72,8 +72,11 @@ describe("getWidgetAggregationCached", () => {
       "dashboard_aggregate",
       expect.objectContaining({ p_board_id: "board-1", p_agg: "count" }),
     );
-    expect(res.buckets).toEqual([{ group_key: "opt1", metric: 3 }]);
-    expect(res.columnMeta).toBeNull();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.buckets).toEqual([{ group_key: "opt1", metric: 3 }]);
+      expect(res.columnMeta).toBeNull();
+    }
   });
 
   it("resolves group-column options when grouped", async () => {
@@ -94,10 +97,12 @@ describe("getWidgetAggregationCached", () => {
     });
     expect(colSelect).toHaveBeenCalled();
     expect(colEq).toHaveBeenCalledWith("id", "col-1");
-    expect(res.columnMeta).toEqual({
-      kind: "status",
-      options: [{ id: "o1", label: "Open", color: "#fff" }],
-    });
+    expect(res.ok).toBe(true);
+    if (res.ok)
+      expect(res.columnMeta).toEqual({
+        kind: "status",
+        options: [{ id: "o1", label: "Open", color: "#fff" }],
+      });
   });
 
   it("returns an error string when the RPC fails", async () => {
@@ -109,6 +114,7 @@ describe("getWidgetAggregationCached", () => {
       config: { agg: "count" },
       groupColumnId: null,
     });
-    expect(res.error).toBe("boom");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBe("boom");
   });
 });

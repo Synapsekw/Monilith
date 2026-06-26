@@ -28,12 +28,8 @@ export async function listDashboardsCached(
 }
 
 export type WidgetAggregation =
-  | {
-      buckets: AggregateBucket[];
-      columnMeta: ColumnMeta | null;
-      error?: undefined;
-    }
-  | { error: string; buckets?: undefined; columnMeta?: undefined };
+  | { ok: true; buckets: AggregateBucket[]; columnMeta: ColumnMeta | null }
+  | { ok: false; error: string };
 
 /**
  * Cached widget aggregation read (Phase 9.3b). The caller (`getWidgetData`)
@@ -66,7 +62,7 @@ export async function getWidgetAggregationCached(input: {
     p_value_column_id: (input.config.valueColumnId as string) ?? undefined,
     p_agg: agg,
   });
-  if (error) return { error: error.message };
+  if (error) return { ok: false, error: error.message };
 
   const buckets: AggregateBucket[] = (data ?? []).map((r) => ({
     group_key: r.group_key,
@@ -88,5 +84,5 @@ export async function getWidgetAggregationCached(input: {
     }
   }
 
-  return { buckets, columnMeta };
+  return { ok: true, buckets, columnMeta };
 }

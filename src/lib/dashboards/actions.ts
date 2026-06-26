@@ -297,7 +297,7 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
     config,
     groupColumnId: (config.groupColumnId as string | undefined) ?? null,
   });
-  if (result.error) return fail(result.error);
+  if (!result.ok) return fail(result.error);
 
   return {
     ok: true,

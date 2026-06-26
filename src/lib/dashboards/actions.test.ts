@@ -171,6 +171,7 @@ describe("getWidgetData delegates to the cached aggregation read", () => {
     }));
     currentClient = { from };
     getWidgetAggregationCached.mockResolvedValue({
+      ok: true,
       buckets: [{ group_key: "g", metric: 5 }],
       columnMeta: null,
     });
@@ -202,7 +203,10 @@ describe("getWidgetData delegates to the cached aggregation read", () => {
       select: () => ({ eq: () => ({ maybeSingle }) }),
     }));
     currentClient = { from };
-    getWidgetAggregationCached.mockResolvedValue({ error: "rpc boom" });
+    getWidgetAggregationCached.mockResolvedValue({
+      ok: false,
+      error: "rpc boom",
+    });
 
     const res = await getWidgetData({ widgetId: WIDGET });
     expect(res.ok).toBe(false);
