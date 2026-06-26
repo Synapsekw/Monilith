@@ -2,7 +2,7 @@
 
 Ship work that is **already integrated on `develop`** to production: validate the delta, open the
 `develop → main` promotion PR, **stop for explicit confirmation**, then merge and watch GitHub
-Actions CI + the Vercel production deploy — ending in a formatted, bulleted report.
+Actions CI + the Vercel production deploy — ending in a formatted, bulleted report, and offering to chain `/sync-prod` on a confirmed successful deploy.
 
 This is the **promote** counterpart to `finish-task.sh` (which merges `task/* → develop`). It does
 **not** merge task branches and does **not** build features. Merging to `main` is the **only** thing
@@ -157,6 +157,19 @@ promotion ever still shows `CONFLICTING`, this heal was skipped — re-run it.)
 Emit the formatted report (below) summarising what shipped, every check, the deploy, and any
 branch-hygiene notes.
 
+### 9. Offer data sync
+
+_Fires **only** when the promotion fully succeeded: `main` merged, main CI green, and Vercel
+production deploy confirmed (`state == success`). Skip this step entirely if the promotion stopped
+at any point or the Vercel deploy was not confirmed._
+
+Ask via `AskUserQuestion`:
+
+> "Production code is live. Sync dev data → prod now? (runs `/sync-prod`)"
+
+Options: **Run `/sync-prod`** / **Not now**. On accept, invoke the `/sync-prod` flow. On decline,
+finish normally.
+
 ## Report format
 
 Success:
@@ -206,6 +219,8 @@ Stop (any hard stop above):
   hanging.
 - **Report, don't clean.** Stale `task/*` branches and other hygiene findings are noted, never
   auto-deleted (that is the user's call / `finish-task.sh`'s job).
+- **`/promote` never writes prod data; it only offers to chain `/sync-prod` after a confirmed
+  successful deploy.**
 
 ## Edge cases
 

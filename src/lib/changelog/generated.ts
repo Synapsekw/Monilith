@@ -4,6 +4,27 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-06-26",
+    kind: "new",
+    title: "Import and export boards as spreadsheets",
+    description:
+      "Export any board to an Excel spreadsheet, or bulk-create items by importing one.",
+  },
+  {
+    date: "2026-06-26",
+    kind: "improved",
+    title: "Snappier board interactions",
+    description:
+      "Resizing columns, dragging items, and live presence updates now feel smoother and more responsive.",
+  },
+  {
+    date: "2026-06-26",
+    kind: "new",
+    title: "See who created each item",
+    description:
+      "Every item and subitem now shows who created it and when, in two read-only columns at the end of the board (and in the item panel) — a permanent record that can't be edited.",
+  },
+  {
     date: "2026-06-24",
     kind: "new",
     title: "Generate dashboards with AI",

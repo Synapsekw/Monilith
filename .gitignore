@@ -89,3 +89,6 @@ Welcome.md
 # Brainstorming visual companion (local mockups)
 .superpowers/
 e2e/.artifacts/
+
+# /sync-prod local dump artifacts (may contain real data — never commit)
+scripts/sync-prod/.dumps/

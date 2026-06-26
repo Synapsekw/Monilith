@@ -24,7 +24,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { signInWithRetry } from "@/test/integration-auth";
+import { signInOrThrow } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
 config({ path: ".env.local", override: true });
@@ -118,10 +118,11 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
     userAAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await signInWithRetry(userAAnon, {
-      email: emailA,
-      password: PASSWORD,
-    });
+    await signInOrThrow(
+      userAAnon,
+      { email: emailA, password: PASSWORD },
+      emailA,
+    );
 
     // ── org + workspace + board ──────────────────────────────────────────
     const { data: orgData } = await userAAnon.rpc("create_organization", {
@@ -294,10 +295,11 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
     userBAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await signInWithRetry(userBAnon, {
-      email: emailB,
-      password: PASSWORD,
-    });
+    await signInOrThrow(
+      userBAnon,
+      { email: emailB, password: PASSWORD },
+      emailB,
+    );
 
     // userB must have an org (session needs it), but NOT orgA
     await userBAnon.rpc("create_organization", {
@@ -1329,7 +1331,12 @@ describe.skipIf(!SERVICE_ROLE_KEY)("engine: automations 5b-1", () => {
     it("does not move a subitem (parent_id is null guard)", async () => {
       const parent = await createFreshItem();
 
-      const { data: subData, error: subErr } = await admin
+      // Insert the subitem as the authenticated actor, not the service-role
+      // admin: items.created_by defaults to auth.uid() and is not directly
+      // insertable by clients (omitted from the generated Insert type), so a
+      // service-role insert leaves it NULL and violates the NOT NULL
+      // constraint. Mirrors the canonical pattern in subitems.integration.test.ts.
+      const { data: subData, error: subErr } = await userAAnon
         .from("items")
         .insert({
           org_id: orgAId,

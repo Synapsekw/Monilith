@@ -76,16 +76,19 @@ function SortableBoardRow({
       <Link
         href={`/boards/${board.id}`}
         aria-current={isActive ? "page" : undefined}
-        className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-1 text-xs"
+        className="min-w-0 flex-1 truncate py-1 pr-1 text-xs"
       >
-        <span className="truncate">{board.name}</span>
-        {board.shared_out ? (
-          <Users2
-            aria-label="Shared with others"
-            className="text-muted-foreground size-3.5 shrink-0"
-          />
-        ) : null}
+        {board.name}
       </Link>
+      {/* Right-aligned share marker — lives outside the name link so it lines
+          up in a vertical column under the + (not after the variable-width
+          name), just inside the hover actions menu. */}
+      {board.shared_out ? (
+        <Users2
+          aria-label="Shared with others"
+          className="text-muted-foreground mr-0.5 size-3.5 shrink-0"
+        />
+      ) : null}
       <BoardItemMenu
         board={{ id: board.id, name: board.name }}
         isActive={isActive}
@@ -260,25 +263,35 @@ export function BoardsNav({
                 href={`/boards/${b.id}`}
                 aria-current={b.id === activeBoardId ? "page" : undefined}
                 className={cn(
-                  "flex flex-col rounded-md px-3 py-1 text-xs transition-colors",
+                  "flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors",
                   b.id === activeBoardId
                     ? "bg-primary/80 text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
-                <span className="flex items-center gap-1">
-                  <span className="truncate">{b.name}</span>
-                  {b.access_level === "viewer" ? (
-                    <Eye
-                      aria-label="View only"
-                      className="text-muted-foreground size-3 shrink-0"
-                    />
-                  ) : null}
-                </span>
+                <span className="min-w-0 flex-1 truncate">{b.name}</span>
+                {b.access_level === "viewer" ? (
+                  <Eye
+                    aria-label="View only"
+                    className="text-muted-foreground size-3 shrink-0"
+                  />
+                ) : null}
+                {/* Who shared it: an icon with a hover tooltip, replacing the
+                    redundant "· from {owner}" second line. */}
                 {b.owner_name ? (
-                  <span className="text-muted-foreground truncate text-xs">
-                    · from {b.owner_name}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex shrink-0 items-center">
+                        <Users2
+                          aria-label={`Shared by ${b.owner_name}`}
+                          className="text-muted-foreground size-3.5"
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      Shared by {b.owner_name}
+                    </TooltipContent>
+                  </Tooltip>
                 ) : null}
               </Link>
             ))}

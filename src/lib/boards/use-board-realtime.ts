@@ -2,33 +2,21 @@
 
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import {
-  addDependency,
-  insertColumn,
-  insertGroup,
-  insertItem,
-  removeCellValue,
-  removeColumn,
-  removeDependency,
-  replaceColumn,
-  replaceGroup,
-  replaceItem,
-  upsertCellValue,
-  type BoardCache,
-  type CacheCellValue,
-  type CacheColumn,
-  type CacheDependency,
-  type CacheGroup,
-  type CacheItem,
-} from "@/lib/boards/cache";
+import type { BoardCache } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
+import {
+  foldBoardEvents,
+  type BoardRealtimeEvent,
+} from "@/lib/boards/realtime-buffer";
 
 /**
  * Subscribe one Realtime channel for the board, reconciling cell_values + items
- * (+ groups/columns) changes into the ["board", boardId] cache. De-dupes echoes
- * from our own optimistic writes by skipping no-op cell value patches.
+ * (+ groups/columns/deps) changes into the ["board", boardId] cache. Incoming
+ * events are BUFFERED and applied in a single setQueryData per animation frame,
+ * so a burst of edits from many concurrent collaborators causes one re-render
+ * per frame instead of one per event. Echo-dedupe of our own optimistic writes
+ * and the onRemoteChange flash callback are preserved (see realtime-buffer.ts).
  */
 export function useBoardRealtime(
   boardId: string,
@@ -47,103 +35,25 @@ export function useBoardRealtime(
   useEffect(() => {
     const supabase = createClient();
     const filter = `board_id=eq.${boardId}`;
-    // Computed inside the effect: boardKey() returns a fresh array each render,
-    // so keeping it out of the dep list avoids resubscribing on every render.
     const key = boardKey(boardId);
 
-    function patch(fn: (prev: BoardCache) => BoardCache) {
-      qc.setQueryData<BoardCache>(key, (prev) => (prev ? fn(prev) : prev));
+    const buffer: BoardRealtimeEvent[] = [];
+    let frame: number | null = null;
+
+    function flush() {
+      frame = null;
+      if (buffer.length === 0) return;
+      const events = buffer.splice(0, buffer.length);
+      const prev = qc.getQueryData<BoardCache>(key);
+      if (!prev) return; // board cache not hydrated yet → drop (page seeds it)
+      const { next, flashes } = foldBoardEvents(prev, events);
+      if (next !== prev) qc.setQueryData<BoardCache>(key, next);
+      for (const f of flashes) cbRef.current?.(f);
     }
 
-    function onCell(p: RealtimePostgresChangesPayload<CacheCellValue>) {
-      if (p.eventType === "DELETE") {
-        const oldRow = p.old as Partial<CacheCellValue>;
-        if (oldRow.item_id && oldRow.column_id) {
-          patch((prev) =>
-            removeCellValue(prev, oldRow.item_id!, oldRow.column_id!),
-          );
-        }
-        return;
-      }
-      const row = p.new as CacheCellValue;
-      let changed = false;
-      patch((prev) => {
-        // Echo-dedupe: if the value already matches, skip (no re-render churn).
-        const existing = prev.cellValues.find(
-          (c) => c.item_id === row.item_id && c.column_id === row.column_id,
-        );
-        if (
-          existing &&
-          JSON.stringify(existing.value) === JSON.stringify(row.value)
-        )
-          return prev;
-        changed = true;
-        return upsertCellValue(prev, row);
-      });
-      if (changed) {
-        cbRef.current?.({
-          targetId: `cell:${row.item_id}:${row.column_id}`,
-          valueChanged: true,
-        });
-      }
-    }
-
-    function onItem(p: RealtimePostgresChangesPayload<CacheItem>) {
-      if (p.eventType === "DELETE") {
-        const oldRow = p.old as Partial<CacheItem>;
-        patch((prev) => ({
-          ...prev,
-          items: prev.items.filter((i) => i.id !== oldRow.id),
-        }));
-        return;
-      }
-      const row = p.new as CacheItem;
-      patch((prev) =>
-        prev.items.some((i) => i.id === row.id)
-          ? replaceItem(prev, row)
-          : insertItem(prev, row),
-      );
-    }
-
-    function onDependency(p: RealtimePostgresChangesPayload<CacheDependency>) {
-      if (p.eventType === "DELETE") {
-        const oldRow = p.old as Partial<CacheDependency>;
-        if (oldRow.id) patch((prev) => removeDependency(prev, oldRow.id!));
-        return;
-      }
-      const row = p.new as CacheDependency;
-      patch((prev) => addDependency(prev, row)); // idempotent on id (echo-safe)
-    }
-
-    function onColumn(p: RealtimePostgresChangesPayload<CacheColumn>) {
-      if (p.eventType === "DELETE") {
-        const oldRow = p.old as Partial<CacheColumn>;
-        if (oldRow.id) patch((prev) => removeColumn(prev, oldRow.id!));
-        return;
-      }
-      const row = p.new as CacheColumn;
-      patch((prev) =>
-        prev.columns.some((c) => c.id === row.id)
-          ? replaceColumn(prev, row)
-          : insertColumn(prev, row),
-      );
-    }
-
-    function onGroup(p: RealtimePostgresChangesPayload<CacheGroup>) {
-      if (p.eventType === "DELETE") {
-        const oldRow = p.old as Partial<CacheGroup>;
-        patch((prev) => ({
-          ...prev,
-          groups: prev.groups.filter((g) => g.id !== oldRow.id),
-        }));
-        return;
-      }
-      const row = p.new as CacheGroup;
-      patch((prev) =>
-        prev.groups.some((g) => g.id === row.id)
-          ? replaceGroup(prev, row)
-          : insertGroup(prev, row),
-      );
+    function enqueue(ev: BoardRealtimeEvent) {
+      buffer.push(ev);
+      if (frame == null) frame = requestAnimationFrame(flush);
     }
 
     const channel = supabase
@@ -151,31 +61,40 @@ export function useBoardRealtime(
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "cell_values", filter },
-        onCell,
+        (payload) =>
+          enqueue({ table: "cell_values", payload } as BoardRealtimeEvent),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "items", filter },
-        onItem,
+        (payload) => enqueue({ table: "items", payload } as BoardRealtimeEvent),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "item_dependencies", filter },
-        onDependency,
+        (payload) =>
+          enqueue({
+            table: "item_dependencies",
+            payload,
+          } as BoardRealtimeEvent),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "columns", filter },
-        onColumn,
+        (payload) =>
+          enqueue({ table: "columns", payload } as BoardRealtimeEvent),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "groups", filter },
-        onGroup,
+        (payload) =>
+          enqueue({ table: "groups", payload } as BoardRealtimeEvent),
       )
       .subscribe();
 
     return () => {
+      if (frame != null) cancelAnimationFrame(frame);
+      buffer.length = 0;
       supabase.removeChannel(channel);
     };
   }, [boardId, qc]);
