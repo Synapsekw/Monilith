@@ -20,6 +20,10 @@ import { ItemViewersBar } from "@/components/boards/presence/ItemViewersBar";
 import { ActivityTab } from "./ActivityTab";
 import { UpdatesTab } from "./UpdatesTab";
 import { FilesTab } from "./FilesTab";
+import {
+  CreatedByCell,
+  CreatedAtCell,
+} from "@/components/boards/cells/created";
 
 type Tab = "fields" | "updates" | "activity" | "files";
 
@@ -31,6 +35,8 @@ export function ItemPanel({
   currentUserId,
   columns,
   members,
+  createdBy,
+  createdAt,
   onClose,
 }: {
   itemId: string | null;
@@ -40,6 +46,8 @@ export function ItemPanel({
   currentUserId: string;
   columns: readonly Column[];
   members: readonly Member[];
+  createdBy: string | null;
+  createdAt: string | null;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("updates");
@@ -107,10 +115,31 @@ export function ItemPanel({
 
         <div className="flex-1 overflow-y-auto">
           {tab === "fields" && (
-            <p className="text-muted-foreground py-6 text-sm">
-              Edit fields in the board grid. (Inline field editing in the panel
-              is a fast-follow.)
-            </p>
+            <div className="space-y-4 py-6">
+              <p className="text-muted-foreground text-sm">
+                Edit fields in the board grid. (Inline field editing in the
+                panel is a fast-follow.)
+              </p>
+              <dl className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground text-sm">Created by</dt>
+                  <dd>
+                    <CreatedByCell
+                      name={
+                        members.find((m) => m.userId === createdBy)?.fullName ??
+                        null
+                      }
+                    />
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground text-sm">Created at</dt>
+                  <dd>
+                    <CreatedAtCell iso={createdAt} />
+                  </dd>
+                </div>
+              </dl>
+            </div>
           )}
           {tab === "updates" && (
             <UpdatesTab

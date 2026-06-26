@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ItemPanel } from "./ItemPanel";
 import {
@@ -29,6 +30,8 @@ const baseProps = {
   currentUserId: "self",
   columns: [],
   members: [],
+  createdBy: null,
+  createdAt: null,
   onClose: () => {},
 } as const;
 
@@ -45,6 +48,36 @@ function renderPanel(
     </QueryClientProvider>,
   );
 }
+
+describe("ItemPanel creation metadata", () => {
+  it("shows read-only creation metadata in the fields tab", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardPresenceProvider value={ctx(vi.fn())}>
+          <ItemPanel
+            itemId="item-1"
+            itemName="Design review"
+            orgId="org-1"
+            boardId="board-1"
+            currentUserId="u-1"
+            columns={[]}
+            members={[{ userId: "u-1", fullName: "Danijel Jovanovic" }]}
+            createdBy="u-1"
+            createdAt="2026-06-25T15:42:00Z"
+            onClose={() => {}}
+          />
+        </BoardPresenceProvider>
+      </QueryClientProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: /fields/i }));
+    expect(screen.getByText("Created by")).toBeInTheDocument();
+    expect(screen.getByText("Danijel Jovanovic")).toBeInTheDocument();
+    expect(screen.getByText("Created at")).toBeInTheDocument();
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+});
 
 describe("ItemPanel presence", () => {
   it("registers a panel focus target while the panel is open", () => {
