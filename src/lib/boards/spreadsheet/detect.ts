@@ -146,9 +146,15 @@ function inferKind(samples: string[]): ImportableKind {
   // All match ISO date or parse ok?
   if (samples.every((v) => isDateLike(v))) return "date";
 
-  // Distinct non-empty count ≤ 12 AND ≤ half the sampled count → status
+  // 2 ≤ distinct ≤ 12 AND distinct ≤ half the sampled count → status.
+  // A single distinct value is a constant (likely free text), not a status,
+  // and needing ≥2 distinct labels keeps a one-option "status" from forming.
   const distinct = new Set(samples.map((v) => v.trim())).size;
-  if (distinct <= 12 && distinct <= Math.ceil(samples.length / 2))
+  if (
+    distinct >= 2 &&
+    distinct <= 12 &&
+    distinct <= Math.ceil(samples.length / 2)
+  )
     return "status";
 
   return "text";
@@ -159,10 +165,16 @@ function isFiniteNumber(v: string): boolean {
   return v.trim() !== "" && Number.isFinite(n);
 }
 
+// Explicit full year-month-day shapes only. `Date.parse` alone is far too
+// permissive ("May 2024", "2024", "3" all parse), so we first require a
+// recognised date shape, then confirm it actually parses to a real date.
+const DATE_SHAPE_RE =
+  /^(\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?|\d{4}\/\d{2}\/\d{2}|\d{2}\/\d{2}\/\d{4})$/;
+
 function isDateLike(v: string): boolean {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return true;
-  const d = Date.parse(v);
-  return !Number.isNaN(d);
+  const trimmed = v.trim();
+  if (!DATE_SHAPE_RE.test(trimmed)) return false;
+  return !Number.isNaN(Date.parse(trimmed));
 }
 
 function synthesizeOptions(samples: string[]): SynthOption[] {

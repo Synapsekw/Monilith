@@ -102,8 +102,36 @@ describe("cellToText", () => {
     );
   });
 
-  it("renders people as blank", () => {
+  it("renders people as blank when no resolver is provided", () => {
     expect(cellToText("people", { userIds: ["u1"] }, {})).toBe("");
+  });
+
+  it("renders resolved people names joined by comma", () => {
+    const resolve = (id: string) =>
+      ({ u1: "Ada Lovelace", u2: "Alan Turing" })[id] ?? null;
+    expect(cellToText("people", { userIds: ["u1", "u2"] }, {}, resolve)).toBe(
+      "Ada Lovelace, Alan Turing",
+    );
+  });
+
+  it("drops unresolvable people ids and keeps resolvable ones", () => {
+    const resolve = (id: string) => (id === "u1" ? "Ada Lovelace" : null);
+    expect(
+      cellToText("people", { userIds: ["u1", "u-missing"] }, {}, resolve),
+    ).toBe("Ada Lovelace");
+  });
+
+  it("renders people as blank when none resolve", () => {
+    const resolve = () => null;
+    expect(cellToText("people", { userIds: ["u1", "u2"] }, {}, resolve)).toBe(
+      "",
+    );
+  });
+
+  it("renders people as blank when userIds is missing/empty", () => {
+    const resolve = () => "Someone";
+    expect(cellToText("people", {}, {}, resolve)).toBe("");
+    expect(cellToText("people", { userIds: [] }, {}, resolve)).toBe("");
   });
 
   it("renders relation as blank", () => {

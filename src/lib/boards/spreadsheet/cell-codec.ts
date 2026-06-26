@@ -12,6 +12,12 @@ export function cellToText(
   kind: ColumnKind,
   value: unknown,
   settings: unknown,
+  /**
+   * Resolve a people-column user id to a display name. Returns null when the
+   * name can't be resolved (the id is then omitted from the output). When
+   * absent, people columns render blank — the v1 default.
+   */
+  resolvePeopleName?: (userId: string) => string | null,
 ): string {
   try {
     if (value == null || typeof value !== "object") return "";
@@ -77,8 +83,19 @@ export function cellToText(
         return labels.join(", ");
       }
 
+      case "people": {
+        // Resolve assignee display names when a resolver is supplied; otherwise
+        // blank (v1 default). Unresolvable ids are dropped; blank when none.
+        if (!resolvePeopleName) return "";
+        const ids = v.userIds;
+        if (!Array.isArray(ids) || ids.length === 0) return "";
+        const names = (ids as unknown[])
+          .map((id) => (typeof id === "string" ? resolvePeopleName(id) : null))
+          .filter((n): n is string => typeof n === "string" && n !== "");
+        return names.join(", ");
+      }
+
       // Export-structure-only kinds: always blank in v1
-      case "people":
       case "relation":
       case "mirror":
       case "files":
