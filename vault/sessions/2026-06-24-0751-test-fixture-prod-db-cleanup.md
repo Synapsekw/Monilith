@@ -30,8 +30,8 @@ No user-facing behavior to test — DB cleanup verified by direct queries (0 `@e
 ## Open threads
 
 - **Tests still write to production.** Until fixed, any test that throws pre-teardown will leak new `@example.com` rows. Safe re-cleanup: delete `@example.com` users + test-only orgs after confirming `shared_orgs_with_real_member = 0`.
-- **Durable fix (not started):** point Vitest at a local Supabase (`supabase start` → `127.0.0.1:54321`) via `.env.test` / Docker DB so fixtures can never reach prod.
+- **Durable fix (not started):** point Vitest at a dedicated isolated test database (a separate test-only Supabase project) via `.env.test` so fixtures can never reach prod.
 
 ## Next session entry point
 
-Set up the local Docker Supabase + `.env.test` so the integration suite targets `127.0.0.1:54321` instead of the remote project — see "Open threads" for the bleed details.
+Set up a dedicated isolated test database + `.env.test` so the integration suite targets a test-only project instead of the remote prod project — see "Open threads" for the bleed details.

@@ -4,7 +4,7 @@
 # buckets/objects/blobs via the Storage API (and storage internals like storage.migrations are
 # owned by supabase_storage_admin, so they can't be truncated/loaded by the postgres role anyway).
 #
-# Uses pg_dump directly: the supabase CLI's `db dump` shells out to Docker, which is not assumed
+# Uses pg_dump directly: the supabase CLI's `db dump` needs extra local tooling that is not assumed
 # present. If pg_dump is not on PATH, set PG_BIN in .env.prod.local to your PostgreSQL bin dir.
 #
 # Output: scripts/sync-prod/.dumps/dev-data-<timestamp>.sql  (path printed on stdout)

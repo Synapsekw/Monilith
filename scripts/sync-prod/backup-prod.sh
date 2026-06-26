@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Safety snapshot of PROD's current data BEFORE any destructive restore. Same scope as the dev dump
 # (public + the 5 auth user tables, data-only) so it can be loaded back via restore-prod.sh if a
-# sync goes wrong. Uses pg_dump directly (no Docker). Set PG_BIN in .env.prod.local if pg_dump is
+# sync goes wrong. Uses pg_dump directly (no extra local tooling). Set PG_BIN in .env.prod.local if pg_dump is
 # not on PATH.
 # Output: scripts/sync-prod/.dumps/prod-backup-<timestamp>.sql  (path printed on stdout)
 set -euo pipefail
