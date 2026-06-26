@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-06-26",
+    kind: "new",
+    title: "See who created each item",
+    description:
+      "Every item and subitem now shows who created it and when, in two read-only columns at the end of the board (and in the item panel) — a permanent record that can't be edited.",
+  },
+  {
     date: "2026-06-24",
     kind: "new",
     title: "Generate dashboards with AI",
