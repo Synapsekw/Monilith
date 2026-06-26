@@ -13,6 +13,36 @@ import type { Database } from "@/types/database.types";
 // See vault/decisions/2026-06-19-gotcha-23-activity-trigger-blocks-cascade-delete.md
 
 const EXAMPLE_SUFFIX = "@example.com";
+
+// global-teardown is the cross-run leak-sweeper; per-suite afterAll already
+// removes same-run data. Because every worktree's `pnpm test` shares ONE cloud
+// dev project, an unscoped suffix purge cascade-deletes a *concurrent* run's
+// in-flight org → board → group (the P0002 "group not found" flake). Only sweep
+// users old enough that no live run could still own them; true orphans from a
+// crashed run age past this and get collected by the next run.
+export const PURGE_MIN_AGE_MS = 30 * 60 * 1000; // 30 min
+
+export type PurgeCandidate = {
+  id: string;
+  email: string | null | undefined;
+  created_at: string;
+};
+
+export function selectPurgeableUserIds(
+  users: PurgeCandidate[],
+  nowMs: number,
+  minAgeMs: number,
+): string[] {
+  const ids: string[] = [];
+  for (const u of users) {
+    if (!u.email?.toLowerCase().endsWith(EXAMPLE_SUFFIX)) continue;
+    const createdMs = Date.parse(u.created_at);
+    if (Number.isNaN(createdMs)) continue; // unknown age → never purge
+    if (nowMs - createdMs >= minAgeMs) ids.push(u.id);
+  }
+  return ids;
+}
+
 const LIST_PER_PAGE = 1000;
 const MAX_PAGES = 50;
 const BATCH = 100;
@@ -42,8 +72,8 @@ export async function teardown(): Promise<void> {
     },
   );
 
-  // Collect every test user id, paginating until a short page.
-  const userIds: string[] = [];
+  // Collect every test user (id + email + created_at), paginating until a short page.
+  const candidates: PurgeCandidate[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, error } = await admin.auth.admin.listUsers({
       page,
@@ -57,10 +87,17 @@ export async function teardown(): Promise<void> {
     }
     const users = data?.users ?? [];
     for (const u of users) {
-      if (u.email?.toLowerCase().endsWith(EXAMPLE_SUFFIX)) userIds.push(u.id);
+      candidates.push({ id: u.id, email: u.email, created_at: u.created_at });
     }
     if (users.length < LIST_PER_PAGE) break;
   }
+
+  // Age-gate: only purge users old enough that no concurrent run still owns them.
+  const userIds = selectPurgeableUserIds(
+    candidates,
+    Date.now(),
+    PURGE_MIN_AGE_MS,
+  );
 
   if (userIds.length === 0) return;
 
