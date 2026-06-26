@@ -2,9 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, Rocket, Megaphone, BarChart3, Plus } from "lucide-react";
+import {
+  LayoutGrid,
+  Rocket,
+  Megaphone,
+  BarChart3,
+  Plus,
+  Upload,
+} from "lucide-react";
 import { createBoardFromTemplate } from "@/lib/boards/actions";
 import { BOARD_TEMPLATES } from "@/lib/boards/templates";
+import { ImportDialog } from "@/components/boards/import/ImportDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +55,7 @@ export function NewBoardDialog({
   const [name, setName] = useState("Blank board");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
 
   function pick(id: string, defaultName: string) {
     setTemplateId(id);
@@ -73,85 +82,110 @@ export function NewBoardDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {collapsed ? null : (
-        <DialogTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="New board"
-            className="size-6"
-          >
-            <Plus className="size-4" />
-          </Button>
-        </DialogTrigger>
-      )}
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>New board</DialogTitle>
-          <DialogDescription>
-            Pick a template to start from, then name your board.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid grid-cols-2 gap-2">
-          {BOARD_TEMPLATES.map((t) => {
-            const Icon = ICONS[t.icon] ?? LayoutGrid;
-            const selected = t.id === templateId;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => pick(t.id, t.name)}
-                className={cn(
-                  "flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-colors",
-                  selected
-                    ? "border-primary bg-accent"
-                    : "border-border hover:bg-accent/50",
-                )}
-              >
-                <span className="flex items-center gap-2 text-sm font-medium">
-                  <Icon className="size-4" />
-                  {t.name}
-                </span>
-                <span className="text-muted-foreground text-xs">
-                  {t.description}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="board-name">Board name</Label>
-            <Input
-              id="board-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Sprint backlog"
-            />
-          </div>
-          {error ? (
-            <p role="alert" className="text-destructive text-xs">
-              {error}
-            </p>
-          ) : null}
-          <DialogFooter>
-            <Button type="submit" disabled={isPending || !name.trim()}>
-              {isPending ? "Creating…" : "Create board"}
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        {collapsed ? null : (
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="New board"
+              className="size-6"
+            >
+              <Plus className="size-4" />
             </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </DialogTrigger>
+        )}
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>New board</DialogTitle>
+            <DialogDescription>
+              Pick a template to start from, then name your board.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-2">
+            {BOARD_TEMPLATES.map((t) => {
+              const Icon = ICONS[t.icon] ?? LayoutGrid;
+              const selected = t.id === templateId;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => pick(t.id, t.name)}
+                  className={cn(
+                    "flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-colors",
+                    selected
+                      ? "border-primary bg-accent"
+                      : "border-border hover:bg-accent/50",
+                  )}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Icon className="size-4" />
+                    {t.name}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {t.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {workspaceId ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full gap-2"
+              onClick={() => {
+                setOpen(false);
+                setImportOpen(true);
+              }}
+            >
+              <Upload className="size-4" />
+              Import from file
+            </Button>
+          ) : null}
+
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="board-name">Board name</Label>
+              <Input
+                id="board-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Sprint backlog"
+              />
+            </div>
+            {error ? (
+              <p role="alert" className="text-destructive text-xs">
+                {error}
+              </p>
+            ) : null}
+            <DialogFooter>
+              <Button type="submit" disabled={isPending || !name.trim()}>
+                {isPending ? "Creating…" : "Create board"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {workspaceId ? (
+        <ImportDialog
+          workspaceId={workspaceId}
+          open={importOpen}
+          onOpenChange={setImportOpen}
+        />
+      ) : null}
+    </>
   );
 }
