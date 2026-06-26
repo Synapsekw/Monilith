@@ -15,7 +15,10 @@ export async function parseWorkbook(
   if (isCsv) {
     await wb.csv.read(Readable.from(buf.toString("utf8")));
   } else {
-    await wb.xlsx.load(buf);
+    // exceljs types xlsx.load's param as the non-generic `Buffer`, while
+    // @types/node now models `Buffer` as `Buffer<ArrayBufferLike>`. Same runtime
+    // type — cast to exceljs's own expected param type to bridge the mismatch.
+    await wb.xlsx.load(buf as unknown as Parameters<typeof wb.xlsx.load>[0]);
   }
 
   const worksheet = wb.worksheets[0];
