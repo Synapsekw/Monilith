@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KanbanBoard, onCardDropped } from "@/components/boards/KanbanBoard";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+
+vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/dnd/sensors")>();
+  return { useTouchAwareSensors: vi.fn(actual.useTouchAwareSensors) };
+});
 
 const setCell = vi.fn();
 const addItem = vi.fn();
@@ -148,6 +154,11 @@ beforeEach(() => {
 });
 
 describe("KanbanBoard", () => {
+  it("wires up the shared touch-aware sensors", () => {
+    renderKanban();
+    expect(useTouchAwareSensors).toHaveBeenCalled();
+  });
+
   it("renders a No-status column + one column per option", () => {
     renderKanban();
     expect(screen.getByText("No status")).toBeInTheDocument();

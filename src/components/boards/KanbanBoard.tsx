@@ -7,11 +7,9 @@ import {
   DndContext,
   useDraggable,
   useDroppable,
-  PointerSensor,
-  useSensor,
-  useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { Plus, Calendar, Users, Hash } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -141,11 +139,7 @@ export function KanbanBoard({
   } | null;
   const groupColumn = resolveKanbanGroupColumn(cache.columns, config);
 
-  // Pointer sensor with a small activation distance so click-to-rename-like
-  // taps don't accidentally start a drag.
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useTouchAwareSensors();
 
   // Status columns available to group by (drives the picker).
   const statusColumns = cache.columns.filter((c) => c.kind === "status");
