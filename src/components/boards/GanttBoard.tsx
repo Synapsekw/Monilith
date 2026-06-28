@@ -196,6 +196,7 @@ export function GanttBoard({
   const colorColumn = colorColumns.find((c) => c.id === colorColId) ?? null;
 
   // dnd-kit sensors
+  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
