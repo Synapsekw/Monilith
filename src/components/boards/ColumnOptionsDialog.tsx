@@ -120,6 +120,7 @@ function OptionsEditor({
   // The freshly-added option whose label input should grab focus.
   const [focusId, setFocusId] = useState<string | null>(null);
 
+  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );

@@ -4,6 +4,8 @@ import * as React from "react"
 import { Tooltip as TooltipPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer"
+import { resolveTooltipOpen } from "./tooltip-open"
 
 function TooltipProvider({
   delayDuration = 0,
@@ -19,9 +21,17 @@ function TooltipProvider({
 }
 
 function Tooltip({
+  open,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+  const coarse = useCoarsePointer()
+  return (
+    <TooltipPrimitive.Root
+      data-slot="tooltip"
+      open={resolveTooltipOpen(coarse, open)}
+      {...props}
+    />
+  )
 }
 
 function TooltipTrigger({

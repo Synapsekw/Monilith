@@ -125,6 +125,7 @@ export function BoardsNav({
     setOrdered(boards);
   }
 
+  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
