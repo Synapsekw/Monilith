@@ -599,6 +599,7 @@ export function BoardTable({
     setRelationLinks: mutations.setRelationLinks,
   };
 
+  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -1349,6 +1350,7 @@ function GroupSection({
     isDragging,
   } = useSortable({ id: group.id });
 
+  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
   const itemSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -1819,6 +1821,7 @@ function SubitemBlock({
   renamingItemId: string | null;
   onRenameSettled: () => void;
 }) {
+  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
   const subitemSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );

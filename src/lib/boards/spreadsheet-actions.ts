@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getBoardPayload } from "@/lib/boards/queries";
+import { getBoardPayload, type BoardPayload } from "@/lib/boards/queries";
 import { buildExportWorkbook } from "@/lib/boards/spreadsheet/export-workbook";
 import { parseWorkbook } from "@/lib/boards/spreadsheet/parse-workbook";
 import { detectColumns } from "@/lib/boards/spreadsheet/detect";
@@ -78,9 +78,16 @@ export async function exportBoard(input: {
   const payload = await getBoardPayload(parsed.data.boardId);
   if (!payload) return fail("Board not found.");
 
+  // Resolve people-column assignee display names so they export as names
+  // rather than blank. Collect every user id referenced by a people cell,
+  // then read their profiles in one RLS-scoped query. Unresolved ids are
+  // dropped downstream; boards with no people cells skip the query entirely.
+  const peopleNames = await resolvePeopleNames(payload);
+
   const { buffer, mime, ext } = await buildExportWorkbook(
     payload,
     parsed.data.format,
+    peopleNames,
   );
 
   const safeName = sanitizeFileName(payload.board.name);
@@ -88,6 +95,43 @@ export async function exportBoard(input: {
   const base64 = buffer.toString("base64");
 
   return { ok: true, data: { fileName, base64, mime } };
+}
+
+/**
+ * Build a `userId → display name` map for the people cells in a board payload.
+ * Returns an empty map (and skips the DB read) when the board has no people
+ * columns or no assignees. RLS-scoped read of `profiles(id, full_name)`; ids
+ * whose profile is missing or has no name are simply absent from the map and
+ * get dropped at render time.
+ */
+async function resolvePeopleNames(
+  payload: BoardPayload,
+): Promise<Map<string, string>> {
+  const peopleColumnIds = new Set(
+    payload.columns.filter((c) => c.kind === "people").map((c) => c.id),
+  );
+  if (peopleColumnIds.size === 0) return new Map();
+
+  const userIds = new Set<string>();
+  for (const cv of payload.cellValues) {
+    if (!peopleColumnIds.has(cv.column_id)) continue;
+    const ids = (cv.value as { userIds?: unknown } | null)?.userIds;
+    if (!Array.isArray(ids)) continue;
+    for (const id of ids) if (typeof id === "string") userIds.add(id);
+  }
+  if (userIds.size === 0) return new Map();
+
+  const supabase = await createClient();
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", [...userIds]);
+
+  const map = new Map<string, string>();
+  for (const p of profiles ?? []) {
+    if (p.full_name) map.set(p.id, p.full_name);
+  }
+  return map;
 }
 
 // ─── previewImport ────────────────────────────────────────────────────────────

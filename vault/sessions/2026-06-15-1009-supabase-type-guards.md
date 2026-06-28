@@ -27,7 +27,7 @@ related: ["[[2026-06-15-gotcha-03-gen-types-schema-public-prettier]]"]
 
 Pre-empt the `any`-creep that follows stale generated Supabase types (flagged from past projects).
 The repo has zero `any` today; the lint pin keeps the symptom out and `pnpm db:types` removes the
-friction that causes drift. A CI drift check was scoped and rejected: Docker-local is unavailable,
+friction that causes drift. A CI drift check was scoped and rejected: no local DB stack is available,
 and Supabase Branching is overkill for a solo developer.
 
 ## Open threads

@@ -6,6 +6,7 @@ import {
   workspacesTag,
   platformAdminTag,
   orgAdminTag,
+  widgetAggregationTag,
 } from "./tags";
 
 describe("cache tag builders", () => {
@@ -21,5 +22,19 @@ describe("cache tag builders", () => {
   it("are distinct across identities (no collisions)", () => {
     expect(boardsTag("u1")).not.toBe(boardsTag("u2"));
     expect(orgAdminTag("u1", "o1")).not.toBe(orgAdminTag("u1", "o2"));
+  });
+});
+
+describe("widgetAggregationTag", () => {
+  it("scopes by org AND widget id (cross-tenant isolation)", () => {
+    expect(widgetAggregationTag("org-A", "w1")).toBe(
+      "widget-agg:org:org-A:widget:w1",
+    );
+  });
+
+  it("differs across orgs for the same widget id", () => {
+    expect(widgetAggregationTag("org-A", "w1")).not.toBe(
+      widgetAggregationTag("org-B", "w1"),
+    );
   });
 });

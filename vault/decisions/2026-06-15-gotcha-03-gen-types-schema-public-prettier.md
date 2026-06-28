@@ -37,7 +37,7 @@ With both applied, CLI output matched the committed file byte-for-byte (0-line d
 
 - Positive: `pnpm db:types` is a safe one-liner; no churn, regen-after-migration has no excuse.
 - Negative: requires the Supabase CLI to be linked (`supabase link`) locally.
-- Open follow-ups: no CI drift check (Docker-local unavailable; Branching overkill solo). A husky
+- Open follow-ups: no CI drift check (no local DB stack available; Branching overkill solo). A husky
   `pre-push` or secret-gated `--linked` CI job remain options if drift ever slips through.
 
 ## Related
