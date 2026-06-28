@@ -17,7 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Placeholder public env so env validation + build pass without real secrets.
-      # The RLS integration test auto-skips when SUPABASE_SERVICE_ROLE_KEY is absent.
+      # CI runs the unit project only (`pnpm test:unit`); the live-DB integration
+      # suites are not exercised here (they're gated locally by finish-task.sh),
+      # so loading them here only added global-setup network overhead.
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
     steps:
@@ -42,7 +44,7 @@ jobs:
         run: pnpm lint
 
       - name: Unit tests
-        run: pnpm test
+        run: pnpm test:unit
 
       - name: Build
         run: pnpm build

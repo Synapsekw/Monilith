@@ -16,6 +16,7 @@
     "db:types": "supabase gen types typescript --linked --schema public | prettier --parser typescript > src/types/database.types.ts",
     "changelog:gen": "tsx scripts/generate-changelog.ts && prettier --write src/lib/changelog/generated.ts",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit",
     "test:watch": "vitest",
     "lhci": "lhci autorun",
     "e2e": "playwright test",
