@@ -197,3 +197,69 @@ describe("TimeTrackingCell date pickers (Calendar primitive)", () => {
     expect(onEdit).toHaveBeenCalledWith("edit-entry", "2026-06-15", 5400);
   });
 });
+
+// ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────────
+// Class-presence assertions for the coarse-pointer (finger) sizing/reveal.
+describe("TimeTrackingCell — coarse-pointer tap targets", () => {
+  it("gives the start timer quick-action a ≥44px coarse target", () => {
+    render(<TimeTrackingCell {...base} />);
+    expect(
+      screen.getByRole("button", { name: /start timer/i }).className,
+    ).toContain("pointer-coarse:size-11");
+  });
+
+  it("makes the per-entry edit/delete actions always-visible + ≥44px on coarse", async () => {
+    render(
+      <TimeTrackingCell
+        {...base}
+        entries={[
+          {
+            id: "e1",
+            user_id: "u1",
+            started_at: "2026-06-20T08:00:00Z",
+            ended_at: "2026-06-20T09:00:00Z",
+            duration_secs: 3600,
+          } as never,
+        ]}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /open time tracking/i }),
+    );
+    const edit = screen.getByRole("button", { name: /edit entry/i });
+    const del = screen.getByRole("button", { name: /delete entry/i });
+    for (const el of [edit, del]) {
+      expect(el.className).toContain("pointer-coarse:size-11");
+    }
+    // The wrapping reveal span is hover-gated for mouse but always visible on
+    // coarse pointers.
+    expect(edit.parentElement?.className).toContain(
+      "pointer-coarse:opacity-100",
+    );
+    expect(edit.parentElement?.className).toContain("group-hover:opacity-100");
+  });
+
+  it("gives the edit-date picker button a ≥44px coarse height", async () => {
+    render(
+      <TimeTrackingCell
+        {...base}
+        entries={[
+          {
+            id: "e1",
+            user_id: "u1",
+            started_at: "2026-06-20T08:00:00Z",
+            ended_at: "2026-06-20T09:30:00Z",
+            duration_secs: 5400,
+          } as never,
+        ]}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /open time tracking/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit entry/i }));
+    expect(
+      screen.getByRole("button", { name: /edit date/i }).className,
+    ).toContain("pointer-coarse:h-11");
+  });
+});

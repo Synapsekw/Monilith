@@ -101,7 +101,7 @@ function ClearButton({ onClear }: { onClear: () => void }) {
     <button
       type="button"
       onClick={onClear}
-      className="text-muted-foreground hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="text-muted-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
     >
       Clear
     </button>
@@ -207,7 +207,7 @@ export function StatusEditor({
           role="option"
           aria-selected={selected === o.id}
           onClick={() => onCommit({ optionId: o.id })}
-          className="focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+          className="focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11"
           style={{ backgroundColor: o.color, color: pillTextColor(o.color) }}
         >
           {o.label}
@@ -376,14 +376,18 @@ export function CheckboxEditor({
   const checked = value?.checked ?? false;
   return (
     <div className="flex h-8 items-center px-1">
-      <input
-        type="checkbox"
-        aria-label="Toggle"
-        checked={checked}
-        autoFocus
-        onChange={() => onCommit({ checked: !checked })}
-        className="size-4"
-      />
+      {/* The native checkbox stays visually `size-4`; on a coarse pointer the
+          surrounding label is a ≥44px tap target so a finger can toggle it. */}
+      <label className="grid cursor-pointer place-items-center pointer-coarse:size-11">
+        <input
+          type="checkbox"
+          aria-label="Toggle"
+          checked={checked}
+          autoFocus
+          onChange={() => onCommit({ checked: !checked })}
+          className="size-4"
+        />
+      </label>
     </div>
   );
 }
@@ -397,7 +401,7 @@ export function RatingEditor({
   const current = value?.rating ?? 0;
   return (
     <PopoverSurface label="Set rating" onCancel={onCancel}>
-      <div className="flex items-center gap-1 p-1">
+      <div className="flex items-center gap-1 p-1 pointer-coarse:gap-2">
         {[1, 2, 3, 4, 5].map((i) => (
           <button
             key={i}
@@ -406,6 +410,7 @@ export function RatingEditor({
             onClick={() =>
               i === current ? (onClear ?? onCancel)() : onCommit({ rating: i })
             }
+            className="grid place-items-center pointer-coarse:size-11"
           >
             <Star
               className={`size-5 ${i <= current ? "fill-current text-amber-400" : "text-muted-foreground/40"}`}

@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
@@ -24,6 +18,7 @@ import {
   renameOption,
   reorderOptions,
 } from "@/lib/boards/option-edit";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { OPTION_COLORS } from "@/lib/boards/option-colors";
 import { pillTextColor } from "@/lib/boards/contrast";
 import type { ColumnOption } from "@/lib/validations/boards";
@@ -120,10 +115,7 @@ function OptionsEditor({
   // The freshly-added option whose label input should grab focus.
   const [focusId, setFocusId] = useState<string | null>(null);
 
-  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useTouchAwareSensors();
 
   function handleDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -290,7 +282,7 @@ function OptionRow({
         aria-label={`Reorder ${option.label}`}
         {...attributes}
         {...listeners}
-        className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md active:cursor-grabbing"
+        className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md active:cursor-grabbing pointer-coarse:size-11"
       >
         <GripVertical className="size-4" />
       </button>
@@ -301,7 +293,7 @@ function OptionRow({
             type="button"
             aria-label={`Color for ${option.label}`}
             style={{ backgroundColor: option.color }}
-            className="focus-visible:ring-ring size-6 shrink-0 rounded-md focus-visible:ring-2 focus-visible:outline-none"
+            className="focus-visible:ring-ring size-6 shrink-0 rounded-md focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11"
           />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-2">
@@ -317,7 +309,7 @@ function OptionRow({
                 }}
                 style={{ backgroundColor: c }}
                 className={cn(
-                  "focus-visible:ring-ring size-6 rounded-md focus-visible:ring-2 focus-visible:outline-none",
+                  "focus-visible:ring-ring size-6 rounded-md focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11",
                   option.color.toLowerCase() === c.toLowerCase() &&
                     "ring-foreground ring-offset-background ring-2 ring-offset-1",
                 )}
@@ -343,7 +335,7 @@ function OptionRow({
         type="button"
         aria-label={`remove ${option.label}`}
         onClick={onRemove}
-        className="text-muted-foreground hover:text-destructive grid size-7 shrink-0 place-items-center rounded-md"
+        className="text-muted-foreground hover:text-destructive grid size-7 shrink-0 place-items-center rounded-md pointer-coarse:size-11"
       >
         <X className="size-4" />
       </button>
