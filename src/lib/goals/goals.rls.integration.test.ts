@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { config } from "dotenv";
+import {
+  integrationTargetReady,
+  loadIntegrationEnv,
+} from "@/test/integration-env";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
-config({ path: ".env.local", override: true });
+loadIntegrationEnv();
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -38,7 +41,7 @@ function createGoalArgs(over: {
   };
 }
 
-describe.skipIf(!SERVICE_ROLE_KEY)("RLS + RPCs: goals", () => {
+describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   let admin: SupabaseClient<Database>;
   const createdUserIds: string[] = [];
   let aAnon: SupabaseClient<Database>; // org A creator/owner
@@ -48,11 +51,12 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + RPCs: goals", () => {
 
   async function provisionUser(label: string) {
     const email = `goals-${label}-${randomUUID()}@example.com`;
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      password: PASSWORD,
-      email_confirm: true,
-    });
+    const { data: created, error: createErr } =
+      await admin.auth.admin.createUser({
+        email,
+        password: PASSWORD,
+        email_confirm: true,
+      });
     expect(createErr, `createUser(${label})`).toBeNull();
     const id = created.user!.id;
     createdUserIds.push(id);
@@ -109,7 +113,10 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + RPCs: goals", () => {
     const goal = data as Database["public"]["Tables"]["goals"]["Row"];
     expect(goal.org_id).toBe(orgA);
 
-    const { data: read } = await aAnon.from("goals").select("id").eq("id", goal.id);
+    const { data: read } = await aAnon
+      .from("goals")
+      .select("id")
+      .eq("id", goal.id);
     expect((read ?? []).length).toBe(1);
   });
 
@@ -121,16 +128,26 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + RPCs: goals", () => {
     const parentId = (parent as { id: string }).id;
     const { data: child } = await aAnon.rpc(
       "create_goal",
-      createGoalArgs({ name: "Child", mode: "manual_percent", parent: parentId }),
+      createGoalArgs({
+        name: "Child",
+        mode: "manual_percent",
+        parent: parentId,
+      }),
     );
     const childId = (child as { id: string }).id;
 
     // Self-parent.
-    const selfRes = await aAnon.from("goals").update({ parent_goal_id: parentId }).eq("id", parentId);
+    const selfRes = await aAnon
+      .from("goals")
+      .update({ parent_goal_id: parentId })
+      .eq("id", parentId);
     expect(selfRes.error).not.toBeNull();
 
     // Cycle: make the parent a child of its own child.
-    const cycleRes = await aAnon.from("goals").update({ parent_goal_id: childId }).eq("id", parentId);
+    const cycleRes = await aAnon
+      .from("goals")
+      .update({ parent_goal_id: childId })
+      .eq("id", parentId);
     expect(cycleRes.error).not.toBeNull();
   });
 
@@ -141,12 +158,19 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + RPCs: goals", () => {
     );
     const goalId = (g as { id: string }).id;
 
-    const { data: bRead } = await bAnon.from("goals").select("id").eq("id", goalId);
+    const { data: bRead } = await bAnon
+      .from("goals")
+      .select("id")
+      .eq("id", goalId);
     expect((bRead ?? []).length).toBe(0);
 
     // RLS update policy (can_edit_goal) hides the row from B → 0 rows changed.
     await bAnon.from("goals").update({ name: "hacked" }).eq("id", goalId);
-    const { data: after } = await aAnon.from("goals").select("name").eq("id", goalId).single();
+    const { data: after } = await aAnon
+      .from("goals")
+      .select("name")
+      .eq("id", goalId)
+      .single();
     expect((after as { name: string }).name).toBe("A private");
   });
 
@@ -159,7 +183,9 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + RPCs: goals", () => {
 
     const { error } = await aAnon.rpc("set_goal_links", {
       p_goal_id: goalId,
-      p_links: [{ board_id: bBoardId, done_column_id: null, done_option_ids: [] }] as unknown as Database["public"]["Functions"]["set_goal_links"]["Args"]["p_links"],
+      p_links: [
+        { board_id: bBoardId, done_column_id: null, done_option_ids: [] },
+      ] as unknown as Database["public"]["Functions"]["set_goal_links"]["Args"]["p_links"],
     });
     expect(error, "linking an unreadable board must fail").not.toBeNull();
   });

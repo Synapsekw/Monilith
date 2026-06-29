@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { selectPurgeableUserIds } from "@/test/global-teardown";
+import { isSafeTestTarget } from "@/test/integration-env";
 
 const NOW = 1_700_000_000_000; // fixed epoch ms for deterministic ages
 const MIN_AGE = 30 * 60 * 1000; // 30 min
@@ -54,5 +55,30 @@ describe("selectPurgeableUserIds", () => {
 
   it("returns an empty array for empty input", () => {
     expect(selectPurgeableUserIds([], NOW, MIN_AGE)).toEqual([]);
+  });
+});
+
+describe("teardown safety guard wiring", () => {
+  const savedMarker = process.env.PULSE_TEST_DB;
+  afterEach(() => {
+    if (savedMarker === undefined) delete process.env.PULSE_TEST_DB;
+    else process.env.PULSE_TEST_DB = savedMarker;
+  });
+
+  it("refuses the DEV/PROD-shaped targets even with the marker", () => {
+    process.env.PULSE_TEST_DB = "1";
+    // PROD ref
+    expect(isSafeTestTarget("https://jzsyqhxynswolgijkktn.supabase.co")).toBe(
+      false,
+    );
+    // DEV ref
+    expect(isSafeTestTarget("https://hjqcahbbbdaknbbnfnvl.supabase.co")).toBe(
+      false,
+    );
+  });
+
+  it("refuses any target when the marker is unset", () => {
+    delete process.env.PULSE_TEST_DB;
+    expect(isSafeTestTarget("https://pulse-test.supabase.co")).toBe(false);
   });
 });
