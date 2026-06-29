@@ -107,7 +107,7 @@ export function TimeTrackingCell(props: TimeTrackingCellProps) {
               onStop(running.id);
             }}
             className={cn(
-              "text-muted-foreground hover:text-foreground flex items-center rounded p-0.5 transition-colors",
+              "text-muted-foreground hover:text-foreground flex items-center justify-center rounded p-0.5 transition-colors pointer-coarse:size-11",
               "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
             )}
           >
@@ -122,7 +122,7 @@ export function TimeTrackingCell(props: TimeTrackingCellProps) {
               onStart();
             }}
             className={cn(
-              "text-muted-foreground hover:text-foreground flex items-center rounded p-0.5 transition-colors",
+              "text-muted-foreground hover:text-foreground flex items-center justify-center rounded p-0.5 transition-colors pointer-coarse:size-11",
               "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
             )}
           >
@@ -365,12 +365,12 @@ function TimeTrackingPopover({
                   {e.user_id === currentUserId ? "You" : e.user_id.slice(0, 8)}
                 </span>
                 {isMine && (
-                  <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
                     <button
                       type="button"
                       aria-label="Edit entry"
                       onClick={() => startEdit(e)}
-                      className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded p-0.5 focus-visible:ring-2 focus-visible:outline-none"
+                      className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid place-items-center rounded p-0.5 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11"
                     >
                       <Pencil className="size-3" />
                     </button>
@@ -378,7 +378,7 @@ function TimeTrackingPopover({
                       type="button"
                       aria-label="Delete entry"
                       onClick={() => onDelete(e.id)}
-                      className="text-muted-foreground hover:text-destructive focus-visible:ring-ring rounded p-0.5 focus-visible:ring-2 focus-visible:outline-none"
+                      className="text-muted-foreground hover:text-destructive focus-visible:ring-ring grid place-items-center rounded p-0.5 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11"
                     >
                       <Trash2 className="size-3" />
                     </button>
@@ -462,7 +462,7 @@ function DatePickerButton({
           type="button"
           aria-label={ariaLabel}
           className={cn(
-            "border-input flex h-6 w-28 items-center gap-1 rounded-md border px-1.5 text-xs",
+            "border-input flex h-6 w-28 items-center gap-1 rounded-md border px-1.5 text-xs pointer-coarse:h-11",
             "hover:bg-accent focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
           )}
         >
