@@ -40,14 +40,14 @@ export function CalendarControls({
           type="button"
           aria-label="Previous period"
           onClick={onPrev}
-          className="text-muted-foreground hover:bg-accent flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+          className="text-muted-foreground hover:bg-accent flex h-7 w-7 items-center justify-center rounded-md transition-colors pointer-coarse:size-11"
         >
           <ChevronLeft className="size-4" aria-hidden />
         </button>
         <button
           type="button"
           onClick={onToday}
-          className="text-muted-foreground hover:bg-accent rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+          className="text-muted-foreground hover:bg-accent rounded-md border px-2.5 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11"
         >
           Today
         </button>
@@ -55,7 +55,7 @@ export function CalendarControls({
           type="button"
           aria-label="Next period"
           onClick={onNext}
-          className="text-muted-foreground hover:bg-accent flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+          className="text-muted-foreground hover:bg-accent flex h-7 w-7 items-center justify-center rounded-md transition-colors pointer-coarse:size-11"
         >
           <ChevronRight className="size-4" aria-hidden />
         </button>
@@ -77,7 +77,7 @@ export function CalendarControls({
               aria-selected={mode === m.id}
               onClick={() => onModeChange(m.id)}
               className={cn(
-                "rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors",
+                "rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11",
                 mode === m.id
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground",
