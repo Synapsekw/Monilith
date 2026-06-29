@@ -28,6 +28,23 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
 }));
 
+// Spy on the shared touch-aware sensor hook (still delegating to the real
+// implementation so dnd-kit gets valid sensors). Lets us assert the calendar
+// event-drag DndContext consumes it. See the TOUCH Batch-2 calendar spec §5/§7.
+const touchSensorsSpy = vi.fn();
+vi.mock("@/lib/dnd/sensors", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/dnd/sensors")>(
+      "@/lib/dnd/sensors",
+    );
+  return {
+    useTouchAwareSensors: () => {
+      touchSensorsSpy();
+      return actual.useTouchAwareSensors();
+    },
+  };
+});
+
 // 2026-06-16 is "today" per system-reminder. Our dated item falls in June 2026.
 const DATE_COL_ID = "d1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1";
 const VIEW_ID = "vvvvvvvv-vvvv-4vvv-8vvv-vvvvvvvvvvvv";
@@ -95,6 +112,15 @@ beforeEach(() => {
   addItem.mockReset();
   push.mockReset();
   refresh.mockReset();
+  touchSensorsSpy.mockReset();
+});
+
+describe("CalendarBoard touch event-drag sensors", () => {
+  it("consumes the shared touch-aware sensors for the calendar DndContext", () => {
+    // Default render is month mode, which mounts the drag DndContext.
+    renderCalendar();
+    expect(touchSensorsSpy).toHaveBeenCalled();
+  });
 });
 
 describe("CalendarBoard", () => {

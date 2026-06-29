@@ -2,13 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardCache } from "@/lib/boards/cache";
@@ -21,6 +15,7 @@ import {
   addDaysISO,
 } from "@/lib/boards/calendar";
 import { resolveDateColumn, itemDateRange } from "@/lib/boards/dates";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
@@ -134,10 +129,7 @@ export function CalendarBoard({
     [cache.cellValues],
   );
 
-  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useTouchAwareSensors();
 
   if (!dateColumn) {
     return (

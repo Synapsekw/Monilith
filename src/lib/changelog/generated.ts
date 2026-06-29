@@ -6,6 +6,20 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-06-29",
     kind: "improved",
+    title: "Calendar touch targets",
+    description:
+      "Calendar navigation buttons are comfortably tappable on iPad.",
+  },
+  {
+    date: "2026-06-29",
+    kind: "improved",
+    title: "Calendar drag on touch",
+    description:
+      "Long-press an event to drag it to another day on iPad; a quick swipe scrolls.",
+  },
+  {
+    date: "2026-06-29",
+    kind: "improved",
     title: "Kanban touch targets",
     description: "Group-by and add-card controls are now finger-sized on iPad",
   },
