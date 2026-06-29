@@ -1,6 +1,8 @@
 "use client";
 
 import { Download, Eye, Trash2, Play, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import {
   canPreviewInline,
   fileKind,
@@ -59,33 +61,39 @@ export function AttachmentCard({
         )}
 
         {!uploading && (
-          <div className="bg-background/70 absolute inset-0 flex items-center justify-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <RevealOnHover className="bg-background/70 absolute inset-0 flex items-center justify-center gap-2">
             {canPreview && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={onPreview}
                 aria-label="Preview"
                 className="text-muted-foreground hover:text-foreground"
               >
                 <Eye className="size-4" />
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={onDownload}
               aria-label="Download"
               className="text-muted-foreground hover:text-foreground"
             >
               <Download className="size-4" />
-            </button>
+            </Button>
             {canDelete && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={onDelete}
                 aria-label="Delete"
                 className="text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="size-4" />
-              </button>
+              </Button>
             )}
-          </div>
+          </RevealOnHover>
         )}
       </div>
 
