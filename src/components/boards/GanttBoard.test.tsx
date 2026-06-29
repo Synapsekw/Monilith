@@ -2,11 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import {
   BoardPresenceProvider,
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
 import type { RosterOccupant } from "@/lib/boards/presence-types";
+
+vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/dnd/sensors")>();
+  return { useTouchAwareSensors: vi.fn(actual.useTouchAwareSensors) };
+});
 
 const setCell = vi.fn();
 const addItem = vi.fn();
@@ -386,5 +392,57 @@ describe("GanttBoard — two-column spans + color", () => {
       target: { value: STATUS_COL },
     });
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TOUCH Batch 2 — iPad touch ergonomics (coarse pointer)
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — touch ergonomics (Batch 2)", () => {
+  it("wires the bar-move DndContext to the shared touch-aware sensors", () => {
+    renderGantt();
+    expect(useTouchAwareSensors).toHaveBeenCalled();
+  });
+
+  it("gives the Week/Month zoom buttons a coarse-pointer touch target (>=44px)", () => {
+    renderGantt();
+    for (const label of ["week", "month"]) {
+      const btn = screen.getByRole("button", {
+        name: new RegExp(`^${label}$`, "i"),
+      });
+      expect(btn.className).toContain("pointer-coarse:min-h-11");
+    }
+  });
+
+  it("makes the per-row dependency menu always-visible and >=44px on coarse pointers", () => {
+    renderGantt();
+    // The per-row dependency menu trigger: "Options for <item name>" (distinct
+    // from the ViewSwitcher's "View options for …" header buttons).
+    const trigger = screen.getByRole("button", {
+      name: "Options for Item Alpha",
+    });
+    expect(trigger.className).toContain("pointer-coarse:opacity-100");
+    expect(trigger.className).toContain("pointer-coarse:size-11");
+  });
+
+  it("gives the bar resize handle a coarse hit area and touch-none", () => {
+    renderGantt();
+    const handle = screen.getAllByLabelText(/^resize /i)[0];
+    expect(handle.className).toContain("touch-none");
+    expect(handle.className).toContain("pointer-coarse:w-11");
+  });
+
+  it("gives the Start/End/Color-by selects a coarse-pointer touch target (>=44px)", () => {
+    renderGantt();
+    for (const label of [
+      "Start date column",
+      "End date column",
+      "Color by column",
+    ]) {
+      expect(screen.getByLabelText(label).className).toContain(
+        "pointer-coarse:min-h-11",
+      );
+    }
   });
 });
