@@ -4,6 +4,12 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-06-29",
+    kind: "improved",
+    title: "Kanban touch targets",
+    description: "Group-by and add-card controls are now finger-sized on iPad",
+  },
+  {
     date: "2026-06-26",
     kind: "new",
     title: "Import and export boards as spreadsheets",
