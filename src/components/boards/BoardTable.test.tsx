@@ -69,6 +69,24 @@ vi.mock("./BoardHeader", () => ({
   BoardHeader: () => <div data-testid="board-header" />,
 }));
 
+// Spy on the shared touch-aware sensor hook (still delegating to the real
+// implementation so dnd-kit gets valid sensors). Lets us assert the three
+// DndContexts (group / item / subitem reorder) each consume it. See the
+// TOUCH Batch-2 table spec §5.
+const touchSensorsSpy = vi.fn();
+vi.mock("@/lib/dnd/sensors", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/dnd/sensors")>(
+      "@/lib/dnd/sensors",
+    );
+  return {
+    useTouchAwareSensors: () => {
+      touchSensorsSpy();
+      return actual.useTouchAwareSensors();
+    },
+  };
+});
+
 function payloadFixture() {
   return {
     board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
@@ -107,6 +125,7 @@ beforeEach(() => {
   deleteItem.mockReset();
   reorderItem.mockReset();
   updateColumnSettings.mockReset();
+  touchSensorsSpy.mockReset();
 });
 
 describe("BoardTable add group", () => {
@@ -1160,5 +1179,61 @@ describe("BoardTable per-group column headers", () => {
     renderBoardWithColumns();
     fireEvent.click(screen.getByRole("button", { name: /Collapse Group 2/i }));
     expect(screen.getAllByText("Status")).toHaveLength(2);
+  });
+});
+
+// ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────────
+// jsdom can't simulate touch-drag physics, so we assert sensor *config* and
+// coarse-pointer *class presence* (the `(pointer: coarse)` media query only
+// resolves in a real browser), mirroring ui/button.touch.test.tsx.
+
+describe("BoardTable touch reorder sensors", () => {
+  it("consumes the shared touch-aware sensors for each DndContext (group + item + subitem)", () => {
+    // nestedPayload has a group, a top-level item, and two subitems → all three
+    // DndContexts mount, so the hook is called at least three times.
+    renderNested();
+    expect(touchSensorsSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("BoardTable touch targets (coarse pointer)", () => {
+  it("makes the group menu and group drag handle always-visible + 44px on coarse", () => {
+    renderBoard();
+    const groupMenu = screen.getByRole("button", {
+      name: "Group 1 group menu",
+    });
+    const groupHandle = screen.getByRole("button", { name: "Reorder Group 1" });
+    for (const el of [groupMenu, groupHandle]) {
+      expect(el.className).toContain("pointer-coarse:opacity-100");
+      expect(el.className).toContain("pointer-coarse:size-11");
+    }
+  });
+
+  it("makes item row controls (menu, drag handle, open-panel) always-visible + 44px on coarse", () => {
+    renderTwoItems();
+    const handle = screen.getByRole("button", { name: "Reorder Task One" });
+    const open = screen.getByRole("button", { name: "Open Task One" });
+    const menu = screen.getByRole("button", { name: "Task One menu" });
+    for (const el of [handle, open, menu]) {
+      expect(el.className).toContain("pointer-coarse:opacity-100");
+      expect(el.className).toContain("pointer-coarse:size-11");
+    }
+  });
+
+  it("makes the add-subitem button always-visible + 44px on coarse", () => {
+    renderChildless();
+    const addBtn = screen.getByRole("button", {
+      name: "Add subitem to Task One",
+    });
+    expect(addBtn.className).toContain("pointer-coarse:opacity-100");
+    expect(addBtn.className).toContain("pointer-coarse:size-11");
+  });
+
+  it("makes the subitem drag handle always-visible + 44px on coarse", () => {
+    renderNested();
+    fireEvent.click(screen.getByRole("button", { name: /Expand Epic/i }));
+    const subHandle = screen.getByRole("button", { name: "Reorder Design" });
+    expect(subHandle.className).toContain("pointer-coarse:opacity-100");
+    expect(subHandle.className).toContain("pointer-coarse:size-11");
   });
 });

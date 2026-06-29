@@ -35,11 +35,26 @@ const AiDashboardWizard = dynamic(
 );
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+/**
+ * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
+ * Closes gotcha-47 for the dashboards list: the touch-suppressed tooltip is no
+ * longer an item's only label. Text equals the trigger's `aria-label` (single
+ * source) and is `truncate`d so a long name never widens the `w-14` rail.
+ */
+function CoarseCaption({ label }: { label: string }) {
+  return (
+    <span className="text-muted-foreground max-w-full truncate text-[10px] leading-tight normal-case">
+      {label}
+    </span>
+  );
+}
 
 export function DashboardsNav({
   dashboards,
@@ -71,6 +86,7 @@ export function DashboardsNav({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const coarse = useCoarsePointer();
   const workspaceId = workspaces[0]?.id;
 
   function submit() {
@@ -102,9 +118,10 @@ export function DashboardsNav({
             <Link
               href="/dashboards"
               aria-label="Dashboards"
-              className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors"
+              className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
             >
-              <LayoutGrid className="size-4" />
+              <LayoutGrid className="size-4 shrink-0" />
+              {coarse ? <CoarseCaption label="Dashboards" /> : null}
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">Dashboards</TooltipContent>
@@ -211,13 +228,14 @@ export function DashboardsNav({
                   aria-current={d.id === activeDashboardId ? "page" : undefined}
                   aria-label={d.name}
                   className={cn(
-                    "flex size-9 items-center justify-center rounded-md text-sm font-medium uppercase transition-colors",
+                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
                     d.id === activeDashboardId
                       ? "bg-primary/80 text-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
-                  {d.name.charAt(0)}
+                  <span className="shrink-0">{d.name.charAt(0)}</span>
+                  {coarse ? <CoarseCaption label={d.name} /> : null}
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right">{d.name}</TooltipContent>

@@ -4,13 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Eye, FolderKanban, GripVertical, Users2 } from "lucide-react";
-import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
@@ -21,6 +15,8 @@ import { CSS } from "@dnd-kit/utilities";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { reorderBoard } from "@/lib/boards/actions";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -29,6 +25,20 @@ import {
 } from "@/components/ui/tooltip";
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
+
+/**
+ * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
+ * Closes gotcha-47 for the sidebar board list: the touch-suppressed tooltip is
+ * no longer an item's only label. Text equals the trigger's `aria-label` (single
+ * source) and is `truncate`d so a long board name never widens the `w-14` rail.
+ */
+function CoarseCaption({ label }: { label: string }) {
+  return (
+    <span className="text-muted-foreground max-w-full truncate text-[10px] leading-tight normal-case">
+      {label}
+    </span>
+  );
+}
 
 /**
  * A draggable row in the owned-boards list. The board name stays a plain `<Link>`
@@ -109,6 +119,7 @@ export function BoardsNav({
   collapsed?: boolean;
 }) {
   const { boardId: activeBoardId } = useParams<{ boardId: string }>();
+  const coarse = useCoarsePointer();
 
   // Optimistic order for the owned list: seeded from server props, re-synced
   // (during render, per React's "adjust state when a prop changes" pattern)
@@ -125,10 +136,9 @@ export function BoardsNav({
     setOrdered(boards);
   }
 
-  // TODO(touch-batch-2): migrate to useTouchAwareSensors() (src/lib/dnd/sensors.ts)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  // Shared sensors: 6px move for mouse, 200ms long-press lift for touch (a quick
+  // swipe scrolls the list instead of grabbing a board).
+  const sensors = useTouchAwareSensors();
 
   function handleDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -160,9 +170,10 @@ export function BoardsNav({
             <TooltipTrigger asChild>
               <span
                 aria-label="Boards"
-                className="text-muted-foreground flex size-9 items-center justify-center"
+                className="text-muted-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
               >
-                <FolderKanban className="size-4" />
+                <FolderKanban className="size-4 shrink-0" />
+                {coarse ? <CoarseCaption label="Boards" /> : null}
               </span>
             </TooltipTrigger>
             <TooltipContent side="right">Boards</TooltipContent>
@@ -196,13 +207,14 @@ export function BoardsNav({
                 aria-current={b.id === activeBoardId ? "page" : undefined}
                 aria-label={b.name}
                 className={cn(
-                  "flex size-9 items-center justify-center rounded-md text-sm font-medium uppercase transition-colors",
+                  "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
                   b.id === activeBoardId
                     ? "bg-primary/80 text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
-                {b.name.charAt(0)}
+                <span className="shrink-0">{b.name.charAt(0)}</span>
+                {coarse ? <CoarseCaption label={b.name} /> : null}
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">{b.name}</TooltipContent>
@@ -241,13 +253,14 @@ export function BoardsNav({
                   aria-current={b.id === activeBoardId ? "page" : undefined}
                   aria-label={b.name}
                   className={cn(
-                    "flex size-9 items-center justify-center rounded-md text-sm font-medium uppercase transition-colors",
+                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
                     b.id === activeBoardId
                       ? "bg-primary/80 text-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-foreground",
                   )}
                 >
-                  {b.name.charAt(0)}
+                  <span className="shrink-0">{b.name.charAt(0)}</span>
+                  {coarse ? <CoarseCaption label={b.name} /> : null}
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right">{b.name}</TooltipContent>

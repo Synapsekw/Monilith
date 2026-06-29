@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { AttachmentCard } from "./AttachmentCard";
+import { AttachmentRow } from "./AttachmentRow";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import type { Attachment } from "@/lib/collaboration/attachments-cache";
 
@@ -20,36 +20,42 @@ function att(over: Partial<Attachment> = {}): Attachment {
     item_id: "i",
     update_id: null,
     uploaded_by: "u",
-    storage_path: "o/b/i/a-d.pdf",
-    file_name: "doc.pdf",
-    mime_type: "application/pdf",
+    storage_path: "o/b/i/a-d.png",
+    file_name: "doc.png",
+    mime_type: "image/png",
     size_bytes: 2048,
     created_at: "2026-06-20T00:00:00Z",
     ...over,
   } as Attachment;
 }
 
-describe("AttachmentCard preview affordance", () => {
-  it("shows Preview for a PDF attachment", () => {
+describe("AttachmentRow actions", () => {
+  it("renders Preview/Download/Delete by aria-label", () => {
+    vi.mocked(useCoarsePointer).mockReturnValue(true);
     render(
-      <AttachmentCard
+      <AttachmentRow
         attachment={att()}
         members={[]}
-        canDelete={false}
+        canDelete
         onPreview={vi.fn()}
         onDownload={vi.fn()}
         onDelete={vi.fn()}
       />,
     );
     expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Download" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("hides Preview for a non-previewable type (zip)", () => {
+    vi.mocked(useCoarsePointer).mockReturnValue(true);
     render(
-      <AttachmentCard
+      <AttachmentRow
         attachment={att({ mime_type: "application/zip", file_name: "a.zip" })}
         members={[]}
-        canDelete={false}
+        canDelete
         onPreview={vi.fn()}
         onDownload={vi.fn()}
         onDelete={vi.fn()}
@@ -59,12 +65,12 @@ describe("AttachmentCard preview affordance", () => {
   });
 });
 
-describe("AttachmentCard touch reveal", () => {
-  it("shows the action overlay always-on for a coarse pointer", () => {
+describe("AttachmentRow touch reveal", () => {
+  it("shows the action cluster always-on for a coarse pointer", () => {
     vi.mocked(useCoarsePointer).mockReturnValue(true);
     render(
-      <AttachmentCard
-        attachment={att({ mime_type: "image/png", file_name: "a.png" })}
+      <AttachmentRow
+        attachment={att()}
         members={[]}
         canDelete
         onPreview={vi.fn()}
@@ -72,23 +78,18 @@ describe("AttachmentCard touch reveal", () => {
         onDelete={vi.fn()}
       />,
     );
-    const overlay = screen
+    const cluster = screen
       .getByRole("button", { name: "Download" })
       .closest('[data-slot="reveal-on-hover"]') as HTMLElement;
-    expect(overlay.className).toContain("opacity-100");
-    expect(overlay.className).not.toContain("group-hover");
-    // overlay keeps its scrim so the thumbnail dims behind the controls
-    expect(overlay.className).toContain("bg-background/70");
-    // all three actions resolve by aria-label
-    expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(cluster.className).toContain("opacity-100");
+    expect(cluster.className).not.toContain("group-hover");
   });
 
-  it("hover-gates the overlay for a fine pointer", () => {
+  it("hover-gates the action cluster for a fine pointer", () => {
     vi.mocked(useCoarsePointer).mockReturnValue(false);
     render(
-      <AttachmentCard
-        attachment={att({ mime_type: "image/png", file_name: "a.png" })}
+      <AttachmentRow
+        attachment={att()}
         members={[]}
         canDelete
         onPreview={vi.fn()}
@@ -96,10 +97,10 @@ describe("AttachmentCard touch reveal", () => {
         onDelete={vi.fn()}
       />,
     );
-    const overlay = screen
+    const cluster = screen
       .getByRole("button", { name: "Download" })
       .closest('[data-slot="reveal-on-hover"]') as HTMLElement;
-    expect(overlay.className).toContain("opacity-0");
-    expect(overlay.className).toContain("group-hover:opacity-100");
+    expect(cluster.className).toContain("opacity-0");
+    expect(cluster.className).toContain("group-hover:opacity-100");
   });
 });

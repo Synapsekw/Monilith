@@ -445,3 +445,67 @@ describe("LinkEditor", () => {
     expect(screen.getByText(/http or https/i)).toBeInTheDocument();
   });
 });
+
+// ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────────
+// Class-presence assertions: the `(pointer: coarse)` media query only resolves
+// in a real browser, so we assert the coarse-pointer sizing variant is present.
+describe("inline cell editors — coarse-pointer tap targets", () => {
+  it("StatusEditor option pills get a ≥44px min-height on coarse", () => {
+    render(
+      <StatusEditor
+        value={{ optionId: null }}
+        settings={statusSettings}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("option", { name: /done/i }).className).toContain(
+      "pointer-coarse:min-h-11",
+    );
+  });
+
+  it("StatusEditor Clear button gets a ≥44px height on coarse", () => {
+    render(
+      <StatusEditor
+        value={{ optionId: "o1" }}
+        settings={statusSettings}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /clear/i }).className).toContain(
+      "pointer-coarse:h-11",
+    );
+  });
+
+  it("CheckboxEditor wraps the native input in a ≥44px coarse tap target", () => {
+    render(
+      <CheckboxEditor
+        value={{ checked: false }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const input = screen.getByRole("checkbox", { name: /toggle/i });
+    expect(input.className).toContain("size-4"); // input stays visually small
+    expect(input.closest("label")?.className).toContain(
+      "pointer-coarse:size-11",
+    );
+  });
+
+  it("RatingEditor stars get a ≥44px coarse tap target with comfortable spacing", () => {
+    render(
+      <RatingEditor
+        value={{ rating: 0 }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const star = screen.getByRole("button", { name: /4 stars/i });
+    expect(star.className).toContain("pointer-coarse:size-11");
+    expect(star.parentElement?.className).toContain("pointer-coarse:gap-2");
+  });
+});

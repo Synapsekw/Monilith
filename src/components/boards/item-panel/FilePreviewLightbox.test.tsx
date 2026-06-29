@@ -60,6 +60,47 @@ describe("FilePreviewLightbox", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("exposes header actions + nav as Button primitives that fire their handlers", () => {
+    const onIndexChange = vi.fn();
+    const onDownload = vi.fn();
+    const onDelete = vi.fn();
+    const three = [att("a"), att("b"), att("c")];
+    render(
+      <FilePreviewLightbox
+        attachments={three}
+        index={1}
+        previewUrls={{ a: "x", b: "y", c: "z" }}
+        currentUserId="u"
+        onIndexChange={onIndexChange}
+        onClose={vi.fn()}
+        onDownload={onDownload}
+        onDelete={onDelete}
+      />,
+    );
+
+    const open = screen.getByRole("button", { name: "Open in new tab" });
+    const download = screen.getByRole("button", { name: "Download" });
+    const del = screen.getByRole("button", { name: "Delete" });
+    const prev = screen.getByRole("button", { name: "Previous" });
+    const next = screen.getByRole("button", { name: "Next" });
+
+    // routed through the Button primitive (data-slot proves the swap)
+    for (const el of [open, download, del, prev, next]) {
+      expect(el).toHaveAttribute("data-slot", "button");
+    }
+
+    fireEvent.click(open);
+    expect(onDownload).toHaveBeenCalledTimes(1);
+    fireEvent.click(download);
+    expect(onDownload).toHaveBeenCalledTimes(2);
+    fireEvent.click(del);
+    expect(onDelete).toHaveBeenCalledWith(three[1]);
+    fireEvent.click(prev);
+    expect(onIndexChange).toHaveBeenCalledWith(0);
+    fireEvent.click(next);
+    expect(onIndexChange).toHaveBeenCalledWith(2);
+  });
+
   it("renders a Download fallback for a non-previewable file", () => {
     const zip = [
       att("z", { mime_type: "application/zip", file_name: "z.zip" }),

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
 import { DateTime } from "@/components/datetime/date-time";
 import type { UpdatesCache } from "@/lib/collaboration/cache";
@@ -79,7 +80,7 @@ export function UpdatesTab({
       ) : (
         <ul className="flex flex-col gap-3">
           {cache.updates.map((u) => (
-            <li key={u.id} className="rounded-md border p-3 text-sm">
+            <li key={u.id} className="group rounded-md border p-3 text-sm">
               <div className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
                 <span className="flex items-center gap-2">
                   <span className="text-foreground font-medium">
@@ -88,13 +89,16 @@ export function UpdatesTab({
                   </span>
                   <DateTime value={u.created_at} />
                 </span>
-                <button
-                  className="opacity-60 hover:opacity-100"
-                  onClick={() => onDelete(u.id)}
-                  aria-label="Delete update"
-                >
-                  Delete
-                </button>
+                <RevealOnHover>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDelete(u.id)}
+                    aria-label="Delete update"
+                  >
+                    Delete
+                  </Button>
+                </RevealOnHover>
               </div>
               <p className="whitespace-pre-wrap">{u.body_text}</p>
               {u.edited_at && (

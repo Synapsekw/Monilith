@@ -79,6 +79,28 @@ describe("ItemPanel creation metadata", () => {
   });
 });
 
+describe("ItemPanel tab strip (touch)", () => {
+  it("carries the coarse-pointer sizing token on each tab and switches tabs on click", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardPresenceProvider value={ctx(vi.fn())}>
+          <ItemPanel {...baseProps} itemId="item-1" />
+        </BoardPresenceProvider>
+      </QueryClientProvider>,
+    );
+    for (const name of [/^fields$/i, /updates/i, /activity log/i, /files/i]) {
+      expect(screen.getByRole("button", { name })).toHaveClass(
+        "pointer-coarse:min-h-11",
+      );
+    }
+    // tab switch is client-side: clicking Files reveals the Files-tab content
+    await user.click(screen.getByRole("button", { name: /files/i }));
+    expect(screen.getByText(/No files yet/i)).toBeInTheDocument();
+  });
+});
+
 describe("ItemPanel presence", () => {
   it("registers a panel focus target while the panel is open", () => {
     const setFocus = vi.fn();
