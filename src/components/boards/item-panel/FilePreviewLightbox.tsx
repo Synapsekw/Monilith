@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Trash2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   fileKind,
@@ -96,41 +97,49 @@ export function FilePreviewLightbox({
             </span>
           </span>
           <div className="flex shrink-0 items-center gap-2">
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => onDownload(current)}
               aria-label="Open in new tab"
               className="text-muted-foreground hover:text-foreground"
             >
               <ExternalLink className="size-4" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => onDownload(current)}
               aria-label="Download"
               className="text-muted-foreground hover:text-foreground"
             >
               <Download className="size-4" />
-            </button>
+            </Button>
             {canDelete && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => onDelete(current)}
                 aria-label="Delete"
                 className="text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="size-4" />
-              </button>
+              </Button>
             )}
           </div>
         </div>
 
         <div className="bg-surface-muted relative grid min-h-64 place-items-center rounded-md">
           {index > 0 && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => onIndexChange(index - 1)}
               aria-label="Previous"
-              className="hover:text-foreground text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2"
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 left-2 -translate-y-1/2"
             >
               <ChevronLeft className="size-6" />
-            </button>
+            </Button>
           )}
 
           {previewable && kind === "image" && url ? (
@@ -170,13 +179,15 @@ export function FilePreviewLightbox({
           )}
 
           {index < count - 1 && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => onIndexChange(index + 1)}
               aria-label="Next"
-              className="hover:text-foreground text-muted-foreground absolute top-1/2 right-2 -translate-y-1/2"
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
             >
               <ChevronRight className="size-6" />
-            </button>
+            </Button>
           )}
         </div>
       </DialogContent>
