@@ -3,6 +3,22 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import type { CacheColumn } from "@/lib/boards/cache";
 
+// Spy on the shared touch-aware sensor hook (still delegating to the real
+// implementation). Asserts the option-reorder DndContext consumes it.
+const touchSensorsSpy = vi.fn();
+vi.mock("@/lib/dnd/sensors", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/dnd/sensors")>(
+      "@/lib/dnd/sensors",
+    );
+  return {
+    useTouchAwareSensors: () => {
+      touchSensorsSpy();
+      return actual.useTouchAwareSensors();
+    },
+  };
+});
+
 function statusCol(): CacheColumn {
   return {
     id: "c1",
@@ -70,5 +86,40 @@ describe("ColumnOptionsDialog", () => {
       options: { id: string }[];
     };
     expect(arg.options.some((o) => o.id === "a")).toBe(false);
+  });
+
+  // ── TOUCH Batch-2 (iPad) ────────────────────────────────────────────────
+  it("uses the shared touch-aware sensors for option reorder", () => {
+    touchSensorsSpy.mockReset();
+    render(
+      <ColumnOptionsDialog
+        open
+        column={statusCol()}
+        usageOf={() => 0}
+        onSave={vi.fn()}
+        onRemoveOption={vi.fn()}
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(touchSensorsSpy).toHaveBeenCalled();
+  });
+
+  it("gives each OptionRow control a 44px coarse-pointer target", () => {
+    render(
+      <ColumnOptionsDialog
+        open
+        column={statusCol()}
+        usageOf={() => 0}
+        onSave={vi.fn()}
+        onRemoveOption={vi.fn()}
+        onOpenChange={vi.fn()}
+      />,
+    );
+    const handle = screen.getByLabelText("Reorder Done");
+    const swatch = screen.getByLabelText("Color for Done");
+    const remove = screen.getByLabelText("remove Done");
+    for (const el of [handle, swatch, remove]) {
+      expect(el.className).toContain("pointer-coarse:size-11");
+    }
   });
 });
