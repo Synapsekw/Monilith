@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { BoardsNav } from "./BoardsNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 
 const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
 
@@ -12,11 +14,22 @@ vi.mock("next/navigation", () => ({
   useParams: () => mockUseParams(),
 }));
 
+vi.mock("@/lib/hooks/use-coarse-pointer", () => ({
+  useCoarsePointer: vi.fn(() => false),
+}));
+
+vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/dnd/sensors")>();
+  return { useTouchAwareSensors: vi.fn(actual.useTouchAwareSensors) };
+});
+
 const noWorkspaces: { id: string; name: string }[] = [];
 
 describe("BoardsNav", () => {
   beforeEach(() => {
     mockUseParams.mockReturnValue({});
+    vi.mocked(useCoarsePointer).mockReturnValue(false);
+    vi.mocked(useTouchAwareSensors).mockClear();
   });
 
   it("shows 'No boards yet' when no boards are provided", () => {
@@ -107,6 +120,93 @@ describe("BoardsNav", () => {
     expect(link).toHaveAttribute("href", "/boards/b1");
     expect(link).toHaveTextContent("S");
     expect(screen.queryByText("Boards")).not.toBeInTheDocument();
+  });
+
+  it("collapsed + coarse: shows the Boards header + board name as visible captions (gotcha-47)", () => {
+    vi.mocked(useCoarsePointer).mockReturnValue(true);
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          collapsed
+          boards={[
+            {
+              id: "b1",
+              name: "Marketing",
+              workspace_id: "w1",
+              position: 0,
+              shared_out: false,
+            },
+          ]}
+          sharedBoards={[]}
+          workspaces={[{ id: "w1", name: "Acme" }]}
+        />
+      </TooltipProvider>,
+    );
+    // Header caption now visible (was tooltip-only).
+    expect(
+      screen.getByText("Boards", { selector: "span" }),
+    ).toBeInTheDocument();
+    // The letter tile keeps its initial AND gains the full name as a caption.
+    const tile = screen.getByRole("link", { name: "Marketing" });
+    expect(tile).toHaveTextContent("M");
+    expect(tile).toHaveTextContent("Marketing");
+    expect(tile.className).toContain("pointer-coarse:min-h-11");
+  });
+
+  it("collapsed + fine: stays icon/initial-only, no name caption", () => {
+    vi.mocked(useCoarsePointer).mockReturnValue(false);
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          collapsed
+          boards={[
+            {
+              id: "b1",
+              name: "Marketing",
+              workspace_id: "w1",
+              position: 0,
+              shared_out: false,
+            },
+          ]}
+          sharedBoards={[]}
+          workspaces={[{ id: "w1", name: "Acme" }]}
+        />
+      </TooltipProvider>,
+    );
+    expect(
+      screen.queryByText("Boards", { selector: "span" }),
+    ).not.toBeInTheDocument();
+    const tile = screen.getByRole("link", { name: "Marketing" });
+    // Only the initial is on-screen; full name lives in aria-label/tooltip.
+    expect(tile).toHaveTextContent("M");
+    expect(
+      screen.queryByText("Marketing", { selector: "span" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("collapsed + coarse: shared-board tiles also gain a visible name caption", () => {
+    vi.mocked(useCoarsePointer).mockReturnValue(true);
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          collapsed
+          boards={[]}
+          sharedBoards={[
+            {
+              id: "s1",
+              name: "Roadmap",
+              position: 0,
+              owner_name: "Dana",
+              access_level: "viewer",
+            },
+          ]}
+          workspaces={[{ id: "w1", name: "Acme" }]}
+        />
+      </TooltipProvider>,
+    );
+    const tile = screen.getByRole("link", { name: "Roadmap" });
+    expect(tile).toHaveTextContent("R");
+    expect(tile).toHaveTextContent("Roadmap");
   });
 
   it("renders boards with a shared indicator and a Shared with me section", () => {
@@ -237,6 +337,15 @@ describe("BoardsNav drag-reorder", () => {
     expect(
       screen.getByRole("button", { name: "Reorder Beta" }),
     ).toBeInTheDocument();
+  });
+
+  it("wires the expanded reorder DndContext via the shared touch-aware sensors", () => {
+    render(
+      <BoardsNav boards={owned} sharedBoards={[]} workspaces={noWorkspaces} />,
+    );
+    // The bespoke inline PointerSensor config is gone — reorder now uses the
+    // shared long-press-on-touch sensors (TODO(touch-batch-2) cleared).
+    expect(useTouchAwareSensors).toHaveBeenCalled();
   });
 
   it("renders no reorder handles when collapsed", () => {
