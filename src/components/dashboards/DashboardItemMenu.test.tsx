@@ -80,4 +80,26 @@ describe("DashboardItemMenu", () => {
     );
     expect(deleteDashboard).toHaveBeenCalledWith({ dashboardId: "d1" });
   });
+
+  it("gives the actions trigger a coarse-pointer touch target (>=44px)", () => {
+    render(
+      <DashboardItemMenu
+        dashboard={{ id: "d1", name: "Ops" }}
+        isActive={false}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: /dashboard actions/i });
+    expect(trigger.className).toContain("pointer-coarse:size-11");
+  });
+
+  it("wraps the actions trigger in RevealOnHover (always-visible on coarse)", () => {
+    render(
+      <DashboardItemMenu
+        dashboard={{ id: "d1", name: "Ops" }}
+        isActive={false}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: /dashboard actions/i });
+    expect(trigger.closest('[data-slot="reveal-on-hover"]')).not.toBeNull();
+  });
 });
