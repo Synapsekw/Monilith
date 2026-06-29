@@ -71,22 +71,30 @@ export function FilesTab({
         </span>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border">
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => setMode("gallery")}
               aria-label="Gallery view"
               aria-pressed={mode === "gallery"}
-              className={`px-2 py-1 ${mode === "gallery" ? "bg-accent" : "text-muted-foreground"}`}
+              className={
+                mode === "gallery" ? "bg-accent" : "text-muted-foreground"
+              }
             >
               <LayoutGrid className="size-4" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => setMode("list")}
               aria-label="List view"
               aria-pressed={mode === "list"}
-              className={`px-2 py-1 ${mode === "list" ? "bg-accent" : "text-muted-foreground"}`}
+              className={
+                mode === "list" ? "bg-accent" : "text-muted-foreground"
+              }
             >
               <List className="size-4" />
-            </button>
+            </Button>
           </div>
           <Button
             size="sm"
