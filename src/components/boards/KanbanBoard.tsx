@@ -241,7 +241,7 @@ export function KanbanBoard({
           id="kanban-group-column"
           value={groupColumn.id}
           onChange={(e) => handleGroupColumnChange(e.target.value)}
-          className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+          className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3"
         >
           {statusColumns.map((c) => (
             <option key={c.id} value={c.id}>
@@ -578,7 +578,7 @@ function AddCardInput({
           disabled={isPending || !groupId}
           placeholder="Add item"
           aria-label={`Add item to ${columnLabel}`}
-          className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
+          className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50 pointer-coarse:min-h-11"
         />
       </div>
       {error ? (

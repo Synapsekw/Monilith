@@ -159,6 +159,20 @@ describe("KanbanBoard", () => {
     expect(useTouchAwareSensors).toHaveBeenCalled();
   });
 
+  it("gives the Group-by select a coarse-pointer touch target (>=44px)", () => {
+    renderKanban();
+    const select = screen.getByLabelText("Group by");
+    expect(select.className).toContain("pointer-coarse:min-h-11");
+  });
+
+  it("gives each add-card input a coarse-pointer touch target (>=44px)", () => {
+    renderKanban();
+    const input = screen.getByLabelText("Add item to Working");
+    // The add-card affordance is the input + its row; assert the touch target on
+    // whichever element carries the sizing (input here).
+    expect(input.className).toContain("pointer-coarse:min-h-11");
+  });
+
   it("renders a No-status column + one column per option", () => {
     renderKanban();
     expect(screen.getByText("No status")).toBeInTheDocument();
