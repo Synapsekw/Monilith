@@ -1,6 +1,6 @@
-import { config } from "dotenv";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
+import { isSafeTestTarget, loadIntegrationEnv } from "./integration-env";
 
 // Vitest globalSetup file: the exported `teardown` runs ONCE after the whole
 // run. Integration suites (`*.integration.test.ts`) provision throwaway
@@ -54,15 +54,25 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export async function teardown(): Promise<void> {
-  // Mirror rls.integration.test.ts: `override: true` because vitest.setup.ts
-  // seeds placeholder NEXT_PUBLIC_* values before this runs.
-  config({ path: ".env.local", override: true });
+  // Single source of truth: loads .env.local then .env.test (override) if present.
+  loadIntegrationEnv();
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   // No service-role secret (e.g. CI) → no integration suite ran. Skip silently.
   if (!url || !serviceRoleKey) return;
+
+  // HARD GUARD: the @example.com purge is destructive. Run it ONLY against the
+  // explicitly-marked dedicated test project — never DEV/PROD. Without .env.test
+  // (or its PULSE_TEST_DB marker) this refuses and returns, leaving DEV intact.
+  if (!isSafeTestTarget(url)) {
+    console.warn(
+      "[global-teardown] target is not a marked test DB (PULSE_TEST_DB) — " +
+        "skipping purge to protect DEV/PROD.",
+    );
+    return;
+  }
 
   const admin: SupabaseClient<Database> = createClient<Database>(
     url,
