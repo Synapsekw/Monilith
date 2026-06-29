@@ -67,14 +67,29 @@ if ! git rebase develop; then
   exit 1
 fi
 
-# 3. Gates — now against the integrated (rebased) state.
+# 3. Keep the generated changelog in sync with `Changelog:` commit trailers.
+#    CI has a develop-only drift gate (`git diff --exit-code src/lib/changelog/generated.ts`
+#    after `pnpm changelog:gen`) that the local gates below do NOT cover — so a commit
+#    carrying a `Changelog:` trailer passes here but fails CI (TOUCH Batch 2 hit this:
+#    local green, CI red, fixed by a manual regen `45a2bbe`). Regenerate against the
+#    integrated history and, if it drifted, commit the regen onto the task branch so it
+#    lands in the merge. No-op when no trailer changed the file.
+echo "→ syncing generated changelog (pnpm changelog:gen)…"
+pnpm changelog:gen
+if ! git diff --quiet -- src/lib/changelog/generated.ts; then
+  echo "  changelog drifted — committing regenerated generated.ts onto $BRANCH"
+  git add src/lib/changelog/generated.ts
+  git commit -m "chore(changelog): regenerate generated.ts"
+fi
+
+# 4. Gates — now against the integrated (rebased) state.
 echo "→ running checks (typecheck / lint / test / build) against integrated state…"
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
 
-# 4. Merge + push. The task is already rebased onto develop, so --no-ff is
+# 5. Merge + push. The task is already rebased onto develop, so --no-ff is
 #    conflict-free and keeps the merge-commit convention. Retry the push once if
 #    origin advanced again in the gap.
 echo "→ merging $BRANCH into develop…"
