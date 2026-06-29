@@ -15,8 +15,23 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { cn } from "@/lib/utils";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
+
+/**
+ * Visible caption for a collapsed icon-only rail item under a coarse pointer.
+ * Closes gotcha-47: the touch-suppressed tooltip can no longer be the item's
+ * only label. The text equals the trigger's `aria-label` (single source) and is
+ * `truncate`d so a long name never widens the fixed `w-14` rail.
+ */
+function CoarseCaption({ label }: { label: string }) {
+  return (
+    <span className="text-muted-foreground max-w-full truncate text-[10px] leading-tight">
+      {label}
+    </span>
+  );
+}
 
 const nav = [
   { label: "Goals", icon: Target, href: "/goals" },
@@ -52,6 +67,7 @@ export function SidebarNav({
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
   const isCollapsed = hasHydrated && collapsed;
+  const coarse = useCoarsePointer();
   const pathname = usePathname();
 
   return (
@@ -88,6 +104,17 @@ export function SidebarNav({
           const isActive =
             !!href && (pathname === href || pathname.startsWith(`${href}/`));
           if (isCollapsed) {
+            // Collapsed rail item: icon, plus a visible caption stacked beneath
+            // it on a coarse pointer (gotcha-47) so touch/keyboard users get an
+            // on-screen label. `min-h-11`/`min-w-11` (44px, Apple HIG) only on
+            // coarse — desktop keeps the compact `size-9`.
+            const collapsedItemCn = cn(
+              "flex w-full max-w-full flex-col items-center justify-center gap-0.5 rounded-md transition-colors",
+              "size-9 pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5",
+              isActive
+                ? "bg-primary/80 text-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            );
             return (
               <Tooltip key={item.label}>
                 <TooltipTrigger asChild>
@@ -96,23 +123,23 @@ export function SidebarNav({
                       href={href}
                       aria-label={item.label}
                       aria-current={isActive ? "page" : undefined}
-                      className={cn(
-                        "flex size-9 items-center justify-center rounded-md transition-colors",
-                        isActive
-                          ? "bg-primary/80 text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                      )}
+                      className={collapsedItemCn}
                     >
-                      <item.icon className="size-4" />
+                      <item.icon className="size-4 shrink-0" />
+                      {coarse ? <CoarseCaption label={item.label} /> : null}
                     </Link>
                   ) : (
                     <button
                       type="button"
                       disabled
                       aria-label={item.label}
-                      className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                      className={cn(
+                        collapsedItemCn,
+                        "disabled:cursor-not-allowed disabled:opacity-60",
+                      )}
                     >
-                      <item.icon className="size-4" />
+                      <item.icon className="size-4 shrink-0" />
+                      {coarse ? <CoarseCaption label={item.label} /> : null}
                     </button>
                   )}
                 </TooltipTrigger>

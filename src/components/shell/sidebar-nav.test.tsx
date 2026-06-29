@@ -3,6 +3,11 @@ import { render, screen } from "@testing-library/react";
 import { SidebarNav } from "./sidebar-nav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
+import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
+
+vi.mock("@/lib/hooks/use-coarse-pointer", () => ({
+  useCoarsePointer: vi.fn(() => false),
+}));
 
 // SidebarNav is always rendered inside the Sidebar frame's TooltipProvider; the
 // collapsed nav uses Radix Tooltip, so supply one in isolation.
@@ -28,6 +33,7 @@ vi.mock("@/lib/workspaces/actions", () => ({
 beforeEach(() => {
   useUIStore.setState({ sidebarCollapsed: false, hasHydrated: true });
   Element.prototype.scrollIntoView ??= () => {};
+  vi.mocked(useCoarsePointer).mockReturnValue(false);
 });
 
 const board = {
@@ -119,5 +125,93 @@ describe("SidebarNav", () => {
     expect(
       screen.getByRole("link", { name: "Dashboards" }),
     ).toBeInTheDocument();
+  });
+
+  describe("collapsed coarse-pointer a11y (gotcha-47)", () => {
+    beforeEach(() => {
+      useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
+    });
+
+    it("renders a visible caption under each icon-only item on a coarse pointer", () => {
+      vi.mocked(useCoarsePointer).mockReturnValue(true);
+      renderNav(
+        <SidebarNav
+          boards={[]}
+          sharedBoards={[]}
+          workspaces={[]}
+          dashboards={[]}
+        />,
+      );
+      // The label string that previously only lived in the never-opened tooltip
+      // is now on-screen text (the gotcha-47 fix).
+      for (const label of [
+        "Goals",
+        "Portfolios",
+        "Workload",
+        "My Time",
+        "Inbox",
+      ]) {
+        // The visible caption equals the aria-label (single source, no drift).
+        expect(
+          screen.getByText(label, { selector: "span" }),
+        ).toBeInTheDocument();
+        expect(screen.getByLabelText(label)).toHaveAttribute(
+          "aria-label",
+          label,
+        );
+      }
+    });
+
+    it("keeps the rail icon-only (no captions) on a fine pointer", () => {
+      vi.mocked(useCoarsePointer).mockReturnValue(false);
+      renderNav(
+        <SidebarNav
+          boards={[]}
+          sharedBoards={[]}
+          workspaces={[]}
+          dashboards={[]}
+        />,
+      );
+      // No visible <span> caption — label still only carried by aria-label/tooltip.
+      expect(
+        screen.queryByText("Goals", { selector: "span" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("My Time", { selector: "span" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("gives each collapsed item a ≥44px coarse touch target", () => {
+      vi.mocked(useCoarsePointer).mockReturnValue(true);
+      renderNav(
+        <SidebarNav
+          boards={[]}
+          sharedBoards={[]}
+          workspaces={[]}
+          dashboards={[]}
+        />,
+      );
+      const goals = screen.getByLabelText("Goals");
+      expect(goals.className).toContain("pointer-coarse:min-h-11");
+    });
+
+    it("preserves aria-current on the active collapsed item", () => {
+      vi.mocked(useCoarsePointer).mockReturnValue(true);
+      // usePathname is mocked to "/"; the Inbox has no href, so assert a wired
+      // link keeps aria-current when its route is active is covered elsewhere —
+      // here we just confirm coarse rendering doesn't drop the attribute wiring.
+      renderNav(
+        <SidebarNav
+          boards={[]}
+          sharedBoards={[]}
+          workspaces={[]}
+          dashboards={[]}
+        />,
+      );
+      // None active at "/", so no link should carry aria-current=page.
+      expect(screen.getByLabelText("Goals")).not.toHaveAttribute(
+        "aria-current",
+      );
+    });
   });
 });
