@@ -115,6 +115,47 @@ Pre-convention history lives in `src/lib/changelog/seed.ts`.
 Every feature ships with at least basic tests. Don't merge with failing checks. RLS-sensitive changes
 should include an isolation test.
 
+### Running integration tests (`.env.test`)
+
+The `*.integration.test.ts(x)` suites and the `global-teardown` sweeper provision throwaway
+`@example.com` users + orgs against a **real remote Supabase project** (there is no local stack).
+They run against a **dedicated test-only project** via a gitignored `.env.test` file, and a hard
+safety guard (`src/test/integration-env.ts`) ensures the destructive purge can **never** touch DEV
+or PROD.
+
+**Default behavior:** with **no `.env.test`**, every integration suite **skips cleanly** (`pnpm test`
+runs unit tests only) and the teardown sweeper refuses to purge — so DEV is never polluted. Running
+the integration suites is therefore **opt-in** and requires a one-time test-project setup:
+
+1. **Create a dedicated Supabase project** (e.g. "Pulse TEST") in the dashboard. Note its project
+   ref, URL, anon/publishable key, and service-role key.
+2. **Apply the schema** — the migrations in `supabase/migrations/` are the source of truth:
+
+   ```bash
+   supabase link --project-ref <test-project-ref>
+   supabase db push                                 # applies all migrations to the test project
+   supabase link --project-ref <dev-project-ref>    # relink back to DEV afterwards
+   ```
+
+   Relinking back to DEV keeps `pnpm db:types` (`--linked`) pointed at DEV.
+
+3. **Create `.env.test`** (gitignored) in the repo root with the **test** project's creds:
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://<test-project-ref>.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=<test anon/publishable key>
+   SUPABASE_SERVICE_ROLE_KEY=<test service-role key>
+   PULSE_TEST_DB=1
+   ```
+
+   `PULSE_TEST_DB=1` is the **required** opt-in marker the safety guard checks before any
+   destructive purge. Without it, the suites skip and the teardown refuses to delete.
+
+With `.env.test` present, `pnpm test` (and `finish-task.sh`'s gate) exercise the integration suites
+against the test project; the `@example.com` users appear there, not in DEV, and the teardown purges
+them there. **CI stays unit-only** — wiring `.env.test` secrets into GitHub Actions is a separate
+follow-up.
+
 ## Dev memory
 
 At the end of a working block, run `/wrapup` to log a session note in `vault/sessions/` and bump
