@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   addSubitem,
   clearCell,
@@ -112,6 +113,14 @@ export function stripOption(
   return cv;
 }
 
+/** Surface a failed board mutation. Rollback already restored the cache;
+ *  this is the user-visible half (spec F2). Mutations whose callers surface
+ *  errors inline via `onError` callbacks (addItem, addSubitem, addGroup,
+ *  addColumn, addDependency) deliberately skip this — no double feedback. */
+function showMutationError(action: string, err: Error) {
+  toast.error(action, { description: err.message });
+}
+
 export function useBoardMutations(boardId: string) {
   const qc = useQueryClient();
   const key = boardKey(boardId);
@@ -138,8 +147,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't save the cell — your change was undone.",
+        err,
+      );
     },
     onSettled: () => {
       // No refetch: Realtime + revalidatePath keep the cache fresh.
@@ -225,8 +238,12 @@ export function useBoardMutations(boardId: string) {
       await qc.cancelQueries({ queryKey: key });
       return optimisticColumn(vars.columnId, { name: vars.name });
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't rename the column — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -247,8 +264,12 @@ export function useBoardMutations(boardId: string) {
         settings: vars.settings as CacheColumn["settings"],
       });
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't update the column settings — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -294,8 +315,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't remove the option — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -314,8 +339,12 @@ export function useBoardMutations(boardId: string) {
       await qc.cancelQueries({ queryKey: key });
       return optimisticColumn(vars.columnId, { width: vars.width });
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't resize the column — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -337,8 +366,9 @@ export function useBoardMutations(boardId: string) {
         qc.setQueryData<BoardCache>(key, removeColumn(previous, vars.columnId));
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError("Couldn't delete the column — it was restored.", err);
     },
   });
 
@@ -359,8 +389,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't clear the cell — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -425,8 +459,9 @@ export function useBoardMutations(boardId: string) {
         qc.setQueryData<BoardCache>(key, removeItem(previous, vars.itemId));
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError("Couldn't delete the item — it was restored.", err);
     },
   });
 
@@ -456,8 +491,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't reorder the item — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -485,8 +524,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't rename the item — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -511,8 +554,12 @@ export function useBoardMutations(boardId: string) {
         }
         return { previous };
       },
-      onError: (_err, _vars, ctx) => {
+      onError: (err, _vars, ctx) => {
         if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+        showMutationError(
+          "Couldn't rename the group — your change was undone.",
+          err,
+        );
       },
     },
   );
@@ -542,8 +589,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't reorder the group — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -572,8 +623,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't change the group color — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -595,8 +650,9 @@ export function useBoardMutations(boardId: string) {
         qc.setQueryData<BoardCache>(key, removeGroup(previous, vars.groupId));
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError("Couldn't delete the group — it was restored.", err);
     },
   });
 
@@ -618,8 +674,12 @@ export function useBoardMutations(boardId: string) {
         }
         return { previous };
       },
-      onError: (_err, _vars, ctx) => {
+      onError: (err, _vars, ctx) => {
         if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+        showMutationError(
+          "Couldn't rename the board — your change was undone.",
+          err,
+        );
       },
     },
   );
@@ -649,8 +709,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't resize the column — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -693,8 +757,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't remove the dependency — it was restored.",
+        err,
+      );
     },
   });
 
@@ -774,6 +842,9 @@ export function useBoardMutations(boardId: string) {
         prev ? prependColumnFile(prev, attachment) : prev,
       );
     },
+    onError: (err) => {
+      showMutationError("Couldn't upload the file.", err);
+    },
   });
 
   // ─── Time-tracking mutations ────────────────────────────────────────────────
@@ -795,6 +866,9 @@ export function useBoardMutations(boardId: string) {
         prev ? entries.reduce((c, e) => upsertTimeEntry(c, e), prev) : prev,
       );
     },
+    onError: (err) => {
+      showMutationError("Couldn't start the timer.", err);
+    },
   });
 
   /** Stop a running entry: server computes duration → upsert the returned row. */
@@ -812,6 +886,9 @@ export function useBoardMutations(boardId: string) {
       qc.setQueryData<BoardCache>(key, (prev) =>
         prev ? upsertTimeEntry(prev, entry) : prev,
       );
+    },
+    onError: (err) => {
+      showMutationError("Couldn't stop the timer.", err);
     },
   });
 
@@ -831,6 +908,9 @@ export function useBoardMutations(boardId: string) {
         prev ? prependTimeEntry(prev, entry) : prev,
       );
     },
+    onError: (err) => {
+      showMutationError("Couldn't add the time entry.", err);
+    },
   });
 
   /** Edit a completed entry's date + duration → upsert returned row. */
@@ -848,6 +928,9 @@ export function useBoardMutations(boardId: string) {
       qc.setQueryData<BoardCache>(key, (prev) =>
         prev ? upsertTimeEntry(prev, entry) : prev,
       );
+    },
+    onError: (err) => {
+      showMutationError("Couldn't save the time entry.", err);
     },
   });
 
@@ -873,8 +956,12 @@ export function useBoardMutations(boardId: string) {
         );
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't delete the time entry — it was restored.",
+        err,
+      );
     },
   });
 
@@ -911,8 +998,12 @@ export function useBoardMutations(boardId: string) {
       }
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't save the estimate — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -940,8 +1031,9 @@ export function useBoardMutations(boardId: string) {
         );
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError("Couldn't delete the file — it was restored.", err);
     },
   });
 
@@ -976,8 +1068,12 @@ export function useBoardMutations(boardId: string) {
         );
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't update the connection — your change was undone.",
+        err,
+      );
     },
   });
 
