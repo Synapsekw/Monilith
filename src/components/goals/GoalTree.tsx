@@ -47,7 +47,10 @@ function sortNodes(nodes: GoalNode[], sort: SortKey): GoalNode[] {
       case "progress":
         return (b.progress ?? -1) - (a.progress ?? -1);
       case "status":
-        return STATUS_RANK[a.status] - STATUS_RANK[b.status] || a.name.localeCompare(b.name);
+        return (
+          STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+          a.name.localeCompare(b.name)
+        );
       default:
         return a.name.localeCompare(b.name);
     }
@@ -80,15 +83,18 @@ function GoalRow({
   const isOpen = expanded.has(node.id);
   return (
     <>
-      <tr className="hover:bg-accent/30 border-t">
+      <tr className="hover:bg-accent/30 border-t transition-colors">
         <td className="px-3 py-2">
-          <div className="flex items-center gap-1" style={{ paddingLeft: depth * 20 }}>
+          <div
+            className="flex items-center gap-1"
+            style={{ paddingLeft: depth * 20 }}
+          >
             {hasChildren ? (
               <button
                 type="button"
                 onClick={() => toggle(node.id)}
                 aria-label={isOpen ? "Collapse" : "Expand"}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
                 {isOpen ? (
                   <ChevronDown className="size-4" />
@@ -102,7 +108,7 @@ function GoalRow({
             <button
               type="button"
               onClick={() => openGoal(node.id)}
-              className="text-left font-medium hover:underline"
+              className="focus-visible:ring-ring rounded-sm text-left font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none"
             >
               {node.name}
             </button>
@@ -125,7 +131,13 @@ function GoalRow({
       </tr>
       {isOpen
         ? node.children.map((c) => (
-            <GoalRow key={c.id} node={c} depth={depth + 1} expanded={expanded} toggle={toggle} />
+            <GoalRow
+              key={c.id}
+              node={c}
+              depth={depth + 1}
+              expanded={expanded}
+              toggle={toggle}
+            />
           ))
         : null}
     </>
@@ -197,7 +209,13 @@ export function GoalTree({ tree }: { tree: GoalNode[] }) {
           </thead>
           <tbody>
             {sorted.map((node) => (
-              <GoalRow key={node.id} node={node} depth={0} expanded={expanded} toggle={toggle} />
+              <GoalRow
+                key={node.id}
+                node={node}
+                depth={0}
+                expanded={expanded}
+                toggle={toggle}
+              />
             ))}
             {sorted.length === 0 ? (
               <tr>
