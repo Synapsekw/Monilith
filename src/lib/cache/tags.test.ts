@@ -6,6 +6,7 @@ import {
   workspacesTag,
   platformAdminTag,
   orgAdminTag,
+  orgMembersTag,
   widgetAggregationTag,
 } from "./tags";
 
@@ -17,6 +18,11 @@ describe("cache tag builders", () => {
     expect(workspacesTag("o1")).toBe("workspaces:org:o1");
     expect(platformAdminTag("u1")).toBe("platform-admin:user:u1");
     expect(orgAdminTag("u1", "o1")).toBe("org-admin:user:u1:org:o1");
+  });
+
+  it("orgMembersTag is org-scoped", () => {
+    expect(orgMembersTag("org-1")).toBe("org-members:org:org-1");
+    expect(orgMembersTag("org-1")).not.toBe(orgMembersTag("org-2"));
   });
 
   it("are distinct across identities (no collisions)", () => {

@@ -19,3 +19,4 @@ export const orgAdminTag = (userId: string, orgId: string) =>
   `org-admin:user:${userId}:org:${orgId}`;
 export const widgetAggregationTag = (orgId: string, widgetId: string) =>
   `widget-agg:org:${orgId}:widget:${widgetId}`;
+export const orgMembersTag = (orgId: string) => `org-members:org:${orgId}`;
