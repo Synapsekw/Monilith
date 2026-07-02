@@ -129,4 +129,26 @@ describe("RelationCell — debounced search", () => {
     act(() => void vi.advanceTimersByTime(500));
     expect(loadCandidates).not.toHaveBeenCalled();
   });
+
+  it("cancels the pending debounce on close so reopening fetches fresh, not stale", () => {
+    const loadCandidates = vi.fn(async () => [] as never[]);
+    const input = openPicker(loadCandidates);
+    loadCandidates.mockClear(); // drop the initial open fetch
+
+    // Type, then close before the debounce elapses. Without .cancel() the
+    // pending timer would fire after the close-reset and leave query="abc".
+    act(() => fireEvent.change(input, { target: { value: "abc" } }));
+    act(() => fireEvent.keyDown(input, { key: "Escape" }));
+    act(() => void vi.advanceTimersByTime(500));
+
+    // Reopen: the fetch must use the fresh empty query, never the stale "abc".
+    act(() => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Edit linked items" }),
+      );
+    });
+    expect(loadCandidates).toHaveBeenCalledTimes(1);
+    expect(loadCandidates).toHaveBeenLastCalledWith("");
+    expect(loadCandidates).not.toHaveBeenCalledWith("abc");
+  });
 });

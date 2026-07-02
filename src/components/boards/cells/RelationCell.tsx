@@ -53,13 +53,14 @@ export function RelationCell({
     debouncedSetQuery(value);
   }
 
-  // Reset the search when the popover closes so the next open starts clean, and
-  // so a keystroke's still-pending debounce can't fetch against a closed picker
-  // (the effect below is gated on `open`, so the reset both cancels the visible
-  // fetch and discards any late timer's result).
+  // Reset the search when the popover closes so the next open starts clean.
+  // `.cancel()` drops any still-pending debounce — without it, a timer scheduled
+  // just before close would fire after the reset and leave a stale `query` that
+  // the next open would fetch with.
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (!next) {
+      debouncedSetQuery.cancel();
       setSearch("");
       setQuery("");
     }
