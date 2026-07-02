@@ -577,7 +577,7 @@ export async function upsertCell(input: {
       (id) => !priorPeople.includes(id) && id !== user?.id,
     );
     if (added.length > 0) {
-      await supabase.from("notifications").insert(
+      const { error: notifErr } = await supabase.from("notifications").insert(
         added.map((rid) => ({
           org_id: column.org_id,
           recipient_id: rid,
@@ -587,6 +587,14 @@ export async function upsertCell(input: {
           item_id: parsed.data.itemId,
         })),
       );
+      // Best-effort fan-out: the cell write already succeeded, so don't fail
+      // the action — but never drop the failure silently (spec F3 / decision D4).
+      if (notifErr)
+        console.error("[notifications] assigned fan-out failed", {
+          itemId: parsed.data.itemId,
+          recipients: added.length,
+          error: notifErr.message,
+        });
     }
   }
 

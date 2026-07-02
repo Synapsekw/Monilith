@@ -102,6 +102,68 @@ describe("upsertCell people-cell assignment fan-out", () => {
       }),
     ]);
   });
+
+  it("returns ok but logs when the notification insert fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const notifInsert = vi
+      .fn()
+      .mockResolvedValue({ error: { message: "insert denied" } });
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    from.mockImplementation((table: string) => {
+      if (table === "columns")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { org_id: "org", board_id: "board", kind: "people" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "items")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { board_id: "board" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "cell_values")
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+          }),
+          upsert,
+        } as never;
+      if (table === "notifications") return { insert: notifInsert } as never;
+      return {} as never;
+    });
+
+    const res = await upsertCell({
+      itemId: ITEM,
+      columnId: COL,
+      value: { userIds: [A] },
+    });
+
+    expect(res).toEqual({ ok: true, data: undefined }); // primary write not failed
+    expect(spy).toHaveBeenCalledWith(
+      "[notifications] assigned fan-out failed",
+      expect.objectContaining({
+        itemId: ITEM,
+        recipients: 1,
+        error: "insert denied",
+      }),
+    );
+    spy.mockRestore();
+  });
 });
 
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
