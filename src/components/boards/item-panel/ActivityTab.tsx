@@ -6,6 +6,7 @@ import {
   type Member,
 } from "@/lib/collaboration/activity";
 import type { ActivityCache } from "@/lib/collaboration/cache";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ActivityRow } from "./ActivityRow";
 
 export function ActivityTab({
@@ -18,11 +19,7 @@ export function ActivityTab({
   members: readonly Member[];
 }) {
   if (!cache || cache.activities.length === 0) {
-    return (
-      <p className="text-muted-foreground py-6 text-center text-sm">
-        No activity yet.
-      </p>
-    );
+    return <EmptyState variant="inline">No activity yet.</EmptyState>;
   }
   return (
     <ul className="flex flex-col">

@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import type { AppNotification } from "@/lib/collaboration/notifications-cache";
 
 function label(n: AppNotification): string {
@@ -25,11 +26,7 @@ export function NotificationsList({
   onOpen: (n: AppNotification) => void;
 }) {
   if (notifications.length === 0) {
-    return (
-      <p className="text-muted-foreground p-4 text-center text-sm">
-        No notifications.
-      </p>
-    );
+    return <EmptyState variant="inline">No notifications.</EmptyState>;
   }
   return (
     <ul className="max-h-96 overflow-y-auto">
@@ -38,14 +35,17 @@ export function NotificationsList({
           <button
             type="button"
             onClick={() => onOpen(n)}
-            className="hover:bg-accent flex w-full items-start gap-2 border-b px-3 py-2 text-left text-sm"
+            className="hover:bg-accent focus-visible:ring-ring flex w-full items-start gap-2 border-b px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
           >
-            {!n.read_at && (
-              <span
-                className="bg-primary mt-1.5 size-2 shrink-0 rounded-full"
-                aria-label="unread"
-              />
-            )}
+            {/* Always render the dot slot (transparent when read) so row text
+                aligns regardless of read state. */}
+            <span
+              className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                n.read_at ? "bg-transparent" : "bg-primary"
+              }`}
+              aria-label={n.read_at ? undefined : "unread"}
+              aria-hidden={n.read_at ? true : undefined}
+            />
             <span className={n.read_at ? "text-muted-foreground" : ""}>
               {label(n)}
             </span>

@@ -7,6 +7,7 @@ import { getAttachmentDownloadUrl } from "@/lib/collaboration/actions";
 import { formatSize } from "@/lib/collaboration/attachments-format";
 import type { AttachmentsCache } from "@/lib/collaboration/attachments-cache";
 import type { Member } from "@/lib/collaboration/activity";
+import { EmptyState } from "@/components/ui/empty-state";
 import { AttachmentCard } from "./AttachmentCard";
 import { AttachmentRow } from "./AttachmentRow";
 import { FilePreviewLightbox } from "./FilePreviewLightbox";
@@ -52,7 +53,7 @@ export function FilesTab({
 
   return (
     <div
-      className={`flex flex-col gap-4 rounded-md ${dragOver ? "ring-ring ring-2" : ""}`}
+      className={`flex flex-col gap-4 rounded-md ring-2 transition-shadow ${dragOver ? "ring-ring" : "ring-transparent"}`}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -121,9 +122,9 @@ export function FilesTab({
       )}
 
       {attachments.length === 0 ? (
-        <p className="text-muted-foreground py-10 text-center text-sm">
+        <EmptyState variant="inline">
           No files yet. Drop files here or use “Add files”.
-        </p>
+        </EmptyState>
       ) : mode === "gallery" ? (
         <div className="grid grid-cols-2 gap-3">
           {attachments.map((a, i) => (

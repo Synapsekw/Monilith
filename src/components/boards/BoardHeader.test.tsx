@@ -48,7 +48,9 @@ const views = [
 // BoardHeader renders <BoardPresenceBar />, which reads presence from context and
 // throws without a provider. Wrap every render in a provider; an empty roster
 // makes the bar self-hide, keeping the rename/access assertions unaffected.
-function makePresence(roster: BoardPresence["roster"] = []): BoardPresenceContextValue {
+function makePresence(
+  roster: BoardPresence["roster"] = [],
+): BoardPresenceContextValue {
   return {
     roster,
     focusMap: new Map(),
@@ -164,6 +166,38 @@ describe("BoardHeader", () => {
     expect(
       screen.queryByRole("button", { name: "Sprint backlog" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("board title occupies a stable h-8 line box in display mode", () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="owner"
+      />,
+    );
+
+    const title = screen.getByRole("button", { name: "Sprint backlog" });
+    expect(title.className).toContain("h-8");
+    expect(title.className).toContain("items-center");
+  });
+
+  it("viewer heading occupies the same stable h-8 line box", () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        access="viewer"
+      />,
+    );
+
+    const heading = screen.getByRole("heading", { name: "Sprint backlog" });
+    expect(heading.className).toContain("h-8");
+    expect(heading.className).toContain("items-center");
   });
 
   it("renders the presence avatar bar with a face per occupant in the roster", () => {

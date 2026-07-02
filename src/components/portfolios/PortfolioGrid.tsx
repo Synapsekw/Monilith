@@ -144,7 +144,10 @@ export function PortfolioGrid({
           </thead>
           <tbody>
             {sorted.map((row) => (
-              <tr key={row.id} className="hover:bg-accent/30 border-t">
+              <tr
+                key={row.id}
+                className="hover:bg-accent/30 border-t transition-colors"
+              >
                 <td className="px-3 py-2">
                   <Link
                     href={`/boards/${row.boardId}`}

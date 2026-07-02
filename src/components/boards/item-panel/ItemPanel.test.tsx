@@ -71,7 +71,7 @@ describe("ItemPanel creation metadata", () => {
         </BoardPresenceProvider>
       </QueryClientProvider>,
     );
-    await user.click(screen.getByRole("button", { name: /fields/i }));
+    await user.click(screen.getByRole("tab", { name: /fields/i }));
     expect(screen.getByText("Created by")).toBeInTheDocument();
     expect(screen.getByText("Danijel Jovanovic")).toBeInTheDocument();
     expect(screen.getByText("Created at")).toBeInTheDocument();
@@ -91,13 +91,30 @@ describe("ItemPanel tab strip (touch)", () => {
       </QueryClientProvider>,
     );
     for (const name of [/^fields$/i, /updates/i, /activity log/i, /files/i]) {
-      expect(screen.getByRole("button", { name })).toHaveClass(
+      expect(screen.getByRole("tab", { name })).toHaveClass(
         "pointer-coarse:min-h-11",
       );
     }
     // tab switch is client-side: clicking Files reveals the Files-tab content
-    await user.click(screen.getByRole("button", { name: /files/i }));
+    await user.click(screen.getByRole("tab", { name: /files/i }));
     expect(screen.getByText(/No files yet/i)).toBeInTheDocument();
+  });
+});
+
+describe("ItemPanel tab polish", () => {
+  it("tabs expose tab semantics and the branded focus ring", () => {
+    renderPanel(vi.fn(), "item-1");
+    const tablist = screen.getByRole("tablist");
+    expect(tablist).toBeTruthy();
+    const updates = screen.getByRole("tab", { name: /updates/i });
+    expect(updates.getAttribute("aria-selected")).toBe("true");
+    expect(updates.className).toContain("focus-visible:ring");
+    expect(updates.className).toContain("transition-colors");
+  });
+
+  it("tab body is wrapped in the fade-in wrapper", () => {
+    renderPanel(vi.fn(), "item-1");
+    expect(document.querySelector(".animate-fadein")).toBeTruthy();
   });
 });
 

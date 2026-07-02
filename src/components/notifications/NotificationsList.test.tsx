@@ -43,6 +43,49 @@ describe("NotificationsList", () => {
     expect(screen.getByText(matcher)).toBeInTheDocument();
   });
 
+  it("empty state uses the standardized EmptyState", () => {
+    render(<NotificationsList notifications={[]} onOpen={() => {}} />);
+    const empty = screen.getByText(/no notifications/i);
+    expect(empty.className).toContain("py-8");
+    expect(empty.className).toContain("text-muted-foreground");
+  });
+
+  it("rows keep the dot slot when read so text aligns", () => {
+    render(
+      <NotificationsList
+        notifications={[notif({ read_at: new Date().toISOString() })]}
+        onOpen={() => {}}
+      />,
+    );
+    const row = screen.getByRole("button");
+    const dot = row.querySelector("span.size-2");
+    expect(dot).toBeTruthy();
+    expect(dot!.className).toContain("bg-transparent");
+  });
+
+  it("still marks the unread dot with the brand color and a label", () => {
+    render(
+      <NotificationsList
+        notifications={[notif({ read_at: null })]}
+        onOpen={() => {}}
+      />,
+    );
+    const dot = screen.getByLabelText("unread");
+    expect(dot.className).toContain("bg-primary");
+  });
+
+  it("row button has hover transition and branded focus ring", () => {
+    render(
+      <NotificationsList
+        notifications={[notif({ read_at: new Date().toISOString() })]}
+        onOpen={() => {}}
+      />,
+    );
+    const row = screen.getByRole("button");
+    expect(row.className).toContain("transition-colors");
+    expect(row.className).toContain("focus-visible:ring");
+  });
+
   it("invokes onOpen with the notification when a row is clicked", () => {
     const onOpen = vi.fn();
     const n = notif({ id: "auto-1", kind: "automation" });
