@@ -1,6 +1,6 @@
 import "server-only";
 
-import { listOrgMembers } from "@/lib/boards/queries";
+import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { getUserOrgs } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { buildGoalTree, serverToday } from "@/lib/goals/progress";
@@ -8,7 +8,8 @@ import type { BoardAgg, GoalNode, GoalRow, RowOwner } from "@/lib/goals/types";
 
 // Reuse the portfolio helpers verbatim — board status columns + readable boards
 // are identical concerns for the auto_boards mapping picker.
-export { getBoardStatusColumns, listReadableBoards } from "@/lib/portfolios/queries";
+export { getBoardStatusColumns } from "@/lib/portfolios/queries";
+export { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
 export type { StatusColumn } from "@/lib/portfolios/queries";
 
 type GoalDbRow = {
@@ -57,19 +58,29 @@ export interface GoalLink {
   doneOptionIds: string[];
 }
 
+/** Hot-path caps (AGENTS.md: bounded reads over indexed columns). Both reads
+ * truncate SILENTLY at the cap: `buildGoalTree` roots from parent_goal_id=null,
+ * so a child whose parent fell past the cap is dropped, never a crash. Caps are
+ * ≥10× any realistic org today; add pagination before raising them. */
+export const GOALS_LIMIT = 1000;
+export const GOAL_LINKS_LIMIT = 2000;
+
 /** Board links per goal (for the auto_boards mapping editor in the drawer). */
 export async function getGoalLinks(): Promise<Map<string, GoalLink[]>> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("goal_links")
-    .select("goal_id, board_id, done_column_id, done_option_ids");
+    .select("goal_id, board_id, done_column_id, done_option_ids")
+    .limit(GOAL_LINKS_LIMIT);
   const map = new Map<string, GoalLink[]>();
   for (const r of data ?? []) {
     const list = map.get(r.goal_id) ?? [];
     list.push({
       boardId: r.board_id,
       doneColumnId: r.done_column_id,
-      doneOptionIds: Array.isArray(r.done_option_ids) ? (r.done_option_ids as string[]) : [],
+      doneOptionIds: Array.isArray(r.done_option_ids)
+        ? (r.done_option_ids as string[])
+        : [],
     });
     map.set(r.goal_id, list);
   }
@@ -81,7 +92,7 @@ export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
   const orgs = await getUserOrgs();
   const orgId = orgs[0]?.id;
   if (!orgId) return new Map();
-  const members = await listOrgMembers(orgId);
+  const members = await listOrgMembersCached(orgId);
   return new Map(members.map((m) => [m.userId, m]));
 }
 
@@ -95,7 +106,8 @@ export async function getGoalsTree(): Promise<GoalNode[]> {
       .select(
         "id, parent_goal_id, name, description, owner_id, workspace_id, progress_mode, status, start_value, current_value, target_value, unit, percent, start_date, due_date, position",
       )
-      .order("position"),
+      .order("position")
+      .limit(GOALS_LIMIT),
     supabase.rpc("goals_rollup"),
     getGoalOwners(),
   ]);

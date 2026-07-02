@@ -3,18 +3,20 @@ import {
   getGoalLinks,
   getGoalOwners,
   getGoalsTree,
-  listReadableBoards,
+  listReadableBoardsCached,
 } from "@/lib/goals/queries";
 import { GoalTree } from "@/components/goals/GoalTree";
 import { GoalDetailDrawer } from "@/components/goals/GoalDetailDrawer";
 import { NewGoalDialog } from "@/components/goals/NewGoalDialog";
 
 export default async function GoalsIndex() {
-  await requireUser();
+  // Identity read OUTSIDE the cache scope (9.3 rule) — the user id keys the
+  // cached readable-boards entry.
+  const user = await requireUser();
   const [tree, ownerMap, boards, linkMap] = await Promise.all([
     getGoalsTree(),
     getGoalOwners(),
-    listReadableBoards(),
+    listReadableBoardsCached(user.id),
     getGoalLinks(),
   ]);
   const members = [...ownerMap.values()];

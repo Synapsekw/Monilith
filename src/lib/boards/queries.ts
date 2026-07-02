@@ -325,50 +325,15 @@ export const getBoardPayload = cache(
   },
 );
 
+/** Org member with profile display info (People cell editor, people pickers).
+ * The read now lives in `@/lib/org/queries-cached` (`listOrgMembersCached`);
+ * the type stays here to avoid an import churn cascade. */
 export type OrgMember = {
   userId: string;
   fullName: string | null;
   email: string | null;
   avatarUrl: string | null;
 };
-
-/**
- * Members of an org with their profile display info, for the People cell
- * editor. RLS-scoped: only members of the org can read its org_members rows.
- *
- * Uses a two-query JS join because `org_members → profiles` has no declared FK
- * relationship in database.types.ts (user_id references auth.users, not
- * profiles), so the nested PostgREST embed does not typecheck.
- */
-export async function listOrgMembers(orgId: string): Promise<OrgMember[]> {
-  const supabase = await createClient();
-
-  const { data: members, error: membersErr } = await supabase
-    .from("org_members")
-    .select("user_id")
-    .eq("org_id", orgId);
-  if (membersErr || !members || members.length === 0) return [];
-
-  const userIds = members.map((m) => m.user_id);
-
-  const { data: profiles, error: profilesErr } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, avatar_url")
-    .in("id", userIds);
-  if (profilesErr || !profiles) return [];
-
-  const profileMap = new Map(profiles.map((p) => [p.id, p]));
-
-  return userIds.map((userId) => {
-    const profile = profileMap.get(userId) ?? null;
-    return {
-      userId,
-      fullName: profile?.full_name ?? null,
-      email: profile?.email ?? null,
-      avatarUrl: profile?.avatar_url ?? null,
-    };
-  });
-}
 
 export async function listAutomations(boardId: string): Promise<Automation[]> {
   const supabase = await createClient();
