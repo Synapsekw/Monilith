@@ -86,7 +86,6 @@ export async function createBoardFromTemplate(input: {
   if (error || !data) return fail(error?.message ?? "Could not create board.");
 
   await invalidateMyBoards();
-  revalidatePath("/", "layout");
   return { ok: true, data: { boardId: data.id } };
 }
 
@@ -107,7 +106,6 @@ export async function createBoard(input: {
   if (error || !data) return fail(error?.message ?? "Could not create board.");
 
   await invalidateMyBoards();
-  revalidatePath("/", "layout");
   return { ok: true, data: { boardId: data.id } };
 }
 
@@ -127,8 +125,9 @@ export async function renameBoard(input: {
   if (error) return fail(error.message);
 
   await invalidateMyBoards();
+  // The board name shows on the board page's own (uncached) header; the sidebar
+  // list is served from the `boards:user:<me>` cache the updateTag above expired.
   revalidatePath(`/boards/${parsed.data.boardId}`);
-  revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
 
@@ -202,7 +201,6 @@ export async function deleteBoard(input: {
   await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
 
   await invalidateMyBoards();
-  revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
 
@@ -228,7 +226,6 @@ export async function duplicateBoard(input: {
     return fail(error?.message ?? "Could not duplicate board.");
 
   await invalidateMyBoards();
-  revalidatePath("/", "layout");
   return { ok: true, data: { boardId: data.id } };
 }
 

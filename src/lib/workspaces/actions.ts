@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath, updateTag } from "next/cache";
+import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getUserOrgs } from "@/lib/auth/session";
 import { workspacesTag } from "@/lib/cache/tags";
@@ -40,7 +40,6 @@ export async function createWorkspace(input: {
   if (error) return fail(error.message);
 
   updateTag(workspacesTag(orgId));
-  revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
 
@@ -64,7 +63,6 @@ export async function renameWorkspace(input: {
   if (error) return fail(error.message);
 
   if (orgId) updateTag(workspacesTag(orgId));
-  revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
 
@@ -113,6 +111,5 @@ export async function deleteWorkspace(input: {
   await removeAttachmentObjects(storagePaths);
 
   if (orgId) updateTag(workspacesTag(orgId));
-  revalidatePath("/", "layout");
   return { ok: true, data: undefined };
 }
