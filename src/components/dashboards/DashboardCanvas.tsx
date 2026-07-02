@@ -13,6 +13,7 @@ import { WidgetConfigSheet } from "@/components/dashboards/WidgetConfigSheet";
 import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { DashboardWidget } from "@/components/dashboards/DashboardWidget";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import type { DashboardCache, GridRect } from "@/lib/dashboards/cache";
 import { useDashboardCache } from "@/lib/dashboards/use-dashboard-cache";
@@ -148,10 +149,10 @@ export function DashboardCanvas({
       </div>
 
       {widgets.length === 0 ? (
-        <div className="text-muted-foreground rounded-lg border border-dashed p-12 text-center text-sm">
+        <EmptyState>
           No widgets yet. Click <strong>Edit</strong> →{" "}
           <strong>Add widget</strong>.
-        </div>
+        </EmptyState>
       ) : (
         <div ref={containerRef}>
           {mounted ? (
