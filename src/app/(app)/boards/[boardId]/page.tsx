@@ -1,10 +1,7 @@
 import { notFound } from "next/navigation";
 import { BoardViews } from "@/components/boards/BoardViews";
-import {
-  getBoardAccess,
-  getBoardPayload,
-  listOrgMembers,
-} from "@/lib/boards/queries";
+import { getBoardAccess, getBoardPayload } from "@/lib/boards/queries";
+import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { resolveSelectedView } from "@/lib/boards/views";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -28,7 +25,7 @@ export default async function BoardPage({
 
   const supabase = await createClient();
   const [members, access, { data: grantRows }] = await Promise.all([
-    listOrgMembers(payload.board.org_id),
+    listOrgMembersCached(payload.board.org_id),
     getBoardAccess(boardId),
     supabase
       .from("board_members")

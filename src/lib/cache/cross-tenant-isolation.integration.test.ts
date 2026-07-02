@@ -151,5 +151,32 @@ describe.skipIf(!integrationTargetReady())(
       // User B is not a member of org A → not an admin there (no cross-tenant leak).
       expect(await isOrgAdminCached(b.id, a.orgId)).toBe(false);
     });
+
+    it("org A's cached members exclude org B's user (and vice versa)", async () => {
+      const { listOrgMembersCached } = await import("@/lib/org/queries-cached");
+      const aMembers = await listOrgMembersCached(a.orgId);
+      const bMembers = await listOrgMembersCached(b.orgId);
+
+      const aIds = aMembers.map((m) => m.userId);
+      const bIds = bMembers.map((m) => m.userId);
+      expect(aIds).toContain(a.id);
+      expect(aIds).not.toContain(b.id);
+      expect(bIds).toContain(b.id);
+      expect(bIds).not.toContain(a.id);
+    });
+
+    it("user A's cached readable boards exclude user B's boards (and vice versa)", async () => {
+      const { listReadableBoardsCached } =
+        await import("@/lib/portfolios/queries-cached");
+      const aBoards = await listReadableBoardsCached(a.id);
+      const bBoards = await listReadableBoardsCached(b.id);
+
+      const aIds = aBoards.map((x) => x.id);
+      const bIds = bBoards.map((x) => x.id);
+      expect(aIds).toContain(a.boardId);
+      expect(aIds).not.toContain(b.boardId);
+      expect(bIds).toContain(b.boardId);
+      expect(bIds).not.toContain(a.boardId);
+    });
   },
 );

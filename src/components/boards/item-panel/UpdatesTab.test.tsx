@@ -49,6 +49,36 @@ describe("UpdatesTab", () => {
     expect(screen.getByText(/Shipped it/)).toBeInTheDocument();
   });
 
+  it("write-an-update cta is a real button primitive", () => {
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          cache={cache}
+          members={members}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    const cta = screen.getByRole("button", { name: /write an update/i });
+    expect(cta.getAttribute("data-slot")).toBe("button");
+    expect(cta.className).toContain("focus-visible:ring");
+  });
+
+  it("empty state uses the standardized inline padding", () => {
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          cache={{ updates: [] }}
+          members={members}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    expect(screen.getByText(/no updates yet/i).className).toContain("py-8");
+  });
+
   it("reveals the per-update delete always-on for a coarse pointer and fires onDelete", () => {
     vi.mocked(useCoarsePointer).mockReturnValue(true);
     const onDelete = vi.fn();

@@ -97,6 +97,39 @@ describe("membership invalidation", () => {
       `org-admin:user:${uuid}:org:${orgUuid}`,
     );
   });
+
+  it.each([
+    ["removeMember", () => removeMember({ orgId: orgUuid, userId: uuid })],
+    [
+      "deactivateMember",
+      () => deactivateMember({ orgId: orgUuid, userId: uuid }),
+    ],
+    [
+      "reactivateMember",
+      () => reactivateMember({ orgId: orgUuid, userId: uuid }),
+    ],
+  ])(
+    "%s invalidates the member list and the target's board caches",
+    async (_name, run) => {
+      rpc.mockResolvedValue({ error: null });
+      const r = await run();
+      expect(r.ok).toBe(true);
+      expect(updateTag).toHaveBeenCalledWith(`org-members:org:${orgUuid}`);
+      expect(updateTag).toHaveBeenCalledWith(`boards:user:${uuid}`);
+      expect(updateTag).toHaveBeenCalledWith(`shared-boards:user:${uuid}`);
+    },
+  );
+
+  it("setMemberRole does NOT invalidate the member list (payload carries no role)", async () => {
+    rpc.mockResolvedValue({ error: null });
+    const r = await setMemberRole({
+      orgId: orgUuid,
+      userId: uuid,
+      role: "admin",
+    });
+    expect(r.ok).toBe(true);
+    expect(updateTag).not.toHaveBeenCalledWith(`org-members:org:${orgUuid}`);
+  });
 });
 
 describe("inviteMember", () => {

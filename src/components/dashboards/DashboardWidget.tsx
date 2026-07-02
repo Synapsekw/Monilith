@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 
 import {
@@ -11,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NumberWidget } from "@/components/dashboards/widgets/NumberWidget";
-import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
 import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
 import { WidgetConfigSheet } from "@/components/dashboards/WidgetConfigSheet";
@@ -19,6 +19,24 @@ import { Input } from "@/components/ui/input";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
+
+// Client-only recharts renderer (~35 KB gzip) — lazily loaded only when a chart
+// widget mounts, so recharts never enters the dashboard first-paint bundle.
+// Fallback mirrors ChartWidget's own series-loading skeleton (no layout shift:
+// the widget shell owns the sizing). Mirrors the PdfPreview pattern in
+// FilePreviewLightbox.tsx.
+const ChartWidget = dynamic(
+  () =>
+    import("@/components/dashboards/widgets/ChartWidget").then(
+      (m) => m.ChartWidget,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-muted/40 h-full animate-pulse rounded-md" />
+    ),
+  },
+);
 
 export function DashboardWidget({
   widget,

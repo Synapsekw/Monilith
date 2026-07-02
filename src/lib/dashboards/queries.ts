@@ -12,16 +12,6 @@ export type DashboardPayload = {
   widgets: DashboardWidget[];
 };
 
-/** Workspace-scoped list of dashboards visible to the current user (RLS). */
-export async function listDashboards(): Promise<Dashboard[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("dashboards")
-    .select("*")
-    .order("created_at", { ascending: true });
-  return data ?? [];
-}
-
 /** A dashboard + its widgets. Returns null when not visible (RLS) or absent. */
 export const getDashboardPayload = cache(
   async (dashboardId: string): Promise<DashboardPayload | null> => {

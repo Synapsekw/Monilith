@@ -135,7 +135,10 @@ export const getBoardPayload = cache(
       .select("*")
       .eq("id", boardId)
       .maybeSingle();
-    if (boardErr || !board) return null;
+    // A DB failure is not a 404: throw so the boards error boundary renders
+    // (spec F5 / decision D6). Missing/RLS-hidden row stays null → notFound().
+    if (boardErr) throw new Error(`Failed to load board: ${boardErr.message}`);
+    if (!board) return null;
 
     const [
       groupsRes,
@@ -201,16 +204,37 @@ export const getBoardPayload = cache(
         .limit(2000),
     ]);
 
+    // A silently-empty board (every `.data ?? []` below) is indistinguishable
+    // from deleted data. Fail loudly; the segment error boundary offers retry.
+    const reads: [string, { error: { message: string } | null }][] = [
+      ["groups", groupsRes],
+      ["columns", columnsRes],
+      ["items", itemsRes],
+      ["cell values", cellsRes],
+      ["views", viewsRes],
+      ["dependencies", depsRes],
+      ["attachments", attachmentsRes],
+      ["time entries", timeEntriesRes],
+      ["relation links", relationLinksRes],
+    ];
+    for (const [name, res] of reads)
+      if (res.error)
+        throw new Error(`Failed to load board ${name}: ${res.error.message}`);
+
     // Resolve linked-item names (targets are on other boards). RLS auto-filters
     // to readable boards → a name the caller can't see stays null (chip omitted).
     const rawLinks = relationLinksRes.data ?? [];
     const linkedIds = [...new Set(rawLinks.map((l) => l.linked_item_id))];
     const namesById = new Map<string, string>();
     if (linkedIds.length > 0) {
-      const { data: linkedItems } = await supabase
+      const { data: linkedItems, error: linkedErr } = await supabase
         .from("items")
         .select("id, name")
         .in("id", linkedIds);
+      if (linkedErr)
+        throw new Error(
+          `Failed to load board linked items: ${linkedErr.message}`,
+        );
       for (const it of linkedItems ?? []) namesById.set(it.id, it.name);
     }
     const relationLinks: RelationLink[] = rawLinks.map((l) => ({
@@ -271,6 +295,14 @@ export const getBoardPayload = cache(
             .select("id, kind, settings")
             .in("id", targetColumnIds),
         ]);
+        if (cellsRes2.error)
+          throw new Error(
+            `Failed to load board mirror cells: ${cellsRes2.error.message}`,
+          );
+        if (colsRes2.error)
+          throw new Error(
+            `Failed to load board mirror columns: ${colsRes2.error.message}`,
+          );
         mirrorTargetCells = cellsRes2.data ?? [];
         mirrorTargetColumns = colsRes2.data ?? [];
       }
@@ -293,50 +325,15 @@ export const getBoardPayload = cache(
   },
 );
 
+/** Org member with profile display info (People cell editor, people pickers).
+ * The read now lives in `@/lib/org/queries-cached` (`listOrgMembersCached`);
+ * the type stays here to avoid an import churn cascade. */
 export type OrgMember = {
   userId: string;
   fullName: string | null;
   email: string | null;
   avatarUrl: string | null;
 };
-
-/**
- * Members of an org with their profile display info, for the People cell
- * editor. RLS-scoped: only members of the org can read its org_members rows.
- *
- * Uses a two-query JS join because `org_members → profiles` has no declared FK
- * relationship in database.types.ts (user_id references auth.users, not
- * profiles), so the nested PostgREST embed does not typecheck.
- */
-export async function listOrgMembers(orgId: string): Promise<OrgMember[]> {
-  const supabase = await createClient();
-
-  const { data: members, error: membersErr } = await supabase
-    .from("org_members")
-    .select("user_id")
-    .eq("org_id", orgId);
-  if (membersErr || !members || members.length === 0) return [];
-
-  const userIds = members.map((m) => m.user_id);
-
-  const { data: profiles, error: profilesErr } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, avatar_url")
-    .in("id", userIds);
-  if (profilesErr || !profiles) return [];
-
-  const profileMap = new Map(profiles.map((p) => [p.id, p]));
-
-  return userIds.map((userId) => {
-    const profile = profileMap.get(userId) ?? null;
-    return {
-      userId,
-      fullName: profile?.full_name ?? null,
-      email: profile?.email ?? null,
-      avatarUrl: profile?.avatar_url ?? null,
-    };
-  });
-}
 
 export async function listAutomations(boardId: string): Promise<Automation[]> {
   const supabase = await createClient();

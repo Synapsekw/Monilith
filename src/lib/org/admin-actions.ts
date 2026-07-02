@@ -3,7 +3,12 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { orgAdminTag } from "@/lib/cache/tags";
+import {
+  boardsTag,
+  orgAdminTag,
+  orgMembersTag,
+  sharedBoardsTag,
+} from "@/lib/cache/tags";
 import {
   setMemberRoleSchema,
   memberTargetSchema,
@@ -58,6 +63,12 @@ export async function removeMember(input: unknown): Promise<ActionResult> {
   });
   if (error) return fail(friendlyMemberError(error.message));
   updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
+  updateTag(orgMembersTag(parsed.data.orgId));
+  // The target's cached board lists (listMyBoardsCached / listSharedBoardsCached /
+  // listReadableBoardsCached all hang off these two tags) must drop immediately
+  // when their membership flips — don't wait out the nav TTL.
+  updateTag(boardsTag(parsed.data.userId));
+  updateTag(sharedBoardsTag(parsed.data.userId));
   revalidatePath("/settings");
   return ok();
 }
@@ -73,6 +84,10 @@ export async function deactivateMember(input: unknown): Promise<ActionResult> {
   });
   if (error) return fail(friendlyMemberError(error.message));
   updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
+  updateTag(orgMembersTag(parsed.data.orgId));
+  // See removeMember: drop the target's cached board lists immediately.
+  updateTag(boardsTag(parsed.data.userId));
+  updateTag(sharedBoardsTag(parsed.data.userId));
   revalidatePath("/settings");
   return ok();
 }
@@ -88,6 +103,10 @@ export async function reactivateMember(input: unknown): Promise<ActionResult> {
   });
   if (error) return fail(friendlyMemberError(error.message));
   updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
+  updateTag(orgMembersTag(parsed.data.orgId));
+  // See removeMember: drop the target's cached board lists immediately.
+  updateTag(boardsTag(parsed.data.userId));
+  updateTag(sharedBoardsTag(parsed.data.userId));
   revalidatePath("/settings");
   return ok();
 }

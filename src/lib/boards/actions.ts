@@ -33,6 +33,7 @@ import {
   removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
+import { getBoardAccess } from "@/lib/boards/queries";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -176,6 +177,13 @@ export async function deleteBoard(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
+  // Defense in depth: RLS already blocks non-owners, but an RLS-filtered
+  // delete affects 0 rows and returns no error — a lying success. Check
+  // explicitly so non-owners get a real answer (spec F4 / decision D5).
+  const access = await getBoardAccess(parsed.data.boardId);
+  if (access !== "owner")
+    return fail("Only the board owner can delete this board.");
+
   const supabase = await createClient();
 
   // Attachment rows cascade with the board; their Storage objects do not. Every
@@ -205,6 +213,12 @@ export async function duplicateBoard(input: {
   const parsed = duplicateBoardSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  // Any member (owner/editor/viewer) may duplicate — they can already read
+  // the data. Non-members get the same message as a missing board so we
+  // don't leak existence (spec F4 / decision D5).
+  const access = await getBoardAccess(parsed.data.boardId);
+  if (!access) return fail("Board not found.");
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("duplicate_board_structure", {
@@ -577,7 +591,7 @@ export async function upsertCell(input: {
       (id) => !priorPeople.includes(id) && id !== user?.id,
     );
     if (added.length > 0) {
-      await supabase.from("notifications").insert(
+      const { error: notifErr } = await supabase.from("notifications").insert(
         added.map((rid) => ({
           org_id: column.org_id,
           recipient_id: rid,
@@ -587,6 +601,14 @@ export async function upsertCell(input: {
           item_id: parsed.data.itemId,
         })),
       );
+      // Best-effort fan-out: the cell write already succeeded, so don't fail
+      // the action — but never drop the failure silently (spec F3 / decision D4).
+      if (notifErr)
+        console.error("[notifications] assigned fan-out failed", {
+          itemId: parsed.data.itemId,
+          recipients: added.length,
+          error: notifErr.message,
+        });
     }
   }
 

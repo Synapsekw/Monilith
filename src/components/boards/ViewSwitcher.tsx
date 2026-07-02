@@ -202,7 +202,7 @@ function ViewTab({
         aria-selected={selected}
         onClick={selectView}
         className={cn(
-          "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors",
+          "focus-visible:ring-ring flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
           selected
             ? "text-primary-foreground"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
