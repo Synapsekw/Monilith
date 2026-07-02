@@ -22,12 +22,25 @@ vi.mock("@/lib/supabase/server", () => ({
 // listOrgMembers import inside portfolios/queries.ts must not explode at import time
 vi.mock("@/lib/boards/queries", () => ({ listOrgMembers: vi.fn() }));
 
-import { listPortfolios, PORTFOLIO_LIMIT } from "./queries";
+import {
+  listPortfolios,
+  listReadableBoards,
+  PORTFOLIO_LIMIT,
+  READABLE_BOARDS_LIMIT,
+} from "./queries";
 
 describe("listPortfolios", () => {
   it("is bounded", async () => {
     const rows = await listPortfolios();
     expect(limit).toHaveBeenCalledWith(PORTFOLIO_LIMIT);
     expect(rows).toEqual([{ id: "p1", name: "P" }]);
+  });
+});
+
+describe("listReadableBoards", () => {
+  it("is bounded", async () => {
+    limit.mockClear();
+    await listReadableBoards();
+    expect(limit).toHaveBeenCalledWith(READABLE_BOARDS_LIMIT);
   });
 });

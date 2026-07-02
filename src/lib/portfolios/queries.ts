@@ -133,6 +133,10 @@ export async function getBoardStatusColumns(
   }));
 }
 
+/** Hot-path cap (AGENTS.md: bounded reads). Truncates silently at the cap —
+ * raise alongside pagination if a user's readable set ever approaches it. */
+export const READABLE_BOARDS_LIMIT = 500;
+
 /** Boards the current user can add to a portfolio (RLS already filters reads). */
 export async function listReadableBoards(): Promise<
   { id: string; name: string; workspaceId: string }[]
@@ -141,7 +145,8 @@ export async function listReadableBoards(): Promise<
   const { data } = await supabase
     .from("boards")
     .select("id, name, workspace_id")
-    .order("name", { ascending: true });
+    .order("name", { ascending: true })
+    .limit(READABLE_BOARDS_LIMIT);
   return (data ?? []).map((b) => ({
     id: b.id,
     name: b.name,
