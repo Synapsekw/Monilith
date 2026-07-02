@@ -1,18 +1,21 @@
 import { randomUUID } from "node:crypto";
-import { config } from "dotenv";
+import {
+  integrationTargetReady,
+  loadIntegrationEnv,
+} from "@/test/integration-env";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
-config({ path: ".env.local", override: true });
+loadIntegrationEnv();
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PASSWORD = "Test-Password-123!";
 
-describe.skipIf(!SERVICE_ROLE_KEY)(
+describe.skipIf(!integrationTargetReady())(
   "RLS: relation_links + set_relation_links (cross-board)",
   () => {
     let admin: SupabaseClient<Database>;
@@ -118,7 +121,10 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
             name: "Primary project",
             kind: "relation",
             position: 1001,
-            settings: { target_board_id: boardB.boardId, allow_multiple: false },
+            settings: {
+              target_board_id: boardB.boardId,
+              allow_multiple: false,
+            },
           },
         ])
         .select("id, position");
@@ -204,9 +210,7 @@ describe.skipIf(!SERVICE_ROLE_KEY)(
       expect(data).toHaveLength(2); // link rows visible (board A readable)
       // linked item lives on board B which the outsider can't read → name null
       for (const row of data ?? []) {
-        expect(
-          (row as { items: { name: string } | null }).items,
-        ).toBeNull();
+        expect((row as { items: { name: string } | null }).items).toBeNull();
       }
     });
 

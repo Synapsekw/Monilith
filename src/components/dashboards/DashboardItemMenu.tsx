@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,17 +94,19 @@ export function DashboardItemMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Dashboard actions"
-            className="text-muted-foreground hover:text-foreground shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
-          >
-            <MoreHorizontal className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
+        <RevealOnHover className="shrink-0 [&:has([data-state=open])]:opacity-100">
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Dashboard actions"
+              className="text-muted-foreground hover:text-foreground pointer-coarse:size-11"
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </RevealOnHover>
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem
             onSelect={() => {

@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { config } from "dotenv";
+import {
+  integrationTargetReady,
+  loadIntegrationEnv,
+} from "@/test/integration-env";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
 
-config({ path: ".env.local", override: true });
+loadIntegrationEnv();
 
 // --- WebSocket / jsdom Event-realm reconciliation -------------------------
 // The integration Vitest project runs under jsdom, which replaces the global
@@ -91,7 +94,7 @@ function subscribeStatus(
   });
 }
 
-describe.skipIf(!SERVICE_ROLE_KEY || !HAS_WEBSOCKET)(
+describe.skipIf(!integrationTargetReady() || !HAS_WEBSOCKET)(
   "RLS: private presence channel authorization (presence:board:<id>)",
   () => {
     let admin: SupabaseClient<Database>;

@@ -1,20 +1,21 @@
-import { config } from "dotenv";
+import {
+  integrationTargetReady,
+  loadIntegrationEnv,
+} from "@/test/integration-env";
 import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "@/types/database.types";
 
 // Load dev credentials from .env.local (symlinked into this worktree).
-config({ path: ".env.local", override: true });
+loadIntegrationEnv();
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const hasEnv = !!SUPABASE_URL && !!ANON_KEY;
-
-// These exercise the RPC's SHAPE + auth contract. They run only when the linked
-// project env is present; otherwise they no-op (CI without secrets).
-describe.runIf(hasEnv)("dashboard_series RPC", () => {
+// These exercise the RPC's SHAPE + auth contract. They run only against a marked
+// dedicated test project (.env.test); otherwise they skip (no DEV pollution).
+describe.runIf(integrationTargetReady())("dashboard_series RPC", () => {
   // Use an anon (not signed-in) client — the RPC enforces is_org_member, so
   // an unknown board must yield an error for any caller.
   const supabase = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {

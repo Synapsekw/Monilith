@@ -3,6 +3,9 @@
 // dashboards-scoped layout so the grid styles load only for dashboard routes,
 // not shell-wide.
 import "react-grid-layout/css/styles.css";
+// Touch override — MUST come after the vendor stylesheet so the
+// (pointer: coarse) resize-handle rules win by source order without !important.
+import "./dashboards.touch.css";
 
 import type { ReactNode } from "react";
 
