@@ -34,10 +34,10 @@ The roadmap backlog was empty (TOUCH 8/8, Phase 9 done), so the next work was qu
 
 ## Open threads
 
-- **Test-DB provisioning (user-gated):** create the dedicated test-only Supabase project + `.env.test` with `PULSE_TEST_DB=1` so integration suites stop hitting remote DEV. Code side shipped in #43.
+- **Isolated test DB — decided against** ([[2026-07-02-decision-25-no-isolated-test-db-integration-opt-in]]): not provisioning a dedicated test project; integration suites stay opt-in and skip without `.env.test`, so DEV/PROD are safe by default. Cleared from the roadmap.
 - **Phase 10 undefined:** no next feature phase is specced — needs product direction before scoping.
 - `.mcp.json` local edit still uncommitted (perpetual, untouched). Wrapup commit is local — not pushed (user asked to verify before pushing).
 
 ## Next session entry point
 
-Provision the isolated test DB, or get a Phase 10 direction and scope it. `develop` and `main` are clean and in sync; nothing in flight.
+The planned build is complete and clean (`develop`/`main` in sync, nothing in flight). Next is a product call: Phase 10, revisit deferred 6e Docs, or declare v1 feature-complete.
