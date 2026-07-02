@@ -6,10 +6,7 @@ import type { CacheWidget } from "@/lib/dashboards/cache";
 
 export function BatteryWidget({ widget }: { widget: CacheWidget }) {
   const config = (widget.config ?? {}) as { groupColumnId?: string };
-  const { data, isLoading, isError } = useWidgetData(
-    widget.id,
-    widget.config as Record<string, unknown>,
-  );
+  const { data, isLoading, isError } = useWidgetData(widget.id);
 
   if (!widget.source_board_id || !config.groupColumnId)
     return (

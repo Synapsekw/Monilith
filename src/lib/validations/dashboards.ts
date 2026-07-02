@@ -158,3 +158,10 @@ export const saveLayoutSchema = z.object({
 });
 
 export const getWidgetDataSchema = z.object({ widgetId: uuid });
+
+// Batched widget-data fetch: one round-trip for a whole dashboard's widgets.
+// Bounded at 100 (matches saveLayout's cap) — the client only sends ids; RLS +
+// a server-side re-read of the rows is the authorization boundary.
+export const getWidgetsDataSchema = z.object({
+  widgetIds: z.array(uuid).max(100),
+});
