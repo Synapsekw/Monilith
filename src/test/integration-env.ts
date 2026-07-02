@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { config } from "dotenv";
+import { SUPABASE_PROJECT_REFS } from "@/lib/supabase/project-refs";
 
 // Single source of truth for integration-suite env resolution.
 //
@@ -15,8 +16,8 @@ import { config } from "dotenv";
 // real gate, though, is the positive PULSE_TEST_DB marker: a forgotten
 // `.env.test` leaves the marker unset, so the target is never "safe".
 const FORBIDDEN_PROJECT_REFS = [
-  "jzsyqhxynswolgijkktn", // PROD
-  "hjqcahbbbdaknbbnfnvl", // DEV
+  SUPABASE_PROJECT_REFS.prod, // PROD
+  SUPABASE_PROJECT_REFS.dev, // DEV
 ] as const;
 
 const ENV_LOCAL = ".env.local";
