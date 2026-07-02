@@ -130,4 +130,53 @@ describe("WidgetDataProvider / useWidgetData", () => {
     // The healthy widget still renders its value.
     expect(screen.getByTestId(W1)).toHaveTextContent("total:4");
   });
+
+  it("marks a widget whose slot is absent from a resolved batch as errored", async () => {
+    // The batch resolves but carries no entry for W2 (e.g. row not visible
+    // under RLS, or a stale id) — that widget must surface an error, not a
+    // silent empty state.
+    getWidgetsData.mockResolvedValue({
+      ok: true,
+      data: {
+        results: {
+          [W1]: {
+            ok: true,
+            kind: "number",
+            config: {},
+            buckets: [{ group_key: null, metric: 2 }],
+            columnMeta: null,
+          },
+        },
+      },
+    });
+
+    renderWithProvider(
+      [widget(W1), widget(W2)],
+      <>
+        <Probe id={W1} />
+        <Probe id={W2} />
+      </>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId(W1)).toHaveTextContent("total:2"),
+    );
+    expect(screen.getByTestId(W2)).toHaveTextContent("error");
+  });
+
+  it("degrades to a non-crashing error state when rendered without a provider", () => {
+    // The widget-config sheet's live preview renders widget bodies outside the
+    // dashboard grid's provider — the hook must not throw there.
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <Probe id={W1} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId(W1)).toHaveTextContent("error");
+    // No batched fetch is ever issued from a provider-less render.
+    expect(getWidgetsData).not.toHaveBeenCalled();
+  });
 });

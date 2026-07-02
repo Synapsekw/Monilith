@@ -108,7 +108,13 @@ export function WidgetDataProvider({
  * Read one widget's slice of the dashboard's batched aggregate fetch. Keeps the
  * per-widget `{ data, isLoading, isError }` shape the widget bodies already use,
  * so a failed aggregation for one widget surfaces as that widget's error only.
- * Must be rendered under a {@link WidgetDataProvider}.
+ *
+ * Rendered without a {@link WidgetDataProvider} (e.g. the widget-config sheet's
+ * live preview mounts NumberWidget/BatteryWidget outside the dashboard grid),
+ * the hook degrades to a stable non-loading error state instead of throwing —
+ * matching the pre-batch behavior, where a preview id failed the action's Zod
+ * parse and surfaced as `isError`. The preview never needs live batch data;
+ * widgets fall back to their configure/empty affordances.
  */
 export function useWidgetData(widgetId: string): {
   data: WidgetData | undefined;
@@ -116,14 +122,16 @@ export function useWidgetData(widgetId: string): {
   isError: boolean;
 } {
   const ctx = useContext(WidgetDataContext);
-  if (!ctx)
-    throw new Error("useWidgetData must be used within a WidgetDataProvider");
+  if (!ctx) return { data: undefined, isLoading: false, isError: true };
 
   const entry = ctx.results?.[widgetId];
+  // A resolved batch with no slot for this id (row not visible under RLS, or a
+  // stale/unknown id) is an error for this widget — not a silent blank.
+  const missing = ctx.results !== undefined && entry === undefined;
   return {
     isLoading: ctx.isLoading,
-    // The widget errors if the whole batch failed, or if its own slot did.
-    isError: ctx.isError || entry?.ok === false,
+    // The widget errors if the whole batch failed, its slot did, or its slot is absent.
+    isError: ctx.isError || missing || entry?.ok === false,
     data: entry?.ok
       ? { buckets: entry.buckets, columnMeta: entry.columnMeta }
       : undefined,
