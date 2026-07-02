@@ -11,8 +11,10 @@ import type {
 } from "./types";
 
 /** One person's week: their manual allocations + their timer totals + item
- * metadata, assembled into the card. Bounded by [weekStart, weekStart+6] over
- * the indexed (user_id, work_date) / (started_at) columns. */
+ * metadata, assembled into the card. Bounded by [weekStart, weekStart+6]: the
+ * allocations read filters time_allocations on (user_id, work_date); the
+ * completed-timer read is served by the partial index time_entries_user_started_idx
+ * ((user_id, started_at) where ended_at is not null). */
 export async function getTimeCardData(
   weekStart: string,
 ): Promise<TimeCardData> {
