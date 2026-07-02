@@ -69,8 +69,13 @@ describe("serverEnvSummary", () => {
   it("prints ref, label, and presence flags — never key material", () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = "super-secret-role-key";
     const line = serverEnvSummary();
-    // vitest.setup.ts pins NEXT_PUBLIC_SUPABASE_URL to http://localhost:54321.
-    expect(line).toContain("[env] supabase ref localhost (UNKNOWN)");
+    // The ambient public URL differs between local runs (vitest.setup.ts pins
+    // http://localhost:54321) and CI (the workflow pins a placeholder domain),
+    // so derive the expected ref instead of hardcoding it. Both are UNKNOWN.
+    const ref = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).hostname.split(
+      ".",
+    )[0];
+    expect(line).toContain(`[env] supabase ref ${ref} (UNKNOWN)`);
     expect(line).toContain("service role: present");
     expect(line).toContain("anthropic: absent");
     expect(line).not.toContain("super-secret-role-key");

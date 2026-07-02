@@ -59,6 +59,9 @@ jobs:
       # the real-user Web-Vitals layer instead (see src/components/web-vitals.tsx).
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      # `next start` now validates server env at boot (src/instrumentation.ts);
+      # without this the server refuses to start and Lighthouse gets a 500.
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
     steps:
       - uses: actions/checkout@v6
 
