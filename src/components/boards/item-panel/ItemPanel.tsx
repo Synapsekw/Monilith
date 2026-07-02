@@ -102,7 +102,7 @@ export function ItemPanel({
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-2 text-sm capitalize ${
+              className={`px-3 py-2 text-sm capitalize pointer-coarse:min-h-11 ${
                 tab === t
                   ? "border-primary border-b-2 font-medium"
                   : "text-muted-foreground"

@@ -62,4 +62,12 @@ describe("RelationCell", () => {
       screen.getByRole("button", { name: "Edit linked items" }),
     ).toBeDisabled();
   });
+
+  // ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────
+  it("gives the empty-state add chip a ≥44px coarse target", () => {
+    render(<RelationCell {...base} links={[]} />);
+    const trigger = screen.getByRole("button", { name: "Edit linked items" });
+    const addChip = trigger.querySelector(".border-dashed");
+    expect(addChip?.className).toContain("pointer-coarse:size-11");
+  });
 });

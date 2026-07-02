@@ -1,14 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef, useMemo } from "react";
-import {
-  DndContext,
-  useDraggable,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, useDraggable, type DragEndEvent } from "@dnd-kit/core";
 import {
   CalendarDays,
   ChevronRight,
@@ -17,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardCache, CacheDependency } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
@@ -195,10 +189,9 @@ export function GanttBoard({
     dateColumns.find((c) => c.id === startColId) ?? dateColumns[0] ?? null;
   const colorColumn = colorColumns.find((c) => c.id === colorColId) ?? null;
 
-  // dnd-kit sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  // dnd-kit sensors — shared touch-aware setup (PointerSensor 6px + TouchSensor
+  // long-press lift) so a finger can move bars on iPad while a quick swipe scrolls.
+  const sensors = useTouchAwareSensors();
 
   // Earliest scheduled item start date for range anchoring.
   // Guard: returns "" when no dateColumn (we'll be in the early-return path).
@@ -457,7 +450,7 @@ export function GanttBoard({
               type="button"
               onClick={() => handleZoomChange(z)}
               className={cn(
-                "rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+                "rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors pointer-coarse:min-h-11 pointer-coarse:px-3",
                 zoom === z
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-accent",
@@ -481,7 +474,7 @@ export function GanttBoard({
             aria-label="Start date column"
             value={dateColumn?.id ?? ""}
             onChange={(e) => handleStartColumnChange(e.target.value)}
-            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3"
           >
             {dateColumns.map((c) => (
               <option key={c.id} value={c.id}>
@@ -501,7 +494,7 @@ export function GanttBoard({
             aria-label="End date column"
             value={endColId ?? ""}
             onChange={(e) => handleEndColumnChange(e.target.value)}
-            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3"
           >
             <option value="">None</option>
             {dateColumns.map((c) => (
@@ -522,7 +515,7 @@ export function GanttBoard({
             aria-label="Color by column"
             value={colorColId ?? ""}
             onChange={(e) => handleColorColumnChange(e.target.value)}
-            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3"
           >
             <option value="">None</option>
             {colorColumns.map((c) => (
@@ -809,7 +802,7 @@ function GanttRowItem({
               variant="ghost"
               size="icon-xs"
               aria-label={`Options for ${row.name}`}
-              className="text-muted-foreground hover:text-foreground size-6 opacity-0 group-hover:opacity-100"
+              className="text-muted-foreground hover:text-foreground size-6 opacity-0 group-hover:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
             >
               <MoreHorizontal className="size-3.5" aria-hidden />
             </Button>
@@ -931,7 +924,7 @@ function GanttRowItem({
               onPointerMove={handleResizeMove}
               onPointerUp={handleResizeEnd}
               onPointerLeave={handleResizeEnd}
-              className="hover:bg-primary-foreground/20 h-full w-2 cursor-ew-resize rounded-r-md"
+              className="hover:bg-primary-foreground/20 h-full w-2 cursor-ew-resize touch-none rounded-r-md pointer-coarse:w-11"
               aria-label={`Resize ${row.name}`}
             />
           </div>

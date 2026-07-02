@@ -54,6 +54,43 @@ describe("detectColumns edge cases", () => {
     expect(cols[0].kind).toBe("date");
   });
 
+  it("does NOT classify month-name / loose date-ish strings as date", () => {
+    // "May 2024" etc. are Date.parse-acceptable but not a real Y-M-D shape.
+    const h = ["Name", "Period"];
+    const r = [
+      ["A", "May 2024"],
+      ["B", "June 2024"],
+      ["C", "May 2024"],
+      ["D", "July 2024"],
+    ];
+    const cols = detectColumns(h, r);
+    expect(cols[0].kind).not.toBe("date");
+  });
+
+  it("detects MM/DD/YYYY slash dates as date", () => {
+    const h = ["Name", "Due"];
+    const r = [
+      ["A", "01/15/2024"],
+      ["B", "02/20/2024"],
+    ];
+    const cols = detectColumns(h, r);
+    expect(cols[0].kind).toBe("date");
+  });
+
+  it("does NOT classify a single-distinct-value column as status", () => {
+    // Every row is the same value → a constant, not a status.
+    const h = ["Name", "Stage"];
+    const r = [
+      ["A", "Active"],
+      ["B", "Active"],
+      ["C", "Active"],
+      ["D", "Active"],
+    ];
+    const cols = detectColumns(h, r);
+    expect(cols[0].kind).not.toBe("status");
+    expect(cols[0].kind).toBe("text");
+  });
+
   it("falls back to text for mixed/unrecognized values", () => {
     const h = ["Name", "Notes"];
     const r = [

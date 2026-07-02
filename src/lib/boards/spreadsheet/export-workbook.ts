@@ -25,7 +25,17 @@ function sanitizeWorksheetName(name: string): string {
 export async function buildExportWorkbook(
   payload: BoardPayload,
   format: ImportFormat,
+  /**
+   * Display-name lookup for people-column user ids. When provided, people cells
+   * export the resolved assignee names; ids absent from the map are omitted.
+   * When omitted, people columns export blank (the v1 default).
+   */
+  peopleNames?: Map<string, string>,
 ): Promise<{ buffer: Buffer; mime: string; ext: string }> {
+  const resolvePeopleName = peopleNames
+    ? (userId: string) => peopleNames.get(userId) ?? null
+    : undefined;
+
   const wb = new ExcelJS.Workbook();
   const wsName = sanitizeWorksheetName(payload.board.name) || "Sheet1";
   const ws = wb.addWorksheet(wsName);
@@ -62,7 +72,7 @@ export async function buildExportWorkbook(
       const dataCells = columns.map((col) => {
         const colMap = cellLookup.get(item.id);
         const value = colMap?.get(col.id);
-        return cellToText(col.kind, value, col.settings);
+        return cellToText(col.kind, value, col.settings, resolvePeopleName);
       });
 
       ws.addRow([group.name, item.name, ...dataCells]);
@@ -76,7 +86,7 @@ export async function buildExportWorkbook(
         const subDataCells = columns.map((col) => {
           const colMap = cellLookup.get(sub.id);
           const value = colMap?.get(col.id);
-          return cellToText(col.kind, value, col.settings);
+          return cellToText(col.kind, value, col.settings, resolvePeopleName);
         });
 
         ws.addRow([group.name, SUBTASK_MARKER + sub.name, ...subDataCells]);

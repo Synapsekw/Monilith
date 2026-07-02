@@ -68,6 +68,38 @@ describe("FilesTab", () => {
     );
   });
 
+  it("exposes the view toggle as Button primitives with aria-pressed and swaps card↔row", () => {
+    const cache: AttachmentsCache = { attachments: [att("a")] };
+    render(<FilesTab cache={cache} {...base} />);
+    const gallery = screen.getByLabelText("Gallery view");
+    const list = screen.getByLabelText("List view");
+    // routed through the Button primitive
+    expect(gallery).toHaveAttribute("data-slot", "button");
+    expect(list).toHaveAttribute("data-slot", "button");
+    // segmented-control state
+    expect(gallery).toHaveAttribute("aria-pressed", "true");
+    expect(list).toHaveAttribute("aria-pressed", "false");
+
+    // Gallery view shows the card overlay (a Download action button)
+    expect(
+      screen.getByRole("button", { name: "Download" }),
+    ).toBeInTheDocument();
+
+    // Switching to list keeps a Download action and flips pressed state
+    fireEvent.click(list);
+    expect(screen.getByLabelText("Gallery view")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByLabelText("List view")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.getByRole("button", { name: "Download" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows the uploading state for an optimistic card", () => {
     const cache: AttachmentsCache = { attachments: [att("optimistic-1")] };
     render(<FilesTab cache={cache} {...base} />);

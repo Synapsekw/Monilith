@@ -72,4 +72,22 @@ describe("FilesCell", () => {
     expect(screen.getByLabelText("0 files")).toBeInTheDocument();
     expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
+
+  // ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────
+  it("gives the file chip and the upload affordance ≥44px coarse targets", () => {
+    render(
+      <FilesCell
+        files={[att("1")]}
+        previewUrls={{}}
+        onOpen={vi.fn()}
+        onUpload={vi.fn()}
+      />,
+    );
+    expect(screen.getByTitle("report.png").className).toContain(
+      "pointer-coarse:size-11",
+    );
+    expect(screen.getByLabelText("Add file").className).toContain(
+      "pointer-coarse:size-11",
+    );
+  });
 });

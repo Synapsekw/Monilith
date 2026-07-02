@@ -12,6 +12,13 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z
     .string()
     .min(1, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required"),
+  // Optional Web-Vitals (RUM) sink. When set, the client beacons Core Web Vital
+  // samples here (see src/components/web-vitals.tsx); when absent, reporting is
+  // a no-op (dev still logs to console.debug).
+  NEXT_PUBLIC_WEB_VITALS_ENDPOINT: z
+    .string()
+    .url("NEXT_PUBLIC_WEB_VITALS_ENDPOINT must be a valid URL")
+    .optional(),
 });
 
 // Reference vars via static property access so Next.js can statically replace
@@ -19,6 +26,7 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse({
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  NEXT_PUBLIC_WEB_VITALS_ENDPOINT: process.env.NEXT_PUBLIC_WEB_VITALS_ENDPOINT,
 });
 
 if (!parsed.success) {

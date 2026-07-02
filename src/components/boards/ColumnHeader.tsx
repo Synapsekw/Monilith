@@ -93,7 +93,7 @@ export function ColumnHeader({
             <DropdownMenuTrigger asChild>
               <button
                 aria-label={`${column.name} column menu`}
-                className="text-muted-foreground hover:text-foreground ml-auto opacity-0 transition-opacity group-hover/col:opacity-100"
+                className="text-muted-foreground hover:text-foreground ml-auto grid place-items-center opacity-0 transition-opacity group-hover/col:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
               >
                 <MoreHorizontal className="size-4" />
               </button>
@@ -123,13 +123,18 @@ export function ColumnHeader({
         </>
       )}
 
-      {/* Resize handle on the right edge. */}
+      {/* Resize handle on the right edge. The visible feedback is a 4px line
+          (the `before:` pseudo, hidden until hover on fine pointers). On a
+          coarse pointer the *hit area* grows to a 44px-wide band centred on the
+          edge (`-right-5` = -1.25rem so 44px straddles the 4px line) while the
+          visible line stays 4px; `touch-none` keeps a resize drag from
+          scrolling the table. */}
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label={`Resize ${column.name}`}
         onPointerDown={onPointerDown}
-        className="hover:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize"
+        className="hover:before:bg-primary/40 absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none before:absolute before:inset-y-0 before:right-0 before:w-1 before:bg-transparent pointer-coarse:-right-5 pointer-coarse:w-11"
       />
 
       <AlertDialog open={confirming} onOpenChange={setConfirming}>

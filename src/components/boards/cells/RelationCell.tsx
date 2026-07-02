@@ -111,7 +111,7 @@ export function RelationCell({
         </span>
       )}
       {isEmpty && !readOnly && (
-        <span className="text-muted-foreground inline-flex size-5 shrink-0 items-center justify-center rounded border border-dashed">
+        <span className="text-muted-foreground inline-flex size-5 shrink-0 items-center justify-center rounded border border-dashed pointer-coarse:size-11">
           <Plus className="size-3.5" />
         </span>
       )}

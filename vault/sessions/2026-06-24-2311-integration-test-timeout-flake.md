@@ -30,7 +30,7 @@ No user-facing behavior to test — test infra. Verified by config load (`vitest
 
 ## Open threads
 
-- Band-aid only. The real fix per gotcha-43 / north-star "Owed" is an **isolated/local Docker Supabase** (`.env.test` → `127.0.0.1:54321`) so the gate is deterministic and stops writing to prod.
+- Band-aid only. The real fix per gotcha-43 / north-star "Owed" is a **dedicated isolated test database** (a separate test-only Supabase project via `.env.test`) so the gate is deterministic and stops writing to prod.
 - If flake persists at high load, consider splitting the gate (unit vs integration as separate steps) to kill CPU contention entirely.
 
 ## Next session entry point

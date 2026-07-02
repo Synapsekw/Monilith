@@ -1,0 +1,16 @@
+/* Touch (Batch 2, surface ⑥): make react-grid-layout's resize grip finger-usable.
+ * Scoped to (pointer: coarse) so desktop (fine pointer) keeps the slim 20px hover grip.
+ * Imported AFTER react-grid-layout/css/styles.css so these rules win at equal specificity. */
+@media (pointer: coarse) {
+  .react-grid-item > .react-resizable-handle {
+    width: 44px;
+    height: 44px;
+    opacity: 1; /* a finger can't hover — keep the grip always visible */
+    touch-action: none; /* a resize drag must not scroll the page */
+  }
+  /* keep the chevron glyph anchored near the true corner while the hit area grows */
+  .react-grid-item > .react-resizable-handle::after {
+    right: 6px;
+    bottom: 6px;
+  }
+}

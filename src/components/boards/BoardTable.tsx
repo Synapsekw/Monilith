@@ -24,13 +24,7 @@ import {
   CreatedAtCell,
   CreatedByCell,
 } from "@/components/boards/cells/created";
-import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
@@ -38,6 +32,7 @@ import {
 } from "@dnd-kit/sortable";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
+import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { bucketItems } from "@/lib/boards/item-tree";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
@@ -599,9 +594,7 @@ export function BoardTable({
     setRelationLinks: mutations.setRelationLinks,
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const sensors = useTouchAwareSensors();
 
   function handleGroupDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -907,7 +900,7 @@ function GroupMenu({
           <button
             type="button"
             aria-label={`${group.name} group menu`}
-            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-auto grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-auto grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11 pointer-coarse:opacity-100"
           >
             <MoreHorizontal className="size-4" />
           </button>
@@ -992,7 +985,7 @@ function RowMenu({
           <button
             type="button"
             aria-label={`${label} menu`}
-            className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100"
+            className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
           >
             <MoreHorizontal className="size-4" />
           </button>
@@ -1109,7 +1102,7 @@ function GroupHeaderRow({
           aria-label={`Reorder ${group.name}`}
           {...dragAttributes}
           {...dragListeners}
-          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing"
+          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 cursor-grab touch-none place-items-center rounded-md opacity-0 transition-opacity group-hover/grouphdr:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
         >
           <GripVertical className="size-4" />
         </button>
@@ -1349,9 +1342,7 @@ function GroupSection({
     isDragging,
   } = useSortable({ id: group.id });
 
-  const itemSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const itemSensors = useTouchAwareSensors();
 
   function handleItemDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -1562,7 +1553,7 @@ function ItemRow({
       aria-label={`Reorder ${item.name}`}
       {...attributes}
       {...listeners}
-      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing"
+      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
     >
       <GripVertical className="size-3.5" />
     </button>
@@ -1609,7 +1600,7 @@ function ItemRow({
               },
             })
           }
-          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100"
+          className="text-muted-foreground hover:text-foreground grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 pointer-coarse:size-11 pointer-coarse:opacity-100"
         >
           <Plus className="size-3.5" />
         </button>
@@ -1729,7 +1720,7 @@ function SortableSubitemRow({
       aria-label={`Reorder ${sub.name}`}
       {...attributes}
       {...listeners}
-      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing"
+      className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/name:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
     >
       <GripVertical className="size-3.5" />
     </button>
@@ -1819,9 +1810,7 @@ function SubitemBlock({
   renamingItemId: string | null;
   onRenameSettled: () => void;
 }) {
-  const subitemSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
+  const subitemSensors = useTouchAwareSensors();
 
   function handleSubitemDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -2212,7 +2201,7 @@ function NameCell({
         type="button"
         aria-label={`Open ${item.name}`}
         onClick={() => openItemPanel(item.id)}
-        className="hover:bg-accent text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        className="hover:bg-accent text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11 pointer-coarse:opacity-100"
       >
         <Maximize2 className="size-3.5" />
       </button>

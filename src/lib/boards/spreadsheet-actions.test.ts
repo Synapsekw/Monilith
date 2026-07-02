@@ -460,6 +460,50 @@ describe("commitImport", () => {
     expect(boardsChain.eq).toHaveBeenCalledWith("id", "b1");
   });
 
+  it("deletes board and returns fail when phase-2 cell_values insert errors", async () => {
+    const buf = await xlsxBuf([
+      ["Group", "Name", "Status"],
+      ["Backlog", "Task 1", "Done"],
+      ["Backlog", "↳ Sub 1", "Working"],
+    ]);
+    const input = {
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      workspaceId: BOARD_UUID,
+      boardName: "Board With Subitems",
+      columnMappings: validMappings,
+    };
+
+    // items insert succeeds
+    const itemsChain = makeChain();
+    itemsChain.insert.mockResolvedValue({ data: null, error: null });
+    fromMockMap.set("items", itemsChain);
+
+    // cell_values insert fails
+    const cellsChain = makeChain();
+    cellsChain.insert.mockResolvedValue({
+      data: null,
+      error: { message: "cells boom" },
+    });
+    fromMockMap.set("cell_values", cellsChain);
+
+    // boards delete chain — must return a chainable object for .delete().eq()
+    const boardsChain = makeChain();
+    boardsChain.delete.mockReturnValue(boardsChain);
+    boardsChain.eq.mockResolvedValue({ data: null, error: null });
+    fromMockMap.set("boards", boardsChain);
+
+    const result = await commitImport(input);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/cells boom/i);
+
+    // Assert the rollback delete was called on boards with the board id
+    expect(boardsChain.delete).toHaveBeenCalled();
+    expect(boardsChain.eq).toHaveBeenCalledWith("id", "b1");
+  });
+
   it("returns fail on Zod validation error (empty columnMappings)", async () => {
     const buf = await xlsxBuf([["Name"], ["A"]]);
     const result = await commitImport({

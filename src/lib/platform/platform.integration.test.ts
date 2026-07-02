@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { config } from "dotenv";
+import {
+  integrationTargetReady,
+  loadIntegrationEnv,
+} from "@/test/integration-env";
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signInWithRetry } from "@/test/integration-auth";
@@ -8,7 +11,7 @@ import type { Database } from "@/types/database.types";
 // Load the real dev credentials. `override: true` is required because
 // vitest.setup.ts seeds placeholder NEXT_PUBLIC_* values before this file's
 // top-level code runs; without override dotenv would keep the placeholders.
-config({ path: ".env.local", override: true });
+loadIntegrationEnv();
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -24,7 +27,7 @@ type TestUser = {
   anon: SupabaseClient<Database>;
 };
 
-describe.skipIf(!SERVICE_ROLE_KEY)("platform-admin gate + RPCs", () => {
+describe.skipIf(!integrationTargetReady())("platform-admin gate + RPCs", () => {
   let admin: SupabaseClient<Database>;
 
   const createdUserIds: string[] = [];

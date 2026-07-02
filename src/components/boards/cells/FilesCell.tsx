@@ -44,7 +44,7 @@ export function FilesCell({
               e.stopPropagation();
               onOpen(i);
             }}
-            className="border-border flex size-6 items-center justify-center overflow-hidden rounded border"
+            className="border-border flex size-6 items-center justify-center overflow-hidden rounded border pointer-coarse:size-11"
           >
             {k === "image" && url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -67,7 +67,7 @@ export function FilesCell({
           e.stopPropagation();
           input.current?.click();
         }}
-        className="text-muted-foreground hover:text-foreground"
+        className="text-muted-foreground hover:text-foreground grid place-items-center pointer-coarse:size-11"
       >
         {files.length ? (
           <Plus className="size-3.5" />

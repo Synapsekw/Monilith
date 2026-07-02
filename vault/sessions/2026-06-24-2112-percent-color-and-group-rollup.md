@@ -55,4 +55,4 @@ collapsed _groups_ — that gap was the second half of the work.
 
 `develop` is green (unit-gated) at `afe5019`. Resume Phase 9.3 cache / 9.4 skeletons, or run
 `/promote` once `ANTHROPIC_API_KEY` is on Vercel. If touching the integration suite, the flake is the
-thing to fix (local Docker Supabase).
+thing to fix (point it at a dedicated isolated test database).
