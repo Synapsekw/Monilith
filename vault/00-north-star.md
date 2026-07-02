@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-02-1356
+last-updated: 2026-07-02-1902
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -48,11 +48,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation** shipped · **Phase 9 (Hardening) DONE** · **TOUCH (iPad) DONE — Batch 2 8/8 surfaces** · **Quality pass (robustness + perf + UI polish + env validation) DONE — built + shipped to prod.**
-- **Branch:** `develop == origin/develop` at `c94b5d2` (squash-divergence heal post-#45); `main ⊆ develop`, nothing unpromoted. **Last production promotion is #45** (2026-07-02, `137b36b`): robustness/error-surfacing (error+not-found boundaries, sonner mutation toasts, owner-gated deleteBoard, loud getBoardPayload) + perf (lazy recharts, bounded/cached reads) + UI polish (EmptyState, ItemPanel tab a11y+fade, rename layout-shift fix) + server env boot validation. Main CI green + Vercel prod deploy confirmed. (Preceded by **#43** `c019f97` — TOUCH close-out + test-DB wiring.) CI tuning still stands: Lighthouse informational/warn, CI verify unit-only.
-- **In flight:** nothing open. All four quality worktrees built, gated, merged, and removed; branches deleted.
-- **Next:** **the planned 0→9 build + reskin + iPad is complete** — no roadmap work is queued. Next step is a **product decision**: define **Phase 10**, revisit deferred **6e Docs**, or declare v1 feature-complete and shift to real-user-feedback mode.
-- **Owed:** nothing infra-blocking. Isolated test DB **decided against** — integration suites are opt-in; DEV/PROD are safe by default (suites skip without `.env.test`), see [[2026-07-02-decision-25-no-isolated-test-db-integration-opt-in]]. `.mcp.json` local edit still uncommitted in the main checkout (left untouched). CI trap recorded: env boot check + hardcoded env refs break CI but pass local gates ([[env-boot-validation-breaks-ci]] auto-memory).
+- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation** shipped · **Phase 9 (Hardening) DONE** · **TOUCH (iPad) DONE** · Quality pass shipped to prod (#45) · **Perceived-perf pass DONE on develop** — cache-invalidation precision (no more root-layout purges), session-read dedupe, lazy board renderers, debounced relation search, instant group-by, batched dashboard widgets, board-page read dedupe, set-based RLS + index migration. ([[2026-07-02-1902-perf-pass-four-parallel-worktrees]])
+- **Branch:** `develop == origin/develop` at `4d98277` (4 perf merges: `af34669` db, `9598ee6` caching, `59e5d72` client, `4d98277` board-reads) — **unpromoted; main is behind at #45** (`137b36b`, prod deploy confirmed). CI tuning still stands: Lighthouse informational/warn, CI verify unit-only.
+- **In flight:** nothing open. All four perf worktrees built, reviewed, gated, merged, and removed; branches deleted.
+- **Next:** (1) **apply migration `20260702120000_perf_set_based_rls_and_indexes.sql` to cloud dev** (manual — agent DDL blocked), verify, then promote develop → main; (2) then the standing product decision: define Phase 10, revisit deferred 6e Docs, or declare v1 feature-complete.
+- **Owed:** **migration 20260702120000 unapplied** (app runs fine either way; RLS/index wins inert until applied; prod needs it via /sync-prod later). Perf tier-3 leftovers + deferred minors listed in [[2026-07-02-1902-perf-pass-four-parallel-worktrees]] (instant-nav exports, landing WebGL deferral, bundle analyzer, spreadsheet-import revalidate). `.mcp.json` local edit still uncommitted (left untouched). Isolated test DB decided against ([[2026-07-02-decision-25-no-isolated-test-db-integration-opt-in]]).
 
 ### Last session
 
