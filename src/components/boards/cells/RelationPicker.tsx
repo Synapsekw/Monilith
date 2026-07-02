@@ -15,12 +15,16 @@ export type RelationCandidate = { id: string; name: string };
 export function RelationPicker({
   candidates,
   selectedIds,
+  searchValue,
   onToggle,
   onSearch,
   allowMultiple,
 }: {
   candidates: RelationCandidate[];
   selectedIds: string[];
+  /** Controlled raw input value — echoes each keystroke instantly, decoupled
+   *  from the debounced value the parent feeds to the server fetch. */
+  searchValue: string;
   onToggle: (id: string) => void;
   onSearch: (q: string) => void;
   allowMultiple: boolean;
@@ -32,6 +36,7 @@ export function RelationPicker({
         <Search className="text-muted-foreground size-4 shrink-0" />
         <Input
           autoFocus
+          value={searchValue}
           onChange={(e) => onSearch(e.target.value)}
           placeholder={allowMultiple ? "Search to link…" : "Search…"}
           aria-label="Search items to link"

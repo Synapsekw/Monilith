@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { RelationCell } from "./RelationCell";
 import type { RelationLink } from "@/lib/boards/relations";
 
@@ -69,5 +69,64 @@ describe("RelationCell", () => {
     const trigger = screen.getByRole("button", { name: "Edit linked items" });
     const addChip = trigger.querySelector(".border-dashed");
     expect(addChip?.className).toContain("pointer-coarse:size-11");
+  });
+});
+
+describe("RelationCell — debounced search", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function openPicker(loadCandidates: (q: string) => Promise<never[]>) {
+    render(
+      <RelationCell
+        allowMultiple
+        onChange={() => {}}
+        loadCandidates={loadCandidates}
+        links={[]}
+      />,
+    );
+    // Open the popover.
+    act(() => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Edit linked items" }),
+      );
+    });
+    return screen.getByLabelText("Search items to link") as HTMLInputElement;
+  }
+
+  it("echoes each keystroke instantly but fetches once after the quiet period", () => {
+    const loadCandidates = vi.fn(async () => [] as never[]);
+    const input = openPicker(loadCandidates);
+
+    // Initial open fetches with an empty query.
+    expect(loadCandidates).toHaveBeenCalledTimes(1);
+    expect(loadCandidates).toHaveBeenLastCalledWith("");
+    loadCandidates.mockClear();
+
+    // Three fast keystrokes: the input value echoes immediately each time…
+    act(() => fireEvent.change(input, { target: { value: "a" } }));
+    act(() => fireEvent.change(input, { target: { value: "ac" } }));
+    act(() => fireEvent.change(input, { target: { value: "acm" } }));
+    expect(input.value).toBe("acm");
+    // …but no fetch has fired yet (still inside the debounce window).
+    expect(loadCandidates).not.toHaveBeenCalled();
+
+    // After the quiet period, exactly one fetch fires with the latest value.
+    act(() => void vi.advanceTimersByTime(200));
+    expect(loadCandidates).toHaveBeenCalledTimes(1);
+    expect(loadCandidates).toHaveBeenLastCalledWith("acm");
+  });
+
+  it("does not fetch a stale query after the popover closes", () => {
+    const loadCandidates = vi.fn(async () => [] as never[]);
+    const input = openPicker(loadCandidates);
+    loadCandidates.mockClear(); // drop the initial open fetch
+
+    act(() => fireEvent.change(input, { target: { value: "abc" } }));
+    // Close the popover before the debounce elapses (Escape closes it).
+    act(() => fireEvent.keyDown(input, { key: "Escape" }));
+
+    act(() => void vi.advanceTimersByTime(500));
+    expect(loadCandidates).not.toHaveBeenCalled();
   });
 });

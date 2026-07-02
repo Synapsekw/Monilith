@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { useDebouncedCallback } from "@/lib/hooks/use-debounced-callback";
 import { sortLinks, type RelationLink } from "@/lib/boards/relations";
 import { RelationPicker, type RelationCandidate } from "./RelationPicker";
 
@@ -37,20 +38,44 @@ export function RelationCell({
   maxChips = 2,
 }: RelationCellProps) {
   const [open, setOpen] = useState(false);
+  // `search` is the raw input value (instant echo, every keystroke); `query` is
+  // the debounced value that actually drives the server fetch. Typing updates
+  // `search` immediately and schedules `query` ~200ms after the last keystroke,
+  // so each keystroke no longer costs a `loadCandidates` round-trip.
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<RelationCandidate[]>([]);
 
-  // Lazy-load candidates when the picker opens or the search changes.
+  const debouncedSetQuery = useDebouncedCallback(setQuery, 200);
+
+  function handleSearch(value: string) {
+    setSearch(value);
+    debouncedSetQuery(value);
+  }
+
+  // Reset the search when the popover closes so the next open starts clean, and
+  // so a keystroke's still-pending debounce can't fetch against a closed picker
+  // (the effect below is gated on `open`, so the reset both cancels the visible
+  // fetch and discards any late timer's result).
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) {
+      setSearch("");
+      setQuery("");
+    }
+  }
+
+  // Lazy-load candidates when the picker opens or the debounced query changes.
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    loadCandidates(search).then((c) => {
+    loadCandidates(query).then((c) => {
       if (alive) setCandidates(c);
     });
     return () => {
       alive = false;
     };
-  }, [open, search, loadCandidates]);
+  }, [open, query, loadCandidates]);
 
   const ordered = sortLinks(links);
   const selectedIds = ordered.map((l) => l.linkedItemId);
@@ -122,14 +147,15 @@ export function RelationCell({
   if (readOnly) return trigger;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
         <RelationPicker
           candidates={candidates}
           selectedIds={selectedIds}
+          searchValue={search}
           onToggle={toggle}
-          onSearch={setSearch}
+          onSearch={handleSearch}
           allowMultiple={allowMultiple}
         />
       </PopoverContent>
