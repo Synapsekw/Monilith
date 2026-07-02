@@ -473,7 +473,7 @@ export async function getWidgetSeries(input: {
   // NOTE: org_members → profiles has no declared FK in database.types.ts (user_id
   // references auth.users, not profiles), so a PostgREST embed won't typecheck.
   // We use a two-query JS join instead, matching the existing pattern in
-  // src/lib/boards/queries.ts::listOrgMembers.
+  // src/lib/org/queries-cached.ts::listOrgMembersCached.
   async function resolver(dim: { kind: string; columnId?: string }) {
     const map = new Map<string, { label: string; color: string }>();
     if (dim.kind === "status" || dim.kind === "dropdown") {
@@ -491,7 +491,7 @@ export async function getWidgetSeries(input: {
       opts.forEach((o) => map.set(o.id, { label: o.label, color: o.color }));
     } else if (dim.kind === "people") {
       // Two-query JS join: fetch org_members user_ids (scoped to this widget's
-      // org, matching src/lib/boards/queries.ts::listOrgMembers), then fetch
+      // org, matching src/lib/org/queries-cached.ts::listOrgMembersCached), then fetch
       // profiles by id. The org_id filter keeps the member set + palette indices
       // deterministic for multi-org users (RLS alone would merge orgs).
       const { data: members } = await supabase

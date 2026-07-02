@@ -19,8 +19,10 @@ vi.mock("@/lib/supabase/server", () => ({
     from: () => makeChain([{ id: "p1", name: "P" }]),
   })),
 }));
-// listOrgMembers import inside portfolios/queries.ts must not explode at import time
-vi.mock("@/lib/boards/queries", () => ({ listOrgMembers: vi.fn() }));
+// the cached-members import inside portfolios/queries.ts must not explode at import time
+vi.mock("@/lib/org/queries-cached", () => ({
+  listOrgMembersCached: vi.fn(async () => []),
+}));
 
 import {
   listPortfolios,

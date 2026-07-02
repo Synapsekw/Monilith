@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { listOrgMembers } from "@/lib/boards/queries";
+import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { optionSchema, type ColumnOption } from "@/lib/validations/boards";
 import { mergeRows, serverToday } from "@/lib/portfolios/rollup";
 import type {
@@ -94,7 +94,7 @@ export async function getPortfolioRows(
     overdueItems: Number(r.overdue_items),
   }));
 
-  const members = await listOrgMembers(portfolio.org_id);
+  const members = await listOrgMembersCached(portfolio.org_id);
   const owners = new Map<string, RowOwner>(
     members.map((m) => [
       m.userId,

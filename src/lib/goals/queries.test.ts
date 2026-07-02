@@ -20,8 +20,8 @@ vi.mock("@/lib/supabase/server", () => ({
     rpc: vi.fn(async () => ({ data: [], error: null })),
   })),
 }));
-vi.mock("@/lib/boards/queries", () => ({
-  listOrgMembers: vi.fn(async () => []),
+vi.mock("@/lib/org/queries-cached", () => ({
+  listOrgMembersCached: vi.fn(async () => []),
 }));
 vi.mock("@/lib/auth/session", () => ({ getUserOrgs: vi.fn(async () => []) }));
 

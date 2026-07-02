@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrgs } from "@/lib/auth/session";
-import { listOrgMembers } from "@/lib/boards/queries";
+import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { listReadableBoards } from "@/lib/portfolios/queries";
 import { buildWorkloadGrid, serverToday } from "@/lib/workload/rollup";
 import { EFFORT_FALLBACK } from "@/lib/workload/types";
@@ -20,7 +20,7 @@ import type {
 export async function listOrgMembersForWorkload(
   orgId: string,
 ): Promise<WorkloadMember[]> {
-  const members = await listOrgMembers(orgId); // { userId, fullName, email, avatarUrl }[]
+  const members = await listOrgMembersCached(orgId); // { userId, fullName, email, avatarUrl }[]
   return members.map((m) => ({
     userId: m.userId,
     fullName: m.fullName,

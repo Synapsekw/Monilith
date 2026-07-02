@@ -1,6 +1,6 @@
 import "server-only";
 
-import { listOrgMembers } from "@/lib/boards/queries";
+import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { getUserOrgs } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { buildGoalTree, serverToday } from "@/lib/goals/progress";
@@ -94,7 +94,7 @@ export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
   const orgs = await getUserOrgs();
   const orgId = orgs[0]?.id;
   if (!orgId) return new Map();
-  const members = await listOrgMembers(orgId);
+  const members = await listOrgMembersCached(orgId);
   return new Map(members.map((m) => [m.userId, m]));
 }
 

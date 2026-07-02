@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getPortfolioRows, listReadableBoards } from "@/lib/portfolios/queries";
-import { listOrgMembers } from "@/lib/boards/queries";
+import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { PortfolioGrid } from "@/components/portfolios/PortfolioGrid";
 
 export default async function PortfolioPage({
@@ -16,7 +16,7 @@ export default async function PortfolioPage({
   if (!result) notFound();
 
   const [members, addableBoards] = await Promise.all([
-    listOrgMembers(result.portfolio.org_id),
+    listOrgMembersCached(result.portfolio.org_id),
     listReadableBoards(),
   ]);
 
