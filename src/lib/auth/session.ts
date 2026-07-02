@@ -7,6 +7,14 @@ import type { Tables } from "@/types/database.types";
 export type Organization = Tables<"organizations">;
 
 /**
+ * The subset of an organization the app actually reads off `getUserOrgs()`:
+ * every caller uses only `id` (org scoping), `name` (welcome/settings headers),
+ * or `timezone` (settings org card). Narrowing the select to these three keeps
+ * the hot per-page read off `select("*")`.
+ */
+export type UserOrg = Pick<Organization, "id" | "name" | "timezone">;
+
+/**
  * The session identity derived from the verified access-token claims — the
  * subset of Supabase's `User` carried in the JWT. Everything the app reads off
  * the session (id, email, the two metadata bags) lives here; no consumer needs
@@ -62,24 +70,19 @@ export async function requireUser(): Promise<SessionUser> {
   return user;
 }
 
-/** Returns the organizations the current user belongs to (RLS-scoped). */
-export async function getUserOrgs(): Promise<Organization[]> {
+/**
+ * Returns the organizations the current user belongs to (RLS-scoped).
+ *
+ * Wrapped in React `cache()` (like `getUser`) so the 2–4 callers that run in one
+ * authenticated render (sidebar + command palette + page + guards) share a
+ * single query instead of re-hitting `organizations` each time. The select is
+ * narrowed to the fields every caller reads (see `UserOrg`).
+ */
+export const getUserOrgs = cache(async (): Promise<UserOrg[]> => {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("organizations").select("*");
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("id, name, timezone");
   if (error) return [];
   return data ?? [];
-}
-
-/** The signed-in user's personal timezone (null = Automatic / unset). Cached
- * per request so the layout reads it without an extra round-trip. */
-export const getUserTimeZone = cache(async (): Promise<string | null> => {
-  const user = await getUser();
-  if (!user) return null;
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("timezone")
-    .eq("id", user.id)
-    .single();
-  return data?.timezone ?? null;
 });
