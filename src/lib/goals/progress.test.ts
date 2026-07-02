@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildGoalTree, computeGoalHealth, leafProgress } from "@/lib/goals/progress";
+import {
+  buildGoalTree,
+  computeGoalHealth,
+  leafProgress,
+} from "@/lib/goals/progress";
 import type { BoardAgg, GoalRow } from "@/lib/goals/types";
 
 const base: Omit<GoalRow, "id" | "progressMode"> = {
@@ -28,7 +32,13 @@ describe("leafProgress", () => {
   it("manual_number: (current-start)/(target-start), clamped", () => {
     expect(
       leafProgress(
-        row({ id: "a", progressMode: "manual_number", startValue: 0, currentValue: 25, targetValue: 100 }),
+        row({
+          id: "a",
+          progressMode: "manual_number",
+          startValue: 0,
+          currentValue: 25,
+          targetValue: 100,
+        }),
         [],
       ),
     ).toBe(0.25);
@@ -36,48 +46,85 @@ describe("leafProgress", () => {
   it("manual_number: null when target === start", () => {
     expect(
       leafProgress(
-        row({ id: "a", progressMode: "manual_number", startValue: 10, currentValue: 10, targetValue: 10 }),
+        row({
+          id: "a",
+          progressMode: "manual_number",
+          startValue: 10,
+          currentValue: 10,
+          targetValue: 10,
+        }),
         [],
       ),
     ).toBeNull();
   });
   it("manual_percent: percent/100", () => {
-    expect(leafProgress(row({ id: "a", progressMode: "manual_percent", percent: 60 }), [])).toBe(0.6);
+    expect(
+      leafProgress(
+        row({ id: "a", progressMode: "manual_percent", percent: 60 }),
+        [],
+      ),
+    ).toBe(0.6);
   });
   it("auto_boards: sum(done)/sum(total) across this goal's aggregates", () => {
     const aggs: BoardAgg[] = [
       { goalId: "a", boardId: "b1", total: 4, done: 1 },
       { goalId: "a", boardId: "b2", total: 6, done: 2 },
     ];
-    expect(leafProgress(row({ id: "a", progressMode: "auto_boards" }), aggs)).toBeCloseTo(0.3);
+    expect(
+      leafProgress(row({ id: "a", progressMode: "auto_boards" }), aggs),
+    ).toBeCloseTo(0.3);
   });
   it("auto_boards: null when there are no items", () => {
-    expect(leafProgress(row({ id: "a", progressMode: "auto_boards" }), [])).toBeNull();
+    expect(
+      leafProgress(row({ id: "a", progressMode: "auto_boards" }), []),
+    ).toBeNull();
   });
   it("auto_subgoals: leaf returns null (resolved during roll-up)", () => {
-    expect(leafProgress(row({ id: "a", progressMode: "auto_subgoals" }), [])).toBeNull();
+    expect(
+      leafProgress(row({ id: "a", progressMode: "auto_subgoals" }), []),
+    ).toBeNull();
   });
 });
 
 describe("computeGoalHealth", () => {
   it("off_track when past due and unfinished", () => {
     expect(
-      computeGoalHealth({ progress: 0.5, startDate: "2026-01-01", dueDate: "2026-06-01", today: "2026-06-21" }),
+      computeGoalHealth({
+        progress: 0.5,
+        startDate: "2026-01-01",
+        dueDate: "2026-06-01",
+        today: "2026-06-21",
+      }),
     ).toBe("off_track");
   });
   it("at_risk when behind pace", () => {
     expect(
-      computeGoalHealth({ progress: 0.1, startDate: "2026-01-01", dueDate: "2026-12-31", today: "2026-07-01" }),
+      computeGoalHealth({
+        progress: 0.1,
+        startDate: "2026-01-01",
+        dueDate: "2026-12-31",
+        today: "2026-07-01",
+      }),
     ).toBe("at_risk");
   });
   it("on_track when ahead of pace", () => {
     expect(
-      computeGoalHealth({ progress: 0.9, startDate: "2026-01-01", dueDate: "2026-12-31", today: "2026-03-01" }),
+      computeGoalHealth({
+        progress: 0.9,
+        startDate: "2026-01-01",
+        dueDate: "2026-12-31",
+        today: "2026-03-01",
+      }),
     ).toBe("on_track");
   });
   it("null when no signal", () => {
     expect(
-      computeGoalHealth({ progress: null, startDate: null, dueDate: null, today: "2026-06-21" }),
+      computeGoalHealth({
+        progress: null,
+        startDate: null,
+        dueDate: null,
+        today: "2026-06-21",
+      }),
     ).toBeNull();
   });
 });
@@ -86,8 +133,20 @@ describe("buildGoalTree", () => {
   it("rolls auto_subgoals up as the equal-weight mean of children", () => {
     const rows: GoalRow[] = [
       row({ id: "root", progressMode: "auto_subgoals" }),
-      row({ id: "c1", parentGoalId: "root", progressMode: "manual_percent", percent: 40, position: 0 }),
-      row({ id: "c2", parentGoalId: "root", progressMode: "manual_percent", percent: 80, position: 1 }),
+      row({
+        id: "c1",
+        parentGoalId: "root",
+        progressMode: "manual_percent",
+        percent: 40,
+        position: 0,
+      }),
+      row({
+        id: "c2",
+        parentGoalId: "root",
+        progressMode: "manual_percent",
+        percent: 80,
+        position: 1,
+      }),
     ];
     const tree = buildGoalTree(rows, [], new Map(), "2026-06-21");
     expect(tree).toHaveLength(1);
@@ -98,7 +157,12 @@ describe("buildGoalTree", () => {
   it("excludes children with null progress from the mean", () => {
     const rows: GoalRow[] = [
       row({ id: "root", progressMode: "auto_subgoals" }),
-      row({ id: "c1", parentGoalId: "root", progressMode: "manual_percent", percent: 50 }),
+      row({
+        id: "c1",
+        parentGoalId: "root",
+        progressMode: "manual_percent",
+        percent: 50,
+      }),
       row({ id: "c2", parentGoalId: "root", progressMode: "auto_boards" }), // null (no items)
     ];
     const tree = buildGoalTree(rows, [], new Map(), "2026-06-21");
@@ -108,10 +172,26 @@ describe("buildGoalTree", () => {
     const rows: GoalRow[] = [
       row({ id: "co", progressMode: "auto_subgoals" }),
       row({ id: "team", parentGoalId: "co", progressMode: "auto_subgoals" }),
-      row({ id: "ic", parentGoalId: "team", progressMode: "manual_number", startValue: 0, currentValue: 50, targetValue: 100 }),
+      row({
+        id: "ic",
+        parentGoalId: "team",
+        progressMode: "manual_number",
+        startValue: 0,
+        currentValue: 50,
+        targetValue: 100,
+      }),
     ];
     const tree = buildGoalTree(rows, [], new Map(), "2026-06-21");
     expect(tree[0].progress).toBeCloseTo(0.5);
     expect(tree[0].children[0].progress).toBeCloseTo(0.5);
+  });
+  it("drops orphaned children (truncated parent) without crashing", () => {
+    // Pins the silent-truncation contract of the bounded goals read: a child
+    // whose parent fell past GOALS_LIMIT is dropped, never a crash — roots
+    // come exclusively from byParent.get(null).
+    const orphan = row({ id: "g2", parentGoalId: "missing-parent" });
+    const root = row({ id: "g1", parentGoalId: null });
+    const tree = buildGoalTree([root, orphan], [], new Map(), "2026-07-02");
+    expect(tree.map((n) => n.id)).toEqual(["g1"]);
   });
 });
