@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // cacheTag/cacheLife throw outside a compiled `use cache` scope under Vitest.
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 
-// `listDashboardsCached` path: from("dashboards").select().eq().order()
-const orderForList = vi.fn();
+// `listDashboardsCached` path: from("dashboards").select().eq().order().limit()
+const limitForList = vi.fn();
+const orderForList = vi.fn(() => ({ limit: limitForList }));
 const listEq = vi.fn(() => ({ order: orderForList }));
 const listSelect = vi.fn(() => ({ eq: listEq }));
 
@@ -24,6 +25,7 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 
 import {
+  DASHBOARDS_LIMIT,
   getWidgetAggregationCached,
   listDashboardsCached,
 } from "./queries-cached";
@@ -31,7 +33,9 @@ import {
 beforeEach(() => {
   listSelect.mockClear();
   listEq.mockClear();
-  orderForList.mockReset();
+  orderForList.mockClear();
+  orderForList.mockReturnValue({ limit: limitForList });
+  limitForList.mockReset();
   rpc.mockReset();
   colSelect.mockClear();
   colEq.mockClear();
@@ -40,7 +44,7 @@ beforeEach(() => {
 
 describe("listDashboardsCached", () => {
   it("filters by orgId (tenant boundary)", async () => {
-    orderForList.mockResolvedValue({
+    limitForList.mockResolvedValue({
       data: [{ id: "d1", name: "D" }],
       error: null,
     });
@@ -49,8 +53,14 @@ describe("listDashboardsCached", () => {
     expect(result).toEqual([{ id: "d1", name: "D" }]);
   });
 
+  it("is bounded", async () => {
+    limitForList.mockResolvedValue({ data: [], error: null });
+    await listDashboardsCached("org-A");
+    expect(limitForList).toHaveBeenCalledWith(DASHBOARDS_LIMIT);
+  });
+
   it("returns [] when none", async () => {
-    orderForList.mockResolvedValue({ data: null, error: null });
+    limitForList.mockResolvedValue({ data: null, error: null });
     expect(await listDashboardsCached("org-A")).toEqual([]);
   });
 });

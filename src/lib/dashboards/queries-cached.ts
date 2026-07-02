@@ -6,6 +6,10 @@ import { optionSchema } from "@/lib/validations/boards";
 import type { Dashboard } from "@/lib/dashboards/queries";
 import type { AggregateBucket, ColumnMeta } from "@/lib/dashboards/widget-data";
 
+/** Hot-path cap (AGENTS.md: bounded reads over dashboards_org_id_idx).
+ * Truncates silently at the cap. */
+export const DASHBOARDS_LIMIT = 100;
+
 /**
  * Cached org dashboards list. `orgId` is passed in (part of the cache key + tag);
  * the explicit `org_id = orgId` filter is the tenant boundary (the service client
@@ -23,7 +27,8 @@ export async function listDashboardsCached(
     .from("dashboards")
     .select("*")
     .eq("org_id", orgId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .limit(DASHBOARDS_LIMIT);
   return data ?? [];
 }
 
