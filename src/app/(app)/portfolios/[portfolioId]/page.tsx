@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { getPortfolioRows, listReadableBoards } from "@/lib/portfolios/queries";
+import { getPortfolioRows } from "@/lib/portfolios/queries";
+import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { PortfolioGrid } from "@/components/portfolios/PortfolioGrid";
 
@@ -10,15 +11,18 @@ export default async function PortfolioPage({
   params: Promise<{ portfolioId: string }>;
 }) {
   const { portfolioId } = await params;
-  await requireUser();
+  const user = await requireUser();
 
-  const result = await getPortfolioRows(portfolioId);
+  // Stage 1: everything keyed on portfolioId / userId, concurrent.
+  const [result, addableBoards] = await Promise.all([
+    getPortfolioRows(portfolioId),
+    listReadableBoardsCached(user.id),
+  ]);
   if (!result) notFound();
 
-  const [members, addableBoards] = await Promise.all([
-    listOrgMembersCached(result.portfolio.org_id),
-    listReadableBoards(),
-  ]);
+  // Stage 2: same use-cache key getPortfolioRows just resolved → warm hit,
+  // not a second Supabase round-trip (this used to be a duplicate fresh fetch).
+  const members = await listOrgMembersCached(result.portfolio.org_id);
 
   return (
     <div className="flex h-full flex-col">

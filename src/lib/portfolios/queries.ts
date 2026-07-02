@@ -60,18 +60,20 @@ export type PortfolioRowsResult = {
   rows: PortfolioRow[];
 };
 
-/** One-pass read for the grid: portfolio + placements + rollup + owners. */
+/** One-pass read for the grid: portfolio + placements + rollup + owners.
+ *
+ * The three portfolioId-keyed reads fire in ONE Promise.all: RLS returns
+ * empty/null rows for the not-found/not-visible case, so starting placements/
+ * rollup before the existence check is safe — they're discarded on the (cold)
+ * 404 path, and the hot path loses a full await stage. */
 export async function getPortfolioRows(
   portfolioId: string,
 ): Promise<PortfolioRowsResult | null> {
   const supabase = await createClient();
-
-  const portfolio = await getPortfolio(portfolioId);
-  if (!portfolio) return null;
-
   const today = serverToday(Date.now());
 
-  const [placementsRes, rollupRes] = await Promise.all([
+  const [portfolio, placementsRes, rollupRes] = await Promise.all([
+    getPortfolio(portfolioId),
     supabase
       .from("portfolio_boards")
       .select("*")
@@ -82,6 +84,7 @@ export async function getPortfolioRows(
       p_today: today,
     }),
   ]);
+  if (!portfolio) return null;
 
   const placements = (placementsRes.data ?? []).map(toPlacement);
   const rollups: RollupRow[] = (rollupRes.data ?? []).map((r) => ({
@@ -133,23 +136,8 @@ export async function getBoardStatusColumns(
   }));
 }
 
-/** Hot-path cap (AGENTS.md: bounded reads). Truncates silently at the cap —
- * raise alongside pagination if a user's readable set ever approaches it. */
+/** Hot-path cap for the readable-boards read (AGENTS.md: bounded reads).
+ * Consumed by `listReadableBoardsCached` in ./queries-cached — the uncached
+ * RLS variant was deleted once all callers migrated. Truncates silently at
+ * the cap — raise alongside pagination if a user's set ever approaches it. */
 export const READABLE_BOARDS_LIMIT = 500;
-
-/** Boards the current user can add to a portfolio (RLS already filters reads). */
-export async function listReadableBoards(): Promise<
-  { id: string; name: string; workspaceId: string }[]
-> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("boards")
-    .select("id, name, workspace_id")
-    .order("name", { ascending: true })
-    .limit(READABLE_BOARDS_LIMIT);
-  return (data ?? []).map((b) => ({
-    id: b.id,
-    name: b.name,
-    workspaceId: b.workspace_id,
-  }));
-}
