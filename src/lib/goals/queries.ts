@@ -8,10 +8,8 @@ import type { BoardAgg, GoalNode, GoalRow, RowOwner } from "@/lib/goals/types";
 
 // Reuse the portfolio helpers verbatim — board status columns + readable boards
 // are identical concerns for the auto_boards mapping picker.
-export {
-  getBoardStatusColumns,
-  listReadableBoards,
-} from "@/lib/portfolios/queries";
+export { getBoardStatusColumns } from "@/lib/portfolios/queries";
+export { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
 export type { StatusColumn } from "@/lib/portfolios/queries";
 
 type GoalDbRow = {

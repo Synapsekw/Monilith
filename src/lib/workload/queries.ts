@@ -1,8 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { getUserOrgs } from "@/lib/auth/session";
+import { getUser, getUserOrgs } from "@/lib/auth/session";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
-import { listReadableBoards } from "@/lib/portfolios/queries";
+import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
 import { buildWorkloadGrid, serverToday } from "@/lib/workload/rollup";
 import { EFFORT_FALLBACK } from "@/lib/workload/types";
 import type {
@@ -163,7 +163,10 @@ export async function getWorkloadPageData(override?: {
   const weeksFwd = 4;
   const weekStartsOn = 1;
 
-  const orgs = await getUserOrgs();
+  // Identity reads OUTSIDE the cache scopes (9.3 rule): userId keys the cached
+  // readable-boards entry, orgId keys the cached members entry.
+  const [user, orgs] = await Promise.all([getUser(), getUserOrgs()]);
+  const userId = user?.id ?? "";
   const orgId = orgs[0]?.id ?? "";
   const supabase = await createClient();
 
@@ -181,7 +184,9 @@ export async function getWorkloadPageData(override?: {
     listOrgMembersForWorkload(orgId),
     getMemberCapacities(orgId),
     getWorkloadDefaults(orgId),
-    listReadableBoards(),
+    // listReadableBoardsCached("") returns [] via the no-membership guard —
+    // same failure shape as the previous RLS empty read.
+    listReadableBoardsCached(userId),
     supabase
       .from("workspaces")
       .select("id, name")
