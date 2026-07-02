@@ -42,7 +42,7 @@ its fallback _inside_ the `AuthenticatedShell`, exactly what we want.
 New files (all thin wrappers around two shared components):
 
 - `src/components/shell/error-fallback.tsx` — client `ErrorFallback` component:
-  `{ error, retry, title?, backHref?, backLabel? }`. Renders segment-scoped copy, a "Try again"
+  `{ error, retry, title?, description? }`. Renders segment-scoped copy, a "Try again"
   button wired to `unstable_retry`, the `error.digest` (muted, for support), and logs the error
   via `console.error` in a `useEffect`. Styled per **pulse-ui** (monochromatic + single accent;
   builders must load the `pulse-ui` + `frontend-design` skills).
