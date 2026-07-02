@@ -2,8 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const from = vi.fn();
 const getUser = vi.fn();
+const rpc = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ from, auth: { getUser } }),
+  createClient: async () => ({ from, auth: { getUser }, rpc }),
+}));
+const getBoardAccess = vi.fn();
+vi.mock("@/lib/boards/queries", () => ({
+  getBoardAccess: (...a: unknown[]) => getBoardAccess(...a),
 }));
 const sessionGetUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({ getUser: () => sessionGetUser() }));
@@ -30,6 +35,10 @@ beforeEach(() => {
   from.mockReset();
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: USER } }, error: null });
+  rpc.mockReset();
+  // Default to owner so pre-existing tests that reach the new membership
+  // checks keep exercising their original paths.
+  getBoardAccess.mockReset().mockResolvedValue("owner");
   sessionGetUser.mockReset().mockResolvedValue({ id: "owner-1" });
   updateTag.mockReset();
   vi.mocked(removeAttachmentObjects).mockReset();
@@ -375,6 +384,53 @@ describe("deleteBoard", () => {
 
     expect(res).toEqual({ ok: true, data: undefined });
     expect(removeAttachmentObjects).toHaveBeenCalledWith(["o/b/i/1.png"]);
+  });
+});
+
+describe("board membership checks (defense in depth — RLS stays the boundary)", () => {
+  it("deleteBoard refuses non-owners without touching the db", async () => {
+    getBoardAccess.mockResolvedValue("editor");
+    const res = await deleteBoard({ boardId: BOARD });
+    expect(res).toEqual({
+      ok: false,
+      error: "Only the board owner can delete this board.",
+    });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("deleteBoard proceeds for the owner", async () => {
+    getBoardAccess.mockResolvedValue("owner");
+    const del = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    from.mockImplementation((table: string) => {
+      if (table === "attachments")
+        return {
+          select: () => ({ eq: async () => ({ data: [], error: null }) }),
+        } as never;
+      if (table === "boards") return { delete: del } as never;
+      return {} as never;
+    });
+    const res = await deleteBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(del).toHaveBeenCalled();
+  });
+
+  it("duplicateBoard refuses non-members with a non-leaking message", async () => {
+    getBoardAccess.mockResolvedValue(null);
+    const res = await duplicateBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: false, error: "Board not found." });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("duplicateBoard proceeds for a viewer", async () => {
+    getBoardAccess.mockResolvedValue("viewer");
+    rpc.mockResolvedValue({ data: { id: "new-board" }, error: null });
+    const res = await duplicateBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: true, data: { boardId: "new-board" } });
+    expect(rpc).toHaveBeenCalledWith("duplicate_board_structure", {
+      p_board_id: BOARD,
+    });
   });
 });
 

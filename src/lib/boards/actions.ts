@@ -33,6 +33,7 @@ import {
   removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
+import { getBoardAccess } from "@/lib/boards/queries";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -176,6 +177,13 @@ export async function deleteBoard(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
+  // Defense in depth: RLS already blocks non-owners, but an RLS-filtered
+  // delete affects 0 rows and returns no error — a lying success. Check
+  // explicitly so non-owners get a real answer (spec F4 / decision D5).
+  const access = await getBoardAccess(parsed.data.boardId);
+  if (access !== "owner")
+    return fail("Only the board owner can delete this board.");
+
   const supabase = await createClient();
 
   // Attachment rows cascade with the board; their Storage objects do not. Every
@@ -205,6 +213,12 @@ export async function duplicateBoard(input: {
   const parsed = duplicateBoardSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  // Any member (owner/editor/viewer) may duplicate — they can already read
+  // the data. Non-members get the same message as a missing board so we
+  // don't leak existence (spec F4 / decision D5).
+  const access = await getBoardAccess(parsed.data.boardId);
+  if (!access) return fail("Board not found.");
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("duplicate_board_structure", {
