@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-02-1218
+last-updated: 2026-07-02-1356
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -48,11 +48,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation** shipped · **Phase 9 (Hardening) DONE** · **TOUCH (iPad) DONE — Batch 2 8/8 surfaces** · **Quality pass (polish/perf/robustness) scoped — 4 specs awaiting review.**
-- **Branch:** `develop == origin/develop` at `d2392e4` (squash-divergence heal post-#43); `main ⊆ develop`, nothing unpromoted. **Last production promotion is #43** (2026-07-02, `c019f97`): TOUCH Batch 2 close-out (dashboard canvas + command palette) + isolated test-DB wiring. Main CI green + Vercel prod deploy confirmed. CI tuning from #38 still stands: Lighthouse informational/warn, CI verify unit-only (`4da5c30`).
-- **In flight:** **4 scoping worktrees with specs + plans awaiting review** (docs-only commits, disjoint footprints, parallel-buildable as one batch): `task/robustness-error-surfacing` (error.tsx/not-found.tsx coverage, sonner toasts on mutation failure, lying-`ok:true` deleteBoard fix, getBoardPayload error swallowing) · `task/perf-query-bounds` (recharts lazy-load, bounded reads, org-members/readable-boards caching, duplicate members fetch) · `task/ui-polish-micro` (shared EmptyState, ItemPanel tab a11y + fade, BoardHeader rename layout shift) · `task/env-validation` (env.server.ts + instrumentation boot check logging active Supabase ref). Specs under each worktree's `docs/superpowers/{specs,plans}/2026-07-02-*`.
-- **Next:** review the 4 quality specs and green-light the builds (robustness is critical path). In parallel or before: **provision the isolated test DB** — create the dedicated test-only Supabase project + local `.env.test` with `PULSE_TEST_DB=1` (code side shipped in #43; runbook `docs/…/2026-06-29-test-db-isolation-design.md`). Then Phase 7 remaining polish / Phase 10.
-- **Owed:** **Test-DB provisioning (user-gated)** — until `.env.test` exists, integration suites still hit remote DEV and re-pollute it ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]]). `.mcp.json` local edit still uncommitted in the main checkout (left untouched). Migration ledger reconciled (2026-06-29); finish-task changelog guard verified working.
+- **Phase:** Phase 6 (ClickUp depth) complete except deferred 6e Docs · Phase 7 (Asana polish) in progress — 7a + 7b + 7c + Workload analytics v3 + **time allocation** shipped · **Phase 9 (Hardening) DONE** · **TOUCH (iPad) DONE — Batch 2 8/8 surfaces** · **Quality pass (robustness + perf + UI polish + env validation) DONE — built + shipped to prod.**
+- **Branch:** `develop == origin/develop` at `c94b5d2` (squash-divergence heal post-#45); `main ⊆ develop`, nothing unpromoted. **Last production promotion is #45** (2026-07-02, `137b36b`): robustness/error-surfacing (error+not-found boundaries, sonner mutation toasts, owner-gated deleteBoard, loud getBoardPayload) + perf (lazy recharts, bounded/cached reads) + UI polish (EmptyState, ItemPanel tab a11y+fade, rename layout-shift fix) + server env boot validation. Main CI green + Vercel prod deploy confirmed. (Preceded by **#43** `c019f97` — TOUCH close-out + test-DB wiring.) CI tuning still stands: Lighthouse informational/warn, CI verify unit-only.
+- **In flight:** nothing open. All four quality worktrees built, gated, merged, and removed; branches deleted.
+- **Next:** **provision the isolated test DB** — create the dedicated test-only Supabase project + local `.env.test` with `PULSE_TEST_DB=1` (code side shipped in #43; runbook `docs/…/2026-06-29-test-db-isolation-design.md`); until then integration suites still hit remote DEV. Then get a **Phase 10** direction (no next feature phase is specced) or a Phase 7 residual-polish scope.
+- **Owed:** **Test-DB provisioning (user-gated)** — until `.env.test` exists, integration suites still hit remote DEV and re-pollute it ([[2026-06-23-gotcha-43-shared-db-integration-test-flake]]). `.mcp.json` local edit still uncommitted in the main checkout (left untouched). New CI trap recorded: env boot check + hardcoded env refs break CI but pass local gates ([[env-boot-validation-breaks-ci]] auto-memory).
 
 ### Last session
 
