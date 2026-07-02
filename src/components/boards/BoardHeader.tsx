@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Eye, UserPlus, Zap } from "lucide-react";
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
@@ -51,7 +50,6 @@ export function BoardHeader({
   /** Existing share grants, seeding the share dialog. Only meaningful for owners. */
   grants?: HeaderGrant[];
 }) {
-  const router = useRouter();
   const { renameBoard } = useBoardMutations(boardId);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(boardName);
@@ -71,8 +69,13 @@ export function BoardHeader({
     const trimmed = name.trim();
     setEditing(false);
     if (!trimmed || trimmed === boardName) return;
+    // `renameBoard` optimistically patches the shared BoardCache (React Query)
+    // with the new name and rolls back on error, and `boardName` here is read
+    // from that cache — so the header updates without a `router.refresh()`,
+    // which would refetch the whole board (gotcha-09). The transition keeps the
+    // input disabled while the mutation is in flight.
     startTransition(() => {
-      renameBoard(trimmed, { onSuccess: () => router.refresh() });
+      renameBoard(trimmed);
     });
   }
 
