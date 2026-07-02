@@ -99,14 +99,14 @@ export function BoardHeader({
             className="h-8 max-w-md text-xl font-semibold"
           />
         ) : isViewer ? (
-          <h1 className="truncate text-xl font-semibold tracking-tight">
+          <h1 className="flex h-8 items-center truncate text-xl font-semibold tracking-tight">
             {boardName}
           </h1>
         ) : (
           <button
             type="button"
             onClick={openRename}
-            className="hover:text-muted-foreground focus-visible:ring-ring rounded-sm text-left text-xl font-semibold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:text-muted-foreground focus-visible:ring-ring flex h-8 items-center rounded-sm text-left text-xl font-semibold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {boardName}
           </button>

@@ -42,6 +42,12 @@ describe("ViewSwitcher", () => {
     );
   });
 
+  it("view tab button carries the branded focus ring", () => {
+    render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
+    const tab = screen.getAllByRole("tab")[0];
+    expect(tab.className).toContain("focus-visible:ring");
+  });
+
   it("switches view via the History API (no RSC navigation)", async () => {
     const pushState = vi.spyOn(window.history, "pushState");
     render(<ViewSwitcher boardId="b1" views={views} selectedViewId="v1" />);
