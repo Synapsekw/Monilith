@@ -49,6 +49,21 @@ describe("FilesTab", () => {
     expect(screen.getByText(/No files yet/i)).toBeInTheDocument();
   });
 
+  it("dropzone ring is transitioned, not popped", () => {
+    render(<FilesTab cache={{ attachments: [] }} {...base} />);
+    const zone = document.querySelector(".ring-2");
+    expect(zone).toBeTruthy();
+    expect(zone!.className).toContain("ring-transparent");
+    expect(zone!.className).toContain("transition-shadow");
+  });
+
+  it("empty state uses the standardized inline EmptyState", () => {
+    render(<FilesTab cache={{ attachments: [] }} {...base} />);
+    const empty = screen.getByText(/No files yet/i);
+    expect(empty.className).toContain("py-8");
+    expect(empty.className).toContain("text-muted-foreground");
+  });
+
   it("renders gallery cards with name + size", () => {
     const cache: AttachmentsCache = { attachments: [att("a")] };
     render(<FilesTab cache={cache} {...base} />);

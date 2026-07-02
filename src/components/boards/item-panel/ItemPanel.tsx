@@ -97,15 +97,21 @@ export function ItemPanel({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex gap-1 border-b">
+        <div
+          role="tablist"
+          aria-label="Item panel sections"
+          className="flex gap-1 border-b"
+        >
           {(["fields", "updates", "activity", "files"] as const).map((t) => (
             <button
               key={t}
+              role="tab"
+              aria-selected={tab === t}
               onClick={() => setTab(t)}
-              className={`px-3 py-2 text-sm capitalize pointer-coarse:min-h-11 ${
+              className={`focus-visible:ring-ring rounded-sm px-3 py-2 text-sm capitalize transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 ${
                 tab === t
                   ? "border-primary border-b-2 font-medium"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t === "activity" ? "Activity Log" : t}
@@ -114,60 +120,68 @@ export function ItemPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {tab === "fields" && (
-            <div className="space-y-4 py-6">
-              <p className="text-muted-foreground text-sm">
-                Edit fields in the board grid. (Inline field editing in the
-                panel is a fast-follow.)
-              </p>
-              <dl className="space-y-2 border-t pt-4">
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-muted-foreground text-sm">Created by</dt>
-                  <dd>
-                    <CreatedByCell
-                      name={
-                        members.find((m) => m.userId === createdBy)?.fullName ??
-                        null
-                      }
-                    />
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-muted-foreground text-sm">Created at</dt>
-                  <dd>
-                    <CreatedAtCell iso={createdAt} />
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          )}
-          {tab === "updates" && (
-            <UpdatesTab
-              cache={updates.data}
-              members={members}
-              onAdd={mutations.addUpdate}
-              onDelete={mutations.deleteUpdate}
-            />
-          )}
-          {tab === "activity" && (
-            <ActivityTab
-              cache={activity.data}
-              columns={columns}
-              members={members}
-            />
-          )}
-          {tab === "files" && (
-            <FilesTab
-              cache={attachments.data}
-              previewUrls={previewUrls}
-              members={members}
-              currentUserId={currentUserId}
-              isUploading={attachmentMutations.isUploading}
-              uploadError={attachmentMutations.uploadError}
-              onUpload={attachmentMutations.uploadFile}
-              onDelete={attachmentMutations.deleteAttachment}
-            />
-          )}
+          {/* Keyed by tab so each switch re-mounts the wrapper and plays the
+              150ms fade (reduced-motion handled globally in globals.css). */}
+          <div key={tab} className="animate-fadein">
+            {tab === "fields" && (
+              <div className="space-y-4 py-6">
+                <p className="text-muted-foreground text-sm">
+                  Edit fields in the board grid. (Inline field editing in the
+                  panel is a fast-follow.)
+                </p>
+                <dl className="space-y-2 border-t pt-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground text-sm">
+                      Created by
+                    </dt>
+                    <dd>
+                      <CreatedByCell
+                        name={
+                          members.find((m) => m.userId === createdBy)
+                            ?.fullName ?? null
+                        }
+                      />
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground text-sm">
+                      Created at
+                    </dt>
+                    <dd>
+                      <CreatedAtCell iso={createdAt} />
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+            {tab === "updates" && (
+              <UpdatesTab
+                cache={updates.data}
+                members={members}
+                onAdd={mutations.addUpdate}
+                onDelete={mutations.deleteUpdate}
+              />
+            )}
+            {tab === "activity" && (
+              <ActivityTab
+                cache={activity.data}
+                columns={columns}
+                members={members}
+              />
+            )}
+            {tab === "files" && (
+              <FilesTab
+                cache={attachments.data}
+                previewUrls={previewUrls}
+                members={members}
+                currentUserId={currentUserId}
+                isUploading={attachmentMutations.isUploading}
+                uploadError={attachmentMutations.uploadError}
+                onUpload={attachmentMutations.uploadFile}
+                onDelete={attachmentMutations.deleteAttachment}
+              />
+            )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

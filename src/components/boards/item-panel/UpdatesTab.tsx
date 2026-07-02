@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
 import { DateTime } from "@/components/datetime/date-time";
@@ -45,12 +46,13 @@ export function UpdatesTab({
   return (
     <div className="flex flex-col gap-4">
       {!open ? (
-        <button
-          className="text-muted-foreground hover:bg-accent rounded-md border px-3 py-2 text-left text-sm"
+        <Button
+          variant="outline"
+          className="text-muted-foreground w-full justify-start font-normal"
           onClick={() => setOpen(true)}
         >
           Write an update
-        </button>
+        </Button>
       ) : (
         <div className="flex flex-col gap-2">
           <MentionTextarea
@@ -74,9 +76,7 @@ export function UpdatesTab({
       )}
 
       {!cache || cache.updates.length === 0 ? (
-        <p className="text-muted-foreground py-6 text-center text-sm">
-          No updates yet for this item.
-        </p>
+        <EmptyState variant="inline">No updates yet for this item.</EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
           {cache.updates.map((u) => (
