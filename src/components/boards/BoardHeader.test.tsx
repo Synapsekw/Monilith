@@ -10,11 +10,6 @@ import {
 import type { BoardPresence } from "@/lib/boards/use-board-presence";
 
 const renameBoard = vi.fn();
-const refresh = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh }),
-}));
 
 vi.mock("@/lib/boards/use-board-mutations", () => ({
   useBoardMutations: () => ({ renameBoard }),
@@ -73,7 +68,6 @@ function renderHeader(
 
 beforeEach(() => {
   renameBoard.mockReset();
-  refresh.mockReset();
 });
 
 describe("BoardHeader", () => {
@@ -95,9 +89,9 @@ describe("BoardHeader", () => {
     await userEvent.type(input, "Q2 roadmap");
     await userEvent.keyboard("{Enter}");
 
-    expect(renameBoard).toHaveBeenCalledWith("Q2 roadmap", {
-      onSuccess: expect.any(Function),
-    });
+    // The rename reconciles the shared BoardCache optimistically, so no
+    // post-mutation router.refresh() callback is passed (B4).
+    expect(renameBoard).toHaveBeenCalledWith("Q2 roadmap");
   });
 
   it("owner: shows the Share affordance, no View only badge, and a rename control", () => {

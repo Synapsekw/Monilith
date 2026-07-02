@@ -13,6 +13,7 @@ describe("RelationPicker", () => {
       <RelationPicker
         candidates={candidates}
         selectedIds={["b1"]}
+        searchValue=""
         onToggle={() => {}}
         onSearch={() => {}}
         allowMultiple
@@ -35,6 +36,7 @@ describe("RelationPicker", () => {
       <RelationPicker
         candidates={candidates}
         selectedIds={[]}
+        searchValue=""
         onToggle={onToggle}
         onSearch={onSearch}
         allowMultiple
@@ -53,6 +55,7 @@ describe("RelationPicker", () => {
       <RelationPicker
         candidates={[]}
         selectedIds={[]}
+        searchValue=""
         onToggle={() => {}}
         onSearch={() => {}}
         allowMultiple

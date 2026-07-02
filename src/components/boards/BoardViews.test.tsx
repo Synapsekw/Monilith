@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { useEffect, useState, type ComponentType } from "react";
 import { BoardViews } from "@/components/boards/BoardViews";
 import type { BoardPayload } from "@/lib/boards/queries";
 
@@ -9,6 +13,26 @@ let viewParam: string | null = null;
 vi.mock("next/navigation", () => ({
   useSearchParams: () =>
     new URLSearchParams(viewParam ? `view=${viewParam}` : ""),
+}));
+
+// The non-default views are now next/dynamic imports. Resolve the loader in an
+// effect and swap the component in (mirrors DashboardWidget.test.tsx): each
+// BoardViews loader already maps the module to its named export, so `m` here is
+// the component itself. Tests await these via findByTestId.
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<unknown>) => {
+    return function Lazy(props: Record<string, unknown>) {
+      const [Comp, setComp] = useState<ComponentType<
+        Record<string, unknown>
+      > | null>(null);
+      useEffect(() => {
+        void loader().then((m) =>
+          setComp(() => m as ComponentType<Record<string, unknown>>),
+        );
+      }, []);
+      return Comp ? <Comp {...props} /> : null;
+    };
+  },
 }));
 
 vi.mock("@/lib/boards/use-board-cache", () => ({ useBoardCache: vi.fn() }));
@@ -90,7 +114,7 @@ describe("BoardViews", () => {
     expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
   });
 
-  it("renders the kanban view when the URL selects a kanban view", () => {
+  it("renders the kanban view when the URL selects a kanban view", async () => {
     viewParam = "v2";
     render(
       <BoardViews
@@ -102,11 +126,11 @@ describe("BoardViews", () => {
         grants={[]}
       />,
     );
-    expect(screen.getByTestId("kanban")).toHaveTextContent("kanban:v2");
+    expect(await screen.findByTestId("kanban")).toHaveTextContent("kanban:v2");
     expect(screen.queryByTestId("table")).not.toBeInTheDocument();
   });
 
-  it("falls back to initialViewId when the URL has no view param", () => {
+  it("falls back to initialViewId when the URL has no view param", async () => {
     viewParam = null;
     render(
       <BoardViews
@@ -118,10 +142,10 @@ describe("BoardViews", () => {
         grants={[]}
       />,
     );
-    expect(screen.getByTestId("kanban")).toHaveTextContent("kanban:v2");
+    expect(await screen.findByTestId("kanban")).toHaveTextContent("kanban:v2");
   });
 
-  it("renders the calendar view when the URL selects a calendar view", () => {
+  it("renders the calendar view when the URL selects a calendar view", async () => {
     viewParam = "v3";
     render(
       <BoardViews
@@ -133,12 +157,14 @@ describe("BoardViews", () => {
         grants={[]}
       />,
     );
-    expect(screen.getByTestId("calendar")).toHaveTextContent("calendar:v3");
+    expect(await screen.findByTestId("calendar")).toHaveTextContent(
+      "calendar:v3",
+    );
     expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
     expect(screen.queryByTestId("table")).not.toBeInTheDocument();
   });
 
-  it("renders the gantt view when the URL selects a timeline view", () => {
+  it("renders the gantt view when the URL selects a timeline view", async () => {
     viewParam = "v4";
     render(
       <BoardViews
@@ -150,9 +176,23 @@ describe("BoardViews", () => {
         grants={[]}
       />,
     );
-    expect(screen.getByTestId("gantt")).toHaveTextContent("gantt:v4");
+    expect(await screen.findByTestId("gantt")).toHaveTextContent("gantt:v4");
     expect(screen.queryByTestId("kanban")).not.toBeInTheDocument();
     expect(screen.queryByTestId("table")).not.toBeInTheDocument();
     expect(screen.queryByTestId("calendar")).not.toBeInTheDocument();
+  });
+
+  it("lazy-loads the non-default renderers (keeps them out of first paint)", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/components/boards/BoardViews.tsx"),
+      "utf8",
+    );
+    // BoardTable is the default view → stays a static import.
+    expect(src).toMatch(/^import\s+\{\s*BoardTable\s*\}\s+from/m);
+    // The other three renderers must not be statically imported.
+    expect(src).not.toMatch(/^import\s+\{\s*KanbanBoard\s*\}\s+from/m);
+    expect(src).not.toMatch(/^import\s+\{\s*CalendarBoard\s*\}\s+from/m);
+    expect(src).not.toMatch(/^import\s+\{\s*GanttBoard\s*\}\s+from/m);
+    expect(src).toContain("dynamic(");
   });
 });

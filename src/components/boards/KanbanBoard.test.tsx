@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KanbanBoard, onCardDropped } from "@/components/boards/KanbanBoard";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+
+const updateBoardView = vi.fn();
+vi.mock("@/lib/boards/view-actions", () => ({
+  updateBoardView: (...a: unknown[]) => updateBoardView(...a),
+}));
+
+const toastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...a: unknown[]) => toastError(...a) },
+}));
 
 vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/dnd/sensors")>();
@@ -328,6 +338,136 @@ describe("KanbanCard fields", () => {
     expect(screen.getByText("40%")).toBeInTheDocument();
     // Date is formatted (month short) — assert the year/day survive formatting.
     expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+});
+
+// Two status columns so the Group-by select has something to switch to.
+function twoStatusPayload() {
+  const status = {
+    id: "status",
+    board_id: "b1",
+    org_id: "o1",
+    kind: "status",
+    name: "Status",
+    position: 0,
+    settings: {
+      options: [
+        { id: "o1", label: "Working", color: "#fdab3d" },
+        { id: "o2", label: "Done", color: "#00c875" },
+      ],
+    },
+  };
+  const stage = {
+    id: "stage",
+    board_id: "b1",
+    org_id: "o1",
+    kind: "status",
+    name: "Stage",
+    position: 1,
+    settings: {
+      options: [
+        { id: "s1", label: "Todo", color: "#66ccff" },
+        { id: "s2", label: "Shipped", color: "#9d99ff" },
+      ],
+    },
+  };
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board" },
+    groups: [{ id: "g1", board_id: "b1" }],
+    columns: [status, stage],
+    items: [{ id: "i1", name: "Card A", group_id: "g1", position: 0 }],
+    cellValues: [
+      { item_id: "i1", column_id: "status", value: { optionId: "o1" } },
+    ],
+    views: [
+      {
+        id: "v2",
+        kind: "kanban",
+        name: "Kanban",
+        config: { group_column_id: "status" },
+      },
+    ],
+  } as never;
+}
+
+describe("KanbanBoard Group-by (B3: instant regroup, background persist)", () => {
+  beforeEach(() => {
+    updateBoardView.mockReset();
+    toastError.mockReset();
+  });
+
+  it("regroups instantly and persists via updateBoardView without a router.refresh", async () => {
+    updateBoardView.mockResolvedValue({ ok: true, data: undefined });
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <KanbanBoard
+          payload={twoStatusPayload()}
+          selectedViewId="v2"
+          members={[]}
+        />
+      </QueryClientProvider>,
+    );
+
+    // Grouped by Status → lanes (regions) are the Status options.
+    expect(screen.getByRole("region", { name: "Working" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Todo" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Group by"), {
+      target: { value: "stage" },
+    });
+
+    // Regroup is synchronous: the Stage lanes appear immediately (no await).
+    expect(screen.getByRole("region", { name: "Todo" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Shipped" })).toBeInTheDocument();
+    expect((screen.getByLabelText("Group by") as HTMLSelectElement).value).toBe(
+      "stage",
+    );
+
+    // Persisted in the background; the whole board is never refetched.
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: "v2",
+      config: { group_column_id: "stage" },
+    });
+    expect(refresh).not.toHaveBeenCalled();
+    await waitFor(() => expect(toastError).not.toHaveBeenCalled());
+  });
+
+  it("reverts the override and surfaces an error when the persist fails", async () => {
+    updateBoardView.mockResolvedValue({ ok: false, error: "nope" });
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <KanbanBoard
+          payload={twoStatusPayload()}
+          selectedViewId="v2"
+          members={[]}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Group by"), {
+      target: { value: "stage" },
+    });
+    // Optimistically switched.
+    expect(screen.getByRole("region", { name: "Todo" })).toBeInTheDocument();
+
+    // After the failed persist the override reverts to Status grouping and the
+    // error surfaces via a toast.
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Group by") as HTMLSelectElement).value,
+      ).toBe("status"),
+    );
+    expect(
+      screen.queryByRole("region", { name: "Todo" }),
+    ).not.toBeInTheDocument();
+    expect(toastError).toHaveBeenCalledWith(
+      "Couldn't change the grouping — your change was undone.",
+      { description: "nope" },
+    );
   });
 });
 
