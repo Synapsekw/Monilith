@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 // Mock the server action behind editWidget → updateWidgetConfig so no Supabase
 // call happens; we assert on the args the header rename sends.
@@ -10,12 +13,44 @@ vi.mock("@/lib/dashboards/actions", () => ({
   updateWidgetConfig: (...a: unknown[]) => updateWidgetConfig(...a),
 }));
 
+// Resolve next/dynamic loaders in a jsdom-friendly way: run the loader in an
+// effect and swap the resolved component in (the loader itself already maps
+// the module to the named export).
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<unknown>) => {
+    return function Lazy(props: Record<string, unknown>) {
+      const [Comp, setComp] = useState<ComponentType<
+        Record<string, unknown>
+      > | null>(null);
+      useEffect(() => {
+        void loader().then((m) => {
+          const resolved =
+            typeof m === "function"
+              ? (m as ComponentType<Record<string, unknown>>)
+              : ((m as { ChartWidget?: ComponentType<Record<string, unknown>> })
+                  .ChartWidget ?? null);
+          setComp(() => resolved);
+        });
+      }, []);
+      return Comp ? <Comp {...props} /> : null;
+    };
+  },
+}));
+
 // Stub the widget bodies — they fetch their own data and are irrelevant to the
-// header rename behavior under test.
-vi.mock("./widgets/NumberWidget", () => ({ NumberWidget: () => <div /> }));
-vi.mock("./widgets/ChartWidget", () => ({ ChartWidget: () => <div /> }));
-vi.mock("./widgets/BatteryWidget", () => ({ BatteryWidget: () => <div /> }));
-vi.mock("./widgets/ListWidget", () => ({ ListWidget: () => <div /> }));
+// dispatch/rename behavior under test.
+vi.mock("./widgets/NumberWidget", () => ({
+  NumberWidget: () => <div data-testid="number-widget" />,
+}));
+vi.mock("./widgets/ChartWidget", () => ({
+  ChartWidget: () => <div data-testid="chart-widget" />,
+}));
+vi.mock("./widgets/BatteryWidget", () => ({
+  BatteryWidget: () => <div data-testid="battery-widget" />,
+}));
+vi.mock("./widgets/ListWidget", () => ({
+  ListWidget: () => <div data-testid="list-widget" />,
+}));
 
 import { DashboardWidget } from "./DashboardWidget";
 import type { CacheWidget } from "@/lib/dashboards/cache";
@@ -23,10 +58,10 @@ import type { CacheWidget } from "@/lib/dashboards/cache";
 const WIDGET_ID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const BOARD_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
-function makeWidget(title: string): CacheWidget {
+function makeWidget(title: string, kind = "number"): CacheWidget {
   return {
     id: WIDGET_ID,
-    kind: "number",
+    kind,
     title,
     config: { agg: "count" },
     source_board_id: BOARD_ID,
@@ -104,5 +139,26 @@ describe("DashboardWidget header rename", () => {
       expect(screen.queryByLabelText("Widget title")).not.toBeInTheDocument(),
     );
     expect(updateWidgetConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe("DashboardWidget kind dispatch", () => {
+  it("renders the chart widget through the lazy path", async () => {
+    renderWidget(makeWidget("Chart", "chart"), false);
+    expect(await screen.findByTestId("chart-widget")).toBeInTheDocument();
+  });
+
+  it("renders static widgets directly", () => {
+    renderWidget(makeWidget("Number", "number"), false);
+    expect(screen.getByTestId("number-widget")).toBeInTheDocument();
+  });
+
+  it("does not statically import ChartWidget (recharts stays out of first paint)", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/components/dashboards/DashboardWidget.tsx"),
+      "utf8",
+    );
+    expect(src).not.toMatch(/^import\s+\{\s*ChartWidget\s*\}\s+from/m);
+    expect(src).toContain("dynamic(");
   });
 });
