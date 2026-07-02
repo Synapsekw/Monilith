@@ -10,6 +10,7 @@ const reorderGroup = vi.fn();
 const updateGroupColor = vi.fn();
 const deleteGroup = vi.fn();
 const createColumn = vi.fn();
+const createItem = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
@@ -18,6 +19,12 @@ vi.mock("@/lib/boards/actions", () => ({
   updateGroupColor: (...a: unknown[]) => updateGroupColor(...a),
   deleteGroup: (...a: unknown[]) => deleteGroup(...a),
   createColumn: (...a: unknown[]) => createColumn(...a),
+  createItem: (...a: unknown[]) => createItem(...a),
+}));
+
+const toastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...a: unknown[]) => toastError(...a) },
 }));
 
 const createDependency = vi.fn();
@@ -622,6 +629,81 @@ describe("useBoardMutations.deleteEntry", () => {
       expect(cache.timeEntries).toHaveLength(1);
       expect(cache.timeEntries[0].id).toBe(ENTRY_ID);
     });
+  });
+});
+
+describe("mutation error toasts", () => {
+  beforeEach(() => {
+    toastError.mockReset();
+    upsertCell.mockReset();
+    createItem.mockReset();
+  });
+
+  it("toasts and rolls back when setCell fails", async () => {
+    upsertCell.mockResolvedValue({ ok: false, error: "boom" });
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    const before = seedCache(qc);
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    act(() => {
+      result.current.setCell({
+        itemId: "i1",
+        columnId: "c1",
+        value: { text: "x" },
+      });
+    });
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError).toHaveBeenCalledWith(
+      "Couldn't save the cell — your change was undone.",
+      { description: "boom" },
+    );
+    // rollback still happens
+    expect(qc.getQueryData(boardKey("b1"))).toEqual(before);
+  });
+
+  it("toasts when a silent non-optimistic mutation fails (startTimer)", async () => {
+    startTimerFn.mockReset();
+    startTimerFn.mockResolvedValue({ ok: false, error: "boom" });
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    seedCache(qc);
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    act(() => {
+      result.current.startTimer("i1", "col1");
+    });
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError).toHaveBeenCalledWith("Couldn't start the timer.", {
+      description: "boom",
+    });
+  });
+
+  it("does NOT toast for callback-surfaced mutations (addItem)", async () => {
+    createItem.mockResolvedValue({ ok: false, error: "boom" });
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    seedCache(qc);
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    const onError = vi.fn();
+    act(() => {
+      result.current.addItem({ groupId: "g1", name: "x" }, { onError });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalled());
+    expect(toastError).not.toHaveBeenCalled();
   });
 });
 

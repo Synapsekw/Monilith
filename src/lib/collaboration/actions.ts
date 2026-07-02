@@ -62,7 +62,7 @@ export async function addUpdate(input: {
     (id) => id !== user.id,
   );
   if (recipients.length > 0) {
-    await supabase.from("notifications").insert(
+    const { error: notifErr } = await supabase.from("notifications").insert(
       recipients.map((rid) => ({
         org_id: item.org_id,
         recipient_id: rid,
@@ -73,6 +73,13 @@ export async function addUpdate(input: {
         update_id: data.id,
       })),
     );
+    // Best-effort fan-out: the update already posted (spec F3 / decision D4).
+    if (notifErr)
+      console.error("[notifications] mention fan-out failed", {
+        itemId: parsed.data.itemId,
+        recipients: recipients.length,
+        error: notifErr.message,
+      });
   }
 
   return { ok: true, data: { updateId: data.id } };

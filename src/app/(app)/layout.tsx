@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
+import { Toaster } from "@/components/ui/sonner";
 
 /**
  * The single persistent shell for every authenticated section
@@ -21,5 +22,10 @@ import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
 export const unstable_instant = false;
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  return <AuthenticatedShell>{children}</AuthenticatedShell>;
+  return (
+    <>
+      <AuthenticatedShell>{children}</AuthenticatedShell>
+      <Toaster />
+    </>
+  );
 }

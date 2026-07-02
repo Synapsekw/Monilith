@@ -158,6 +158,51 @@ describe("addUpdate mention fan-out", () => {
     await addUpdate({ itemId: ITEM, text: "no mentions" });
     expect(notifInsert).not.toHaveBeenCalled();
   });
+
+  it("returns ok but logs when the mention notification insert fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const notifInsert = vi
+      .fn()
+      .mockResolvedValue({ error: { message: "insert denied" } });
+    const updInsert = vi.fn().mockReturnValue({
+      select: () => ({
+        single: async () => ({ data: { id: UPD }, error: null }),
+      }),
+    });
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { org_id: "org", board_id: "board" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "item_updates") return { insert: updInsert } as never;
+      if (table === "notifications") return { insert: notifInsert } as never;
+      return {} as never;
+    });
+
+    const res = await addUpdate({
+      itemId: ITEM,
+      text: "hi",
+      mentions: [OTHER],
+    });
+
+    expect(res).toEqual({ ok: true, data: { updateId: UPD } });
+    expect(spy).toHaveBeenCalledWith(
+      "[notifications] mention fan-out failed",
+      expect.objectContaining({
+        itemId: ITEM,
+        recipients: 1,
+        error: "insert denied",
+      }),
+    );
+    spy.mockRestore();
+  });
 });
 
 describe("markNotificationRead", () => {
