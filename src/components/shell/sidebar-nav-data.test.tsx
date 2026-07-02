@@ -48,11 +48,18 @@ beforeEach(() => {
 });
 
 describe("SidebarNavData", () => {
-  it("renders boards, dashboards and workspaces from the cached reads", async () => {
-    const { SidebarNavData } = await import("./sidebar-nav-data");
-    render(await SidebarNavData());
-    expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
-    expect(screen.getByText("Velocity")).toBeInTheDocument();
-    expect(screen.getByText("Eng")).toBeInTheDocument();
-  });
+  // Rendering the full async RSC tree takes ~2-5s and breaches the default
+  // 5s cap when the suite runs fully parallel; the generous cap only guards
+  // against a hang, not slowness.
+  it(
+    "renders boards, dashboards and workspaces from the cached reads",
+    { timeout: 20_000 },
+    async () => {
+      const { SidebarNavData } = await import("./sidebar-nav-data");
+      render(await SidebarNavData());
+      expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
+      expect(screen.getByText("Velocity")).toBeInTheDocument();
+      expect(screen.getByText("Eng")).toBeInTheDocument();
+    },
+  );
 });

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireUser, getUserOrgs, getUserTimeZone } from "@/lib/auth/session";
+import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -16,8 +17,12 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const myTimeZone = await getUserTimeZone();
-  const orgs = await getUserOrgs();
+  // Timezone + orgs are independent reads — resolve them in parallel (the
+  // members RPC below is the only read that depends on org.id).
+  const [myTimeZone, orgs] = await Promise.all([
+    getUserTimeZoneCached(user.id),
+    getUserOrgs(),
+  ]);
   const org = orgs[0];
   if (!org) redirect("/onboarding");
 

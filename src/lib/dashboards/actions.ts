@@ -99,7 +99,10 @@ export async function deleteDashboard(input: {
   if (error) return fail(error.message);
 
   if (data) updateTag(dashboardsTag(data.org_id));
-  revalidatePath("/", "layout");
+  // Narrow to the dashboards index (its redirect picks the first remaining
+  // dashboard); the sidebar/palette lists are served from the `dashboards:org`
+  // cache the updateTag above expired. Mirrors createDashboard/renameDashboard.
+  revalidatePath("/dashboards");
   return { ok: true, data: undefined };
 }
 
@@ -125,7 +128,10 @@ export async function duplicateDashboard(input: {
     return fail(error?.message ?? "Could not duplicate dashboard.");
 
   if (source) updateTag(dashboardsTag(source.org_id));
-  revalidatePath("/", "layout");
+  // Narrow to the dashboards index; sidebar/palette lists are served from the
+  // `dashboards:org` cache the updateTag above expired. The client navigates to
+  // the new copy. Mirrors createDashboard/renameDashboard.
+  revalidatePath("/dashboards");
   return { ok: true, data: { dashboardId: data.id } };
 }
 

@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { profileTag } from "@/lib/cache/tags";
 import { updateProfileTimezoneSchema } from "@/lib/validations/profile";
 
 type ActionResult<T = void> =
@@ -31,6 +32,10 @@ export async function updateProfileTimezone(input: {
 
   if (error) return fail("Could not update timezone.");
 
-  revalidatePath("/settings");
+  // Read-your-own-writes: immediately expire this user's cached timezone so the
+  // shell TimeZoneBoundary and the settings page reflect the new value on the
+  // next render of ANY route (not just /settings, which the old path revalidate
+  // was scoped to). Both consumers read `getUserTimeZoneCached(user.id)`.
+  updateTag(profileTag(user.id));
   return { ok: true, data: undefined };
 }
