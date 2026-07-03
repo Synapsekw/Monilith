@@ -20,7 +20,12 @@ import {
   StatusOptionList,
   parsePercentInput,
 } from "./status-options";
-import { currencyOf, roundToCurrency } from "@/lib/boards/currency";
+import {
+  currencyOf,
+  dirhamSignEnabled,
+  roundToCurrency,
+} from "@/lib/boards/currency";
+import { DirhamSign } from "@/components/boards/CurrencyAmount";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -196,7 +201,9 @@ export function CurrencyEditor({
   const onKey = useCommitKeys(commit, onCancel);
   return (
     <div className="flex h-8 items-center gap-1.5">
-      <span className="text-muted-foreground shrink-0 text-xs">{code}</span>
+      <span className="text-muted-foreground shrink-0 text-xs">
+        {dirhamSignEnabled(settings) ? <DirhamSign /> : code}
+      </span>
       <Input
         type="number"
         autoFocus

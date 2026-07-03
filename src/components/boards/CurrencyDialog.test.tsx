@@ -69,4 +69,26 @@ describe("CurrencyDialog", () => {
     render(<CurrencyDialog column={column} onSave={vi.fn()} />);
     expect(screen.getByText("Amounts are not converted.")).toBeInTheDocument();
   });
+
+  it("shows the dirham-sign toggle only for AED and writes dirham_sign", async () => {
+    const onSave = vi.fn();
+    render(
+      <CurrencyDialog
+        column={
+          { ...(column as object), settings: { currency: "AED" } } as never
+        }
+        onSave={onSave}
+      />,
+    );
+    const toggle = screen.getByRole("switch", { name: /dirham sign/i });
+    await userEvent.click(toggle);
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "AED", dirham_sign: false }),
+    );
+  });
+
+  it("hides the dirham-sign toggle for non-AED columns", () => {
+    render(<CurrencyDialog column={column} onSave={vi.fn()} />);
+    expect(screen.queryByRole("switch", { name: /dirham sign/i })).toBeNull();
+  });
 });

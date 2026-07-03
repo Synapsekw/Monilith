@@ -3,7 +3,7 @@ import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
 import { percentBandColor } from "@/lib/boards/percent-color";
-import { currencyOf, formatCurrency } from "@/lib/boards/currency";
+import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -223,7 +223,7 @@ export function CurrencyCell({
     return <span className="text-sm" />;
   return (
     <span className="truncate text-sm tabular-nums">
-      {formatCurrency(value.amount, currencyOf(settings))}
+      <CurrencyAmount amount={value.amount} settings={settings} />
     </span>
   );
 }

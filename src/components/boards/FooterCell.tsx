@@ -7,7 +7,7 @@ import type {
   ColumnKind,
   ColumnOption,
 } from "@/lib/validations/boards";
-import { formatCurrency } from "@/lib/boards/currency";
+import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import { formatDuration } from "@/lib/boards/time-format";
 import {
   DropdownMenu,
@@ -43,17 +43,30 @@ function fmtDate(iso: string): string {
   });
 }
 
-/** Pure presentational renderer for a computed footer aggregate. */
-export function FooterValue({ result }: { result: AggregateResult }) {
+/** Pure presentational renderer for a computed footer aggregate.
+ *  `dirhamSign` is the column's AED display flag (absent = default ON) —
+ *  only consulted when the result carries the currency style. */
+export function FooterValue({
+  result,
+  dirhamSign,
+}: {
+  result: AggregateResult;
+  dirhamSign?: boolean;
+}) {
   switch (result.kind) {
     case "empty":
       return null;
     case "number":
       return (
         <span className="text-foreground text-sm font-medium tabular-nums">
-          {result.style === "currency" && result.currency
-            ? formatCurrency(result.value, result.currency)
-            : `${result.value}${result.style === "percent" ? "%" : ""}`}
+          {result.style === "currency" && result.currency ? (
+            <CurrencyAmount
+              amount={result.value}
+              settings={{ currency: result.currency, dirham_sign: dirhamSign }}
+            />
+          ) : (
+            `${result.value}${result.style === "percent" ? "%" : ""}`
+          )}
         </span>
       );
     case "checkbox":
@@ -118,6 +131,8 @@ export type FooterCellProps = {
   options?: readonly ColumnOption[];
   /** ISO 4217 code when aggregateKind is currency (formats numeric results). */
   currency?: string;
+  /** AED dirham-sign display flag from the column settings (absent = ON). */
+  dirhamSign?: boolean;
   /** The currently chosen aggregation, if any. */
   current?: AggregationId;
   /** Allowed aggregations for the picker (default-first). */
@@ -139,6 +154,7 @@ export function FooterCell({
   values,
   options,
   currency,
+  dirhamSign,
   current,
   allowed,
   canEdit,
@@ -157,7 +173,7 @@ export function FooterCell({
           {label}
         </span>
       )}
-      <FooterValue result={result} />
+      <FooterValue result={result} dirhamSign={dirhamSign} />
       {!current && canEdit && (
         <span className="text-muted-foreground/60 text-xs">Summary</span>
       )}

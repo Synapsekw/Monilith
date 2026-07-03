@@ -263,7 +263,12 @@ type ColumnHeaderControls = {
 function footerColumnMeta(
   col: Column,
   cache: BoardCache,
-): { aggregateKind: ColumnKind; options?: ColumnOption[]; currency?: string } {
+): {
+  aggregateKind: ColumnKind;
+  options?: ColumnOption[];
+  currency?: string;
+  dirhamSign?: boolean;
+} {
   const settingsSource =
     col.kind === "mirror"
       ? (mirrorTargetColumnFor(cache, col)?.settings ?? null)
@@ -276,6 +281,8 @@ function footerColumnMeta(
     aggregateKind,
     options: (settingsSource as { options?: ColumnOption[] } | null)?.options,
     currency: (settingsSource as { currency?: string } | null)?.currency,
+    dirhamSign: (settingsSource as { dirham_sign?: boolean } | null)
+      ?.dirham_sign,
   };
 }
 
@@ -345,10 +352,8 @@ function SummaryFooter({
         Summary
       </div>
       {columns.map((col) => {
-        const { aggregateKind, options, currency } = footerColumnMeta(
-          col,
-          cache,
-        );
+        const { aggregateKind, options, currency, dirhamSign } =
+          footerColumnMeta(col, cache);
         const current = (
           col.settings as { summary_aggregation?: AggregationId } | null
         )?.summary_aggregation;
@@ -362,6 +367,7 @@ function SummaryFooter({
               values={footerColumnValues(col, itemIds, cellMap, cache, nowMs)}
               options={options}
               currency={currency}
+              dirhamSign={dirhamSign}
               current={current}
               allowed={allowedAggregations(aggregateKind)}
               canEdit={canEdit}

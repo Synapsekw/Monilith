@@ -89,6 +89,7 @@ export function RollupValueCell({
           settings.options,
           settings.currency,
         )}
+        currencySettings={col.settings}
       />
     </div>
   );

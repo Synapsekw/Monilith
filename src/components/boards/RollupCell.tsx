@@ -1,5 +1,5 @@
 import type { RollupResult } from "@/lib/boards/rollup";
-import { formatCurrency } from "@/lib/boards/currency";
+import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import { formatDuration } from "@/lib/boards/time-format";
 import { PercentBar } from "@/components/boards/cells";
 
@@ -10,8 +10,17 @@ function fmt(iso: string): string {
   });
 }
 
-/** Read-only rollup summary shown on a collapsed parent's cells. */
-export function RollupCell({ result }: { result: RollupResult }) {
+/** Read-only rollup summary shown on a collapsed parent's cells.
+ *  `currencySettings` are the raw column settings, consulted only by the
+ *  currency case (AED dirham-sign flag lives there; falls back to the
+ *  result's code with the default-ON sign behavior). */
+export function RollupCell({
+  result,
+  currencySettings,
+}: {
+  result: RollupResult;
+  currencySettings?: unknown;
+}) {
   switch (result.kind) {
     case "blank":
       return <span className="text-sm" />;
@@ -44,7 +53,11 @@ export function RollupCell({ result }: { result: RollupResult }) {
     case "currency":
       return (
         <span className="text-muted-foreground text-sm tabular-nums">
-          Σ {formatCurrency(result.total, result.currency)}
+          Σ{" "}
+          <CurrencyAmount
+            amount={result.total}
+            settings={currencySettings ?? { currency: result.currency }}
+          />
         </span>
       );
     case "dateSpan":

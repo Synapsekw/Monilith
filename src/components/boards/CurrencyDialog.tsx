@@ -10,12 +10,15 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Switch } from "@/components/ui/switch";
+import { DirhamSign } from "@/components/boards/CurrencyAmount";
 import type { CacheColumn } from "@/lib/boards/cache";
 import {
   COMMON_CURRENCY_CODES,
   CURRENCY_CODES,
   currencyLabel,
   currencyOf,
+  dirhamSignEnabled,
   isCurrencyCode,
   type CurrencyCode,
 } from "@/lib/boards/currency";
@@ -115,6 +118,24 @@ export function CurrencyDialog({
       <p className="text-muted-foreground text-xs">
         Amounts are not converted.
       </p>
+      {current === "AED" && (
+        <label className="flex items-center justify-between gap-2 text-xs">
+          <span className="flex items-center gap-1">
+            Use new dirham sign (
+            <DirhamSign className="inline-block" />)
+          </span>
+          <Switch
+            aria-label="Use new dirham sign"
+            checked={dirhamSignEnabled(column.settings)}
+            onCheckedChange={(checked) =>
+              onSave({
+                ...((column.settings as Record<string, unknown>) ?? {}),
+                dirham_sign: checked,
+              })
+            }
+          />
+        </label>
+      )}
     </div>
   );
 }
