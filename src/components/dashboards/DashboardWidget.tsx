@@ -14,6 +14,7 @@ import {
 import { NumberWidget } from "@/components/dashboards/widgets/NumberWidget";
 import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { CompletionWidget } from "@/components/dashboards/widgets/CompletionWidget";
+import { HealthWidget } from "@/components/dashboards/widgets/HealthWidget";
 import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
 import { WidgetConfigSheet } from "@/components/dashboards/WidgetConfigSheet";
 import { Input } from "@/components/ui/input";
@@ -147,6 +148,8 @@ export function DashboardWidget({
             <ListWidget widget={widget} />
           ) : widget.kind === "completion" ? (
             <CompletionWidget widget={widget} />
+          ) : widget.kind === "health" ? (
+            <HealthWidget widget={widget} />
           ) : (
             <div className="text-muted-foreground text-sm">
               {widget.kind} widget — coming soon
