@@ -27,10 +27,14 @@ import {
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
+  horizontalListSortingStrategy,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  restrictToHorizontalAxis,
+  restrictToVerticalAxis,
+} from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { reorderPosition } from "@/lib/boards/group-reorder";
@@ -250,6 +254,7 @@ type ColumnHeaderControls = {
   renameColumn: (id: string, name: string) => void;
   deleteColumn: (id: string) => void;
   resizeColumn: (id: string, w: number) => void;
+  reorderColumn: (id: string, position: number) => void;
   resizeNameColumn: (w: number | null) => void;
   onAddColumn: (kind: ColumnKind) => void;
   onEditOptions: (col: Column) => void;
@@ -565,6 +570,7 @@ export function BoardTable({
     renameColumn: mutations.renameColumn,
     deleteColumn: mutations.deleteColumn,
     resizeColumn: mutations.resizeColumn,
+    reorderColumn: mutations.reorderColumn,
     resizeNameColumn: mutations.resizeNameColumn,
     onAddColumn: (kind) => {
       if (kind === "relation") {
@@ -1083,6 +1089,54 @@ function CreatedHeaderCell({
   );
 }
 
+/** Owns useSortable for one data-column header so ColumnHeader stays
+ *  presentational. Translate-only transform (gotcha-20: grid tracks have
+ *  differing widths — never stretch). */
+function SortableColumnHeader({
+  column,
+  col,
+  onMoveLeft,
+  onMoveRight,
+}: {
+  column: Column;
+  col: ColumnHeaderControls;
+  onMoveLeft: (() => void) | null;
+  onMoveRight: (() => void) | null;
+}) {
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: column.id });
+  return (
+    <ColumnHeader
+      column={column}
+      width={col.liveWidths[column.id] ?? column.width ?? VALUE_COL_WIDTH}
+      onRename={(n) => col.renameColumn(column.id, n)}
+      onDelete={() => col.deleteColumn(column.id)}
+      onResize={(w) => col.setLiveWidths((m) => ({ ...m, [column.id]: w }))}
+      onResizeEnd={(w) => col.resizeColumn(column.id, w)}
+      onEditOptions={() => col.onEditOptions(column)}
+      onEditCurrency={() => col.onEditCurrency(column)}
+      reorder={{
+        setNodeRef,
+        style: {
+          transform: CSS.Translate.toString(transform),
+          transition,
+        },
+        isDragging,
+        handleAttributes: attributes,
+        handleListeners: listeners,
+        onMoveLeft,
+        onMoveRight,
+      }}
+    />
+  );
+}
+
 /**
  * A group's header row (Monday-style): a grid aligned to the shared column
  * `template`, with the group controls in a frozen Name cell and an interactive
@@ -1128,6 +1182,29 @@ function GroupHeaderRow({
   onDelete: () => void;
   col: ColumnHeaderControls;
 }) {
+  const columnSensors = useTouchAwareSensors();
+
+  function columnMovePosition(index: number, dir: -1 | 1): number | null {
+    const over = columns[index + dir];
+    if (!over) return null;
+    return reorderPosition(
+      columns.map((c) => ({ id: c.id, position: c.position })),
+      columns[index].id,
+      over.id,
+    );
+  }
+
+  function handleColumnDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const position = reorderPosition(
+      columns.map((c) => ({ id: c.id, position: c.position })),
+      String(active.id),
+      String(over.id),
+    );
+    if (position !== null) col.reorderColumn(String(active.id), position);
+  }
+
   return (
     <div
       className="group/grouphdr bg-surface text-muted-foreground grid border-b text-xs font-medium"
@@ -1218,19 +1295,44 @@ function GroupHeaderRow({
         />
       </div>
 
-      {columns.map((c) => (
-        <ColumnHeader
-          key={c.id}
-          column={c}
-          width={col.liveWidths[c.id] ?? c.width ?? VALUE_COL_WIDTH}
-          onRename={(n) => col.renameColumn(c.id, n)}
-          onDelete={() => col.deleteColumn(c.id)}
-          onResize={(w) => col.setLiveWidths((m) => ({ ...m, [c.id]: w }))}
-          onResizeEnd={(w) => col.resizeColumn(c.id, w)}
-          onEditOptions={() => col.onEditOptions(c)}
-          onEditCurrency={() => col.onEditCurrency(c)}
-        />
-      ))}
+      {/* DndContext/SortableContext render no DOM, so headers stay direct
+          grid children. The frozen Name cell before this block and the
+          Created/Add cells after it sit OUTSIDE the sortable set — that is
+          what makes the Name column immovable by construction. */}
+      <DndContext
+        sensors={columnSensors}
+        modifiers={[restrictToHorizontalAxis]}
+        onDragEnd={handleColumnDragEnd}
+      >
+        <SortableContext
+          items={columns.map((c) => c.id)}
+          strategy={horizontalListSortingStrategy}
+        >
+          {columns.map((c, i) => (
+            <SortableColumnHeader
+              key={c.id}
+              column={c}
+              col={col}
+              onMoveLeft={
+                i > 0
+                  ? () => {
+                      const p = columnMovePosition(i, -1);
+                      if (p !== null) col.reorderColumn(c.id, p);
+                    }
+                  : null
+              }
+              onMoveRight={
+                i < columns.length - 1
+                  ? () => {
+                      const p = columnMovePosition(i, 1);
+                      if (p !== null) col.reorderColumn(c.id, p);
+                    }
+                  : null
+              }
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
       <CreatedHeaderCell icon={User} label="Created by" />
       <CreatedHeaderCell icon={Clock} label="Created at" />
       <AddColumnMenu onAdd={col.onAddColumn} />
