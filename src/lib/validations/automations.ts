@@ -19,6 +19,11 @@ export const automationTriggerSchema = z.discriminatedUnion("type", [
     columnId: z.string().uuid(),
     offsetDays: z.number().int().min(-365).max(365),
   }),
+  z.object({
+    type: z.literal("percent_reached"),
+    columnId: z.string().uuid(),
+    percent: z.number().int().min(1).max(100).default(100),
+  }),
 ]);
 export type AutomationTrigger = z.infer<typeof automationTriggerSchema>;
 
@@ -33,6 +38,11 @@ export const automationActionSchema = z.discriminatedUnion("type", [
     type: z.literal("set_option"),
     columnId: z.string().uuid(),
     optionId: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal("set_percent"),
+    columnId: z.string().uuid(),
+    percent: z.number().int().min(0).max(100),
   }),
   z.object({
     type: z.literal("move_to_group"),

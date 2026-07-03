@@ -166,6 +166,58 @@ describe("call_webhook action", () => {
   });
 });
 
+describe("percent-sync members (percent_reached / set_percent)", () => {
+  it("defaults percent_reached to 100 and bounds set_percent", () => {
+    expect(
+      automationTriggerSchema.parse({ type: "percent_reached", columnId: COL }),
+    ).toMatchObject({ percent: 100 });
+    expect(() =>
+      automationActionSchema.parse({
+        type: "set_percent",
+        columnId: COL,
+        percent: 101,
+      }),
+    ).toThrow();
+    expect(() =>
+      automationTriggerSchema.parse({
+        type: "percent_reached",
+        columnId: "not-a-uuid",
+      }),
+    ).toThrow();
+  });
+
+  it("accepts an explicit threshold and set_percent bounds 0..100", () => {
+    expect(
+      automationTriggerSchema.parse({
+        type: "percent_reached",
+        columnId: COL,
+        percent: 50,
+      }),
+    ).toMatchObject({ percent: 50 });
+    expect(() =>
+      automationTriggerSchema.parse({
+        type: "percent_reached",
+        columnId: COL,
+        percent: 0,
+      }),
+    ).toThrow();
+    expect(
+      automationActionSchema.parse({
+        type: "set_percent",
+        columnId: COL,
+        percent: 0,
+      }),
+    ).toMatchObject({ percent: 0 });
+    expect(() =>
+      automationActionSchema.parse({
+        type: "set_percent",
+        columnId: COL,
+        percent: -1,
+      }),
+    ).toThrow();
+  });
+});
+
 describe("move_to_group action", () => {
   const GROUP = "00000000-0000-4000-8000-000000000003";
 
