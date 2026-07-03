@@ -71,6 +71,7 @@ describe("CompletionWidget", () => {
         ],
         groups,
       },
+      health: null,
     };
     render(<CompletionWidget widget={widget()} />);
     // weighted overall: (50*3 + 100*1) / 4 = 62.5 → rounded 63%
@@ -89,6 +90,7 @@ describe("CompletionWidget", () => {
       buckets: [],
       columnMeta: null,
       completion: { rows: [], groups },
+      health: null,
     };
     render(<CompletionWidget widget={widget()} />);
     expect(screen.getByText("No data yet")).toBeInTheDocument();

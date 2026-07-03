@@ -2697,8 +2697,7 @@ export type Database = {
         | "relation"
         | "mirror"
         | "percent"
-        | "currency"
-        | "priority";
+        | "currency";
       goal_progress_mode:
         | "manual_number"
         | "manual_percent"
@@ -2880,7 +2879,6 @@ export const Constants = {
         "mirror",
         "percent",
         "currency",
-        "priority",
       ],
       goal_progress_mode: [
         "manual_number",
