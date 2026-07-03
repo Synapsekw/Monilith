@@ -130,3 +130,30 @@ describe("shapeCompletion", () => {
     expect(shaped.rows.every((r) => r.percent === null)).toBe(true);
   });
 });
+
+import { shapeHealth } from "./widget-data";
+
+describe("shapeHealth", () => {
+  it("computes progress as done/total", () => {
+    const shaped = shapeHealth({
+      totalItems: 8,
+      doneItems: 2,
+      overdueItems: 3,
+      incompleteItems: 4,
+      newItems7d: 1,
+    });
+    expect(shaped.progress).toBe(25);
+    expect(shaped.counts.overdueItems).toBe(3);
+  });
+
+  it("returns null progress for an empty board", () => {
+    const shaped = shapeHealth({
+      totalItems: 0,
+      doneItems: 0,
+      overdueItems: 0,
+      incompleteItems: 0,
+      newItems7d: 0,
+    });
+    expect(shaped.progress).toBeNull();
+  });
+});

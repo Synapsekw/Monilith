@@ -10,6 +10,7 @@ export const widgetKindSchema = z.enum([
   "battery",
   "list",
   "completion",
+  "health",
 ]);
 
 // ── per-kind config (D1 implements `number`; others are placeholders for D2/D3) ──
@@ -94,6 +95,11 @@ export const completionConfigSchema = z
   });
 export type CompletionConfig = z.infer<typeof completionConfigSchema>;
 
+// Health summary widget: zero config beyond the source board — the structural-
+// completeness/overdue rule is fixed (spec: 2026-07-03-health-summary-design.md).
+export const healthConfigSchema = z.object({});
+export type HealthConfig = z.infer<typeof healthConfigSchema>;
+
 export const filterOperatorSchema = z.enum([
   "is",
   "is_not", // status
@@ -148,6 +154,8 @@ export function configSchemaForKind(kind: z.infer<typeof widgetKindSchema>) {
       return listConfigSchema;
     case "completion":
       return completionConfigSchema;
+    case "health":
+      return healthConfigSchema;
     default:
       return configObject;
   }

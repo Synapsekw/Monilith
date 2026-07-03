@@ -30,7 +30,7 @@ export type BoardOption = {
 };
 
 export type WidgetDraft = {
-  kind: "number" | "chart" | "battery" | "list" | "completion";
+  kind: "number" | "chart" | "battery" | "list" | "completion" | "health";
   sourceBoardId: string;
   title: string;
   config: Record<string, unknown>;
@@ -179,6 +179,7 @@ export function WidgetConfigForm({
           <option value="battery">Battery</option>
           <option value="list">List</option>
           <option value="completion">Completion</option>
+          <option value="health">Health summary</option>
         </select>
       </label>
 
@@ -284,6 +285,12 @@ export function WidgetConfigForm({
         </label>
       ) : value.kind === "completion" ? (
         <CompletionFields board={board} cfg={cfg} patchConfig={patchConfig} />
+      ) : value.kind === "health" ? (
+        <p className="text-muted-foreground text-xs">
+          Shows overall progress plus overdue, incomplete, and new-item counts
+          for the source board — no extra configuration. Incomplete = missing
+          owner or date on an unfinished item.
+        </p>
       ) : (
         <ListFields board={board} cfg={cfg} patchConfig={patchConfig} />
       )}
@@ -311,6 +318,9 @@ export function defaultConfig(
       // Status mode default: every board template ships a status column;
       // percent columns are opt-in.
       return { mode: "status", doneOptionIds: [] };
+    case "health":
+      // Fixed rule — nothing to configure beyond the source board.
+      return {};
   }
 }
 

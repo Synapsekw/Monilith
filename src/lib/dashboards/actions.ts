@@ -7,6 +7,7 @@ import { dashboardsTag, widgetAggregationTag } from "@/lib/cache/tags";
 import {
   getWidgetAggregationCached,
   getWidgetCompletionCached,
+  getWidgetHealthCached,
 } from "@/lib/dashboards/queries-cached";
 import { optionSchema } from "@/lib/validations/boards";
 import {
@@ -14,6 +15,7 @@ import {
   type ColumnMeta,
   type CompletionGroupRow,
   type GroupMeta,
+  type HealthCounts,
 } from "@/lib/dashboards/widget-data";
 import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
 import type { SeriesData, SeriesPoint } from "@/lib/dashboards/series";
@@ -282,6 +284,8 @@ export type WidgetAggregatePayload = {
   columnMeta: ColumnMeta | null;
   /** Present only for completion widgets. */
   completion?: { rows: CompletionGroupRow[]; groups: GroupMeta[] };
+  /** Present only for health widgets. */
+  health?: HealthCounts;
 };
 
 /** The per-widget slot in a batched result — a discriminated union so one
@@ -336,6 +340,26 @@ async function resolveWidgetAggregate(
         buckets: [],
         columnMeta: null,
         completion: { rows: result.rows, groups: result.groups },
+      },
+    };
+  }
+
+  if (widget.kind === "health") {
+    const result = await getWidgetHealthCached({
+      widgetId,
+      orgId: widget.org_id,
+      boardId: widget.source_board_id,
+      config,
+    });
+    if (!result.ok) return fail(result.error);
+    return {
+      ok: true,
+      data: {
+        kind: widget.kind,
+        config,
+        buckets: [],
+        columnMeta: null,
+        health: result.counts,
       },
     };
   }

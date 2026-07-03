@@ -15,11 +15,13 @@ vi.mock("@/lib/supabase/server", () => ({
 // under Vitest; stub the one fn actions.ts consumes.
 const getWidgetAggregationCached = vi.fn();
 const getWidgetCompletionCached = vi.fn();
+const getWidgetHealthCached = vi.fn();
 vi.mock("./queries-cached", () => ({
   getWidgetAggregationCached: (...args: unknown[]) =>
     getWidgetAggregationCached(...args),
   getWidgetCompletionCached: (...args: unknown[]) =>
     getWidgetCompletionCached(...args),
+  getWidgetHealthCached: (...args: unknown[]) => getWidgetHealthCached(...args),
 }));
 
 import {
@@ -44,6 +46,7 @@ beforeEach(() => {
   updateTag.mockReset();
   getWidgetAggregationCached.mockReset();
   getWidgetCompletionCached.mockReset();
+  getWidgetHealthCached.mockReset();
 });
 
 describe("dashboard mutation invalidation", () => {
@@ -413,6 +416,89 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const from = vi.fn(() => ({ select }));
     currentClient = { from };
     getWidgetCompletionCached.mockResolvedValue({ ok: false, error: "boom" });
+    getWidgetAggregationCached.mockResolvedValue({
+      ok: true,
+      buckets: [{ group_key: null, metric: 7 }],
+      columnMeta: null,
+    });
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET, WIDGET_2] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.results[WIDGET].ok).toBe(false);
+    expect(res.data.results[WIDGET_2].ok).toBe(true);
+  });
+
+  it("resolves a health widget slot via the health cached read", async () => {
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "health",
+          config: {},
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+    getWidgetHealthCached.mockResolvedValue({
+      ok: true,
+      counts: {
+        totalItems: 8,
+        doneItems: 2,
+        overdueItems: 3,
+        incompleteItems: 4,
+        newItems7d: 1,
+      },
+    });
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(getWidgetHealthCached).toHaveBeenCalledWith(
+      expect.objectContaining({
+        widgetId: WIDGET,
+        orgId: "org-9",
+        boardId: BOARD,
+      }),
+    );
+    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    const slot = res.data.results[WIDGET];
+    expect(slot.ok).toBe(true);
+    if (!slot.ok) return;
+    expect(slot.kind).toBe("health");
+    expect(slot.health).toMatchObject({ overdueItems: 3, newItems7d: 1 });
+    expect(slot.buckets).toEqual([]);
+  });
+
+  it("a health widget's failure does not blank sibling slots", async () => {
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "health",
+          config: {},
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+        {
+          id: WIDGET_2,
+          kind: "number",
+          config: { agg: "count" },
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+    getWidgetHealthCached.mockResolvedValue({ ok: false, error: "boom" });
     getWidgetAggregationCached.mockResolvedValue({
       ok: true,
       buckets: [{ group_key: null, metric: 7 }],

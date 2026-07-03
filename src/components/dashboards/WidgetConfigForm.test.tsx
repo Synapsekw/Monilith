@@ -212,3 +212,30 @@ describe("WidgetConfigForm", () => {
     expect(Array.from(measure.options).map((o) => o.value)).toEqual(["count"]);
   });
 });
+
+describe("WidgetConfigForm health kind", () => {
+  it("offers the health kind with fixed-rule helper text", () => {
+    render(
+      <WidgetConfigForm
+        boards={boards}
+        value={{
+          kind: "health",
+          sourceBoardId: "b1",
+          title: "",
+          config: {},
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+    const kindSelect = screen.getByLabelText("Widget type", {
+      selector: "select",
+    }) as HTMLSelectElement;
+    expect(Array.from(kindSelect.options).map((o) => o.value)).toContain(
+      "health",
+    );
+    // Fixed rule → helper text only, no column selects beyond the shared ones.
+    expect(screen.getByText(/no extra configuration/i)).toBeInTheDocument();
+    expect(screen.getByText(/overdue/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Status column")).not.toBeInTheDocument();
+  });
+});

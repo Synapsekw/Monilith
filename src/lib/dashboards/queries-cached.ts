@@ -9,6 +9,7 @@ import type {
   ColumnMeta,
   CompletionGroupRow,
   GroupMeta,
+  HealthCounts,
 } from "@/lib/dashboards/widget-data";
 import type { Json } from "@/types/database.types";
 
@@ -159,5 +160,44 @@ export async function getWidgetCompletionCached(input: {
       label: g.name,
       color: g.color,
     })),
+  };
+}
+
+export type WidgetHealth =
+  | { ok: true; counts: HealthCounts }
+  | { ok: false; error: string };
+
+/**
+ * Cached health read — the 9.3b contract verbatim: caller resolves orgId/boardId
+ * from the widget row (tenant boundary), entry keyed by org+widget+config and
+ * tagged widgetAggregationTag so existing create/update/delete updateTag calls
+ * invalidate it with zero new code. Freshness is TTL-bounded (cacheLife
+ * "widget", ~30s), same tradeoff as getWidgetAggregationCached.
+ */
+export async function getWidgetHealthCached(input: {
+  widgetId: string;
+  orgId: string;
+  boardId: string;
+  config: Record<string, unknown>;
+}): Promise<WidgetHealth> {
+  "use cache";
+  cacheLife("widget");
+  cacheTag(widgetAggregationTag(input.orgId, input.widgetId));
+
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("dashboard_health_summary", {
+    p_board_id: input.boardId,
+  });
+  if (error) return { ok: false, error: error.message };
+  const row = data?.[0];
+  return {
+    ok: true,
+    counts: {
+      totalItems: Number(row?.total_items ?? 0),
+      doneItems: Number(row?.done_items ?? 0),
+      overdueItems: Number(row?.overdue_items ?? 0),
+      incompleteItems: Number(row?.incomplete_items ?? 0),
+      newItems7d: Number(row?.new_items ?? 0),
+    },
   };
 }

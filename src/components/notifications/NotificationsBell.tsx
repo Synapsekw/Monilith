@@ -30,6 +30,11 @@ export function NotificationsBell({ userId }: { userId: string }) {
 
   function open(n: AppNotification) {
     markRead(n.id);
+    if (n.kind === "health_digest") {
+      // Org-wide digest has no board/item FK — land on the dashboards index.
+      window.location.assign("/dashboards");
+      return;
+    }
     if (n.board_id) {
       const u = new URL(window.location.origin + `/boards/${n.board_id}`);
       if (n.item_id) u.searchParams.set("item", n.item_id);
