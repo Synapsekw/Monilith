@@ -165,3 +165,28 @@ export function shapeCompletion(
     totalItems,
   };
 }
+
+/** Single row of dashboard_health_summary (camelCased). */
+export type HealthCounts = {
+  totalItems: number;
+  doneItems: number;
+  overdueItems: number;
+  incompleteItems: number;
+  newItems7d: number;
+};
+
+export type ShapedHealth = {
+  /** done/total as 0..100; null when the board has no top-level items. */
+  progress: number | null;
+  counts: HealthCounts;
+};
+
+export function shapeHealth(counts: HealthCounts): ShapedHealth {
+  return {
+    progress:
+      counts.totalItems > 0
+        ? (counts.doneItems / counts.totalItems) * 100
+        : null,
+    counts,
+  };
+}

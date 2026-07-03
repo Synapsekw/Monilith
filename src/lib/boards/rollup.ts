@@ -122,6 +122,45 @@ export function rollupCell(
         ? { kind: "percent", average: Math.round(sum / n) }
         : { kind: "blank" };
     }
+    case "priority": {
+      // Count STORED levels into a fixed two-segment distribution (the derived
+      // auto-critical state is render-only and never aggregates). Colors match
+      // the seeded option palette red + a neutral gray.
+      let critical = 0;
+      let normal = 0;
+      for (const v of present) {
+        const level = (v as { level?: unknown }).level;
+        if (level === "critical") critical += 1;
+        else if (level === "normal") normal += 1;
+      }
+      if (critical + normal === 0) return { kind: "blank" };
+      return {
+        kind: "distribution",
+        total: critical + normal,
+        segments: [
+          ...(critical > 0
+            ? [
+                {
+                  id: "critical",
+                  label: "Critical",
+                  color: "#e2445c",
+                  count: critical,
+                },
+              ]
+            : []),
+          ...(normal > 0
+            ? [
+                {
+                  id: "normal",
+                  label: "Normal",
+                  color: "#c4c4c4",
+                  count: normal,
+                },
+              ]
+            : []),
+        ],
+      };
+    }
     case "currency": {
       // Money SUMS on the collapsed parent (contrast percent, which averages).
       let total = 0;

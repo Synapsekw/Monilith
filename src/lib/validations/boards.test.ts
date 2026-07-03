@@ -11,6 +11,7 @@ import {
   numbersSettingsSchema,
   numbersValueSchema,
   peopleValueSchema,
+  priorityValueSchema,
   statusSettingsSchema,
   statusValueSchema,
   textValueSchema,
@@ -353,5 +354,37 @@ describe("currency column", () => {
   it("dispatchers route the currency kind", () => {
     expect(columnSettingsSchema("currency")).toBe(currencySettingsSchema);
     expect(cellValueSchema("currency")).toBe(currencyValueSchema);
+  });
+});
+
+describe("priority column kind", () => {
+  it("is a known column kind", () => {
+    expect(columnKindSchema.safeParse("priority").success).toBe(true);
+  });
+  it("accepts normal and critical levels", () => {
+    expect(priorityValueSchema.safeParse({ level: "normal" }).success).toBe(
+      true,
+    );
+    expect(priorityValueSchema.safeParse({ level: "critical" }).success).toBe(
+      true,
+    );
+  });
+  it("rejects unknown levels and junk", () => {
+    expect(priorityValueSchema.safeParse({ level: "urgent" }).success).toBe(
+      false,
+    );
+    expect(priorityValueSchema.safeParse({}).success).toBe(false);
+    expect(
+      cellValueSchema("priority").safeParse({ level: "high" }).success,
+    ).toBe(false);
+  });
+  it("uses empty settings (fixed vocabulary, no options)", () => {
+    expect(columnSettingsSchema("priority").safeParse({}).success).toBe(true);
+    expect(
+      columnSettingsSchema("priority").safeParse({ options: [] }).success,
+    ).toBe(false); // strict: no options array on priority
+  });
+  it("dispatchers route the priority kind", () => {
+    expect(cellValueSchema("priority")).toBe(priorityValueSchema);
   });
 });

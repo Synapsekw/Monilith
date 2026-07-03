@@ -519,3 +519,69 @@ describe("onCardDropped", () => {
     expect(clear).not.toHaveBeenCalled();
   });
 });
+
+describe("KanbanCard priority pill", () => {
+  function priorityPayload() {
+    const base = payloadFixture() as unknown as {
+      columns: Array<Record<string, unknown>>;
+      cellValues: Array<{ item_id: string; column_id: string; value: unknown }>;
+      items: Array<Record<string, unknown>>;
+      dependencies?: Array<Record<string, unknown>>;
+    };
+    base.columns.push({
+      id: "prio",
+      board_id: "b1",
+      org_id: "o1",
+      kind: "priority",
+      name: "Priority",
+      position: 5,
+      settings: {},
+    });
+    // Card A gets 2 direct dependents (auto-critical); Card B stays unset.
+    base.dependencies = [
+      {
+        id: "d1",
+        board_id: "b1",
+        org_id: "o1",
+        predecessor_id: "i1",
+        successor_id: "i2",
+        created_at: "2026-07-01T10:00:00Z",
+      },
+      {
+        id: "d2",
+        board_id: "b1",
+        org_id: "o1",
+        predecessor_id: "i1",
+        successor_id: "i3",
+        created_at: "2026-07-01T10:00:00Z",
+      },
+    ];
+    base.items.push({
+      id: "i3",
+      name: "Card C",
+      group_id: "g1",
+      position: 2,
+    });
+    return base as never;
+  }
+
+  it("shows the auto-critical pill on a card with 2+ dependents only", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <KanbanBoard
+          payload={priorityPayload()}
+          selectedViewId="v2"
+          members={[]}
+        />
+      </QueryClientProvider>,
+    );
+    // Card A (i1) has two dependents → auto pill with the count explanation.
+    expect(
+      screen.getByLabelText("Critical (auto) — 2 items depend on this"),
+    ).toBeInTheDocument();
+    // Unset cards below the threshold render no priority text at all.
+    expect(screen.queryByText("Normal")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Critical")).toHaveLength(1);
+  });
+});

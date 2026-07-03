@@ -4,6 +4,69 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-07-03",
+    kind: "new",
+    title: "Currency columns",
+    description:
+      "Track money on your boards with a new currency column — pick from 44 currencies, switch a column's currency in one click, and see totals in the footer and on collapsed parents.",
+  },
+  {
+    date: "2026-07-03",
+    kind: "new",
+    title: "Completion widgets for dashboards",
+    description:
+      "See how complete any board is at a glance — an overall percentage plus a progress bar per group, measured by percent or by done statuses.",
+  },
+  {
+    date: "2026-07-03",
+    kind: "new",
+    title: "Quick-edit from Calendar and Timeline",
+    description:
+      "Click a calendar event or timeline bar to update its status or progress on the spot, without opening the full item.",
+  },
+  {
+    date: "2026-07-03",
+    kind: "new",
+    title: "Keep status and progress in sync",
+    description:
+      'Automations gain a "percent reached" trigger and a "set percent" action, with ready-made recipes: mark items Done at 100%, or jump to 100% when marked Done.',
+  },
+  {
+    date: "2026-07-03",
+    kind: "new",
+    title: "Reorder columns",
+    description:
+      "Drag a column header — or use Move left / Move right in its menu — to rearrange your table. Works on touch too.",
+  },
+  {
+    date: "2026-07-03",
+    kind: "improved",
+    title: "Overdue dates stand out",
+    description:
+      "Date cells turn red when an item is past due and not yet done.",
+  },
+  {
+    date: "2026-07-03",
+    kind: "improved",
+    title: "Polished Excel exports",
+    description:
+      "Exported spreadsheets now open formatted: real number and percent cells, progress data bars, currency formats, group colors, and a frozen, filterable header.",
+  },
+  {
+    date: "2026-07-02",
+    kind: "improved",
+    title: "Smoother loading",
+    description:
+      "Boards, dashboards, and workload pages now load with content-shaped placeholders instead of blank screens, and feel snappier throughout.",
+  },
+  {
+    date: "2026-07-02",
+    kind: "improved",
+    title: "Errors no longer fail silently",
+    description:
+      "When a change can't be saved you get a clear error message, and broken links land on friendly error pages instead of a crash.",
+  },
+  {
     date: "2026-06-29",
     kind: "improved",
     title: "Calendar touch targets",

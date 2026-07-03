@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
+  CellEditor,
   CheckboxEditor,
   DateEditor,
   DropdownEditor,
@@ -507,5 +508,98 @@ describe("inline cell editors — coarse-pointer tap targets", () => {
     const star = screen.getByRole("button", { name: /4 stars/i });
     expect(star.className).toContain("pointer-coarse:size-11");
     expect(star.parentElement?.className).toContain("pointer-coarse:gap-2");
+  });
+});
+
+describe("PriorityEditor", () => {
+  it("commits critical", async () => {
+    const onCommit = vi.fn();
+    render(
+      <CellEditor
+        kind="priority"
+        value={null}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("option", { name: /critical/i }));
+    expect(onCommit).toHaveBeenCalledWith({ level: "critical" });
+  });
+  it("commits normal", async () => {
+    const onCommit = vi.fn();
+    render(
+      <CellEditor
+        kind="priority"
+        value={{ level: "critical" }}
+        settings={{}}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("option", { name: /normal/i }));
+    expect(onCommit).toHaveBeenCalledWith({ level: "normal" });
+  });
+  it("clears via the clear affordance", async () => {
+    const onClear = vi.fn();
+    render(
+      <CellEditor
+        kind="priority"
+        value={{ level: "normal" }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /clear/i }));
+    expect(onClear).toHaveBeenCalled();
+  });
+  it("marks the stored level as selected", () => {
+    render(
+      <CellEditor
+        kind="priority"
+        value={{ level: "critical" }}
+        settings={{}}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("option", { name: /critical/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("option", { name: /normal/i })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+  it("explains the auto state when 2+ items depend on the item", () => {
+    render(
+      <CellEditor
+        kind="priority"
+        value={{ level: "normal" }}
+        settings={{}}
+        dependents={4}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(/auto-critical: 4 items depend on this item/i),
+    ).toBeInTheDocument();
+  });
+  it("shows no auto explanation below the threshold", () => {
+    render(
+      <CellEditor
+        kind="priority"
+        value={{ level: "normal" }}
+        settings={{}}
+        dependents={1}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/auto-critical/i)).not.toBeInTheDocument();
   });
 });

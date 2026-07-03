@@ -19,6 +19,7 @@ import { NumberWidget } from "@/components/dashboards/widgets/NumberWidget";
 import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
 import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { CompletionWidget } from "@/components/dashboards/widgets/CompletionWidget";
+import { HealthWidget } from "@/components/dashboards/widgets/HealthWidget";
 import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
 import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
@@ -150,6 +151,8 @@ function WidgetConfigSheetForm({
               <BatteryWidget widget={previewWidget} />
             ) : draft.kind === "completion" ? (
               <CompletionWidget widget={previewWidget} />
+            ) : draft.kind === "health" ? (
+              <HealthWidget widget={previewWidget} />
             ) : (
               <ListWidget widget={previewWidget} />
             )}

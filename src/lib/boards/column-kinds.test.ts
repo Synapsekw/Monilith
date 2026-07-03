@@ -31,3 +31,13 @@ describe("column kind metadata", () => {
     expect(COLUMN_KIND_ORDER).toContain("currency");
   });
 });
+
+describe("priority column kind meta", () => {
+  it("registers priority in the add-column menu", () => {
+    expect(COLUMN_KIND_META.priority).toMatchObject({
+      label: "Priority",
+      hasOptions: false,
+    });
+    expect(COLUMN_KIND_ORDER).toContain("priority");
+  });
+});

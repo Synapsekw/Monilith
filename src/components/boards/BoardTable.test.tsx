@@ -812,6 +812,118 @@ describe("BoardTable summary footer (6d-3)", () => {
   });
 });
 
+// Two groups sharing one numbers column: g1 items sum to 3, g2 items to 7,
+// the whole board to 10 — distinct per-surface totals so a test can tell a
+// group-scoped summary from the board-wide one.
+function twoGroupSummaryPayload(settings: Record<string, unknown>) {
+  const item = (id: string, gid: string, name: string, position: number) => ({
+    id,
+    board_id: "b1",
+    org_id: "o1",
+    group_id: gid,
+    parent_id: null,
+    name,
+    position,
+  });
+  const cell = (itemId: string, n: number) => ({
+    item_id: itemId,
+    column_id: "c1",
+    org_id: "o1",
+    board_id: "b1",
+    value: { n },
+  });
+  return {
+    board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+    groups: [
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+      {
+        id: "g2",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 2",
+        color: "#00c875",
+        position: 1,
+      },
+    ],
+    columns: [
+      {
+        id: "c1",
+        board_id: "b1",
+        org_id: "o1",
+        kind: "numbers",
+        name: "Est",
+        settings,
+        position: 0,
+        width: null,
+      },
+    ],
+    items: [
+      item("a1", "g1", "Alpha 1", 0),
+      item("a2", "g1", "Alpha 2", 1),
+      item("b1i", "g2", "Beta 1", 0),
+      item("b2i", "g2", "Beta 2", 1),
+    ],
+    cellValues: [cell("a1", 1), cell("a2", 2), cell("b1i", 3), cell("b2i", 4)],
+    dependencies: [],
+    views: [],
+  } as never;
+}
+
+function renderTwoGroupSummary(settings: Record<string, unknown>) {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <BoardTable
+        payload={twoGroupSummaryPayload(settings)}
+        selectedViewId="v1"
+      />
+    </QueryClientProvider>,
+  );
+}
+
+describe("BoardTable per-group summary rows", () => {
+  it("shows a summary row per group with group-scoped values once a column has an aggregation", () => {
+    renderTwoGroupSummary({ summary_aggregation: "sum" });
+    expect(screen.getByTestId("group-summary-g1")).toHaveTextContent("3");
+    expect(screen.getByTestId("group-summary-g2")).toHaveTextContent("7");
+    // board footer still totals everything
+    expect(screen.getByTestId("board-summary-footer")).toHaveTextContent("10");
+  });
+
+  it("renders no group summary rows when no column has an aggregation", () => {
+    renderTwoGroupSummary({});
+    expect(screen.queryByTestId("group-summary-g1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("group-summary-g2")).not.toBeInTheDocument();
+    // board footer affordance unchanged
+    expect(screen.getByTestId("board-summary-footer")).toBeInTheDocument();
+  });
+});
+
+describe("BoardTable collapsed-group summary", () => {
+  it("collapsed group shows the assigned summary instead of the legacy rollup", () => {
+    renderTwoGroupSummary({ summary_aggregation: "sum" });
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Group 1" }));
+    // group-scoped subtotal survives the collapse…
+    expect(screen.getByTestId("group-summary-g1")).toHaveTextContent("3");
+    // …and the hardcoded GroupRollupRow strip (labeled "Average") is gone.
+    expect(screen.queryByText("Average")).not.toBeInTheDocument();
+  });
+
+  it("collapsed group without any assigned summary keeps the legacy rollup strip", () => {
+    renderTwoGroupSummary({});
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Group 1" }));
+    expect(screen.getByText("Average")).toBeInTheDocument();
+    expect(screen.queryByTestId("group-summary-g1")).not.toBeInTheDocument();
+  });
+});
+
 function occupant(over: Partial<RosterOccupant>): RosterOccupant {
   return {
     userId: "u2",
@@ -1232,6 +1344,57 @@ describe("BoardTable touch reorder sensors", () => {
     // DndContexts mount, so the hook is called at least three times.
     renderNested();
     expect(touchSensorsSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ── SSR-stable dnd ids ────────────────────────────────────────────────────
+// dnd-kit's auto-generated `DndDescribedBy-N` ids come from a module-global
+// counter that diverges between server render and client hydration (dev
+// StrictMode double-invokes useMemo, consuming two counter slots per context
+// on the client) → hydration mismatch on aria-describedby. Every DndContext
+// must therefore pass an explicit deterministic `id`, which bypasses the
+// counter entirely. Regression: the column-header reorder context shipped
+// without one.
+
+describe("BoardTable deterministic dnd ids", () => {
+  it("derives the column reorder handle's aria-describedby from the group id, not the global counter", () => {
+    const qc = new QueryClient();
+    const payload = {
+      board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+      groups: [
+        {
+          id: "g1",
+          board_id: "b1",
+          org_id: "o1",
+          name: "Group 1",
+          color: "#0073ea",
+          position: 0,
+        },
+      ],
+      columns: [
+        {
+          id: "c1",
+          board_id: "b1",
+          org_id: "o1",
+          kind: "numbers",
+          name: "Est",
+          settings: {},
+          position: 0,
+          width: null,
+        },
+      ],
+      items: [],
+      cellValues: [],
+      dependencies: [],
+      views: [],
+    } as never;
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable payload={payload} selectedViewId="v1" />
+      </QueryClientProvider>,
+    );
+    const handle = screen.getByRole("button", { name: "Reorder Est column" });
+    expect(handle.getAttribute("aria-describedby")).toBe("group-columns-g1");
   });
 });
 

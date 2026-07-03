@@ -314,3 +314,19 @@ describe("listConfigSchema filter", () => {
     expect(r.success).toBe(false);
   });
 });
+
+import { healthConfigSchema, widgetKindSchema } from "./dashboards";
+
+describe("healthConfigSchema", () => {
+  it("accepts the empty config", () => {
+    expect(healthConfigSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("routes via configSchemaForKind", () => {
+    expect(configSchemaForKind("health").safeParse({}).success).toBe(true);
+  });
+
+  it("widgetKindSchema includes health", () => {
+    expect(widgetKindSchema.safeParse("health").success).toBe(true);
+  });
+});

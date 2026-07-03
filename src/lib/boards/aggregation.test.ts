@@ -265,3 +265,30 @@ describe("currency aggregation", () => {
     });
   });
 });
+
+describe("priority aggregation", () => {
+  it("offers distribution + count family for priority", () => {
+    expect(allowedAggregations("priority")).toEqual([
+      "distribution",
+      "count",
+      "count_filled",
+      "count_empty",
+      "count_unique",
+    ]);
+  });
+  it("summarizes stored levels as a distribution via aggregate()", () => {
+    const r = aggregate("priority", "distribution", [
+      { level: "critical" },
+      { level: "normal" },
+      null,
+    ]);
+    expect(r).toEqual({
+      kind: "distribution",
+      total: 2,
+      segments: [
+        { id: "critical", label: "Critical", color: "#e2445c", count: 1 },
+        { id: "normal", label: "Normal", color: "#c4c4c4", count: 1 },
+      ],
+    });
+  });
+});

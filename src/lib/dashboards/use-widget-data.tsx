@@ -12,6 +12,7 @@ import {
   type ColumnMeta,
   type CompletionGroupRow,
   type GroupMeta,
+  type HealthCounts,
 } from "@/lib/dashboards/widget-data";
 
 export type WidgetData = {
@@ -19,6 +20,8 @@ export type WidgetData = {
   columnMeta: ColumnMeta | null;
   /** Completion widgets only; null for aggregate kinds. */
   completion: { rows: CompletionGroupRow[]; groups: GroupMeta[] } | null;
+  /** Health widgets only; null for other kinds. */
+  health: HealthCounts | null;
 };
 
 type WidgetDataContextValue = {
@@ -36,7 +39,12 @@ const WidgetDataContext = createContext<WidgetDataContextValue | null>(null);
  *  Chart + list widgets use their own actions (series / rows) and are excluded
  *  from the aggregate batch. */
 function usesAggregateData(kind: CacheWidget["kind"]): boolean {
-  return kind === "number" || kind === "battery" || kind === "completion";
+  return (
+    kind === "number" ||
+    kind === "battery" ||
+    kind === "completion" ||
+    kind === "health"
+  );
 }
 
 /**
@@ -141,6 +149,7 @@ export function useWidgetData(widgetId: string): {
           buckets: entry.buckets,
           columnMeta: entry.columnMeta,
           completion: entry.completion ?? null,
+          health: entry.health ?? null,
         }
       : undefined,
   };

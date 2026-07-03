@@ -25,6 +25,10 @@ import {
   dirhamSignEnabled,
   roundToCurrency,
 } from "@/lib/boards/currency";
+import {
+  AUTO_CRITICAL_MIN_DEPENDENTS,
+  effectivePriority,
+} from "@/lib/boards/priority";
 import { DirhamSign } from "@/components/boards/CurrencyAmount";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -235,6 +239,66 @@ export function StatusEditor({
         onSelect={(optionId) => onCommit({ optionId })}
         onClear={() => (onClear ?? onCancel)()}
       />
+    </PopoverSurface>
+  );
+}
+
+/**
+ * Priority editor — fixed two-option vocabulary (no per-column options).
+ * Critical previews as the earned status-red pill; Normal stays quiet. When
+ * the derived auto-critical state is active (>= 2 dependents), the popover
+ * explains it so a kept-but-overridden manual Normal never looks like a bug.
+ */
+export function PriorityEditor({
+  value,
+  onCommit,
+  onCancel,
+  onClear,
+  dependents = 0,
+}: EditorProps<{ level: "normal" | "critical" }> & { dependents?: number }) {
+  const { auto } = effectivePriority(value, dependents);
+  const selected = value?.level ?? null;
+  const rows: { level: "critical" | "normal"; label: string; pill: string }[] =
+    [
+      {
+        level: "critical",
+        label: "Critical",
+        pill: "bg-status-red text-white",
+      },
+      {
+        level: "normal",
+        label: "Normal",
+        pill: "bg-muted text-muted-foreground",
+      },
+    ];
+  return (
+    <PopoverSurface label="Select priority" onCancel={onCancel}>
+      {rows.map((r) => (
+        <button
+          key={r.level}
+          type="button"
+          role="option"
+          aria-selected={selected === r.level}
+          onClick={() => onCommit({ level: r.level })}
+          className={cn(
+            "focus-visible:ring-ring inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium transition-opacity focus-visible:ring-2 focus-visible:outline-none",
+            r.pill,
+            selected === r.level
+              ? "opacity-100"
+              : "opacity-60 hover:opacity-90",
+          )}
+        >
+          {r.label}
+        </button>
+      ))}
+      <ClearOptionButton onClear={() => (onClear ?? onCancel)()} />
+      {auto && (
+        <p className="text-muted-foreground px-2 py-1 text-xs">
+          Auto-critical: {dependents} items depend on this item. A manual Normal
+          is kept but overridden while {AUTO_CRITICAL_MIN_DEPENDENTS}+
+          dependents exist.
+        </p>
+      )}
     </PopoverSurface>
   );
 }
@@ -580,6 +644,7 @@ export function CellEditor({
   onCommit,
   onCancel,
   onClear,
+  dependents,
 }: {
   kind: string;
   value: unknown;
@@ -588,6 +653,8 @@ export function CellEditor({
   onCommit: (value: unknown) => void;
   onCancel: () => void;
   onClear?: () => void;
+  /** Priority cells only: direct dependents of the item — see @/lib/boards/priority. */
+  dependents?: number;
 }) {
   switch (kind) {
     case "text":
@@ -618,6 +685,17 @@ export function CellEditor({
           onCommit={onCommit}
           onCancel={onCancel}
           onClear={onClear}
+        />
+      );
+    case "priority":
+      return (
+        <PriorityEditor
+          value={value as { level: "normal" | "critical" } | null}
+          settings={settings}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          onClear={onClear}
+          dependents={dependents}
         />
       );
     case "dropdown":

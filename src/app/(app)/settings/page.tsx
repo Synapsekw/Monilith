@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { TimezoneForm } from "@/components/settings/timezone-form";
 import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-form";
+import { DigestPreferenceForm } from "@/components/settings/DigestPreferenceForm";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
 
 export const metadata = { title: "Settings" };
@@ -30,9 +31,14 @@ export default async function SettingsPage() {
   // and a bounded audit slice. Tab switches in the console are History-API only
   // (0 server round-trips) — see OrgAdminConsole / spec §12.
   const supabase = await createClient();
-  const { data: members } = await supabase.rpc("get_org_members", {
-    p_org_id: org.id,
-  });
+  const [{ data: members }, { data: myProfile }] = await Promise.all([
+    supabase.rpc("get_org_members", { p_org_id: org.id }),
+    supabase
+      .from("profiles")
+      .select("email_digest_opt_out")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
   const me = (members ?? []).find((m) => m.user_id === user.id);
   const isAdmin = me?.role === "owner" || me?.role === "admin";
 
@@ -74,6 +80,20 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardContent>
             <PersonalTimezoneForm currentTimezone={myTimeZone} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Notifications</CardTitle>
+            <CardDescription>
+              In-app notifications are unaffected.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DigestPreferenceForm
+              initialOptOut={myProfile?.email_digest_opt_out ?? false}
+            />
           </CardContent>
         </Card>
 
