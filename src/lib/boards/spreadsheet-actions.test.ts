@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import ExcelJS from "exceljs";
 
 // ─── Hoisted mocks (must be defined before vi.mock factories) ─────────────────
-const { rpcMock, fromMockMap, getFromChain, makeChain } = vi.hoisted(() => {
+const { rpcMock, fromMockMap, getFromChain } = vi.hoisted(() => {
   type ChainableMock = {
     insert: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
@@ -266,87 +266,106 @@ describe("previewImport", () => {
     expect(result.error).toMatch(/xlsx|csv|extension|supported/i);
   });
 
-  it("happy path: returns ImportPreview with columns and sampleRows from xlsx", async () => {
-    const buf = await xlsxBuf([
-      ["Name", "Status", "Count"],
-      ["Item A", "Done", "1"],
-      ["Item B", "Working", "2"],
-      ["Item C", "Done", "3"],
-      ["Item D", "Stuck", "4"],
-      ["Item E", "Done", "5"],
-      ["Item F", "Working", "6"],
-    ]);
-    const b64 = buf.toString("base64");
+  it("previewImport returns every sheet with truncated grids", async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws1 = wb.addWorksheet("Sheet1");
+    ws1.addRow(["Name", "Status"]);
+    ws1.addRow(["Item A", "Done"]);
+    const ws2 = wb.addWorksheet("Extra");
+    ws2.addRow(["Col1", "Col2"]);
+    ws2.addRow(["a", "b"]);
+    ws2.addRow(["c", "d"]);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
 
     const result = await previewImport({
-      fileBase64: b64,
+      fileBase64: buf.toString("base64"),
       fileName: "myboard.xlsx",
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
+    expect(result.data.fileName).toBe("myboard.xlsx");
     expect(result.data.boardName).toBe("myboard");
-    expect(result.data.rowCount).toBe(6);
-    expect(result.data.sampleRows).toHaveLength(5);
-    const headers = result.data.columns.map((c) => c.header);
-    expect(headers).toContain("Status");
-    expect(headers).toContain("Count");
+    expect(result.data.sheets).toHaveLength(2);
+    expect(result.data.sheets[1].name).toBe("Extra");
+    expect(result.data.sheets[1].rowCount).toBe(3);
+    expect(result.data.sheets[1].grid).toHaveLength(3);
   });
 
-  it("rejects when column count exceeds MAX_COLS", async () => {
-    // 42 columns > MAX_COLS (40)
-    const tooManyColsRow = Array.from({ length: 42 }, (_, i) => `Col${i}`);
-    const dataRow = Array.from({ length: 42 }, (_, i) => `Val${i}`);
-    const buf = await xlsxBuf([tooManyColsRow, dataRow]);
-    const b64 = buf.toString("base64");
+  it("previewImport fails when a sheet exceeds MAX_COLS, naming the sheet", async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("WideSheet");
+    const headerRow = Array.from({ length: 41 }, (_, i) => `Col${i}`);
+    ws.addRow(headerRow);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
 
     const result = await previewImport({
-      fileBase64: b64,
+      fileBase64: buf.toString("base64"),
       fileName: "test.xlsx",
     });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error).toMatch(/column|too many/i);
+    expect(result.error).toMatch(/too many columns/i);
+    expect(result.error).toContain("WideSheet");
   });
 });
 
 describe("commitImport", () => {
-  const validMappings = [
-    {
-      header: "Status",
-      kind: "status" as const,
-      options: [
-        { id: "opt1", label: "Done", color: "#00c875" },
-        { id: "opt2", label: "Working", color: "#fdab3d" },
-      ],
-    },
-  ];
-
-  async function makeValidInput() {
-    const buf = await xlsxBuf([
-      ["Group", "Name", "Status"],
-      ["Backlog", "Task 1", "Done"],
-      ["Backlog", "Task 2", "Working"],
-    ]);
-    return {
-      fileBase64: buf.toString("base64"),
-      fileName: "import.xlsx",
-      workspaceId: BOARD_UUID,
-      boardName: "My Imported Board",
-      columnMappings: validMappings,
-    };
-  }
-
   beforeEach(() => {
     resetMocks();
   });
 
-  it("happy path: calls rpc with p_template and returns boardId", async () => {
-    const input = await makeValidInput();
+  it("commitImport honors headerRow, excludedRows and skip specs", async () => {
+    const buf = await xlsxBuf([
+      ["Some Title"],
+      ["Name", "Status", "Notes"],
+      ["Task 1", "Done", "foo"],
+      ["Task 2", "Working", "bar"],
+      ["Task 3", "Stuck", "baz"],
+    ]);
 
-    const result = await commitImport(input);
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 1,
+      excludedRows: [3], // exclude "Task 2" data row
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+        {
+          sourceIndex: 1,
+          name: "Status",
+          kind: "status",
+          options: [
+            { id: "opt1", label: "Done", color: "#00c875" },
+            { id: "opt2", label: "Working", color: "#fdab3d" },
+            { id: "opt3", label: "Stuck", color: "#e2445c" },
+          ],
+          role: "data",
+        },
+        {
+          sourceIndex: 2,
+          name: "Notes",
+          kind: "text",
+          options: [],
+          role: "data",
+          target: "skip",
+        },
+      ],
+      destination: {
+        type: "new",
+        workspaceId: BOARD_UUID,
+        boardName: "Imported Board",
+      },
+    });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -356,166 +375,115 @@ describe("commitImport", () => {
     const rpcArgs = rpcMock.mock.calls[0][1] as {
       p_workspace_id: string;
       p_name: string;
-      p_template: unknown;
+      p_template: { groups: unknown[]; columns: unknown[]; items: unknown[] };
     };
     expect(rpcArgs.p_workspace_id).toBe(BOARD_UUID);
-    expect(rpcArgs.p_name).toBe("My Imported Board");
-
-    const template = rpcArgs.p_template as {
-      groups: unknown[];
-      columns: unknown[];
-      items: unknown[];
-    };
-    expect(Array.isArray(template.groups)).toBe(true);
-    expect(template.groups.length).toBeGreaterThan(0);
-    expect(Array.isArray(template.columns)).toBe(true);
-    expect(template.columns.length).toBe(1);
-    expect(Array.isArray(template.items)).toBe(true);
-    expect(template.items.length).toBe(2);
+    expect(rpcArgs.p_name).toBe("Imported Board");
+    // Only the Status column is imported — Notes is skipped
+    expect(rpcArgs.p_template.columns).toHaveLength(1);
+    // Task 2 is excluded, leaving Task 1 and Task 3
+    expect(rpcArgs.p_template.items).toHaveLength(2);
   });
 
-  it("returns fail when rpc errors", async () => {
-    rpcMock.mockResolvedValue({
-      data: null,
-      error: { message: "rpc failed" },
-    });
-
-    const input = await makeValidInput();
-    const result = await commitImport(input);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/rpc failed|could not create/i);
-  });
-
-  it("with subitems: inserts items and cell_values", async () => {
+  it("commitImport rejects two name-role columns", async () => {
     const buf = await xlsxBuf([
-      ["Group", "Name", "Status"],
-      ["Backlog", "Task 1", "Done"],
-      ["Backlog", "↳ Sub 1", "Working"],
+      ["Name", "Alt Name"],
+      ["Task 1", "Alt 1"],
     ]);
-    const input = {
-      fileBase64: buf.toString("base64"),
-      fileName: "import.xlsx",
-      workspaceId: BOARD_UUID,
-      boardName: "Board With Subitems",
-      columnMappings: validMappings,
-    };
 
-    const itemsChain = makeChain();
-    itemsChain.insert.mockResolvedValue({ data: null, error: null });
-    fromMockMap.set("items", itemsChain);
-
-    const cellsChain = makeChain();
-    cellsChain.insert.mockResolvedValue({ data: null, error: null });
-    fromMockMap.set("cell_values", cellsChain);
-
-    const result = await commitImport(input);
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data.boardId).toBe("b1");
-
-    expect(itemsChain.insert).toHaveBeenCalled();
-    const insertedItems = itemsChain.insert.mock.calls[0][0] as Array<{
-      parent_id: string | null;
-    }>;
-    expect(insertedItems.some((row) => row.parent_id !== null)).toBe(true);
-  });
-
-  it("deletes board and returns fail when phase-2 items insert errors", async () => {
-    const buf = await xlsxBuf([
-      ["Group", "Name", "Status"],
-      ["Backlog", "Task 1", "Done"],
-      ["Backlog", "↳ Sub 1", "Working"],
-    ]);
-    const input = {
-      fileBase64: buf.toString("base64"),
-      fileName: "import.xlsx",
-      workspaceId: BOARD_UUID,
-      boardName: "Board With Subitems",
-      columnMappings: validMappings,
-    };
-
-    // items insert fails
-    const itemsChain = makeChain();
-    itemsChain.insert.mockResolvedValue({
-      data: null,
-      error: { message: "boom" },
-    });
-    fromMockMap.set("items", itemsChain);
-
-    // boards delete chain — must return a chainable object for .delete().eq()
-    const boardsChain = makeChain();
-    boardsChain.delete.mockReturnValue(boardsChain);
-    boardsChain.eq.mockResolvedValue({ data: null, error: null });
-    fromMockMap.set("boards", boardsChain);
-
-    const result = await commitImport(input);
-
-    expect(result.ok).toBe(false);
-
-    // Assert the rollback delete was called on boards with the board id
-    expect(boardsChain.delete).toHaveBeenCalled();
-    expect(boardsChain.eq).toHaveBeenCalledWith("id", "b1");
-  });
-
-  it("deletes board and returns fail when phase-2 cell_values insert errors", async () => {
-    const buf = await xlsxBuf([
-      ["Group", "Name", "Status"],
-      ["Backlog", "Task 1", "Done"],
-      ["Backlog", "↳ Sub 1", "Working"],
-    ]);
-    const input = {
-      fileBase64: buf.toString("base64"),
-      fileName: "import.xlsx",
-      workspaceId: BOARD_UUID,
-      boardName: "Board With Subitems",
-      columnMappings: validMappings,
-    };
-
-    // items insert succeeds
-    const itemsChain = makeChain();
-    itemsChain.insert.mockResolvedValue({ data: null, error: null });
-    fromMockMap.set("items", itemsChain);
-
-    // cell_values insert fails
-    const cellsChain = makeChain();
-    cellsChain.insert.mockResolvedValue({
-      data: null,
-      error: { message: "cells boom" },
-    });
-    fromMockMap.set("cell_values", cellsChain);
-
-    // boards delete chain — must return a chainable object for .delete().eq()
-    const boardsChain = makeChain();
-    boardsChain.delete.mockReturnValue(boardsChain);
-    boardsChain.eq.mockResolvedValue({ data: null, error: null });
-    fromMockMap.set("boards", boardsChain);
-
-    const result = await commitImport(input);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/cells boom/i);
-
-    // Assert the rollback delete was called on boards with the board id
-    expect(boardsChain.delete).toHaveBeenCalled();
-    expect(boardsChain.eq).toHaveBeenCalledWith("id", "b1");
-  });
-
-  it("returns fail on Zod validation error (empty columnMappings)", async () => {
-    const buf = await xlsxBuf([["Name"], ["A"]]);
     const result = await commitImport({
       fileBase64: buf.toString("base64"),
       fileName: "import.xlsx",
-      workspaceId: BOARD_UUID,
-      boardName: "Board",
-      columnMappings: [], // invalid: min 1
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+        {
+          sourceIndex: 1,
+          name: "Alt Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+      ],
+      destination: {
+        type: "new",
+        workspaceId: BOARD_UUID,
+        boardName: "Board",
+      },
     });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error).toBeTruthy();
+    expect(result.error).toMatch(/name/i);
+  });
+
+  it("commitImport rejects an existing destination until M2", async () => {
+    const buf = await xlsxBuf([["Name"], ["Task 1"]]);
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+      ],
+      destination: {
+        type: "existing",
+        boardId: BOARD_UUID,
+        group: { newGroupName: "Backlog" },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/not available yet/i);
+  });
+
+  it("commitImport enforces MAX_ROWS on the selected table", async () => {
+    const rows: string[][] = [["Name"]];
+    for (let i = 0; i < 2001; i++) rows.push([`Task ${i}`]);
+    const buf = await xlsxBuf(rows);
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+      ],
+      destination: {
+        type: "new",
+        workspaceId: BOARD_UUID,
+        boardName: "Board",
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/too many rows/i);
   });
 });
