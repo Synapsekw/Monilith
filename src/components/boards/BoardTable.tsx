@@ -1300,6 +1300,7 @@ function GroupHeaderRow({
           Created/Add cells after it sit OUTSIDE the sortable set — that is
           what makes the Name column immovable by construction. */}
       <DndContext
+        id={`group-columns-${group.id}`}
         sensors={columnSensors}
         modifiers={[restrictToHorizontalAxis]}
         onDragEnd={handleColumnDragEnd}

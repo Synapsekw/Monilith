@@ -1235,6 +1235,57 @@ describe("BoardTable touch reorder sensors", () => {
   });
 });
 
+// ── SSR-stable dnd ids ────────────────────────────────────────────────────
+// dnd-kit's auto-generated `DndDescribedBy-N` ids come from a module-global
+// counter that diverges between server render and client hydration (dev
+// StrictMode double-invokes useMemo, consuming two counter slots per context
+// on the client) → hydration mismatch on aria-describedby. Every DndContext
+// must therefore pass an explicit deterministic `id`, which bypasses the
+// counter entirely. Regression: the column-header reorder context shipped
+// without one.
+
+describe("BoardTable deterministic dnd ids", () => {
+  it("derives the column reorder handle's aria-describedby from the group id, not the global counter", () => {
+    const qc = new QueryClient();
+    const payload = {
+      board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
+      groups: [
+        {
+          id: "g1",
+          board_id: "b1",
+          org_id: "o1",
+          name: "Group 1",
+          color: "#0073ea",
+          position: 0,
+        },
+      ],
+      columns: [
+        {
+          id: "c1",
+          board_id: "b1",
+          org_id: "o1",
+          kind: "numbers",
+          name: "Est",
+          settings: {},
+          position: 0,
+          width: null,
+        },
+      ],
+      items: [],
+      cellValues: [],
+      dependencies: [],
+      views: [],
+    } as never;
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardTable payload={payload} selectedViewId="v1" />
+      </QueryClientProvider>,
+    );
+    const handle = screen.getByRole("button", { name: "Reorder Est column" });
+    expect(handle.getAttribute("aria-describedby")).toBe("group-columns-g1");
+  });
+});
+
 describe("BoardTable touch targets (coarse pointer)", () => {
   it("makes the group menu and group drag handle always-visible + 44px on coarse", () => {
     renderBoard();

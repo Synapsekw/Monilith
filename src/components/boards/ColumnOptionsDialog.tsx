@@ -157,6 +157,7 @@ function OptionsEditor({
       </DialogHeader>
 
       <DndContext
+        id={`column-options-${column.id}`}
         sensors={sensors}
         modifiers={[restrictToVerticalAxis]}
         onDragEnd={handleDragEnd}
