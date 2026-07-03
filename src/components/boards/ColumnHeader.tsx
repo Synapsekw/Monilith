@@ -34,6 +34,7 @@ export function ColumnHeader({
   onResize,
   onResizeEnd,
   onEditOptions,
+  onEditCurrency,
 }: {
   column: CacheColumn;
   width: number;
@@ -42,6 +43,7 @@ export function ColumnHeader({
   onResize: (width: number) => void; // live, each drag move (updates liveWidths)
   onResizeEnd: (width: number) => void; // on release (persists via resizeColumn)
   onEditOptions?: () => void; // open the option editor (status/dropdown only)
+  onEditCurrency?: () => void; // open the currency picker (currency kind only)
 }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -102,6 +104,11 @@ export function ColumnHeader({
               {COLUMN_KIND_META[column.kind]?.hasOptions && onEditOptions && (
                 <DropdownMenuItem onSelect={() => onEditOptions()}>
                   Edit labels
+                </DropdownMenuItem>
+              )}
+              {column.kind === "currency" && onEditCurrency && (
+                <DropdownMenuItem onSelect={() => onEditCurrency()}>
+                  Change currency
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
