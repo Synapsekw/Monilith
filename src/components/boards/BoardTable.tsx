@@ -61,7 +61,11 @@ import {
   mirrorValuesForCell,
   mirrorTargetColumnFor,
 } from "@/lib/boards/mirror";
-import { SummaryRow, NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
+import {
+  SummaryRow,
+  hasAssignedSummary,
+  NAME_FREEZE_EDGE,
+} from "@/components/boards/SummaryRow";
 import {
   Dialog,
   DialogContent,
@@ -237,6 +241,19 @@ function gridTemplate(
  * therefore lives in {@link BoardTable} and is threaded down through this bundle
  * (mirrors the {@link CellControls} pattern).
  */
+/**
+ * Per-group summary-row wiring shared by every {@link GroupSection}: the
+ * aggregation choice is per column and board-global (D1), so the edit
+ * permission, the "now" snapshot, and the persist callback are built once in
+ * {@link BoardTable} and threaded down — the group rows differ only in scope
+ * (their own top-level `items`).
+ */
+type GroupSummaryControls = {
+  canEdit: boolean;
+  nowMs: number;
+  onChange: (col: Column, agg: AggregationId | null) => void;
+};
+
 type ColumnHeaderControls = {
   nameWidth: number;
   liveWidths: Record<string, number>;
@@ -422,6 +439,13 @@ export function BoardTable({
     mutations.updateColumnSettings(col.id, next);
   }
 
+  // One shared bundle for every group's summary row (see GroupSummaryControls).
+  const groupSummary: GroupSummaryControls = {
+    canEdit,
+    nowMs: footerNowMs,
+    onChange: setColumnSummary,
+  };
+
   // Board-level column-management surface shared by every group's header row
   // (columns are board-scoped). Width state stays here so a resize/add/rename
   // from any group reflows all groups + the footer.
@@ -566,6 +590,7 @@ export function BoardTable({
                     cellMap={cellMap}
                     template={template}
                     controls={controls}
+                    summary={groupSummary}
                     onRenameGroup={(name) => renameGroup(group.id, name)}
                     nameWidth={nameWidth}
                     autoFocusRename={group.id === renameGroupId}
@@ -1268,6 +1293,7 @@ function GroupSection({
   cellMap,
   template,
   controls,
+  summary,
   onRenameGroup,
   nameWidth,
   autoFocusRename,
@@ -1290,6 +1316,7 @@ function GroupSection({
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
+  summary: GroupSummaryControls;
   onRenameGroup: (name: string) => void;
   nameWidth: number;
   autoFocusRename: boolean;
@@ -1505,6 +1532,22 @@ function GroupSection({
                 </div>
               </SortableContext>
             </DndContext>
+          )}
+          {hasAssignedSummary(columns) && (
+            <SummaryRow
+              variant="group"
+              testId={`group-summary-${group.id}`}
+              groupColor={group.color}
+              columns={columns}
+              itemIds={items.map((i) => i.id)}
+              cellMap={cellMap}
+              cache={controls.cache}
+              template={template}
+              nameWidth={nameWidth}
+              canEdit={summary.canEdit}
+              nowMs={summary.nowMs}
+              onChange={summary.onChange}
+            />
           )}
           <AddItemRow
             groupId={group.id}
