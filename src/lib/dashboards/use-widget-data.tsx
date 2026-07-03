@@ -10,11 +10,15 @@ import {
   configHash,
   type AggregateBucket,
   type ColumnMeta,
+  type CompletionGroupRow,
+  type GroupMeta,
 } from "@/lib/dashboards/widget-data";
 
 export type WidgetData = {
   buckets: AggregateBucket[];
   columnMeta: ColumnMeta | null;
+  /** Completion widgets only; null for aggregate kinds. */
+  completion: { rows: CompletionGroupRow[]; groups: GroupMeta[] } | null;
 };
 
 type WidgetDataContextValue = {
@@ -32,7 +36,7 @@ const WidgetDataContext = createContext<WidgetDataContextValue | null>(null);
  *  Chart + list widgets use their own actions (series / rows) and are excluded
  *  from the aggregate batch. */
 function usesAggregateData(kind: CacheWidget["kind"]): boolean {
-  return kind === "number" || kind === "battery";
+  return kind === "number" || kind === "battery" || kind === "completion";
 }
 
 /**
@@ -133,7 +137,11 @@ export function useWidgetData(widgetId: string): {
     // The widget errors if the whole batch failed, its slot did, or its slot is absent.
     isError: ctx.isError || missing || entry?.ok === false,
     data: entry?.ok
-      ? { buckets: entry.buckets, columnMeta: entry.columnMeta }
+      ? {
+          buckets: entry.buckets,
+          columnMeta: entry.columnMeta,
+          completion: entry.completion ?? null,
+        }
       : undefined,
   };
 }

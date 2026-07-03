@@ -4,11 +4,16 @@ import { revalidatePath, updateTag } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { dashboardsTag, widgetAggregationTag } from "@/lib/cache/tags";
-import { getWidgetAggregationCached } from "@/lib/dashboards/queries-cached";
+import {
+  getWidgetAggregationCached,
+  getWidgetCompletionCached,
+} from "@/lib/dashboards/queries-cached";
 import { optionSchema } from "@/lib/validations/boards";
 import {
   type AggregateBucket,
   type ColumnMeta,
+  type CompletionGroupRow,
+  type GroupMeta,
 } from "@/lib/dashboards/widget-data";
 import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
 import type { SeriesData, SeriesPoint } from "@/lib/dashboards/series";
@@ -275,6 +280,8 @@ export type WidgetAggregatePayload = {
   config: Record<string, unknown>;
   buckets: AggregateBucket[];
   columnMeta: ColumnMeta | null;
+  /** Present only for completion widgets. */
+  completion?: { rows: CompletionGroupRow[]; groups: GroupMeta[] };
 };
 
 /** The per-widget slot in a batched result — a discriminated union so one
@@ -312,6 +319,27 @@ async function resolveWidgetAggregate(
     };
 
   const config = (widget.config ?? {}) as Record<string, unknown>;
+
+  if (widget.kind === "completion") {
+    const result = await getWidgetCompletionCached({
+      widgetId,
+      orgId: widget.org_id,
+      boardId: widget.source_board_id,
+      config,
+    });
+    if (!result.ok) return fail(result.error);
+    return {
+      ok: true,
+      data: {
+        kind: widget.kind,
+        config,
+        buckets: [],
+        columnMeta: null,
+        completion: { rows: result.rows, groups: result.groups },
+      },
+    };
+  }
+
   const result = await getWidgetAggregationCached({
     widgetId,
     orgId: widget.org_id,
