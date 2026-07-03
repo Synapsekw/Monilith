@@ -15,6 +15,11 @@ import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
 import { isoToLocalDate, localDateToISO } from "@/lib/boards/iso-date";
 import { cn } from "@/lib/utils";
 import { pillTextColor } from "@/lib/boards/contrast";
+import {
+  ClearOptionButton,
+  StatusOptionList,
+  parsePercentInput,
+} from "./status-options";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -91,23 +96,6 @@ function PopoverSurface({
   );
 }
 
-/**
- * Trailing "Clear" affordance shared by the selector editors (Status / Dropdown
- * / People). Clearing deletes the cell value; falls back to dismissing the
- * popover when no `onClear` is wired.
- */
-function ClearButton({ onClear }: { onClear: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClear}
-      className="text-muted-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
-    >
-      Clear
-    </button>
-  );
-}
-
 export function TextEditor({
   value,
   onCommit,
@@ -164,14 +152,11 @@ export function PercentEditor({
 }: EditorProps<{ percent: number }>) {
   const [raw, setRaw] = useState(value ? String(value.percent) : "");
   function commit() {
-    const trimmed = raw.trim();
+    const parsed = parsePercentInput(raw);
     // Emptying a previously-set cell clears it (deletes the row).
-    if (trimmed === "") return (onClear ?? onCancel)();
-    const n = Number(trimmed);
-    if (Number.isNaN(n)) return onCancel();
-    // A percent is bounded 0..100 — clamp rather than reject so a fat-fingered
-    // 150 still commits a sensible value.
-    onCommit({ percent: Math.max(0, Math.min(100, n)) });
+    if (parsed.kind === "clear") return (onClear ?? onCancel)();
+    if (parsed.kind === "invalid") return onCancel();
+    onCommit({ percent: parsed.percent });
   }
   const onKey = useCommitKeys(commit, onCancel);
   return (
@@ -200,20 +185,12 @@ export function StatusEditor({
   const selected = value?.optionId ?? null;
   return (
     <PopoverSurface label="Select status" onCancel={onCancel}>
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          role="option"
-          aria-selected={selected === o.id}
-          onClick={() => onCommit({ optionId: o.id })}
-          className="focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11"
-          style={{ backgroundColor: o.color, color: pillTextColor(o.color) }}
-        >
-          {o.label}
-        </button>
-      ))}
-      <ClearButton onClear={() => (onClear ?? onCancel)()} />
+      <StatusOptionList
+        options={options}
+        selected={selected}
+        onSelect={(optionId) => onCommit({ optionId })}
+        onClear={() => (onClear ?? onCancel)()}
+      />
     </PopoverSurface>
   );
 }
@@ -257,7 +234,7 @@ export function DropdownEditor({
           </button>
         );
       })}
-      <ClearButton onClear={() => (onClear ?? onCancel)()} />
+      <ClearOptionButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }
@@ -313,7 +290,7 @@ export function PeopleEditor({
           );
         })
       )}
-      <ClearButton onClear={() => (onClear ?? onCancel)()} />
+      <ClearOptionButton onClear={() => (onClear ?? onCancel)()} />
     </PopoverSurface>
   );
 }
@@ -362,7 +339,7 @@ export function DateEditor({
           }}
         />
         <div className="mt-1 flex justify-end border-t pt-1">
-          <ClearButton onClear={() => (onClear ?? onCancel)()} />
+          <ClearOptionButton onClear={() => (onClear ?? onCancel)()} />
         </div>
       </PopoverContent>
     </Popover>
