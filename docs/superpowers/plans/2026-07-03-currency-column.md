@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a `currency` board column kind — money amounts with a per-column ISO 4217 currency selector, formatted via `Intl`, aggregatable (sum/avg/min/max) so the upcoming summary-row feature can consume it.
+**Goal:** Add a `currency` board column kind — money amounts with a per-column ISO 4217 currency selector, formatted via `Intl`, aggregatable (sum/avg/min/max) so the upcoming summary-row feature can consume it. Two owner-flagged headline requirements: **quick currency selection** (search-first picker, GCC/majors pinned, recents, instant apply — spec §5.2 acceptance criteria) and the **new UAE dirham sign** (U+20C3, rendered via our own bundled glyph until Unicode 18.0 font support exists — spec §5.4).
 
 **Architecture:** One enum-only migration adds `'currency'` to `public.column_kind`; regenerated types flow the new kind into `ColumnKind`, and TypeScript's exhaustive kind-switches enumerate every integration point. Cells store `{ amount: number }` in `cell_values.value` jsonb; the currency code lives in `columns.settings` (`{ currency: "USD" }`) — fixed per column so sums are always single-currency. A new pure module `src/lib/boards/currency.ts` owns the code catalogue and `Intl`-based formatting. No server-action changes: `createColumn`/`upsertCell`/`updateColumnSettings` already validate through `columnSettingsSchema(kind)` / `cellValueSchema(kind)`.
 
-**Tech Stack:** Next.js 16 (App Router) + Supabase (Postgres enum, jsonb), Zod 4, React 19, shadcn/ui (`Dialog`, `Command`, `Input`, `DropdownMenu`), `Intl.NumberFormat`/`Intl.DisplayNames`, Vitest + Testing Library, lucide-react (`Banknote`).
+**Tech Stack:** Next.js 16 (App Router) + Supabase (Postgres enum, jsonb), Zod 4, React 19, shadcn/ui (`Dialog`, `Command`, `Input`, `DropdownMenu`, `Switch`), `Intl.NumberFormat` (incl. `formatToParts`) / `Intl.DisplayNames`, `localStorage` (picker recents), inline SVG (U+20C3 dirham glyph), Vitest + Testing Library, lucide-react (`Banknote`).
 
 **Spec:** `docs/superpowers/specs/2026-07-03-currency-column-design.md`
 
@@ -18,7 +18,8 @@
 - Monochrome UI (pulse-ui): amounts render `text-sm tabular-nums` in foreground/muted tokens; **no color** for currency data (negatives are not red).
 - `Intl.NumberFormat` throws on unknown codes → every formatting entry point goes through the curated `CURRENCY_CODES` guard with a non-throwing fallback.
 - After Task 1 regenerates types, `pnpm typecheck` is **expected to fail** until Tasks 3–6 cover the exhaustive switches (`columnSettingsSchema`, `cellValueSchema`, `allowedAggregations`, `isFilled`, `rollupCell`, `COLUMN_KIND_META`, `DEFAULT_NAME`). Run per-file tests in between; the full gate is Task 9.
-- In-page interactions stay 0 server round-trips: formatting, picker list, footer aggregation, and rollups are pure client computation; the only server calls are the existing `upsertCell` and `updateColumnSettings` Server Actions (perf budget, spec §6).
+- In-page interactions stay 0 server round-trips: formatting, picker list, picker recents (`localStorage`), footer aggregation, and rollups are pure client computation; the only server calls are the existing `upsertCell` and `updateColumnSettings` Server Actions (perf budget, spec §6).
+- **U+20C3 UAE DIRHAM SIGN is not renderable as text today** (accepted by the UTC July 2025; ships Unicode 18.0 in September 2026; no released Unicode version/system font has it as of July 2026, and `Intl` still yields "AED"/"د.إ"). Never emit the raw code point — AED symbol presentation goes through the `CurrencyAmount`/`DirhamSign` components (Task 8b); every plain-text context (export, activity, clipboard, AI snapshot) keeps the string "AED".
 
 ---
 
@@ -32,8 +33,9 @@
 - Task 4 (kind registry + defaults) — depends on **3** (compiling `ColumnKind` records)
 - Task 5 (cell renderer + inline editor) — depends on **2**, **3**
 - Task 6 (aggregation + rollup + footer) — depends on **2**, **3**
-- Task 7 (currency settings dialog + header/table wiring) — depends on **4** (menu meta), **6** (both edit `BoardTable.tsx`; 6 first avoids conflicts)
+- Task 7 (currency settings dialog + header/table wiring, incl. quick-selection ergonomics) — depends on **4** (menu meta), **6** (both edit `BoardTable.tsx`; 6 first avoids conflicts)
 - Task 8 (peripheral kind-switches: kanban, spreadsheet codec, activity, AI snapshot, dashboards) — depends on **2**, **3**
+- Task 8b (AED dirham sign presentation: `DirhamSign` + `CurrencyAmount`, call-site swaps, dialog toggle) — depends on **5**, **6**, **7** (it re-skins the render paths those tasks create)
 - Task 9 (full gates + finish) — depends on **all**
 
 **Parallel batches** (tasks inside a batch touch disjoint files and can be dispatched concurrently; all share the one `task/currency-column` worktree, so only file-disjoint tasks may run in the same wave):
@@ -44,9 +46,10 @@
 | B     | 3          | the schema hub every later task consumes                                                    |
 | C     | 4, 5, 6, 8 | pairwise file-disjoint (registry / cells+editors / aggregation+footer+rollup / peripherals) |
 | D     | 7          | serialized after 6 (both touch `BoardTable.tsx`), after 4 (menu meta)                       |
-| E     | 9          | gates + merge                                                                               |
+| E     | 8b         | serialized after 5/6/7 (touches cells, FooterCell/RollupCell, and CurrencyDialog)           |
+| F     | 9          | gates + merge                                                                               |
 
-**Critical path:** 1 → 3 → 6 → 7 → 9 (5 tasks). Task 1's user checkpoint (manual migration apply) is the only human-blocking step — dispatch Batch A first so the wait overlaps Task 2.
+**Critical path:** 1 → 3 → 6 → 7 → 8b → 9 (6 tasks). Task 1's user checkpoint (manual migration apply) is the only human-blocking step — dispatch Batch A first so the wait overlaps Task 2.
 
 ---
 
@@ -128,6 +131,9 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `roundToCurrency(amount: number, code: CurrencyCode): number`
   - `currencyLabel(code: CurrencyCode): string` (e.g. `"KWD — Kuwaiti Dinar"`)
   - `currencyOf(settings: unknown): CurrencyCode` (reads `settings.currency`, USD fallback)
+  - `COMMON_CURRENCY_CODES: readonly CurrencyCode[]` — pinned picker group `["AED","KWD","SAR","QAR","BHD","OMR","USD","EUR","GBP"]` (Task 7 renders it as the `Common` group)
+  - `formatCurrencyParts(amount: number, code: CurrencyCode): Intl.NumberFormatPart[]` — `formatToParts` variant so Task 8b's `CurrencyAmount` can swap the `currency` part for the dirham glyph
+  - `dirhamSignEnabled(settings: unknown): boolean` — true iff `currencyOf(settings) === "AED"` and `settings.dirham_sign !== false` (default ON)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -203,8 +209,44 @@ describe("catalogue + guards", () => {
     expect(currencyOf({ currency: "nope" })).toBe("USD");
     expect(currencyOf(null)).toBe("USD");
   });
+  it("pins GCC + majors in the common group", () => {
+    expect(COMMON_CURRENCY_CODES).toEqual([
+      "AED",
+      "KWD",
+      "SAR",
+      "QAR",
+      "BHD",
+      "OMR",
+      "USD",
+      "EUR",
+      "GBP",
+    ]);
+  });
+});
+
+describe("formatCurrencyParts", () => {
+  it("exposes a currency part the renderer can swap", () => {
+    const parts = formatCurrencyParts(1234.5, "AED");
+    expect(parts.some((p) => p.type === "currency")).toBe(true);
+    expect(parts.map((p) => p.value).join("")).toBe(
+      formatCurrency(1234.5, "AED"),
+    );
+  });
+});
+
+describe("dirhamSignEnabled", () => {
+  it("defaults ON for AED, respects the opt-out, never for other codes", () => {
+    expect(dirhamSignEnabled({ currency: "AED" })).toBe(true);
+    expect(dirhamSignEnabled({ currency: "AED", dirham_sign: false })).toBe(
+      false,
+    );
+    expect(dirhamSignEnabled({ currency: "KWD" })).toBe(false);
+    expect(dirhamSignEnabled(null)).toBe(false);
+  });
 });
 ```
+
+(Extend the test file's import list with `COMMON_CURRENCY_CODES`, `formatCurrencyParts`, `dirhamSignEnabled`.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -273,6 +315,22 @@ export const CURRENCY_CODES = [
 export type CurrencyCode = (typeof CURRENCY_CODES)[number];
 export const currencyCodeSchema = z.enum(CURRENCY_CODES);
 
+/**
+ * Pinned "Common" picker group (spec §5.2): GCC first (the user base), then
+ * the global majors — visible with zero typing when the picker opens.
+ */
+export const COMMON_CURRENCY_CODES = [
+  "AED",
+  "KWD",
+  "SAR",
+  "QAR",
+  "BHD",
+  "OMR",
+  "USD",
+  "EUR",
+  "GBP",
+] as const satisfies readonly CurrencyCode[];
+
 export function isCurrencyCode(code: unknown): code is CurrencyCode {
   return (
     typeof code === "string" &&
@@ -300,6 +358,29 @@ function formatterFor(code: CurrencyCode): Intl.NumberFormat {
 export function formatCurrency(amount: number, code: string): string {
   if (!isCurrencyCode(code)) return `${code} ${amount.toFixed(2)}`;
   return formatterFor(code).format(amount);
+}
+
+/**
+ * formatToParts variant of formatCurrency — the CurrencyAmount renderer swaps
+ * the `currency` part for the U+20C3 dirham glyph (spec §5.4) while every
+ * digit/separator part stays exactly what Intl produced.
+ */
+export function formatCurrencyParts(
+  amount: number,
+  code: CurrencyCode,
+): Intl.NumberFormatPart[] {
+  return formatterFor(code).formatToParts(amount);
+}
+
+/**
+ * Whether AED amounts under these column settings show the new UAE dirham
+ * sign (U+20C3, drawn as our own glyph until fonts ship Unicode 18.0).
+ * Per-column display choice, DEFAULT ON: absent/omitted means enabled.
+ */
+export function dirhamSignEnabled(settings: unknown): boolean {
+  if (currencyOf(settings) !== "AED") return false;
+  const flag = (settings as { dirham_sign?: unknown } | null)?.dirham_sign;
+  return flag !== false;
 }
 
 /** Minor-unit decimals for a code (USD→2, JPY→0, KWD→3) via Intl. */
@@ -368,7 +449,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: `"currency"` in `ColumnKind` (Task 1); `currencyCodeSchema` (Task 2).
 - Produces (exact, used by Tasks 4–8 and the existing server actions in `src/lib/boards/actions.ts` with zero changes there):
   - `columnKindSchema` includes `"currency"`
-  - `currencySettingsSchema = baseColumnSettingsSchema.extend({ currency: currencyCodeSchema })` — non-strict extend, matching `numbersSettingsSchema`/`relationSettingsSchema`; carries optional `summary_aggregation`
+  - `currencySettingsSchema = baseColumnSettingsSchema.extend({ currency: currencyCodeSchema, dirham_sign: z.boolean().optional() })` — non-strict extend, matching `numbersSettingsSchema`/`relationSettingsSchema`; carries optional `summary_aggregation`; `dirham_sign` is the AED display flag consumed by Task 8b (absent = ON)
   - `currencyValueSchema = z.object({ amount: z.number().finite() })`
   - `columnSettingsSchema("currency")` → `currencySettingsSchema`; `cellValueSchema("currency")` → `currencyValueSchema`
 
@@ -403,6 +484,16 @@ describe("currency column", () => {
         summary_aggregation: "sum",
       }).success,
     ).toBe(true);
+  });
+  it("settings accept the optional dirham_sign display flag", () => {
+    expect(
+      currencySettingsSchema.safeParse({ currency: "AED", dirham_sign: false })
+        .success,
+    ).toBe(true);
+    expect(
+      currencySettingsSchema.safeParse({ currency: "AED", dirham_sign: "no" })
+        .success,
+    ).toBe(false);
   });
   it("cell value is a finite amount", () => {
     expect(currencyValueSchema.safeParse({ amount: 1234.5 }).success).toBe(
@@ -439,8 +530,11 @@ In `src/lib/validations/boards.ts`:
 // Currency column: fixed ISO 4217 code per column (never per cell) so sums
 // are always single-currency — the summary-row feature depends on this.
 // Stored snake_case in columns.settings jsonb, e.g. { "currency": "KWD" }.
+// dirham_sign (AED only): show the new U+20C3 dirham sign glyph in rendered
+// surfaces. Optional; ABSENT MEANS ON (see dirhamSignEnabled, spec §5.4).
 export const currencySettingsSchema = baseColumnSettingsSchema.extend({
   currency: currencyCodeSchema,
+  dirham_sign: z.boolean().optional(),
 });
 ```
 
@@ -1084,7 +1178,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 7: "Change currency" dialog + header/table wiring
+### Task 7: "Change currency" dialog + header/table wiring (quick-selection ergonomics)
+
+This task owns headline requirement #1 (spec §5.2): **switching currency must be fast** —
+search-first with autofocus, `Recent` + `Common` (GCC/majors) groups visible with zero typing,
+instant apply on select (dialog closes, exactly one `updateColumnSettings` round-trip), ≤2
+interactions after the dialog opens.
 
 **Files:**
 
@@ -1095,8 +1194,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 
-- Consumes: `CURRENCY_CODES`, `currencyLabel`, `currencyOf` (Task 2); `mutations.updateColumnSettings(columnId, settings)` from `use-board-mutations.ts` (existing); `COLUMN_KIND_META` (Task 4).
-- Produces: `CurrencyDialog({ column, onSave })` where `onSave(settings: Record<string, unknown>)` receives the **merged** settings (existing keys preserved, `currency` replaced); dismissal is handled by the wrapping `<Dialog>` in `BoardTable`, so the component takes no `onCancel`. `ColumnHeader` prop `onEditCurrency?: () => void` shown only when `column.kind === "currency"`.
+- Consumes: `CURRENCY_CODES`, `COMMON_CURRENCY_CODES`, `currencyLabel`, `currencyOf` (Task 2); `mutations.updateColumnSettings(columnId, settings)` from `use-board-mutations.ts` (existing); `COLUMN_KIND_META` (Task 4).
+- Produces: `CurrencyDialog({ column, onSave })` where `onSave(settings: Record<string, unknown>)` receives the **merged** settings (existing keys preserved, `currency` replaced); dismissal is handled by the wrapping `<Dialog>` in `BoardTable`, so the component takes no `onCancel`. `ColumnHeader` prop `onEditCurrency?: () => void` shown only when `column.kind === "currency"`. Also exports `readRecentCurrencies(): CurrencyCode[]` / `pushRecentCurrency(code)` (localStorage key `pulse.currency.recent`, max 3) — Task 8b re-renders this dialog's labels but does not change its API.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1104,7 +1203,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 // src/components/boards/CurrencyDialog.test.tsx
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CurrencyDialog } from "@/components/boards/CurrencyDialog";
 
 const column = {
@@ -1115,6 +1214,8 @@ const column = {
 } as never;
 
 describe("CurrencyDialog", () => {
+  beforeEach(() => localStorage.clear());
+
   it("saves the picked code, preserving other settings", async () => {
     const onSave = vi.fn();
     render(<CurrencyDialog column={column} onSave={onSave} />);
@@ -1127,6 +1228,39 @@ describe("CurrencyDialog", () => {
       currency: "KWD",
       summary_aggregation: "sum",
     });
+    expect(onSave).toHaveBeenCalledTimes(1); // instant apply — one action, no Save button
+  });
+  it("autofocuses the search input (search-first)", () => {
+    render(<CurrencyDialog column={column} onSave={vi.fn()} />);
+    expect(screen.getByPlaceholderText("Search currencies…")).toHaveFocus();
+  });
+  it("pins Common (GCC + majors) with zero typing", () => {
+    render(<CurrencyDialog column={column} onSave={vi.fn()} />);
+    expect(screen.getByText("Common")).toBeInTheDocument();
+    // AED/KWD visible without any search input
+    expect(screen.getAllByText(/AED/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/KWD/).length).toBeGreaterThan(0);
+  });
+  it("keyboard path: type then Enter selects the top hit (≤2 interactions)", async () => {
+    const onSave = vi.fn();
+    render(<CurrencyDialog column={column} onSave={onSave} />);
+    await userEvent.keyboard("dirham{Enter}");
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "AED" }),
+    );
+  });
+  it("remembers recent picks across opens (localStorage)", async () => {
+    const { unmount } = render(
+      <CurrencyDialog column={column} onSave={vi.fn()} />,
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText("Search currencies…"),
+      "kuwait",
+    );
+    await userEvent.click(await screen.findByText(/KWD/));
+    unmount();
+    render(<CurrencyDialog column={column} onSave={vi.fn()} />);
+    expect(screen.getByText("Recent")).toBeInTheDocument();
   });
   it("states that amounts are not converted", () => {
     render(<CurrencyDialog column={column} onSave={vi.fn()} />);
@@ -1154,6 +1288,7 @@ Expected: FAIL — module/menu item missing.
 ```tsx
 "use client";
 
+import { useState } from "react";
 import { Check } from "lucide-react";
 import {
   Command,
@@ -1165,17 +1300,46 @@ import {
 } from "@/components/ui/command";
 import type { CacheColumn } from "@/lib/boards/cache";
 import {
+  COMMON_CURRENCY_CODES,
   CURRENCY_CODES,
   currencyLabel,
   currencyOf,
+  isCurrencyCode,
+  type CurrencyCode,
 } from "@/lib/boards/currency";
 import { cn } from "@/lib/utils";
 
+const RECENT_KEY = "pulse.currency.recent";
+const RECENT_MAX = 3;
+
+/** Last-picked codes, newest first. Per-device (localStorage); [] when unavailable. */
+export function readRecentCurrencies(): CurrencyCode[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(raw)
+      ? raw.filter(isCurrencyCode).slice(0, RECENT_MAX)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function pushRecentCurrency(code: CurrencyCode): void {
+  try {
+    const next = [code, ...readRecentCurrencies().filter((c) => c !== code)];
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next.slice(0, RECENT_MAX)));
+  } catch {
+    // localStorage unavailable (private mode/SSR) — recents silently absent.
+  }
+}
+
 /**
- * Body of the "Change currency" dialog for a currency column. Pure client
- * picker over the static curated code list (0 round-trips to open — spec §6);
- * only the save persists, via the existing updateColumnSettings action.
- * Amounts are never converted — the same numbers re-render in the new code.
+ * Body of the "Change currency" dialog. QUICK SELECTION is the acceptance bar
+ * (spec §5.2): autofocused search over "CODE — Display Name", Recent (local
+ * picks) and Common (GCC + majors) groups visible with zero typing, and
+ * INSTANT APPLY — selecting a code saves + closes, no confirm button. Pure
+ * client picker (0 round-trips to open — spec §6); only the save persists,
+ * via the existing updateColumnSettings action. Amounts are never converted.
  */
 export function CurrencyDialog({
   column,
@@ -1185,33 +1349,54 @@ export function CurrencyDialog({
   onSave: (settings: Record<string, unknown>) => void;
 }) {
   const current = currencyOf(column.settings);
+  // Snapshot once per open; updated list shows on the NEXT open.
+  const [recent] = useState<CurrencyCode[]>(() => readRecentCurrencies());
+
+  function pick(code: CurrencyCode) {
+    pushRecentCurrency(code);
+    onSave({
+      ...((column.settings as Record<string, unknown>) ?? {}),
+      currency: code,
+    });
+  }
+
+  function item(code: CurrencyCode, group: string) {
+    return (
+      <CommandItem
+        key={`${group}:${code}`}
+        // Match code, currency name, AND cmdk keywords (e.g. "kuwait" via the
+        // display name "Kuwaiti Dinar") so search-by-anything works.
+        value={`${group} ${currencyLabel(code)}`}
+        onSelect={() => pick(code)}
+      >
+        <Check
+          className={cn(
+            "size-4",
+            code === current ? "opacity-100" : "opacity-0",
+          )}
+        />
+        {currencyLabel(code)}
+      </CommandItem>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <Command>
-        <CommandInput placeholder="Search currencies…" />
+        {/* autoFocus = search-first: the fastest path is type → Enter. */}
+        <CommandInput autoFocus placeholder="Search currencies…" />
         <CommandList className="max-h-64">
           <CommandEmpty>No currency found.</CommandEmpty>
-          <CommandGroup>
-            {CURRENCY_CODES.map((code) => (
-              <CommandItem
-                key={code}
-                value={currencyLabel(code)}
-                onSelect={() =>
-                  onSave({
-                    ...((column.settings as Record<string, unknown>) ?? {}),
-                    currency: code,
-                  })
-                }
-              >
-                <Check
-                  className={cn(
-                    "size-4",
-                    code === current ? "opacity-100" : "opacity-0",
-                  )}
-                />
-                {currencyLabel(code)}
-              </CommandItem>
-            ))}
+          {recent.length > 0 && (
+            <CommandGroup heading="Recent">
+              {recent.map((code) => item(code, "recent"))}
+            </CommandGroup>
+          )}
+          <CommandGroup heading="Common">
+            {COMMON_CURRENCY_CODES.map((code) => item(code, "common"))}
+          </CommandGroup>
+          <CommandGroup heading="All currencies">
+            {CURRENCY_CODES.map((code) => item(code, "all"))}
           </CommandGroup>
         </CommandList>
       </Command>
@@ -1223,7 +1408,7 @@ export function CurrencyDialog({
 }
 ```
 
-(No `onCancel` prop: dismissal — Escape / outside click / the X — is owned entirely by the wrapping shadcn `<Dialog>`'s `onOpenChange` in `BoardTable`.)
+(No `onCancel` prop: dismissal — Escape / outside click / the X — is owned entirely by the wrapping shadcn `<Dialog>`'s `onOpenChange` in `BoardTable`. Duplicate entries across Recent/Common/All are fine — cmdk keys are group-prefixed and selection behavior is identical. If the repo's `CommandInput` doesn't forward `autoFocus`, cmdk autofocuses by default — verify with the focus test.)
 
 - [ ] **Step 4: Wire `ColumnHeader.tsx`**
 
@@ -1286,11 +1471,12 @@ Expected: PASS.
 
 ```bash
 git add src/components/boards/CurrencyDialog.tsx src/components/boards/ColumnHeader.tsx src/components/boards/BoardTable.tsx src/components/boards/CurrencyDialog.test.tsx src/components/boards/ColumnHeader.test.tsx
-git commit -m "feat(boards): change-currency dialog in the column menu
+git commit -m "feat(boards): quick-select change-currency dialog
 
 Currency columns get a \"Change currency\" menu item opening a searchable
-Command picker over the curated code list; saving merges settings
-(preserving summary_aggregation) through updateColumnSettings. Amounts
+Command picker: autofocused search, Recent (localStorage, last 3) and
+Common (GCC + majors) groups pinned above the full list, instant apply
+on select (one updateColumnSettings action, no confirm button). Amounts
 are not converted — the dialog says so.
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
@@ -1498,6 +1684,265 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
+### Task 8b: AED dirham sign presentation (U+20C3)
+
+Headline requirement #2 (spec §5.4). **Facts constraining this task:** the UAE dirham sign
+(capital D crossed by two horizontal lines) was accepted by the Unicode Technical Committee in
+July 2025 as **U+20C3 UAE DIRHAM SIGN** and ships in **Unicode 18.0 (September 2026)** — as of
+July 2026 it is in **no released Unicode version**, so no system font has the glyph and
+`Intl.NumberFormat` still yields `"AED"`/`"د.إ"`. Therefore: **never emit the raw code point.**
+We keep Intl for all number formatting and swap only the symbol presentation, in surfaces we
+render — with "AED" fallback everywhere else (export, activity, clipboard, AI snapshot: all
+already produce raw numbers or `formatCurrency` strings from Tasks 6–8, unchanged here).
+
+**Files:**
+
+- Create: `src/components/boards/CurrencyAmount.tsx` (includes the `DirhamSign` inline-SVG glyph)
+- Modify: `src/components/boards/cells/index.tsx` (`CurrencyCell` renders via `CurrencyAmount`)
+- Modify: `src/components/boards/cells/editors/index.tsx` (`CurrencyEditor` prefix shows the glyph for AED)
+- Modify: `src/components/boards/FooterCell.tsx` (`FooterValue` currency case renders via `CurrencyAmount`; `FooterCellProps` gains `dirhamSign?: boolean`, threaded from column settings alongside `currency` in `BoardTable.tsx`)
+- Modify: `src/components/boards/RollupCell.tsx` + `src/components/boards/RollupValueCell.tsx` (thread `dirham_sign` like `currency`; render via `CurrencyAmount`)
+- Modify: `src/components/boards/CurrencyDialog.tsx` (AED-only toggle row writing `dirham_sign`)
+- Test: `src/components/boards/CurrencyAmount.test.tsx` (create), extend `cells.test.tsx` + `CurrencyDialog.test.tsx`
+
+**Interfaces:**
+
+- Consumes: `formatCurrencyParts`, `dirhamSignEnabled`, `currencyOf` (Task 2); `CurrencyCell`/`CurrencyEditor` (Task 5); `FooterValue`/`RollupCell` currency rendering (Task 6); `CurrencyDialog` (Task 7); `dirham_sign` settings field (Task 3).
+- Produces: `CurrencyAmount({ amount: number; settings: unknown; className?: string })` — the ONE component every controlled surface uses to print a currency amount (it internally decides plain Intl string vs parts-with-glyph); `DirhamSign({ className?: string })` inline SVG (`1em`, `currentColor`, `role="img"`, `aria-label="AED"`).
+
+- [ ] **Step 1: Decide the glyph source (license gate, no code yet)**
+
+Evaluate the open-source "dirham" webfont package: check its license (npm/GitHub) for
+redistribution terms. Decision rule (spec §5.4): **default to drawing our own inline SVG** — a
+single static path (capital D + two horizontal crossbars per the official Central Bank design),
+no font pipeline, no dependency, no license exposure, theme-aware via `currentColor`. Adopt the
+webfont ONLY if (a) its license is permissive (MIT/OFL) AND (b) the hand-drawn SVG looks wrong
+next to Geist at 12–14px. Record the outcome in the commit body.
+
+- [ ] **Step 2: Write the failing tests**
+
+```tsx
+// src/components/boards/CurrencyAmount.test.tsx
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
+import { formatCurrency } from "@/lib/boards/currency";
+
+describe("CurrencyAmount", () => {
+  it("renders the dirham glyph for AED by default", () => {
+    render(<CurrencyAmount amount={1234.5} settings={{ currency: "AED" }} />);
+    // glyph present, accessible as "AED"
+    expect(screen.getByRole("img", { name: "AED" })).toBeInTheDocument();
+    // digits/grouping stay exactly Intl's (strip the symbol part for comparison)
+    expect(screen.getByTestId("currency-amount").textContent).toContain(
+      "1,234",
+    );
+  });
+  it("respects the per-column opt-out", () => {
+    render(
+      <CurrencyAmount
+        amount={5}
+        settings={{ currency: "AED", dirham_sign: false }}
+      />,
+    );
+    expect(screen.queryByRole("img", { name: "AED" })).toBeNull();
+    expect(screen.getByTestId("currency-amount").textContent).toBe(
+      formatCurrency(5, "AED"),
+    );
+  });
+  it("never shows the glyph for non-AED codes", () => {
+    render(<CurrencyAmount amount={5} settings={{ currency: "KWD" }} />);
+    expect(screen.queryByRole("img", { name: "AED" })).toBeNull();
+    expect(screen.getByTestId("currency-amount").textContent).toBe(
+      formatCurrency(5, "KWD"),
+    );
+  });
+});
+```
+
+Also extend `CurrencyDialog.test.tsx`:
+
+```tsx
+it("shows the dirham-sign toggle only for AED and writes dirham_sign", async () => {
+  const onSave = vi.fn();
+  render(
+    <CurrencyDialog
+      column={{ ...column, settings: { currency: "AED" } } as never}
+      onSave={onSave}
+    />,
+  );
+  const toggle = screen.getByRole("switch", { name: /dirham sign/i });
+  await userEvent.click(toggle);
+  expect(onSave).toHaveBeenCalledWith(
+    expect.objectContaining({ currency: "AED", dirham_sign: false }),
+  );
+});
+```
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+Run: `pnpm vitest run src/components/boards/CurrencyAmount.test.tsx src/components/boards/CurrencyDialog.test.tsx`
+Expected: FAIL — `CurrencyAmount` module missing; no switch in the dialog.
+
+- [ ] **Step 4: Implement `CurrencyAmount.tsx`**
+
+```tsx
+"use client";
+
+import {
+  currencyOf,
+  dirhamSignEnabled,
+  formatCurrency,
+  formatCurrencyParts,
+} from "@/lib/boards/currency";
+
+/**
+ * The new UAE dirham sign (U+20C3, Unicode 18.0) as an inline SVG: no
+ * released font can render the character yet (accepted July 2025; ships
+ * September 2026), so we draw the official design — a capital D crossed by
+ * two horizontal bars — ourselves. 1em box, currentColor, reads as "AED" to
+ * assistive tech and copy/paste. Swap for the literal character once OS
+ * fonts ship it (spec §9.6).
+ */
+export function DirhamSign({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      role="img"
+      aria-label="AED"
+      className={className}
+      style={{ height: "1em", width: "0.9em", verticalAlign: "-0.08em" }}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={9}
+    >
+      {/* Capital D */}
+      <path d="M25 8 h18 a34 42 0 0 1 0 84 h-18 z" />
+      {/* Two crossbars, extending left of the stem per the official mark */}
+      <line x1="8" y1="40" x2="78" y2="40" />
+      <line x1="8" y1="62" x2="78" y2="62" />
+    </svg>
+  );
+}
+
+/**
+ * THE way to print a currency amount in React surfaces (cell, editor prefix,
+ * footer, rollup, kanban, dialog). Number formatting is always Intl's; only
+ * the AED symbol presentation is custom (spec §5.4). Plain-text consumers
+ * keep using formatCurrency() and therefore keep "AED".
+ */
+export function CurrencyAmount({
+  amount,
+  settings,
+  className,
+}: {
+  amount: number;
+  settings: unknown;
+  className?: string;
+}) {
+  const code = currencyOf(settings);
+  if (!dirhamSignEnabled(settings)) {
+    return (
+      <span data-testid="currency-amount" className={className}>
+        {formatCurrency(amount, code)}
+      </span>
+    );
+  }
+  return (
+    <span data-testid="currency-amount" className={className}>
+      {formatCurrencyParts(amount, code).map((part, i) =>
+        part.type === "currency" ? (
+          <DirhamSign key={i} className="inline-block" />
+        ) : (
+          <span key={i}>{part.value}</span>
+        ),
+      )}
+    </span>
+  );
+}
+```
+
+(The exact SVG path coordinates are a starting sketch — tune visually against Geist in Step 7;
+the tests assert semantics, not geometry.)
+
+- [ ] **Step 5: Swap the call sites**
+
+- `cells/index.tsx` `CurrencyCell` body becomes:
+
+```tsx
+return (
+  <span className="truncate text-sm tabular-nums">
+    <CurrencyAmount amount={value.amount} settings={settings} />
+  </span>
+);
+```
+
+- `editors/index.tsx` `CurrencyEditor` prefix: replace `{code}` with
+  `{dirhamSignEnabled(settings) ? <DirhamSign /> : code}` (imports from `@/components/boards/CurrencyAmount`).
+- `FooterCell.tsx`: `FooterCellProps` gains `dirhamSign?: boolean`; `FooterValue`'s
+  `style === "currency"` branch renders
+  `<CurrencyAmount amount={result.value} settings={{ currency: result.currency, dirham_sign: dirhamSign }} />`
+  (thread `dirhamSign` from the same settings source as `currency` in `BoardTable.tsx`).
+- `RollupCell.tsx` currency case: render via `CurrencyAmount` the same way;
+  `RollupValueCell.tsx` threads `settings.dirham_sign` alongside `settings.currency` (extend the
+  `RollupResult` currency variant with `dirhamSign?: boolean` set from the new optional
+  `rollupCell` argument object — or simplest: `RollupCell` takes the raw column settings as an
+  optional prop and passes them to `CurrencyAmount`; pick one and keep both files consistent).
+- `CurrencyDialog.tsx`: below the caption, an AED-only row using the shadcn `Switch`
+  (add via `yes '' | pnpm dlx shadcn@latest add switch -y` if `src/components/ui/switch.tsx` is absent):
+
+```tsx
+{
+  currencyOf(column.settings) === "AED" && (
+    <label className="flex items-center justify-between gap-2 text-xs">
+      <span>Use new dirham sign (Ⓓ)</span>
+      <Switch
+        aria-label="Use new dirham sign"
+        checked={dirhamSignEnabled(column.settings)}
+        onCheckedChange={(checked) =>
+          onSave({
+            ...((column.settings as Record<string, unknown>) ?? {}),
+            dirham_sign: checked,
+          })
+        }
+      />
+    </label>
+  );
+}
+```
+
+(The visible "Ⓓ" placeholder in the label copy should be the `DirhamSign` component, not a
+character — shown here inline for brevity.)
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `pnpm vitest run src/components/boards/CurrencyAmount.test.tsx src/components/boards/CurrencyDialog.test.tsx src/components/boards/cells/cells.test.tsx src/lib/boards/currency.test.ts`
+Expected: PASS.
+
+- [ ] **Step 7: Visual check**
+
+Run `pnpm dev`, add an AED currency column, enter `1234.5`, and eyeball the glyph next to Geist
+digits at cell size (14px) and footer size — adjust the SVG path/stroke until it reads as a
+sibling of the font's weight. Verify light + dark themes (currentColor should just work).
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/components/boards/CurrencyAmount.tsx src/components/boards/CurrencyAmount.test.tsx src/components/boards/cells/index.tsx src/components/boards/cells/editors/index.tsx src/components/boards/FooterCell.tsx src/components/boards/RollupCell.tsx src/components/boards/RollupValueCell.tsx src/components/boards/BoardTable.tsx src/components/boards/CurrencyDialog.tsx src/components/boards/CurrencyDialog.test.tsx src/components/boards/cells/cells.test.tsx
+git commit -m "feat(boards): render the new uae dirham sign for aed
+
+U+20C3 (accepted july 2025, ships unicode 18.0 in september 2026) has no
+font support yet, so AED amounts render Intl's formatToParts output with
+the currency part swapped for an inline-SVG glyph (currentColor, 1em,
+aria-label AED). Per-column dirham_sign toggle in the currency dialog,
+default on; plain-text contexts (export, activity, AI, clipboard) keep
+the string AED. Glyph source decision: <own-svg | dirham webfont + license>.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
 ### Task 9: full gates, finish, and acceptance walkthrough
 
 **Files:** none new — verification + merge.
@@ -1525,17 +1970,19 @@ Expected: rebases onto latest `develop`, re-runs gates against the merged state,
 1. Pull `develop` and run the app (`pnpm dev`), open any board's Main Table.
 2. Click the `+` add-column button → pick **Currency** (banknote icon). A "Currency" column appears immediately.
 3. Click a cell in it, type `1234.5`, press Enter → the cell shows `$1,234.50`.
-4. Open the column's `⋯` menu → **Change currency** → search "kuwait" → pick **KWD — Kuwaiti Dinar**. All amounts re-render as KWD with 3 decimals (values unchanged; the dialog states "Amounts are not converted.").
-5. In the same cell, enter `10.1266` → commits as `10.127` (KWD minor units).
-6. In the column's footer, click the summary picker → **Sum** → the formatted total appears; add a second amount and watch it update with no page reload.
-7. Add sub-items with amounts under a parent, collapse the parent → the collapsed cell shows `Σ` of the children, formatted.
-8. Switch to Kanban view → cards show the formatted amount in their meta footer.
-9. Board menu → export to Excel → the currency column exports raw numbers (formatting arrives with the "Formatted Excel export" feature).
+4. Open the column's `⋯` menu → **Change currency**. The dialog opens with the search box focused and **Common** (AED, KWD, SAR, QAR, BHD, OMR, USD, EUR, GBP) visible with zero typing. Type "kuwait", press Enter → **KWD — Kuwaiti Dinar** applies instantly (no Save button, dialog closes). All amounts re-render as KWD with 3 decimals (values unchanged; the dialog states "Amounts are not converted.").
+5. Re-open **Change currency** → a **Recent** group now shows KWD at the top (remembered per device).
+6. In the same cell, enter `10.1266` → commits as `10.127` (KWD minor units).
+7. **Change currency** → pick **AED — UAE Dirham** → cells now show the **new dirham sign** (a capital D crossed by two lines) before the amount, in both light and dark themes. Re-open the dialog → a "Use new dirham sign" switch appears; toggle it off → amounts fall back to Intl's plain AED formatting.
+8. In the column's footer, click the summary picker → **Sum** → the formatted total appears (with the dirham sign while AED); add a second amount and watch it update with no page reload.
+9. Add sub-items with amounts under a parent, collapse the parent → the collapsed cell shows `Σ` of the children, formatted.
+10. Switch to Kanban view → cards show the formatted amount in their meta footer.
+11. Board menu → export to Excel → the currency column exports raw numbers, and any AED context in plain text says "AED" — never a missing-glyph box (cell formatting arrives with the "Formatted Excel export" feature).
 
 ---
 
 ## Self-review notes
 
-- **Spec coverage:** §3.1→Task 1; §3.4→Task 2; §3.2/3.3→Task 3; §4 registry rows→Tasks 4–8 (each row named in a task's file list); §5 UX→Tasks 5+7; §6 perf budget→Global Constraints + Task 7 (picker is static, saves via existing actions); §7 tests→embedded per task; §8 units→Execution DAG. Templates row (§4): `templates.ts`/`template-payload.ts` switch on data, not exhaustively on `ColumnKind` — no change needed; covered by the Task 9 typecheck gate.
-- **Type consistency:** `{ amount: number }`, `currency?: string` param position (5th in `aggregate`, 4th in `rollupCell`), `AggregateResult.currency`, `RollupResult` `{ kind: "currency"; total; currency }`, `FooterCellProps.currency`, `onEditCurrency` — names match across Tasks 3–8.
-- **Deliberate scope cuts:** no formatted-currency Excel styling (MVP item 3 owns it, reading `columns.settings.currency`); no FX conversion; no org default currency (spec open question 1).
+- **Spec coverage:** §3.1→Task 1; §3.4→Task 2; §3.2/3.3→Task 3 (incl. `dirham_sign`); §4 registry rows→Tasks 4–8 (each row named in a task's file list); §5 UX→Tasks 5+7; **§5.2 quick-selection acceptance criteria→Task 7** (autofocus, Recent/Common groups, instant apply, keyboard path — each has a test); **§5.4 dirham sign→Task 8b** (glyph, call-site swaps, toggle, fallbacks); §6 perf budget→Global Constraints + Task 7 (picker is static + localStorage, saves via existing actions; SVG glyph = no asset fetch); §7 tests→embedded per task; §8 units→Execution DAG (U8 = Task 8b). Templates row (§4): `templates.ts`/`template-payload.ts` switch on data, not exhaustively on `ColumnKind` — no change needed; covered by the Task 9 typecheck gate.
+- **Type consistency:** `{ amount: number }`, `currency?: string` param position (5th in `aggregate`, 4th in `rollupCell`), `AggregateResult.currency`, `RollupResult` `{ kind: "currency"; total; currency }`, `FooterCellProps.currency` (+`dirhamSign?: boolean` from Task 8b), `onEditCurrency`, `CurrencyAmount({ amount, settings, className })`, `dirhamSignEnabled(settings)`, `readRecentCurrencies()`/`pushRecentCurrency(code)` — names match across Tasks 2–8b.
+- **Deliberate scope cuts:** no formatted-currency Excel styling (MVP item 3 owns it, reading `columns.settings.currency`; exports say "AED", never U+20C3); no FX conversion; no org default currency (spec open question 1); no app-level dirham-sign setting (the per-column flag, default ON, covers the intent).
