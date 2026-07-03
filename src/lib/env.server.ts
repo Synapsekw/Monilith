@@ -22,6 +22,24 @@ const serverEnvSchema = z.object({
     .string()
     .min(1, "ANTHROPIC_API_KEY must be non-empty when set")
     .optional(),
+  // Optional feature (weekly health digest): all absent → the digest
+  // self-disables (route 503s; no email). CI/boot stays green without them.
+  DIGEST_SECRET: z
+    .string()
+    .min(32, "DIGEST_SECRET must be at least 32 chars when set")
+    .optional(),
+  RESEND_API_KEY: z
+    .string()
+    .min(1, "RESEND_API_KEY must be non-empty when set")
+    .optional(),
+  APP_BASE_URL: z
+    .string()
+    .url("APP_BASE_URL must be an absolute URL when set")
+    .optional(),
+  DIGEST_FROM_EMAIL: z
+    .string()
+    .email("DIGEST_FROM_EMAIL must be an email when set")
+    .optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -36,6 +54,10 @@ export function getServerEnv(): ServerEnv {
   const parsed = serverEnvSchema.safeParse({
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    DIGEST_SECRET: process.env.DIGEST_SECRET,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    APP_BASE_URL: process.env.APP_BASE_URL,
+    DIGEST_FROM_EMAIL: process.env.DIGEST_FROM_EMAIL,
   });
   if (!parsed.success) {
     const issues = parsed.error.issues
