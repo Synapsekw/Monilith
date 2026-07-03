@@ -1456,16 +1456,35 @@ function GroupSection({
         col={col}
       />
 
-      {collapsed && items.length > 0 && (
-        <GroupRollupRow
-          group={group}
-          items={items}
-          columns={columns}
-          cellMap={cellMap}
-          cache={controls.cache}
-          template={template}
-        />
-      )}
+      {/* Collapsed strip: the user's assigned aggregation wins; the legacy
+          hardcoded rollup remains the byte-for-byte fallback (spec D5). */}
+      {collapsed &&
+        items.length > 0 &&
+        (hasAssignedSummary(columns) ? (
+          <SummaryRow
+            variant="group"
+            testId={`group-summary-${group.id}`}
+            groupColor={group.color}
+            columns={columns}
+            itemIds={items.map((i) => i.id)}
+            cellMap={cellMap}
+            cache={controls.cache}
+            template={template}
+            nameWidth={nameWidth}
+            canEdit={summary.canEdit}
+            nowMs={summary.nowMs}
+            onChange={summary.onChange}
+          />
+        ) : (
+          <GroupRollupRow
+            group={group}
+            items={items}
+            columns={columns}
+            cellMap={cellMap}
+            cache={controls.cache}
+            template={template}
+          />
+        ))}
 
       {!collapsed && (
         <>

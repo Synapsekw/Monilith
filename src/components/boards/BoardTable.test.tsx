@@ -906,6 +906,24 @@ describe("BoardTable per-group summary rows", () => {
   });
 });
 
+describe("BoardTable collapsed-group summary", () => {
+  it("collapsed group shows the assigned summary instead of the legacy rollup", () => {
+    renderTwoGroupSummary({ summary_aggregation: "sum" });
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Group 1" }));
+    // group-scoped subtotal survives the collapse…
+    expect(screen.getByTestId("group-summary-g1")).toHaveTextContent("3");
+    // …and the hardcoded GroupRollupRow strip (labeled "Average") is gone.
+    expect(screen.queryByText("Average")).not.toBeInTheDocument();
+  });
+
+  it("collapsed group without any assigned summary keeps the legacy rollup strip", () => {
+    renderTwoGroupSummary({});
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Group 1" }));
+    expect(screen.getByText("Average")).toBeInTheDocument();
+    expect(screen.queryByTestId("group-summary-g1")).not.toBeInTheDocument();
+  });
+});
+
 function occupant(over: Partial<RosterOccupant>): RosterOccupant {
   return {
     userId: "u2",
