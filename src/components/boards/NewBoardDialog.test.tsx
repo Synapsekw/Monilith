@@ -14,6 +14,13 @@ vi.mock("@/lib/boards/actions", () => ({
     createBoardFromTemplate(...args),
 }));
 
+const previewImport = vi.fn();
+const commitImport = vi.fn();
+vi.mock("@/lib/boards/spreadsheet-actions", () => ({
+  previewImport: (...args: unknown[]) => previewImport(...args),
+  commitImport: (...args: unknown[]) => commitImport(...args),
+}));
+
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
 
 beforeEach(() => {
@@ -90,5 +97,18 @@ describe("NewBoardDialog", () => {
         ),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("renders the three-step import wizard from 'Import from file'", async () => {
+    render(<NewBoardDialog workspaceId="ws1" />);
+    fireEvent.click(screen.getByRole("button", { name: /new board/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import from file/i }));
+
+    // The wizard's step indicator ("Select & map" / "Confirm") is unique to
+    // ImportWizard — the retired v1 single-page dialog had no step indicator.
+    await waitFor(() =>
+      expect(screen.getByText("Select & map")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Confirm")).toBeInTheDocument();
   });
 });
