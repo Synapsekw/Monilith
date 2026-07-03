@@ -60,11 +60,12 @@ import { MirrorColumnConfig } from "@/components/boards/MirrorColumnConfig";
 import {
   mirrorValuesForCell,
   mirrorTargetColumnFor,
-  mirrorFooterValues,
 } from "@/lib/boards/mirror";
-import { allowedAggregations } from "@/lib/boards/aggregation";
-import { FooterCell } from "@/components/boards/FooterCell";
-import { trackedSeconds } from "@/lib/boards/time-format";
+import {
+  SummaryRow,
+  hasAssignedSummary,
+  NAME_FREEZE_EDGE,
+} from "@/components/boards/SummaryRow";
 import {
   Dialog,
   DialogContent,
@@ -204,12 +205,6 @@ const ROW_HEIGHT = 36; // direction C density
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-// Right-edge shadow for the frozen Name column. The `group/scroll` ancestor
-// (the scroll container) toggles `data-scrolledx`; the ::after only shows once
-// scrolled, so it reads as a floating frozen pane over the data columns.
-const NAME_FREEZE_EDGE =
-  "name-freeze-edge after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-black/15 after:to-transparent after:opacity-0 after:transition-opacity after:content-[''] group-data-[scrolledx=true]/scroll:after:opacity-100";
-
 /**
  * Open the item detail panel by setting `?item=<id>` via the History API — no
  * RSC navigation, so the board page's queries don't re-run (mirrors how
@@ -246,6 +241,19 @@ function gridTemplate(
  * therefore lives in {@link BoardTable} and is threaded down through this bundle
  * (mirrors the {@link CellControls} pattern).
  */
+/**
+ * Per-group summary-row wiring shared by every {@link GroupSection}: the
+ * aggregation choice is per column and board-global (D1), so the edit
+ * permission, the "now" snapshot, and the persist callback are built once in
+ * {@link BoardTable} and threaded down — the group rows differ only in scope
+ * (their own top-level `items`).
+ */
+type GroupSummaryControls = {
+  canEdit: boolean;
+  nowMs: number;
+  onChange: (col: Column, agg: AggregationId | null) => void;
+};
+
 type ColumnHeaderControls = {
   nameWidth: number;
   liveWidths: Record<string, number>;
@@ -260,134 +268,6 @@ type ColumnHeaderControls = {
   onEditOptions: (col: Column) => void;
   onEditCurrency: (col: Column) => void;
 };
-
-/** The kind to aggregate a column AS (a mirror delegates to its target column's
- *  kind) plus the options used for distribution rendering and the ISO 4217
- *  code used for currency formatting — options and currency always read from
- *  the SAME settings source (a mirrored currency column formats correctly). */
-function footerColumnMeta(
-  col: Column,
-  cache: BoardCache,
-): {
-  aggregateKind: ColumnKind;
-  options?: ColumnOption[];
-  currency?: string;
-  dirhamSign?: boolean;
-} {
-  const settingsSource =
-    col.kind === "mirror"
-      ? (mirrorTargetColumnFor(cache, col)?.settings ?? null)
-      : col.settings;
-  const aggregateKind =
-    col.kind === "mirror"
-      ? (mirrorTargetColumnFor(cache, col)?.kind ?? "mirror")
-      : col.kind;
-  return {
-    aggregateKind,
-    options: (settingsSource as { options?: ColumnOption[] } | null)?.options,
-    currency: (settingsSource as { currency?: string } | null)?.currency,
-    dirhamSign: (settingsSource as { dirham_sign?: boolean } | null)
-      ?.dirham_sign,
-  };
-}
-
-/** The per-item values for a column's footer, shaped for `aggregate`. */
-function footerColumnValues(
-  col: Column,
-  itemIds: readonly string[],
-  cellMap: Map<string, CacheCellValue["value"]>,
-  cache: BoardCache,
-  nowMs: number,
-): unknown[] {
-  if (col.kind === "mirror") return mirrorFooterValues(cache, col, itemIds);
-  if (col.kind === "time_tracking") {
-    return itemIds.map((id) => ({
-      trackedSecs: trackedSeconds(timeEntriesForCell(cache, id, col.id), nowMs),
-      estimateSecs: (
-        cellMap.get(cellKey(id, col.id)) as
-          | { estimateSeconds?: number }
-          | undefined
-      )?.estimateSeconds,
-    }));
-  }
-  return itemIds.map((id) => cellMap.get(cellKey(id, col.id)) ?? null);
-}
-
-/**
- * The column-summary footer (6d-3): a sticky bottom row aligned to the column
- * grid where every column can show one aggregate over the loaded top-level rows.
- * Aggregation math is pure + client-side (0 round-trips); only the choice
- * persists. Reuses the same `template` + Name-freeze tokens as the header/data
- * rows so it stays aligned under horizontal scroll + resize.
- */
-function SummaryFooter({
-  columns,
-  itemIds,
-  cellMap,
-  cache,
-  template,
-  nameWidth,
-  canEdit,
-  nowMs,
-  onChange,
-}: {
-  columns: Column[];
-  itemIds: string[];
-  cellMap: Map<string, CacheCellValue["value"]>;
-  cache: BoardCache;
-  template: string;
-  nameWidth: number;
-  canEdit: boolean;
-  nowMs: number;
-  onChange: (col: Column, agg: AggregationId | null) => void;
-}) {
-  return (
-    <div
-      data-testid="board-summary-footer"
-      className="bg-surface-muted sticky bottom-0 z-[15] grid border-t"
-      style={{ gridTemplateColumns: template }}
-    >
-      <div
-        className={cn(
-          "bg-surface-muted text-muted-foreground sticky left-0 z-10 flex items-center px-4 py-1.5 text-xs font-medium",
-          NAME_FREEZE_EDGE,
-        )}
-        style={{ width: nameWidth }}
-      >
-        Summary
-      </div>
-      {columns.map((col) => {
-        const { aggregateKind, options, currency, dirhamSign } =
-          footerColumnMeta(col, cache);
-        const current = (
-          col.settings as { summary_aggregation?: AggregationId } | null
-        )?.summary_aggregation;
-        return (
-          <div
-            key={col.id}
-            className="flex min-w-0 items-center border-l py-1.5"
-          >
-            <FooterCell
-              aggregateKind={aggregateKind}
-              values={footerColumnValues(col, itemIds, cellMap, cache, nowMs)}
-              options={options}
-              currency={currency}
-              dirhamSign={dirhamSign}
-              current={current}
-              allowed={allowedAggregations(aggregateKind)}
-              canEdit={canEdit}
-              onChange={(agg) => onChange(col, agg)}
-            />
-          </div>
-        );
-      })}
-      {/* Two filler cells to keep the grid aligned with the created-by/created-at tracks */}
-      <div aria-hidden />
-      <div aria-hidden />
-      <div />
-    </div>
-  );
-}
 
 export function BoardTable({
   payload,
@@ -559,6 +439,13 @@ export function BoardTable({
     mutations.updateColumnSettings(col.id, next);
   }
 
+  // One shared bundle for every group's summary row (see GroupSummaryControls).
+  const groupSummary: GroupSummaryControls = {
+    canEdit,
+    nowMs: footerNowMs,
+    onChange: setColumnSummary,
+  };
+
   // Board-level column-management surface shared by every group's header row
   // (columns are board-scoped). Width state stays here so a resize/add/rename
   // from any group reflows all groups + the footer.
@@ -703,6 +590,7 @@ export function BoardTable({
                     cellMap={cellMap}
                     template={template}
                     controls={controls}
+                    summary={groupSummary}
                     onRenameGroup={(name) => renameGroup(group.id, name)}
                     nameWidth={nameWidth}
                     autoFocusRename={group.id === renameGroupId}
@@ -732,7 +620,9 @@ export function BoardTable({
             }
           />
           {columns.length > 0 && (
-            <SummaryFooter
+            <SummaryRow
+              variant="board"
+              testId="board-summary-footer"
               columns={columns}
               itemIds={topLevel.map((it) => it.id)}
               cellMap={cellMap}
@@ -1403,6 +1293,7 @@ function GroupSection({
   cellMap,
   template,
   controls,
+  summary,
   onRenameGroup,
   nameWidth,
   autoFocusRename,
@@ -1425,6 +1316,7 @@ function GroupSection({
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
+  summary: GroupSummaryControls;
   onRenameGroup: (name: string) => void;
   nameWidth: number;
   autoFocusRename: boolean;
@@ -1564,16 +1456,35 @@ function GroupSection({
         col={col}
       />
 
-      {collapsed && items.length > 0 && (
-        <GroupRollupRow
-          group={group}
-          items={items}
-          columns={columns}
-          cellMap={cellMap}
-          cache={controls.cache}
-          template={template}
-        />
-      )}
+      {/* Collapsed strip: the user's assigned aggregation wins; the legacy
+          hardcoded rollup remains the byte-for-byte fallback (spec D5). */}
+      {collapsed &&
+        items.length > 0 &&
+        (hasAssignedSummary(columns) ? (
+          <SummaryRow
+            variant="group"
+            testId={`group-summary-${group.id}`}
+            groupColor={group.color}
+            columns={columns}
+            itemIds={items.map((i) => i.id)}
+            cellMap={cellMap}
+            cache={controls.cache}
+            template={template}
+            nameWidth={nameWidth}
+            canEdit={summary.canEdit}
+            nowMs={summary.nowMs}
+            onChange={summary.onChange}
+          />
+        ) : (
+          <GroupRollupRow
+            group={group}
+            items={items}
+            columns={columns}
+            cellMap={cellMap}
+            cache={controls.cache}
+            template={template}
+          />
+        ))}
 
       {!collapsed && (
         <>
@@ -1640,6 +1551,22 @@ function GroupSection({
                 </div>
               </SortableContext>
             </DndContext>
+          )}
+          {hasAssignedSummary(columns) && (
+            <SummaryRow
+              variant="group"
+              testId={`group-summary-${group.id}`}
+              groupColor={group.color}
+              columns={columns}
+              itemIds={items.map((i) => i.id)}
+              cellMap={cellMap}
+              cache={controls.cache}
+              template={template}
+              nameWidth={nameWidth}
+              canEdit={summary.canEdit}
+              nowMs={summary.nowMs}
+              onChange={summary.onChange}
+            />
           )}
           <AddItemRow
             groupId={group.id}
