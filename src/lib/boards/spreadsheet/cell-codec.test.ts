@@ -528,3 +528,28 @@ describe("currency codec", () => {
     expect(cellToExcelValue("currency", null, { currency: "AED" })).toBe("");
   });
 });
+
+describe("priority codec", () => {
+  it("exports stored levels as labels", () => {
+    expect(cellToText("priority", { level: "critical" }, null)).toBe(
+      "Critical",
+    );
+    expect(cellToText("priority", { level: "normal" }, null)).toBe("Normal");
+    expect(cellToText("priority", {}, null)).toBe("");
+    expect(cellToText("priority", null, null)).toBe("");
+  });
+  it("imports labels case-insensitively, rejecting junk", () => {
+    expect(textToCell("priority", "Critical", [])).toEqual({
+      level: "critical",
+    });
+    expect(textToCell("priority", "  normal ", [])).toEqual({
+      level: "normal",
+    });
+    expect(textToCell("priority", "urgent", [])).toBeNull();
+    expect(textToCell("priority", "", [])).toBeNull();
+  });
+  it("round-trips priority through cellToText -> textToCell", () => {
+    const text = cellToText("priority", { level: "critical" }, null);
+    expect(textToCell("priority", text, [])).toEqual({ level: "critical" });
+  });
+});

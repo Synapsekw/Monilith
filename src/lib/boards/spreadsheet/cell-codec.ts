@@ -223,6 +223,13 @@ export function textToCell(
       return opt ? { optionId: opt.id } : null;
     }
 
+    case "priority": {
+      const lower = trimmed.toLowerCase();
+      if (lower === "critical") return { level: "critical" };
+      if (lower === "normal") return { level: "normal" };
+      return null;
+    }
+
     case "dropdown": {
       const tokens = trimmed
         .split(",")

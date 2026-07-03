@@ -17,7 +17,8 @@ export type ImportableKind =
   | "rating"
   | "email"
   | "link"
-  | "phone";
+  | "phone"
+  | "priority";
 export const IMPORTABLE_KINDS: ImportableKind[] = [
   "text",
   "numbers",
@@ -31,6 +32,7 @@ export const IMPORTABLE_KINDS: ImportableKind[] = [
   "email",
   "link",
   "phone",
+  "priority",
 ];
 export type SynthOption = { id: string; label: string; color: string };
 export type DetectedColumn = {
