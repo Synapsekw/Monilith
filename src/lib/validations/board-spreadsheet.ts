@@ -92,12 +92,35 @@ export const commitImportSchema = z
     }
 
     const groupCount = data.columns.filter((c) => c.role === "group").length;
-    if (groupCount > 1) {
+    if (data.destination.type === "existing") {
+      if (groupCount > 0) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            'Column role "group" is not supported when importing into an existing board; rows are appended into a single chosen group.',
+          path: ["columns"],
+        });
+      }
+    } else if (groupCount > 1) {
       ctx.addIssue({
         code: "custom",
         message: 'At most one column can have role "group".',
         path: ["columns"],
       });
+    }
+
+    if (data.destination.type === "existing") {
+      const missingTarget = data.columns.some(
+        (c) => c.role === "data" && c.target === undefined,
+      );
+      if (missingTarget) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            'Every data column must have an explicit target (an existing column, "create", or "skip") when importing into an existing board.',
+          path: ["columns"],
+        });
+      }
     }
 
     const sourceIndexes = data.columns.map((c) => c.sourceIndex);

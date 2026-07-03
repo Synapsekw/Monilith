@@ -10,6 +10,11 @@ import {
   buildImportPayloadV2,
   type ImportPayload,
 } from "@/lib/boards/spreadsheet/build-import-payload";
+import { buildAppendPayload } from "@/lib/boards/spreadsheet/build-append-payload";
+import {
+  isKindCompatible,
+  type BoardColumnRef,
+} from "@/lib/boards/spreadsheet/match-columns";
 import {
   MAX_BYTES,
   MAX_ROWS,
@@ -20,6 +25,8 @@ import {
   type SheetPreview,
   type ColumnSpec,
   type ImportDestination,
+  type ParsedTable,
+  type SynthOption,
 } from "@/lib/boards/spreadsheet/types";
 import {
   exportBoardSchema,
@@ -278,6 +285,92 @@ async function insertNewBoard(
   return { ok: true, boardId };
 }
 
+/**
+ * Append imported rows into an EXISTING board's group via the atomic
+ * `import_rows_into_board` RPC (Task 13). Unlike `insertNewBoard`, this is a
+ * single server-side transaction — there is no "phase 2" and no client-side
+ * rollback to perform.
+ *
+ * Column targets and kind compatibility are validated up front against the
+ * board's actual columns (an RLS-scoped fetch of `columns` by `board_id`) so
+ * `buildAppendPayload` never has to guess at a stale/missing target; a
+ * `boardId` that resolves to zero columns is disambiguated against a direct
+ * `boards` existence check so a genuinely-missing board fails with a clear
+ * "Board not found." instead of silently importing into nothing.
+ */
+async function appendToExistingBoard(
+  supabase: SupabaseServerClient,
+  boardId: string,
+  table: ParsedTable,
+  specs: ColumnSpec[],
+  group: { groupId: string } | { newGroupName: string },
+): Promise<{ ok: true; boardId: string } | { ok: false; error: string }> {
+  const { data: columnRows, error: columnsError } = await supabase
+    .from("columns")
+    .select("id, kind, name, settings")
+    .eq("board_id", boardId);
+
+  if (columnsError) return { ok: false, error: columnsError.message };
+
+  if (!columnRows || columnRows.length === 0) {
+    const { data: boardRows } = await supabase
+      .from("boards")
+      .select("id")
+      .eq("id", boardId);
+    if (!boardRows || boardRows.length === 0) {
+      return { ok: false, error: "Board not found." };
+    }
+  }
+
+  const boardColumns: BoardColumnRef[] = (columnRows ?? []).map((col) => {
+    const settings = col.settings as { options?: SynthOption[] } | null;
+    const options =
+      (col.kind === "status" || col.kind === "dropdown") &&
+      settings &&
+      Array.isArray(settings.options)
+        ? settings.options
+        : [];
+    return { id: col.id, name: col.name, kind: col.kind, options };
+  });
+
+  for (const spec of specs) {
+    if (spec.role !== "data" || spec.target === "skip") continue;
+    const target = spec.target;
+    if (!target || target === "create") continue;
+
+    const boardColumn = boardColumns.find((col) => col.id === target.columnId);
+    if (!boardColumn) {
+      return {
+        ok: false,
+        error: `Column "${spec.name}" targets a column that isn't on this board.`,
+      };
+    }
+    if (!isKindCompatible(spec.kind, boardColumn.kind)) {
+      return {
+        ok: false,
+        error: `Column "${spec.name}" isn't compatible with the target column's type.`,
+      };
+    }
+  }
+
+  let payload;
+  try {
+    payload = buildAppendPayload(table, specs, boardColumns, group);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+
+  const { error: rpcError } = await supabase.rpc("import_rows_into_board", {
+    p_board_id: boardId,
+    p_payload: payload as unknown as Json,
+  });
+
+  if (rpcError) return { ok: false, error: rpcError.message };
+
+  return { ok: true, boardId };
+}
+
 export async function commitImport(input: {
   fileBase64: string;
   fileName: string;
@@ -335,13 +428,23 @@ export async function commitImport(input: {
     }
   }
 
-  const payload = buildImportPayloadV2(table, parsed.data.columns);
+  const supabase = await createClient();
 
   if (parsed.data.destination.type === "existing") {
-    return fail("Importing into an existing board is not available yet.");
+    const result = await appendToExistingBoard(
+      supabase,
+      parsed.data.destination.boardId,
+      table,
+      parsed.data.columns,
+      parsed.data.destination.group,
+    );
+    if (!result.ok) return fail(result.error);
+
+    revalidatePath(`/boards/${result.boardId}`);
+    return { ok: true, data: { boardId: result.boardId } };
   }
 
-  const supabase = await createClient();
+  const payload = buildImportPayloadV2(table, parsed.data.columns);
   const result = await insertNewBoard(
     supabase,
     parsed.data.destination.workspaceId,

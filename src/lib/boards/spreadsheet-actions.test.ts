@@ -72,6 +72,9 @@ import { MAX_BYTES } from "@/lib/boards/spreadsheet/types";
 
 // Valid RFC-4122 v4 UUID for Zod strict uuid validation
 const BOARD_UUID = "a1234567-e89b-42d3-a456-556642440000";
+const COL_STATUS_UUID = "b1234567-e89b-42d3-a456-556642440001";
+const COL_MISSING_UUID = "c1234567-e89b-42d3-a456-556642440002";
+const GROUP_UUID = "d1234567-e89b-42d3-a456-556642440003";
 
 const getBoardPayloadMock = getBoardPayload as ReturnType<typeof vi.fn>;
 
@@ -425,8 +428,190 @@ describe("commitImport", () => {
     expect(result.error).toMatch(/name/i);
   });
 
-  it("commitImport rejects an existing destination until M2", async () => {
+  it("commitImport appends into an existing board's group via the import_rows_into_board RPC", async () => {
+    const buf = await xlsxBuf([
+      ["Name", "Status"],
+      ["Task 1", "Done"],
+      ["Task 2", "New Status"],
+    ]);
+
+    // Board has one existing status column with a single "Done" option.
+    const columnsChain = getFromChain("columns");
+    columnsChain.eq.mockResolvedValue({
+      data: [
+        {
+          id: COL_STATUS_UUID,
+          kind: "status",
+          name: "Status",
+          settings: {
+            options: [{ id: "opt-done", label: "Done", color: "#00c875" }],
+          },
+        },
+      ],
+      error: null,
+    });
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+        {
+          sourceIndex: 1,
+          name: "Status",
+          kind: "status",
+          options: [
+            { id: "spec-done", label: "Done", color: "#e2445c" },
+            { id: "spec-new", label: "New Status", color: "#579bfc" },
+          ],
+          role: "data",
+          target: { columnId: COL_STATUS_UUID },
+        },
+      ],
+      destination: {
+        type: "existing",
+        boardId: BOARD_UUID,
+        group: { groupId: GROUP_UUID },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.boardId).toBe(BOARD_UUID);
+
+    expect(rpcMock).toHaveBeenCalledOnce();
+    const [rpcName, rpcArgs] = rpcMock.mock.calls[0] as [
+      string,
+      {
+        p_board_id: string;
+        p_payload: {
+          groupId?: string;
+          newGroup?: unknown;
+          optionAdditions: { columnId: string; options: unknown[] }[];
+          items: unknown[];
+        };
+      },
+    ];
+    expect(rpcName).toBe("import_rows_into_board");
+    expect(rpcArgs.p_board_id).toBe(BOARD_UUID);
+    // Rows land under the resolved existing groupId, not a freshly minted group
+    expect(rpcArgs.p_payload.groupId).toBe(GROUP_UUID);
+    expect(rpcArgs.p_payload.newGroup).toBeUndefined();
+    // "New Status" is missing from the target's existing options -> minted
+    expect(rpcArgs.p_payload.optionAdditions).toHaveLength(1);
+    expect(rpcArgs.p_payload.optionAdditions[0].columnId).toBe(COL_STATUS_UUID);
+    expect(rpcArgs.p_payload.optionAdditions[0].options).toHaveLength(1);
+    expect(rpcArgs.p_payload.items).toHaveLength(2);
+  });
+
+  it('commitImport rejects a role:"group" column spec for an existing destination', async () => {
+    const buf = await xlsxBuf([
+      ["Group", "Name"],
+      ["Backlog", "Task 1"],
+    ]);
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Group",
+          kind: "text",
+          options: [],
+          role: "group",
+        },
+        {
+          sourceIndex: 1,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+      ],
+      destination: {
+        type: "existing",
+        boardId: BOARD_UUID,
+        group: { newGroupName: "Backlog" },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/group/i);
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("commitImport rejects a target columnId that isn't on the board", async () => {
+    const buf = await xlsxBuf([
+      ["Name", "Status"],
+      ["Task 1", "Done"],
+    ]);
+
+    // Board has no columns matching the target -> board itself still exists.
+    const columnsChain = getFromChain("columns");
+    columnsChain.eq.mockResolvedValue({ data: [], error: null });
+    const boardsChain = getFromChain("boards");
+    boardsChain.eq.mockResolvedValue({
+      data: [{ id: BOARD_UUID }],
+      error: null,
+    });
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+        {
+          sourceIndex: 1,
+          name: "Status",
+          kind: "status",
+          options: [],
+          role: "data",
+          target: { columnId: COL_MISSING_UUID },
+        },
+      ],
+      destination: {
+        type: "existing",
+        boardId: BOARD_UUID,
+        group: { groupId: GROUP_UUID },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/isn't on this board/i);
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('commitImport fails with "Board not found." when the board has no columns and doesn\'t exist', async () => {
     const buf = await xlsxBuf([["Name"], ["Task 1"]]);
+
+    const columnsChain = getFromChain("columns");
+    columnsChain.eq.mockResolvedValue({ data: [], error: null });
+    const boardsChain = getFromChain("boards");
+    boardsChain.eq.mockResolvedValue({ data: [], error: null });
 
     const result = await commitImport({
       fileBase64: buf.toString("base64"),
@@ -446,13 +631,149 @@ describe("commitImport", () => {
       destination: {
         type: "existing",
         boardId: BOARD_UUID,
-        group: { newGroupName: "Backlog" },
+        group: { groupId: GROUP_UUID },
       },
     });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error).toMatch(/not available yet/i);
+    expect(result.error).toBe("Board not found.");
+  });
+
+  it("deletes the newly created board and fails when phase-2 items insert errors", async () => {
+    const buf = await xlsxBuf([
+      ["Group", "Name", "Status"],
+      ["Backlog", "Task 1", "Done"],
+      ["Backlog", "↳ Sub 1", "Working"],
+    ]);
+
+    const itemsChain = getFromChain("items");
+    itemsChain.insert.mockResolvedValue({
+      data: null,
+      error: { message: "boom" },
+    });
+
+    // boards delete chain — must return a chainable object for .delete().eq()
+    const boardsChain = getFromChain("boards");
+    boardsChain.delete.mockReturnValue(boardsChain);
+    boardsChain.eq.mockResolvedValue({ data: null, error: null });
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Group",
+          kind: "text",
+          options: [],
+          role: "group",
+        },
+        {
+          sourceIndex: 1,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+        {
+          sourceIndex: 2,
+          name: "Status",
+          kind: "status",
+          options: [
+            { id: "opt1", label: "Done", color: "#00c875" },
+            { id: "opt2", label: "Working", color: "#fdab3d" },
+          ],
+          role: "data",
+        },
+      ],
+      destination: {
+        type: "new",
+        workspaceId: BOARD_UUID,
+        boardName: "Board With Subitems",
+      },
+    });
+
+    expect(result.ok).toBe(false);
+
+    // Assert the rollback delete was called on boards with the board id
+    expect(itemsChain.insert).toHaveBeenCalled();
+    expect(boardsChain.delete).toHaveBeenCalled();
+    expect(boardsChain.eq).toHaveBeenCalledWith("id", "b1");
+  });
+
+  it("deletes the newly created board and fails when phase-2 cell_values insert errors", async () => {
+    const buf = await xlsxBuf([
+      ["Group", "Name", "Status"],
+      ["Backlog", "Task 1", "Done"],
+      ["Backlog", "↳ Sub 1", "Working"],
+    ]);
+
+    // items insert succeeds
+    const itemsChain = getFromChain("items");
+    itemsChain.insert.mockResolvedValue({ data: null, error: null });
+
+    // cell_values insert fails
+    const cellsChain = getFromChain("cell_values");
+    cellsChain.insert.mockResolvedValue({
+      data: null,
+      error: { message: "cells boom" },
+    });
+
+    // boards delete chain — must return a chainable object for .delete().eq()
+    const boardsChain = getFromChain("boards");
+    boardsChain.delete.mockReturnValue(boardsChain);
+    boardsChain.eq.mockResolvedValue({ data: null, error: null });
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Group",
+          kind: "text",
+          options: [],
+          role: "group",
+        },
+        {
+          sourceIndex: 1,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+        {
+          sourceIndex: 2,
+          name: "Status",
+          kind: "status",
+          options: [
+            { id: "opt1", label: "Done", color: "#00c875" },
+            { id: "opt2", label: "Working", color: "#fdab3d" },
+          ],
+          role: "data",
+        },
+      ],
+      destination: {
+        type: "new",
+        workspaceId: BOARD_UUID,
+        boardName: "Board With Subitems",
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/cells boom/i);
+
+    // Assert the rollback delete was called on boards with the board id
+    expect(boardsChain.delete).toHaveBeenCalled();
+    expect(boardsChain.eq).toHaveBeenCalledWith("id", "b1");
   });
 
   it("commitImport enforces MAX_ROWS on the selected table", async () => {
