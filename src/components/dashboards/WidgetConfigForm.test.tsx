@@ -16,7 +16,19 @@ const boards: BoardOption[] = [
     dateColumns: [{ id: "d1", name: "Due" }],
     peopleColumns: [{ id: "p1", name: "Owner" }],
     dropdownColumns: [{ id: "dd1", name: "Priority" }],
-    allColumns: [],
+    percentColumns: [{ id: "pc1", name: "% Complete" }],
+    allColumns: [
+      {
+        id: "s1",
+        name: "Status",
+        kind: "status",
+        options: [
+          { id: "opt-done", label: "Done", color: "#00c875" },
+          { id: "opt-wip", label: "In Progress", color: "#0073ea" },
+          { id: "opt-complete", label: "Complete", color: "#037f4c" },
+        ],
+      },
+    ],
   },
 ];
 
@@ -67,6 +79,124 @@ describe("WidgetConfigForm", () => {
         }),
       }),
     );
+  });
+
+  it("offers the completion kind and defaults to status mode", () => {
+    render(
+      <WidgetConfigForm
+        boards={boards}
+        value={{
+          kind: "completion",
+          sourceBoardId: "b1",
+          title: "",
+          config: { mode: "status", doneOptionIds: [] },
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+    // The kind select offers Completion.
+    const kindSelect = screen.getByLabelText("Widget type", {
+      selector: "select",
+    }) as HTMLSelectElement;
+    expect(Array.from(kindSelect.options).map((o) => o.value)).toContain(
+      "completion",
+    );
+    const mode = screen.getByLabelText(
+      "Completion source",
+    ) as HTMLSelectElement;
+    expect(mode.value).toBe("status");
+    expect(screen.getByLabelText("Status column")).toBeInTheDocument();
+  });
+
+  it("percent mode shows the percent-column select and empty-board hint", () => {
+    const { rerender } = render(
+      <WidgetConfigForm
+        boards={boards}
+        value={{
+          kind: "completion",
+          sourceBoardId: "b1",
+          title: "",
+          config: { mode: "percent", doneOptionIds: [] },
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+    const percentSelect = screen.getByLabelText(
+      "Percent column",
+    ) as HTMLSelectElement;
+    expect(Array.from(percentSelect.options).map((o) => o.value)).toContain(
+      "pc1",
+    );
+
+    // No percent columns → helper text.
+    const noPercent: BoardOption[] = [{ ...boards[0], percentColumns: [] }];
+    rerender(
+      <WidgetConfigForm
+        boards={noPercent}
+        value={{
+          kind: "completion",
+          sourceBoardId: "b1",
+          title: "",
+          config: { mode: "percent", doneOptionIds: [] },
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(/Add a Percent column to this board/i),
+    ).toBeInTheDocument();
+  });
+
+  it("picking a status column pre-checks done-like options", () => {
+    const onChange = vi.fn();
+    render(
+      <WidgetConfigForm
+        boards={boards}
+        value={{
+          kind: "completion",
+          sourceBoardId: "b1",
+          title: "",
+          config: { mode: "status", doneOptionIds: [] },
+        }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Status column"), {
+      target: { value: "s1" },
+    });
+    // "Done" and "Complete" match /done|complete|finished/i; "In Progress"
+    // does not — the preset is editable via the checkboxes afterwards.
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({
+          statusColumnId: "s1",
+          doneOptionIds: ["opt-done", "opt-complete"],
+        }),
+      }),
+    );
+  });
+
+  it("renders editable done-option checkboxes once a status column is picked", () => {
+    render(
+      <WidgetConfigForm
+        boards={boards}
+        value={{
+          kind: "completion",
+          sourceBoardId: "b1",
+          title: "",
+          config: {
+            mode: "status",
+            statusColumnId: "s1",
+            doneOptionIds: ["opt-done"],
+          },
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+    const done = screen.getByLabelText(/Done/) as HTMLInputElement;
+    const wip = screen.getByLabelText(/In Progress/) as HTMLInputElement;
+    expect(done.checked).toBe(true);
+    expect(wip.checked).toBe(false);
   });
 
   it("offers only Count when the board has no number columns", () => {

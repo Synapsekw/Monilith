@@ -60,6 +60,9 @@ export default async function DashboardPage({
       dropdownColumns: cols
         .filter((c) => c.kind === "dropdown")
         .map((c) => ({ id: c.id, name: c.name })),
+      percentColumns: cols
+        .filter((c) => c.kind === "percent")
+        .map((c) => ({ id: c.id, name: c.name })),
       allColumns: cols.map((c) => ({
         id: c.id,
         name: c.name,
