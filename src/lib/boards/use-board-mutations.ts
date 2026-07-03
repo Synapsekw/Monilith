@@ -16,6 +16,7 @@ import {
   renameColumn,
   renameGroup,
   renameItem,
+  reorderColumn,
   reorderGroup,
   reorderItem,
   resizeColumn,
@@ -343,6 +344,32 @@ export function useBoardMutations(boardId: string) {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
       showMutationError(
         "Couldn't resize the column — your change was undone.",
+        err,
+      );
+    },
+  });
+
+  const reorderColumnMutation = useMutation<
+    unknown,
+    Error,
+    { columnId: string; position: number },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await reorderColumn(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    // replaceColumn re-sorts by position, so this one patch reflows every
+    // group header, row, and the footer immediately.
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      return optimisticColumn(vars.columnId, { position: vars.position });
+    },
+    onError: (err, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't move the column — your change was undone.",
         err,
       );
     },
@@ -1162,6 +1189,8 @@ export function useBoardMutations(boardId: string) {
       renameColumnMutation.mutate({ columnId, name }),
     resizeColumn: (columnId: string, width: number) =>
       resizeColumnMutation.mutate({ columnId, width }),
+    reorderColumn: (columnId: string, position: number) =>
+      reorderColumnMutation.mutate({ columnId, position }),
     deleteColumn: (columnId: string) =>
       deleteColumnMutation.mutate({ columnId }),
     updateColumnSettings: (
