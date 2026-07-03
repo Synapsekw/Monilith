@@ -130,6 +130,13 @@ describe("proxy matcher", () => {
     expect(matcher.test("/updates")).toBe(false);
   });
 
+  it("skips the web manifest so it never redirects to /login (installability)", () => {
+    // The PWA manifest must be publicly fetchable — an anonymous visitor on the
+    // landing page installs the app, so a proxy redirect to /login would return
+    // login HTML instead of the manifest JSON and break the install prompt.
+    expect(matcher.test("/manifest.webmanifest")).toBe(false);
+  });
+
   it("still matches /, the OAuth callback, and protected routes", () => {
     expect(matcher.test("/")).toBe(true);
     expect(matcher.test("/auth/callback")).toBe(true);

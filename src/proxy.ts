@@ -78,13 +78,16 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match everything except Next internals, the favicon, static assets, and
-    // the public marketing/auth routes that never gate on a server-resolved
-    // `user` (`/login`, `/signup`, `/updates`). Dropping those lets Vercel serve
-    // them straight from the CDN with zero proxy invocation — the TTFB win.
-    // `/` stays matched (the authed → /home redirect above needs the resolved
-    // identity); so does `/auth/*` (the OAuth callback needs session-refresh
-    // cookies).
-    "/((?!_next/static|_next/image|favicon.ico|login|signup|updates|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|otf|map)$).*)",
+    // Match everything except Next internals, the favicon, the web manifest,
+    // static assets, and the public marketing/auth routes that never gate on a
+    // server-resolved `user` (`/login`, `/signup`, `/updates`). Dropping those
+    // lets Vercel serve them straight from the CDN with zero proxy invocation —
+    // the TTFB win. The manifest MUST be excluded: it is a public, static,
+    // auth-free route, and an anonymous visitor on the landing page installs the
+    // app, so gating it would 307 the manifest fetch to /login and break the
+    // install prompt. `/` stays matched (the authed → /home redirect above needs
+    // the resolved identity); so does `/auth/*` (the OAuth callback needs
+    // session-refresh cookies).
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|login|signup|updates|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|otf|map)$).*)",
   ],
 };
