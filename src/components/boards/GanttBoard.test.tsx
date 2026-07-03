@@ -16,6 +16,7 @@ vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
 
 const setCell = vi.fn();
 const addItem = vi.fn();
+const clearCellValue = vi.fn();
 const addDependency = vi.fn();
 const removeDependency = vi.fn();
 
@@ -23,7 +24,7 @@ vi.mock("@/lib/boards/use-board-mutations", () => ({
   useBoardMutations: () => ({
     setCell,
     addItem,
-    clearCellValue: vi.fn(),
+    clearCellValue,
     renameItem: vi.fn(),
     addDependency,
     removeDependency,
@@ -242,6 +243,7 @@ describe("GanttBoard (no date column)", () => {
 const START_COL = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const END_COL = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const STATUS_COL = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const PERCENT_COL = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 
 function twoColPayload() {
   return {
@@ -273,7 +275,21 @@ function twoColPayload() {
         kind: "status",
         name: "Status",
         position: 2,
-        settings: { options: [{ id: "o1", label: "Done", color: "#00c875" }] },
+        settings: {
+          options: [
+            { id: "o1", label: "Done", color: "#00c875" },
+            { id: "o2", label: "Stuck", color: "#e2445c" },
+          ],
+        },
+      },
+      {
+        id: PERCENT_COL,
+        board_id: "b1",
+        org_id: "o1",
+        kind: "percent",
+        name: "% complete",
+        position: 3,
+        settings: {},
       },
     ],
     items: [
@@ -392,6 +408,92 @@ describe("GanttBoard — two-column spans + color", () => {
       target: { value: STATUS_COL },
     });
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Quick-edit peek (calendar/timeline inline status + percent editing)
+// ---------------------------------------------------------------------------
+
+function itemParam(): string | null {
+  return new URLSearchParams(window.location.search).get("item");
+}
+
+describe("GanttBoard — quick-edit peek", () => {
+  beforeEach(() => {
+    window.history.pushState({}, "", "/");
+    setCell.mockReset();
+    clearCellValue.mockReset();
+    refresh.mockReset();
+  });
+
+  it("opens the quick-edit peek when a bar is clicked", () => {
+    // twoColPayload: "Spanned" is a two-column bar; status + percent columns exist.
+    renderBoard(twoColPayload());
+    fireEvent.click(screen.getByLabelText("Spanned")); // bar body (drag handle)
+    expect(
+      screen.getByRole("dialog", { name: "Edit Spanned" }),
+    ).toBeInTheDocument();
+    expect(itemParam()).toBeNull(); // peek, not the panel
+  });
+
+  it("opens the peek from the keyboard (Enter on the bar body)", () => {
+    renderBoard(twoColPayload());
+    fireEvent.keyDown(screen.getByLabelText("Spanned"), { key: "Enter" });
+    expect(
+      screen.getByRole("dialog", { name: "Edit Spanned" }),
+    ).toBeInTheDocument();
+  });
+
+  it("commits a status pick from the peek through setCell (no router nav)", () => {
+    renderBoard(twoColPayload());
+    fireEvent.click(screen.getByLabelText("Spanned"));
+    fireEvent.click(screen.getByRole("option", { name: "Stuck" }));
+    expect(setCell).toHaveBeenCalledOnce();
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "i1",
+      columnId: STATUS_COL,
+      value: { optionId: "o2" },
+    });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("opens the peek from a milestone diamond", () => {
+    renderBoard(twoColPayload());
+    // "DotOnly" has a start but no end → milestone diamond with an aria-label.
+    fireEvent.click(screen.getByLabelText("DotOnly"));
+    expect(
+      screen.getByRole("dialog", { name: "Edit DotOnly" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the peek from an unscheduled row", () => {
+    renderBoard(twoColPayload());
+    fireEvent.click(screen.getByText(/Unscheduled \(1\)/)); // expand the section
+    fireEvent.click(screen.getByRole("button", { name: "Nothing" }));
+    expect(
+      screen.getByRole("dialog", { name: "Edit Nothing" }),
+    ).toBeInTheDocument();
+  });
+
+  it("the peek's Open button pushes ?item= via the History API", () => {
+    renderBoard(twoColPayload());
+    fireEvent.click(screen.getByLabelText("Spanned"));
+    fireEvent.click(screen.getByRole("button", { name: /open/i }));
+    expect(itemParam()).toBe("i1");
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("resize-strip pointerdown does not open the peek", () => {
+    renderBoard(twoColPayload());
+    const strip = screen.getByLabelText("Resize Spanned");
+    fireEvent.pointerDown(strip);
+    fireEvent.click(strip);
+    expect(
+      screen.queryByRole("dialog", { name: /^edit /i }),
+    ).not.toBeInTheDocument();
   });
 });
 
