@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -8,11 +8,16 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatHours } from "@/lib/time/hours";
 import { upsertTimeAllocation, deleteTimeAllocation } from "@/lib/time/actions";
-import type { TimeCardData, TimeCardRow } from "@/lib/time/types";
+import type { TimeCardCell, TimeCardData, TimeCardRow } from "@/lib/time/types";
 import { TimeCell } from "./TimeCell";
 import { AddRowPicker, type PickedRow } from "./AddRowPicker";
 
 const DAY = 86_400_000;
+/** Stable empty base for the optimistic edit overlay. Because `useOptimistic`
+ * reverts to its passthrough (base) value once each transition settles, keeping
+ * the base a constant empty Map means the overlay auto-clears exactly when the
+ * refreshed server `data.rows` land — i.e. it reconciles for free. */
+const EMPTY_EDITS = new Map<string, number>();
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const toMs = (d: string) => Date.parse(d + "T00:00:00Z");
 
@@ -45,6 +50,22 @@ export function TimeCard({
   const [, startNav] = useTransition();
   // Locally-added empty rows (from the picker) not yet persisted.
   const [extraRows, setExtraRows] = useState<TimeCardRow[]>([]);
+
+  // Optimistic overlay of in-flight cell edits, keyed by `${rowKey}::${day}` →
+  // manual seconds. Applied synchronously on commit so the per-row Total,
+  // daily totals, and week total move in step with the edited cell — then it
+  // reverts to EMPTY_EDITS when the transition settles (server value has landed
+  // in data.rows via router.refresh(), so display stays consistent).
+  const [pendingEdits, addPendingEdit] = useOptimistic<
+    Map<string, number>,
+    { key: string; day: string; manualSecs: number }
+  >(EMPTY_EDITS, (map, e) =>
+    new Map(map).set(`${e.key}::${e.day}`, e.manualSecs),
+  );
+  // A cell's effective manual seconds: the pending optimistic value if one is
+  // in flight for this (row, day), else the server value.
+  const effManual = (rowKey: string, cell: TimeCardCell) =>
+    pendingEdits.get(`${rowKey}::${cell.day}`) ?? cell.manualSecs;
 
   function gotoWeek(deltaWeeks: number) {
     const next = iso(toMs(data.weekStart) + deltaWeeks * 7 * DAY);
@@ -80,6 +101,11 @@ export function TimeCard({
 
   function commitCell(row: TimeCardRow, day: string, hours: number) {
     startNav(async () => {
+      addPendingEdit({
+        key: row.key,
+        day,
+        manualSecs: Math.round(hours * 3600),
+      });
       await upsertTimeAllocation({
         workDate: day,
         itemId: row.itemId ?? undefined,
@@ -93,6 +119,7 @@ export function TimeCard({
 
   function clearCell(row: TimeCardRow, day: string) {
     startNav(async () => {
+      addPendingEdit({ key: row.key, day, manualSecs: 0 });
       await deleteTimeAllocation({
         workDate: day,
         itemId: row.itemId ?? undefined,
@@ -105,7 +132,7 @@ export function TimeCard({
   const dayTotals = data.days.map((day) =>
     rows.reduce((s, r) => {
       const c = r.cells.find((x) => x.day === day);
-      return s + (c ? c.manualSecs + c.timerSecs : 0);
+      return s + (c ? effManual(r.key, c) + c.timerSecs : 0);
     }, 0),
   );
   const weekTotal = dayTotals.reduce((s, x) => s + x, 0);
@@ -166,37 +193,48 @@ export function TimeCard({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.key} className="group">
-                <td className="bg-background group-hover:bg-accent/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{row.label}</p>
-                    <p className="text-muted-foreground truncate text-[11px]">
-                      {row.kind === "item"
-                        ? (row.boardName ?? "Item")
-                        : "Category"}
-                    </p>
-                  </div>
-                </td>
-                {row.cells.map((cell) => (
-                  <td
-                    key={cell.day}
-                    className="border-b px-1.5 py-1.5 text-center align-middle"
-                  >
-                    <TimeCell
-                      manualSecs={cell.manualSecs}
-                      timerSecs={cell.timerSecs}
-                      ariaLabel={`${row.label}, ${dayLabel(cell.day)}`}
-                      onCommit={(h) => commitCell(row, cell.day, h)}
-                      onClear={() => clearCell(row, cell.day)}
-                    />
+            {rows.map((row) => {
+              // Overlay-aware per-row total so the Total column moves in step
+              // with an in-flight cell edit (server row.totalSecs lags until
+              // router.refresh() lands).
+              const rowTotal = row.cells.reduce(
+                (s, c) => s + effManual(row.key, c) + c.timerSecs,
+                0,
+              );
+              return (
+                <tr key={row.key} className="group">
+                  <td className="bg-background group-hover:bg-accent/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {row.label}
+                      </p>
+                      <p className="text-muted-foreground truncate text-[11px]">
+                        {row.kind === "item"
+                          ? (row.boardName ?? "Item")
+                          : "Category"}
+                      </p>
+                    </div>
                   </td>
-                ))}
-                <td className="border-b border-l px-2 py-1.5 text-center align-middle tabular-nums">
-                  {formatHours(row.totalSecs) || "0"}h
-                </td>
-              </tr>
-            ))}
+                  {row.cells.map((cell) => (
+                    <td
+                      key={cell.day}
+                      className="border-b px-1.5 py-1.5 text-center align-middle"
+                    >
+                      <TimeCell
+                        manualSecs={cell.manualSecs}
+                        timerSecs={cell.timerSecs}
+                        ariaLabel={`${row.label}, ${dayLabel(cell.day)}`}
+                        onCommit={(h) => commitCell(row, cell.day, h)}
+                        onClear={() => clearCell(row, cell.day)}
+                      />
+                    </td>
+                  ))}
+                  <td className="border-b border-l px-2 py-1.5 text-center align-middle tabular-nums">
+                    {formatHours(rowTotal) || "0"}h
+                  </td>
+                </tr>
+              );
+            })}
             {rows.length === 0 ? (
               <tr>
                 <td

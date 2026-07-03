@@ -2,6 +2,8 @@
  *  take resolved primitives, not DB rows, so the table and the item panel can
  *  both reuse them. */
 
+import Image from "next/image";
+
 export function formatDateTime(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -40,8 +42,14 @@ export function CreatedByCell({
     <span className="flex items-center gap-2 truncate text-xs opacity-60">
       <span className="bg-surface-muted flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-medium">
         {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="" className="size-full object-cover" />
+          <Image
+            src={avatarUrl}
+            alt=""
+            width={20}
+            height={20}
+            unoptimized
+            className="size-full object-cover"
+          />
         ) : (
           initials(name)
         )}
