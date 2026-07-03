@@ -150,3 +150,68 @@ describe("applyWorkbookFormatting — static styles", () => {
     expect(solidFillArgb(ws.getRow(2).getCell(3))).toBeUndefined();
   });
 });
+
+describe("applyWorkbookFormatting — percent data bars", () => {
+  it("adds one flat dataBar rule per band present, with 0–100 num cfvo", async () => {
+    const plan: FormatPlan = {
+      columnKinds: ["status", "percent"],
+      rows: [
+        { rowNumber: 2, groupColor: "#0059ff", isSubitem: false },
+        { rowNumber: 3, groupColor: "#0059ff", isSubitem: false },
+        { rowNumber: 4, groupColor: "#0059ff", isSubitem: false },
+      ],
+      optionFills: [],
+      percentCells: [
+        { rowNumber: 2, colIndex: 4, value: 10 }, // red
+        { rowNumber: 3, colIndex: 4, value: 15 }, // red (same rule)
+        { rowNumber: 4, colIndex: 4, value: 100 }, // complete
+      ],
+    };
+    const ws = await roundTrip(plan, [
+      ["Backlog", "a", "", 10],
+      ["Backlog", "b", "", 15],
+      ["Backlog", "c", "", 100],
+    ]);
+
+    // exceljs parses CF back onto the worksheet model.
+    const cfs = (
+      ws as unknown as {
+        conditionalFormattings: Array<{
+          ref: string;
+          rules: Array<{
+            type: string;
+            cfvo?: Array<{ type: string; value?: number }>;
+          }>;
+        }>;
+      }
+    ).conditionalFormattings;
+
+    const dataBars = cfs.filter((cf) =>
+      cf.rules.some((r) => r.type === "dataBar"),
+    );
+    expect(dataBars).toHaveLength(2); // red bucket + complete bucket
+
+    const redBucket = dataBars.find((cf) => cf.ref.includes("D2"));
+    expect(redBucket?.ref).toBe("D2 D3"); // discontiguous sqref, space-separated
+    const rule = redBucket?.rules[0];
+    expect(rule?.cfvo?.[0]).toMatchObject({ type: "num", value: 0 });
+    expect(rule?.cfvo?.[1]).toMatchObject({ type: "num", value: 100 });
+
+    const completeBucket = dataBars.find((cf) => cf.ref === "D4");
+    expect(completeBucket).toBeTruthy();
+  });
+
+  it("adds no dataBar rules when there are no percent cells", async () => {
+    const plan: FormatPlan = { ...basePlan, percentCells: [] };
+    const ws = await roundTrip(plan, baseRows);
+    const cfs =
+      (
+        ws as unknown as {
+          conditionalFormattings?: Array<{ rules: Array<{ type: string }> }>;
+        }
+      ).conditionalFormattings ?? [];
+    expect(
+      cfs.filter((cf) => cf.rules.some((r) => r.type === "dataBar")),
+    ).toHaveLength(0);
+  });
+});

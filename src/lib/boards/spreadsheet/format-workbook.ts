@@ -181,8 +181,48 @@ export function applyWorkbookFormatting(
   applyPercentDataBars(ws, plan);
 }
 
-// Placeholder until the data-bar task — keeps this task shippable and typecheck-green.
-function applyPercentDataBars(
-  _ws: ExcelJS.Worksheet,
-  _plan: FormatPlan,
-): void {}
+/** exceljs's DataBarRuleType omits `color`, but the xlsx writer renders it
+ *  (lib/xlsx/xform/sheet/cf/databar-xform.js). Local, no-any extension. */
+type ColoredDataBarRule = Extract<
+  ExcelJS.ConditionalFormattingRule,
+  { type: "dataBar" }
+> & { color: Partial<ExcelJS.Color> };
+
+function applyPercentDataBars(ws: ExcelJS.Worksheet, plan: FormatPlan): void {
+  // Bucket percent cell addresses per worksheet column, per band.
+  const byColumn = new Map<number, Map<PercentBand, string[]>>();
+  for (const pc of plan.percentCells) {
+    const band = percentBand(pc.value);
+    let bands = byColumn.get(pc.colIndex);
+    if (!bands) {
+      bands = new Map();
+      byColumn.set(pc.colIndex, bands);
+    }
+    const addrs = bands.get(band) ?? [];
+    addrs.push(ws.getRow(pc.rowNumber).getCell(pc.colIndex).address);
+    bands.set(band, addrs);
+  }
+
+  let priority = 1;
+  for (const bands of byColumn.values()) {
+    for (const [band, addrs] of bands) {
+      const bandArgb = argb(PERCENT_BAND_HEX[band]);
+      if (!bandArgb) continue;
+      const rule: ColoredDataBarRule = {
+        type: "dataBar",
+        priority: priority++,
+        gradient: false,
+        showValue: true,
+        cfvo: [
+          { type: "num", value: 0 },
+          { type: "num", value: 100 },
+        ],
+        color: { argb: bandArgb },
+      };
+      ws.addConditionalFormatting({
+        ref: addrs.join(" "), // OOXML sqref: space-separated discontiguous ranges
+        rules: [rule],
+      });
+    }
+  }
+}
