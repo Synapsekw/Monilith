@@ -14,9 +14,9 @@ via automation recipes, surfaced as a badge in table/kanban/panel/Gantt with a c
 health filter — plus a loop-safe Completed⇔100% two-way sync.
 
 **Architecture:** One migration adds `items.health`/`health_reasons` + a SECURITY DEFINER
-evaluator (`_health_recompute_items/_board`, cell/dependency triggers, org-local-midnight pg*cron
-sweep) that reads enabled `health*\*` automations rows as declarative rule config. A second
-migration extends the existing engine (`tg_run_automations`, `\_automation_run`) with
+evaluator (`_health_recompute_items/_board`, cell/dependency triggers, org-local-midnight
+`pg_cron` sweep) that reads enabled `health_*` automations rows as declarative rule config. A
+second migration extends the existing engine (`tg_run_automations`, `_automation_run`) with
 `percent_reached`/`set_percent`. TypeScript work is Zod unions, recipe factories, builder/dialog
 UI, badge + cache plumbing, and a History-API filter chip.
 
