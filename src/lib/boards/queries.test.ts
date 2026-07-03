@@ -35,7 +35,12 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-import { getBoardAccess, listMyBoards, listSharedBoards } from "./queries";
+import {
+  deriveBoardAccess,
+  getBoardAccess,
+  listMyBoards,
+  listSharedBoards,
+} from "./queries";
 
 afterEach(() => vi.clearAllMocks());
 
@@ -56,5 +61,42 @@ describe("boards queries use the cached session, not network auth", () => {
     const access = await getBoardAccess("b1");
     expect(authGetUser).not.toHaveBeenCalled();
     expect(access).toBe("owner");
+  });
+});
+
+describe("deriveBoardAccess", () => {
+  const board = { created_by: "owner-1" };
+  const grants = [
+    { userId: "editor-1", access: "editor" as const },
+    { userId: "viewer-1", access: "viewer" as const },
+  ];
+
+  it("returns owner when the user created the board, regardless of any grant", () => {
+    expect(deriveBoardAccess(board, grants, "owner-1")).toBe("owner");
+  });
+
+  it("returns editor for a user with an editor grant", () => {
+    expect(deriveBoardAccess(board, grants, "editor-1")).toBe("editor");
+  });
+
+  it("returns viewer for a user with a viewer grant", () => {
+    expect(deriveBoardAccess(board, grants, "viewer-1")).toBe("viewer");
+  });
+
+  it("returns null for a user with no grant and who is not the creator", () => {
+    expect(deriveBoardAccess(board, grants, "stranger-1")).toBeNull();
+  });
+
+  it("matches getBoardAccess's decision order: creator check wins even if also granted", () => {
+    // Defensive case: an owner should never also carry a board_members row in
+    // practice, but if one existed, creator identity still wins (same order
+    // getBoardAccess uses: created_by check before the grants lookup).
+    const grantsWithOwnerRow = [
+      ...grants,
+      { userId: "owner-1", access: "viewer" as const },
+    ];
+    expect(deriveBoardAccess(board, grantsWithOwnerRow, "owner-1")).toBe(
+      "owner",
+    );
   });
 });

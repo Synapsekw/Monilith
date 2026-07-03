@@ -38,4 +38,19 @@ describe("useDebouncedCallback", () => {
     rerender();
     expect(result.current).toBe(first);
   });
+
+  it("cancel() discards the pending invocation but not future ones", () => {
+    const fn = vi.fn();
+    const { result } = renderHook(() => useDebouncedCallback(fn, 200));
+    act(() => result.current("stale"));
+    act(() => result.current.cancel());
+    act(() => void vi.advanceTimersByTime(500));
+    expect(fn).not.toHaveBeenCalled();
+
+    // The debounced callback still works after a cancel.
+    act(() => result.current("fresh"));
+    act(() => void vi.advanceTimersByTime(200));
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledWith("fresh");
+  });
 });

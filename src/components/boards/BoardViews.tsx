@@ -1,11 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
 import { BoardTable } from "@/components/boards/BoardTable";
-import { CalendarBoard } from "@/components/boards/CalendarBoard";
-import { GanttBoard } from "@/components/boards/GanttBoard";
-import { KanbanBoard } from "@/components/boards/KanbanBoard";
 import { ItemPanel } from "@/components/boards/item-panel/ItemPanel";
 import { PresenceFlashMessage } from "@/components/boards/presence/PresenceFlashMessage";
 import type { EditorMember } from "@/components/boards/cells/editors";
@@ -21,6 +19,46 @@ import { useBoardPresence } from "@/lib/boards/use-board-presence";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import { useLwwFlash } from "@/lib/boards/use-lww-flash";
 import { resolveSelectedView } from "@/lib/boards/views";
+
+/**
+ * Neutral full-area placeholder shown while a lazily-loaded view chunk streams
+ * in. Mirrors the board route's `loading.tsx` skeleton tokens (no new visual
+ * design — see AGENTS.md); the board shell (header) is owned by each view, so a
+ * simple block is enough to avoid a jarring blank on first switch to a view.
+ */
+function ViewSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      aria-label="Loading view"
+      className="flex h-full flex-col gap-4 p-6"
+    >
+      <div className="bg-muted h-8 w-48 animate-pulse rounded-md" />
+      <div className="bg-muted/40 h-full w-full animate-pulse rounded-md" />
+    </div>
+  );
+}
+
+// Only one view renders at a time (keyed on `selected.kind`), yet a static
+// import ships all four renderers on every board load. BoardTable is the default
+// view and stays static (first paint); the other three are code-split and
+// fetched only when the user switches to them. `ssr: false` is valid here —
+// BoardViews is a Client Component (see next/dist/docs lazy-loading). Mirrors
+// the DashboardWidget.tsx / FilePreviewLightbox.tsx idiom.
+const KanbanBoard = dynamic(
+  () => import("@/components/boards/KanbanBoard").then((m) => m.KanbanBoard),
+  { ssr: false, loading: () => <ViewSkeleton /> },
+);
+const CalendarBoard = dynamic(
+  () =>
+    import("@/components/boards/CalendarBoard").then((m) => m.CalendarBoard),
+  { ssr: false, loading: () => <ViewSkeleton /> },
+);
+const GanttBoard = dynamic(
+  () => import("@/components/boards/GanttBoard").then((m) => m.GanttBoard),
+  { ssr: false, loading: () => <ViewSkeleton /> },
+);
 
 /**
  * Client-side view router for a board. Reads the active view from the `?view=`

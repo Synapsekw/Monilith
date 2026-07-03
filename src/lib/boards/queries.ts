@@ -119,6 +119,21 @@ export async function getBoardAccess(
 }
 
 /**
+ * Pure derivation of a user's effective board access from data already loaded
+ * on the board page — same decision order as {@link getBoardAccess} (creator
+ * check first, then the all-grants `board_members` lookup) so the two stay
+ * behaviorally identical without re-querying `boards`/`board_members`.
+ */
+export function deriveBoardAccess(
+  board: Pick<Board, "created_by">,
+  grants: { userId: string; access: "editor" | "viewer" }[],
+  userId: string,
+): "owner" | "editor" | "viewer" | null {
+  if (board.created_by === userId) return "owner";
+  return grants.find((g) => g.userId === userId)?.access ?? null;
+}
+
+/**
  * Batched read of a board's full payload. Returns null when the board is not
  * visible (RLS) or does not exist. Nine parallel RLS-scoped reads — no joins,
  * no N+1. Attachments are bounded to the most recent 200 files-column rows.

@@ -1,7 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CalendarBoard } from "@/components/boards/CalendarBoard";
+
+const updateBoardView = vi.fn();
+vi.mock("@/lib/boards/view-actions", () => ({
+  updateBoardView: (...a: unknown[]) => updateBoardView(...a),
+}));
+
+const toastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...a: unknown[]) => toastError(...a) },
+}));
 import {
   BoardPresenceProvider,
   type BoardPresenceContextValue,
@@ -256,6 +266,107 @@ describe("CalendarBoard event presence ring (8c)", () => {
     ]);
     renderCalendarWithPresence(presenceValue(focusMap, "self"));
     expect(screen.queryByLabelText(/is editing/i)).not.toBeInTheDocument();
+  });
+});
+
+const DATE_COL_2 = "d2d2d2d2-d2d2-4d2d-8d2d-d2d2d2d2d2d2";
+
+// Two date columns so the picker has something to switch to. Only the first
+// column carries a cell for the dated item, so switching re-lays the grid.
+function twoDatePayload() {
+  const base = payloadFixture() as unknown as {
+    columns: Array<Record<string, unknown>>;
+  };
+  base.columns.push({
+    id: DATE_COL_2,
+    board_id: "b1",
+    org_id: "o1",
+    kind: "date",
+    name: "Kickoff",
+    position: 1,
+    settings: {},
+  });
+  return base as never;
+}
+
+describe("CalendarBoard date column (B3: instant re-layout, background persist)", () => {
+  beforeEach(() => {
+    updateBoardView.mockReset();
+    toastError.mockReset();
+  });
+
+  it("re-lays the grid instantly and persists without a router.refresh", async () => {
+    updateBoardView.mockResolvedValue({ ok: true, data: undefined });
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <CalendarBoard
+          payload={twoDatePayload()}
+          members={[]}
+          selectedViewId={VIEW_ID}
+        />
+      </QueryClientProvider>,
+    );
+
+    // Grouped by the first date column → the dated item is on the grid.
+    expect(screen.getByText("Dated Item")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: /date column/i }), {
+      target: { value: DATE_COL_2 },
+    });
+
+    // Re-layout is synchronous: the item (no cell in the new column) drops off.
+    expect(screen.queryByText("Dated Item")).not.toBeInTheDocument();
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: /date column/i,
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe(DATE_COL_2);
+
+    expect(updateBoardView).toHaveBeenCalledWith({
+      viewId: VIEW_ID,
+      config: { date_column_id: DATE_COL_2 },
+    });
+    expect(refresh).not.toHaveBeenCalled();
+    await waitFor(() => expect(toastError).not.toHaveBeenCalled());
+  });
+
+  it("reverts the override and surfaces an error when the persist fails", async () => {
+    updateBoardView.mockResolvedValue({ ok: false, error: "nope" });
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <CalendarBoard
+          payload={twoDatePayload()}
+          members={[]}
+          selectedViewId={VIEW_ID}
+        />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: /date column/i }), {
+      target: { value: DATE_COL_2 },
+    });
+    // Optimistically switched (item dropped off).
+    expect(screen.queryByText("Dated Item")).not.toBeInTheDocument();
+
+    // Failed persist reverts to the original date column and toasts.
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("combobox", {
+            name: /date column/i,
+          }) as HTMLSelectElement
+        ).value,
+      ).toBe(DATE_COL_ID),
+    );
+    expect(screen.getByText("Dated Item")).toBeInTheDocument();
+    expect(toastError).toHaveBeenCalledWith(
+      "Couldn't change the date column — your change was undone.",
+      { description: "nope" },
+    );
   });
 });
 

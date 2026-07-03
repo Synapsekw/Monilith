@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import type { DashboardCache, GridRect } from "@/lib/dashboards/cache";
 import { useDashboardCache } from "@/lib/dashboards/use-dashboard-cache";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
+import { WidgetDataProvider } from "@/lib/dashboards/use-widget-data";
 import { useDebouncedCallback } from "@/lib/hooks/use-debounced-callback";
 
 const DEFAULT_RECT: GridRect = { x: 0, y: 0, w: 3, h: 2 };
@@ -156,29 +157,33 @@ export function DashboardCanvas({
       ) : (
         <div ref={containerRef}>
           {mounted ? (
-            <ResponsiveGridLayout
-              className="layout"
-              width={width}
-              layouts={layouts}
-              breakpoints={BREAKPOINTS}
-              cols={COLS}
-              rowHeight={80}
-              margin={[12, 12]}
-              dragConfig={{ enabled: editing }}
-              resizeConfig={{ enabled: editing }}
-              onLayoutChange={onLayoutChange}
-            >
-              {widgets.map((w) => (
-                <div key={w.id}>
-                  <DashboardWidget
-                    widget={w}
-                    dashboardId={dashboardId}
-                    editing={editing}
-                    boards={boards}
-                  />
-                </div>
-              ))}
-            </ResponsiveGridLayout>
+            // One batched fetch for all aggregate widgets (distributed via
+            // context), instead of one server round-trip per widget.
+            <WidgetDataProvider dashboardId={dashboardId} widgets={widgets}>
+              <ResponsiveGridLayout
+                className="layout"
+                width={width}
+                layouts={layouts}
+                breakpoints={BREAKPOINTS}
+                cols={COLS}
+                rowHeight={80}
+                margin={[12, 12]}
+                dragConfig={{ enabled: editing }}
+                resizeConfig={{ enabled: editing }}
+                onLayoutChange={onLayoutChange}
+              >
+                {widgets.map((w) => (
+                  <div key={w.id}>
+                    <DashboardWidget
+                      widget={w}
+                      dashboardId={dashboardId}
+                      editing={editing}
+                      boards={boards}
+                    />
+                  </div>
+                ))}
+              </ResponsiveGridLayout>
+            </WidgetDataProvider>
           ) : null}
         </div>
       )}

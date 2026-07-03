@@ -1,9 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { dashboardsTag } from "@/lib/cache/tags";
 import { getBoardPayload, listMyBoards } from "@/lib/boards/queries";
 import { buildBoardSnapshot } from "@/lib/ai/board-snapshot";
 import {
@@ -188,6 +189,10 @@ export async function createDashboardFromProposal(input: {
   });
   if (layoutErr) return fail(layoutErr.message);
 
-  revalidatePath("/dashboards");
+  // Read-your-own-writes: invalidate the cached org dashboards list so the new
+  // dashboard shows in the sidebar / command palette / index immediately. The
+  // org is derived from the just-created dashboard row (never trusted from the
+  // client) — mirrors createDashboard in src/lib/dashboards/actions.ts.
+  updateTag(dashboardsTag(dashboard.org_id));
   return { ok: true, data: { dashboardId } };
 }

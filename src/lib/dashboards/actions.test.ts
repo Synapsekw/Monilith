@@ -28,12 +28,14 @@ import {
   updateWidgetConfig,
   deleteWidget,
   getWidgetData,
+  getWidgetsData,
 } from "./actions";
 
 const WS = "11111111-1111-4111-8111-111111111111";
 const DASH = "22222222-2222-4222-8222-222222222222";
 const WIDGET = "33333333-3333-4333-8333-333333333333";
 const BOARD = "44444444-4444-4444-8444-444444444444";
+const WIDGET_2 = "55555555-5555-4555-8555-555555555555";
 
 beforeEach(() => {
   updateTag.mockReset();
@@ -211,5 +213,148 @@ describe("getWidgetData delegates to the cached aggregation read", () => {
     const res = await getWidgetData({ widgetId: WIDGET });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toBe("rpc boom");
+  });
+});
+
+describe("getWidgetsData (batched, one round-trip)", () => {
+  it("rejects a non-uuid widget id via the Zod schema", async () => {
+    // No client work should happen for invalid input.
+    currentClient = {};
+    const res = await getWidgetsData({ widgetIds: ["not-a-uuid"] });
+    expect(res.ok).toBe(false);
+    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits an empty id list with an empty map (no query)", async () => {
+    const from = vi.fn();
+    currentClient = { from };
+    const res = await getWidgetsData({ widgetIds: [] });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.results).toEqual({});
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("reads all rows in ONE .in query and returns a map keyed by widget id", async () => {
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "number",
+          config: { agg: "count" },
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+        {
+          id: WIDGET_2,
+          kind: "battery",
+          config: { groupColumnId: "col-1" },
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+    getWidgetAggregationCached.mockResolvedValue({
+      ok: true,
+      buckets: [{ group_key: "g", metric: 3 }],
+      columnMeta: null,
+    });
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET, WIDGET_2] });
+
+    // Exactly one table read, via `.in("id", [...])`.
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith("dashboard_widgets");
+    expect(inFn).toHaveBeenCalledWith("id", [WIDGET, WIDGET_2]);
+    // One aggregation per widget, computed concurrently (Promise.all).
+    expect(getWidgetAggregationCached).toHaveBeenCalledTimes(2);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(Object.keys(res.data.results).sort()).toEqual(
+        [WIDGET, WIDGET_2].sort(),
+      );
+      const slot = res.data.results[WIDGET];
+      expect(slot.ok).toBe(true);
+      if (slot.ok)
+        expect(slot.buckets).toEqual([{ group_key: "g", metric: 3 }]);
+    }
+  });
+
+  it("isolates a per-widget failure — one bad aggregation doesn't blank the rest", async () => {
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "number",
+          config: { agg: "count" },
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+        {
+          id: WIDGET_2,
+          kind: "number",
+          config: { agg: "count" },
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+    getWidgetAggregationCached.mockImplementation(
+      async (arg: { widgetId: string }) =>
+        arg.widgetId === WIDGET_2
+          ? { ok: false, error: "boom" }
+          : {
+              ok: true,
+              buckets: [{ group_key: null, metric: 7 }],
+              columnMeta: null,
+            },
+    );
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET, WIDGET_2] });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const good = res.data.results[WIDGET];
+      const bad = res.data.results[WIDGET_2];
+      expect(good.ok).toBe(true);
+      if (good.ok)
+        expect(good.buckets).toEqual([{ group_key: null, metric: 7 }]);
+      expect(bad.ok).toBe(false);
+      if (!bad.ok) expect(bad.error).toBe("boom");
+    }
+  });
+
+  it("returns empty buckets for a widget with no source board (no aggregation call)", async () => {
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "number",
+          config: {},
+          source_board_id: null,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET] });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const slot = res.data.results[WIDGET];
+      expect(slot.ok).toBe(true);
+      if (slot.ok) expect(slot.buckets).toEqual([]);
+    }
+    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
   });
 });

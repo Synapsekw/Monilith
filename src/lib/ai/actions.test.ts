@@ -19,7 +19,11 @@ vi.mock("@/lib/ai/generate", () => ({
   generateProposal: (...args: unknown[]) => generateProposal(...args),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const updateTag = vi.fn();
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  updateTag: (tag: string) => updateTag(tag),
+}));
 
 const BOARD_ID = "33333333-3333-4333-8333-333333333333";
 const STATUS_COL = "44444444-4444-4444-8444-444444444444";
@@ -54,6 +58,7 @@ beforeEach(() => {
   getBoardPayload.mockReset();
   listMyBoards.mockReset();
   generateProposal.mockReset();
+  updateTag.mockReset();
 });
 
 describe("generateDashboardProposal", () => {
@@ -141,7 +146,10 @@ describe("generateDashboardProposal", () => {
 describe("createDashboardFromProposal", () => {
   it("composes the three RPCs and returns the new id", async () => {
     rpc
-      .mockResolvedValueOnce({ data: { id: "dash-1" }, error: null }) // create_dashboard
+      .mockResolvedValueOnce({
+        data: { id: "dash-1", org_id: "org-9" },
+        error: null,
+      }) // create_dashboard
       .mockResolvedValueOnce({ data: { id: "w-1" }, error: null }) // create_dashboard_widget
       .mockResolvedValueOnce({ data: null, error: null }); // set_widget_layouts
     const { createDashboardFromProposal } = await import("@/lib/ai/actions");
@@ -169,6 +177,8 @@ describe("createDashboardFromProposal", () => {
     expect(
       rpc.mock.calls.filter((c) => c[0] === "create_dashboard_widget"),
     ).toHaveLength(1);
+    // read-your-own-writes: invalidates the created dashboard's org list
+    expect(updateTag).toHaveBeenCalledWith("dashboards:org:org-9");
   });
 
   it("fails with the RPC error message when create_dashboard errors", async () => {

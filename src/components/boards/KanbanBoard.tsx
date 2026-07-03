@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   DndContext,
@@ -130,14 +130,33 @@ export function KanbanBoard({
     payload.board.id,
   );
 
-  const router = useRouter();
-
-  // The view config carries the chosen grouping column.
+  // The view config carries the persisted grouping column. We hold a local
+  // override so switching "Group by" regroups instantly — `buildKanbanColumns`
+  // is memoized over the in-memory cache — without a `router.refresh()` that
+  // would refetch the whole board. The server write runs in the background.
   const selectedView = payload.views.find((v) => v.id === selectedViewId);
-  const config = (selectedView?.config ?? null) as {
+  const serverConfig = (selectedView?.config ?? null) as {
     group_column_id?: string | null;
   } | null;
-  const groupColumn = resolveKanbanGroupColumn(cache.columns, config);
+  const serverGroupColumnId = serverConfig?.group_column_id ?? null;
+
+  const [groupColumnOverride, setGroupColumnOverride] = useState<string | null>(
+    serverGroupColumnId,
+  );
+  // Reconcile if the server prop changes under us (adjust-state-during-render
+  // pattern): adopt the new server value and drop the stale override.
+  const [syncedServerGroupId, setSyncedServerGroupId] =
+    useState(serverGroupColumnId);
+  if (serverGroupColumnId !== syncedServerGroupId) {
+    setSyncedServerGroupId(serverGroupColumnId);
+    setGroupColumnOverride(serverGroupColumnId);
+  }
+
+  const [, startTransition] = useTransition();
+
+  const groupColumn = resolveKanbanGroupColumn(cache.columns, {
+    group_column_id: groupColumnOverride,
+  });
 
   const sensors = useTouchAwareSensors();
 
@@ -209,10 +228,22 @@ export function KanbanBoard({
   }
 
   function handleGroupColumnChange(columnId: string) {
-    void updateBoardView({
-      viewId: selectedViewId,
-      config: { group_column_id: columnId },
-    }).then(() => router.refresh());
+    const previous = groupColumnOverride;
+    // Apply immediately so the memoized regroup happens this render — no refetch.
+    setGroupColumnOverride(columnId);
+    // Persist in the background; on failure revert the override + surface it.
+    startTransition(async () => {
+      const res = await updateBoardView({
+        viewId: selectedViewId,
+        config: { group_column_id: columnId },
+      });
+      if (!res.ok) {
+        setGroupColumnOverride(previous);
+        toast.error("Couldn't change the grouping — your change was undone.", {
+          description: res.error,
+        });
+      }
+    });
   }
 
   return (

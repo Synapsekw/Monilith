@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ReactNode } from "react";
 
 import type { DashboardCache } from "@/lib/dashboards/cache";
 
@@ -31,6 +32,14 @@ vi.mock("./DashboardWidget", () => ({
 // Stub the add-widget sheet — pulls in board/data deps we don't need.
 vi.mock("./WidgetConfigSheet", () => ({
   WidgetConfigSheet: () => null,
+}));
+// Stub the batched widget-data provider — it opens a React Query fetch that's
+// out of scope for the edit-toggle/render-structure test (and this suite mocks
+// the cache hooks precisely to avoid needing a QueryClient).
+vi.mock("@/lib/dashboards/use-widget-data", () => ({
+  WidgetDataProvider: ({ children }: { children: ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 import { DashboardCanvas } from "./DashboardCanvas";

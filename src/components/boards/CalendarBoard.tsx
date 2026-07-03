@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 
 import type { BoardPayload } from "@/lib/boards/queries";
@@ -96,14 +96,31 @@ export function CalendarBoard({
     payload as unknown as BoardCache,
   );
   const { setCell, addItem } = useBoardMutations(payload.board.id);
-  const router = useRouter();
   const [, startTransition] = useTransition();
 
+  // The view config carries the persisted date column. Hold a local override so
+  // switching the date column re-lays the calendar instantly (memoized over the
+  // in-memory cache) with no `router.refresh()` refetch; persist in background.
   const selectedView = payload.views.find((v) => v.id === selectedViewId);
-  const config = (selectedView?.config ?? null) as {
+  const serverConfig = (selectedView?.config ?? null) as {
     date_column_id?: string | null;
   } | null;
-  const dateColumn = resolveDateColumn(cache.columns, config);
+  const serverDateColumnId = serverConfig?.date_column_id ?? null;
+
+  const [dateColumnOverride, setDateColumnOverride] = useState<string | null>(
+    serverDateColumnId,
+  );
+  // Reconcile if the server prop changes under us (adjust-state-during-render).
+  const [syncedServerDateId, setSyncedServerDateId] =
+    useState(serverDateColumnId);
+  if (serverDateColumnId !== syncedServerDateId) {
+    setSyncedServerDateId(serverDateColumnId);
+    setDateColumnOverride(serverDateColumnId);
+  }
+
+  const dateColumn = resolveDateColumn(cache.columns, {
+    date_column_id: dateColumnOverride,
+  });
   const dateColumns = cache.columns.filter((c) => c.kind === "date");
   const statusColumn = useMemo(
     () => cache.columns.find((c) => c.kind === "status"),
@@ -172,12 +189,24 @@ export function CalendarBoard({
   }
 
   function handleDateColumnChange(columnId: string) {
+    const previous = dateColumnOverride;
+    // Apply immediately so the memoized re-layout happens this render — no refetch.
+    setDateColumnOverride(columnId);
+    // Persist in the background; on failure revert the override + surface it.
     startTransition(async () => {
-      await updateBoardView({
+      const res = await updateBoardView({
         viewId: selectedViewId,
         config: { date_column_id: columnId },
       });
-      router.refresh();
+      if (!res.ok) {
+        setDateColumnOverride(previous);
+        toast.error(
+          "Couldn't change the date column — your change was undone.",
+          {
+            description: res.error,
+          },
+        );
+      }
     });
   }
 

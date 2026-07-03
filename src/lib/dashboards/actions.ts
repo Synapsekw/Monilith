@@ -20,6 +20,7 @@ import {
   duplicateDashboardSchema,
   deleteWidgetSchema,
   getWidgetDataSchema,
+  getWidgetsDataSchema,
   renameDashboardSchema,
   saveLayoutSchema,
   updateWidgetConfigSchema,
@@ -99,7 +100,10 @@ export async function deleteDashboard(input: {
   if (error) return fail(error.message);
 
   if (data) updateTag(dashboardsTag(data.org_id));
-  revalidatePath("/", "layout");
+  // Narrow to the dashboards index (its redirect picks the first remaining
+  // dashboard); the sidebar/palette lists are served from the `dashboards:org`
+  // cache the updateTag above expired. Mirrors createDashboard/renameDashboard.
+  revalidatePath("/dashboards");
   return { ok: true, data: undefined };
 }
 
@@ -125,7 +129,10 @@ export async function duplicateDashboard(input: {
     return fail(error?.message ?? "Could not duplicate dashboard.");
 
   if (source) updateTag(dashboardsTag(source.org_id));
-  revalidatePath("/", "layout");
+  // Narrow to the dashboards index; sidebar/palette lists are served from the
+  // `dashboards:org` cache the updateTag above expired. The client navigates to
+  // the new copy. Mirrors createDashboard/renameDashboard.
+  revalidatePath("/dashboards");
   return { ok: true, data: { dashboardId: data.id } };
 }
 
@@ -258,26 +265,43 @@ export async function saveLayout(input: {
   return { ok: true, data: { saved: parsed.data.layouts.length } };
 }
 
-/** Fetch a widget's bounded aggregate data. Reads the widget, runs the RPC. */
-export async function getWidgetData(input: { widgetId: string }): Promise<
-  ActionResult<{
-    kind: Widget["kind"];
-    config: Record<string, unknown>;
-    buckets: AggregateBucket[];
-    columnMeta: ColumnMeta | null;
-  }>
-> {
-  const parsed = getWidgetDataSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+/** A widget's resolved aggregate payload (success shape shared by the single +
+ *  batched fetches). */
+export type WidgetAggregatePayload = {
+  kind: Widget["kind"];
+  config: Record<string, unknown>;
+  buckets: AggregateBucket[];
+  columnMeta: ColumnMeta | null;
+};
 
-  const supabase = await createClient();
-  const { data: widget } = await supabase
-    .from("dashboard_widgets")
-    .select("kind, config, source_board_id, org_id")
-    .eq("id", parsed.data.widgetId)
-    .maybeSingle();
-  if (!widget) return fail("Widget not found.");
+/** The per-widget slot in a batched result — a discriminated union so one
+ *  widget's failed aggregation surfaces as an error without blanking the rest. */
+export type WidgetDataResult =
+  | ({ ok: true } & WidgetAggregatePayload)
+  | { ok: false; error: string };
+
+/** The columns a widget row must carry to resolve its aggregation. Shared by the
+ *  single (`.eq`) and batched (`.in`) reads so both trust the DB row, never the
+ *  client — RLS scopes which rows are visible. */
+type WidgetAggRow = {
+  kind: Widget["kind"];
+  config: Json | null;
+  source_board_id: string | null;
+  org_id: string;
+};
+
+/**
+ * Resolve one widget row's aggregate. The widget's `org_id` + `source_board_id`
+ * come from the server-read row (never the client), so `orgId` is part of the
+ * cached fn's key + tag — cross-tenant isolation holds by construction. The
+ * cached fn also resolves the group column's options server-side (so
+ * renames/recolors reflect without a stale client snapshot), bounded by the
+ * short `widget` TTL.
+ */
+async function resolveWidgetAggregate(
+  widgetId: string,
+  widget: WidgetAggRow,
+): Promise<ActionResult<WidgetAggregatePayload>> {
   if (!widget.source_board_id)
     return {
       ok: true,
@@ -285,13 +309,8 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
     };
 
   const config = (widget.config ?? {}) as Record<string, unknown>;
-  // Delegate the aggregation read to the cached query (Phase 9.3b). The widget's
-  // org + board are resolved above and passed in, so `orgId` is part of the cache
-  // key + tag — cross-tenant isolation holds by construction. The cached fn also
-  // resolves the group column's options server-side (so renames/recolors reflect
-  // without a stale client snapshot), bounded by the short `widget` TTL.
   const result = await getWidgetAggregationCached({
-    widgetId: parsed.data.widgetId,
+    widgetId,
     orgId: widget.org_id,
     boardId: widget.source_board_id,
     config,
@@ -308,6 +327,66 @@ export async function getWidgetData(input: { widgetId: string }): Promise<
       columnMeta: result.columnMeta,
     },
   };
+}
+
+/** Fetch a widget's bounded aggregate data. Reads the widget, runs the RPC. */
+export async function getWidgetData(input: {
+  widgetId: string;
+}): Promise<ActionResult<WidgetAggregatePayload>> {
+  const parsed = getWidgetDataSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data: widget } = await supabase
+    .from("dashboard_widgets")
+    .select("kind, config, source_board_id, org_id")
+    .eq("id", parsed.data.widgetId)
+    .maybeSingle();
+  if (!widget) return fail("Widget not found.");
+
+  return resolveWidgetAggregate(parsed.data.widgetId, widget);
+}
+
+/**
+ * Batched widget-data fetch: resolves every requested widget's aggregate in a
+ * single client→server round-trip (Next serializes Server Action POSTs, so N
+ * per-widget calls populate a dashboard sequentially — this collapses them to
+ * one). Authorization re-reads the widget rows server-side in ONE `.in("id")`
+ * query (RLS scopes visibility; the client-passed ids are never trusted for
+ * board/org access), then computes all aggregations concurrently with
+ * `Promise.all`, reusing the same per-widget cached read. Returns a map keyed by
+ * widget id whose slots are independent: one widget's failure never blanks the
+ * others. Ids the caller can't see are simply absent from the map.
+ */
+export async function getWidgetsData(input: {
+  widgetIds: string[];
+}): Promise<ActionResult<{ results: Record<string, WidgetDataResult> }>> {
+  const parsed = getWidgetsDataSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  if (parsed.data.widgetIds.length === 0)
+    return { ok: true, data: { results: {} } };
+
+  const supabase = await createClient();
+  const { data: widgets, error } = await supabase
+    .from("dashboard_widgets")
+    .select("id, kind, config, source_board_id, org_id")
+    .in("id", parsed.data.widgetIds);
+  if (error) return fail(error.message);
+
+  const entries = await Promise.all(
+    (widgets ?? []).map(async (widget) => {
+      const res = await resolveWidgetAggregate(widget.id, widget);
+      const slot: WidgetDataResult = res.ok
+        ? { ok: true, ...res.data }
+        : { ok: false, error: res.error };
+      return [widget.id, slot] as const;
+    }),
+  );
+
+  return { ok: true, data: { results: Object.fromEntries(entries) } };
 }
 
 /**
