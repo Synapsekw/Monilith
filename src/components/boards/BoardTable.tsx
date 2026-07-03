@@ -42,6 +42,7 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
+import { isItemComplete, isOverdue, localTodayISO } from "@/lib/boards/overdue";
 import { FlashHighlight } from "@/components/boards/presence/FlashHighlight";
 import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 import { presenceTarget } from "@/lib/boards/presence-target";
@@ -1538,6 +1539,9 @@ function ItemRow({
   // child's elapsed time is approximate while collapsed — the live tick happens in
   // the expanded child cell — and it refreshes whenever this (virtualized) row remounts.
   const [rollupNowMs] = useState(() => Date.now());
+  // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
+  // purity idiom as rollupNowMs; virtualized rows remount as they scroll).
+  const [todayISO] = useState(() => localTodayISO());
   const {
     setNodeRef,
     attributes,
@@ -1653,13 +1657,19 @@ function ItemRow({
             />
           );
         }
+        const value = cellMap.get(cellKey(item.id, col.id)) ?? null;
         return (
           <EditableCell
             key={col.id}
             item={item}
             column={col}
-            value={cellMap.get(cellKey(item.id, col.id)) ?? null}
+            value={value}
             controls={controls}
+            overdue={
+              col.kind === "date" &&
+              isOverdue(value, todayISO) &&
+              !isItemComplete(item.id, columns, controls.cache.cellValues)
+            }
           />
         );
       })}
@@ -1705,6 +1715,9 @@ function SortableSubitemRow({
   renamingItemId: string | null;
   onRenameSettled: () => void;
 }) {
+  // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
+  // purity idiom as ItemRow's rollupNowMs).
+  const [todayISO] = useState(() => localTodayISO());
   const {
     setNodeRef,
     attributes,
@@ -1757,15 +1770,23 @@ function SortableSubitemRow({
           />
         }
       />
-      {columns.map((col) => (
-        <EditableCell
-          key={col.id}
-          item={sub}
-          column={col}
-          value={cellMap.get(cellKey(sub.id, col.id)) ?? null}
-          controls={controls}
-        />
-      ))}
+      {columns.map((col) => {
+        const value = cellMap.get(cellKey(sub.id, col.id)) ?? null;
+        return (
+          <EditableCell
+            key={col.id}
+            item={sub}
+            column={col}
+            value={value}
+            controls={controls}
+            overdue={
+              col.kind === "date" &&
+              isOverdue(value, todayISO) &&
+              !isItemComplete(sub.id, columns, controls.cache.cellValues)
+            }
+          />
+        );
+      })}
       {/* Virtual created-by / created-at trailing cells */}
       {(() => {
         const creator = controls.members.find(
@@ -1925,11 +1946,14 @@ function EditableCell({
   column,
   value,
   controls,
+  overdue = false,
 }: {
   item: Item;
   column: Column;
   value: CacheCellValue["value"];
   controls: CellControls;
+  /** Date cells only: past-due + incomplete (see @/lib/boards/overdue). */
+  overdue?: boolean;
 }) {
   const { editing, setEditing, setCell, clearCellValue, members } = controls;
   const isEditing =
@@ -2088,6 +2112,7 @@ function EditableCell({
         value={value}
         settings={settings}
         members={members}
+        overdue={overdue}
       />
       <PresenceRing target={target} />
       <FlashHighlight target={target} />
