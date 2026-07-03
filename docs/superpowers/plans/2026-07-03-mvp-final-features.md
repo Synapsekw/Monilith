@@ -25,6 +25,12 @@ F4 is excluded below — already implemented (iPad TOUCH batch 1 + 2). F5 bundle
 features (numbered F5.1–F5.6). F6 overlaps heavily with F5.6, so they are merged into one
 feature (item 9).
 
+> **Product decisions (owner review, 2026-07-03):** item 4 (At-Risk propagation) and the
+> Delayed/At-Risk rule engine of item 9 are **descoped** — replaced by a simple derived red fill
+> on overdue due-date cells (item 9, simplified). Item 9 keeps the Completed⇔100% sync. Item 10
+> (column reordering) added from direct owner request. Item 1 gains the new UAE Dirham sign
+> requirement. Calendar two-tap peek (item 6) and manual migration applies accepted as specced.
+
 ## Features
 
 ### 1. Currency column type — `S/M` _(from F1)_
@@ -32,7 +38,10 @@ feature (item 9).
 A new board column kind for money values with a per-column currency selector (symbol, formatting,
 decimals). Builds on the existing column-kind registry (Phase 2/6b custom fields). Spec should
 decide: fixed currency per column vs per cell, and whether summary aggregation (item 2) needs to
-handle mixed currencies.
+handle mixed currencies. **Owner additions (2026-07-03):** currency picking must be fast
+(search-first dialog, GCC majors prominent), and AED should render the **new Emirati dirham sign**
+(U+20C3, accepted into Unicode 18.0 landing Sept 2026 — not in system fonts yet, so ship it via a
+bundled glyph webfont/SVG with "AED" fallback in exports/plain text).
 
 ### 2. Summary row (configurable per-column aggregation) — `M` _(from F2)_
 
@@ -48,11 +57,12 @@ status/dropdown color fills, percentage bars (data bars), header styling. `excel
 dependency (spreadsheet IO, 2026-06-25) and supports fills + data-bar conditional formatting, so
 this is an enrichment of the existing export path, not a new subsystem.
 
-### 4. Dependency "At Risk" propagation — `M` _(from F5.1)_
+### 4. Dependency "At Risk" propagation — **DESCOPED** _(from F5.1; owner decision 2026-07-03)_
 
-Timeline/Gantt with finish-to-start dependencies already exists (Phase 3). The new part: when a
-predecessor's due date slips, flag its **immediate successors** (single hop, not the full
-downstream chain) as **At Risk**. Needs a place to surface the flag (item row, Gantt bar, filter).
+Timeline/Gantt with finish-to-start dependencies already exists (Phase 3). The proposed At-Risk
+flagging of successors was descoped by the owner in favor of the simple overdue indicator in
+item 9 ("we don't have to overcomplicate"). The original computed-health design is preserved in
+the status-intelligence spec's "Descoped by product decision" section if ever revisited.
 
 ### 5. Priority field + auto-critical flagging — `S/M` _(from F5.2, depends on item 4's data — already present)_
 
@@ -73,7 +83,7 @@ workstream/sub-group. Dashboards + 9 chart types + battery widget already exist 
 is likely a widget configuration/preset gap more than a new engine — spec should verify before
 building anything new.
 
-### 8. Overall health summary + alerts — `L` _(from F5.5; reuses item 9's rules)_
+### 8. Overall health summary + alerts — `L` _(from F5.5)_
 
 - Dashboard summary of overall plan health/progress.
 - In-dashboard notifications **and a weekly email digest** covering: new activities added, and
@@ -83,41 +93,49 @@ building anything new.
 - Email digest is the only genuinely new infrastructure (scheduled send — `pg_cron` + existing
   email path or Resend-style provider). Everything else composes notifications (Phase 4b) +
   dashboards (Phase 8).
+- **Note (2026-07-03):** with the health-flag machinery descoped (items 4/9), this feature's
+  alerts rest on the structural-completeness rule alone; its spec should re-derive any "overdue"
+  signal from dates directly, the same way item 9's red fill does.
 
-### 9. Automated status rules (Delayed / At Risk / % sync) — `M` _(merges F6 + F5.6)_
+### 9. Overdue indicator + Completed⇔100% sync — `S/M` _(merges F6 + F5.6; simplified by owner 2026-07-03)_
 
-Built on the existing automations engine (Phase 5, incl. date triggers):
+Simplified scope per owner review:
 
-- **Completed ⇔ 100%** two-way sync: marking an item Completed sets % complete to 100, and vice
-  versa.
-- Incomplete item **past its due date** → auto-mark **Delayed**.
-- Item **within 3 days of due date and < 50% complete** → auto-mark **At Risk**.
+- **Overdue = derived red fill on the due-date cell**: an item past its due date and not complete
+  gets a red (destructive-tint) fill on its due-date cell. Computed at render from data already in
+  the board payload — no schema, no automations, no cron, no stored flag.
+- **Completed ⇔ 100%** two-way sync kept in minimal form (loop-guarded automation): marking an
+  item Completed sets % complete to 100, and vice versa.
 
-Ship as automation recipes (user-visible, per-board toggleable) rather than hard-coded behavior,
-so orgs with different status vocabularies can adapt them.
+The Delayed/At-Risk status rules and health-flag machinery originally specced here are descoped
+(see item 4 note).
+
+### 10. Column reordering — `M` _(owner request, 2026-07-03)_
+
+Drag-to-reorder board columns in the Table view, the same way item rows reorder today. **All
+columns movable except the first (Name/item) column, which stays fixed at position 0** (it is
+already frozen/pinned). Persist order via a Server Action with optimistic update; propagate over
+realtime; respect existing touch ergonomics and the per-group column headers.
 
 ## Execution DAG (working agreement #6)
 
-Edges:
+Edges (updated 2026-07-03 after descoping item 4):
 
-- **9 → 8**: the health summary's "structurally incomplete / at-risk" alerts consume the rule
-  definitions and flags produced by item 9.
-- **4 → (soft) 8**: At-Risk flags feed the health summary if built first (not a hard blocker).
 - **1 → (soft) 2**: summary row should know how to aggregate a currency column; buildable in
   either order but 1-before-2 avoids rework.
 - Everything else is pairwise independent (disjoint subsystems: export, calendar/timeline editors,
-  dashboard presets).
+  dashboard presets, overdue fill + % sync, column reorder, health summary).
 
 **Parallel batches** (each item = one `task/<slug>` worktree; ≥2 in a batch → dispatch in
 parallel per `superpowers:dispatching-parallel-agents`):
 
-| Batch | Items                                                                                                                        | Note                                                                          |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| A     | 1 (currency), 3 (excel export), 4 (at-risk propagation), 6 (inline cal/timeline edit), 7 (phase dashboard), 9 (status rules) | all independent                                                               |
-| B     | 2 (summary row), 5 (priority auto-critical), 8 (health summary + digest)                                                     | 2 after 1; 5 after 4 only if they share the dependency-read helper; 8 after 9 |
+| Batch | Items                                                                                                                             | Note            |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| A     | 1 (currency), 3 (excel export), 6 (inline cal/timeline edit), 7 (phase dashboard), 9 (overdue fill + % sync), 10 (column reorder) | all independent |
+| B     | 2 (summary row), 5 (priority auto-critical), 8 (health summary + digest)                                                          | 2 after 1       |
 
-**Critical path:** 9 → 8 (automated rules, then health summary + weekly digest) — the wall-clock
-floor. Item 8 is also the largest single item (email digest infra).
+**Critical path:** 1 → 2 (currency, then summary row); item 8 is the largest single item (email
+digest infra) but no longer blocked by anything.
 
 ## Definition of done
 
