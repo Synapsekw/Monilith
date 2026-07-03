@@ -133,6 +133,22 @@ describe("cell renderers (read-only, 2a)", () => {
     expect(screen.getByText(/2026/)).toBeInTheDocument();
   });
 
+  it("DateCell tints an overdue date and labels it for AT", () => {
+    render(<DateCell value={{ date: "2026-06-15" }} settings={{}} overdue />);
+    const el = screen.getByLabelText("Overdue");
+    expect(el.className).toContain("text-destructive");
+    expect(el.className).toContain("bg-destructive/10");
+    expect(el).toHaveAttribute("title", "Overdue");
+  });
+
+  it("DateCell renders untinted without the overdue prop", () => {
+    render(<DateCell value={{ date: "2026-06-15" }} settings={{}} />);
+    expect(screen.queryByLabelText("Overdue")).not.toBeInTheDocument();
+    expect(screen.getByText(/2026/).className).not.toContain(
+      "text-destructive",
+    );
+  });
+
   it("NumberCell shows the number with its unit", () => {
     render(<NumberCell value={{ n: 42 }} settings={{ unit: "$" }} />);
     expect(screen.getByText(/42/)).toBeInTheDocument();

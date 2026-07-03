@@ -97,9 +97,12 @@ export function PeopleCell({
 
 export function DateCell({
   value,
+  overdue = false,
 }: {
   value: { date: string; end?: string } | null;
   settings: Settings;
+  /** Past-due + incomplete (derived at render time — see @/lib/boards/overdue). */
+  overdue?: boolean;
 }) {
   if (!value?.date) return <span className="text-sm" />;
   const formatted = new Date(value.date).toLocaleDateString(undefined, {
@@ -107,7 +110,18 @@ export function DateCell({
     month: "short",
     day: "numeric",
   });
-  return <span className="text-sm">{formatted}</span>;
+  if (!overdue) return <span className="text-sm">{formatted}</span>;
+  // Negative margins cancel the padding so the date text does not shift when
+  // the tint appears. aria-label/title carry the state — never color alone.
+  return (
+    <span
+      aria-label="Overdue"
+      title="Overdue"
+      className="bg-destructive/10 text-destructive -mx-1.5 -my-0.5 rounded-md px-1.5 py-0.5 text-sm"
+    >
+      {formatted}
+    </span>
+  );
 }
 
 export function NumberCell({
@@ -278,11 +292,14 @@ export function CellRenderer({
   value,
   settings,
   members,
+  overdue,
 }: {
   kind: string;
   value: unknown;
   settings: Settings;
   members?: EditorMember[];
+  /** Date cells only: past-due + incomplete (see @/lib/boards/overdue). */
+  overdue?: boolean;
 }) {
   switch (kind) {
     case "text":
@@ -319,6 +336,7 @@ export function CellRenderer({
         <DateCell
           value={value as { date: string; end?: string } | null}
           settings={settings}
+          overdue={overdue}
         />
       );
     case "numbers":
