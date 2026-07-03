@@ -539,15 +539,51 @@ describe("board mutation invalidation (boards tag)", () => {
   });
 
   it("renameBoard updates the owner's boards tag", async () => {
-    const updateChain = {
-      update: () => ({ eq: async () => ({ error: null }) }),
-    };
-    from.mockImplementation((t: string) =>
-      t === "boards" ? (updateChain as never) : ({} as never),
-    );
+    from.mockImplementation((t: string) => {
+      if (t === "boards")
+        return {
+          update: () => ({ eq: async () => ({ error: null }) }),
+        } as never;
+      if (t === "board_members")
+        return {
+          select: () => ({
+            eq: async () => ({ data: [], error: null }),
+          }),
+        } as never;
+      return {} as never;
+    });
     const res = await renameBoard({ boardId: BOARD, name: "New" });
     expect(res.ok).toBe(true);
     expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+  });
+
+  it("renameBoard invalidates every recipient's shared-boards tag", async () => {
+    from.mockImplementation((t: string) => {
+      if (t === "boards")
+        return {
+          update: () => ({ eq: async () => ({ error: null }) }),
+        } as never;
+      if (t === "board_members")
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: [{ user_id: A }, { user_id: B }],
+              error: null,
+            }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await renameBoard({ boardId: BOARD, name: "New" });
+
+    expect(res.ok).toBe(true);
+    // Owner's own list is still invalidated (via invalidateMyBoards).
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+    // Each grantee's shared-boards list is invalidated so the rename shows up
+    // for them immediately instead of after the nav TTL.
+    expect(updateTag).toHaveBeenCalledWith(`shared-boards:user:${A}`);
+    expect(updateTag).toHaveBeenCalledWith(`shared-boards:user:${B}`);
   });
 
   it("deleteBoard updates the owner's boards tag", async () => {
