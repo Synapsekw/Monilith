@@ -1,4 +1,5 @@
 import type { RollupResult } from "@/lib/boards/rollup";
+import { formatCurrency } from "@/lib/boards/currency";
 import { formatDuration } from "@/lib/boards/time-format";
 import { PercentBar } from "@/components/boards/cells";
 
@@ -40,6 +41,12 @@ export function RollupCell({ result }: { result: RollupResult }) {
       );
     case "percent":
       return <PercentBar percent={result.average} />;
+    case "currency":
+      return (
+        <span className="text-muted-foreground text-sm tabular-nums">
+          Σ {formatCurrency(result.total, result.currency)}
+        </span>
+      );
     case "dateSpan":
       return (
         <span className="text-muted-foreground text-sm">

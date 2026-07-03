@@ -113,3 +113,21 @@ it("omits estimateSecs when no estimates provided", () => {
   );
   expect(r).toEqual({ kind: "duration", totalSecs: 1800 });
 });
+
+describe("currency rollup", () => {
+  it("sums subitem amounts with the column currency", () => {
+    expect(
+      rollupCell(
+        "currency",
+        [{ amount: 1.5 }, null, { amount: 2 }],
+        undefined,
+        "USD",
+      ),
+    ).toEqual({ kind: "currency", total: 3.5, currency: "USD" });
+  });
+  it("blanks when no filled amounts", () => {
+    expect(rollupCell("currency", [null, {}], undefined, "USD")).toEqual({
+      kind: "blank",
+    });
+  });
+});

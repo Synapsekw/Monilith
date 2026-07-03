@@ -32,6 +32,9 @@ export function allowedAggregations(
   switch (kind) {
     case "numbers":
       return ["sum", "avg", "min", "max", ...COUNT_FAMILY];
+    case "currency":
+      // Sum-first: a money column's natural summary is its total.
+      return ["sum", "avg", "min", "max", ...COUNT_FAMILY];
     case "rating":
       return ["avg", "min", "max", ...COUNT_FAMILY];
     case "percent":
@@ -65,7 +68,13 @@ export function allowedAggregations(
 /** A computed footer summary, ready to render. `empty` = nothing to show. */
 export type AggregateResult =
   | { kind: "empty" }
-  | { kind: "number"; value: number; style?: "plain" | "percent" }
+  | {
+      kind: "number";
+      value: number;
+      style?: "plain" | "percent" | "currency";
+      /** ISO 4217 code accompanying style === "currency" (formats the value). */
+      currency?: string;
+    }
   | {
       kind: "distribution";
       total: number;
@@ -77,10 +86,15 @@ export type AggregateResult =
   | { kind: "duration"; totalSecs: number; estimateSecs?: number };
 
 const EMPTY: AggregateResult = { kind: "empty" };
-const num = (value: number, style?: "percent"): AggregateResult => ({
+const num = (
+  value: number,
+  style?: "percent" | "currency",
+  currency?: string,
+): AggregateResult => ({
   kind: "number",
   value,
   ...(style ? { style } : {}),
+  ...(currency ? { currency } : {}),
 });
 
 /**
@@ -97,6 +111,7 @@ export function aggregate(
   aggId: AggregationId,
   values: readonly unknown[],
   options?: readonly ColumnOption[],
+  currency?: string,
 ): AggregateResult {
   // count family — presence-based, applies to every kind
   switch (aggId) {
@@ -119,17 +134,25 @@ export function aggregate(
     case "max": {
       const nums = numericValues(kind, present);
       if (nums.length === 0) return EMPTY;
-      // A percent column renders its numeric summaries with a "%" suffix.
-      const style = kind === "percent" ? "percent" : undefined;
+      // A percent column renders its numeric summaries with a "%" suffix;
+      // a currency column carries its ISO code so the footer can format.
+      const style =
+        kind === "percent"
+          ? "percent"
+          : kind === "currency"
+            ? "currency"
+            : undefined;
+      const code = kind === "currency" ? currency : undefined;
       if (aggId === "sum")
         return num(
           nums.reduce((a, b) => a + b, 0),
           style,
+          code,
         );
-      if (aggId === "min") return num(Math.min(...nums), style);
-      if (aggId === "max") return num(Math.max(...nums), style);
+      if (aggId === "min") return num(Math.min(...nums), style, code);
+      if (aggId === "max") return num(Math.max(...nums), style, code);
       const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-      return num(Math.round(avg * 100) / 100, style);
+      return num(Math.round(avg * 100) / 100, style, code);
     }
     case "distribution": {
       const r = rollupCell(kind, values, options);
@@ -221,6 +244,8 @@ function isFilled(kind: ColumnKind, v: unknown): boolean {
       return typeof o.n === "number" && Number.isFinite(o.n);
     case "percent":
       return typeof o.percent === "number" && Number.isFinite(o.percent);
+    case "currency":
+      return typeof o.amount === "number" && Number.isFinite(o.amount);
     case "checkbox":
       return o.checked === true;
     case "rating":
@@ -244,7 +269,13 @@ function numericValues(
   present: readonly unknown[],
 ): number[] {
   const key =
-    kind === "rating" ? "rating" : kind === "percent" ? "percent" : "n";
+    kind === "rating"
+      ? "rating"
+      : kind === "percent"
+        ? "percent"
+        : kind === "currency"
+          ? "amount"
+          : "n";
   const out: number[] = [];
   for (const v of present) {
     const n = (v as Record<string, unknown>)[key];
@@ -282,6 +313,8 @@ function identitiesOf(kind: ColumnKind, v: unknown): string[] {
       return [String(o.phone)];
     case "numbers":
       return [String(o.n)];
+    case "currency":
+      return [String(o.amount)];
     case "rating":
       return [String(o.rating)];
     case "date":

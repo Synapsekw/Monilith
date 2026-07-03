@@ -235,3 +235,33 @@ describe("aggregate", () => {
     expect(aggregate("status", "distribution", [])).toEqual({ kind: "empty" });
   });
 });
+
+describe("currency aggregation", () => {
+  const vals = [{ amount: 10.5 }, { amount: 20 }, null, { amount: -5 }];
+  it("offers sum-first numeric aggregations", () => {
+    expect(allowedAggregations("currency")).toEqual([
+      "sum",
+      "avg",
+      "min",
+      "max",
+      "count",
+      "count_filled",
+      "count_empty",
+      "count_unique",
+    ]);
+  });
+  it("sums amounts and carries the currency style", () => {
+    expect(aggregate("currency", "sum", vals, undefined, "KWD")).toEqual({
+      kind: "number",
+      value: 25.5,
+      style: "currency",
+      currency: "KWD",
+    });
+  });
+  it("counts filled cells by amount presence", () => {
+    expect(aggregate("currency", "count_filled", vals)).toEqual({
+      kind: "number",
+      value: 3,
+    });
+  });
+});

@@ -1,15 +1,13 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import {
-  aggregate,
-  type AggregateResult,
-} from "@/lib/boards/aggregation";
+import { aggregate, type AggregateResult } from "@/lib/boards/aggregation";
 import type {
   AggregationId,
   ColumnKind,
   ColumnOption,
 } from "@/lib/validations/boards";
+import { formatCurrency } from "@/lib/boards/currency";
 import { formatDuration } from "@/lib/boards/time-format";
 import {
   DropdownMenu,
@@ -53,8 +51,9 @@ export function FooterValue({ result }: { result: AggregateResult }) {
     case "number":
       return (
         <span className="text-foreground text-sm font-medium tabular-nums">
-          {result.value}
-          {result.style === "percent" ? "%" : ""}
+          {result.style === "currency" && result.currency
+            ? formatCurrency(result.value, result.currency)
+            : `${result.value}${result.style === "percent" ? "%" : ""}`}
         </span>
       );
     case "checkbox":
@@ -117,6 +116,8 @@ export type FooterCellProps = {
   values: readonly unknown[];
   /** Options for distribution rendering (status/dropdown). */
   options?: readonly ColumnOption[];
+  /** ISO 4217 code when aggregateKind is currency (formats numeric results). */
+  currency?: string;
   /** The currently chosen aggregation, if any. */
   current?: AggregationId;
   /** Allowed aggregations for the picker (default-first). */
@@ -137,13 +138,14 @@ export function FooterCell({
   aggregateKind,
   values,
   options,
+  currency,
   current,
   allowed,
   canEdit,
   onChange,
 }: FooterCellProps) {
   const result: AggregateResult = current
-    ? aggregate(aggregateKind, current, values, options)
+    ? aggregate(aggregateKind, current, values, options, currency)
     : { kind: "empty" };
 
   const label = current ? AGGREGATION_LABEL[current] : null;
@@ -151,7 +153,7 @@ export function FooterCell({
   const body = (
     <span className="flex min-w-0 items-center gap-1.5 truncate">
       {label && result.kind !== "empty" && (
-        <span className="text-muted-foreground shrink-0 text-[11px] uppercase tracking-wide">
+        <span className="text-muted-foreground shrink-0 text-[11px] tracking-wide uppercase">
           {label}
         </span>
       )}
