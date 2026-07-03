@@ -14,6 +14,10 @@ import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardCache, CacheDependency } from "@/lib/boards/cache";
 import { buildCellMap, cellKey } from "@/lib/boards/cache";
+import {
+  buildDependentsCountMap,
+  effectivePriority,
+} from "@/lib/boards/priority";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import {
@@ -298,6 +302,18 @@ export function GanttBoard({
   const cellMap = useMemo(
     () => buildCellMap(cache.cellValues),
     [cache.cellValues],
+  );
+  // Name-rail critical dot: direct-dependent counts (O(E), memoized) + the
+  // board's first priority column feed effectivePriority per row. The dot also
+  // renders on boards with no priority column for auto (>= 2 dependents) items
+  // — the signal is about the dependency graph this view is drawing.
+  const dependentsByItem = useMemo(
+    () => buildDependentsCountMap(cache.dependencies ?? []),
+    [cache.dependencies],
+  );
+  const priorityColumn = useMemo(
+    () => cache.columns.find((c) => c.kind === "priority"),
+    [cache.columns],
   );
   // The tapped bar/milestone/row the quick-edit peek is anchored to.
   const [quickEdit, setQuickEdit] = useState<QuickEditTarget | null>(null);
@@ -616,6 +632,13 @@ export function GanttBoard({
                 <GanttRowItem
                   key={row.itemId}
                   row={row}
+                  criticalLabel={effectiveCriticalLabel(
+                    priorityColumn
+                      ? (cellMap.get(cellKey(row.itemId, priorityColumn.id)) ??
+                          null)
+                      : null,
+                    dependentsByItem.get(row.itemId) ?? 0,
+                  )}
                   rowIdx={rowIdx}
                   totalW={totalW}
                   todayOffset={todayOffset}
@@ -741,8 +764,25 @@ export function GanttBoard({
 // GanttRowItem
 // ---------------------------------------------------------------------------
 
+/**
+ * Name-rail marker label for an effective-critical item, or null when the item
+ * is not critical. Same label strings as PriorityCell so the tooltip/sr text
+ * reads identically across views.
+ */
+function effectiveCriticalLabel(
+  value: unknown,
+  dependents: number,
+): string | null {
+  const { level, auto } = effectivePriority(value, dependents);
+  if (level !== "critical") return null;
+  return auto
+    ? `Critical (auto) — ${dependents} items depend on this`
+    : "Critical";
+}
+
 function GanttRowItem({
   row,
+  criticalLabel,
   rowIdx,
   totalW,
   todayOffset,
@@ -759,6 +799,8 @@ function GanttRowItem({
   onItemTap,
 }: {
   row: GanttRow;
+  /** Effective-critical marker text (see effectiveCriticalLabel), or null. */
+  criticalLabel: string | null;
   rowIdx: number;
   totalW: number;
   todayOffset: number;
@@ -882,6 +924,17 @@ function GanttRowItem({
         className="bg-background sticky left-0 z-10 flex shrink-0 items-center border-r px-4"
         style={{ width: LABEL_W }}
       >
+        {/* Effective-critical dot — minimal marker where dependencies are
+            actually drawn (a dot, not a badge; the tooltip + sr text carry
+            the meaning, never color alone). */}
+        {criticalLabel && (
+          <span
+            title={criticalLabel}
+            className="bg-status-red mr-1.5 inline-block size-1.5 shrink-0 rounded-full"
+          >
+            <span className="sr-only">{criticalLabel}</span>
+          </span>
+        )}
         <span className="text-foreground min-w-0 flex-1 truncate text-[12.5px]">
           {row.name}
         </span>

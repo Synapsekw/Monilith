@@ -548,3 +548,51 @@ describe("GanttBoard — touch ergonomics (Batch 2)", () => {
     }
   });
 });
+
+describe("GanttBoard — effective-critical name-rail dot", () => {
+  function criticalPayload() {
+    const base = payloadFixture() as unknown as {
+      items: Array<Record<string, unknown>>;
+      cellValues: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+    };
+    // Add a third scheduled item and a second edge from i1, giving i1 two
+    // direct dependents (auto-critical). i2 keeps a single predecessor.
+    base.items.push({
+      id: "i4",
+      name: "Item Gamma",
+      group_id: "g1",
+      position: 3,
+    });
+    base.cellValues.push({
+      item_id: "i4",
+      column_id: DATE_COL_ID,
+      value: { date: "2026-06-20", end: "2026-06-22" },
+      board_id: "b1",
+      org_id: "o1",
+      updated_at: "2026-06-01T00:00:00Z",
+    });
+    base.dependencies.push({
+      id: "dep-2",
+      org_id: "o1",
+      board_id: "b1",
+      predecessor_id: "i1",
+      successor_id: "i4",
+      type: "FS",
+      created_at: "2026-06-01T00:00:00Z",
+    });
+    return base as never;
+  }
+
+  it("marks an item with 2+ dependents with the auto-critical dot", () => {
+    renderGantt(criticalPayload());
+    expect(
+      screen.getByTitle("Critical (auto) — 2 items depend on this"),
+    ).toBeInTheDocument();
+  });
+
+  it("does not mark items below the threshold", () => {
+    renderGantt(); // base fixture: i1 has exactly 1 dependent
+    expect(screen.queryByTitle(/Critical/)).not.toBeInTheDocument();
+  });
+});
