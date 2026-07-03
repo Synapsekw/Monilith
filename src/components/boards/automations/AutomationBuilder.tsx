@@ -70,6 +70,9 @@ function isActionComplete(a: AutomationAction): boolean {
   if (a.type === "move_to_group") {
     return !!a.groupId;
   }
+  if (a.type === "set_percent") {
+    return !!a.columnId && a.percent >= 0 && a.percent <= 100;
+  }
   return false;
 }
 function memberLabel(m: BuilderMember): string {
@@ -102,6 +105,7 @@ export function AutomationBuilder({
   );
   const peopleColumns = columns.filter((c) => c.kind === "people");
   const dateColumns = columns.filter((c) => c.kind === "date");
+  const percentColumns = columns.filter((c) => c.kind === "percent");
   const conditionColumns: FilterColumn[] = columns
     .filter((c) => CONDITION_KINDS.includes(c.kind))
     .map((c) => ({
@@ -126,6 +130,14 @@ export function AutomationBuilder({
   );
   const [dateColId, setDateColId] = useState<string>(
     it?.type === "date_reached" ? it.columnId : (dateColumns[0]?.id ?? ""),
+  );
+  const [percentColId, setPercentColId] = useState<string>(
+    it?.type === "percent_reached"
+      ? it.columnId
+      : (percentColumns[0]?.id ?? ""),
+  );
+  const [percentThreshold, setPercentThreshold] = useState<number>(
+    it?.type === "percent_reached" ? (it.percent ?? 100) : 100,
   );
   const [dateDirection, setDateDirection] = useState<DateDirection>(() => {
     if (it?.type === "date_reached") {
@@ -171,7 +183,13 @@ export function AutomationBuilder({
                     ? -Math.abs(dateCount)
                     : Math.abs(dateCount),
             }
-          : { type: "item_created" };
+          : triggerType === "percent_reached"
+            ? {
+                type: "percent_reached",
+                columnId: percentColId,
+                percent: percentThreshold,
+              }
+            : { type: "item_created" };
 
   const triggerValid =
     triggerType === "status_changed"
@@ -180,7 +198,9 @@ export function AutomationBuilder({
         ? !!peopleColId
         : triggerType === "date_reached"
           ? !!dateColId
-          : true;
+          : triggerType === "percent_reached"
+            ? !!percentColId
+            : true;
 
   const valid =
     triggerValid && actions.length > 0 && actions.every(isActionComplete);
@@ -227,6 +247,17 @@ export function AutomationBuilder({
       { _id: nextId(), type: "move_to_group", groupId: "" },
     ]);
   }
+  function addSetPercent() {
+    setActions((prev) => [
+      ...prev,
+      {
+        _id: nextId(),
+        type: "set_percent",
+        columnId: percentColumns[0]?.id ?? "",
+        percent: 100,
+      },
+    ]);
+  }
 
   function submit() {
     if (!valid) return;
@@ -260,6 +291,9 @@ export function AutomationBuilder({
             <option value="item_created">An item is created</option>
             <option value="person_assigned">A person is assigned</option>
             <option value="date_reached">Date reached</option>
+            <option value="percent_reached">
+              A percent reaches a threshold
+            </option>
           </select>
         </label>
 
@@ -398,6 +432,51 @@ export function AutomationBuilder({
             </div>
           )
         ) : null}
+
+        {triggerType === "percent_reached" ? (
+          percentColumns.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Add a Percent column to use this trigger.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm">
+                <span className="text-muted-foreground">Percent column</span>
+                <select
+                  aria-label="Percent column"
+                  className={selectClass}
+                  value={percentColId}
+                  onChange={(e) => setPercentColId(e.target.value)}
+                >
+                  {percentColumns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-muted-foreground">Reaches (%)</span>
+                <input
+                  aria-label="Percent threshold"
+                  type="number"
+                  min={1}
+                  max={100}
+                  className={selectClass}
+                  value={percentThreshold}
+                  onChange={(e) =>
+                    setPercentThreshold(
+                      Math.min(
+                        100,
+                        Math.max(1, parseInt(e.target.value, 10) || 100),
+                      ),
+                    )
+                  }
+                />
+              </label>
+            </div>
+          )
+        ) : null}
       </fieldset>
 
       {/* If (optional) */}
@@ -483,6 +562,12 @@ export function AutomationBuilder({
                     groups={groups}
                     onChange={(next) => updateAction(action._id, next)}
                   />
+                ) : action.type === "set_percent" ? (
+                  <SetPercentRow
+                    action={action}
+                    percentColumns={percentColumns}
+                    onChange={(next) => updateAction(action._id, next)}
+                  />
                 ) : null}
               </div>
               <Button
@@ -518,6 +603,16 @@ export function AutomationBuilder({
           >
             <Plus className="size-3.5" /> Move to group
           </Button>
+          {percentColumns.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addSetPercent}
+            >
+              <Plus className="size-3.5" /> Set percent
+            </Button>
+          ) : null}
           {canWebhook ? (
             <Button
               type="button"
@@ -720,6 +815,64 @@ function MoveToGroupRow({
         ))}
       </select>
     </label>
+  );
+}
+
+function SetPercentRow({
+  action,
+  percentColumns,
+  onChange,
+}: {
+  action: Extract<AutomationAction, { type: "set_percent" }>;
+  percentColumns: CacheColumn[];
+  onChange: (next: AutomationAction) => void;
+}) {
+  return (
+    <>
+      <label className="text-sm">
+        <span className="text-muted-foreground">Set percent column</span>
+        <select
+          aria-label="Set percent column"
+          className={selectClass}
+          value={action.columnId}
+          onChange={(e) =>
+            onChange({
+              type: "set_percent",
+              columnId: e.target.value,
+              percent: action.percent,
+            })
+          }
+        >
+          <option value="">Select…</option>
+          {percentColumns.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="text-muted-foreground">To (%)</span>
+        <input
+          aria-label="Percent value"
+          type="number"
+          min={0}
+          max={100}
+          className={selectClass}
+          value={action.percent}
+          onChange={(e) =>
+            onChange({
+              type: "set_percent",
+              columnId: action.columnId,
+              percent: Math.min(
+                100,
+                Math.max(0, parseInt(e.target.value, 10) || 0),
+              ),
+            })
+          }
+        />
+      </label>
+    </>
   );
 }
 
