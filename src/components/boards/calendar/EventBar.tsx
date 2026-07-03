@@ -53,7 +53,9 @@ export function EventBar({
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
-  onOpen?: (itemId: string) => void;
+  /** Tap/Enter on the chip — receives the chip's viewport rect so the parent
+   * can anchor the quick-edit peek to it. */
+  onOpen?: (itemId: string, anchorRect: DOMRect) => void;
 }) {
   const dragData: ChipDragData = {
     itemId: interval.itemId,
@@ -81,7 +83,7 @@ export function EventBar({
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       e.stopPropagation();
-      onOpen?.(interval.itemId);
+      onOpen?.(interval.itemId, e.currentTarget.getBoundingClientRect());
     }
   };
 
@@ -104,7 +106,7 @@ export function EventBar({
         aria-label={interval.name}
         onClick={(e) => {
           e.stopPropagation();
-          onOpen?.(interval.itemId);
+          onOpen?.(interval.itemId, e.currentTarget.getBoundingClientRect());
         }}
         onKeyDown={handleKeyDown}
         className={cn(common, "bg-surface-muted border")}
@@ -137,7 +139,7 @@ export function EventBar({
       aria-label={interval.name}
       onClick={(e) => {
         e.stopPropagation();
-        onOpen?.(interval.itemId);
+        onOpen?.(interval.itemId, e.currentTarget.getBoundingClientRect());
       }}
       onKeyDown={handleKeyDown}
       className={cn(common, !color && "bg-surface-muted border")}

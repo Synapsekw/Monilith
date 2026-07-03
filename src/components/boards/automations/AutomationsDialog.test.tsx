@@ -368,3 +368,147 @@ describe("AutomationsDialog", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("percent-sync recipes + summarize", () => {
+  const percentCol = col({
+    id: "c-percent",
+    name: "Progress",
+    kind: "percent",
+  });
+
+  function renderWith(cols: CacheColumn[], rules: unknown[] = []) {
+    getAutomations.mockResolvedValue(rules);
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    render(
+      <AutomationsDialog
+        open
+        boardId="board-1"
+        columns={cols}
+        members={members}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: Wrapper },
+    );
+  }
+
+  it("shows both percent-sync recipe buttons when status AND percent columns exist", async () => {
+    renderWith([...columns, percentCol]);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /new automation/i }),
+    );
+    expect(
+      screen.getByRole("button", { name: /completed sets 100%/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /100% sets completed/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the percent-sync recipe buttons without a percent column", async () => {
+    renderWith(columns);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /new automation/i }),
+    );
+    expect(
+      screen.queryByRole("button", { name: /completed sets 100%/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /100% sets completed/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("'Completed sets 100%' seeds the builder with the done option preselected", async () => {
+    renderWith([...columns, percentCol]);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /new automation/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /completed sets 100%/i }),
+    );
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Trigger type") as HTMLSelectElement).value,
+      ).toBe("status_changed");
+    });
+    // The /done|complete/i-labeled option is preselected as "changes to".
+    expect(
+      (screen.getByLabelText("Trigger value") as HTMLSelectElement).value,
+    ).toBe("opt-done");
+    // And a set_percent action row is seeded.
+    expect(screen.getByLabelText("Set percent column")).toBeInTheDocument();
+  });
+
+  it("'100% sets Completed' seeds a percent_reached trigger", async () => {
+    renderWith([...columns, percentCol]);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /new automation/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /100% sets completed/i }),
+    );
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Trigger type") as HTMLSelectElement).value,
+      ).toBe("percent_reached");
+    });
+    expect(screen.getByLabelText("Set column")).toBeInTheDocument();
+  });
+
+  it("summarize renders percent_reached triggers and set_percent actions", async () => {
+    renderWith(
+      [...columns, percentCol],
+      [
+        {
+          id: "auto-ps",
+          board_id: "board-1",
+          org_id: "o1",
+          name: null,
+          enabled: true,
+          trigger: {
+            type: "percent_reached",
+            columnId: "c-percent",
+            percent: 100,
+          },
+          actions: [
+            { type: "set_option", columnId: "c-status", optionId: "opt-done" },
+          ],
+          condition: null,
+          created_at: "",
+          updated_at: "",
+        },
+        {
+          id: "auto-sp",
+          board_id: "board-1",
+          org_id: "o1",
+          name: null,
+          enabled: true,
+          trigger: {
+            type: "status_changed",
+            columnId: "c-status",
+            toOptionId: "opt-done",
+          },
+          actions: [
+            { type: "set_percent", columnId: "c-percent", percent: 100 },
+          ],
+          condition: null,
+          created_at: "",
+          updated_at: "",
+        },
+      ],
+    );
+    expect(
+      await screen.findByText(/When Progress reaches 100%/i),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(/set Progress to 100%/i),
+    ).toBeInTheDocument();
+  });
+});

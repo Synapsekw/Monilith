@@ -5,8 +5,14 @@ import {
   SUBTASK_MARKER,
   type ImportFormat,
 } from "./types";
-import { cellToText } from "./cell-codec";
+import { cellToExcelValue, type ExcelCellValue } from "./cell-codec";
+import {
+  applyWorkbookFormatting,
+  optionFillHex,
+  type FormatPlan,
+} from "./format-workbook";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { currencyOf } from "@/lib/boards/currency";
 
 /** Characters forbidden in Excel worksheet names. */
 const FORBIDDEN_WS_NAME_RE = /[\[\]*?/\\:]/g;
@@ -61,6 +67,55 @@ export async function buildExportWorkbook(
   // Sort groups by position
   const groups = [...payload.groups].sort((a, b) => a.position - b.position);
 
+  // Formatting facts collected while emitting rows; applied for xlsx only.
+  const plan: FormatPlan = {
+    columnKinds: columns.map((c) => c.kind),
+    rows: [],
+    optionFills: [],
+    percentCells: [],
+    currencyCells: [],
+  };
+
+  /** Emit one item row, recording its formatting facts. */
+  function emitRow(
+    groupName: string,
+    groupColor: string,
+    itemId: string,
+    displayName: string,
+    isSubitem: boolean,
+  ): void {
+    const colMap = cellLookup.get(itemId);
+    const dataCells: ExcelCellValue[] = columns.map((col) =>
+      cellToExcelValue(
+        col.kind,
+        colMap?.get(col.id),
+        col.settings,
+        resolvePeopleName,
+      ),
+    );
+    const row = ws.addRow([groupName, displayName, ...dataCells]);
+    const rowNumber = row.number;
+
+    plan.rows.push({ rowNumber, groupColor, isSubitem });
+    columns.forEach((col, i) => {
+      const colIndex = 3 + i;
+      const value = colMap?.get(col.id);
+      const fill = optionFillHex(col.kind, value, col.settings);
+      if (fill) plan.optionFills.push({ rowNumber, colIndex, hex: fill });
+      const cellValue = dataCells[i];
+      if (col.kind === "percent" && typeof cellValue === "number") {
+        plan.percentCells.push({ rowNumber, colIndex, value: cellValue });
+      }
+      if (col.kind === "currency" && typeof cellValue === "number") {
+        plan.currencyCells.push({
+          rowNumber,
+          colIndex,
+          code: currencyOf(col.settings),
+        });
+      }
+    });
+  }
+
   for (const group of groups) {
     // Top-level items in this group, sorted by position
     const topLevelItems = payload.items
@@ -68,14 +123,7 @@ export async function buildExportWorkbook(
       .sort((a, b) => a.position - b.position);
 
     for (const item of topLevelItems) {
-      // Build the data cells for this item
-      const dataCells = columns.map((col) => {
-        const colMap = cellLookup.get(item.id);
-        const value = colMap?.get(col.id);
-        return cellToText(col.kind, value, col.settings, resolvePeopleName);
-      });
-
-      ws.addRow([group.name, item.name, ...dataCells]);
+      emitRow(group.name, group.color, item.id, item.name, false);
 
       // Subitems of this item, sorted by position
       const subitems = payload.items
@@ -83,18 +131,19 @@ export async function buildExportWorkbook(
         .sort((a, b) => a.position - b.position);
 
       for (const sub of subitems) {
-        const subDataCells = columns.map((col) => {
-          const colMap = cellLookup.get(sub.id);
-          const value = colMap?.get(col.id);
-          return cellToText(col.kind, value, col.settings, resolvePeopleName);
-        });
-
-        ws.addRow([group.name, SUBTASK_MARKER + sub.name, ...subDataCells]);
+        emitRow(
+          group.name,
+          group.color,
+          sub.id,
+          SUBTASK_MARKER + sub.name,
+          true,
+        );
       }
     }
   }
 
   if (format === "xlsx") {
+    applyWorkbookFormatting(ws, plan);
     const buffer = Buffer.from(await wb.xlsx.writeBuffer());
     return {
       buffer,

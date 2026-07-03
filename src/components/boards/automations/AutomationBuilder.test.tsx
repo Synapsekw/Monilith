@@ -5,7 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { AutomationBuilder } from "./AutomationBuilder";
 import type { CacheColumn } from "@/lib/boards/cache";
 import {
+  recipeCompletedSetsPercent,
   recipeItemCreatedSetOption,
+  recipePercentSetsCompleted,
   recipePersonAssignedNotify,
 } from "@/components/boards/automations/recipes";
 
@@ -39,6 +41,7 @@ const statusCol = col({
 
 const peopleCol = col({ id: "c-people", name: "Owner", kind: "people" });
 const dateCol = col({ id: "c-date", name: "Due Date", kind: "date" });
+const percentCol = col({ id: "c-percent", name: "Progress", kind: "percent" });
 
 const columns = [statusCol, peopleCol, dateCol];
 const members = [
@@ -533,5 +536,119 @@ describe("5b-1 recipes", () => {
         recipient: { kind: "owner", peopleColumnId: "people-1" },
       },
     ]);
+  });
+});
+
+describe("percent-sync builder (percent_reached / set_percent)", () => {
+  const pColumns = [statusCol, peopleCol, dateCol, percentCol];
+
+  it("seeds from the 100%->Completed recipe and emits the exact draft", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={pColumns}
+        members={members}
+        initial={recipePercentSetsCompleted(
+          "c-percent",
+          "c-status",
+          "opt-done",
+        )}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Trigger picker reflects the percent_reached draft.
+    expect(
+      (screen.getByLabelText("Trigger type") as HTMLSelectElement).value,
+    ).toBe("percent_reached");
+    expect(
+      (screen.getByLabelText("Percent column") as HTMLSelectElement).value,
+    ).toBe("c-percent");
+    expect(
+      (screen.getByLabelText("Percent threshold") as HTMLInputElement).value,
+    ).toBe("100");
+
+    // The seeded set_option action is present and complete -> Save enabled.
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      trigger: { type: "percent_reached", columnId: "c-percent", percent: 100 },
+      actions: [
+        { type: "set_option", columnId: "c-status", optionId: "opt-done" },
+      ],
+      condition: undefined,
+    });
+  });
+
+  it("seeds from the Completed->100% recipe with a set_percent action row", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <AutomationBuilder
+        columns={pColumns}
+        members={members}
+        initial={recipeCompletedSetsPercent(
+          "c-status",
+          "opt-done",
+          "c-percent",
+        )}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // set_percent action row: percent-column picker + bounded numeric input.
+    expect(
+      (screen.getByLabelText("Set percent column") as HTMLSelectElement).value,
+    ).toBe("c-percent");
+    const percentInput = screen.getByLabelText(
+      "Percent value",
+    ) as HTMLInputElement;
+    expect(percentInput.value).toBe("100");
+    expect(percentInput).toHaveAttribute("max", "100");
+    expect(percentInput).toHaveAttribute("min", "0");
+
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await userEvent.click(save);
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      trigger: {
+        type: "status_changed",
+        columnId: "c-status",
+        toOptionId: "opt-done",
+      },
+      actions: [{ type: "set_percent", columnId: "c-percent", percent: 100 }],
+      condition: undefined,
+    });
+  });
+
+  it("offers the 'Set percent' action button only when a percent column exists", async () => {
+    const { unmount } = render(
+      <AutomationBuilder
+        columns={pColumns}
+        members={members}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /set percent/i }),
+    ).toBeInTheDocument();
+    unmount();
+
+    render(
+      <AutomationBuilder
+        columns={columns}
+        members={members}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /set percent/i }),
+    ).not.toBeInTheDocument();
   });
 });

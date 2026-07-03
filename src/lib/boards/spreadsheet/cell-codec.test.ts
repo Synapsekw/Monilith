@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cellToText, textToCell } from "./cell-codec";
+import { cellToText, cellToExcelValue, textToCell } from "./cell-codec";
 
 const statusSettings = {
   options: [
@@ -452,5 +452,79 @@ describe("textToCell", () => {
     expect(textToCell("status", text, synthOptions)).toEqual({
       optionId: "o1",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cellToExcelValue
+// ---------------------------------------------------------------------------
+describe("cellToExcelValue", () => {
+  it("returns a real number for numbers cells", () => {
+    expect(cellToExcelValue("numbers", { n: 42.5 }, {})).toBe(42.5);
+  });
+
+  it("returns a real number for percent cells", () => {
+    expect(cellToExcelValue("percent", { percent: 60 }, {})).toBe(60);
+  });
+
+  it("returns empty string for blank numbers/percent", () => {
+    expect(cellToExcelValue("numbers", null, {})).toBe("");
+    expect(cellToExcelValue("percent", { percent: "bogus" }, {})).toBe("");
+  });
+
+  it("returns the cellToText string for every other kind", () => {
+    expect(
+      cellToExcelValue(
+        "status",
+        { optionId: "o1" },
+        { options: [{ id: "o1", label: "Done", color: "#00c875" }] },
+      ),
+    ).toBe("Done");
+    expect(cellToExcelValue("date", { date: "2026-07-03" }, {})).toBe(
+      "2026-07-03",
+    );
+    expect(cellToExcelValue("checkbox", { checked: true }, {})).toBe("TRUE");
+  });
+
+  it("never throws on malformed input", () => {
+    expect(cellToExcelValue("numbers", 7, {})).toBe("");
+    expect(cellToExcelValue("percent", "x", null)).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// currency codec
+// ---------------------------------------------------------------------------
+describe("currency codec", () => {
+  it("exports the raw amount", () => {
+    expect(
+      cellToText("currency", { amount: 1234.5 }, { currency: "USD" }),
+    ).toBe("1234.5");
+  });
+
+  it("exports blank for missing/malformed amount", () => {
+    expect(cellToText("currency", {}, { currency: "USD" })).toBe("");
+    expect(cellToText("currency", null, { currency: "USD" })).toBe("");
+    expect(cellToText("currency", { amount: "x" }, { currency: "USD" })).toBe(
+      "",
+    );
+  });
+
+  it("imports symbol/grouping-decorated strings", () => {
+    expect(textToCell("currency", "$1,234.50", [])).toEqual({ amount: 1234.5 });
+    expect(textToCell("currency", "-20", [])).toEqual({ amount: -20 });
+    expect(textToCell("currency", "abc", [])).toBeNull();
+  });
+
+  it("round-trips currency through cellToText → textToCell", () => {
+    const text = cellToText("currency", { amount: 99.25 }, { currency: "KWD" });
+    expect(textToCell("currency", text, [])).toEqual({ amount: 99.25 });
+  });
+
+  it("cellToExcelValue exports currency as a real number", () => {
+    expect(
+      cellToExcelValue("currency", { amount: 1234.5 }, { currency: "AED" }),
+    ).toBe(1234.5);
+    expect(cellToExcelValue("currency", null, { currency: "AED" })).toBe("");
   });
 });

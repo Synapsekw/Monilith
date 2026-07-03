@@ -3,6 +3,8 @@ import {
   cellValueSchema,
   columnKindSchema,
   columnSettingsSchema,
+  currencySettingsSchema,
+  currencyValueSchema,
   dateValueSchema,
   dropdownSettingsSchema,
   dropdownValueSchema,
@@ -303,5 +305,53 @@ describe("6d-3 summary_aggregation settings", () => {
     expect(
       columnSettingsSchema("text").safeParse({ bogus: true }).success,
     ).toBe(false);
+  });
+});
+
+describe("currency column", () => {
+  it("kind enum includes currency", () => {
+    expect(columnKindSchema.safeParse("currency").success).toBe(true);
+  });
+  it("settings require a known ISO code", () => {
+    expect(currencySettingsSchema.safeParse({ currency: "KWD" }).success).toBe(
+      true,
+    );
+    expect(currencySettingsSchema.safeParse({ currency: "ZZZ" }).success).toBe(
+      false,
+    );
+    expect(currencySettingsSchema.safeParse({}).success).toBe(false);
+  });
+  it("settings accept the shared summary_aggregation", () => {
+    expect(
+      currencySettingsSchema.safeParse({
+        currency: "USD",
+        summary_aggregation: "sum",
+      }).success,
+    ).toBe(true);
+  });
+  it("settings accept the optional dirham_sign display flag", () => {
+    expect(
+      currencySettingsSchema.safeParse({ currency: "AED", dirham_sign: false })
+        .success,
+    ).toBe(true);
+    expect(
+      currencySettingsSchema.safeParse({ currency: "AED", dirham_sign: "no" })
+        .success,
+    ).toBe(false);
+  });
+  it("cell value is a finite amount", () => {
+    expect(currencyValueSchema.safeParse({ amount: 1234.5 }).success).toBe(
+      true,
+    );
+    expect(currencyValueSchema.safeParse({ amount: -20 }).success).toBe(true);
+    expect(currencyValueSchema.safeParse({ amount: Infinity }).success).toBe(
+      false,
+    );
+    expect(currencyValueSchema.safeParse({ amount: "12" }).success).toBe(false);
+    expect(currencyValueSchema.safeParse({}).success).toBe(false);
+  });
+  it("dispatchers route the currency kind", () => {
+    expect(columnSettingsSchema("currency")).toBe(currencySettingsSchema);
+    expect(cellValueSchema("currency")).toBe(currencyValueSchema);
   });
 });

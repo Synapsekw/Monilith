@@ -17,6 +17,7 @@ const DEFAULT_NAME: Record<ColumnKind, string> = {
   relation: "Relation",
   mirror: "Mirror",
   percent: "Percent",
+  currency: "Currency",
 };
 
 function opt(label: string, color: string) {
@@ -46,6 +47,10 @@ export function defaultColumn(
     settings = {
       options: [opt("Option 1", "#579bfc"), opt("Option 2", "#a25ddc")],
     };
+  } else if (kind === "currency") {
+    // Zero-friction add: seed USD; "Change currency" in the column menu is
+    // one click away (spec §5.1). Snake_case jsonb key per settings convention.
+    settings = { currency: "USD" };
   }
   return { name: resolved, settings };
 }

@@ -3,6 +3,7 @@ import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
 import { percentBandColor } from "@/lib/boards/percent-color";
+import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -97,9 +98,12 @@ export function PeopleCell({
 
 export function DateCell({
   value,
+  overdue = false,
 }: {
   value: { date: string; end?: string } | null;
   settings: Settings;
+  /** Past-due + incomplete (derived at render time — see @/lib/boards/overdue). */
+  overdue?: boolean;
 }) {
   if (!value?.date) return <span className="text-sm" />;
   const formatted = new Date(value.date).toLocaleDateString(undefined, {
@@ -107,7 +111,18 @@ export function DateCell({
     month: "short",
     day: "numeric",
   });
-  return <span className="text-sm">{formatted}</span>;
+  if (!overdue) return <span className="text-sm">{formatted}</span>;
+  // Negative margins cancel the padding so the date text does not shift when
+  // the tint appears. aria-label/title carry the state — never color alone.
+  return (
+    <span
+      aria-label="Overdue"
+      title="Overdue"
+      className="bg-destructive/10 text-destructive -mx-1.5 -my-0.5 rounded-md px-1.5 py-0.5 text-sm"
+    >
+      {formatted}
+    </span>
+  );
 }
 
 export function NumberCell({
@@ -191,6 +206,26 @@ export function PercentCell({
   if (value == null || typeof value.percent !== "number")
     return <span className="text-sm" />;
   return <PercentBar percent={value.percent} />;
+}
+
+/**
+ * Currency cell — the amount formatted in the column's currency (viewer
+ * locale). Monochrome data surface (pulse-ui): no color, tabular numerals.
+ */
+export function CurrencyCell({
+  value,
+  settings,
+}: {
+  value: { amount: number } | null;
+  settings: Settings;
+}) {
+  if (value == null || typeof value.amount !== "number")
+    return <span className="text-sm" />;
+  return (
+    <span className="truncate text-sm tabular-nums">
+      <CurrencyAmount amount={value.amount} settings={settings} />
+    </span>
+  );
 }
 
 export function RatingCell({
@@ -278,11 +313,14 @@ export function CellRenderer({
   value,
   settings,
   members,
+  overdue,
 }: {
   kind: string;
   value: unknown;
   settings: Settings;
   members?: EditorMember[];
+  /** Date cells only: past-due + incomplete (see @/lib/boards/overdue). */
+  overdue?: boolean;
 }) {
   switch (kind) {
     case "text":
@@ -319,6 +357,7 @@ export function CellRenderer({
         <DateCell
           value={value as { date: string; end?: string } | null}
           settings={settings}
+          overdue={overdue}
         />
       );
     case "numbers":
@@ -343,6 +382,13 @@ export function CellRenderer({
       return (
         <PercentCell
           value={value as { percent: number } | null}
+          settings={settings}
+        />
+      );
+    case "currency":
+      return (
+        <CurrencyCell
+          value={value as { amount: number } | null}
           settings={settings}
         />
       );

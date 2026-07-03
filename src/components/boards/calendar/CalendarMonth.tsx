@@ -31,7 +31,7 @@ export function CalendarMonth({
   statusColumn,
   cellMap,
   onDayClick,
-  onOpenItem,
+  onItemTap,
 }: {
   monthISO: string;
   today: string;
@@ -41,7 +41,9 @@ export function CalendarMonth({
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
   onDayClick: (dayISO: string) => void;
-  onOpenItem?: (itemId: string) => void;
+  /** Tap on a chip/overflow row — carries the tapped element's rect so the
+   * board can anchor the quick-edit peek. */
+  onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
 }) {
   const month = useMemo(
     () => buildCalendarMonth(monthISO, items, cellValues, dateColumnId),
@@ -154,7 +156,7 @@ export function CalendarMonth({
                       dateColumnId={dateColumnId}
                       statusColumn={statusColumn}
                       cellMap={cellMap}
-                      onOpenItem={onOpenItem}
+                      onItemTap={onItemTap}
                     />
                   </div>
                 ))}
@@ -171,7 +173,7 @@ export function CalendarMonth({
                       key={c}
                       colIndex={c}
                       hidden={hidden}
-                      onOpenItem={onOpenItem}
+                      onItemTap={onItemTap}
                     />
                   ) : (
                     <span key={c} />
@@ -198,7 +200,7 @@ function BarForDay({
   dateColumnId,
   statusColumn,
   cellMap,
-  onOpenItem,
+  onItemTap,
 }: {
   interval: PlacedInterval;
   weekStartISO: string;
@@ -206,7 +208,7 @@ function BarForDay({
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
-  onOpenItem?: (itemId: string) => void;
+  onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
 }) {
   const range = itemDateRange(interval.itemId, cellValues, dateColumnId);
   const fromDayISO = range?.start ?? weekStartISO;
@@ -218,7 +220,7 @@ function BarForDay({
       dateColumnId={dateColumnId}
       statusColumn={statusColumn}
       cellMap={cellMap}
-      onOpen={onOpenItem}
+      onOpen={onItemTap}
     />
   );
 }
@@ -226,11 +228,11 @@ function BarForDay({
 function DayMorePopover({
   colIndex,
   hidden,
-  onOpenItem,
+  onItemTap,
 }: {
   colIndex: number;
   hidden: PlacedInterval[];
-  onOpenItem?: (itemId: string) => void;
+  onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
 }) {
   return (
     <div
@@ -253,8 +255,13 @@ function DayMorePopover({
               <li key={iv.itemId}>
                 <button
                   type="button"
-                  onClick={() => onOpenItem?.(iv.itemId)}
-                  className="hover:bg-accent w-full truncate rounded px-2 py-1 text-left text-sm"
+                  onClick={(e) =>
+                    onItemTap?.(
+                      iv.itemId,
+                      e.currentTarget.getBoundingClientRect(),
+                    )
+                  }
+                  className="hover:bg-accent w-full truncate rounded px-2 py-1 text-left text-sm pointer-coarse:min-h-11"
                 >
                   {iv.name}
                 </button>

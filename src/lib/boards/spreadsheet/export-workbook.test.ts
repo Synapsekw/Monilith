@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildExportWorkbook } from "./export-workbook";
 import { parseWorkbook } from "./parse-workbook";
+import { detectColumns } from "./detect";
 import { SUBTASK_MARKER, GROUP_HEADER, NAME_HEADER } from "./types";
 import type { BoardPayload } from "@/lib/boards/queries";
 
@@ -68,6 +69,18 @@ function makePayload(): BoardPayload {
         updated_at: "2024-01-01T00:00:00Z",
         width: null,
       },
+      {
+        id: "col-percent",
+        name: "Progress",
+        kind: "percent",
+        board_id: boardId,
+        org_id: orgId,
+        position: 2,
+        settings: {},
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+        width: null,
+      },
     ],
     items: [
       {
@@ -116,6 +129,22 @@ function makePayload(): BoardPayload {
         item_id: subitemId,
         org_id: orgId,
         value: { n: 7 },
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+      {
+        board_id: boardId,
+        column_id: "col-percent",
+        item_id: itemId,
+        org_id: orgId,
+        value: { percent: 60 },
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+      {
+        board_id: boardId,
+        column_id: "col-percent",
+        item_id: subitemId,
+        org_id: orgId,
+        value: { percent: 100 },
         updated_at: "2024-01-01T00:00:00Z",
       },
     ],
@@ -176,12 +205,13 @@ describe("buildExportWorkbook — CSV export", () => {
     const { buffer } = await buildExportWorkbook(payload, "csv");
     const parsed = await parseWorkbook(buffer, "export.csv");
 
-    // Header should be [Group, Name, Status, Count]
+    // Header should be [Group, Name, Status, Count, Progress]
     expect(parsed.header).toEqual([
       GROUP_HEADER,
       NAME_HEADER,
       "Status",
       "Count",
+      "Progress",
     ]);
 
     // Should have 2 data rows: one top-level item and one subitem
@@ -208,7 +238,7 @@ describe("buildExportWorkbook — people column", () => {
       kind: "people",
       board_id: "board-1",
       org_id: "org-1",
-      position: 2,
+      position: 3,
       settings: {},
       created_at: "2024-01-01T00:00:00Z",
       updated_at: "2024-01-01T00:00:00Z",
@@ -274,6 +304,7 @@ describe("buildExportWorkbook — XLSX export", () => {
       NAME_HEADER,
       "Status",
       "Count",
+      "Progress",
     ]);
     expect(parsed.rows).toHaveLength(2);
     expect(parsed.rows[0][1]).toBe("Build login");
@@ -288,5 +319,138 @@ describe("buildExportWorkbook — XLSX export", () => {
     // Should not throw; buffer should be valid xlsx
     const parsed = await parseWorkbook(buffer, "export.xlsx");
     expect(parsed.header[0]).toBe(GROUP_HEADER);
+  });
+});
+
+describe("xlsx formatting", () => {
+  it('writes percent cells as numbers with the 0"%" format', async () => {
+    const { buffer } = await buildExportWorkbook(makePayload(), "xlsx");
+    const wb = new (await import("exceljs")).default.Workbook();
+    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
+    const ws = wb.worksheets[0];
+    // Row 2 = first item; percent col = Group + Name + (status, numbers, percent) → col 5.
+    const cell = ws.getRow(2).getCell(5);
+    expect(cell.value).toBe(60);
+    expect(cell.numFmt).toBe('0"%"');
+  });
+
+  it("styles header, fills status cells, freezes the pane", async () => {
+    const { buffer } = await buildExportWorkbook(makePayload(), "xlsx");
+    const wb = new (await import("exceljs")).default.Workbook();
+    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
+    const ws = wb.worksheets[0];
+    expect(ws.getRow(1).getCell(1).font?.bold).toBe(true);
+    expect(ws.views?.[0]).toMatchObject({ state: "frozen", ySplit: 1 });
+    const statusFill = ws.getRow(2).getCell(3).fill as {
+      fgColor?: { argb?: string };
+    };
+    expect(statusFill?.fgColor?.argb).toBe("FF00C875");
+  });
+
+  it("adds dataBar conditional formatting for the percent column", async () => {
+    const { buffer } = await buildExportWorkbook(makePayload(), "xlsx");
+    const wb = new (await import("exceljs")).default.Workbook();
+    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
+    const ws = wb.worksheets[0] as unknown as {
+      conditionalFormattings: Array<{ rules: Array<{ type: string }> }>;
+    };
+    expect(
+      ws.conditionalFormattings.filter((cf) =>
+        cf.rules.some((r) => r.type === "dataBar"),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("round-trips: formatted export still parses and detects identically", async () => {
+    const { buffer } = await buildExportWorkbook(makePayload(), "xlsx");
+    const sheet = await parseWorkbook(buffer, "board.xlsx");
+    expect(sheet.header).toEqual([
+      GROUP_HEADER,
+      NAME_HEADER,
+      "Status",
+      "Count",
+      "Progress",
+    ]);
+    // Percent values stringify back from real numbers.
+    expect(sheet.rows[0][4]).toBe("60");
+    expect(sheet.rows[1][1].startsWith(SUBTASK_MARKER)).toBe(true);
+
+    // Detection must be IDENTICAL to the unstyled path: the csv export of the
+    // same board carries no formatting, so any drift here would mean styling
+    // leaked into what the import detector sees.
+    const { buffer: csvBuffer } = await buildExportWorkbook(
+      makePayload(),
+      "csv",
+    );
+    const csvSheet = await parseWorkbook(csvBuffer, "board.csv");
+    const detectedXlsx = detectColumns(sheet.header, sheet.rows).map((c) => ({
+      header: c.header,
+      kind: c.kind,
+    }));
+    const detectedCsv = detectColumns(csvSheet.header, csvSheet.rows).map(
+      (c) => ({ header: c.header, kind: c.kind }),
+    );
+    expect(detectedXlsx).toEqual(detectedCsv);
+    expect(sheet.rows).toEqual(csvSheet.rows);
+  });
+
+  it("csv output carries no styling and still parses", async () => {
+    const { buffer, ext } = await buildExportWorkbook(makePayload(), "csv");
+    expect(ext).toBe("csv");
+    const sheet = await parseWorkbook(buffer, "board.csv");
+    expect(sheet.rows[0][4]).toBe("60");
+  });
+});
+
+describe("currency column export", () => {
+  function payloadWithCurrency(): BoardPayload {
+    const p = makePayload();
+    p.columns = [
+      ...p.columns,
+      {
+        id: "col-currency",
+        name: "Budget",
+        kind: "currency",
+        board_id: "board-1",
+        org_id: "org-1",
+        position: 3,
+        settings: { currency: "AED" },
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+        width: null,
+      },
+    ];
+    p.cellValues = [
+      ...p.cellValues,
+      {
+        id: "cv-currency",
+        item_id: "item-1",
+        column_id: "col-currency",
+        board_id: "board-1",
+        org_id: "org-1",
+        value: { amount: 1234.5 },
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+    ] as BoardPayload["cellValues"];
+    return p;
+  }
+
+  it('exports a real number with the "AED 1,234.50"-style numFmt (ISO code, never U+20C3)', async () => {
+    const { buffer } = await buildExportWorkbook(payloadWithCurrency(), "xlsx");
+    const wb = new (await import("exceljs")).default.Workbook();
+    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
+    const ws = wb.worksheets[0];
+    // Currency col = Group + Name + (status, numbers, percent, currency) → col 6.
+    const cell = ws.getRow(2).getCell(6);
+    expect(cell.value).toBe(1234.5);
+    expect(cell.numFmt).toBe('"AED" #,##0.00');
+    expect(cell.numFmt).not.toContain("⃃");
+  });
+
+  it("csv export keeps the raw re-importable amount", async () => {
+    const { buffer } = await buildExportWorkbook(payloadWithCurrency(), "csv");
+    const sheet = await parseWorkbook(buffer, "board.csv");
+    expect(sheet.rows[0][5]).toBe("1234.5");
   });
 });

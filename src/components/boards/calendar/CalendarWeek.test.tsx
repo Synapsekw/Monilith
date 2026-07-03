@@ -30,7 +30,7 @@ describe("CalendarWeek", () => {
           statusColumn={undefined}
           cellMap={buildCellMap(cellValues)}
           onDayClick={vi.fn()}
-          onOpenItem={vi.fn()}
+          onItemTap={vi.fn()}
         />
       </DndContext>,
     );
@@ -52,7 +52,7 @@ describe("CalendarWeek", () => {
           statusColumn={undefined}
           cellMap={new Map()}
           onDayClick={onDayClick}
-          onOpenItem={vi.fn()}
+          onItemTap={vi.fn()}
         />
       </DndContext>,
     );

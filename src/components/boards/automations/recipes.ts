@@ -130,6 +130,50 @@ export function recipeDueSoonNotifyOwner(
 }
 
 /**
+ * "When status changes to Done, set a percent column to 100%."
+ * One half of the Completed <-> 100% two-way sync; the engine's
+ * skipped_equal idempotence terminates the loop at depth 2.
+ */
+export function recipeCompletedSetsPercent(
+  statusColumnId: string,
+  doneOptionId: string,
+  percentColumnId: string,
+): Draft {
+  return {
+    name: "Completed sets 100%",
+    trigger: {
+      type: "status_changed",
+      columnId: statusColumnId,
+      toOptionId: doneOptionId,
+    },
+    actions: [{ type: "set_percent", columnId: percentColumnId, percent: 100 }],
+  };
+}
+
+/**
+ * "When a percent column reaches 100%, set status to Done."
+ * The percent_reached trigger only fires on threshold-crossing writes,
+ * so a 100 -> 100 rewrite never re-fires this rule.
+ */
+export function recipePercentSetsCompleted(
+  percentColumnId: string,
+  statusColumnId: string,
+  doneOptionId: string,
+): Draft {
+  return {
+    name: "100% sets Completed",
+    trigger: {
+      type: "percent_reached",
+      columnId: percentColumnId,
+      percent: 100,
+    },
+    actions: [
+      { type: "set_option", columnId: statusColumnId, optionId: doneOptionId },
+    ],
+  };
+}
+
+/**
  * "When status changes (to X), move the item to a group."
  * `optionId === null` means the trigger fires on any value change.
  */

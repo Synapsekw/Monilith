@@ -31,6 +31,16 @@ describe("operatorsForKind", () => {
   it("unknown kind offers empties only", () => {
     expect(operatorsForKind("mystery")).toEqual(["is_empty", "not_empty"]);
   });
+  it("currency filters like numbers", () => {
+    expect(operatorsForKind("currency")).toEqual([
+      "num_eq",
+      "num_ne",
+      "gt",
+      "lt",
+      "is_empty",
+      "not_empty",
+    ]);
+  });
 });
 
 describe("valueControlFor", () => {
@@ -45,6 +55,10 @@ describe("valueControlFor", () => {
     expect(valueControlFor("numbers", "gt")).toBe("number");
     expect(valueControlFor("date", "before")).toBe("date");
     expect(valueControlFor("text", "contains")).toBe("text");
+  });
+  it("currency → number", () => {
+    expect(valueControlFor("currency", "gt")).toBe("number");
+    expect(valueControlFor("currency", "num_eq")).toBe("number");
   });
 });
 

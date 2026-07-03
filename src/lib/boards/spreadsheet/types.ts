@@ -9,6 +9,7 @@ export type ImportableKind =
   | "text"
   | "numbers"
   | "percent"
+  | "currency"
   | "status"
   | "dropdown"
   | "date"
@@ -21,6 +22,7 @@ export const IMPORTABLE_KINDS: ImportableKind[] = [
   "text",
   "numbers",
   "percent",
+  "currency",
   "status",
   "dropdown",
   "date",

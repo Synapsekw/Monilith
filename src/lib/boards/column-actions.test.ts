@@ -11,6 +11,7 @@ import {
   renameColumn,
   deleteColumn,
   resizeColumn,
+  reorderColumn,
 } from "@/lib/boards/actions";
 
 const BOARD = "11111111-1111-4111-8111-111111111111";
@@ -128,5 +129,41 @@ describe("renameColumn / resizeColumn / deleteColumn", () => {
     const res = await deleteColumn({ columnId: COL });
     expect(res.ok).toBe(true);
     expect(del).toHaveBeenCalled();
+  });
+});
+
+describe("reorderColumn", () => {
+  it("updates position in a single query and revalidates the board", async () => {
+    const eqSelect = {
+      select: () => ({
+        maybeSingle: async () => ({ data: { board_id: BOARD }, error: null }),
+      }),
+    };
+    const update = vi.fn().mockReturnValue({ eq: () => eqSelect });
+    from.mockImplementation((t: string) => (t === "columns" ? { update } : {}));
+
+    const res = await reorderColumn({ columnId: COL, position: 1.5 });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(update).toHaveBeenCalledWith({ position: 1.5 });
+    expect(from).toHaveBeenCalledTimes(1); // no separate board lookup
+  });
+
+  it("rejects invalid input before any db call", async () => {
+    const res = await reorderColumn({ columnId: COL, position: "x" as never });
+    expect(res.ok).toBe(false);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("fails when the column is not visible/found", async () => {
+    const eqSelect = {
+      select: () => ({
+        maybeSingle: async () => ({ data: null, error: null }),
+      }),
+    };
+    const update = vi.fn().mockReturnValue({ eq: () => eqSelect });
+    from.mockImplementation((t: string) => (t === "columns" ? { update } : {}));
+
+    const res = await reorderColumn({ columnId: COL, position: 1 });
+    expect(res.ok).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import {
   CheckboxCell,
+  CurrencyCell,
   DateCell,
   DropdownCell,
   EmailCell,
@@ -17,6 +18,7 @@ import {
   StatusCell,
   TextCell,
 } from "./index";
+import { CurrencyEditor } from "./editors";
 
 const upsertCellMock = vi.fn();
 const renameItemMock = vi.fn();
@@ -131,6 +133,22 @@ describe("cell renderers (read-only, 2a)", () => {
   it("DateCell shows the formatted date", () => {
     render(<DateCell value={{ date: "2026-06-15" }} settings={{}} />);
     expect(screen.getByText(/2026/)).toBeInTheDocument();
+  });
+
+  it("DateCell tints an overdue date and labels it for AT", () => {
+    render(<DateCell value={{ date: "2026-06-15" }} settings={{}} overdue />);
+    const el = screen.getByLabelText("Overdue");
+    expect(el.className).toContain("text-destructive");
+    expect(el.className).toContain("bg-destructive/10");
+    expect(el).toHaveAttribute("title", "Overdue");
+  });
+
+  it("DateCell renders untinted without the overdue prop", () => {
+    render(<DateCell value={{ date: "2026-06-15" }} settings={{}} />);
+    expect(screen.queryByLabelText("Overdue")).not.toBeInTheDocument();
+    expect(screen.getByText(/2026/).className).not.toContain(
+      "text-destructive",
+    );
   });
 
   it("NumberCell shows the number with its unit", () => {
@@ -283,6 +301,75 @@ describe("BoardTable inline edit (optimistic + rollback)", () => {
       expect(screen.queryByText("Done")).not.toBeInTheDocument();
       expect(screen.getByText("Stuck")).toBeInTheDocument();
     });
+  });
+});
+
+describe("CurrencyCell", () => {
+  const usd = new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+  });
+  it("renders the formatted amount", () => {
+    render(
+      <CurrencyCell
+        value={{ amount: 1234.5 }}
+        settings={{ currency: "USD" }}
+      />,
+    );
+    expect(screen.getByText(usd.format(1234.5))).toBeInTheDocument();
+  });
+  it("renders blank when empty or malformed", () => {
+    const { container } = render(
+      <CurrencyCell value={null} settings={{ currency: "USD" }} />,
+    );
+    expect(container.textContent).toBe("");
+  });
+  it("falls back to USD when settings are malformed", () => {
+    render(<CurrencyCell value={{ amount: 2 }} settings={{}} />);
+    expect(screen.getByText(usd.format(2))).toBeInTheDocument();
+  });
+});
+
+describe("CurrencyEditor", () => {
+  it("commits the rounded amount on Enter", async () => {
+    const onCommit = vi.fn();
+    render(
+      <CurrencyEditor
+        value={null}
+        settings={{ currency: "USD" }}
+        onCommit={onCommit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText("Amount"), "10.126{Enter}");
+    expect(onCommit).toHaveBeenCalledWith({ amount: 10.13 });
+  });
+  it("clears on empty commit", async () => {
+    const onClear = vi.fn();
+    const { unmount } = render(
+      <CurrencyEditor
+        value={{ amount: 5 }}
+        settings={{ currency: "USD" }}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+        onClear={onClear}
+      />,
+    );
+    await userEvent.clear(screen.getByLabelText("Amount"));
+    await userEvent.keyboard("{Enter}");
+    expect(onClear).toHaveBeenCalled();
+    unmount();
+  });
+  it("shows the currency code prefix", () => {
+    render(
+      <CurrencyEditor
+        value={null}
+        settings={{ currency: "KWD" }}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("KWD")).toBeInTheDocument();
   });
 });
 

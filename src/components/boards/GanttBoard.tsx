@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardCache, CacheDependency } from "@/lib/boards/cache";
+import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import {
@@ -41,6 +42,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { EditorMember } from "@/components/boards/cells/editors";
+import {
+  ItemQuickEdit,
+  type QuickEditTarget,
+} from "@/components/boards/quick-edit/ItemQuickEdit";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -280,6 +285,23 @@ export function GanttBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, colorColId, cache.cellValues, cache.columns]);
 
+  // First status/percent columns + cell map for the quick-edit peek (mirrors
+  // CalendarBoard). All reads come from the in-memory board cache.
+  const statusColumn = useMemo(
+    () => cache.columns.find((c) => c.kind === "status"),
+    [cache.columns],
+  );
+  const percentColumn = useMemo(
+    () => cache.columns.find((c) => c.kind === "percent"),
+    [cache.columns],
+  );
+  const cellMap = useMemo(
+    () => buildCellMap(cache.cellValues),
+    [cache.cellValues],
+  );
+  // The tapped bar/milestone/row the quick-edit peek is anchored to.
+  const [quickEdit, setQuickEdit] = useState<QuickEditTarget | null>(null);
+
   // Month tick labels for the timeline header.
   const monthTicks = useMemo(
     () => (rangeStartISO ? buildMonthTicks(rangeStartISO, dayCount) : []),
@@ -363,6 +385,27 @@ export function GanttBoard({
   }
 
   const resolvedDateColumn = dateColumn;
+
+  /**
+   * Open the item detail panel by setting `?item=<id>` via the History API —
+   * no RSC navigation, so the board page's queries don't re-run (gotcha-09).
+   * {@link BoardViews} reads the param and renders the panel on any view.
+   */
+  function openItemPanel(itemId: string) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("item", itemId);
+    window.history.pushState({}, "", url);
+  }
+
+  /**
+   * Tap on a bar / milestone / unscheduled row: open the quick-edit peek when
+   * the board has a status or percent column to edit; otherwise fall back to
+   * the ItemPanel so the peek never renders empty.
+   */
+  function handleItemTap(itemId: string, anchorRect: DOMRect) {
+    if (statusColumn || percentColumn) setQuickEdit({ itemId, anchorRect });
+    else openItemPanel(itemId);
+  }
 
   function persistConfig(next: {
     date_column_id?: string | null;
@@ -595,6 +638,7 @@ export function GanttBoard({
                   }
                   addDependency={mutations.addDependency}
                   removeDependency={mutations.removeDependency}
+                  onItemTap={handleItemTap}
                 />
               ))}
 
@@ -661,7 +705,34 @@ export function GanttBoard({
       </DndContext>
 
       {/* Unscheduled section */}
-      <UnscheduledSection rows={unscheduledRows} />
+      <UnscheduledSection rows={unscheduledRows} onItemTap={handleItemTap} />
+
+      {quickEdit && (
+        <ItemQuickEdit
+          target={quickEdit}
+          itemName={
+            cache.items.find((i) => i.id === quickEdit.itemId)?.name ?? ""
+          }
+          statusColumn={statusColumn ?? null}
+          percentColumn={percentColumn ?? null}
+          statusValue={
+            statusColumn
+              ? ((cellMap.get(cellKey(quickEdit.itemId, statusColumn.id)) ??
+                  null) as { optionId: string | null } | null)
+              : null
+          }
+          percentValue={
+            percentColumn
+              ? ((cellMap.get(cellKey(quickEdit.itemId, percentColumn.id)) ??
+                  null) as { percent: number } | null)
+              : null
+          }
+          setCell={mutations.setCell}
+          clearCellValue={mutations.clearCellValue}
+          onOpenItem={openItemPanel}
+          onClose={() => setQuickEdit(null)}
+        />
+      )}
     </div>
   );
 }
@@ -685,6 +756,7 @@ function GanttRowItem({
   onBarResized: handleBarResized,
   addDependency,
   removeDependency,
+  onItemTap,
 }: {
   row: GanttRow;
   rowIdx: number;
@@ -707,6 +779,9 @@ function GanttRowItem({
     callbacks?: { onError?: (err: Error) => void },
   ) => void;
   removeDependency: (vars: { dependencyId: string }) => void;
+  /** Plain tap (no drag activated) on the bar body or milestone — carries the
+   * element's rect so the board can anchor the quick-edit peek. */
+  onItemTap: (itemId: string, anchorRect: DOMRect) => void;
 }) {
   void rowIdx;
   void allRows;
@@ -779,6 +854,22 @@ function GanttRowItem({
   function handleResizeEnd() {
     resizeStartXRef.current = null;
     resizeStartEndRef.current = null;
+  }
+
+  /** Tap/Enter/Space on the bar body or milestone → quick-edit peek. dnd-kit
+   * suppresses the click when a drag actually activated (same behavior the
+   * calendar's EventBar relies on), so drags never open it. */
+  function handleTap(e: React.MouseEvent | React.KeyboardEvent) {
+    onItemTap(
+      row.itemId,
+      (e.currentTarget as HTMLElement).getBoundingClientRect(),
+    );
+  }
+  function handleTapKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleTap(e);
+    }
   }
 
   return (
@@ -880,7 +971,12 @@ function GanttRowItem({
             }}
             {...listeners}
             {...attributes}
+            role="button"
+            tabIndex={0}
             title={row.name}
+            aria-label={row.name}
+            onClick={handleTap}
+            onKeyDown={handleTapKeyDown}
           >
             <PresenceRing target={target} className="rounded-sm" />
           </div>
@@ -902,10 +998,16 @@ function GanttRowItem({
             }}
           >
             <PresenceRing target={target} />
-            {/* Drag handle covering most of the bar */}
+            {/* Drag handle covering most of the bar; a plain click (no drag
+                activated) opens the quick-edit peek. */}
             <div
               {...listeners}
               {...attributes}
+              role="button"
+              tabIndex={0}
+              aria-label={row.name}
+              onClick={handleTap}
+              onKeyDown={handleTapKeyDown}
               className="flex h-full flex-1 items-center overflow-hidden px-2"
             >
               <span
@@ -938,7 +1040,15 @@ function GanttRowItem({
 // UnscheduledSection
 // ---------------------------------------------------------------------------
 
-function UnscheduledSection({ rows }: { rows: GanttRow[] }) {
+function UnscheduledSection({
+  rows,
+  onItemTap,
+}: {
+  rows: GanttRow[];
+  /** Tap on a row — status/% are exactly what you'd triage on an unscheduled
+   * item, so rows open the quick-edit peek like bars do. */
+  onItemTap: (itemId: string, anchorRect: DOMRect) => void;
+}) {
   const [open, setOpen] = useState(false);
 
   if (rows.length === 0) return null;
@@ -959,11 +1069,16 @@ function UnscheduledSection({ rows }: { rows: GanttRow[] }) {
       </button>
       <ul hidden={!open} aria-hidden={!open} className="border-t px-6 py-2">
         {rows.map((row) => (
-          <li
-            key={row.itemId}
-            className="text-foreground truncate py-0.5 text-sm"
-          >
-            {row.name}
+          <li key={row.itemId} className="py-0.5">
+            <button
+              type="button"
+              onClick={(e) =>
+                onItemTap(row.itemId, e.currentTarget.getBoundingClientRect())
+              }
+              className="text-foreground hover:bg-accent focus-visible:ring-ring block w-full truncate rounded-md px-1 py-0.5 text-left text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11"
+            >
+              {row.name}
+            </button>
           </li>
         ))}
       </ul>

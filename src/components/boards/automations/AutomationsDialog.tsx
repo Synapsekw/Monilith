@@ -44,8 +44,13 @@ import {
   recipeDateReachedSetOption,
   recipeDueSoonNotifyOwner,
   recipeStatusChangedWebhook,
+  recipeCompletedSetsPercent,
+  recipePercentSetsCompleted,
   type Draft,
 } from "@/components/boards/automations/recipes";
+
+/** The completeness vocabulary shared with the overdue tint (spec §1). */
+const DONE_LABEL = /done|complete/i;
 
 function automationsKey(boardId: string) {
   return ["automations", boardId] as const;
@@ -122,6 +127,8 @@ function summarize(
         : trigger.offsetDays < 0
           ? `When ${col} is in ${n} day${n === 1 ? "" : "s"}`
           : `When ${col} is ${n} day${n === 1 ? "" : "s"} overdue`;
+  } else if (trigger.type === "percent_reached") {
+    when = `When ${colName(columns, trigger.columnId)} reaches ${trigger.percent}%`;
   } else {
     when =
       trigger.toOptionId == null
@@ -151,6 +158,9 @@ function summarize(
     }
     if (a.type === "move_to_group") {
       return `move to ${groupName(groups, a.groupId)}`;
+    }
+    if (a.type === "set_percent") {
+      return `set ${colName(columns, a.columnId)} to ${a.percent}%`;
     }
     return "do nothing";
   });
@@ -258,11 +268,32 @@ export function AutomationsDialog({
     () => columns.filter((c) => c.kind === "date"),
     [columns],
   );
+  // Percent-sync recipes need a real status column (the completeness column,
+  // matching the overdue tint's definition) plus a percent column.
+  const pureStatusColumns = useMemo(
+    () => columns.filter((c) => c.kind === "status"),
+    [columns],
+  );
+  const percentColumns = useMemo(
+    () => columns.filter((c) => c.kind === "percent"),
+    [columns],
+  );
   const canNotifyOwner = statusColumns.length > 0 && peopleColumns.length > 0;
   const canSetOption = statusColumns.length >= 2;
   const canDateReachedSetOption =
     dateColumns.length > 0 && statusColumns.length > 0;
   const canDueSoonNotify = dateColumns.length > 0 && peopleColumns.length > 0;
+  const canPercentSync =
+    pureStatusColumns.length > 0 && percentColumns.length > 0;
+
+  /** First /done|complete/i-labeled option of the first status column
+   *  (fallback: its first option — the builder's picker lets the user correct it). */
+  function doneOptionId(): string {
+    const opts = pureStatusColumns[0]
+      ? columnOptions(pureStatusColumns[0])
+      : [];
+    return (opts.find((o) => DONE_LABEL.test(o.label)) ?? opts[0])?.id ?? "";
+  }
 
   function startBuild(draft?: Draft) {
     setError(null);
@@ -301,7 +332,8 @@ export function AutomationsDialog({
               statusColumns.length > 0 ||
               peopleColumns.length > 0 ||
               canDateReachedSetOption ||
-              canDueSoonNotify) &&
+              canDueSoonNotify ||
+              canPercentSync) &&
             !initialDraft ? (
               <div className="flex flex-col gap-2">
                 <p className="text-muted-foreground text-xs font-medium">
@@ -406,6 +438,40 @@ export function AutomationsDialog({
                       }
                     >
                       Notify owner before due date
+                    </Button>
+                  ) : null}
+                  {canPercentSync ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        startBuild(
+                          recipeCompletedSetsPercent(
+                            pureStatusColumns[0].id,
+                            doneOptionId(),
+                            percentColumns[0].id,
+                          ),
+                        )
+                      }
+                    >
+                      Completed sets 100%
+                    </Button>
+                  ) : null}
+                  {canPercentSync ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        startBuild(
+                          recipePercentSetsCompleted(
+                            percentColumns[0].id,
+                            pureStatusColumns[0].id,
+                            doneOptionId(),
+                          ),
+                        )
+                      }
+                    >
+                      100% sets Completed
                     </Button>
                   ) : null}
                   {isAdmin && statusColumns.length > 0 ? (

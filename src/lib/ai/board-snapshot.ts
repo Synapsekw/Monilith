@@ -42,6 +42,8 @@ function isFilled(kind: string, v: unknown): boolean {
     case "percent":
     case "rating":
       return typeof o.n === "number" && Number.isFinite(o.n);
+    case "currency":
+      return typeof o.amount === "number" && Number.isFinite(o.amount);
     case "checkbox":
       return o.checked === true;
     case "text":
@@ -117,9 +119,14 @@ export function buildBoardSnapshot(input: {
     } else if (
       col.kind === "numbers" ||
       col.kind === "percent" ||
-      col.kind === "rating"
+      col.kind === "rating" ||
+      col.kind === "currency"
     ) {
-      const ns = cells.map((c) => (c.value as { n: number }).n);
+      const ns = cells.map((c) =>
+        col.kind === "currency"
+          ? (c.value as { amount: number }).amount
+          : (c.value as { n: number }).n,
+      );
       if (ns.length) {
         const sum = ns.reduce((a, b) => a + b, 0);
         stats.numeric = {

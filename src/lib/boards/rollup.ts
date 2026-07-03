@@ -14,6 +14,7 @@ export type RollupResult =
   | { kind: "checkbox"; checked: number; total: number }
   | { kind: "rating"; average: number }
   | { kind: "percent"; average: number }
+  | { kind: "currency"; total: number; currency: string }
   | { kind: "duration"; totalSecs: number; estimateSecs?: number };
 
 type Options = readonly ColumnOption[] | undefined;
@@ -27,6 +28,7 @@ export function rollupCell(
   kind: ColumnKind,
   values: readonly unknown[],
   options?: Options,
+  currency?: string,
 ): RollupResult {
   const present = values.filter((v) => v != null);
   if (present.length === 0) return { kind: "blank" };
@@ -118,6 +120,21 @@ export function rollupCell(
       }
       return n
         ? { kind: "percent", average: Math.round(sum / n) }
+        : { kind: "blank" };
+    }
+    case "currency": {
+      // Money SUMS on the collapsed parent (contrast percent, which averages).
+      let total = 0;
+      let any = false;
+      for (const v of present) {
+        const a = (v as { amount?: unknown }).amount;
+        if (typeof a === "number" && Number.isFinite(a)) {
+          total += a;
+          any = true;
+        }
+      }
+      return any
+        ? { kind: "currency", total, currency: currency ?? "USD" }
         : { kind: "blank" };
     }
     case "text":

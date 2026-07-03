@@ -1,15 +1,13 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import {
-  aggregate,
-  type AggregateResult,
-} from "@/lib/boards/aggregation";
+import { aggregate, type AggregateResult } from "@/lib/boards/aggregation";
 import type {
   AggregationId,
   ColumnKind,
   ColumnOption,
 } from "@/lib/validations/boards";
+import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import { formatDuration } from "@/lib/boards/time-format";
 import {
   DropdownMenu,
@@ -45,16 +43,30 @@ function fmtDate(iso: string): string {
   });
 }
 
-/** Pure presentational renderer for a computed footer aggregate. */
-export function FooterValue({ result }: { result: AggregateResult }) {
+/** Pure presentational renderer for a computed footer aggregate.
+ *  `dirhamSign` is the column's AED display flag (absent = default ON) —
+ *  only consulted when the result carries the currency style. */
+export function FooterValue({
+  result,
+  dirhamSign,
+}: {
+  result: AggregateResult;
+  dirhamSign?: boolean;
+}) {
   switch (result.kind) {
     case "empty":
       return null;
     case "number":
       return (
         <span className="text-foreground text-sm font-medium tabular-nums">
-          {result.value}
-          {result.style === "percent" ? "%" : ""}
+          {result.style === "currency" && result.currency ? (
+            <CurrencyAmount
+              amount={result.value}
+              settings={{ currency: result.currency, dirham_sign: dirhamSign }}
+            />
+          ) : (
+            `${result.value}${result.style === "percent" ? "%" : ""}`
+          )}
         </span>
       );
     case "checkbox":
@@ -117,6 +129,10 @@ export type FooterCellProps = {
   values: readonly unknown[];
   /** Options for distribution rendering (status/dropdown). */
   options?: readonly ColumnOption[];
+  /** ISO 4217 code when aggregateKind is currency (formats numeric results). */
+  currency?: string;
+  /** AED dirham-sign display flag from the column settings (absent = ON). */
+  dirhamSign?: boolean;
   /** The currently chosen aggregation, if any. */
   current?: AggregationId;
   /** Allowed aggregations for the picker (default-first). */
@@ -137,13 +153,15 @@ export function FooterCell({
   aggregateKind,
   values,
   options,
+  currency,
+  dirhamSign,
   current,
   allowed,
   canEdit,
   onChange,
 }: FooterCellProps) {
   const result: AggregateResult = current
-    ? aggregate(aggregateKind, current, values, options)
+    ? aggregate(aggregateKind, current, values, options, currency)
     : { kind: "empty" };
 
   const label = current ? AGGREGATION_LABEL[current] : null;
@@ -151,11 +169,11 @@ export function FooterCell({
   const body = (
     <span className="flex min-w-0 items-center gap-1.5 truncate">
       {label && result.kind !== "empty" && (
-        <span className="text-muted-foreground shrink-0 text-[11px] uppercase tracking-wide">
+        <span className="text-muted-foreground shrink-0 text-[11px] tracking-wide uppercase">
           {label}
         </span>
       )}
-      <FooterValue result={result} />
+      <FooterValue result={result} dirhamSign={dirhamSign} />
       {!current && canEdit && (
         <span className="text-muted-foreground/60 text-xs">Summary</span>
       )}

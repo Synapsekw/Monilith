@@ -20,6 +20,7 @@ export type BoardOption = {
   dateColumns: { id: string; name: string }[];
   peopleColumns: { id: string; name: string }[];
   dropdownColumns: { id: string; name: string }[];
+  percentColumns: { id: string; name: string }[];
   allColumns: {
     id: string;
     name: string;
@@ -29,7 +30,7 @@ export type BoardOption = {
 };
 
 export type WidgetDraft = {
-  kind: "number" | "chart" | "battery" | "list";
+  kind: "number" | "chart" | "battery" | "list" | "completion";
   sourceBoardId: string;
   title: string;
   config: Record<string, unknown>;
@@ -177,6 +178,7 @@ export function WidgetConfigForm({
           <option value="chart">Chart</option>
           <option value="battery">Battery</option>
           <option value="list">List</option>
+          <option value="completion">Completion</option>
         </select>
       </label>
 
@@ -280,6 +282,8 @@ export function WidgetConfigForm({
             ))}
           </select>
         </label>
+      ) : value.kind === "completion" ? (
+        <CompletionFields board={board} cfg={cfg} patchConfig={patchConfig} />
       ) : (
         <ListFields board={board} cfg={cfg} patchConfig={patchConfig} />
       )}
@@ -303,6 +307,10 @@ export function defaultConfig(
       return {};
     case "list":
       return { columnIds: [], limit: 25 };
+    case "completion":
+      // Status mode default: every board template ships a status column;
+      // percent columns are opt-in.
+      return { mode: "status", doneOptionIds: [] };
   }
 }
 
@@ -476,6 +484,146 @@ function NumberFields({
           />
         </label>
       ) : null}
+    </>
+  );
+}
+
+/** Config fields for the Completion widget: pick the completion semantics
+ *  (percent column average vs. status done-set share) and the column(s) it
+ *  reads. Picking a status column pre-checks done-looking options — an
+ *  editable head start, never a hidden rule. Module scope for a stable
+ *  identity (react-hooks/static-components), like NumberFields. */
+function CompletionFields({
+  board,
+  cfg,
+  patchConfig,
+}: {
+  board: BoardOption | undefined;
+  cfg: Record<string, unknown>;
+  patchConfig: (n: Record<string, unknown>) => void;
+}) {
+  const mode = (cfg.mode as string) ?? "status";
+  const statusCols = board?.statusColumns ?? [];
+  const percentCols = board?.percentColumns ?? [];
+  const statusColumnId = (cfg.statusColumnId as string) ?? "";
+  const options =
+    board?.allColumns.find((c) => c.id === statusColumnId)?.options ?? [];
+  const doneOptionIds = (cfg.doneOptionIds as string[]) ?? [];
+
+  return (
+    <>
+      <label className="text-sm">
+        Completion source
+        <select
+          aria-label="Completion source"
+          className={selectClass}
+          value={mode}
+          onChange={(e) =>
+            patchConfig(
+              e.target.value === "percent"
+                ? {
+                    mode: "percent",
+                    statusColumnId: undefined,
+                    doneOptionIds: [],
+                  }
+                : { mode: "status", percentColumnId: undefined },
+            )
+          }
+        >
+          <option value="status">Status (done options)</option>
+          <option value="percent">Percent column</option>
+        </select>
+      </label>
+
+      {mode === "percent" ? (
+        <>
+          <label className="text-sm">
+            Percent column
+            <select
+              aria-label="Percent column"
+              className={selectClass}
+              value={(cfg.percentColumnId as string) ?? ""}
+              onChange={(e) => patchConfig({ percentColumnId: e.target.value })}
+            >
+              <option value="">Select…</option>
+              {percentCols.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {percentCols.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              Add a Percent column to this board to use percent mode.
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <label className="text-sm">
+            Status column
+            <select
+              aria-label="Status column"
+              className={selectClass}
+              value={statusColumnId}
+              onChange={(e) => {
+                const colId = e.target.value;
+                const opts =
+                  board?.allColumns.find((c) => c.id === colId)?.options ?? [];
+                // Pre-check done-like options; the user can edit the set.
+                const preset = opts
+                  .filter((o) => /done|complete|finished/i.test(o.label))
+                  .map((o) => o.id);
+                patchConfig({ statusColumnId: colId, doneOptionIds: preset });
+              }}
+            >
+              <option value="">Select…</option>
+              {statusCols.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {statusCols.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              Add a Status column to this board to use status mode.
+            </p>
+          ) : null}
+          {statusColumnId ? (
+            <fieldset className="text-sm">
+              <legend className="mb-1">Counts as done</legend>
+              <div className="flex flex-col gap-1 rounded-md border p-2">
+                {options.map((o) => (
+                  <label key={o.id} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="accent-primary size-4"
+                      checked={doneOptionIds.includes(o.id)}
+                      onChange={(e) =>
+                        patchConfig({
+                          doneOptionIds: e.target.checked
+                            ? [...doneOptionIds, o.id]
+                            : doneOptionIds.filter((id) => id !== o.id),
+                        })
+                      }
+                    />
+                    <span
+                      className="size-2.5 rounded-sm"
+                      style={{
+                        backgroundColor: o.color ?? "var(--muted-foreground)",
+                      }}
+                      aria-hidden
+                    />
+                    {o.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+        </>
+      )}
     </>
   );
 }

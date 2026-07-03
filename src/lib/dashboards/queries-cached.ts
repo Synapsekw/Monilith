@@ -4,7 +4,13 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { dashboardsTag, widgetAggregationTag } from "@/lib/cache/tags";
 import { optionSchema } from "@/lib/validations/boards";
 import type { Dashboard } from "@/lib/dashboards/queries";
-import type { AggregateBucket, ColumnMeta } from "@/lib/dashboards/widget-data";
+import type {
+  AggregateBucket,
+  ColumnMeta,
+  CompletionGroupRow,
+  GroupMeta,
+} from "@/lib/dashboards/widget-data";
+import type { Json } from "@/types/database.types";
 
 /** Hot-path cap (AGENTS.md: bounded reads over dashboards_org_id_idx).
  * Truncates silently at the cap. */
@@ -90,4 +96,68 @@ export async function getWidgetAggregationCached(input: {
   }
 
   return { ok: true, buckets, columnMeta };
+}
+
+export type WidgetCompletion =
+  | { ok: true; rows: CompletionGroupRow[]; groups: GroupMeta[] }
+  | { ok: false; error: string };
+
+/**
+ * Cached completion read for the Completion widget — the 9.3b contract verbatim:
+ * the caller resolves orgId/boardId from the widget row (tenant boundary), the
+ * entry is keyed by org+widget+config and tagged widgetAggregationTag so the
+ * existing create/update/delete updateTag calls invalidate it with zero new
+ * code. Board-data freshness is TTL-bounded (cacheLife "widget", ~30s), the
+ * same tradeoff as getWidgetAggregationCached. Group meta (name/color,
+ * position order) is resolved here so renames/recolors surface within the TTL.
+ */
+export async function getWidgetCompletionCached(input: {
+  widgetId: string;
+  orgId: string;
+  boardId: string;
+  config: Record<string, unknown>;
+}): Promise<WidgetCompletion> {
+  "use cache";
+  cacheLife("widget");
+  cacheTag(widgetAggregationTag(input.orgId, input.widgetId));
+
+  const mode = (input.config.mode as string) ?? "status";
+  const valueColumnId =
+    mode === "percent"
+      ? ((input.config.percentColumnId as string | undefined) ?? null)
+      : ((input.config.statusColumnId as string | undefined) ?? null);
+  // Unconfigured widget → empty result (widget renders its configure state).
+  if (!valueColumnId) return { ok: true, rows: [], groups: [] };
+
+  const supabase = createServiceClient();
+  const [rpc, groupsRes] = await Promise.all([
+    supabase.rpc("dashboard_completion", {
+      p_board_id: input.boardId,
+      p_mode: mode,
+      p_value_column_id: valueColumnId,
+      p_done_option_ids: ((input.config.doneOptionIds as string[]) ??
+        []) as Json,
+    }),
+    supabase
+      .from("groups")
+      .select("id, name, color")
+      .eq("board_id", input.boardId)
+      .order("position", { ascending: true })
+      .limit(100), // bounded: groups are user-managed row bands (groups_board_id_idx)
+  ]);
+  if (rpc.error) return { ok: false, error: rpc.error.message };
+
+  return {
+    ok: true,
+    rows: (rpc.data ?? []).map((r) => ({
+      groupKey: r.group_key,
+      itemCount: Number(r.item_count),
+      completion: Number(r.completion),
+    })),
+    groups: (groupsRes.data ?? []).map((g) => ({
+      id: g.id,
+      label: g.name,
+      color: g.color,
+    })),
+  };
 }

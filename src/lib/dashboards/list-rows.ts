@@ -1,4 +1,5 @@
 import type { ColumnOption } from "@/lib/dashboards/widget-data";
+import { currencyOf, formatCurrency } from "@/lib/boards/currency";
 
 /** A displayed column in a List widget: id/name/kind + (for status/dropdown) options. */
 export type DisplayColumn = {
@@ -6,6 +7,8 @@ export type DisplayColumn = {
   name: string;
   kind: string;
   options: ColumnOption[];
+  /** Raw columns.settings jsonb — currency reads its ISO code from here. */
+  settings?: unknown;
 };
 
 /** A rendered cell: text plus an optional pill color (status). */
@@ -21,6 +24,10 @@ export function formatCell(column: DisplayColumn, value: unknown): CellDisplay {
       return typeof v.text === "string" && v.text ? { text: v.text } : EMPTY;
     case "numbers":
       return typeof v.n === "number" ? { text: String(v.n) } : EMPTY;
+    case "currency":
+      return typeof v.amount === "number"
+        ? { text: formatCurrency(v.amount, currencyOf(column.settings)) }
+        : EMPTY;
     case "date":
       return typeof v.date === "string" && v.date ? { text: v.date } : EMPTY;
     case "status": {
