@@ -63,4 +63,35 @@ describe("getBoardPayload error contract", () => {
     expect(payload?.board).toEqual(BOARD_ROW);
     expect(payload?.items).toEqual([]);
   });
+
+  it("bounds the items and cell_values reads with .limit(...)", async () => {
+    // Record every .limit(n) call, keyed by table. With an all-empty fixture the
+    // mirror branch never fires (no mirror columns), so cell_values is read once —
+    // the board-scoped read — and its only limit is 20000.
+    const limits: Record<string, number[]> = {};
+    from.mockImplementation((table: string) => {
+      const result: Result =
+        table === "boards"
+          ? { data: BOARD_ROW, error: null }
+          : { data: [], error: null };
+      const chain: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "order", "not", "in"])
+        chain[m] = () => chain;
+      chain.limit = (n: number) => {
+        (limits[table] ??= []).push(n);
+        return chain;
+      };
+      chain.maybeSingle = async () => result;
+      (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
+        resolve(result);
+      return chain;
+    });
+
+    await getBoardPayload("b5");
+
+    expect(limits["items"]).toContain(5000);
+    expect(limits["cell_values"]).toContain(20000);
+    // Only the board-scoped cell_values read fires (no mirror columns).
+    expect(limits["cell_values"]).toEqual([20000]);
+  });
 });
