@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import {
+  CellRenderer,
   CheckboxCell,
   CurrencyCell,
   DateCell,
@@ -396,5 +397,70 @@ describe("BoardTable Name column rename", () => {
       itemId: "i1",
       name: "Renamed",
     });
+  });
+});
+
+describe("PriorityCell", () => {
+  it("renders a red Critical pill for a manual critical value", () => {
+    render(
+      <CellRenderer
+        kind="priority"
+        value={{ level: "critical" }}
+        settings={{}}
+        dependents={0}
+      />,
+    );
+    const pill = screen.getByText("Critical");
+    expect(pill.closest("span")).toHaveClass("bg-status-red");
+    expect(screen.queryByLabelText(/auto/i)).not.toBeInTheDocument();
+  });
+  it("renders the auto variant with count explanation at 2+ dependents", () => {
+    render(
+      <CellRenderer
+        kind="priority"
+        value={null}
+        settings={{}}
+        dependents={3}
+      />,
+    );
+    const pill = screen.getByLabelText(
+      "Critical (auto) — 3 items depend on this",
+    );
+    expect(pill).toHaveTextContent("Critical");
+  });
+  it("auto overrides an explicit normal", () => {
+    render(
+      <CellRenderer
+        kind="priority"
+        value={{ level: "normal" }}
+        settings={{}}
+        dependents={2}
+      />,
+    );
+    expect(screen.getByText("Critical")).toBeInTheDocument();
+  });
+  it("renders explicit normal as quiet text", () => {
+    render(
+      <CellRenderer
+        kind="priority"
+        value={{ level: "normal" }}
+        settings={{}}
+        dependents={1}
+      />,
+    );
+    const el = screen.getByText("Normal");
+    expect(el).toHaveClass("text-muted-foreground");
+  });
+  it("renders blank when unset and below threshold", () => {
+    const { container } = render(
+      <CellRenderer
+        kind="priority"
+        value={null}
+        settings={{}}
+        dependents={1}
+      />,
+    );
+    expect(container).not.toHaveTextContent("Critical");
+    expect(container).not.toHaveTextContent("Normal");
   });
 });

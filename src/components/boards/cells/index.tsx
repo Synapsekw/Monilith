@@ -1,8 +1,9 @@
-import { Check, Star } from "lucide-react";
+import { Check, Network, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
 import { percentBandColor } from "@/lib/boards/percent-color";
+import { effectivePriority } from "@/lib/boards/priority";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
@@ -228,6 +229,43 @@ export function CurrencyCell({
   );
 }
 
+/**
+ * Priority cell — fixed Normal/Critical vocabulary. Critical is the earned
+ * red (status token, never raw color); the auto variant (>= 2 dependents,
+ * derived render-time — see @/lib/boards/priority) adds a small network icon
+ * and a title/aria explanation so "auto" never reads as a stuck manual value.
+ */
+export function PriorityCell({
+  value,
+  dependents = 0,
+}: {
+  value: { level: "normal" | "critical" } | null;
+  settings: Settings;
+  /** Direct dependents of this item (derived at the row-render site). */
+  dependents?: number;
+}) {
+  const { level, auto } = effectivePriority(value, dependents);
+  if (level === "critical") {
+    const label = auto
+      ? `Critical (auto) — ${dependents} items depend on this`
+      : "Critical";
+    return (
+      <span
+        aria-label={label}
+        title={label}
+        className="bg-status-red inline-flex max-w-full items-center gap-1 truncate rounded-md px-2.5 py-0.5 text-xs font-medium text-white"
+      >
+        {auto && <Network className="size-3 shrink-0" aria-hidden />}
+        Critical
+      </span>
+    );
+  }
+  // Explicit Normal reads as quiet metadata; unset stays blank (no per-row noise).
+  if (value?.level === "normal")
+    return <span className="text-muted-foreground text-sm">Normal</span>;
+  return <span className="text-sm" />;
+}
+
 export function RatingCell({
   value,
 }: {
@@ -314,6 +352,7 @@ export function CellRenderer({
   settings,
   members,
   overdue,
+  dependents,
 }: {
   kind: string;
   value: unknown;
@@ -321,6 +360,8 @@ export function CellRenderer({
   members?: EditorMember[];
   /** Date cells only: past-due + incomplete (see @/lib/boards/overdue). */
   overdue?: boolean;
+  /** Priority cells only: direct dependents of the item — see @/lib/boards/priority. */
+  dependents?: number;
 }) {
   switch (kind) {
     case "text":
@@ -390,6 +431,14 @@ export function CellRenderer({
         <CurrencyCell
           value={value as { amount: number } | null}
           settings={settings}
+        />
+      );
+    case "priority":
+      return (
+        <PriorityCell
+          value={value as { level: "normal" | "critical" } | null}
+          settings={settings}
+          dependents={dependents}
         />
       );
     case "link":
