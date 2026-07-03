@@ -70,6 +70,10 @@ function describeCell(
       const v = value as { n?: number };
       return v.n != null ? String(v.n) : null;
     }
+    case "currency": {
+      const v = value as { amount?: number };
+      return v.amount != null ? String(v.amount) : null;
+    }
     case "time_tracking": {
       // The only cell_values change a time-tracking column emits is an estimate
       // edit (timer/manual sessions live in time_entries); show it as a duration.

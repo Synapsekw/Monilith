@@ -6,8 +6,9 @@ describe("spreadsheet types", () => {
     expect(SUBTASK_MARKER).toBe("↳ ");
     expect(MAX_COLS).toBe(40);
   });
-  it("lists 11 importable kinds without people/relation/mirror/files/time_tracking", () => {
-    expect(IMPORTABLE_KINDS).toHaveLength(11);
+  it("lists 12 importable kinds without people/relation/mirror/files/time_tracking", () => {
+    expect(IMPORTABLE_KINDS).toHaveLength(12);
+    expect(IMPORTABLE_KINDS).toContain("currency");
     expect(IMPORTABLE_KINDS).not.toContain("people");
   });
 });

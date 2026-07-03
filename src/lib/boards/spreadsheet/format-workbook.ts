@@ -1,6 +1,7 @@
 import type ExcelJS from "exceljs";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
+import { currencyDecimals, isCurrencyCode } from "@/lib/boards/currency";
 
 /** Six red→green bands mirroring src/lib/boards/percent-color.ts.
  *  Hex values are sRGB freezes of the light-mode --progress-* OKLCH tokens
@@ -49,9 +50,20 @@ export const KIND_WIDTHS: Partial<Record<ColumnKind, number>> = {
   date: 12,
   percent: 12,
   numbers: 10,
+  currency: 14,
   checkbox: 10,
   rating: 8,
 };
+
+/** Excel number format for a currency column: real numbers displayed as
+ *  `AED 1,234.56` (decimals per the code's minor units — KWD 3, JPY 0).
+ *  Always the ISO code as literal text, never U+20C3 (no font support yet,
+ *  spec §5.4) — the stored cell stays a plain re-importable number. */
+export function currencyNumFmt(code: string): string {
+  const d = isCurrencyCode(code) ? currencyDecimals(code) : 2;
+  const frac = d > 0 ? `.${"0".repeat(d)}` : "";
+  return `"${code}" #,##0${frac}`;
+}
 
 /** "#rgb"/"#rrggbb" → exceljs ARGB ("FFRRGGBB"); null when unparseable. */
 export function argb(hex: string): string | null {
@@ -112,6 +124,8 @@ export type FormatPlan = {
   optionFills: { rowNumber: number; colIndex: number; hex: string }[];
   /** Percent cells with their numeric value (0–100). */
   percentCells: { rowNumber: number; colIndex: number; value: number }[];
+  /** Currency cells with their column's ISO 4217 code. */
+  currencyCells: { rowNumber: number; colIndex: number; code: string }[];
 };
 
 /** Apply all board-fidelity styling to a fully-populated worksheet. Best-effort:
@@ -176,6 +190,14 @@ export function applyWorkbookFormatting(
   // Percent display format ("60%" while the stored value stays 60 → round-trip safe).
   for (const pc of plan.percentCells) {
     ws.getRow(pc.rowNumber).getCell(pc.colIndex).numFmt = '0"%"';
+  }
+
+  // Currency display format ("AED 1,234.56" while the stored value stays the
+  // raw number → round-trip safe; always the ISO code, never the U+20C3 glyph).
+  for (const cc of plan.currencyCells) {
+    ws.getRow(cc.rowNumber).getCell(cc.colIndex).numFmt = currencyNumFmt(
+      cc.code,
+    );
   }
 
   applyPercentDataBars(ws, plan);

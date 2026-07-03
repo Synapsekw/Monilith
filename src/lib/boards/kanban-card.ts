@@ -10,7 +10,13 @@ const PILL_KINDS = new Set(["status", "dropdown"]);
  * Column kinds surfaced in the quiet, icon-prefixed meta footer of a Kanban
  * card. Each reads as metadata (date · people · percent · number), not a label.
  */
-const META_KINDS = new Set(["date", "people", "percent", "numbers"]);
+const META_KINDS = new Set([
+  "date",
+  "people",
+  "percent",
+  "numbers",
+  "currency",
+]);
 
 export type CardColumns = { pills: CacheColumn[]; meta: CacheColumn[] };
 
@@ -58,6 +64,8 @@ export function isCardCellEmpty(kind: string, value: unknown): boolean {
       return typeof v.percent !== "number";
     case "numbers":
       return typeof v.n !== "number";
+    case "currency":
+      return typeof v.amount !== "number";
     default:
       return false;
   }

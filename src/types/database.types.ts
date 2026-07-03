@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5";
   };
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
       admin_audit_log: {
@@ -2274,6 +2249,19 @@ export type Database = {
           metric: number;
         }[];
       };
+      dashboard_completion: {
+        Args: {
+          p_board_id: string;
+          p_done_option_ids?: Json;
+          p_mode: string;
+          p_value_column_id: string;
+        };
+        Returns: {
+          completion: number;
+          group_key: string;
+          item_count: number;
+        }[];
+      };
       dashboard_list_rows: {
         Args: { p_board_id: string; p_filter?: Json; p_limit?: number };
         Returns: {
@@ -2469,6 +2457,7 @@ export type Database = {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
       };
+      readable_board_ids: { Args: never; Returns: string[] };
       redeem_invitations: { Args: never; Returns: number };
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
@@ -2608,7 +2597,8 @@ export type Database = {
         | "time_tracking"
         | "relation"
         | "mirror"
-        | "percent";
+        | "percent"
+        | "currency";
       goal_progress_mode:
         | "manual_number"
         | "manual_percent"
@@ -2625,7 +2615,7 @@ export type Database = {
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
-      widget_kind: "number" | "chart" | "battery" | "list";
+      widget_kind: "number" | "chart" | "battery" | "list" | "completion";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -2754,9 +2744,6 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       activity_action: [
@@ -2785,6 +2772,7 @@ export const Constants = {
         "relation",
         "mirror",
         "percent",
+        "currency",
       ],
       goal_progress_mode: [
         "manual_number",
@@ -2804,7 +2792,7 @@ export const Constants = {
       portfolio_health: ["on_track", "at_risk", "off_track"],
       portfolio_priority: ["low", "medium", "high", "critical"],
       view_kind: ["table", "kanban", "calendar", "timeline"],
-      widget_kind: ["number", "chart", "battery", "list"],
+      widget_kind: ["number", "chart", "battery", "list", "completion"],
     },
   },
 } as const;

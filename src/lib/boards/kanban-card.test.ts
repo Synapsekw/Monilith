@@ -108,4 +108,16 @@ describe("isCardCellEmpty", () => {
     expect(isCardCellEmpty("numbers", null)).toBe(true);
     expect(isCardCellEmpty("numbers", { n: 0 })).toBe(false);
   });
+
+  it("currency: surfaces in card meta and detects empties", () => {
+    const { meta } = selectCardColumns(
+      [col("group", "status", 0), col("budget", "currency", 1)],
+      "group",
+    );
+    expect(meta.map((c) => c.id)).toEqual(["budget"]);
+    expect(isCardCellEmpty("currency", { amount: 3 })).toBe(false);
+    expect(isCardCellEmpty("currency", { amount: 0 })).toBe(false);
+    expect(isCardCellEmpty("currency", {})).toBe(true);
+    expect(isCardCellEmpty("currency", null)).toBe(true);
+  });
 });

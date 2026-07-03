@@ -491,3 +491,40 @@ describe("cellToExcelValue", () => {
     expect(cellToExcelValue("percent", "x", null)).toBe("");
   });
 });
+
+// ---------------------------------------------------------------------------
+// currency codec
+// ---------------------------------------------------------------------------
+describe("currency codec", () => {
+  it("exports the raw amount", () => {
+    expect(
+      cellToText("currency", { amount: 1234.5 }, { currency: "USD" }),
+    ).toBe("1234.5");
+  });
+
+  it("exports blank for missing/malformed amount", () => {
+    expect(cellToText("currency", {}, { currency: "USD" })).toBe("");
+    expect(cellToText("currency", null, { currency: "USD" })).toBe("");
+    expect(cellToText("currency", { amount: "x" }, { currency: "USD" })).toBe(
+      "",
+    );
+  });
+
+  it("imports symbol/grouping-decorated strings", () => {
+    expect(textToCell("currency", "$1,234.50", [])).toEqual({ amount: 1234.5 });
+    expect(textToCell("currency", "-20", [])).toEqual({ amount: -20 });
+    expect(textToCell("currency", "abc", [])).toBeNull();
+  });
+
+  it("round-trips currency through cellToText → textToCell", () => {
+    const text = cellToText("currency", { amount: 99.25 }, { currency: "KWD" });
+    expect(textToCell("currency", text, [])).toEqual({ amount: 99.25 });
+  });
+
+  it("cellToExcelValue exports currency as a real number", () => {
+    expect(
+      cellToExcelValue("currency", { amount: 1234.5 }, { currency: "AED" }),
+    ).toBe(1234.5);
+    expect(cellToExcelValue("currency", null, { currency: "AED" })).toBe("");
+  });
+});

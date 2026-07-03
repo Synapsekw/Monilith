@@ -15,6 +15,7 @@ import {
   Waypoints,
   FoldHorizontal,
   Percent,
+  Banknote,
 } from "lucide-react";
 
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -43,6 +44,7 @@ export const COLUMN_KIND_META: Record<ColumnKind, KindMeta> = {
   relation: { label: "Relation", Icon: Waypoints, hasOptions: false },
   mirror: { label: "Mirror", Icon: FoldHorizontal, hasOptions: false },
   percent: { label: "Percent", Icon: Percent, hasOptions: false },
+  currency: { label: "Currency", Icon: Banknote, hasOptions: false },
 };
 
 export const COLUMN_KIND_ORDER: ColumnKind[] = [
@@ -62,4 +64,5 @@ export const COLUMN_KIND_ORDER: ColumnKind[] = [
   "relation",
   "mirror",
   "percent",
+  "currency",
 ];

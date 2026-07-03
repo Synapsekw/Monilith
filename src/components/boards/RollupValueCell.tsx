@@ -78,10 +78,19 @@ export function RollupValueCell({
   const values = items.map((c) => cellMap.get(cellKey(c.id, col.id)) ?? null);
   const settings = (col.settings ?? {}) as {
     options?: Parameters<typeof rollupCell>[2];
+    currency?: string;
   };
   return (
     <div className={CELL_CLASS}>
-      <RollupCell result={rollupCell(col.kind, values, settings.options)} />
+      <RollupCell
+        result={rollupCell(
+          col.kind,
+          values,
+          settings.options,
+          settings.currency,
+        )}
+        currencySettings={col.settings}
+      />
     </div>
   );
 }

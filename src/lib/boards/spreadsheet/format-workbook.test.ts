@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import {
   applyWorkbookFormatting,
   argb,
+  currencyNumFmt,
   optionFillHex,
   percentBand,
   KIND_WIDTHS,
@@ -38,6 +39,7 @@ const basePlan: FormatPlan = {
     { rowNumber: 2, colIndex: 4, value: 60 },
     { rowNumber: 3, colIndex: 4, value: 100 },
   ],
+  currencyCells: [],
 };
 const baseRows = [
   ["Backlog", "Build login", "Done", 60],
@@ -166,6 +168,7 @@ describe("applyWorkbookFormatting — percent data bars", () => {
         { rowNumber: 3, colIndex: 4, value: 15 }, // red (same rule)
         { rowNumber: 4, colIndex: 4, value: 100 }, // complete
       ],
+      currencyCells: [],
     };
     const ws = await roundTrip(plan, [
       ["Backlog", "a", "", 10],
@@ -213,5 +216,35 @@ describe("applyWorkbookFormatting — percent data bars", () => {
     expect(
       cfs.filter((cf) => cf.rules.some((r) => r.type === "dataBar")),
     ).toHaveLength(0);
+  });
+});
+
+describe("currencyNumFmt", () => {
+  it("formats with the ISO code as literal text and minor-unit decimals", () => {
+    expect(currencyNumFmt("USD")).toBe('"USD" #,##0.00');
+    expect(currencyNumFmt("KWD")).toBe('"KWD" #,##0.000');
+    expect(currencyNumFmt("JPY")).toBe('"JPY" #,##0');
+    // AED stays the ISO code in exports — never the U+20C3 glyph.
+    expect(currencyNumFmt("AED")).toBe('"AED" #,##0.00');
+  });
+  it("degrades unknown codes to 2 decimals", () => {
+    expect(currencyNumFmt("ZZZ")).toBe('"ZZZ" #,##0.00');
+  });
+});
+
+describe("applyWorkbookFormatting — currency number format", () => {
+  it("applies the column currency's numFmt while the stored value stays numeric", async () => {
+    const plan: FormatPlan = {
+      ...basePlan,
+      percentCells: [],
+      currencyCells: [{ rowNumber: 2, colIndex: 4, code: "AED" }],
+    };
+    const ws = await roundTrip(plan, [
+      ["Backlog", "Build login", "Done", 1234.5],
+      ["Backlog", "↳ sub", "", ""],
+    ]);
+    const cell = ws.getRow(2).getCell(4);
+    expect(cell.value).toBe(1234.5);
+    expect(cell.numFmt).toBe('"AED" #,##0.00');
   });
 });

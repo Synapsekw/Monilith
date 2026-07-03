@@ -40,6 +40,13 @@ const dropdown: DisplayColumn = {
     { id: "d2", label: "Back", color: "#000" },
   ],
 };
+const currencyCol: DisplayColumn = {
+  id: "c7",
+  name: "Budget",
+  kind: "currency",
+  options: [],
+  settings: { currency: "KWD" },
+};
 
 describe("formatCell", () => {
   it("status → label + color", () => {
@@ -75,5 +82,16 @@ describe("formatCell", () => {
       formatCell(dropdown, { optionIds: ["d1", "missing", "d2"] }),
     ).toEqual({ text: "Front, Back" });
     expect(formatCell(dropdown, { optionIds: [] })).toEqual({ text: "—" });
+  });
+  it("currency → locale-formatted amount in the column's code", () => {
+    const oracle = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "KWD",
+    });
+    expect(formatCell(currencyCol, { amount: 2.5 })).toEqual({
+      text: oracle.format(2.5),
+    });
+    expect(formatCell(currencyCol, null)).toEqual({ text: "—" });
+    expect(formatCell(currencyCol, {})).toEqual({ text: "—" });
   });
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { currencyCodeSchema } from "@/lib/boards/currency";
 import type { Database } from "@/types/database.types";
 
 export type ColumnKind = Database["public"]["Enums"]["column_kind"];
@@ -20,6 +21,7 @@ export const columnKindSchema = z.enum([
   "relation",
   "mirror",
   "percent",
+  "currency",
 ]);
 
 // --- shared option shape (status + dropdown) ---
@@ -81,6 +83,15 @@ export const numbersSettingsSchema = baseColumnSettingsSchema.extend({
   unit: z.string().optional(),
   precision: z.number().int().min(0).max(10).optional(),
 });
+// Currency column: fixed ISO 4217 code per column (never per cell) so sums
+// are always single-currency — the summary-row feature depends on this.
+// Stored snake_case in columns.settings jsonb, e.g. { "currency": "KWD" }.
+// dirham_sign (AED only): show the new U+20C3 dirham sign glyph in rendered
+// surfaces. Optional; ABSENT MEANS ON (see dirhamSignEnabled, spec §5.4).
+export const currencySettingsSchema = baseColumnSettingsSchema.extend({
+  currency: currencyCodeSchema,
+  dirham_sign: z.boolean().optional(),
+});
 // Relation column connects to one target board; cells may link one or many
 // items from it. Stored snake_case in columns.settings jsonb.
 export const relationSettingsSchema = baseColumnSettingsSchema.extend({
@@ -108,6 +119,8 @@ export function columnSettingsSchema(kind: ColumnKind) {
       return relationSettingsSchema;
     case "mirror":
       return mirrorSettingsSchema;
+    case "currency":
+      return currencySettingsSchema;
     case "text":
     case "people":
     case "date":
@@ -148,6 +161,12 @@ export const checkboxValueSchema = z.object({ checked: z.boolean() });
 // average of their subitems' percent values when collapsed (see rollupCell).
 export const percentValueSchema = z.object({
   percent: z.number().min(0).max(100),
+});
+// Currency cells store a plain decimal amount; the editor rounds to the
+// column currency's minor units at commit (roundToCurrency), so stored
+// values never carry sub-minor-unit precision. See spec §3.2.
+export const currencyValueSchema = z.object({
+  amount: z.number().finite(),
 });
 export const ratingValueSchema = z.object({
   rating: z.number().int().min(1).max(5),
@@ -209,6 +228,8 @@ export function cellValueSchema(kind: ColumnKind) {
       return checkboxValueSchema;
     case "percent":
       return percentValueSchema;
+    case "currency":
+      return currencyValueSchema;
     case "rating":
       return ratingValueSchema;
     case "link":

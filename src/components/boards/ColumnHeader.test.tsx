@@ -74,6 +74,40 @@ describe("ColumnHeader", () => {
     expect(screen.queryByText("Edit labels")).not.toBeInTheDocument();
   });
 
+  it("offers 'Change currency' for currency columns only and fires onEditCurrency", () => {
+    const onEditCurrency = vi.fn();
+    render(
+      <ColumnHeader
+        column={col({ kind: "currency" as never, name: "Budget" })}
+        width={180}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+        onEditCurrency={onEditCurrency}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Budget column menu"));
+    fireEvent.click(screen.getByText("Change currency"));
+    expect(onEditCurrency).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides 'Change currency' for non-currency columns", () => {
+    render(
+      <ColumnHeader
+        column={col({ kind: "text", name: "Notes" })}
+        width={180}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onResize={vi.fn()}
+        onResizeEnd={vi.fn()}
+        onEditCurrency={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Notes column menu"));
+    expect(screen.queryByText("Change currency")).not.toBeInTheDocument();
+  });
+
   it("confirms before delete", () => {
     const onDelete = vi.fn();
     render(

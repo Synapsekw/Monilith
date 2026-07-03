@@ -10,6 +10,7 @@ export function operatorsForKind(kind: string): FilterOperator[] {
     case "text":
       return ["contains", "eq", ...EMPTIES];
     case "numbers":
+    case "currency":
       return ["num_eq", "num_ne", "gt", "lt", ...EMPTIES];
     case "date":
       return ["before", "after", "on", ...EMPTIES];
@@ -30,7 +31,7 @@ export function valueControlFor(
 ): ValueControl {
   if (op === "is_empty" || op === "not_empty") return "none";
   if (kind === "status") return "option";
-  if (kind === "numbers") return "number";
+  if (kind === "numbers" || kind === "currency") return "number";
   if (kind === "date") return "date";
   return "text";
 }

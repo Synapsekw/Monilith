@@ -19,6 +19,14 @@ describe("AddColumnMenu", () => {
     }
   });
 
+  it("offers the currency kind", async () => {
+    render(<AddColumnMenu onAdd={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: /add column/i }));
+    expect(
+      screen.getByRole("menuitem", { name: "Currency" }),
+    ).toBeInTheDocument();
+  });
+
   it("calls onAdd with the chosen kind", async () => {
     const onAdd = vi.fn();
     render(<AddColumnMenu onAdd={onAdd} />);

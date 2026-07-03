@@ -3,6 +3,7 @@ import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { pillTextColor } from "@/lib/boards/contrast";
 import { percentBandColor } from "@/lib/boards/percent-color";
+import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
@@ -207,6 +208,26 @@ export function PercentCell({
   return <PercentBar percent={value.percent} />;
 }
 
+/**
+ * Currency cell — the amount formatted in the column's currency (viewer
+ * locale). Monochrome data surface (pulse-ui): no color, tabular numerals.
+ */
+export function CurrencyCell({
+  value,
+  settings,
+}: {
+  value: { amount: number } | null;
+  settings: Settings;
+}) {
+  if (value == null || typeof value.amount !== "number")
+    return <span className="text-sm" />;
+  return (
+    <span className="truncate text-sm tabular-nums">
+      <CurrencyAmount amount={value.amount} settings={settings} />
+    </span>
+  );
+}
+
 export function RatingCell({
   value,
 }: {
@@ -361,6 +382,13 @@ export function CellRenderer({
       return (
         <PercentCell
           value={value as { percent: number } | null}
+          settings={settings}
+        />
+      );
+    case "currency":
+      return (
+        <CurrencyCell
+          value={value as { amount: number } | null}
           settings={settings}
         />
       );
