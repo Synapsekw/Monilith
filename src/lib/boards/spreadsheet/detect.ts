@@ -33,6 +33,44 @@ export function detectColumns(
   });
 }
 
+/** Detect a kind + synthesized options for EVERY column including structural ones (Group, Name).
+ *  Indexed to align with header. */
+export function detectAllColumns(
+  header: string[],
+  rows: string[][],
+): DetectedColumn[] {
+  return header.map((h, colIdx) => {
+    const sampleValues: string[] = [];
+    for (const row of rows) {
+      if (sampleValues.length >= 50) break;
+      const val = (row[colIdx] ?? "").trim();
+      if (val !== "") sampleValues.push(val);
+    }
+    const kind = inferKind(sampleValues);
+    const options =
+      kind === "status"
+        ? synthesizeOptions(sampleValues)
+        : kind === "dropdown"
+          ? synthesizeOptions(
+              sampleValues.flatMap((v) => v.split(",").map((p) => p.trim())),
+            )
+          : [];
+    return { header: h, kind, options, sampleValues };
+  });
+}
+
+/** Propose structural column roles (Group and Name indices) from headers. */
+export function proposeRoles(header: string[]): {
+  nameIndex: number;
+  groupIndex: number | null;
+} {
+  const { groupColIdx, nameColIdx } = resolveStructure(header);
+  return {
+    nameIndex: nameColIdx,
+    groupIndex: groupColIdx === -1 ? null : groupColIdx,
+  };
+}
+
 export type SplitRows = {
   groups: string[]; // distinct group names, in first-seen order
   items: { group: string; name: string; cells: string[] }[]; // top-level, cells aligned to data columns
@@ -133,6 +171,29 @@ const CHECKBOX_VALUES = new Set([
   "x",
 ]);
 
+const PERCENT_RE = /^-?\d+(?:\.\d+)?\s*%$/;
+const CURRENCY_RE = /^[$€£]\s?-?[\d.,]+(?:\.\d+)?$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LINK_RE = /^(https?:\/\/|www\.)\S+$/i;
+
+function isDropdownLike(samples: string[]): boolean {
+  let anyMulti = false;
+  const parts: string[] = [];
+  for (const s of samples) {
+    const ps = s.split(",").map((p) => p.trim());
+    if (ps.some((p) => p === "" || p.length > 30)) return false;
+    if (ps.length > 1) anyMulti = true;
+    parts.push(...ps);
+  }
+  const distinct = new Set(parts).size;
+  return (
+    anyMulti &&
+    distinct >= 2 &&
+    distinct <= 12 &&
+    distinct <= Math.ceil(parts.length / 2)
+  );
+}
+
 function inferKind(samples: string[]): ImportableKind {
   if (samples.length === 0) return "text";
 
@@ -145,6 +206,13 @@ function inferKind(samples: string[]): ImportableKind {
 
   // All match ISO date or parse ok?
   if (samples.every((v) => isDateLike(v))) return "date";
+
+  // New inference rules: percent, currency, email, link, dropdown
+  if (samples.every((v) => PERCENT_RE.test(v))) return "percent";
+  if (samples.every((v) => CURRENCY_RE.test(v))) return "currency";
+  if (samples.every((v) => EMAIL_RE.test(v))) return "email";
+  if (samples.every((v) => LINK_RE.test(v))) return "link";
+  if (isDropdownLike(samples)) return "dropdown";
 
   // 2 ≤ distinct ≤ 12 AND distinct ≤ half the sampled count → status.
   // A single distinct value is a constant (likely free text), not a status,

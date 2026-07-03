@@ -4,16 +4,29 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getBoardPayload, type BoardPayload } from "@/lib/boards/queries";
 import { buildExportWorkbook } from "@/lib/boards/spreadsheet/export-workbook";
-import { parseWorkbook } from "@/lib/boards/spreadsheet/parse-workbook";
-import { detectColumns } from "@/lib/boards/spreadsheet/detect";
-import { buildImportPayload } from "@/lib/boards/spreadsheet/build-import-payload";
+import { parseWorkbookSheets } from "@/lib/boards/spreadsheet/parse-workbook";
+import { selectRows } from "@/lib/boards/spreadsheet/select-rows";
+import {
+  buildImportPayloadV2,
+  type ImportPayload,
+} from "@/lib/boards/spreadsheet/build-import-payload";
+import { buildAppendPayload } from "@/lib/boards/spreadsheet/build-append-payload";
+import {
+  isKindCompatible,
+  type BoardColumnRef,
+} from "@/lib/boards/spreadsheet/match-columns";
 import {
   MAX_BYTES,
   MAX_ROWS,
   MAX_COLS,
+  PREVIEW_GRID_ROWS,
   type ImportFormat,
   type ImportPreview,
-  type ColumnMapping,
+  type SheetPreview,
+  type ColumnSpec,
+  type ImportDestination,
+  type ParsedTable,
+  type SynthOption,
 } from "@/lib/boards/spreadsheet/types";
 import {
   exportBoardSchema,
@@ -147,112 +160,88 @@ export async function previewImport(input: {
   const guard = guardFile(parsed.data.fileBase64, parsed.data.fileName);
   if (!guard.ok) return fail(guard.error);
 
-  let sheet;
+  let rawSheets;
   try {
-    sheet = await parseWorkbook(guard.buf, parsed.data.fileName);
+    rawSheets = await parseWorkbookSheets(guard.buf, parsed.data.fileName);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return fail(`Could not parse file: ${msg}`);
   }
 
-  if (sheet.rows.length > MAX_ROWS) {
-    return fail(
-      `File has too many rows (${sheet.rows.length}). Maximum allowed is ${MAX_ROWS}.`,
+  const sheets: SheetPreview[] = [];
+  for (const raw of rawSheets) {
+    const colCount = raw.grid.reduce(
+      (max, row) => Math.max(max, row.length),
+      0,
     );
+    // No row-cap failure at preview: rowCount is surfaced for the UI to warn
+    // with; MAX_ROWS is only enforced against the selected table at commit.
+    if (colCount > MAX_COLS) {
+      return fail(
+        `Sheet "${raw.name}" has too many columns (${colCount}). Maximum allowed is ${MAX_COLS}.`,
+      );
+    }
+    sheets.push({
+      name: raw.name,
+      rowCount: raw.grid.length,
+      colCount,
+      grid: raw.grid.slice(0, PREVIEW_GRID_ROWS),
+    });
   }
-  if (sheet.header.length > MAX_COLS) {
-    return fail(
-      `File has too many columns (${sheet.header.length}). Maximum allowed is ${MAX_COLS}.`,
-    );
-  }
-
-  const columns = detectColumns(sheet.header, sheet.rows);
 
   // boardName = fileName without extension
   const boardName = parsed.data.fileName.replace(/\.[^.]+$/, "");
-  const sampleRows = sheet.rows.slice(0, 5);
 
   return {
     ok: true,
-    data: {
-      boardName,
-      columns,
-      rowCount: sheet.rows.length,
-      sampleRows,
-      droppedSheets: sheet.droppedSheets,
-    },
+    data: { fileName: parsed.data.fileName, boardName, sheets },
   };
 }
 
 // ─── commitImport ─────────────────────────────────────────────────────────────
 
-export async function commitImport(input: {
-  fileBase64: string;
-  fileName: string;
-  workspaceId: string;
-  boardName: string;
-  columnMappings: ColumnMapping[];
-}): Promise<ActionResult<{ boardId: string }>> {
-  const parsed = commitImportSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-  const guard = guardFile(parsed.data.fileBase64, parsed.data.fileName);
-  if (!guard.ok) return fail(guard.error);
-
-  let sheet;
-  try {
-    sheet = await parseWorkbook(guard.buf, parsed.data.fileName);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return fail(`Could not parse file: ${msg}`);
-  }
-
-  if (sheet.rows.length > MAX_ROWS) {
-    return fail(
-      `File has too many rows (${sheet.rows.length}). Maximum allowed is ${MAX_ROWS}.`,
-    );
-  }
-  if (sheet.header.length > MAX_COLS) {
-    return fail(
-      `File has too many columns (${sheet.header.length}). Maximum allowed is ${MAX_COLS}.`,
-    );
-  }
-
-  const { templatePayload, subitems } = buildImportPayload(
-    sheet,
-    parsed.data.columnMappings as ColumnMapping[],
-  );
-
-  const supabase = await createClient();
-
-  // Phase 1: Create the board via the atomic RPC
+/**
+ * Create a brand-new board from an import payload.
+ * Phase 1: create the board via the atomic `create_board_from_template` RPC.
+ * Phase 2: insert subitems (they require a board_id that only exists after
+ * phase 1). The phase-1 RPC has already committed, so this is NOT one atomic
+ * transaction — on failure we best-effort delete the just-created board
+ * (cascade) to avoid orphaning a half-built board. The delete runs on the same
+ * RLS-bound client, so it can only ever remove a board the caller may delete.
+ * org_id/board_id come from the membership-checked RPC's return row (never
+ * client input); the client-supplied group_id/parent_id/column_id are confined
+ * to the caller's org by the items/cell_values RLS insert policies.
+ */
+async function insertNewBoard(
+  supabase: SupabaseServerClient,
+  workspaceId: string,
+  boardName: string,
+  payload: ImportPayload,
+): Promise<{ ok: true; boardId: string } | { ok: false; error: string }> {
   const { data: board, error: rpcError } = await supabase.rpc(
     "create_board_from_template",
     {
-      p_workspace_id: parsed.data.workspaceId,
-      p_name: parsed.data.boardName,
-      p_template: templatePayload as unknown as Json,
+      p_workspace_id: workspaceId,
+      p_name: boardName,
+      p_template: payload.templatePayload as unknown as Json,
     },
   );
 
   if (rpcError || !board) {
-    return fail(rpcError?.message ?? "Could not create board.");
+    return { ok: false, error: rpcError?.message ?? "Could not create board." };
   }
 
-  // Phase 2: Insert subitems (they require a board_id that only exists after
-  // phase 1). The phase-1 RPC has already committed, so this is NOT one atomic
-  // transaction — on failure we best-effort delete the just-created board
-  // (cascade) to avoid orphaning a half-built board. The delete runs on the same
-  // RLS-bound client, so it can only ever remove a board the caller may delete.
-  // org_id/board_id come from the membership-checked RPC's return row (never
-  // client input); the client-supplied group_id/parent_id/column_id are confined
-  // to the caller's org by the items/cell_values RLS insert policies.
+  const boardId = (board as { id: string; org_id: string }).id;
+  const orgId = (board as { id: string; org_id: string }).org_id;
+
+  const { subitems } = payload;
   if (subitems.length > 0) {
     const subitemRows = subitems.map((s) => ({
       id: s.id,
-      org_id: (board as { id: string; org_id: string }).org_id,
-      board_id: (board as { id: string; org_id: string }).id,
+      org_id: orgId,
+      board_id: boardId,
       group_id: s.groupId,
       parent_id: s.parentId,
       name: s.name,
@@ -265,18 +254,15 @@ export async function commitImport(input: {
 
     if (itemsError) {
       // Rollback: delete the board (cascade removes groups/columns/items/cells)
-      await supabase
-        .from("boards")
-        .delete()
-        .eq("id", (board as { id: string; org_id: string }).id);
-      return fail(itemsError.message);
+      await supabase.from("boards").delete().eq("id", boardId);
+      return { ok: false, error: itemsError.message };
     }
 
     // Insert subitem cell values
     const cellRows = subitems.flatMap((s) =>
       s.cells.map((c) => ({
-        org_id: (board as { id: string; org_id: string }).org_id,
-        board_id: (board as { id: string; org_id: string }).id,
+        org_id: orgId,
+        board_id: boardId,
         item_id: s.id,
         column_id: c.columnId,
         value: c.value,
@@ -290,18 +276,183 @@ export async function commitImport(input: {
 
       if (cellsError) {
         // Rollback: delete the board
-        await supabase
-          .from("boards")
-          .delete()
-          .eq("id", (board as { id: string; org_id: string }).id);
-        return fail(cellsError.message);
+        await supabase.from("boards").delete().eq("id", boardId);
+        return { ok: false, error: cellsError.message };
       }
     }
   }
 
+  return { ok: true, boardId };
+}
+
+/**
+ * Append imported rows into an EXISTING board's group via the atomic
+ * `import_rows_into_board` RPC (Task 13). Unlike `insertNewBoard`, this is a
+ * single server-side transaction — there is no "phase 2" and no client-side
+ * rollback to perform.
+ *
+ * Column targets and kind compatibility are validated up front against the
+ * board's actual columns (an RLS-scoped fetch of `columns` by `board_id`) so
+ * `buildAppendPayload` never has to guess at a stale/missing target; a
+ * `boardId` that resolves to zero columns is disambiguated against a direct
+ * `boards` existence check so a genuinely-missing board fails with a clear
+ * "Board not found." instead of silently importing into nothing.
+ */
+async function appendToExistingBoard(
+  supabase: SupabaseServerClient,
+  boardId: string,
+  table: ParsedTable,
+  specs: ColumnSpec[],
+  group: { groupId: string } | { newGroupName: string },
+): Promise<{ ok: true; boardId: string } | { ok: false; error: string }> {
+  const { data: columnRows, error: columnsError } = await supabase
+    .from("columns")
+    .select("id, kind, name, settings")
+    .eq("board_id", boardId);
+
+  if (columnsError) return { ok: false, error: columnsError.message };
+
+  if (!columnRows || columnRows.length === 0) {
+    const { data: boardRows } = await supabase
+      .from("boards")
+      .select("id")
+      .eq("id", boardId);
+    if (!boardRows || boardRows.length === 0) {
+      return { ok: false, error: "Board not found." };
+    }
+  }
+
+  const boardColumns: BoardColumnRef[] = (columnRows ?? []).map((col) => {
+    const settings = col.settings as { options?: SynthOption[] } | null;
+    const options =
+      (col.kind === "status" || col.kind === "dropdown") &&
+      settings &&
+      Array.isArray(settings.options)
+        ? settings.options
+        : [];
+    return { id: col.id, name: col.name, kind: col.kind, options };
+  });
+
+  for (const spec of specs) {
+    if (spec.role !== "data" || spec.target === "skip") continue;
+    const target = spec.target;
+    if (!target || target === "create") continue;
+
+    const boardColumn = boardColumns.find((col) => col.id === target.columnId);
+    if (!boardColumn) {
+      return {
+        ok: false,
+        error: `Column "${spec.name}" targets a column that isn't on this board.`,
+      };
+    }
+    if (!isKindCompatible(spec.kind, boardColumn.kind)) {
+      return {
+        ok: false,
+        error: `Column "${spec.name}" isn't compatible with the target column's type.`,
+      };
+    }
+  }
+
+  let payload;
+  try {
+    payload = buildAppendPayload(table, specs, boardColumns, group);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
+
+  const { error: rpcError } = await supabase.rpc("import_rows_into_board", {
+    p_board_id: boardId,
+    p_payload: payload as unknown as Json,
+  });
+
+  if (rpcError) return { ok: false, error: rpcError.message };
+
+  return { ok: true, boardId };
+}
+
+export async function commitImport(input: {
+  fileBase64: string;
+  fileName: string;
+  sheetName: string;
+  headerRow: number | null;
+  excludedRows: number[];
+  columns: ColumnSpec[];
+  destination: ImportDestination;
+}): Promise<ActionResult<{ boardId: string }>> {
+  const parsed = commitImportSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const guard = guardFile(parsed.data.fileBase64, parsed.data.fileName);
+  if (!guard.ok) return fail(guard.error);
+
+  let rawSheets;
+  try {
+    rawSheets = await parseWorkbookSheets(guard.buf, parsed.data.fileName);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return fail(`Could not parse file: ${msg}`);
+  }
+
+  const rawSheet = rawSheets.find((s) => s.name === parsed.data.sheetName);
+  if (!rawSheet) return fail("Sheet not found.");
+
+  let table;
+  try {
+    table = selectRows(
+      rawSheet.grid,
+      parsed.data.headerRow,
+      parsed.data.excludedRows,
+    );
+  } catch {
+    return fail("The selected sheet has no data to import.");
+  }
+
+  if (table.rows.length > MAX_ROWS) {
+    return fail(
+      `Sheet has too many rows (${table.rows.length}). Maximum allowed is ${MAX_ROWS}.`,
+    );
+  }
+  if (table.header.length > MAX_COLS) {
+    return fail(
+      `Sheet has too many columns (${table.header.length}). Maximum allowed is ${MAX_COLS}.`,
+    );
+  }
+
+  for (const spec of parsed.data.columns) {
+    if (spec.sourceIndex >= table.header.length) {
+      return fail(
+        `Column "${spec.name}" refers to a column that isn't in the selected header.`,
+      );
+    }
+  }
+
+  const supabase = await createClient();
+
+  if (parsed.data.destination.type === "existing") {
+    const result = await appendToExistingBoard(
+      supabase,
+      parsed.data.destination.boardId,
+      table,
+      parsed.data.columns,
+      parsed.data.destination.group,
+    );
+    if (!result.ok) return fail(result.error);
+
+    revalidatePath(`/boards/${result.boardId}`);
+    return { ok: true, data: { boardId: result.boardId } };
+  }
+
+  const payload = buildImportPayloadV2(table, parsed.data.columns);
+  const result = await insertNewBoard(
+    supabase,
+    parsed.data.destination.workspaceId,
+    parsed.data.destination.boardName,
+    payload,
+  );
+  if (!result.ok) return fail(result.error);
+
   revalidatePath("/", "layout");
-  return {
-    ok: true,
-    data: { boardId: (board as { id: string; org_id: string }).id },
-  };
+  return { ok: true, data: { boardId: result.boardId } };
 }

@@ -1,18 +1,14 @@
 import ExcelJS from "exceljs";
 import { Readable } from "node:stream";
-import type { ParsedSheet } from "./types";
+import type { ParsedSheet, RawSheet } from "./types";
+import { selectRows } from "./select-rows";
 
-/** Parse the FIRST worksheet of an xlsx/csv buffer into header + string rows.
- *  Other sheets are reported in `droppedSheets`. Trailing empty rows/cols trimmed.
- *  Throws Error('empty') when there is no header row. */
-export async function parseWorkbook(
+async function loadWorkbook(
   buf: Buffer,
   fileName: string,
-): Promise<ParsedSheet> {
+): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
-  const isCsv = fileName.toLowerCase().endsWith(".csv");
-
-  if (isCsv) {
+  if (fileName.toLowerCase().endsWith(".csv")) {
     await wb.csv.read(Readable.from(buf.toString("utf8")));
   } else {
     // exceljs types xlsx.load's param as the non-generic `Buffer`, while
@@ -20,64 +16,45 @@ export async function parseWorkbook(
     // type — cast to exceljs's own expected param type to bridge the mismatch.
     await wb.xlsx.load(buf as unknown as Parameters<typeof wb.xlsx.load>[0]);
   }
+  return wb;
+}
 
-  const worksheet = wb.worksheets[0];
-  const droppedSheets = wb.worksheets.slice(1).map((ws) => ws.name);
+export async function parseWorkbookSheets(
+  buf: Buffer,
+  fileName: string,
+): Promise<RawSheet[]> {
+  const wb = await loadWorkbook(buf, fileName);
+  if (wb.worksheets.length === 0) throw new Error("empty");
+  const isCsv = fileName.toLowerCase().endsWith(".csv");
+  const csvName =
+    fileName
+      .replace(/\.[^.]+$/, "")
+      .split(/[\\/]/)
+      .pop() || "Sheet1";
 
-  if (!worksheet) {
-    throw new Error("empty");
-  }
-
-  // Collect all rows using eachRow (which skips empty rows in xlsx)
-  const allRows: string[][] = [];
-  worksheet.eachRow((row) => {
-    const cells: string[] = [];
-    // row.cellCount gives the number of columns used; use row.actualCellCount to get non-empty
-    // We iterate using getCell by index to preserve column positions
-    const lastCol = row.cellCount;
-    for (let col = 1; col <= lastCol; col++) {
-      cells.push(row.getCell(col).text);
+  return wb.worksheets.map((ws, wi) => {
+    const grid: string[][] = [];
+    for (let r = 1; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+      const cells: string[] = [];
+      for (let c = 1; c <= row.cellCount; c++) cells.push(row.getCell(c).text);
+      grid.push(cells);
     }
-    allRows.push(cells);
+    return { name: isCsv && wi === 0 ? csvName : ws.name, grid };
   });
+}
 
-  if (allRows.length === 0) {
-    throw new Error("empty");
-  }
-
-  // Row 1 is the header
-  const rawHeader = allRows[0];
-
-  // Right-trim trailing empty header columns
-  let headerLen = rawHeader.length;
-  while (headerLen > 0 && rawHeader[headerLen - 1] === "") {
-    headerLen--;
-  }
-
-  if (headerLen === 0) {
-    throw new Error("empty");
-  }
-
-  const header = rawHeader.slice(0, headerLen);
-
-  // Process data rows (rows 2..n)
-  const rows: string[][] = [];
-  for (let i = 1; i < allRows.length; i++) {
-    const rawRow = allRows[i];
-
-    // Build a row aligned to header length using getCell semantics
-    const row: string[] = [];
-    for (let col = 0; col < header.length; col++) {
-      row.push(rawRow[col] ?? "");
-    }
-
-    // Skip fully-empty rows
-    if (row.every((cell) => cell === "")) {
-      continue;
-    }
-
-    rows.push(row);
-  }
-
-  return { header, rows, droppedSheets };
+/** v1-compatible view: first sheet, header = row 1. */
+export async function parseWorkbook(
+  buf: Buffer,
+  fileName: string,
+): Promise<ParsedSheet> {
+  const sheets = await parseWorkbookSheets(buf, fileName);
+  const first = sheets[0];
+  const table = selectRows(first.grid, 0, []); // throws "empty" on blank sheets
+  return {
+    header: table.header,
+    rows: table.rows,
+    droppedSheets: sheets.slice(1).map((s) => s.name),
+  };
 }

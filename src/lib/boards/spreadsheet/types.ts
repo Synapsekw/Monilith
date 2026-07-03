@@ -4,6 +4,7 @@ export const NAME_HEADER = "Name";
 export const MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_ROWS = 2000;
 export const MAX_COLS = 40;
+export const PREVIEW_GRID_ROWS = 200;
 export type ImportFormat = "xlsx" | "csv";
 export type ImportableKind =
   | "text"
@@ -51,10 +52,37 @@ export type ParsedSheet = {
   rows: string[][];
   droppedSheets: string[];
 };
-export type ImportPreview = {
-  boardName: string;
-  columns: DetectedColumn[];
+export type RawSheet = { name: string; grid: string[][] };
+export type SheetPreview = {
+  name: string;
   rowCount: number;
-  sampleRows: string[][];
-  droppedSheets: string[];
+  colCount: number;
+  grid: string[][];
 };
+export type ImportPreview = {
+  fileName: string;
+  boardName: string;
+  sheets: SheetPreview[];
+};
+export type ParsedTable = {
+  header: string[];
+  rows: string[][];
+  rowIndices: number[];
+};
+export type ColumnRole = "name" | "group" | "data";
+export type ColumnTarget = { columnId: string } | "create" | "skip";
+export type ColumnSpec = {
+  sourceIndex: number;
+  name: string;
+  kind: ImportableKind;
+  options: SynthOption[];
+  role: ColumnRole;
+  target?: ColumnTarget;
+};
+export type ImportDestination =
+  | { type: "new"; workspaceId: string; boardName: string }
+  | {
+      type: "existing";
+      boardId: string;
+      group: { groupId: string } | { newGroupName: string };
+    };

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { createBoardFromTemplate } from "@/lib/boards/actions";
 import { BOARD_TEMPLATES } from "@/lib/boards/templates";
-import { ImportDialog } from "@/components/boards/import/ImportDialog";
+import { ImportWizard } from "@/components/boards/import/ImportWizard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -180,8 +180,8 @@ export function NewBoardDialog({
         </DialogContent>
       </Dialog>
       {workspaceId ? (
-        <ImportDialog
-          workspaceId={workspaceId}
+        <ImportWizard
+          destination={{ type: "new", workspaceId }}
           open={importOpen}
           onOpenChange={setImportOpen}
         />
