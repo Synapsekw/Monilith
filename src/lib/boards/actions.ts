@@ -3,7 +3,7 @@
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
-import { boardsTag } from "@/lib/cache/tags";
+import { boardsTag, sharedBoardsTag } from "@/lib/cache/tags";
 import { midpoint } from "@/lib/boards/position";
 import {
   clearCellSchema,
@@ -126,6 +126,18 @@ export async function renameBoard(input: {
   if (error) return fail(error.message);
 
   await invalidateMyBoards();
+
+  // Recipients read this board's name from their cached shared-boards list
+  // (`shared-boards:user:<id>`, served by listSharedBoardsCached). A rename must
+  // drop THEIR entry too, or they keep the stale name until the nav TTL expires.
+  // Fan out over every board_members grantee — this read is RLS-scoped to the
+  // board the owner can already read, and returns non-owner members.
+  const { data: members } = await supabase
+    .from("board_members")
+    .select("user_id")
+    .eq("board_id", parsed.data.boardId);
+  for (const m of members ?? []) updateTag(sharedBoardsTag(m.user_id));
+
   // The board name shows on the board page's own (uncached) header; the sidebar
   // list is served from the `boards:user:<me>` cache the updateTag above expired.
   revalidatePath(`/boards/${parsed.data.boardId}`);
