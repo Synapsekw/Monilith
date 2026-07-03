@@ -2,6 +2,7 @@
 
 import { EmptyState } from "@/components/ui/empty-state";
 import type { AppNotification } from "@/lib/collaboration/notifications-cache";
+import { digestNotificationPayloadSchema } from "@/lib/validations/digest";
 
 function label(n: AppNotification): string {
   switch (n.kind) {
@@ -13,6 +14,14 @@ function label(n: AppNotification): string {
       return "an automation ran on an item";
     case "feedback_response":
       return "updated your feedback request";
+    case "health_digest": {
+      // System notification (actor_id null): the digest numbers ride in
+      // payload so no join is needed at render time.
+      const parsed = digestNotificationPayloadSchema.safeParse(n.payload);
+      return parsed.success
+        ? `Weekly digest: ${parsed.data.newCount} new · ${parsed.data.incompleteCount} incomplete · ${parsed.data.overdueCount} overdue`
+        : "Weekly plan health digest";
+    }
     default:
       return "updated an item you follow";
   }

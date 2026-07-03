@@ -43,6 +43,51 @@ describe("NotificationsList", () => {
     expect(screen.getByText(matcher)).toBeInTheDocument();
   });
 
+  it("renders health_digest copy from payload", () => {
+    render(
+      <NotificationsList
+        notifications={[
+          notif({
+            id: "hd-1",
+            kind: "health_digest",
+            actor_id: null,
+            board_id: null,
+            item_id: null,
+            payload: {
+              newCount: 4,
+              incompleteCount: 3,
+              overdueCount: 2,
+              periodStart: "2026-06-29",
+            },
+          }),
+        ]}
+        onOpen={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText("Weekly digest: 4 new · 3 incomplete · 2 overdue"),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to generic copy when payload is malformed", () => {
+    render(
+      <NotificationsList
+        notifications={[
+          notif({
+            id: "hd-2",
+            kind: "health_digest",
+            actor_id: null,
+            board_id: null,
+            item_id: null,
+            payload: null,
+          }),
+        ]}
+        onOpen={() => {}}
+      />,
+    );
+    expect(screen.getByText("Weekly plan health digest")).toBeInTheDocument();
+  });
+
   it("empty state uses the standardized EmptyState", () => {
     render(<NotificationsList notifications={[]} onOpen={() => {}} />);
     const empty = screen.getByText(/no notifications/i);
