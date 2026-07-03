@@ -448,6 +448,8 @@ export async function getWidgetRows(input: { widgetId: string }): Promise<
             .array()
             .safeParse((c.settings as { options?: unknown }).options ?? [])
             .data ?? [],
+        // Raw settings ride along so formatCell can read e.g. the currency code.
+        settings: c.settings,
       }))
       // preserve the config's column order
       .sort((a, b) => columnIds.indexOf(a.id) - columnIds.indexOf(b.id));

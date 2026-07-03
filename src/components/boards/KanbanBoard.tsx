@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
-import { Plus, Calendar, Users, Hash } from "lucide-react";
+import { Plus, Calendar, Users, Hash, Banknote } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { pillTextColor } from "@/lib/boards/contrast";
@@ -61,6 +61,7 @@ function MetaIcon({ kind }: { kind: string }) {
   if (kind === "date") return <Calendar className={cls} aria-hidden />;
   if (kind === "people") return <Users className={cls} aria-hidden />;
   if (kind === "numbers") return <Hash className={cls} aria-hidden />;
+  if (kind === "currency") return <Banknote className={cls} aria-hidden />;
   // percent renders as a labelled bar — an icon would be redundant.
   return null;
 }

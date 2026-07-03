@@ -34,6 +34,11 @@ export function cellToText(
       case "percent":
         return typeof v.percent === "number" ? String(v.percent) : "";
 
+      // Raw number keeps the export re-importable (Excel/CSV); locale
+      // formatting is a display concern, not a data-exchange one.
+      case "currency":
+        return typeof v.amount === "number" ? String(v.amount) : "";
+
       case "rating":
         return typeof v.rating === "number" ? String(v.rating) : "";
 
@@ -153,6 +158,14 @@ export function textToCell(
       const n = Number(trimmed);
       if (!Number.isFinite(n)) return null;
       return { percent: Math.min(100, Math.max(0, n)) };
+    }
+
+    case "currency": {
+      // Accept symbol/grouping-decorated money strings: "$1,234.50" → 1234.5.
+      const n = Number(trimmed.replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) && trimmed.replace(/[^0-9]/g, "") !== ""
+        ? { amount: n }
+        : null;
     }
 
     case "rating": {
