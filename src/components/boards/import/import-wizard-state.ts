@@ -6,6 +6,10 @@ import {
 import { splitRows2 } from "@/lib/boards/spreadsheet/build-import-payload";
 import { textToCell } from "@/lib/boards/spreadsheet/cell-codec";
 import {
+  autoMatchColumns,
+  type BoardColumnRef,
+} from "@/lib/boards/spreadsheet/match-columns";
+import {
   SUBTASK_MARKER,
   type ParsedTable,
   type ColumnSpec,
@@ -52,12 +56,23 @@ export type SheetState = {
  * inferred kind down to "text" — those rows still get flagged later via
  * `invalidCellMap` once the column kind is fixed.
  *
+ * `boardColumns` is optional and only passed for the existing-board wizard
+ * mode. When present:
+ * - the proposed "group" role is never assigned — existing boards append
+ *   every row into ONE chosen group (picked in the confirm step), so the
+ *   column that would otherwise be treated as "group" is demoted to a
+ *   regular "data" column instead.
+ * - every "data" column gets its `target` auto-filled via
+ *   `autoMatchColumns`: a name+kind match on `boardColumns` resolves to
+ *   `{ columnId }`, otherwise it defaults to `"create"`.
+ *
  * Throws whatever `selectRows` throws (an `Error("empty")` for an empty
  * sheet) — that's passed straight through to the caller.
  */
 export function deriveSheetState(
   grid: string[][],
   headerRow: number | null,
+  boardColumns?: BoardColumnRef[],
 ): SheetState {
   const table = selectRows(grid, headerRow, []);
   const { nameIndex, groupIndex } = proposeRoles(table.header);
@@ -67,15 +82,29 @@ export function deriveSheetState(
   );
   const detected = detectAllColumns(table.header, detectionRows);
 
+  const matches = boardColumns
+    ? autoMatchColumns(
+        table.header.map((name, i) => ({ name, kind: detected[i].kind })),
+        boardColumns,
+      )
+    : null;
+
   const columns: ColumnState[] = table.header.map((name, sourceIndex) => {
     const role: ColumnRole =
       sourceIndex === nameIndex
         ? "name"
-        : sourceIndex === groupIndex
+        : sourceIndex === groupIndex && !boardColumns
           ? "group"
           : "data";
     const detectedKind = detected[sourceIndex].kind;
     const kind: ImportableKind = role === "data" ? detectedKind : "text";
+
+    const target: ColumnTarget | null =
+      boardColumns && role === "data"
+        ? matches![sourceIndex]
+          ? { columnId: matches![sourceIndex] as string }
+          : "create"
+        : null;
 
     return {
       sourceIndex,
@@ -85,7 +114,7 @@ export function deriveSheetState(
       options: detected[sourceIndex].options,
       role,
       detectedKind,
-      target: null,
+      target,
     };
   });
 

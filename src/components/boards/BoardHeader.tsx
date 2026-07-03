@@ -1,17 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Eye, UserPlus, Zap } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { Eye, Upload, UserPlus, Zap } from "lucide-react";
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
 import { BoardPresenceBar } from "@/components/boards/presence/BoardPresenceBar";
 import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
 import { ShareBoardDialog } from "@/components/boards/ShareBoardDialog";
 import { ExportMenu } from "@/components/boards/ExportMenu";
+import { ImportWizard } from "@/components/boards/import/ImportWizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { BoardView } from "@/lib/boards/queries";
 import type { CacheColumn } from "@/lib/boards/cache";
+import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
+import type { SynthOption } from "@/lib/boards/spreadsheet/types";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 
 export type HeaderMember = {
@@ -56,6 +59,26 @@ export function BoardHeader({
   const [isPending, startTransition] = useTransition();
   const [automationsOpen, setAutomationsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  // The import wizard's existing-board arm matches/targets columns by their
+  // real board kind + synthesized options — the same shape the commit
+  // Server Action reads off `columns.settings` (see `appendToExistingBoard`
+  // in spreadsheet-actions.ts).
+  const importBoardColumns: BoardColumnRef[] = useMemo(
+    () =>
+      columns.map((c) => {
+        const settings = c.settings as { options?: SynthOption[] } | null;
+        const options =
+          (c.kind === "status" || c.kind === "dropdown") &&
+          settings &&
+          Array.isArray(settings.options)
+            ? settings.options
+            : [];
+        return { id: c.id, name: c.name, kind: c.kind, options };
+      }),
+    [columns],
+  );
 
   const isOwner = access === "owner";
   const isViewer = access === "viewer";
@@ -134,6 +157,15 @@ export function BoardHeader({
             type="button"
             variant="ghost"
             size="sm"
+            aria-label="Import"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="size-3.5" /> Import
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             aria-label="Automations"
             onClick={() => setAutomationsOpen(true)}
           >
@@ -159,6 +191,16 @@ export function BoardHeader({
         groups={groups}
         open={automationsOpen}
         onOpenChange={setAutomationsOpen}
+      />
+      <ImportWizard
+        destination={{
+          type: "existing",
+          boardId,
+          boardColumns: importBoardColumns,
+          groups,
+        }}
+        open={importOpen}
+        onOpenChange={setImportOpen}
       />
       {isOwner ? (
         <ShareBoardDialog

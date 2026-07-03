@@ -250,6 +250,98 @@ describe("ImportWizard", () => {
     );
   });
 
+  it("existing-board mode: derives targets, commits with the existing destination shape, and only refreshes (no push)", async () => {
+    previewImport.mockResolvedValue({
+      ok: true,
+      data: {
+        fileName: "data.xlsx",
+        boardName: "my-board",
+        sheets: [
+          {
+            name: "Sheet1",
+            rowCount: 4,
+            colCount: 2,
+            grid: [
+              ["Name", "Status"],
+              ["Task A", "Done"],
+              ["Task B", "Working"],
+              ["Task C", "Done"],
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <ImportWizard
+        destination={{
+          type: "existing",
+          boardId: "board-1",
+          boardColumns: [
+            {
+              id: "col-status",
+              name: "Status",
+              kind: "status",
+              options: [{ id: "o1", label: "Done", color: "#000" }],
+            },
+          ],
+          groups: [{ id: "g1", name: "Group 1" }],
+        }}
+        open={true}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    uploadFile();
+
+    // Step 2: the "Status" column auto-matched the board's status column by
+    // name+kind, so its target select preselects that column.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Target for Status")).toBeInTheDocument(),
+    );
+    const targetSelect = screen.getByLabelText(
+      "Target for Status",
+    ) as HTMLSelectElement;
+    expect(targetSelect.value).toBe("col-status");
+
+    // Skip the column instead, so the commit payload includes one mapped
+    // (well, now skipped) target we can assert on.
+    fireEvent.change(targetSelect, { target: { value: "skip" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /confirm/i }),
+      ).toBeInTheDocument(),
+    );
+
+    // Default group choice: the board's only group.
+    expect((screen.getByLabelText("Group") as HTMLSelectElement).value).toBe(
+      "g1",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() =>
+      expect(commitImport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          columns: expect.arrayContaining([
+            expect.objectContaining({ name: "Status", target: "skip" }),
+          ]),
+          destination: {
+            type: "existing",
+            boardId: "board-1",
+            group: { groupId: "g1" },
+          },
+        }),
+      ),
+    );
+
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("resets to step 1 (fresh upload UI, no grid) after closing mid-flow and reopening", async () => {
     const onOpenChange = vi.fn();
 

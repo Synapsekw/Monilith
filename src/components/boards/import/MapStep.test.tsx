@@ -2,8 +2,13 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 import { MapStep } from "./MapStep";
-import { deriveSheetState, type SheetState } from "./import-wizard-state";
+import {
+  buildCommitColumns,
+  deriveSheetState,
+  type SheetState,
+} from "./import-wizard-state";
 import type { SheetPreview } from "@/lib/boards/spreadsheet/types";
+import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 
 // Same fixture as import-wizard-state.test.ts: "Est" auto-detects as
 // "numbers" (detection samples skip the subtask row), and the subtask row's
@@ -23,10 +28,14 @@ function renderMapStep(overrides: {
   sheets?: SheetPreview[];
   activeSheet?: number;
   state?: SheetState;
+  mode?: "new" | "existing";
+  boardColumns?: BoardColumnRef[];
 }) {
   const sheets = overrides.sheets ?? [baseSheet(grid)];
   const activeSheet = overrides.activeSheet ?? 0;
-  const state = overrides.state ?? deriveSheetState(grid, 0);
+  const mode = overrides.mode ?? "new";
+  const boardColumns = overrides.boardColumns;
+  const state = overrides.state ?? deriveSheetState(grid, 0, boardColumns);
   const onSheetChange = vi.fn();
   const onStateChange = vi.fn();
 
@@ -37,7 +46,8 @@ function renderMapStep(overrides: {
       onSheetChange={onSheetChange}
       state={state}
       onStateChange={onStateChange}
-      mode="new"
+      mode={mode}
+      boardColumns={boardColumns}
       rowCapWarning={null}
       onBack={vi.fn()}
       onNext={vi.fn()}
@@ -148,5 +158,105 @@ describe("MapStep", () => {
     expect(
       screen.getByTitle("Can't parse as numbers — will import empty"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("MapStep existing mode", () => {
+  const boardColumns: BoardColumnRef[] = [
+    { id: "col-est", name: "Est", kind: "numbers", options: [] },
+  ];
+
+  it("renders a target select per data column with auto-match preselected", () => {
+    renderMapStep({ mode: "existing", boardColumns });
+
+    // "Est" auto-matches the board's "numbers" column by name+kind.
+    const estTarget = screen.getByLabelText(
+      "Target for Est",
+    ) as HTMLSelectElement;
+    expect(estTarget.value).toBe("col-est");
+    expect(screen.getByRole("option", { name: "Est" })).toBeInTheDocument();
+
+    // "Group" is demoted to a data column with no board match -> "create".
+    const groupTarget = screen.getByLabelText(
+      "Target for Group",
+    ) as HTMLSelectElement;
+    expect(groupTarget.value).toBe("create");
+  });
+
+  it('changing a target to "Skip" updates state, and buildCommitColumns reflects the skip', () => {
+    const { onStateChange } = renderMapStep({ mode: "existing", boardColumns });
+
+    const estTarget = screen.getByLabelText("Target for Est");
+    fireEvent.change(estTarget, { target: { value: "skip" } });
+
+    expect(onStateChange).toHaveBeenCalledTimes(1);
+    const nextState = onStateChange.mock.calls[0][0] as SheetState;
+    const estCol = nextState.columns.find((c) => c.name === "Est")!;
+    expect(estCol.target).toBe("skip");
+
+    const specs = buildCommitColumns(nextState);
+    expect(specs.find((s) => s.name === "Est")?.target).toBe("skip");
+  });
+
+  it('shows a "+N new options" badge when a status column maps to a target missing option labels', () => {
+    const statusGrid = [
+      ["Name", "Status"],
+      ["Task A", "Done"],
+      ["Task B", "New"],
+      ["Task C", "Done"],
+    ];
+    const statusBoardColumns: BoardColumnRef[] = [
+      {
+        id: "col-status",
+        name: "Status",
+        kind: "status",
+        options: [{ id: "o1", label: "Done", color: "#000" }],
+      },
+    ];
+    renderMapStep({
+      sheets: [baseSheet(statusGrid)],
+      mode: "existing",
+      boardColumns: statusBoardColumns,
+      state: deriveSheetState(statusGrid, 0, statusBoardColumns),
+    });
+
+    expect(screen.getByText("+1 new options")).toBeInTheDocument();
+  });
+
+  it("role menu offers only item-name / regular column (no group) in existing mode", () => {
+    const simpleGrid = [
+      ["Name", "Note"],
+      ["A", "x"],
+    ];
+    renderMapStep({
+      sheets: [baseSheet(simpleGrid)],
+      mode: "existing",
+      state: deriveSheetState(simpleGrid, 0),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Data/ }));
+
+    expect(
+      screen.getByRole("menuitem", { name: "Use as item name" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Regular column" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: "Use as group" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables the kind select for a mapped target with an explanatory title", () => {
+    renderMapStep({ mode: "existing", boardColumns });
+
+    const kindSelect = screen.getByLabelText(
+      "Column type for Est",
+    ) as HTMLSelectElement;
+    expect(kindSelect).toBeDisabled();
+    expect(kindSelect).toHaveAttribute(
+      "title",
+      "Type comes from the board column",
+    );
   });
 });

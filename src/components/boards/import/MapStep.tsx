@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { SheetPreview } from "@/lib/boards/spreadsheet/types";
+import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 import {
   deriveSheetState,
   invalidCellMap,
@@ -21,6 +22,7 @@ export function MapStep({
   state,
   onStateChange,
   mode,
+  boardColumns,
   rowCapWarning,
   onBack,
   onNext,
@@ -31,6 +33,9 @@ export function MapStep({
   state: SheetState;
   onStateChange: (next: SheetState) => void;
   mode: "new" | "existing";
+  /** The existing board's columns to match/target against. Only meaningful
+   * (and only passed) when `mode === "existing"`. */
+  boardColumns?: BoardColumnRef[];
   rowCapWarning: string | null;
   onBack: () => void;
   onNext: () => void;
@@ -49,7 +54,7 @@ export function MapStep({
   function handleHeaderRowChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const raw = e.target.value;
     const headerRow = raw === "none" ? null : Number(raw);
-    onStateChange(deriveSheetState(grid, headerRow));
+    onStateChange(deriveSheetState(grid, headerRow, boardColumns));
   }
 
   function handleExcludeInvalid() {
@@ -126,6 +131,8 @@ export function MapStep({
         table={table}
         invalid={invalid}
         onStateChange={onStateChange}
+        mode={mode}
+        boardColumns={boardColumns}
       />
 
       <div className="flex justify-between pt-2">

@@ -70,13 +70,23 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
+type GroupChoice = { groupId: string } | { newGroupName: string };
+
+/** Default group choice for the existing-board confirm step: the board's
+ * first group, or a fresh "Imported" group when it has none yet. */
+function defaultGroupChoice(destination: Destination): GroupChoice {
+  if (destination.type !== "existing") return { newGroupName: "Imported" };
+  return destination.groups[0]
+    ? { groupId: destination.groups[0].id }
+    : { newGroupName: "Imported" };
+}
+
 /**
  * Three-step "upload → map → confirm" wizard that replaces the retired v1
- * single-page import dialog. Only the `destination.type === "new"` arm is
- * wired up in this task — `previewImport`/`commitImport` and the map/confirm
- * steps all target a brand-new board. The `existing` arm renders the dialog
- * shell with a placeholder body; T15 activates it (auto-matching columns
- * onto `boardColumns`, appending into one of `groups`).
+ * single-page import dialog. Both destination arms are wired up:
+ * `destination.type === "new"` mints a brand-new board; `"existing"` appends
+ * into one group of an existing board, auto-matching columns onto
+ * `destination.boardColumns` (see `deriveSheetState`'s `boardColumns` arm).
  */
 export function ImportWizard({
   destination,
@@ -98,9 +108,15 @@ export function ImportWizard({
   );
   const [activeSheet, setActiveSheet] = useState(0);
   const [boardName, setBoardName] = useState("");
+  const [groupChoice, setGroupChoice] = useState<GroupChoice>(() =>
+    defaultGroupChoice(destination),
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const boardColumns =
+    destination.type === "existing" ? destination.boardColumns : undefined;
 
   function resetState() {
     setStep(1);
@@ -110,6 +126,7 @@ export function ImportWizard({
     setSheetStates({});
     setActiveSheet(0);
     setBoardName("");
+    setGroupChoice(defaultGroupChoice(destination));
     setError(null);
     setBusy(false);
   }
@@ -136,7 +153,7 @@ export function ImportWizard({
         setBoardName(res.data.boardName);
         setActiveSheet(0);
         setSheetStates({
-          0: deriveSheetState(res.data.sheets[0]?.grid ?? [], 0),
+          0: deriveSheetState(res.data.sheets[0]?.grid ?? [], 0, boardColumns),
         });
         setStep(2);
       })
@@ -151,7 +168,7 @@ export function ImportWizard({
     setSheetStates((prev) => {
       if (prev[i]) return prev;
       const grid = preview?.sheets[i]?.grid ?? [];
-      return { ...prev, [i]: deriveSheetState(grid, 0) };
+      return { ...prev, [i]: deriveSheetState(grid, 0, boardColumns) };
     });
   }
 
@@ -178,18 +195,9 @@ export function ImportWizard({
   }
 
   function handleConfirm() {
-    if (
-      !fileBase64 ||
-      !fileName ||
-      !preview ||
-      !activeState ||
-      destination.type !== "new"
-    ) {
-      return;
-    }
+    if (!fileBase64 || !fileName || !preview || !activeState) return;
     setError(null);
 
-    const workspaceId = destination.workspaceId;
     startTransition(async () => {
       const res = await commitImport({
         fileBase64,
@@ -198,7 +206,18 @@ export function ImportWizard({
         headerRow: activeState.headerRow,
         excludedRows: activeState.excluded,
         columns: buildCommitColumns(activeState),
-        destination: { type: "new", workspaceId, boardName },
+        destination:
+          destination.type === "new"
+            ? {
+                type: "new",
+                workspaceId: destination.workspaceId,
+                boardName,
+              }
+            : {
+                type: "existing",
+                boardId: destination.boardId,
+                group: groupChoice,
+              },
       });
 
       if (!res.ok) {
@@ -208,7 +227,12 @@ export function ImportWizard({
 
       onOpenChange(false);
       resetState();
-      router.push(`/boards/${res.data.boardId}`);
+      // The "new" arm lands on the freshly created board; the "existing" arm
+      // is already on that board's page, so it only needs a data refresh —
+      // no navigation (gotcha-09: never RSC-navigate for in-page data).
+      if (destination.type === "new") {
+        router.push(`/boards/${res.data.boardId}`);
+      }
       router.refresh();
     });
   }
@@ -222,60 +246,62 @@ export function ImportWizard({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto">
-          {destination.type === "existing" ? (
-            <div className="text-muted-foreground flex h-full items-center justify-center text-center text-sm">
-              Importing into an existing board is coming soon.
+          {step === 1 ? (
+            <UploadStep busy={busy} error={error} onFile={handleFile} />
+          ) : null}
+
+          {step === 2 && preview && activeState ? (
+            <div className="flex flex-col gap-2">
+              <MapStep
+                sheets={preview.sheets}
+                activeSheet={activeSheet}
+                onSheetChange={handleSheetChange}
+                state={activeState}
+                onStateChange={(next) =>
+                  setSheetStates((prev) => ({
+                    ...prev,
+                    [activeSheet]: next,
+                  }))
+                }
+                mode={destination.type}
+                boardColumns={boardColumns}
+                rowCapWarning={rowCapWarning}
+                onBack={() => setStep(1)}
+                onNext={handleNext}
+              />
+              {!hasNameColumn ? (
+                <p role="alert" className="text-destructive text-xs">
+                  Mark a column as the item name (via its column menu) before
+                  continuing.
+                </p>
+              ) : null}
             </div>
-          ) : (
-            <>
-              {step === 1 ? (
-                <UploadStep busy={busy} error={error} onFile={handleFile} />
-              ) : null}
+          ) : null}
 
-              {step === 2 && preview && activeState ? (
-                <div className="flex flex-col gap-2">
-                  <MapStep
-                    sheets={preview.sheets}
-                    activeSheet={activeSheet}
-                    onSheetChange={handleSheetChange}
-                    state={activeState}
-                    onStateChange={(next) =>
-                      setSheetStates((prev) => ({
-                        ...prev,
-                        [activeSheet]: next,
-                      }))
+          {step === 3 && preview && activeState && table ? (
+            <ConfirmStep
+              table={table}
+              state={activeState}
+              destination={
+                destination.type === "new"
+                  ? {
+                      type: "new",
+                      boardName,
+                      onBoardNameChange: setBoardName,
                     }
-                    mode="new"
-                    rowCapWarning={rowCapWarning}
-                    onBack={() => setStep(1)}
-                    onNext={handleNext}
-                  />
-                  {!hasNameColumn ? (
-                    <p role="alert" className="text-destructive text-xs">
-                      Mark a column as the item name (via its column menu)
-                      before continuing.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {step === 3 && preview && activeState && table ? (
-                <ConfirmStep
-                  table={table}
-                  state={activeState}
-                  destination={{
-                    type: "new",
-                    boardName,
-                    onBoardNameChange: setBoardName,
-                  }}
-                  error={error}
-                  pending={isPending}
-                  onBack={() => setStep(2)}
-                  onConfirm={handleConfirm}
-                />
-              ) : null}
-            </>
-          )}
+                  : {
+                      type: "existing",
+                      groups: destination.groups,
+                      groupChoice,
+                      onGroupChange: setGroupChoice,
+                    }
+              }
+              error={error}
+              pending={isPending}
+              onBack={() => setStep(2)}
+              onConfirm={handleConfirm}
+            />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

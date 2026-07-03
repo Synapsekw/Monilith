@@ -27,6 +27,36 @@ describe("deriveSheetState", () => {
   });
 });
 
+describe("deriveSheetState with boardColumns (existing-board mode)", () => {
+  it("never assigns role:group — the group column demotes to data", () => {
+    const s = deriveSheetState(grid, 0, []);
+    expect(s.columns.map((c) => c.role)).toEqual(["data", "name", "data"]);
+  });
+
+  it("auto-fills data-column targets: matched name+kind -> columnId, unmatched -> create", () => {
+    const boardColumns = [
+      { id: "col-est", name: "Est", kind: "numbers" as const, options: [] },
+    ];
+    const s = deriveSheetState(grid, 0, boardColumns);
+
+    const groupCol = s.columns.find((c) => c.name === "Group")!;
+    const estCol = s.columns.find((c) => c.name === "Est")!;
+    const nameCol = s.columns.find((c) => c.role === "name")!;
+
+    // "Est" matches the board's numbers column by name+kind.
+    expect(estCol.target).toEqual({ columnId: "col-est" });
+    // "Group" (demoted to data) has no board-column match -> create.
+    expect(groupCol.target).toBe("create");
+    // Structural "name" role never gets a target.
+    expect(nameCol.target).toBeNull();
+  });
+
+  it("leaves target null when boardColumns is omitted (new-board mode)", () => {
+    const s = deriveSheetState(grid, 0);
+    expect(s.columns.every((c) => c.target === null)).toBe(true);
+  });
+});
+
 describe("invalidCellMap + summarize", () => {
   it("flags unparseable cells by grid row index and counts them", () => {
     const s = deriveSheetState(grid, 0);

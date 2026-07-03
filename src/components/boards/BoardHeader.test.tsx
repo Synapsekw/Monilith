@@ -19,6 +19,20 @@ vi.mock("./ViewSwitcher", () => ({
   ViewSwitcher: () => <div data-testid="view-switcher" />,
 }));
 
+// BoardHeader now renders the real ImportWizard (Task 15's entry point). It
+// calls useRouter() and the spreadsheet Server Actions — mock both so the
+// dialog can open in this render tree without a Next router/server context.
+const push = vi.fn();
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, refresh }),
+}));
+
+vi.mock("@/lib/boards/spreadsheet-actions", () => ({
+  previewImport: vi.fn(),
+  commitImport: vi.fn(),
+}));
+
 // The Automations dialog pulls in Server Actions (and TanStack Query) that are
 // out of scope for the header rename test; stub it to its trigger only.
 vi.mock("@/components/boards/automations/AutomationsDialog", () => ({
@@ -192,6 +206,38 @@ describe("BoardHeader", () => {
     const heading = screen.getByRole("heading", { name: "Sprint backlog" });
     expect(heading.className).toContain("h-8");
     expect(heading.className).toContain("items-center");
+  });
+
+  it("shows the Import button and opens the import wizard dialog", async () => {
+    renderHeader(
+      <BoardHeader
+        boardId="b1"
+        boardName="Sprint backlog"
+        views={views}
+        selectedViewId="v1"
+        columns={[
+          {
+            id: "col-1",
+            board_id: "b1",
+            org_id: "org1",
+            name: "Status",
+            kind: "status",
+            position: 0,
+            settings: { options: [{ id: "o1", label: "Done", color: "#000" }] },
+          } as never,
+        ]}
+        groups={[{ id: "g1", name: "Group 1" }]}
+      />,
+    );
+
+    const importButton = screen.getByRole("button", { name: "Import" });
+    expect(importButton).toBeInTheDocument();
+
+    await userEvent.click(importButton);
+
+    expect(
+      screen.getByRole("dialog", { name: "Import from file" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the presence avatar bar with a face per occupant in the roster", () => {
