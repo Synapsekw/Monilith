@@ -87,7 +87,8 @@ describe("EventBar", () => {
     );
     fireEvent.click(screen.getByText("Clickable"));
     expect(onOpen).toHaveBeenCalledOnce();
-    expect(onOpen).toHaveBeenCalledWith("i1");
+    // The chip passes its own rect up so the board can anchor the peek.
+    expect(onOpen).toHaveBeenCalledWith("i1", expect.any(Object));
   });
 
   it("calls onOpen with the item id when Enter is pressed", () => {
@@ -108,6 +109,6 @@ describe("EventBar", () => {
     const bar = screen.getByText("KeyboardItem").closest("div[tabindex]")!;
     fireEvent.keyDown(bar, { key: "Enter" });
     expect(onOpen).toHaveBeenCalledOnce();
-    expect(onOpen).toHaveBeenCalledWith("i1");
+    expect(onOpen).toHaveBeenCalledWith("i1", expect.any(Object));
   });
 });

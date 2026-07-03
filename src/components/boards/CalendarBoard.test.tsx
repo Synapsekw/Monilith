@@ -20,11 +20,12 @@ import type { RosterOccupant } from "@/lib/boards/presence-types";
 
 const setCell = vi.fn();
 const addItem = vi.fn();
+const clearCellValue = vi.fn();
 vi.mock("@/lib/boards/use-board-mutations", () => ({
   useBoardMutations: () => ({
     setCell,
     addItem,
-    clearCellValue: vi.fn(),
+    clearCellValue,
     renameItem: vi.fn(),
   }),
 }));
@@ -183,16 +184,21 @@ function openItemParam(): string | null {
   return new URLSearchParams(window.location.search).get("item");
 }
 
-describe("CalendarBoard — open item", () => {
+describe("CalendarBoard — open item (no editable columns → legacy panel)", () => {
   beforeEach(() => {
     // Reset the URL so `?item=` assertions don't leak across tests.
     window.history.pushState({}, "", "/");
   });
 
+  // The default fixture has no status/percent column, so a tap must keep
+  // today's behavior: straight to the ItemPanel, never an empty peek.
   it("opens the item panel (sets ?item=<id>) when a month-view event is clicked", () => {
     renderCalendar();
     fireEvent.click(screen.getByText("Dated Item"));
     expect(openItemParam()).toBe("i1");
+    expect(
+      screen.queryByRole("dialog", { name: /^edit /i }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens the item panel when an event is activated with Enter", () => {
@@ -207,6 +213,118 @@ describe("CalendarBoard — open item", () => {
     fireEvent.click(screen.getByRole("tab", { name: /agenda/i }));
     fireEvent.click(screen.getByText("Dated Item"));
     expect(openItemParam()).toBe("i1");
+  });
+});
+
+const STATUS_COL_ID = "s1s1s1s1-s1s1-4s1s-8s1s-s1s1s1s1s1s1";
+const PERCENT_COL_ID = "p1p1p1p1-p1p1-4p1p-8p1p-p1p1p1p1p1p1";
+
+/** Fixture with a status column (with options) + a percent column so taps
+ * open the quick-edit peek instead of the panel. */
+function editablePayload() {
+  const base = payloadFixture() as unknown as {
+    columns: Array<Record<string, unknown>>;
+    cellValues: Array<Record<string, unknown>>;
+  };
+  base.columns.push(
+    {
+      id: STATUS_COL_ID,
+      board_id: "b1",
+      org_id: "o1",
+      kind: "status",
+      name: "Status",
+      position: 1,
+      settings: {
+        options: [
+          { id: "o1", label: "Done", color: "#00854d" },
+          { id: "o2", label: "Stuck", color: "#d83a52" },
+        ],
+      },
+    },
+    {
+      id: PERCENT_COL_ID,
+      board_id: "b1",
+      org_id: "o1",
+      kind: "percent",
+      name: "% complete",
+      position: 2,
+      settings: {},
+    },
+  );
+  base.cellValues.push({
+    item_id: "i1",
+    column_id: STATUS_COL_ID,
+    value: { optionId: "o1" },
+    board_id: "b1",
+    org_id: "o1",
+    updated_at: "2026-06-01T00:00:00Z",
+  });
+  return base as never;
+}
+
+function renderCalendarWithStatusAndPercent() {
+  const qc = new QueryClient();
+  return render(
+    <QueryClientProvider client={qc}>
+      <CalendarBoard
+        payload={editablePayload()}
+        members={[]}
+        selectedViewId={VIEW_ID}
+      />
+    </QueryClientProvider>,
+  );
+}
+
+describe("CalendarBoard — quick-edit peek", () => {
+  beforeEach(() => {
+    window.history.pushState({}, "", "/");
+    setCell.mockReset();
+    clearCellValue.mockReset();
+  });
+
+  it("opens the quick-edit peek on event click instead of the item panel", () => {
+    renderCalendarWithStatusAndPercent();
+    fireEvent.click(screen.getByLabelText("Dated Item")); // the EventBar chip
+    expect(
+      screen.getByRole("dialog", { name: "Edit Dated Item" }),
+    ).toBeInTheDocument();
+    expect(openItemParam()).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("commits a status pick from the peek through setCell and stays open", () => {
+    renderCalendarWithStatusAndPercent();
+    fireEvent.click(screen.getByLabelText("Dated Item"));
+    fireEvent.click(screen.getByRole("option", { name: "Stuck" }));
+    expect(setCell).toHaveBeenCalledWith({
+      itemId: "i1",
+      columnId: STATUS_COL_ID,
+      value: { optionId: "o2" },
+    });
+    expect(
+      screen.getByRole("dialog", { name: "Edit Dated Item" }),
+    ).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("the peek's Open button pushes ?item= via the History API (no RSC nav)", () => {
+    renderCalendarWithStatusAndPercent();
+    fireEvent.click(screen.getByLabelText("Dated Item"));
+    fireEvent.click(screen.getByRole("button", { name: /open/i }));
+    expect(openItemParam()).toBe("i1");
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("opens the peek from an agenda row too", () => {
+    renderCalendarWithStatusAndPercent();
+    fireEvent.click(screen.getByRole("tab", { name: /agenda/i }));
+    fireEvent.click(screen.getByText("Dated Item"));
+    expect(
+      screen.getByRole("dialog", { name: "Edit Dated Item" }),
+    ).toBeInTheDocument();
+    expect(openItemParam()).toBeNull();
   });
 });
 

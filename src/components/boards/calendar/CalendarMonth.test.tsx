@@ -18,7 +18,7 @@ const cellValues = items.map((it) => ({
   value: { date: "2026-06-09", end: "2026-06-12" },
 })) as never;
 
-function renderMonth(onOpenItem = vi.fn()) {
+function renderMonth(onItemTap = vi.fn()) {
   return render(
     <DndContext>
       <CalendarMonth
@@ -30,7 +30,7 @@ function renderMonth(onOpenItem = vi.fn()) {
         statusColumn={statusColumn}
         cellMap={buildCellMap(cellValues)}
         onDayClick={vi.fn()}
-        onOpenItem={onOpenItem}
+        onItemTap={onItemTap}
       />
     </DndContext>,
   );
@@ -49,6 +49,14 @@ describe("CalendarMonth", () => {
     renderMonth();
     fireEvent.click(screen.getAllByText(/\+1 more/)[0]);
     expect(screen.getByText("Span D")).toBeInTheDocument();
+  });
+
+  it("fires onItemTap with the item id and the tapped row's rect from the overflow popover", () => {
+    const onItemTap = vi.fn();
+    renderMonth(onItemTap);
+    fireEvent.click(screen.getAllByText(/\+1 more/)[0]);
+    fireEvent.click(screen.getByText("Span D"));
+    expect(onItemTap).toHaveBeenCalledWith("d", expect.any(Object));
   });
 
   it("counts per-day overflow for a hidden item on an interior day of a hidden span", () => {
@@ -80,7 +88,7 @@ describe("CalendarMonth", () => {
           statusColumn={undefined}
           cellMap={buildCellMap(cv)}
           onDayClick={vi.fn()}
-          onOpenItem={vi.fn()}
+          onItemTap={vi.fn()}
         />
       </DndContext>,
     );
@@ -108,7 +116,7 @@ describe("CalendarMonth", () => {
           statusColumn={undefined}
           cellMap={buildCellMap(cv)}
           onDayClick={vi.fn()}
-          onOpenItem={vi.fn()}
+          onItemTap={vi.fn()}
         />
       </DndContext>,
     );
