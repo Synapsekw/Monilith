@@ -16,7 +16,14 @@ import {
   type GroupMeta,
   type HealthCounts,
 } from "@/lib/dashboards/widget-data";
-import { resolveSeries, resolveRows } from "@/lib/dashboards/widget-resolve";
+import {
+  resolveAggregate,
+  resolveCompletion,
+  resolveHealth,
+  resolveSeries,
+  resolveRows,
+  type WidgetRowsData,
+} from "@/lib/dashboards/widget-resolve";
 import type { SeriesData } from "@/lib/dashboards/series";
 import {
   configSchemaForKind,
@@ -27,6 +34,7 @@ import {
   deleteWidgetSchema,
   getWidgetDataSchema,
   getWidgetsDataSchema,
+  getWidgetPreviewDataSchema,
   renameDashboardSchema,
   saveLayoutSchema,
   updateWidgetConfigSchema,
@@ -494,4 +502,151 @@ export async function getWidgetSeries(input: {
     orgId: widget.org_id,
     config: (widget.config ?? {}) as Record<string, unknown>,
   });
+}
+
+/** Result of a single draft preview fetch — one shape per widget family. */
+export type WidgetPreviewResult =
+  | { ok: true; shape: "aggregate"; payload: WidgetAggregatePayload }
+  | { ok: true; shape: "series"; payload: SeriesData }
+  | { ok: true; shape: "rows"; payload: WidgetRowsData }
+  | { ok: false; error: string };
+
+/**
+ * Resolve a *draft* widget's data for the config-sheet live preview. Unlike the
+ * id-keyed reads, the config is unsaved client draft state, so it's passed in
+ * directly. Authorization: re-read the board row with the RLS-scoped client to
+ * derive org_id — a board the caller can't see is absent ⇒ error. The config is
+ * Zod-validated per kind; a transiently-invalid draft yields a neutral empty
+ * payload (the preview shows the widget's own configure/empty state), matching
+ * how half-configured live widgets render. Uncached: every draft is fresh.
+ */
+export async function getWidgetPreviewData(input: {
+  kind: Widget["kind"];
+  sourceBoardId: string;
+  config: Record<string, unknown>;
+}): Promise<ActionResult<WidgetPreviewResult>> {
+  const parsed = getWidgetPreviewDataSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  // Validate the kind-specific shape; invalid drafts render as neutral/empty.
+  const kindParsed = widgetKindSchema.safeParse(parsed.data.kind);
+  if (!kindParsed.success) return fail("Unsupported widget kind.");
+  const cfg = configSchemaForKind(kindParsed.data).safeParse(
+    parsed.data.config,
+  );
+  const config = cfg.success ? (cfg.data as Record<string, unknown>) : null;
+
+  const supabase = await createClient();
+  // Tenant boundary: derive org from an RLS-visible board row, never the client.
+  const { data: board } = await supabase
+    .from("boards")
+    .select("org_id")
+    .eq("id", parsed.data.sourceBoardId)
+    .maybeSingle();
+  if (!board) return fail("Board not found.");
+  const orgId = board.org_id;
+  const boardId = parsed.data.sourceBoardId;
+
+  // Chart + list.
+  if (kindParsed.data === "chart") {
+    if (!config)
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          shape: "series",
+          payload: {
+            chartType: "bar",
+            primaryKind: "date",
+            seriesKind: null,
+            points: [],
+          },
+        },
+      };
+    const r = await resolveSeries(supabase, { boardId, orgId, config });
+    return r.ok
+      ? { ok: true, data: { ok: true, shape: "series", payload: r.data } }
+      : { ok: true, data: { ok: false, error: r.error } };
+  }
+  if (kindParsed.data === "list") {
+    if (!config)
+      return {
+        ok: true,
+        data: { ok: true, shape: "rows", payload: { columns: [], rows: [] } },
+      };
+    const r = await resolveRows(supabase, { boardId, config });
+    return r.ok
+      ? { ok: true, data: { ok: true, shape: "rows", payload: r.data } }
+      : { ok: true, data: { ok: false, error: r.error } };
+  }
+
+  // Aggregate family (number / battery / completion / health).
+  if (!config)
+    return {
+      ok: true,
+      data: {
+        ok: true,
+        shape: "aggregate",
+        payload: {
+          kind: kindParsed.data,
+          config: {},
+          buckets: [],
+          columnMeta: null,
+        },
+      },
+    };
+
+  if (kindParsed.data === "completion") {
+    const r = await resolveCompletion(supabase, { boardId, config });
+    if (!r.ok) return { ok: true, data: { ok: false, error: r.error } };
+    return {
+      ok: true,
+      data: {
+        ok: true,
+        shape: "aggregate",
+        payload: {
+          kind: kindParsed.data,
+          config,
+          buckets: [],
+          columnMeta: null,
+          completion: { rows: r.rows, groups: r.groups },
+        },
+      },
+    };
+  }
+  if (kindParsed.data === "health") {
+    const r = await resolveHealth(supabase, { boardId });
+    if (!r.ok) return { ok: true, data: { ok: false, error: r.error } };
+    return {
+      ok: true,
+      data: {
+        ok: true,
+        shape: "aggregate",
+        payload: {
+          kind: kindParsed.data,
+          config,
+          buckets: [],
+          columnMeta: null,
+          health: r.counts,
+        },
+      },
+    };
+  }
+  // number / battery
+  const r = await resolveAggregate(supabase, { boardId, config });
+  if (!r.ok) return { ok: true, data: { ok: false, error: r.error } };
+  return {
+    ok: true,
+    data: {
+      ok: true,
+      shape: "aggregate",
+      payload: {
+        kind: kindParsed.data,
+        config,
+        buckets: r.buckets,
+        columnMeta: r.columnMeta,
+      },
+    },
+  };
 }
