@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-03-1512
+last-updated: 2026-07-03-1918
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -40,7 +40,7 @@ advisors + regenerate types before moving on.**
 - **4 — Collaboration** — <span style="color:#22c55e">**[Done]**</span> — Item detail panel, updates/comments/@mentions, attachments, activity log, notifications inbox. _(4a panel+updates+activity · 4b mentions+notifications · 4c attachments — spec [[2026-06-16-phase-4-collaboration-design]])_
 - **5 — Automations + Rules** — <span style="color:#22c55e">**[Done]**</span> — Trigger/condition/action builder on Postgres triggers + `pg_cron`/`pg_net` (no Edge Functions); recipes, run-history, webhook actions. _(5a → 5c-2 + move_to_group)_
 - **6 — ClickUp depth** — <span style="color:#eab308">**[In progress — 6a–6h done; 6e Docs deferred]**</span> — Subitems, custom fields/statuses, time tracking, relations + mirror columns + aggregation, workspace management, real-time presence. 6e Docs deferred ([[2026-06-21-decision-24-defer-phase-6e-docs]]: too complex + not fully cloud-native).
-- **7 — Asana polish** — <span style="color:#eab308">**[In progress — 7a + 7b + 7c + time-allocation done]**</span> — Portfolios, Goals/OKRs, Workload/capacity (v2: workspace/board filtering + planned/actual metric; v3: variance + per-day actuals drill-down). Time allocation: `/time` weekly "My Time" card (manual decimal-hours per task/category/day, save-as-you-go) unified with timers into one actuals ledger; Workload reworked to full-canvas (utilization % + capacity bars). ([[2026-06-23-2059-time-allocation-my-time-card]])
+- **7 — Asana polish** — <span style="color:#22c55e">**[Done — 7a + 7b + 7c + time-allocation]**</span> (Workload v3 variance/drill-down is optional future depth) — Portfolios, Goals/OKRs, Workload/capacity (v2: workspace/board filtering + planned/actual metric; v3: variance + per-day actuals drill-down). Time allocation: `/time` weekly "My Time" card (manual decimal-hours per task/category/day, save-as-you-go) unified with timers into one actuals ledger; Workload reworked to full-canvas (utilization % + capacity bars). ([[2026-06-23-2059-time-allocation-my-time-card]])
 - **8 — Dashboards + templates + ⌘K polish** — <span style="color:#22c55e">**[Done + v2 polish + AI gen]**</span> — Cross-board widgets (Number/Chart/Battery/List + filter), board templates, ⌘K nav + create. v2 polish: 9 chart types (line/area/stacked/grouped/combo/donut/radial) via `dashboard_series` (date-bucket + multi-series; group by date/status/dropdown/people), unified edit drawer w/ live preview, bordered-card reskin. **AI generation:** Opus 4.8 reads a board's schema+stats (no raw cells) and proposes a full dashboard via a Generate-with-AI wizard + Keep/Discard/Regenerate review banner. ([[2026-06-23-1953-dashboards-polish-v2]], [[2026-06-24-0912-ai-dashboard-generation]])
 - **9 — Hardening & Optimization** — <span style="color:#22c55e">**[Done — 9.1 + 9.2 + 9.3 + 9.3b + 9.4 + 9.5a + 9.6]**</span> — Perf + perceived-perf program (Track A actual speed, Track B perceived speed). 9.1 auth fast-path + 9.2 streaming shell + 9.3 tagged `use cache` shell reads + **9.3b widget-aggregation cache** + 9.4 route skeletons + 9.5a interaction responsiveness + **9.6 Web-Vitals gate** (Lighthouse CI budget + `next/web-vitals` RUM) all shipped. Spec `docs/superpowers/specs/2026-06-22-phase-9-performance-optimization-design.md`. ([[2026-06-28-1743-phase-9-close-parallel-batch]])
 - **RS — Design refresh (dark-first reskin)** — <span style="color:#22c55e">**[Done — dark + light]**</span> — Dark-first near-black palette as `.dark` OKLch tokens (dark default); light-mode pass shipped. ([[2026-06-16-decision-08-dark-first-monday-reskin]])
@@ -49,10 +49,10 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **MVP-F DONE — 9/9 features shipped to production** (Batch A PR #47 + Batch B PR #48, both same-day; [[2026-07-03-1512-mvp-final-batch-b-promote]]) · Phase 7 (Asana polish) in progress · standing product decision next: define Phase 10, revisit deferred 6e Docs, or declare v1 feature-complete.
-- **Branch:** `develop == origin/develop` at `af8d962` (post-#48 heal) · `main` at `f0f71f5`, prod deploy confirmed. Feedback rows: F1/F3/F6 resolved, F2/F5 in_progress (flip after prod confirms Batch B).
-- **In flight:** nothing from this session. Foreign worktree `task/import-wizard-v2` (another session) is live.
-- **Next:** (1) apply Batch B migrations to **prod** (`…110000`, `…120000`, `…121000` — each file separately, prod SQL editor) or `/sync-prod`; (2) optional email leg (Resend domain + Vercel env + Vault secrets); (3) `/whats-next` for the post-MVP direction.
+- **Phase:** **MVP-F DONE — 9/9 shipped to prod** · **Phase 7 confirmed fully built** (7a/7b/7c/time-allocation — nothing left) · standing product call next: define Phase 10, revive deferred 6e Docs, or **declare v1 feature-complete**.
+- **Branch:** `develop == origin/develop` at `9d618c3` · `main` at `f0f71f5`, prod deploy confirmed. Feedback rows: F1/F3/F6 resolved, F2/F5 in_progress (flip after prod confirms Batch B).
+- **In flight:** four scoped plans **pushed, awaiting review** — `task/perf-tier3` (6 perf items), `task/rename-board-shared-tag` (S), `task/widget-preview-live` (M), `task/pwa-shell` (S). All docs-only, no source built. Foreign `task/import-wizard-v2` (another session) still live. ([[2026-07-03-1918-whats-next-triage-scope-four-plans]])
+- **Next:** review the four pushed plans (cheapest first: rename-board-shared-tag → pwa-shell), then greenlight builds as a parallel batch or make the v1-feature-complete call. `importSpreadsheetAsBoard` boardsTag fix deferred into import-wizard-v2's Task 6 (file collision).
 - **Owed:** prod Batch B migrations (above). Migration-ledger repair on BOTH projects at next `db push`/`/sync-prod` (all 8 recent applies were SQL-editor). Health-summary requester questions in its spec. Dead lock-held worktree dirs to delete. `.mcp.json` uncommitted; untracked `scripts/sync-prod/push-schema.sh` (foreign). Perf tier-3 leftovers per [[2026-07-02-1902-perf-pass-four-parallel-worktrees]].
 
 ### Last session
