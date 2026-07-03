@@ -24,6 +24,7 @@ import {
   renameDashboardSchema,
   saveLayoutSchema,
   updateWidgetConfigSchema,
+  widgetKindSchema,
 } from "@/lib/validations/dashboards";
 import type { Json, Tables } from "@/types/database.types";
 import type { DisplayColumn } from "@/lib/dashboards/list-rows";
@@ -201,9 +202,11 @@ export async function updateWidgetConfig(input: {
       .eq("id", parsed.data.widgetId)
       .maybeSingle();
     if (!existing) return fail("Widget not found.");
-    const cfg = configSchemaForKind(existing.kind).safeParse(
-      parsed.data.config,
-    );
+    // The DB enum can be ahead of this build (a widget kind added by a newer
+    // migration before its handling ships here) — validate at the boundary.
+    const kind = widgetKindSchema.safeParse(existing.kind);
+    if (!kind.success) return fail("Unsupported widget kind.");
+    const cfg = configSchemaForKind(kind.data).safeParse(parsed.data.config);
     if (!cfg.success)
       return fail(cfg.error.issues[0]?.message ?? "Invalid widget config");
     patch.config = cfg.data as Json;

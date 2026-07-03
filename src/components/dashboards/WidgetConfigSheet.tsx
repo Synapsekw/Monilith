@@ -22,6 +22,7 @@ import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
 import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
 import type { CacheWidget } from "@/lib/dashboards/cache";
+import { widgetKindSchema } from "@/lib/validations/dashboards";
 
 function draftFromWidget(w: CacheWidget): WidgetDraft {
   const config =
@@ -30,8 +31,12 @@ function draftFromWidget(w: CacheWidget): WidgetDraft {
           (w.config ?? {}) as Record<string, unknown>,
         ) as unknown as Record<string, unknown>)
       : ((w.config ?? {}) as Record<string, unknown>);
+  // The DB enum can be ahead of this build (a widget kind added by a newer
+  // migration before its UI ships here). Validate at the boundary; an
+  // unrecognized kind degrades to a "number" draft instead of a type hole.
+  const kind = widgetKindSchema.safeParse(w.kind);
   return {
-    kind: w.kind,
+    kind: kind.success ? kind.data : "number",
     sourceBoardId: w.source_board_id ?? "",
     title: w.title ?? "",
     config,
