@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { GripVertical, MoreHorizontal } from "lucide-react";
+import type {
+  DraggableAttributes,
+  DraggableSyntheticListeners,
+} from "@dnd-kit/core";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -22,9 +27,25 @@ import { Input } from "@/components/ui/input";
 import type { CacheColumn } from "@/lib/boards/cache";
 import { COLUMN_KIND_META } from "@/lib/boards/column-kinds";
 import { clampDragWidth } from "@/lib/boards/name-column-width";
+import { cn } from "@/lib/utils";
 
 const MIN = 80;
 const MAX = 1200;
+
+/**
+ * Drag/reorder wiring passed down by the owning sortable wrapper (the header
+ * itself stays presentational). `onMoveLeft`/`onMoveRight` are the menu-based
+ * keyboard path; null = disabled at that edge.
+ */
+export type ColumnReorder = {
+  setNodeRef: (el: HTMLDivElement | null) => void;
+  style: React.CSSProperties; // translate-only transform + transition
+  isDragging: boolean;
+  handleAttributes: DraggableAttributes;
+  handleListeners: DraggableSyntheticListeners;
+  onMoveLeft: (() => void) | null; // null = disabled (first data column)
+  onMoveRight: (() => void) | null; // null = disabled (last data column)
+};
 
 export function ColumnHeader({
   column,
@@ -35,6 +56,7 @@ export function ColumnHeader({
   onResizeEnd,
   onEditOptions,
   onEditCurrency,
+  reorder,
 }: {
   column: CacheColumn;
   width: number;
@@ -44,6 +66,7 @@ export function ColumnHeader({
   onResizeEnd: (width: number) => void; // on release (persists via resizeColumn)
   onEditOptions?: () => void; // open the option editor (status/dropdown only)
   onEditCurrency?: () => void; // open the currency picker (currency kind only)
+  reorder?: ColumnReorder; // drag + move-left/right affordances (optional)
 }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -74,7 +97,14 @@ export function ColumnHeader({
   }
 
   return (
-    <div className="group/col relative flex items-center gap-1 border-l px-3 py-1.5">
+    <div
+      ref={reorder?.setNodeRef}
+      style={reorder?.style}
+      className={cn(
+        "group/col relative flex items-center gap-1 border-l px-3 py-1.5",
+        reorder?.isDragging && "bg-surface z-auto shadow-lg",
+      )}
+    >
       {editing ? (
         <Input
           autoFocus
@@ -90,6 +120,17 @@ export function ColumnHeader({
         />
       ) : (
         <>
+          {reorder && (
+            <button
+              type="button"
+              aria-label={`Reorder ${column.name} column`}
+              {...reorder.handleAttributes}
+              {...(reorder.handleListeners ?? {})}
+              className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 cursor-grab touch-none place-items-center rounded opacity-0 transition-opacity group-hover/col:opacity-100 active:cursor-grabbing pointer-coarse:size-11 pointer-coarse:opacity-100"
+            >
+              <GripVertical className="size-3.5" />
+            </button>
+          )}
           <span className="truncate">{column.name}</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -101,6 +142,23 @@ export function ColumnHeader({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {reorder && (
+                <>
+                  <DropdownMenuItem
+                    disabled={!reorder.onMoveLeft}
+                    onSelect={() => reorder.onMoveLeft?.()}
+                  >
+                    Move left
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!reorder.onMoveRight}
+                    onSelect={() => reorder.onMoveRight?.()}
+                  >
+                    Move right
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               {COLUMN_KIND_META[column.kind]?.hasOptions && onEditOptions && (
                 <DropdownMenuItem onSelect={() => onEditOptions()}>
                   Edit labels

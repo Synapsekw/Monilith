@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ColumnHeader } from "@/components/boards/ColumnHeader";
+import {
+  ColumnHeader,
+  type ColumnReorder,
+} from "@/components/boards/ColumnHeader";
 import type { CacheColumn } from "@/lib/boards/cache";
 
 function col(over: Partial<CacheColumn> = {}): CacheColumn {
@@ -196,5 +199,72 @@ describe("ColumnHeader", () => {
     expect(onResize).toHaveBeenCalledWith(240); // 180 + (260-200)
     fireEvent(window, new Event("pointerup"));
     expect(onResizeEnd).toHaveBeenCalledWith(240);
+  });
+});
+
+function reorder(over: Partial<ColumnReorder> = {}): ColumnReorder {
+  return {
+    setNodeRef: () => {},
+    style: {},
+    isDragging: false,
+    handleAttributes: {} as ColumnReorder["handleAttributes"],
+    handleListeners: undefined,
+    onMoveLeft: vi.fn(),
+    onMoveRight: vi.fn(),
+    ...over,
+  };
+}
+
+describe("ColumnHeader reorder affordances", () => {
+  const base = {
+    width: 180,
+    onRename: vi.fn(),
+    onDelete: vi.fn(),
+    onResize: vi.fn(),
+    onResizeEnd: vi.fn(),
+  };
+
+  it("renders a reorder grip when reorder props are provided", () => {
+    render(<ColumnHeader column={col()} {...base} reorder={reorder()} />);
+    expect(
+      screen.getByRole("button", { name: "Reorder Notes column" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders no grip and no move items without reorder props", () => {
+    render(<ColumnHeader column={col()} {...base} />);
+    expect(
+      screen.queryByRole("button", { name: "Reorder Notes column" }),
+    ).toBeNull();
+    fireEvent.click(screen.getByLabelText("Notes column menu"));
+    expect(screen.queryByText("Move left")).toBeNull();
+  });
+
+  it("fires onMoveRight from the menu", () => {
+    const onMoveRight = vi.fn();
+    render(
+      <ColumnHeader
+        column={col()}
+        {...base}
+        reorder={reorder({ onMoveRight })}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Notes column menu"));
+    fireEvent.click(screen.getByText("Move right"));
+    expect(onMoveRight).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables Move left at the left edge", () => {
+    render(
+      <ColumnHeader
+        column={col()}
+        {...base}
+        reorder={reorder({ onMoveLeft: null })}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Notes column menu"));
+    expect(
+      screen.getByText("Move left").closest("[role=menuitem]"),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 });
