@@ -72,11 +72,13 @@ and gives the formatting logic an independently testable surface.
 
 ```
 export type FormatPlan = {
-  headerCellCount: number;
-  columns: { kind: ColumnKind; index: number }[];   // 1-based ws columns incl. Group/Name
+  /** Board columns in emitted order; worksheet column = index + 3 (A=Group, B=Name). */
+  columnKinds: ColumnKind[];
   rows: { rowNumber: number; groupColor: string; isSubitem: boolean }[];
-  optionFills: { rowNumber: number; colIndex: number; hex: string }[]; // status/dropdown
-  percentBands: { colIndex: number; band: Band; cells: string[] }[];   // "D3" addresses
+  /** Status / single-select dropdown fills. colIndex is 1-based worksheet column. */
+  optionFills: { rowNumber: number; colIndex: number; hex: string }[];
+  /** Percent cells with their numeric value (0–100); band-bucketing happens inside. */
+  percentCells: { rowNumber: number; colIndex: number; value: number }[];
 };
 export function applyWorkbookFormatting(ws: ExcelJS.Worksheet, plan: FormatPlan): void;
 ```
