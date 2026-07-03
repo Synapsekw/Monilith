@@ -207,6 +207,52 @@ describe("WidgetDataProvider / useWidgetData", () => {
     expect(getWidgetsData).toHaveBeenCalledWith({ widgetIds: [W1] });
   });
 
+  it("includes health widgets in the batch and exposes data.health", async () => {
+    getWidgetsData.mockResolvedValue({
+      ok: true,
+      data: {
+        results: {
+          [W1]: {
+            ok: true,
+            kind: "health",
+            config: {},
+            buckets: [],
+            columnMeta: null,
+            health: {
+              totalItems: 8,
+              doneItems: 2,
+              overdueItems: 3,
+              incompleteItems: 4,
+              newItems7d: 1,
+            },
+          },
+        },
+      },
+    });
+
+    function HealthProbe({ id }: { id: string }) {
+      const { data, isLoading, isError } = useWidgetData(id);
+      const text = isLoading
+        ? "loading"
+        : isError
+          ? "error"
+          : `overdue:${data?.health?.overdueItems ?? "none"}`;
+      return <div data-testid={id}>{text}</div>;
+    }
+
+    renderWithProvider(
+      [widget(W1, { kind: "health", config: {} })],
+      <HealthProbe id={W1} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId(W1)).toHaveTextContent("overdue:3"),
+    );
+    // The health widget rode the single batched fetch.
+    expect(getWidgetsData).toHaveBeenCalledTimes(1);
+    expect(getWidgetsData).toHaveBeenCalledWith({ widgetIds: [W1] });
+  });
+
   it("degrades to a non-crashing error state when rendered without a provider", () => {
     // The widget-config sheet's live preview renders widget bodies outside the
     // dashboard grid's provider — the hook must not throw there.
