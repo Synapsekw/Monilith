@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cellToText, textToCell } from "./cell-codec";
+import { cellToText, cellToExcelValue, textToCell } from "./cell-codec";
 
 const statusSettings = {
   options: [
@@ -452,5 +452,42 @@ describe("textToCell", () => {
     expect(textToCell("status", text, synthOptions)).toEqual({
       optionId: "o1",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cellToExcelValue
+// ---------------------------------------------------------------------------
+describe("cellToExcelValue", () => {
+  it("returns a real number for numbers cells", () => {
+    expect(cellToExcelValue("numbers", { n: 42.5 }, {})).toBe(42.5);
+  });
+
+  it("returns a real number for percent cells", () => {
+    expect(cellToExcelValue("percent", { percent: 60 }, {})).toBe(60);
+  });
+
+  it("returns empty string for blank numbers/percent", () => {
+    expect(cellToExcelValue("numbers", null, {})).toBe("");
+    expect(cellToExcelValue("percent", { percent: "bogus" }, {})).toBe("");
+  });
+
+  it("returns the cellToText string for every other kind", () => {
+    expect(
+      cellToExcelValue(
+        "status",
+        { optionId: "o1" },
+        { options: [{ id: "o1", label: "Done", color: "#00c875" }] },
+      ),
+    ).toBe("Done");
+    expect(cellToExcelValue("date", { date: "2026-07-03" }, {})).toBe(
+      "2026-07-03",
+    );
+    expect(cellToExcelValue("checkbox", { checked: true }, {})).toBe("TRUE");
+  });
+
+  it("never throws on malformed input", () => {
+    expect(cellToExcelValue("numbers", 7, {})).toBe("");
+    expect(cellToExcelValue("percent", "x", null)).toBe("");
   });
 });
