@@ -110,6 +110,24 @@ export function cellToText(
   }
 }
 
+/** A cell value ready for exceljs `addRow`: real numbers for numbers/percent,
+ *  the flat `cellToText` string otherwise. Never throws. */
+export type ExcelCellValue = string | number;
+
+export function cellToExcelValue(
+  kind: ColumnKind,
+  value: unknown,
+  settings: unknown,
+  resolvePeopleName?: (userId: string) => string | null,
+): ExcelCellValue {
+  const text = cellToText(kind, value, settings, resolvePeopleName);
+  if ((kind === "numbers" || kind === "percent") && text !== "") {
+    const n = Number(text);
+    if (Number.isFinite(n)) return n;
+  }
+  return text;
+}
+
 /**
  * Parse a raw spreadsheet string into a cell value Json for an importable kind.
  * Returns null when empty/invalid. Never throws.
