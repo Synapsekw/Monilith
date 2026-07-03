@@ -83,3 +83,50 @@ describe("bucketsTotal", () => {
     ).toBe(7);
   });
 });
+
+import { shapeCompletion } from "./widget-data";
+
+describe("shapeCompletion", () => {
+  const groups = [
+    { id: "g1", label: "Workstream A", color: "#0073ea" },
+    { id: "g2", label: "Workstream B", color: "#00c875" },
+    { id: "g3", label: "Empty group", color: "#999999" },
+  ];
+
+  it("emits one row per group in position order, weighted overall", () => {
+    const shaped = shapeCompletion(
+      [
+        { groupKey: "g2", itemCount: 1, completion: 100 },
+        { groupKey: "g1", itemCount: 3, completion: 50 },
+      ],
+      groups,
+    );
+    expect(shaped.rows.map((r) => r.key)).toEqual(["g1", "g2", "g3"]);
+    expect(shaped.rows[0]).toMatchObject({ percent: 50, itemCount: 3 });
+    expect(shaped.rows[2]).toMatchObject({ percent: null, itemCount: 0 });
+    // weighted: (50*3 + 100*1) / 4 = 62.5 — never the unweighted mean (75)
+    expect(shaped.overall).toBe(62.5);
+    expect(shaped.totalItems).toBe(4);
+  });
+
+  it("folds unknown group keys into a trailing Unknown row", () => {
+    const shaped = shapeCompletion(
+      [
+        { groupKey: "g1", itemCount: 2, completion: 100 },
+        { groupKey: "deleted-group", itemCount: 2, completion: 0 },
+      ],
+      groups.slice(0, 1),
+    );
+    const last = shaped.rows[shaped.rows.length - 1];
+    expect(last.label).toBe("Unknown");
+    expect(last.percent).toBe(0);
+    expect(shaped.overall).toBe(50);
+  });
+
+  it("returns null overall for an empty board", () => {
+    const shaped = shapeCompletion([], groups);
+    expect(shaped.overall).toBeNull();
+    expect(shaped.totalItems).toBe(0);
+    expect(shaped.rows.every((r) => r.percent === null)).toBe(true);
+  });
+});
