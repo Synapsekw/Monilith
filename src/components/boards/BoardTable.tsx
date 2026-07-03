@@ -47,6 +47,7 @@ import type {
 } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
 import { isItemComplete, isOverdue, localTodayISO } from "@/lib/boards/overdue";
+import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { FlashHighlight } from "@/components/boards/presence/FlashHighlight";
 import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 import { presenceTarget } from "@/lib/boards/presence-target";
@@ -1616,6 +1617,13 @@ function ItemRow({
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as rollupNowMs; virtualized rows remount as they scroll).
   const [todayISO] = useState(() => localTodayISO());
+  // Priority cells only: direct-dependent counts derived from the cached
+  // dependency edges (one O(E) pass — see @/lib/boards/priority; overdue-tint
+  // precedent: render-time signal, nothing persisted, 0 extra round-trips).
+  const dependentsByItem = useMemo(
+    () => buildDependentsCountMap(controls.cache.dependencies),
+    [controls.cache.dependencies],
+  );
   const {
     setNodeRef,
     attributes,
@@ -1744,6 +1752,11 @@ function ItemRow({
               isOverdue(value, todayISO) &&
               !isItemComplete(item.id, columns, controls.cache.cellValues)
             }
+            dependents={
+              col.kind === "priority"
+                ? (dependentsByItem.get(item.id) ?? 0)
+                : undefined
+            }
           />
         );
       })}
@@ -1792,6 +1805,11 @@ function SortableSubitemRow({
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as ItemRow's rollupNowMs).
   const [todayISO] = useState(() => localTodayISO());
+  // Priority cells only: direct-dependent counts (see ItemRow's map).
+  const dependentsByItem = useMemo(
+    () => buildDependentsCountMap(controls.cache.dependencies),
+    [controls.cache.dependencies],
+  );
   const {
     setNodeRef,
     attributes,
@@ -1857,6 +1875,11 @@ function SortableSubitemRow({
               col.kind === "date" &&
               isOverdue(value, todayISO) &&
               !isItemComplete(sub.id, columns, controls.cache.cellValues)
+            }
+            dependents={
+              col.kind === "priority"
+                ? (dependentsByItem.get(sub.id) ?? 0)
+                : undefined
             }
           />
         );
@@ -2021,6 +2044,7 @@ function EditableCell({
   value,
   controls,
   overdue = false,
+  dependents,
 }: {
   item: Item;
   column: Column;
@@ -2028,6 +2052,8 @@ function EditableCell({
   controls: CellControls;
   /** Date cells only: past-due + incomplete (see @/lib/boards/overdue). */
   overdue?: boolean;
+  /** Priority cells only: direct dependents of the item — see @/lib/boards/priority. */
+  dependents?: number;
 }) {
   const { editing, setEditing, setCell, clearCellValue, members } = controls;
   const isEditing =
@@ -2151,6 +2177,7 @@ function EditableCell({
           value={value}
           settings={settings}
           members={members}
+          dependents={dependents}
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
             setEditing(null);
@@ -2187,6 +2214,7 @@ function EditableCell({
         settings={settings}
         members={members}
         overdue={overdue}
+        dependents={dependents}
       />
       <PresenceRing target={target} />
       <FlashHighlight target={target} />
