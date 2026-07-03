@@ -330,3 +330,33 @@ describe("healthConfigSchema", () => {
     expect(widgetKindSchema.safeParse("health").success).toBe(true);
   });
 });
+
+import { getWidgetPreviewDataSchema } from "./dashboards";
+
+describe("getWidgetPreviewDataSchema", () => {
+  const board = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  it("accepts a well-formed draft", () => {
+    const r = getWidgetPreviewDataSchema.safeParse({
+      kind: "number",
+      sourceBoardId: board,
+      config: { agg: "count" },
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects a non-uuid board", () => {
+    const r = getWidgetPreviewDataSchema.safeParse({
+      kind: "number",
+      sourceBoardId: "__preview__",
+      config: {},
+    });
+    expect(r.success).toBe(false);
+  });
+  it("rejects an unknown kind", () => {
+    const r = getWidgetPreviewDataSchema.safeParse({
+      kind: "gauge",
+      sourceBoardId: board,
+      config: {},
+    });
+    expect(r.success).toBe(false);
+  });
+});
