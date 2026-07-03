@@ -1,0 +1,11 @@
+-- MVP Final item 5: add the priority column kind (Normal / Critical).
+-- Enum-only migration: ALTER TYPE ... ADD VALUE is additive and must not be
+-- referenced by later statements in the same transaction. Mirrors
+-- 20260623000000_percent_enum.sql and 20260703090000_currency_enum.sql.
+-- Priority cells store { "level": "normal" | "critical" } jsonb; the
+-- auto-Critical (>= 2 dependents) state is DERIVED at render time from
+-- item_dependencies already in the board payload and is never persisted
+-- (spec: docs/superpowers/specs/2026-07-03-priority-critical-design.md).
+-- Version slot 20260703110000 reserved per gotcha-43 (parallel-branch
+-- migration version collision).
+alter type public.column_kind add value if not exists 'priority';
