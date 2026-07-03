@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { verifyUnsubscribeSignature } from "@/lib/digest/token";
 import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -15,6 +15,10 @@ const page = (msg: string) => `<!doctype html>
  * true, idempotent, reveals no data. Invalid signature → 400, no side effect.
  */
 export async function GET(req: Request) {
+  // Stop build-time prerendering before touching server env — a GET handler
+  // with no detected request-time API otherwise prerenders during `next
+  // build`, where CI has no secrets and getServerEnv() fails the build.
+  await connection();
   const env = getServerEnv();
   const url = new URL(req.url);
   const uid = url.searchParams.get("uid") ?? "";
