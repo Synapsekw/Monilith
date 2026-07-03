@@ -121,3 +121,27 @@ describe("isCardCellEmpty", () => {
     expect(isCardCellEmpty("currency", null)).toBe(true);
   });
 });
+
+describe("priority on kanban cards", () => {
+  it("surfaces priority in the pill zone", () => {
+    const { pills } = selectCardColumns(
+      [col("s", "status", 0), col("p", "priority", 1)],
+      "s",
+    );
+    expect(pills.map((c) => c.id)).toContain("p");
+  });
+
+  describe("isCardCellEmpty(priority)", () => {
+    it("is empty when unset/normal and below threshold (cards show only critical)", () => {
+      expect(isCardCellEmpty("priority", null, 1)).toBe(true);
+      expect(isCardCellEmpty("priority", { level: "normal" }, 0)).toBe(true);
+    });
+    it("is present when manually critical or auto-critical", () => {
+      expect(isCardCellEmpty("priority", { level: "critical" }, 0)).toBe(false);
+      expect(isCardCellEmpty("priority", null, 2)).toBe(false);
+    });
+    it("auto-presence works even over a stored normal", () => {
+      expect(isCardCellEmpty("priority", { level: "normal" }, 2)).toBe(false);
+    });
+  });
+});

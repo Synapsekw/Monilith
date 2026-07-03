@@ -131,3 +131,24 @@ describe("currency rollup", () => {
     });
   });
 });
+
+describe("priority rollup", () => {
+  it("rolls priority up as a fixed-segment distribution", () => {
+    const r = rollupCell("priority", [
+      { level: "critical" },
+      { level: "critical" },
+      { level: "normal" },
+    ]);
+    expect(r).toEqual({
+      kind: "distribution",
+      total: 3,
+      segments: [
+        { id: "critical", label: "Critical", color: "#e2445c", count: 2 },
+        { id: "normal", label: "Normal", color: "#c4c4c4", count: 1 },
+      ],
+    });
+  });
+  it("blanks when no stored levels", () => {
+    expect(rollupCell("priority", [null, {}])).toEqual({ kind: "blank" });
+  });
+});

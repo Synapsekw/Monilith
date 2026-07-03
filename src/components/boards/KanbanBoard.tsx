@@ -19,6 +19,7 @@ import {
   isCardCellEmpty,
   type CardColumns,
 } from "@/lib/boards/kanban-card";
+import { buildDependentsCountMap } from "@/lib/boards/priority";
 import type { BoardPayload } from "@/lib/boards/queries";
 import type {
   BoardCache,
@@ -185,6 +186,13 @@ export function KanbanBoard({
     [cache.cellValues],
   );
 
+  // Priority pills only: direct-dependent counts derived once per dependency
+  // change (O(E) — see @/lib/boards/priority); cards read O(1) lookups.
+  const dependentsByItem = useMemo(
+    () => buildDependentsCountMap(cache.dependencies ?? []),
+    [cache.dependencies],
+  );
+
   if (!groupColumn) {
     return (
       <div className="flex h-full flex-col">
@@ -300,6 +308,7 @@ export function KanbanBoard({
               groupColumnId={groupColumn.id}
               addItem={addItem}
               setCell={setCell}
+              dependentsByItem={dependentsByItem}
             />
           ))}
         </div>
@@ -317,6 +326,7 @@ function KanbanColumnView({
   groupColumnId,
   addItem,
   setCell,
+  dependentsByItem,
 }: {
   column: KanbanColumn;
   cellMap: Map<string, CacheCellValue["value"]>;
@@ -324,6 +334,8 @@ function KanbanColumnView({
   members: EditorMember[];
   firstGroupId: string | undefined;
   groupColumnId: string;
+  /** Priority pills only: item id → direct-dependent count. */
+  dependentsByItem: Map<string, number>;
   addItem: (
     vars: { groupId: string; name: string },
     callbacks?: {
@@ -413,6 +425,7 @@ function KanbanColumnView({
                   cellMap={cellMap}
                   cardColumns={cardColumns}
                   members={members}
+                  dependents={dependentsByItem.get(card.id) ?? 0}
                 />
               </div>
             );
@@ -439,12 +452,15 @@ function KanbanCard({
   cellMap,
   cardColumns,
   members,
+  dependents = 0,
 }: {
   item: CacheItem;
   fromColId: string;
   cellMap: Map<string, CacheCellValue["value"]>;
   cardColumns: CardColumns;
   members: EditorMember[];
+  /** Priority pills only: direct dependents of this card's item. */
+  dependents?: number;
 }) {
   const dragData: CardDragData = { itemId: item.id, fromColId };
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -465,7 +481,7 @@ function KanbanCard({
   const cellOf = (col: CacheColumn) =>
     (cellMap.get(cellKey(item.id, col.id)) ?? null) as Json;
   const pills = cardColumns.pills.filter(
-    (c) => !isCardCellEmpty(c.kind, cellOf(c)),
+    (c) => !isCardCellEmpty(c.kind, cellOf(c), dependents),
   );
   const meta = cardColumns.meta.filter(
     (c) => !isCardCellEmpty(c.kind, cellOf(c)),
@@ -496,6 +512,7 @@ function KanbanCard({
               value={cellOf(col)}
               settings={(col.settings ?? {}) as Settings}
               members={members}
+              dependents={col.kind === "priority" ? dependents : undefined}
             />
           ))}
         </div>

@@ -721,6 +721,53 @@ export type Database = {
           },
         ];
       };
+      digest_runs: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          email_sent_count: number | null;
+          error: string | null;
+          id: string;
+          org_id: string;
+          period_end: string;
+          period_start: string;
+          stats: Json | null;
+          status: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          email_sent_count?: number | null;
+          error?: string | null;
+          id?: string;
+          org_id: string;
+          period_end: string;
+          period_start: string;
+          stats?: Json | null;
+          status?: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          email_sent_count?: number | null;
+          error?: string | null;
+          id?: string;
+          org_id?: string;
+          period_end?: string;
+          period_start?: string;
+          stats?: Json | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "digest_runs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       feedback: {
         Row: {
           admin_response: string | null;
@@ -1280,6 +1327,7 @@ export type Database = {
           item_id: string | null;
           kind: Database["public"]["Enums"]["notification_kind"];
           org_id: string;
+          payload: Json | null;
           read_at: string | null;
           recipient_id: string;
           update_id: string | null;
@@ -1294,6 +1342,7 @@ export type Database = {
           item_id?: string | null;
           kind: Database["public"]["Enums"]["notification_kind"];
           org_id: string;
+          payload?: Json | null;
           read_at?: string | null;
           recipient_id: string;
           update_id?: string | null;
@@ -1308,6 +1357,7 @@ export type Database = {
           item_id?: string | null;
           kind?: Database["public"]["Enums"]["notification_kind"];
           org_id?: string;
+          payload?: Json | null;
           read_at?: string | null;
           recipient_id?: string;
           update_id?: string | null;
@@ -1639,6 +1689,7 @@ export type Database = {
           avatar_url: string | null;
           created_at: string;
           email: string | null;
+          email_digest_opt_out: boolean;
           full_name: string | null;
           id: string;
           timezone: string | null;
@@ -1648,6 +1699,7 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           email?: string | null;
+          email_digest_opt_out?: boolean;
           full_name?: string | null;
           id: string;
           timezone?: string | null;
@@ -1657,6 +1709,7 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           email?: string | null;
+          email_digest_opt_out?: boolean;
           full_name?: string | null;
           id?: string;
           timezone?: string | null;
@@ -1941,9 +1994,45 @@ export type Database = {
       };
       _automation_runs_prune: { Args: never; Returns: undefined };
       _automation_webhook_reconcile: { Args: never; Returns: undefined };
+      _board_health_counts: {
+        Args: { p_board_id: string; p_since: string };
+        Returns: {
+          done_items: number;
+          incomplete_items: number;
+          new_items: number;
+          overdue_items: number;
+          total_items: number;
+        }[];
+      };
+      _board_health_flags: {
+        Args: { p_board_id: string };
+        Returns: {
+          is_done: boolean;
+          is_incomplete: boolean;
+          is_overdue: boolean;
+          item_created_at: string;
+          item_id: string;
+          item_name: string;
+        }[];
+      };
       _dashboard_list_predicate: {
         Args: { p_col: string; p_op: string; p_val: string };
         Returns: string;
+      };
+      _health_digest_ping: { Args: never; Returns: undefined };
+      _org_health_digest: {
+        Args: { p_org_id: string; p_since: string };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          done_items: number;
+          incomplete_items: number;
+          incomplete_sample: Json;
+          new_items: number;
+          new_sample: Json;
+          overdue_items: number;
+          total_items: number;
+        }[];
       };
       _webhook_outcome: {
         Args: { p_error_msg: string; p_status_code: number };
@@ -2260,6 +2349,16 @@ export type Database = {
           completion: number;
           group_key: string;
           item_count: number;
+        }[];
+      };
+      dashboard_health_summary: {
+        Args: { p_board_id: string };
+        Returns: {
+          done_items: number;
+          incomplete_items: number;
+          new_items: number;
+          overdue_items: number;
+          total_items: number;
         }[];
       };
       dashboard_list_rows: {
@@ -2598,7 +2697,8 @@ export type Database = {
         | "relation"
         | "mirror"
         | "percent"
-        | "currency";
+        | "currency"
+        | "priority";
       goal_progress_mode:
         | "manual_number"
         | "manual_percent"
@@ -2610,12 +2710,19 @@ export type Database = {
         | "assigned"
         | "update_on_item"
         | "automation"
-        | "feedback_response";
+        | "feedback_response"
+        | "health_digest";
       org_role: "owner" | "admin" | "member" | "guest";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
-      widget_kind: "number" | "chart" | "battery" | "list" | "completion";
+      widget_kind:
+        | "number"
+        | "chart"
+        | "battery"
+        | "list"
+        | "completion"
+        | "health";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -2773,6 +2880,7 @@ export const Constants = {
         "mirror",
         "percent",
         "currency",
+        "priority",
       ],
       goal_progress_mode: [
         "manual_number",
@@ -2787,12 +2895,20 @@ export const Constants = {
         "update_on_item",
         "automation",
         "feedback_response",
+        "health_digest",
       ],
       org_role: ["owner", "admin", "member", "guest"],
       portfolio_health: ["on_track", "at_risk", "off_track"],
       portfolio_priority: ["low", "medium", "high", "critical"],
       view_kind: ["table", "kanban", "calendar", "timeline"],
-      widget_kind: ["number", "chart", "battery", "list", "completion"],
+      widget_kind: [
+        "number",
+        "chart",
+        "battery",
+        "list",
+        "completion",
+        "health",
+      ],
     },
   },
 } as const;

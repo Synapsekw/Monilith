@@ -1,10 +1,12 @@
 import type { CacheColumn } from "@/lib/boards/cache";
+import { effectivePriority } from "@/lib/boards/priority";
 
 /**
  * Column kinds rendered as colored status pills on a Kanban card — the one
- * sanctioned place for option color (see pulse-ui).
+ * sanctioned place for option color (see pulse-ui). Priority joins the zone
+ * but renders only when effectively Critical (see isCardCellEmpty).
  */
-const PILL_KINDS = new Set(["status", "dropdown"]);
+const PILL_KINDS = new Set(["status", "dropdown", "priority"]);
 
 /**
  * Column kinds surfaced in the quiet, icon-prefixed meta footer of a Kanban
@@ -48,7 +50,17 @@ export function selectCardColumns(
  * field entirely (no lonely icon, no empty pill) rather than reserve space for
  * it. Mirrors the per-kind "empty" checks the cell renderers use internally.
  */
-export function isCardCellEmpty(kind: string, value: unknown): boolean {
+export function isCardCellEmpty(
+  kind: string,
+  value: unknown,
+  /** Priority cells only: direct dependents of the item. */
+  dependents = 0,
+): boolean {
+  // Cards surface priority only when it is effectively Critical — an explicit
+  // Normal or unset cell renders nothing (scannability). Checked before the
+  // null short-circuit: an unset cell with 2+ dependents is NOT empty.
+  if (kind === "priority")
+    return effectivePriority(value, dependents).level !== "critical";
   if (value == null) return true;
   const v = value as Record<string, unknown>;
   switch (kind) {

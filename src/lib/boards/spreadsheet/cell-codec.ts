@@ -100,6 +100,15 @@ export function cellToText(
         return names.join(", ");
       }
 
+      case "priority":
+        // STORED level only — the derived auto-critical state deliberately
+        // does not export (spec open question 5).
+        return v.level === "critical"
+          ? "Critical"
+          : v.level === "normal"
+            ? "Normal"
+            : "";
+
       // Export-structure-only kinds: always blank in v1
       case "relation":
       case "mirror":
@@ -212,6 +221,13 @@ export function textToCell(
       const lower = trimmed.toLowerCase();
       const opt = options.find((o) => o.label.toLowerCase() === lower);
       return opt ? { optionId: opt.id } : null;
+    }
+
+    case "priority": {
+      const lower = trimmed.toLowerCase();
+      if (lower === "critical") return { level: "critical" };
+      if (lower === "normal") return { level: "normal" };
+      return null;
     }
 
     case "dropdown": {

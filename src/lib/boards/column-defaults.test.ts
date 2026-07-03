@@ -41,3 +41,12 @@ describe("defaultColumn", () => {
     expect(defaultColumn("people").settings).toEqual({});
   });
 });
+
+describe("priority column defaults", () => {
+  it("defaults a priority column", () => {
+    expect(defaultColumn("priority")).toEqual({
+      name: "Priority",
+      settings: {},
+    });
+  });
+});

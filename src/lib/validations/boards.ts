@@ -22,6 +22,7 @@ export const columnKindSchema = z.enum([
   "mirror",
   "percent",
   "currency",
+  "priority",
 ]);
 
 // --- shared option shape (status + dropdown) ---
@@ -132,6 +133,7 @@ export function columnSettingsSchema(kind: ColumnKind) {
     case "files":
     case "time_tracking":
     case "percent":
+    case "priority":
       return emptySettingsSchema;
   }
 }
@@ -168,6 +170,13 @@ export const percentValueSchema = z.object({
 export const currencyValueSchema = z.object({
   amount: z.number().finite(),
 });
+// Priority cells store a fixed two-level value. The auto-critical (>= 2
+// dependents) state is derived at render time (src/lib/boards/priority.ts)
+// and is NEVER stored — this schema is only the manual value.
+export const priorityValueSchema = z.object({
+  level: z.enum(["normal", "critical"]),
+});
+export type PriorityValue = z.infer<typeof priorityValueSchema>;
 export const ratingValueSchema = z.object({
   rating: z.number().int().min(1).max(5),
 });
@@ -230,6 +239,8 @@ export function cellValueSchema(kind: ColumnKind) {
       return percentValueSchema;
     case "currency":
       return currencyValueSchema;
+    case "priority":
+      return priorityValueSchema;
     case "rating":
       return ratingValueSchema;
     case "link":

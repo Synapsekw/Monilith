@@ -43,6 +43,10 @@ export function allowedAggregations(
     case "status":
     case "dropdown":
       return ["distribution", ...COUNT_FAMILY];
+    case "priority":
+      // Fixed Normal/Critical vocabulary summarizes as a distribution over
+      // STORED values (the derived auto state stays render-only by design).
+      return ["distribution", ...COUNT_FAMILY];
     case "checkbox":
       return ["checked_total", "percent_checked", ...COUNT_FAMILY];
     case "date":
@@ -248,6 +252,8 @@ function isFilled(kind: ColumnKind, v: unknown): boolean {
       return typeof o.amount === "number" && Number.isFinite(o.amount);
     case "checkbox":
       return o.checked === true;
+    case "priority":
+      return o.level === "normal" || o.level === "critical";
     case "rating":
       return typeof o.rating === "number" && o.rating >= 1;
     case "time_tracking":
@@ -321,6 +327,8 @@ function identitiesOf(kind: ColumnKind, v: unknown): string[] {
       return [String(o.date)];
     case "checkbox":
       return [String(o.checked)];
+    case "priority":
+      return typeof o.level === "string" ? [o.level] : [];
     default:
       return [JSON.stringify(v)];
   }
