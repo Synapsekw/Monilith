@@ -2463,6 +2463,10 @@ export type Database = {
         };
         Returns: boolean;
       };
+      import_rows_into_board: {
+        Args: { p_board_id: string; p_payload: Json };
+        Returns: undefined;
+      };
       is_board_member: { Args: { p_board_id: string }; Returns: boolean };
       is_member_of: {
         Args: { p_org_id: string; p_user: string };
