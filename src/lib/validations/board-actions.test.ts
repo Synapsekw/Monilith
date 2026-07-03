@@ -15,6 +15,7 @@ import {
   addSubitemSchema,
   deleteItemSchema,
   reorderItemSchema,
+  reorderColumnSchema,
   updateColumnSettingsSchema,
   removeColumnOptionSchema,
 } from "./board-actions";
@@ -240,6 +241,23 @@ describe("reorderItemSchema", () => {
     expect(
       reorderItemSchema.safeParse({ itemId: UUID, position: 2.5 }).success,
     ).toBe(true);
+  });
+});
+
+describe("reorderColumnSchema", () => {
+  it("accepts a fractional position", () => {
+    expect(
+      reorderColumnSchema.safeParse({ columnId: UUID, position: 2.5 }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a non-numeric position and a non-uuid id", () => {
+    expect(
+      reorderColumnSchema.safeParse({ columnId: UUID, position: "x" }).success,
+    ).toBe(false);
+    expect(
+      reorderColumnSchema.safeParse({ columnId: "nope", position: 1 }).success,
+    ).toBe(false);
   });
 });
 

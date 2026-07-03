@@ -1182,6 +1182,45 @@ describe("BoardTable per-group column headers", () => {
   });
 });
 
+describe("BoardTable column reorder", () => {
+  it("renders a reorder grip per data column in every group header", () => {
+    renderBoardWithColumns();
+    // 2 groups × 3 columns; Name/Created cells get no grip.
+    expect(
+      screen.getAllByRole("button", { name: "Reorder Status column" }),
+    ).toHaveLength(2);
+    expect(
+      screen.getAllByRole("button", { name: "Reorder Owner column" }),
+    ).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /Reorder Name/ })).toBeNull();
+  });
+
+  it("disables Move left on the first data column and Move right on the last", () => {
+    renderBoardWithColumns();
+    fireEvent.click(screen.getAllByLabelText("Status column menu")[0]);
+    expect(
+      screen.getByText("Move left").closest("[role=menuitem]"),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByText("Move right").closest("[role=menuitem]"),
+    ).not.toHaveAttribute("aria-disabled", "true");
+  });
+});
+
+describe("BoardTable column reorder (pure position math)", () => {
+  it("computes a column reorder position among board columns", () => {
+    const cols = [
+      { id: "c_status", position: 0 },
+      { id: "c_owner", position: 1 },
+      { id: "c_date", position: 2 },
+    ];
+    // drag Due Date before Status → strictly less than 0
+    expect(reorderPosition(cols, "c_date", "c_status")!).toBeLessThan(0);
+    // self-drop is a no-op
+    expect(reorderPosition(cols, "c_owner", "c_owner")).toBeNull();
+  });
+});
+
 // ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────────
 // jsdom can't simulate touch-drag physics, so we assert sensor *config* and
 // coarse-pointer *class presence* (the `(pointer: coarse)` media query only

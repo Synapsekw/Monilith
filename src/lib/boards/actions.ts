@@ -25,6 +25,7 @@ import {
   renameColumnSchema,
   deleteColumnSchema,
   resizeColumnSchema,
+  reorderColumnSchema,
   resizeNameColumnSchema,
   addSubitemSchema,
   deleteItemSchema,
@@ -749,6 +750,29 @@ export async function resizeColumn(input: {
     .eq("id", parsed.data.columnId);
   if (error) return fail(error.message);
   revalidatePath(`/boards/${boardId}`);
+  return { ok: true, data: undefined };
+}
+
+/** Update a column's position (header drag-reorder / Move left-right). */
+export async function reorderColumn(input: {
+  columnId: string;
+  position: number;
+}): Promise<ActionResult> {
+  const parsed = reorderColumnSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("columns")
+    .update({ position: parsed.data.position })
+    .eq("id", parsed.data.columnId)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Column not found.");
+
+  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 

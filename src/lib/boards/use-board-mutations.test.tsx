@@ -11,6 +11,7 @@ const updateGroupColor = vi.fn();
 const deleteGroup = vi.fn();
 const createColumn = vi.fn();
 const createItem = vi.fn();
+const reorderColumn = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
@@ -20,6 +21,7 @@ vi.mock("@/lib/boards/actions", () => ({
   deleteGroup: (...a: unknown[]) => deleteGroup(...a),
   createColumn: (...a: unknown[]) => createColumn(...a),
   createItem: (...a: unknown[]) => createItem(...a),
+  reorderColumn: (...a: unknown[]) => reorderColumn(...a),
 }));
 
 const toastError = vi.fn();
@@ -483,6 +485,76 @@ describe("useBoardMutations.reorderGroup", () => {
     await waitFor(() => {
       const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
       expect(cache.groups.map((g) => g.id)).toEqual(["g1", "g2"]);
+    });
+  });
+});
+
+function seedColumns(qc: QueryClient): void {
+  const colBase = {
+    org_id: "o1",
+    board_id: "b1",
+    kind: "text",
+    settings: {},
+    width: null,
+    created_at: "2026-07-03T00:00:00Z",
+    updated_at: "2026-07-03T00:00:00Z",
+  };
+  qc.setQueryData(boardKey("b1"), {
+    board: { id: "b1", org_id: "o1", name: "B" },
+    groups: [],
+    columns: [
+      { id: "c1", name: "C1", position: 0, ...colBase },
+      { id: "c2", name: "C2", position: 1, ...colBase },
+    ],
+    items: [],
+    cellValues: [],
+    dependencies: [],
+    attachments: [],
+  } as never);
+}
+
+describe("useBoardMutations.reorderColumn", () => {
+  beforeEach(() => reorderColumn.mockReset());
+
+  it("optimistically moves the column and re-sorts", async () => {
+    const qc = new QueryClient();
+    seedColumns(qc); // c1 @ 0, c2 @ 1
+    reorderColumn.mockResolvedValue({ ok: true, data: undefined });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.reorderColumn("c2", -1); // drop c2 before c1
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.columns.map((c) => c.id)).toEqual(["c2", "c1"]);
+    await waitFor(() =>
+      expect(reorderColumn).toHaveBeenCalledWith({
+        columnId: "c2",
+        position: -1,
+      }),
+    );
+  });
+
+  it("rolls back on failure", async () => {
+    const qc = new QueryClient();
+    seedColumns(qc);
+    reorderColumn.mockResolvedValue({ ok: false, error: "nope" });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.reorderColumn("c2", -1);
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      expect(cache.columns.map((c) => c.id)).toEqual(["c1", "c2"]);
     });
   });
 });
