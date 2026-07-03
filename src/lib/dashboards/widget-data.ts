@@ -83,3 +83,85 @@ export function shapeBuckets(
 export function bucketsTotal(buckets: AggregateBucket[]): number {
   return buckets.reduce((sum, b) => sum + (b.metric ?? 0), 0);
 }
+
+/** Per-group completion as returned by the dashboard_completion RPC (camelCased). */
+export type CompletionGroupRow = {
+  groupKey: string;
+  itemCount: number;
+  completion: number;
+};
+
+/** Board-group metadata resolved server-side (id/name/color, position order). */
+export type GroupMeta = { id: string; label: string; color: string };
+
+export type ShapedCompletionRow = {
+  key: string;
+  label: string;
+  color: string;
+  /** null → the group has no top-level items (rendered as "—", excluded from overall). */
+  percent: number | null;
+  itemCount: number;
+};
+
+export type ShapedCompletion = {
+  rows: ShapedCompletionRow[];
+  /** Item-weighted mean across groups with data; null when the board has no items. */
+  overall: number | null;
+  totalItems: number;
+};
+
+/**
+ * Join per-group completion rows to the board's groups for rendering:
+ * - one row per group in board position order (0-item groups → percent null);
+ * - unknown group keys (group deleted inside the cache TTL) fold into a
+ *   trailing "Unknown" row, mirroring shapeBuckets;
+ * - overall is the item-weighted mean (never an unweighted mean of groups).
+ */
+export function shapeCompletion(
+  rows: CompletionGroupRow[],
+  groups: GroupMeta[],
+): ShapedCompletion {
+  const byKey = new Map(rows.map((r) => [r.groupKey, r]));
+  const known = new Set(groups.map((g) => g.id));
+
+  const shaped: ShapedCompletionRow[] = groups.map((g) => {
+    const r = byKey.get(g.id);
+    return {
+      key: g.id,
+      label: g.label,
+      color: g.color,
+      percent: r ? r.completion : null,
+      itemCount: r?.itemCount ?? 0,
+    };
+  });
+
+  let unknownItems = 0;
+  let unknownWeighted = 0;
+  for (const r of rows) {
+    if (known.has(r.groupKey)) continue;
+    unknownItems += r.itemCount;
+    unknownWeighted += r.completion * r.itemCount;
+  }
+  if (unknownItems > 0)
+    shaped.push({
+      key: "__unknown__",
+      label: "Unknown",
+      color: NONE_COLOR,
+      percent: unknownWeighted / unknownItems,
+      itemCount: unknownItems,
+    });
+
+  let totalItems = 0;
+  let weighted = 0;
+  for (const r of shaped) {
+    if (r.percent === null) continue;
+    totalItems += r.itemCount;
+    weighted += r.percent * r.itemCount;
+  }
+
+  return {
+    rows: shaped,
+    overall: totalItems > 0 ? weighted / totalItems : null,
+    totalItems,
+  };
+}

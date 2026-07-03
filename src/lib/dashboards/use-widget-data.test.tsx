@@ -164,6 +164,49 @@ describe("WidgetDataProvider / useWidgetData", () => {
     expect(screen.getByTestId(W2)).toHaveTextContent("error");
   });
 
+  it("includes completion widgets in the batch and exposes data.completion", async () => {
+    getWidgetsData.mockResolvedValue({
+      ok: true,
+      data: {
+        results: {
+          [W1]: {
+            ok: true,
+            kind: "completion",
+            config: {},
+            buckets: [],
+            columnMeta: null,
+            completion: {
+              rows: [{ groupKey: "g1", itemCount: 2, completion: 50 }],
+              groups: [{ id: "g1", label: "WS A", color: "#0073ea" }],
+            },
+          },
+        },
+      },
+    });
+
+    function CompletionProbe({ id }: { id: string }) {
+      const { data, isLoading, isError } = useWidgetData(id);
+      const text = isLoading
+        ? "loading"
+        : isError
+          ? "error"
+          : `rows:${data?.completion?.rows.length ?? "none"}`;
+      return <div data-testid={id}>{text}</div>;
+    }
+
+    renderWithProvider(
+      [widget(W1, { kind: "completion", config: { mode: "status" } })],
+      <CompletionProbe id={W1} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId(W1)).toHaveTextContent("rows:1"),
+    );
+    // The completion widget rode the single batched fetch.
+    expect(getWidgetsData).toHaveBeenCalledTimes(1);
+    expect(getWidgetsData).toHaveBeenCalledWith({ widgetIds: [W1] });
+  });
+
   it("degrades to a non-crashing error state when rendered without a provider", () => {
     // The widget-config sheet's live preview renders widget bodies outside the
     // dashboard grid's provider — the hook must not throw there.

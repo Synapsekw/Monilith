@@ -4,7 +4,13 @@ const uuid = z.string().uuid();
 const name = z.string().trim().min(1).max(100);
 const title = z.string().trim().max(100);
 
-export const widgetKindSchema = z.enum(["number", "chart", "battery", "list"]);
+export const widgetKindSchema = z.enum([
+  "number",
+  "chart",
+  "battery",
+  "list",
+  "completion",
+]);
 
 // ── per-kind config (D1 implements `number`; others are placeholders for D2/D3) ──
 export const numberConfigSchema = z
@@ -64,6 +70,30 @@ export type ChartConfig = z.infer<typeof chartConfigSchema>;
 export const batteryConfigSchema = z.object({ groupColumnId: uuid });
 export type BatteryConfig = z.infer<typeof batteryConfigSchema>;
 
+// Completion widget: % complete per board group. percent mode averages a
+// percent column; status mode measures the share of items whose status is in
+// the "counts as done" option set (precedent: goals doneColumnId/doneOptionIds).
+export const completionConfigSchema = z
+  .object({
+    mode: z.enum(["percent", "status"]),
+    percentColumnId: uuid.optional(),
+    statusColumnId: uuid.optional(),
+    doneOptionIds: z.array(uuid).max(50).default([]),
+  })
+  .refine((c) => c.mode !== "percent" || !!c.percentColumnId, {
+    message: "Percent mode needs a percent column.",
+    path: ["percentColumnId"],
+  })
+  .refine((c) => c.mode !== "status" || !!c.statusColumnId, {
+    message: "Status mode needs a status column.",
+    path: ["statusColumnId"],
+  })
+  .refine((c) => c.mode !== "status" || c.doneOptionIds.length > 0, {
+    message: "Pick at least one status that counts as done.",
+    path: ["doneOptionIds"],
+  });
+export type CompletionConfig = z.infer<typeof completionConfigSchema>;
+
 export const filterOperatorSchema = z.enum([
   "is",
   "is_not", // status
@@ -116,6 +146,8 @@ export function configSchemaForKind(kind: z.infer<typeof widgetKindSchema>) {
       return batteryConfigSchema;
     case "list":
       return listConfigSchema;
+    case "completion":
+      return completionConfigSchema;
     default:
       return configObject;
   }

@@ -212,6 +212,58 @@ describe("configSchemaForKind (list)", () => {
   });
 });
 
+import { completionConfigSchema } from "./dashboards";
+
+describe("completionConfigSchema", () => {
+  it("accepts percent mode with a percent column", () => {
+    const r = completionConfigSchema.safeParse({
+      mode: "percent",
+      percentColumnId: UUID_A,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.doneOptionIds).toEqual([]); // default applied
+  });
+
+  it("rejects percent mode without a percent column", () => {
+    const r = completionConfigSchema.safeParse({ mode: "percent" });
+    expect(r.success).toBe(false);
+  });
+
+  it("accepts status mode with a status column and a done set", () => {
+    const r = completionConfigSchema.safeParse({
+      mode: "status",
+      statusColumnId: UUID_A,
+      doneOptionIds: [UUID_B],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects status mode without a status column", () => {
+    const r = completionConfigSchema.safeParse({
+      mode: "status",
+      doneOptionIds: [UUID_B],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects status mode with an empty done set", () => {
+    const r = completionConfigSchema.safeParse({
+      mode: "status",
+      statusColumnId: UUID_A,
+      doneOptionIds: [],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("routes via configSchemaForKind", () => {
+    const r = configSchemaForKind("completion").safeParse({
+      mode: "percent",
+      percentColumnId: UUID_A,
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
 describe("listConfigSchema filter", () => {
   it("accepts an empty config (D3a backward-compat)", () => {
     const r = listConfigSchema.safeParse({});

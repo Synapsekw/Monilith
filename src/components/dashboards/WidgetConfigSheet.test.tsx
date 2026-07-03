@@ -40,6 +40,7 @@ const boardOption: BoardOption = {
   dateColumns: [],
   peopleColumns: [],
   dropdownColumns: [],
+  percentColumns: [],
   allColumns: [],
 };
 

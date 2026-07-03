@@ -14,9 +14,12 @@ vi.mock("@/lib/supabase/server", () => ({
 // queries-cached pulls in `server-only` + a `use cache` scope that can't run
 // under Vitest; stub the one fn actions.ts consumes.
 const getWidgetAggregationCached = vi.fn();
+const getWidgetCompletionCached = vi.fn();
 vi.mock("./queries-cached", () => ({
   getWidgetAggregationCached: (...args: unknown[]) =>
     getWidgetAggregationCached(...args),
+  getWidgetCompletionCached: (...args: unknown[]) =>
+    getWidgetCompletionCached(...args),
 }));
 
 import {
@@ -40,6 +43,7 @@ const WIDGET_2 = "55555555-5555-4555-8555-555555555555";
 beforeEach(() => {
   updateTag.mockReset();
   getWidgetAggregationCached.mockReset();
+  getWidgetCompletionCached.mockReset();
 });
 
 describe("dashboard mutation invalidation", () => {
@@ -329,6 +333,97 @@ describe("getWidgetsData (batched, one round-trip)", () => {
       expect(bad.ok).toBe(false);
       if (!bad.ok) expect(bad.error).toBe("boom");
     }
+  });
+
+  it("resolves a completion widget slot via the completion cached read", async () => {
+    const STATUS_COL = "66666666-6666-4666-8666-666666666666";
+    const DONE_OPT = "77777777-7777-4777-8777-777777777777";
+    const config = {
+      mode: "status",
+      statusColumnId: STATUS_COL,
+      doneOptionIds: [DONE_OPT],
+    };
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "completion",
+          config,
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+    getWidgetCompletionCached.mockResolvedValue({
+      ok: true,
+      rows: [{ groupKey: "g1", itemCount: 2, completion: 50 }],
+      groups: [{ id: "g1", label: "WS A", color: "#0073ea" }],
+    });
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(getWidgetCompletionCached).toHaveBeenCalledWith(
+      expect.objectContaining({
+        widgetId: WIDGET,
+        orgId: "org-9",
+        boardId: BOARD,
+        config,
+      }),
+    );
+    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    const slot = res.data.results[WIDGET];
+    expect(slot.ok).toBe(true);
+    if (!slot.ok) return;
+    expect(slot.kind).toBe("completion");
+    expect(slot.completion?.rows[0]).toMatchObject({
+      groupKey: "g1",
+      completion: 50,
+    });
+    expect(slot.completion?.groups[0]).toMatchObject({ label: "WS A" });
+    expect(slot.buckets).toEqual([]);
+    expect(slot.columnMeta).toBeNull();
+  });
+
+  it("a completion widget's failure does not blank sibling slots", async () => {
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "completion",
+          config: { mode: "status" },
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+        {
+          id: WIDGET_2,
+          kind: "number",
+          config: { agg: "count" },
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+    getWidgetCompletionCached.mockResolvedValue({ ok: false, error: "boom" });
+    getWidgetAggregationCached.mockResolvedValue({
+      ok: true,
+      buckets: [{ group_key: null, metric: 7 }],
+      columnMeta: null,
+    });
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET, WIDGET_2] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.results[WIDGET].ok).toBe(false);
+    expect(res.data.results[WIDGET_2].ok).toBe(true);
   });
 
   it("returns empty buckets for a widget with no source board (no aggregation call)", async () => {
