@@ -22,6 +22,7 @@ import { CompletionWidget } from "@/components/dashboards/widgets/CompletionWidg
 import { HealthWidget } from "@/components/dashboards/widgets/HealthWidget";
 import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
 import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
+import { WidgetPreviewProvider } from "@/lib/dashboards/use-widget-preview";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 import { widgetKindSchema } from "@/lib/validations/dashboards";
@@ -143,19 +144,26 @@ function WidgetConfigSheetForm({
             Live preview
           </span>
           <div className="bg-card relative h-64 rounded-xl border p-3">
-            {draft.kind === "number" ? (
-              <NumberWidget widget={previewWidget} />
-            ) : draft.kind === "chart" ? (
-              <ChartWidget widget={previewWidget} />
-            ) : draft.kind === "battery" ? (
-              <BatteryWidget widget={previewWidget} />
-            ) : draft.kind === "completion" ? (
-              <CompletionWidget widget={previewWidget} />
-            ) : draft.kind === "health" ? (
-              <HealthWidget widget={previewWidget} />
-            ) : (
-              <ListWidget widget={previewWidget} />
-            )}
+            <WidgetPreviewProvider
+              previewWidgetId={previewWidget.id}
+              kind={draft.kind}
+              sourceBoardId={draft.sourceBoardId}
+              config={previewCfg}
+            >
+              {draft.kind === "number" ? (
+                <NumberWidget widget={previewWidget} />
+              ) : draft.kind === "chart" ? (
+                <ChartWidget widget={previewWidget} />
+              ) : draft.kind === "battery" ? (
+                <BatteryWidget widget={previewWidget} />
+              ) : draft.kind === "completion" ? (
+                <CompletionWidget widget={previewWidget} />
+              ) : draft.kind === "health" ? (
+                <HealthWidget widget={previewWidget} />
+              ) : (
+                <ListWidget widget={previewWidget} />
+              )}
+            </WidgetPreviewProvider>
           </div>
         </div>
       </div>
