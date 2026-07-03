@@ -28,6 +28,12 @@ describe("defaultColumn", () => {
     const s = defaultColumn("dropdown").settings as { options: unknown[] };
     expect(s.options.length).toBeGreaterThanOrEqual(2);
   });
+  it("seeds a currency column with USD", () => {
+    expect(defaultColumn("currency")).toEqual({
+      name: "Currency",
+      settings: { currency: "USD" },
+    });
+  });
   it("gives plain kinds an empty settings object", () => {
     expect(defaultColumn("text").settings).toEqual({});
     expect(defaultColumn("date").settings).toEqual({});

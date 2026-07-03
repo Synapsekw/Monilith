@@ -22,4 +22,12 @@ describe("column kind metadata", () => {
     expect(COLUMN_KIND_META.text.hasOptions).toBe(false);
     expect(COLUMN_KIND_META.checkbox.hasOptions).toBe(false);
   });
+
+  it("registers the currency kind", () => {
+    expect(COLUMN_KIND_META.currency).toMatchObject({
+      label: "Currency",
+      hasOptions: false,
+    });
+    expect(COLUMN_KIND_ORDER).toContain("currency");
+  });
 });
