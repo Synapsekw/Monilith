@@ -6,7 +6,7 @@ import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 
 import type { BoardPayload } from "@/lib/boards/queries";
 import type { BoardCache } from "@/lib/boards/cache";
-import { buildCellMap } from "@/lib/boards/cache";
+import { buildCellMap, cellKey } from "@/lib/boards/cache";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
 import {
@@ -28,6 +28,10 @@ import { CalendarMonth } from "@/components/boards/calendar/CalendarMonth";
 import { CalendarWeek } from "@/components/boards/calendar/CalendarWeek";
 import { CalendarAgenda } from "@/components/boards/calendar/CalendarAgenda";
 import type { ChipDragData } from "@/components/boards/calendar/EventBar";
+import {
+  ItemQuickEdit,
+  type QuickEditTarget,
+} from "@/components/boards/quick-edit/ItemQuickEdit";
 
 function firstOfMonth(dateISO: string): string {
   const [y, m] = dateISO.split("-");
@@ -95,7 +99,9 @@ export function CalendarBoard({
     payload.board.id,
     payload as unknown as BoardCache,
   );
-  const { setCell, addItem } = useBoardMutations(payload.board.id);
+  const { setCell, clearCellValue, addItem } = useBoardMutations(
+    payload.board.id,
+  );
   const [, startTransition] = useTransition();
 
   // The view config carries the persisted date column. Hold a local override so
@@ -126,8 +132,14 @@ export function CalendarBoard({
     () => cache.columns.find((c) => c.kind === "status"),
     [cache.columns],
   );
+  const percentColumn = useMemo(
+    () => cache.columns.find((c) => c.kind === "percent"),
+    [cache.columns],
+  );
 
   const [mode, setMode] = useState<CalendarMode>("month");
+  // The tapped chip/row the quick-edit peek is anchored to (null = closed).
+  const [quickEdit, setQuickEdit] = useState<QuickEditTarget | null>(null);
   const [cursorISO, setCursorISO] = useState<string>(() => {
     if (dateColumn) {
       const first = cache.cellValues.find(
@@ -249,6 +261,17 @@ export function CalendarBoard({
     );
   }
 
+  /**
+   * Tap on a chip / agenda row / overflow row: open the quick-edit peek when
+   * the board has something to edit in it (a status or percent column);
+   * otherwise keep the legacy direct-to-panel behavior so the peek never
+   * renders empty.
+   */
+  function handleItemTap(itemId: string, anchorRect: DOMRect) {
+    if (statusColumn || percentColumn) setQuickEdit({ itemId, anchorRect });
+    else openItemPanel(itemId);
+  }
+
   const shared = {
     today,
     items: cache.items,
@@ -256,7 +279,7 @@ export function CalendarBoard({
     dateColumnId: resolvedDateColumn.id,
     statusColumn,
     cellMap,
-    onOpenItem: openItemPanel,
+    onItemTap: handleItemTap,
   };
 
   return (
@@ -311,6 +334,33 @@ export function CalendarBoard({
             />
           )}
         </DndContext>
+      )}
+
+      {quickEdit && (
+        <ItemQuickEdit
+          target={quickEdit}
+          itemName={
+            cache.items.find((i) => i.id === quickEdit.itemId)?.name ?? ""
+          }
+          statusColumn={statusColumn ?? null}
+          percentColumn={percentColumn ?? null}
+          statusValue={
+            statusColumn
+              ? ((cellMap.get(cellKey(quickEdit.itemId, statusColumn.id)) ??
+                  null) as { optionId: string | null } | null)
+              : null
+          }
+          percentValue={
+            percentColumn
+              ? ((cellMap.get(cellKey(quickEdit.itemId, percentColumn.id)) ??
+                  null) as { percent: number } | null)
+              : null
+          }
+          setCell={setCell}
+          clearCellValue={clearCellValue}
+          onOpenItem={openItemPanel}
+          onClose={() => setQuickEdit(null)}
+        />
       )}
     </div>
   );

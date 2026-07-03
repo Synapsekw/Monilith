@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { CalendarAgenda } from "./CalendarAgenda";
 import { buildCellMap } from "@/lib/boards/cache";
 
@@ -16,7 +16,7 @@ const cellValues = [
   { item_id: "i2", column_id: "d1", value: { date: "2026-06-10" } },
 ] as never;
 
-function renderAgenda() {
+function renderAgenda(onItemTap = vi.fn()) {
   return render(
     <CalendarAgenda
       fromISO="2026-06-01"
@@ -27,7 +27,7 @@ function renderAgenda() {
       dateColumnId="d1"
       statusColumn={undefined}
       cellMap={buildCellMap(cellValues)}
-      onOpenItem={vi.fn()}
+      onItemTap={onItemTap}
     />,
   );
 }
@@ -41,5 +41,11 @@ describe("CalendarAgenda", () => {
   it("shows a date range for multi-day items", () => {
     renderAgenda();
     expect(screen.getByText(/Jun 9.*Jun 16/)).toBeInTheDocument();
+  });
+  it("fires onItemTap with the item id and the tapped row's rect", () => {
+    const onItemTap = vi.fn();
+    renderAgenda(onItemTap);
+    fireEvent.click(screen.getByText("Standup"));
+    expect(onItemTap).toHaveBeenCalledWith("i2", expect.any(Object));
   });
 });

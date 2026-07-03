@@ -19,7 +19,7 @@ export function CalendarWeek({
   statusColumn,
   cellMap,
   onDayClick,
-  onOpenItem,
+  onItemTap,
 }: {
   weekStartISO: string;
   today: string;
@@ -29,7 +29,9 @@ export function CalendarWeek({
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
   onDayClick: (dayISO: string) => void;
-  onOpenItem?: (itemId: string) => void;
+  /** Tap on a chip — carries the tapped element's rect so the board can
+   * anchor the quick-edit peek. */
+  onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
 }) {
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStartISO, i)),
@@ -112,7 +114,7 @@ export function CalendarWeek({
                   dateColumnId={dateColumnId}
                   statusColumn={statusColumn}
                   cellMap={cellMap}
-                  onOpen={onOpenItem}
+                  onOpen={onItemTap}
                 />
               </div>
             );

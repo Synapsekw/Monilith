@@ -34,7 +34,7 @@ export function CalendarAgenda({
   dateColumnId,
   statusColumn,
   cellMap,
-  onOpenItem,
+  onItemTap,
 }: {
   fromISO: string;
   toISO: string;
@@ -44,7 +44,9 @@ export function CalendarAgenda({
   dateColumnId: string;
   statusColumn: CacheColumn | undefined;
   cellMap: CellMap;
-  onOpenItem?: (itemId: string) => void;
+  /** Tap on an agenda row — carries the row's rect so the board can anchor
+   * the quick-edit peek. */
+  onItemTap?: (itemId: string, anchorRect: DOMRect) => void;
 }) {
   const groups = useMemo(
     () => agendaGroups(fromISO, toISO, items, cellValues, dateColumnId),
@@ -95,8 +97,13 @@ export function CalendarAgenda({
                   <li key={item.itemId}>
                     <button
                       type="button"
-                      onClick={() => onOpenItem?.(item.itemId)}
-                      className="hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-left"
+                      onClick={(e) =>
+                        onItemTap?.(
+                          item.itemId,
+                          e.currentTarget.getBoundingClientRect(),
+                        )
+                      }
+                      className="hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-left pointer-coarse:min-h-11"
                     >
                       <span className="flex-1 truncate text-sm">
                         {item.name}
