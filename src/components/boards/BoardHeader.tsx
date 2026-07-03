@@ -153,15 +153,20 @@ export function BoardHeader({
         <div className="flex items-center gap-2">
           <BoardPresenceBar />
           <ExportMenu boardId={boardId} />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Import"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload className="size-3.5" /> Import
-          </Button>
+          {/* Import appends rows — a board-level write — so viewers don't get
+              the affordance (the RPC also rejects them server-side). Export
+              stays: it's a read, allowed for viewers. */}
+          {!isViewer ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Import"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="size-3.5" /> Import
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

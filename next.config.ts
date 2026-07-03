@@ -22,6 +22,16 @@ const nextConfig: NextConfig = {
     // cacheLife.md, Prerendering behavior).
     widget: { stale: 30, revalidate: 30, expire: 300 },
   },
+  // The import wizard advertises a 5MB file cap, and files travel to the
+  // preview/commit Server Actions as base64 (~1.37x inflation, ~6.9MB) inside
+  // a JSON body. Next's default Server Action body limit is 1MB, which would
+  // kill any real upload in transport before our friendly size guard ever
+  // runs — 8mb gives the 5MB cap headroom. See serverActions.md#bodysizelimit.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "8mb",
+    },
+  },
   // Move the on-screen dev indicator (the Next.js logo button) to the bottom
   // right; it defaults to bottom-left. See devIndicators.md.
   devIndicators: {

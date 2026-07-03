@@ -66,29 +66,37 @@ export function MappingGrid({
     onStateChange({ ...state, columns });
   }
 
+  /** Demote a column back to a regular data column, restoring its frozen
+   * detected kind. In existing mode a data column must carry an explicit
+   * target (the commit Zod schema rejects `null`), so a column that never had
+   * one (it was structural at derive time) defaults to "create". */
+  function demoteToData(c: ColumnState): ColumnState {
+    return {
+      ...c,
+      role: "data",
+      kind: c.detectedKind,
+      target: mode === "existing" && c.target === null ? "create" : c.target,
+    };
+  }
+
   function setRole(index: number, role: ColumnState["role"]) {
     const columns = state.columns.map((c) => ({ ...c }));
 
     // Reassigning a structural role demotes whoever currently holds it back
-    // to a regular data column, restoring its frozen detected kind.
+    // to a regular data column.
     if (role !== "data") {
       const prevIndex = columns.findIndex(
         (c, i) => c.role === role && i !== index,
       );
       if (prevIndex !== -1) {
-        columns[prevIndex] = {
-          ...columns[prevIndex],
-          role: "data",
-          kind: columns[prevIndex].detectedKind,
-        };
+        columns[prevIndex] = demoteToData(columns[prevIndex]);
       }
     }
 
-    columns[index] = {
-      ...columns[index],
-      role,
-      kind: role === "data" ? columns[index].detectedKind : "text",
-    };
+    columns[index] =
+      role === "data"
+        ? demoteToData(columns[index])
+        : { ...columns[index], role, kind: "text" };
 
     onStateChange({ ...state, columns });
   }

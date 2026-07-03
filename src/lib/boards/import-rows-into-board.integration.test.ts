@@ -207,6 +207,58 @@ describe.skipIf(!integrationTargetReady())("import_rows_into_board RPC", () => {
     ).toBe(true);
   });
 
+  it("denies an org member with only a viewer grant on the board (42501)", async () => {
+    // Provision user C inside userA's org: an org member shared into
+    // userA's board as VIEWER. Org membership alone must not grant append
+    // rights — the RPC's can_edit_board guard has to reject the call.
+    const email = `import-rows-${randomUUID()}@example.com`;
+    const { data: created, error: createErr } =
+      await admin.auth.admin.createUser({
+        email,
+        password: PASSWORD,
+        email_confirm: true,
+      });
+    expect(createErr, "createUser(viewer)").toBeNull();
+    const viewerId = created.user!.id;
+    createdUserIds.push(viewerId);
+
+    const viewerAnon = createClient<Database>(SUPABASE_URL!, ANON_KEY!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    await signInWithRetry(viewerAnon, { email, password: PASSWORD });
+
+    const { error: memberErr } = await admin.from("org_members").insert({
+      org_id: userA.orgId,
+      user_id: viewerId,
+      role: "member",
+    });
+    expect(memberErr, "org_members insert").toBeNull();
+
+    // The board owner (userA) grants viewer-level board access.
+    const { error: shareErr } = await userA.anon.from("board_members").insert({
+      board_id: userA.boardId,
+      org_id: userA.orgId,
+      user_id: viewerId,
+      access_level: "viewer",
+      granted_by: userA.id,
+    });
+    expect(shareErr, "share board with viewer").toBeNull();
+
+    const { error } = await (
+      viewerAnon as unknown as {
+        rpc: (
+          fn: string,
+          args: unknown,
+        ) => Promise<{ error: { code?: string; message: string } | null }>;
+      }
+    ).rpc("import_rows_into_board", {
+      p_board_id: userA.boardId,
+      p_payload: { groupId: userA.groupId, items: [] },
+    });
+    expect(error).not.toBeNull();
+    expect(error?.code).toBe("42501");
+  }, 60_000);
+
   it("denies a caller from a different org (42501)", async () => {
     const { error } = await (
       userB.anon as unknown as {

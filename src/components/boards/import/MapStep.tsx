@@ -6,6 +6,7 @@ import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 import {
   deriveSheetState,
   invalidCellMap,
+  isEmptySheetState,
   tableFor,
   type SheetState,
 } from "./import-wizard-state";
@@ -24,6 +25,7 @@ export function MapStep({
   mode,
   boardColumns,
   rowCapWarning,
+  nextDisabled = false,
   onBack,
   onNext,
 }: {
@@ -37,6 +39,9 @@ export function MapStep({
    * (and only passed) when `mode === "existing"`. */
   boardColumns?: BoardColumnRef[];
   rowCapWarning: string | null;
+  /** Blocks the Next button (empty sheet, missing name column upstream, or
+   * a row-cap overflow that commit would hard-reject). */
+  nextDisabled?: boolean;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -45,9 +50,19 @@ export function MapStep({
     [sheets, activeSheet],
   );
 
-  const table = useMemo(() => tableFor(grid, state), [grid, state]);
+  // A blank sheet carries the zero-column sentinel state; `tableFor` on it
+  // would throw the same `Error("empty")` as `deriveSheetState`, so short-
+  // circuit to `null` and render an inline message instead of the grid.
+  const isEmpty = isEmptySheetState(state);
+  const table = useMemo(
+    () => (isEmpty ? null : tableFor(grid, state)),
+    [grid, state, isEmpty],
+  );
   const invalid = useMemo(
-    () => invalidCellMap(table, state.columns),
+    () =>
+      table
+        ? invalidCellMap(table, state.columns)
+        : new Map<number, number[]>(),
     [table, state.columns],
   );
 
@@ -82,64 +97,76 @@ export function MapStep({
         ))}
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="import-header-row"
-          className="text-foreground text-sm font-medium"
-        >
-          Header row
-        </label>
-        <select
-          id="import-header-row"
-          value={state.headerRow === null ? "none" : String(state.headerRow)}
-          onChange={handleHeaderRowChange}
-          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 h-8 w-fit rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3"
-        >
-          {HEADER_ROW_OPTIONS.map((i) => (
-            <option key={i} value={i}>
-              Row {i + 1}
-            </option>
-          ))}
-          <option value="none">No header row</option>
-        </select>
-        <p className="text-muted-foreground text-xs">
-          Changing the header row resets column edits for this sheet.
-        </p>
-      </div>
-
-      {rowCapWarning ? (
-        <p className="border-status-yellow/40 bg-status-yellow/10 text-foreground rounded-md border px-3 py-2 text-xs">
-          {rowCapWarning}
+      {isEmpty ? (
+        <p className="text-muted-foreground rounded-md border px-3 py-2 text-sm">
+          This sheet has no data. Pick another sheet to import.
         </p>
       ) : null}
 
-      {invalid.size > 0 ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-fit"
-          onClick={handleExcludeInvalid}
-        >
-          Exclude {invalid.size} rows with invalid cells
-        </Button>
-      ) : null}
+      {table ? (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="import-header-row"
+              className="text-foreground text-sm font-medium"
+            >
+              Header row
+            </label>
+            <select
+              id="import-header-row"
+              value={
+                state.headerRow === null ? "none" : String(state.headerRow)
+              }
+              onChange={handleHeaderRowChange}
+              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 h-8 w-fit rounded-lg border bg-transparent px-2.5 text-sm outline-none focus-visible:ring-3"
+            >
+              {HEADER_ROW_OPTIONS.map((i) => (
+                <option key={i} value={i}>
+                  Row {i + 1}
+                </option>
+              ))}
+              <option value="none">No header row</option>
+            </select>
+            <p className="text-muted-foreground text-xs">
+              Changing the header row resets column edits for this sheet.
+            </p>
+          </div>
 
-      <MappingGrid
-        grid={grid}
-        state={state}
-        table={table}
-        invalid={invalid}
-        onStateChange={onStateChange}
-        mode={mode}
-        boardColumns={boardColumns}
-      />
+          {rowCapWarning ? (
+            <p className="border-status-yellow/40 bg-status-yellow/10 text-foreground rounded-md border px-3 py-2 text-xs">
+              {rowCapWarning}
+            </p>
+          ) : null}
+
+          {invalid.size > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit"
+              onClick={handleExcludeInvalid}
+            >
+              Exclude {invalid.size} rows with invalid cells
+            </Button>
+          ) : null}
+
+          <MappingGrid
+            grid={grid}
+            state={state}
+            table={table}
+            invalid={invalid}
+            onStateChange={onStateChange}
+            mode={mode}
+            boardColumns={boardColumns}
+          />
+        </>
+      ) : null}
 
       <div className="flex justify-between pt-2">
         <Button type="button" variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button type="button" onClick={onNext}>
+        <Button type="button" disabled={nextDisabled} onClick={onNext}>
           Next
         </Button>
       </div>

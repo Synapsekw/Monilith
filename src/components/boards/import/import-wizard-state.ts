@@ -121,6 +121,36 @@ export function deriveSheetState(
   return { headerRow, excluded: [], columns };
 }
 
+/**
+ * Like `deriveSheetState`, but a blank sheet (where `selectRows` throws
+ * `Error("empty")`) yields a zero-column sentinel state instead of throwing —
+ * `parseWorkbookSheets` keeps empty worksheets in the preview, and switching
+ * to one must not crash the wizard. Detect the sentinel with
+ * `isEmptySheetState` and render an inline "no data" message instead of the
+ * mapping grid (`tableFor` on it would throw the same `"empty"`).
+ */
+export function deriveSheetStateSafe(
+  grid: string[][],
+  headerRow: number | null,
+  boardColumns?: BoardColumnRef[],
+): SheetState {
+  try {
+    return deriveSheetState(grid, headerRow, boardColumns);
+  } catch (err) {
+    if (err instanceof Error && err.message === "empty") {
+      return { headerRow: null, excluded: [], columns: [] };
+    }
+    throw err;
+  }
+}
+
+/** True for the sentinel state `deriveSheetStateSafe` mints for a blank
+ * sheet. A non-empty grid always yields at least one header column, so
+ * zero columns ⇔ empty sheet. */
+export function isEmptySheetState(state: SheetState): boolean {
+  return state.columns.length === 0;
+}
+
 /** Re-run row selection against the current header/exclusion state. */
 export function tableFor(grid: string[][], state: SheetState): ParsedTable {
   return selectRows(grid, state.headerRow, state.excluded);

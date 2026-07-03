@@ -250,6 +250,99 @@ describe("ImportWizard", () => {
     );
   });
 
+  it("switching to an empty sheet shows the no-data message and disables Next instead of crashing", async () => {
+    previewImport.mockResolvedValue({
+      ok: true,
+      data: {
+        fileName: "data.xlsx",
+        boardName: "my-board",
+        sheets: [
+          { name: "Sheet1", rowCount: 3, colCount: 2, grid: GRID },
+          { name: "Empty", rowCount: 0, colCount: 0, grid: [] },
+        ],
+      },
+    });
+
+    render(
+      <ImportWizard
+        destination={{ type: "new", workspaceId: "ws1" }}
+        open={true}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    uploadFile();
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("Name")).toBeInTheDocument(),
+    );
+
+    // Switching to the blank worksheet must not throw (deriveSheetStateSafe
+    // stores the empty-sheet sentinel instead of letting selectRows crash).
+    fireEvent.click(screen.getByRole("tab", { name: "Empty" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "This sheet has no data. Pick another sheet to import.",
+        ),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+
+    // Clicking Next stays on step 2 — no confirm step reachable.
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(
+      screen.queryByRole("button", { name: /confirm/i }),
+    ).not.toBeInTheDocument();
+
+    // Switching back to the populated sheet recovers the mapping grid.
+    fireEvent.click(screen.getByRole("tab", { name: "Sheet1" }));
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("Name")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+  });
+
+  it("blocks Next and shows the honest over-limit copy when the sheet exceeds MAX_ROWS", async () => {
+    previewImport.mockResolvedValue({
+      ok: true,
+      data: {
+        fileName: "data.xlsx",
+        boardName: "my-board",
+        // rowCount reflects the full sheet; the grid is the sliced preview.
+        sheets: [{ name: "Sheet1", rowCount: 2500, colCount: 2, grid: GRID }],
+      },
+    });
+
+    render(
+      <ImportWizard
+        destination={{ type: "new", workspaceId: "ws1" }}
+        open={true}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    uploadFile();
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("Name")).toBeInTheDocument(),
+    );
+
+    // Honest copy: the file can't be imported until reduced — no
+    // "first N will be imported" truncation promise.
+    expect(
+      screen.getByText(
+        'Sheet "Sheet1" has 2500 rows, which exceeds the 2000-row import limit. Reduce the file to 2000 rows or fewer to import it.',
+      ),
+    ).toBeInTheDocument();
+
+    // Next is blocked: commitImport would hard-fail this sheet.
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(
+      screen.queryByRole("button", { name: /confirm/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("existing-board mode: derives targets, commits with the existing destination shape, and only refreshes (no push)", async () => {
     previewImport.mockResolvedValue({
       ok: true,

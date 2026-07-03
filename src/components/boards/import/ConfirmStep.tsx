@@ -20,6 +20,14 @@ const NEW_GROUP_VALUE = "__new__";
 export type ConfirmStepProps = {
   table: ParsedTable;
   state: SheetState;
+  /** The sheet's TRUE total grid row count from the server parse. The commit
+   * re-parses the full file, so this — not the previewed slice — is what
+   * gets imported. */
+  rowCount: number;
+  /** How many grid rows the preview actually carries (the server slices to
+   * PREVIEW_GRID_ROWS). When `rowCount` exceeds this, the summary counts
+   * above only reflect the slice and a caveat line is rendered. */
+  previewedRowCount: number;
   destination:
     | {
         type: "new";
@@ -157,6 +165,8 @@ function ExistingGroupFields({
 export function ConfirmStep({
   table,
   state,
+  rowCount,
+  previewedRowCount,
   destination,
   error,
   pending,
@@ -164,6 +174,9 @@ export function ConfirmStep({
   onConfirm,
 }: ConfirmStepProps) {
   const summary = summarize(table, state);
+  // The preview grid is a server-side slice; when the sheet is bigger than
+  // the slice, the counts above undercount what the commit will import.
+  const previewTruncated = rowCount > previewedRowCount;
 
   const dataColumns = state.columns.filter(
     (c) => c.include && c.role === "data" && c.target !== "skip",
@@ -180,6 +193,14 @@ export function ConfirmStep({
         {summary.items} items · {summary.subitems} subtasks · {summary.columns}{" "}
         columns · {summary.invalid} invalid cells → empty
       </p>
+
+      {previewTruncated ? (
+        <p className="border-status-yellow/40 bg-status-yellow/10 text-foreground rounded-md border px-3 py-2 text-xs">
+          These counts reflect only the first {previewedRowCount} previewed rows
+          — the import itself reads the whole sheet, so all {rowCount} rows will
+          be imported.
+        </p>
+      ) : null}
 
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-sm">

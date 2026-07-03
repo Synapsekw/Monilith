@@ -7,7 +7,8 @@ import { MAX_ROWS, type ImportPreview } from "@/lib/boards/spreadsheet/types";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 import {
   buildCommitColumns,
-  deriveSheetState,
+  deriveSheetStateSafe,
+  isEmptySheetState,
   tableFor,
   type SheetState,
 } from "./import-wizard-state";
@@ -153,7 +154,11 @@ export function ImportWizard({
         setBoardName(res.data.boardName);
         setActiveSheet(0);
         setSheetStates({
-          0: deriveSheetState(res.data.sheets[0]?.grid ?? [], 0, boardColumns),
+          0: deriveSheetStateSafe(
+            res.data.sheets[0]?.grid ?? [],
+            0,
+            boardColumns,
+          ),
         });
         setStep(2);
       })
@@ -168,21 +173,33 @@ export function ImportWizard({
     setSheetStates((prev) => {
       if (prev[i]) return prev;
       const grid = preview?.sheets[i]?.grid ?? [];
-      return { ...prev, [i]: deriveSheetState(grid, 0, boardColumns) };
+      // Safe variant: a blank worksheet yields the empty-sheet sentinel
+      // instead of throwing mid-setState (MapStep renders it as an inline
+      // "This sheet has no data" message).
+      return { ...prev, [i]: deriveSheetStateSafe(grid, 0, boardColumns) };
     });
   }
 
   const activeSheetPreview = preview?.sheets[activeSheet];
   const activeState = sheetStates[activeSheet];
+  const activeSheetEmpty = activeState ? isEmptySheetState(activeState) : false;
 
   const table = useMemo(() => {
-    if (!activeState) return null;
+    // The empty-sheet sentinel has no derivable table (`tableFor` throws on
+    // a blank grid), and step 3 is unreachable for it anyway.
+    if (!activeState || isEmptySheetState(activeState)) return null;
     return tableFor(activeSheetPreview?.grid ?? [], activeState);
   }, [activeSheetPreview, activeState]);
 
+  // Commit hard-rejects a selected table above MAX_ROWS — so the warning is
+  // a blocker, not a "we'll truncate for you" promise, and Next is gated on
+  // it (see handleNext).
+  const overRowCap = Boolean(
+    activeSheetPreview && activeSheetPreview.rowCount > MAX_ROWS,
+  );
   const rowCapWarning =
-    activeSheetPreview && activeSheetPreview.rowCount > MAX_ROWS
-      ? `Sheet "${activeSheetPreview.name}" has ${activeSheetPreview.rowCount} rows — only the first ${MAX_ROWS} will be imported.`
+    overRowCap && activeSheetPreview
+      ? `Sheet "${activeSheetPreview.name}" has ${activeSheetPreview.rowCount} rows, which exceeds the ${MAX_ROWS}-row import limit. Reduce the file to ${MAX_ROWS} rows or fewer to import it.`
       : null;
 
   const hasNameColumn = activeState
@@ -190,12 +207,14 @@ export function ImportWizard({
     : false;
 
   function handleNext() {
-    if (!hasNameColumn) return;
+    if (!hasNameColumn || activeSheetEmpty || overRowCap) return;
     setStep(3);
   }
 
   function handleConfirm() {
     if (!fileBase64 || !fileName || !preview || !activeState) return;
+    // Same gates as handleNext — commitImport would hard-fail both cases.
+    if (activeSheetEmpty || overRowCap) return;
     setError(null);
 
     startTransition(async () => {
@@ -266,10 +285,11 @@ export function ImportWizard({
                 mode={destination.type}
                 boardColumns={boardColumns}
                 rowCapWarning={rowCapWarning}
+                nextDisabled={!hasNameColumn || activeSheetEmpty || overRowCap}
                 onBack={() => setStep(1)}
                 onNext={handleNext}
               />
-              {!hasNameColumn ? (
+              {!hasNameColumn && !activeSheetEmpty ? (
                 <p role="alert" className="text-destructive text-xs">
                   Mark a column as the item name (via its column menu) before
                   continuing.
@@ -278,10 +298,16 @@ export function ImportWizard({
             </div>
           ) : null}
 
-          {step === 3 && preview && activeState && table ? (
+          {step === 3 &&
+          preview &&
+          activeSheetPreview &&
+          activeState &&
+          table ? (
             <ConfirmStep
               table={table}
               state={activeState}
+              rowCount={activeSheetPreview.rowCount}
+              previewedRowCount={activeSheetPreview.grid.length}
               destination={
                 destination.type === "new"
                   ? {

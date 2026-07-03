@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { MapStep } from "./MapStep";
 import {
@@ -245,6 +246,49 @@ describe("MapStep existing mode", () => {
     expect(
       screen.queryByRole("menuitem", { name: "Use as group" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("reassigning the name role gives the demoted column an explicit 'create' target", async () => {
+    const user = userEvent.setup();
+    const simpleGrid = [
+      ["Name", "Note"],
+      ["A", "x"],
+    ];
+    // No board columns match, so the lone data column ("Note") derives with
+    // target "create" while the name column ("Name") derives with target null.
+    const noMatchColumns: BoardColumnRef[] = [];
+    const { onStateChange } = renderMapStep({
+      sheets: [baseSheet(simpleGrid)],
+      mode: "existing",
+      boardColumns: noMatchColumns,
+      state: deriveSheetState(simpleGrid, 0, noMatchColumns),
+    });
+
+    // Promote "Note" (the only role:"data" column) to the item-name role;
+    // "Name" demotes back to a data column.
+    await user.click(screen.getByRole("button", { name: /Data/ }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "Use as item name" }),
+    );
+
+    expect(onStateChange).toHaveBeenCalledTimes(1);
+    const nextState = onStateChange.mock.calls[0][0] as SheetState;
+
+    expect(nextState.columns.find((c) => c.name === "Note")?.role).toBe("name");
+    const demoted = nextState.columns.find((c) => c.name === "Name")!;
+    expect(demoted.role).toBe("data");
+    // The demoted column never had a target (it was structural at derive
+    // time) — existing mode must default it to "create" so the state stays
+    // committable, not leave it null (which the commit Zod schema rejects).
+    expect(demoted.target).toBe("create");
+
+    // Committable: every data-column spec carries an explicit target.
+    const specs = buildCommitColumns(nextState);
+    const dataSpecs = specs.filter((s) => s.role === "data");
+    expect(dataSpecs.length).toBeGreaterThan(0);
+    for (const spec of dataSpecs) {
+      expect(spec.target).toBeDefined();
+    }
   });
 
   it("disables the kind select for a mapped target with an explanatory title", () => {

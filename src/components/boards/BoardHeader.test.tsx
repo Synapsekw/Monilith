@@ -150,6 +150,8 @@ describe("BoardHeader", () => {
     expect(
       screen.getByRole("button", { name: "Sprint backlog" }),
     ).toBeInTheDocument();
+    // Editors can append rows, so the Import affordance stays.
+    expect(screen.getByRole("button", { name: "Import" })).toBeInTheDocument();
   });
 
   it("viewer: shows the View only badge, hides Share, and renders the name as a static heading", () => {
@@ -173,6 +175,10 @@ describe("BoardHeader", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Sprint backlog" }),
+    ).not.toBeInTheDocument();
+    // Import appends rows — a write — so viewers never see the affordance.
+    expect(
+      screen.queryByRole("button", { name: "Import" }),
     ).not.toBeInTheDocument();
   });
 

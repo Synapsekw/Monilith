@@ -45,6 +45,14 @@ begin
   if not public.is_org_member(v_org_id) then
     raise exception 'not a member of this organization' using errcode = '42501';
   end if;
+  -- Board-level write guard: SECURITY DEFINER bypasses the per-table RLS
+  -- write policies (which all check can_edit_board), so enforce the same
+  -- board-level edit check explicitly — org membership alone must not grant
+  -- append rights to a private/viewer-shared board (see
+  -- 20260620100000_board_level_sharing.sql).
+  if not public.can_edit_board(p_board_id) then
+    raise exception 'not authorized to edit this board' using errcode = '42501';
+  end if;
 
   -- 1. Resolve the target group: mint a new one appended after the board's
   --    existing groups, or validate that an existing groupId belongs to

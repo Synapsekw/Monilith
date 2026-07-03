@@ -69,6 +69,9 @@ function baseProps() {
   return {
     table,
     state,
+    // Full sheet == previewed slice: no truncation caveat by default.
+    rowCount: 3,
+    previewedRowCount: 3,
     destination: newDestination(),
     error: null,
     pending: false,
@@ -88,6 +91,26 @@ describe("ConfirmStep", () => {
         "2 items · 0 subtasks · 2 columns · 2 invalid cells → empty",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("shows the truncated-preview caveat when the sheet has more rows than the preview slice", () => {
+    render(
+      <ConfirmStep {...baseProps()} rowCount={500} previewedRowCount={200} />,
+    );
+
+    expect(
+      screen.getByText(
+        /These counts reflect only the first 200 previewed rows — the import itself reads the whole sheet, so all 500 rows will be imported\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the truncated-preview caveat when the preview covers the whole sheet", () => {
+    render(<ConfirmStep {...baseProps()} />);
+
+    expect(
+      screen.queryByText(/These counts reflect only the first/),
+    ).not.toBeInTheDocument();
   });
 
   it("renders a valid status cell as a pill with the option's color dot", () => {
