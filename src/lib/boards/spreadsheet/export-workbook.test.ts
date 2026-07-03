@@ -401,3 +401,56 @@ describe("xlsx formatting", () => {
     expect(sheet.rows[0][4]).toBe("60");
   });
 });
+
+describe("currency column export", () => {
+  function payloadWithCurrency(): BoardPayload {
+    const p = makePayload();
+    p.columns = [
+      ...p.columns,
+      {
+        id: "col-currency",
+        name: "Budget",
+        kind: "currency",
+        board_id: "board-1",
+        org_id: "org-1",
+        position: 3,
+        settings: { currency: "AED" },
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+        width: null,
+      },
+    ];
+    p.cellValues = [
+      ...p.cellValues,
+      {
+        id: "cv-currency",
+        item_id: "item-1",
+        column_id: "col-currency",
+        board_id: "board-1",
+        org_id: "org-1",
+        value: { amount: 1234.5 },
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+      },
+    ] as BoardPayload["cellValues"];
+    return p;
+  }
+
+  it('exports a real number with the "AED 1,234.50"-style numFmt (ISO code, never U+20C3)', async () => {
+    const { buffer } = await buildExportWorkbook(payloadWithCurrency(), "xlsx");
+    const wb = new (await import("exceljs")).default.Workbook();
+    await wb.xlsx.load(buffer as unknown as Parameters<typeof wb.xlsx.load>[0]);
+    const ws = wb.worksheets[0];
+    // Currency col = Group + Name + (status, numbers, percent, currency) → col 6.
+    const cell = ws.getRow(2).getCell(6);
+    expect(cell.value).toBe(1234.5);
+    expect(cell.numFmt).toBe('"AED" #,##0.00');
+    expect(cell.numFmt).not.toContain("⃃");
+  });
+
+  it("csv export keeps the raw re-importable amount", async () => {
+    const { buffer } = await buildExportWorkbook(payloadWithCurrency(), "csv");
+    const sheet = await parseWorkbook(buffer, "board.csv");
+    expect(sheet.rows[0][5]).toBe("1234.5");
+  });
+});

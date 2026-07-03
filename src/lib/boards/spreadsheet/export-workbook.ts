@@ -12,6 +12,7 @@ import {
   type FormatPlan,
 } from "./format-workbook";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { currencyOf } from "@/lib/boards/currency";
 
 /** Characters forbidden in Excel worksheet names. */
 const FORBIDDEN_WS_NAME_RE = /[\[\]*?/\\:]/g;
@@ -72,6 +73,7 @@ export async function buildExportWorkbook(
     rows: [],
     optionFills: [],
     percentCells: [],
+    currencyCells: [],
   };
 
   /** Emit one item row, recording its formatting facts. */
@@ -103,6 +105,13 @@ export async function buildExportWorkbook(
       const cellValue = dataCells[i];
       if (col.kind === "percent" && typeof cellValue === "number") {
         plan.percentCells.push({ rowNumber, colIndex, value: cellValue });
+      }
+      if (col.kind === "currency" && typeof cellValue === "number") {
+        plan.currencyCells.push({
+          rowNumber,
+          colIndex,
+          code: currencyOf(col.settings),
+        });
       }
     });
   }

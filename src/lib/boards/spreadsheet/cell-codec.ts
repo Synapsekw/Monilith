@@ -115,8 +115,8 @@ export function cellToText(
   }
 }
 
-/** A cell value ready for exceljs `addRow`: real numbers for numbers/percent,
- *  the flat `cellToText` string otherwise. Never throws. */
+/** A cell value ready for exceljs `addRow`: real numbers for numbers/percent/
+ *  currency, the flat `cellToText` string otherwise. Never throws. */
 export type ExcelCellValue = string | number;
 
 export function cellToExcelValue(
@@ -126,7 +126,10 @@ export function cellToExcelValue(
   resolvePeopleName?: (userId: string) => string | null,
 ): ExcelCellValue {
   const text = cellToText(kind, value, settings, resolvePeopleName);
-  if ((kind === "numbers" || kind === "percent") && text !== "") {
+  if (
+    (kind === "numbers" || kind === "percent" || kind === "currency") &&
+    text !== ""
+  ) {
     const n = Number(text);
     if (Number.isFinite(n)) return n;
   }

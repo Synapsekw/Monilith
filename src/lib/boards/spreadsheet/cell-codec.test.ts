@@ -520,4 +520,11 @@ describe("currency codec", () => {
     const text = cellToText("currency", { amount: 99.25 }, { currency: "KWD" });
     expect(textToCell("currency", text, [])).toEqual({ amount: 99.25 });
   });
+
+  it("cellToExcelValue exports currency as a real number", () => {
+    expect(
+      cellToExcelValue("currency", { amount: 1234.5 }, { currency: "AED" }),
+    ).toBe(1234.5);
+    expect(cellToExcelValue("currency", null, { currency: "AED" })).toBe("");
+  });
 });
