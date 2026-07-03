@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-03-1918
+last-updated: 2026-07-03-1924
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -49,11 +49,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **MVP-F DONE — 9/9 shipped to prod** · **Phase 7 confirmed fully built** (7a/7b/7c/time-allocation — nothing left) · standing product call next: define Phase 10, revive deferred 6e Docs, or **declare v1 feature-complete**.
-- **Branch:** `develop == origin/develop` at `9d618c3` · `main` at `f0f71f5`, prod deploy confirmed. Feedback rows: F1/F3/F6 resolved, F2/F5 in_progress (flip after prod confirms Batch B).
-- **In flight:** four scoped plans **pushed, awaiting review** — `task/perf-tier3` (6 perf items), `task/rename-board-shared-tag` (S), `task/widget-preview-live` (M), `task/pwa-shell` (S). All docs-only, no source built. Foreign `task/import-wizard-v2` (another session) still live. ([[2026-07-03-1918-whats-next-triage-scope-four-plans]])
-- **Next:** review the four pushed plans (cheapest first: rename-board-shared-tag → pwa-shell), then greenlight builds as a parallel batch or make the v1-feature-complete call. `importSpreadsheetAsBoard` boardsTag fix deferred into import-wizard-v2's Task 6 (file collision).
-- **Owed:** prod Batch B migrations (above). Migration-ledger repair on BOTH projects at next `db push`/`/sync-prod` (all 8 recent applies were SQL-editor). Health-summary requester questions in its spec. Dead lock-held worktree dirs to delete. `.mcp.json` uncommitted; untracked `scripts/sync-prod/push-schema.sh` (foreign). Perf tier-3 leftovers per [[2026-07-02-1902-perf-pass-four-parallel-worktrees]].
+- **Phase:** **MVP-F DONE — 9/9 shipped to prod** · **Phase 7 confirmed fully built** (7a/7b/7c/time-allocation — nothing left) · **Import Wizard v2 merged to develop** (3-step Excel/CSV wizard + existing-board append) · standing product call next: define Phase 10, revive deferred 6e Docs, or **declare v1 feature-complete**.
+- **Branch:** `develop == origin/develop` (advanced by import-wizard-v2 merge) · `main` at `f0f71f5`, prod deploy confirmed. Feedback rows: F1/F3/F6 resolved, F2/F5 in_progress (flip after prod confirms Batch B).
+- **In flight:** four scoped plans **pushed, awaiting review** — `task/perf-tier3` (6 perf items), `task/rename-board-shared-tag` (S), `task/widget-preview-live` (M), `task/pwa-shell` (S). All docs-only, no source built. ([[2026-07-03-1918-whats-next-triage-scope-four-plans]])
+- **Next:** (0) **re-apply import-wizard-v2's dev migration** — paste `supabase/migrations/20260703110000_import_rows_into_board.sql` into the DEV SQL editor to add the `can_edit_board` guard the running dev DB is still missing (idempotent, no `db:types` churn); (1) review the four pushed plans (cheapest first: rename-board-shared-tag → pwa-shell), then greenlight builds or make the v1-feature-complete call. `importSpreadsheetAsBoard` boardsTag fix deferred into import-wizard-v2's Task 6 (file collision).
+- **Owed:** import-wizard-v2 DEV migration re-apply (above). prod Batch B migrations (above). Migration-ledger repair on BOTH projects at next `db push`/`/sync-prod` (all recent applies were SQL-editor, incl. `…703110000`). Health-summary requester questions in its spec. Dead lock-held worktree dirs to delete. `.mcp.json` uncommitted; untracked `scripts/sync-prod/push-schema.sh` (foreign). Perf tier-3 leftovers per [[2026-07-02-1902-perf-pass-four-parallel-worktrees]].
 
 ### Last session
 
