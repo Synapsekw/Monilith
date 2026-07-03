@@ -100,6 +100,15 @@ export function cellToText(
         return names.join(", ");
       }
 
+      case "priority":
+        // STORED level only — the derived auto-critical state deliberately
+        // does not export (spec open question 5).
+        return v.level === "critical"
+          ? "Critical"
+          : v.level === "normal"
+            ? "Normal"
+            : "";
+
       // Export-structure-only kinds: always blank in v1
       case "relation":
       case "mirror":

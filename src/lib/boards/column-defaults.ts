@@ -18,6 +18,7 @@ const DEFAULT_NAME: Record<ColumnKind, string> = {
   mirror: "Mirror",
   percent: "Percent",
   currency: "Currency",
+  priority: "Priority",
 };
 
 function opt(label: string, color: string) {
