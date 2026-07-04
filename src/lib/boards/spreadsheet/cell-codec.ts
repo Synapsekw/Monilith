@@ -146,6 +146,129 @@ export function cellToExcelValue(
 }
 
 /**
+ * Parse a locale-decorated numeric string into a plain number, tolerant of
+ * both US (`1,234.56`) and EU (`1.234,56`) grouping/decimal conventions plus
+ * currency symbols, spaces and accounting-style parenthesised negatives.
+ * Returns `null` for anything without a digit (so a genuinely-unparseable
+ * non-empty cell is surfaced as invalid rather than silently coerced).
+ *
+ * Decimal-separator resolution:
+ * - Both `.` and `,` present → the **right-most** one is the decimal point,
+ *   the other is a grouping separator (`1.234,56`→1234.56, `1,234.56`→1234.56).
+ * - Only `,` present → decimal **iff** there is exactly one comma followed by
+ *   1–2 digits (`1,5`→1.5, `1,56`→1.56); otherwise it's grouping
+ *   (`1,234`→1234, `1,234,567`→1234567).
+ * - Only `.` present → treated as the decimal point (JS/US native), except
+ *   multiple dots which are grouping (`1.234.567`→1234567). A lone
+ *   `1.234` therefore parses as 1.234, not 1234 — without a decimal-comma or
+ *   currency-locale signal a bare dot is the standard decimal point; genuine
+ *   EU thousands appear as `1.234,00` / `€1.234` and resolve via the branches
+ *   above.
+ */
+export function parseNumericLoose(raw: string): number | null {
+  let s = raw.trim();
+  if (s === "") return null;
+
+  // Accounting negative: "(500)" → -500.
+  let negative = false;
+  const paren = /^\((.*)\)$/.exec(s);
+  if (paren) {
+    negative = true;
+    s = paren[1];
+  }
+
+  // Drop currency symbols, spaces, and any other decoration — keep only
+  // digits, separators and signs.
+  s = s.replace(/[^\d.,+-]/g, "");
+
+  // Pull a single leading sign, then discard any stray signs.
+  if (s.startsWith("-")) {
+    negative = !negative;
+    s = s.slice(1);
+  } else if (s.startsWith("+")) {
+    s = s.slice(1);
+  }
+  s = s.replace(/[+-]/g, "");
+  if (!/\d/.test(s)) return null;
+
+  const dotCount = (s.match(/\./g) ?? []).length;
+  const commaCount = (s.match(/,/g) ?? []).length;
+
+  let normalized: string;
+  if (dotCount > 0 && commaCount > 0) {
+    if (s.lastIndexOf(".") > s.lastIndexOf(",")) {
+      normalized = s.replace(/,/g, ""); // dot decimal, comma grouping
+    } else {
+      normalized = s.replace(/\./g, "").replace(",", "."); // comma decimal
+    }
+  } else if (commaCount > 0) {
+    const afterLast = s.length - s.lastIndexOf(",") - 1;
+    const commaIsDecimal = commaCount === 1 && afterLast >= 1 && afterLast <= 2;
+    normalized = commaIsDecimal ? s.replace(",", ".") : s.replace(/,/g, "");
+  } else if (dotCount > 1) {
+    normalized = s.replace(/\./g, ""); // repeated dots → grouping
+  } else {
+    normalized = s;
+  }
+
+  const n = Number(normalized);
+  if (!Number.isFinite(n)) return null;
+  return negative ? -n : n;
+}
+
+/**
+ * Parse an import date string to a canonical `YYYY-MM-DD`, or `null` when it
+ * isn't a date shape we can resolve **unambiguously**. ISO dates/datetimes and
+ * `YYYY/MM/DD` are taken as-is. For `dd/mm/yyyy`-vs-`mm/dd/yyyy` slash dates the
+ * order is inferred only when a component exceeds 12 (`25/12/2024`→DD/MM,
+ * `12/25/2024`→MM/DD); a genuinely ambiguous value where both are ≤ 12
+ * (e.g. `03/04/2024`) returns `null` instead of silently guessing month-first.
+ */
+export function parseImportDate(raw: string): string | null {
+  const t = raw.trim();
+  if (t === "") return null;
+
+  // ISO date or datetime — canonical, unambiguous.
+  if (/^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/.test(t)) {
+    const ts = Date.parse(t);
+    if (Number.isNaN(ts)) return null;
+    return new Date(ts).toISOString().slice(0, 10);
+  }
+
+  // YYYY/MM/DD — year-first, unambiguous.
+  const ymd = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(t);
+  if (ymd) return buildIsoDate(+ymd[1], +ymd[2], +ymd[3]);
+
+  // dd/mm/yyyy or mm/dd/yyyy — disambiguate by a component > 12.
+  const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (dmy) {
+    const a = +dmy[1];
+    const b = +dmy[2];
+    const y = +dmy[3];
+    if (a > 12 && b >= 1 && b <= 12) return buildIsoDate(y, b, a); // DD/MM
+    if (b > 12 && a >= 1 && a <= 12) return buildIsoDate(y, a, b); // MM/DD
+    return null; // both ≤ 12 (ambiguous) or both > 12 (invalid)
+  }
+
+  return null;
+}
+
+/** Validate a Y-M-D triple against the real calendar and format it as ISO. */
+function buildIsoDate(y: number, m: number, d: number): string | null {
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() !== m - 1 ||
+    dt.getUTCDate() !== d
+  ) {
+    return null;
+  }
+  const pad = (n: number, w: number) => String(n).padStart(w, "0");
+  return `${pad(y, 4)}-${pad(m, 2)}-${pad(d, 2)}`;
+}
+
+/**
  * Parse a raw spreadsheet string into a cell value Json for an importable kind.
  * Returns null when empty/invalid. Never throws.
  */
@@ -162,22 +285,22 @@ export function textToCell(
       return { text: trimmed };
 
     case "numbers": {
-      const n = Number(trimmed);
-      return Number.isFinite(n) ? { n } : null;
+      const n = parseNumericLoose(trimmed);
+      return n !== null ? { n } : null;
     }
 
     case "percent": {
-      const n = Number(trimmed);
-      if (!Number.isFinite(n)) return null;
+      // Tolerate a trailing "%" and locale grouping/decimals ("12,5%" → 12.5).
+      const n = parseNumericLoose(trimmed);
+      if (n === null) return null;
       return { percent: Math.min(100, Math.max(0, n)) };
     }
 
     case "currency": {
-      // Accept symbol/grouping-decorated money strings: "$1,234.50" → 1234.5.
-      const n = Number(trimmed.replace(/[^0-9.-]/g, ""));
-      return Number.isFinite(n) && trimmed.replace(/[^0-9]/g, "") !== ""
-        ? { amount: n }
-        : null;
+      // Accept symbol/grouping-decorated money in either US or EU convention:
+      // "$1,234.50" → 1234.5, "€1.234,56" → 1234.56, "(500)" → -500.
+      const n = parseNumericLoose(trimmed);
+      return n !== null ? { amount: n } : null;
     }
 
     case "rating": {
@@ -196,15 +319,19 @@ export function textToCell(
       return isHttpUrl(trimmed) ? { url: trimmed } : null;
 
     case "date": {
-      // Prefer strict ISO YYYY-MM-DD
-      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        return { date: trimmed };
-      }
-      // Fall back to any parseable date string
-      const ts = Date.parse(trimmed);
-      if (!Number.isNaN(ts)) {
-        const iso = new Date(ts).toISOString().slice(0, 10);
-        return { date: iso };
+      // ISO and unambiguous slash dates (see parseImportDate). Ambiguous
+      // dd/mm-vs-mm/dd values return null here rather than silently defaulting
+      // to month-first, so they surface as unparseable instead of wrong.
+      const iso = parseImportDate(trimmed);
+      if (iso) return { date: iso };
+      // Non-ISO, non-slash prose ("January 15, 2024") stays supported via
+      // Date.parse. The `/` guard keeps slash dates out of this branch so they
+      // can never be silently re-interpreted month-first.
+      if (!trimmed.includes("/")) {
+        const ts = Date.parse(trimmed);
+        if (!Number.isNaN(ts)) {
+          return { date: new Date(ts).toISOString().slice(0, 10) };
+        }
       }
       return null;
     }

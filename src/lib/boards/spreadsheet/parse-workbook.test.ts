@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import ExcelJS from "exceljs";
 import { parseWorkbook, parseWorkbookSheets } from "./parse-workbook";
+import { MAX_ROWS, MAX_COLS } from "./types";
 
 async function xlsxBuf(
   rows: string[][],
@@ -115,5 +116,36 @@ describe("parseWorkbookSheets", () => {
     const wb = new ExcelJS.Workbook();
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     await expect(parseWorkbookSheets(buf, "x.xlsx")).rejects.toThrow("empty");
+  });
+
+  it("rejects a sheet whose declared columns exceed MAX_COLS, naming it", async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("WideSheet");
+    ws.addRow(Array.from({ length: MAX_COLS + 1 }, (_, i) => `Col${i}`));
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    await expect(parseWorkbookSheets(buf, "wide.xlsx")).rejects.toThrow(
+      /WideSheet.*too many columns/i,
+    );
+  });
+
+  it("rejects a sheet whose declared rows exceed MAX_ROWS before building the grid", async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("TallSheet");
+    for (let i = 0; i <= MAX_ROWS; i++) ws.addRow([`Task ${i}`]);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    await expect(parseWorkbookSheets(buf, "tall.xlsx")).rejects.toThrow(
+      /TallSheet.*too many rows/i,
+    );
+  });
+
+  it("caps each row's cells at MAX_COLS even when a row is padded wider", async () => {
+    // A row with exactly MAX_COLS cells parses; the grid never exceeds the cap.
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Sheet1");
+    ws.addRow(Array.from({ length: MAX_COLS }, (_, i) => `Col${i}`));
+    ws.addRow(Array.from({ length: MAX_COLS }, (_, i) => `v${i}`));
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const sheets = await parseWorkbookSheets(buf, "ok.xlsx");
+    expect(sheets[0].grid[0]).toHaveLength(MAX_COLS);
   });
 });

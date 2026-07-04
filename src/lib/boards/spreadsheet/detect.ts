@@ -7,6 +7,7 @@ import {
   SUBTASK_MARKER,
 } from "./types";
 import { nextOptionColor } from "@/lib/boards/option-colors";
+import { parseImportDate } from "./cell-codec";
 
 /** Detect a kind + synthesized options for every NON-structural column (all columns
  *  except a leading `Group` and the `Name` column). Indexed to align with header. */
@@ -233,16 +234,14 @@ function isFiniteNumber(v: string): boolean {
   return v.trim() !== "" && Number.isFinite(n);
 }
 
-// Explicit full year-month-day shapes only. `Date.parse` alone is far too
-// permissive ("May 2024", "2024", "3" all parse), so we first require a
-// recognised date shape, then confirm it actually parses to a real date.
-const DATE_SHAPE_RE =
-  /^(\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?|\d{4}\/\d{2}\/\d{2}|\d{2}\/\d{2}\/\d{4})$/;
-
+// A column auto-maps to `date` only when every sampled value resolves to a
+// real calendar date without ambiguity. `parseImportDate` handles that:
+// ISO/`YYYY/MM/DD` are canonical, slash `dd/mm`-vs-`mm/dd` values resolve only
+// when a component > 12 pins the order, and genuinely ambiguous ones (both
+// ≤ 12) return null so the column falls back to text rather than importing a
+// silently-wrong month-first date. Prose like "May 2024" is likewise excluded.
 function isDateLike(v: string): boolean {
-  const trimmed = v.trim();
-  if (!DATE_SHAPE_RE.test(trimmed)) return false;
-  return !Number.isNaN(Date.parse(trimmed));
+  return parseImportDate(v) !== null;
 }
 
 function synthesizeOptions(samples: string[]): SynthOption[] {

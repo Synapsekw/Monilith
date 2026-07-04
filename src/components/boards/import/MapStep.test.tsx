@@ -160,6 +160,13 @@ describe("MapStep", () => {
       screen.getByTitle("Can't parse as numbers — will import empty"),
     ).toBeInTheDocument();
   });
+
+  it("shows a per-column count of cells that won't import", () => {
+    // The "Est" column's subtask row holds "oops" — one unparseable cell.
+    renderMapStep({});
+
+    expect(screen.getByText(/1 won.t import/i)).toBeInTheDocument();
+  });
 });
 
 describe("MapStep existing mode", () => {
