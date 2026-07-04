@@ -2,6 +2,8 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
+import { resolveUserTimeZone } from "@/lib/datetime/user-timezone";
+import { zonedDayOf, zonedWallTimeToUtc } from "@/lib/datetime/timezone";
 import { weekDays, assembleTimeCard } from "@/lib/time/card";
 import { PRESET_CATEGORIES } from "@/lib/time/categories";
 import type {
@@ -23,6 +25,15 @@ export async function getTimeCardData(
   const days = weekDays(weekStart);
   const from = days[0];
   const to = days[6];
+
+  // Bucket timer instants into the USER's local calendar day, not the UTC day.
+  // The week window and each entry's day are computed in this zone, so a timer
+  // run at 5pm local Monday lands under Monday regardless of UTC offset.
+  const timeZone = await resolveUserTimeZone(userId);
+  // UTC bounds of the local week [Mon 00:00 local, Mon+7 00:00 local) — the
+  // exclusive upper bound is the local midnight after Sunday (hour=24 of `to`).
+  const windowStart = zonedWallTimeToUtc(from, 0, timeZone).toISOString();
+  const windowEnd = zonedWallTimeToUtc(to, 24, timeZone).toISOString();
 
   const supabase = await createClient();
 
@@ -46,14 +57,14 @@ export async function getTimeCardData(
     .select("item_id, started_at, duration_secs")
     .eq("user_id", userId)
     .not("ended_at", "is", null)
-    .gte("started_at", `${from}T00:00:00Z`)
-    .lte("started_at", `${to}T23:59:59Z`);
+    .gte("started_at", windowStart)
+    .lt("started_at", windowEnd);
   if (timerErr)
     throw new Error(`Failed to load timer entries: ${timerErr.message}`);
 
   const timer: TimerSecsByItemDay[] = (timerRows ?? []).map((r) => ({
     itemId: r.item_id,
-    day: (r.started_at as string).slice(0, 10),
+    day: zonedDayOf(r.started_at as string, timeZone),
     secs: Number(r.duration_secs ?? 0),
   }));
 

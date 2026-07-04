@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { resolveUserTimeZone } from "@/lib/datetime/user-timezone";
+import { zonedWallTimeToUtc } from "@/lib/datetime/timezone";
 import type { Tables } from "@/types/database.types";
 import {
   addManualEntrySchema,
@@ -113,7 +115,15 @@ export async function addManualEntry(input: {
   if (!col || col.board_id !== meta.boardId || col.kind !== "time_tracking")
     return fail("Invalid time tracking column.");
 
-  const startedAt = new Date(`${parsed.data.date}T12:00:00.000Z`).toISOString();
+  // Anchor the entry to MIDDAY in the user's timezone (not noon UTC), so it
+  // buckets back onto the same local calendar day the user picked — agreeing
+  // with the /time card read path (resolveUserTimeZone + zonedDayOf).
+  const timeZone = await resolveUserTimeZone(user.id);
+  const startedAt = zonedWallTimeToUtc(
+    parsed.data.date,
+    12,
+    timeZone,
+  ).toISOString();
   const endedAt = new Date(
     Date.parse(startedAt) + parsed.data.durationSecs * 1000,
   ).toISOString();
@@ -147,7 +157,20 @@ export async function editEntry(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const startedAt = new Date(`${parsed.data.date}T12:00:00.000Z`).toISOString();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Not authenticated.");
+
+  // Same midday-in-user-tz anchoring as addManualEntry, so an edited day
+  // renders on that local day on the /time card (RLS scopes the row to self,
+  // so the editor's tz is the owner's tz).
+  const timeZone = await resolveUserTimeZone(user.id);
+  const startedAt = zonedWallTimeToUtc(
+    parsed.data.date,
+    12,
+    timeZone,
+  ).toISOString();
   const endedAt = new Date(
     Date.parse(startedAt) + parsed.data.durationSecs * 1000,
   ).toISOString();
