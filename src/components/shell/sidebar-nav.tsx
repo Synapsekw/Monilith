@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Clock, Gauge, Inbox, Target } from "lucide-react";
+import { BarChart3, Clock, Gauge, Inbox, ListTodo, Target } from "lucide-react";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { PlatformNav } from "@/components/platform/PlatformNav";
@@ -34,6 +34,7 @@ function CoarseCaption({ label }: { label: string }) {
 }
 
 const nav = [
+  { label: "My Work", icon: ListTodo, href: "/my-work" },
   { label: "Goals", icon: Target, href: "/goals" },
   { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
   { label: "Workload", icon: Gauge, href: "/workload" },
