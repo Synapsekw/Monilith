@@ -110,21 +110,6 @@ type Ctx = { rollback?: (cache: BoardCache) => BoardCache };
  * referenced the option, or a dropdown left with no ids) and should be dropped.
  * Pure — mirrors the server's `delete_column_option` clearing behavior.
  */
-/**
- * Snapshot the prior values of exactly the keys a `change` patch touches, so a
- * rollback can revert those fields (and only those) on the current row. Keeps
- * field-level rollbacks from clobbering a peer's concurrent edit to a different
- * field of the same entity.
- */
-export function pickFields<T extends object>(
-  source: T,
-  change: Partial<T>,
-): Partial<T> {
-  const prior: Partial<T> = {};
-  for (const k of Object.keys(change) as (keyof T)[]) prior[k] = source[k];
-  return prior;
-}
-
 export function stripOption(
   cv: CacheCellValue,
   optionId: string,
@@ -138,6 +123,21 @@ export function stripOption(
       : null;
   }
   return cv;
+}
+
+/**
+ * Snapshot the prior values of exactly the keys a `change` patch touches, so a
+ * rollback can revert those fields (and only those) on the current row. Keeps
+ * field-level rollbacks from clobbering a peer's concurrent edit to a different
+ * field of the same entity.
+ */
+export function pickFields<T extends object>(
+  source: T,
+  change: Partial<T>,
+): Partial<T> {
+  const prior: Partial<T> = {};
+  for (const k of Object.keys(change) as (keyof T)[]) prior[k] = source[k];
+  return prior;
 }
 
 // Failed board mutations surface via the shared `showMutationError` toast helper
