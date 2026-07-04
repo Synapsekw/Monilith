@@ -19,20 +19,23 @@ beforeEach(() => getAutomationRuns.mockReset());
 
 describe("RecentRuns", () => {
   it("does not fetch until expanded, then lists runs", async () => {
-    getAutomationRuns.mockResolvedValue([
-      {
-        id: "r1",
-        automation_id: "a1",
-        status: "ran",
-        trigger_type: "status_changed",
-        actions: [{ type: "notify", outcome: "sent" }],
-        item_id: "i1",
-        error: null,
-        created_at: new Date().toISOString(),
-        org_id: "o1",
-        board_id: "b1",
-      },
-    ]);
+    getAutomationRuns.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          id: "r1",
+          automation_id: "a1",
+          status: "ran",
+          trigger_type: "status_changed",
+          actions: [{ type: "notify", outcome: "sent" }],
+          item_id: "i1",
+          error: null,
+          created_at: new Date().toISOString(),
+          org_id: "o1",
+          board_id: "b1",
+        },
+      ],
+    });
     wrap(<RecentRuns automationId="a1" />);
     // not fetched yet
     expect(getAutomationRuns).not.toHaveBeenCalled();
@@ -42,10 +45,20 @@ describe("RecentRuns", () => {
   });
 
   it("shows empty state when no runs", async () => {
-    getAutomationRuns.mockResolvedValue([]);
+    getAutomationRuns.mockResolvedValue({ ok: true, data: [] });
     wrap(<RecentRuns automationId="a2" />);
     await userEvent.click(screen.getByRole("button", { name: /recent runs/i }));
     expect(await screen.findByText(/no runs yet/i)).toBeInTheDocument();
+  });
+
+  it("shows a distinct error state (not the empty state) when the read fails", async () => {
+    getAutomationRuns.mockResolvedValue({ ok: false, error: "boom" });
+    wrap(<RecentRuns automationId="a4" />);
+    await userEvent.click(screen.getByRole("button", { name: /recent runs/i }));
+    expect(
+      await screen.findByText(/couldn.t load recent runs/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/no runs yet/i)).not.toBeInTheDocument();
   });
 
   it("renders blocked and error badges with their summaries", async () => {
@@ -57,16 +70,19 @@ describe("RecentRuns", () => {
       org_id: "o1",
       board_id: "b1",
     };
-    getAutomationRuns.mockResolvedValue([
-      { ...base, id: "r1", status: "blocked", actions: [], error: null },
-      {
-        ...base,
-        id: "r2",
-        status: "error",
-        actions: [],
-        error: "boom",
-      },
-    ]);
+    getAutomationRuns.mockResolvedValue({
+      ok: true,
+      data: [
+        { ...base, id: "r1", status: "blocked", actions: [], error: null },
+        {
+          ...base,
+          id: "r2",
+          status: "error",
+          actions: [],
+          error: "boom",
+        },
+      ],
+    });
     wrap(<RecentRuns automationId="a3" />);
     await userEvent.click(screen.getByRole("button", { name: /recent runs/i }));
     expect(await screen.findByText("Blocked")).toBeInTheDocument();

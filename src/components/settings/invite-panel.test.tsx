@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { InvitePanel, type Invite } from "./invite-panel";
 
 const inviteMember = vi.fn();
@@ -32,6 +38,31 @@ describe("InvitePanel", () => {
       email: "new@x.com",
       role: "admin",
     });
+  });
+
+  it("warns when the invite is recorded but the email fails to send", async () => {
+    inviteMember.mockResolvedValue({ ok: true, data: { emailSent: false } });
+    render(<InvitePanel orgId={ORG} invites={[]} />);
+    fireEvent.change(screen.getByLabelText("Invite email"), {
+      target: { value: "new@x.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      /email delivery failed/i,
+    );
+  });
+
+  it("shows no warning when the invite email is delivered", async () => {
+    inviteMember.mockResolvedValue({ ok: true, data: { emailSent: true } });
+    render(<InvitePanel orgId={ORG} invites={[]} />);
+    fireEvent.change(screen.getByLabelText("Invite email"), {
+      target: { value: "new@x.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Invite" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Invite email")).toHaveValue(""),
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when there are no pending invites", () => {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { toast } from "sonner";
 import { Eye, FolderKanban, GripVertical, Users2 } from "lucide-react";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
@@ -149,12 +150,22 @@ export function BoardsNav({
       String(over.id),
     );
     if (position === null) return;
+    // Snapshot the pre-drag order so a failed persist can be rolled back —
+    // otherwise the new order looks saved until the next reload snaps it back.
+    const previousOrder = ordered;
     setOrdered((prev) =>
       prev
         .map((b) => (b.id === active.id ? { ...b, position } : b))
         .sort((a, b) => a.position - b.position),
     );
-    void reorderBoard({ boardId: String(active.id), position });
+    void reorderBoard({ boardId: String(active.id), position }).then((res) => {
+      if (!res.ok) {
+        setOrdered(previousOrder);
+        toast.error("Couldn't reorder the board — your change was undone.", {
+          description: res.error,
+        });
+      }
+    });
   }
 
   return (
