@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   createDependencySchema,
@@ -26,7 +25,6 @@ export async function createDependency(input: {
   });
   if (error || !data)
     return fail(error?.message ?? "Could not create dependency.");
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: { dependencyId: data.id } };
 }
 
@@ -48,6 +46,5 @@ export async function deleteDependency(input: {
     .delete()
     .eq("id", parsed.data.dependencyId);
   if (error) return fail(error.message);
-  revalidatePath(`/boards/${dep.board_id}`);
   return { ok: true, data: undefined };
 }

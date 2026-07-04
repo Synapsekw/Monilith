@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
@@ -186,6 +187,13 @@ function presenceValue(
 }
 
 function renderGanttWithPresence(presence: BoardPresenceContextValue) {
+  // PresenceRing/usePresenceFocus read the presence focus store now — seed it.
+  usePresenceFocusStore.getState().syncPresence({
+    focusMap: presence.focusMap,
+    flashTargetId: presence.flashTargetId,
+    selfUserId: presence.selfUserId,
+    setFocus: presence.setFocus,
+  });
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>
@@ -201,6 +209,7 @@ function renderGanttWithPresence(presence: BoardPresenceContextValue) {
 }
 
 describe("GanttBoard bar presence ring (8c)", () => {
+  afterEach(() => usePresenceFocusStore.getState().reset());
   it("shows an editing indicator on a bar another user is manipulating", () => {
     // payloadFixture schedules item i1 (Item Alpha) → target event:i1
     const focusMap = new Map([["event:i1", [occupant({ name: "Sam" })]]]);

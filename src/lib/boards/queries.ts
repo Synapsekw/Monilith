@@ -199,11 +199,16 @@ export const getBoardPayload = cache(
         .select("*")
         .eq("board_id", boardId)
         .order("position", { ascending: true }),
+      // Bounded over the board_id index — the only board-payload read that was
+      // previously uncapped. Dependencies scale with items, so cap at the same
+      // 5000 as the items read; a server-side follow-up applies if a board ever
+      // exceeds this (matches items/cell_values/relation_links).
       supabase
         .from("item_dependencies")
         .select("*")
         .eq("board_id", boardId)
-        .order("created_at", { ascending: true }),
+        .order("created_at", { ascending: true })
+        .limit(5000),
       supabase
         .from("attachments")
         .select("*")

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,7 +7,10 @@ import {
   BoardPresenceProvider,
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
+import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { presenceTarget } from "@/lib/boards/presence-target";
+
+afterEach(() => usePresenceFocusStore.getState().reset());
 
 function ctx(
   setFocus: BoardPresenceContextValue["setFocus"],
@@ -39,6 +42,13 @@ function renderPanel(
   setFocus: BoardPresenceContextValue["setFocus"],
   itemId: string | null,
 ) {
+  // usePresenceFocus reads setFocus from the presence focus store now — seed it.
+  usePresenceFocusStore.getState().syncPresence({
+    focusMap: new Map(),
+    flashTargetId: null,
+    selfUserId: "self",
+    setFocus,
+  });
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>

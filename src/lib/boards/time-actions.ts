@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database.types";
 import {
@@ -49,8 +48,6 @@ export async function startTimer(input: {
     p_column_id: parsed.data.columnId,
   });
   if (error) return fail(error.message);
-
-  revalidatePath(`/boards/${meta.boardId}`);
   return { ok: true, data: { entries: (data ?? []) as TimeEntry[] } };
 }
 
@@ -84,7 +81,6 @@ export async function stopTimer(input: {
   if (error) return fail(error.message);
   if (!data) return fail("Entry already stopped.");
 
-  revalidatePath(`/boards/${existing.board_id}`);
   return { ok: true, data: { entry: data } };
 }
 
@@ -137,8 +133,6 @@ export async function addManualEntry(input: {
     .select("*")
     .single();
   if (error || !data) return fail(error?.message ?? "Could not add time.");
-
-  revalidatePath(`/boards/${meta.boardId}`);
   return { ok: true, data: { entry: data } };
 }
 
@@ -172,7 +166,6 @@ export async function editEntry(input: {
   if (error) return fail(error.message);
   if (!data) return fail("Entry not found or still running.");
 
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: { entry: data } };
 }
 
@@ -185,14 +178,14 @@ export async function deleteEntry(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // No board_id read needed anymore (previously fetched only for a
+  // revalidatePath, now dropped — the board client hydrates once and is kept
+  // fresh by the optimistic remove + realtime, never by RSC revalidation).
+  const { error } = await supabase
     .from("time_entries")
     .delete()
-    .eq("id", parsed.data.entryId)
-    .select("board_id")
-    .maybeSingle();
+    .eq("id", parsed.data.entryId);
   if (error) return fail(error.message);
-  if (data?.board_id) revalidatePath(`/boards/${data.board_id}`);
 
   return { ok: true, data: { id: parsed.data.entryId } };
 }

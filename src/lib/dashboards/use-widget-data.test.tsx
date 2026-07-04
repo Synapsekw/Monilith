@@ -9,7 +9,12 @@ vi.mock("@/lib/dashboards/actions", () => ({
   getWidgetsData: (...a: unknown[]) => getWidgetsData(...a),
 }));
 
-import { WidgetDataProvider, useWidgetData } from "./use-widget-data";
+import {
+  WidgetDataProvider,
+  useWidgetData,
+  useBatchedWidgetSeries,
+  useBatchedWidgetRows,
+} from "./use-widget-data";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 
 const W1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -251,6 +256,118 @@ describe("WidgetDataProvider / useWidgetData", () => {
     // The health widget rode the single batched fetch.
     expect(getWidgetsData).toHaveBeenCalledTimes(1);
     expect(getWidgetsData).toHaveBeenCalledWith({ widgetIds: [W1] });
+  });
+
+  it("serves a chart widget's series slot from the same batched fetch", async () => {
+    // Chart + list widgets now ride the batch too: useBatchedWidgetSeries reads
+    // the `shape:"series"` slot from context — no per-widget getWidgetSeries.
+    getWidgetsData.mockResolvedValue({
+      ok: true,
+      data: {
+        results: {
+          [W1]: {
+            ok: true,
+            shape: "series",
+            series: {
+              chartType: "bar",
+              primaryKind: "status",
+              seriesKind: null,
+              points: [
+                {
+                  primaryKey: "done",
+                  primaryLabel: "Done",
+                  seriesKey: null,
+                  seriesLabel: null,
+                  seriesColor: "#34d399",
+                  value: 7,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    function SeriesProbe({ id }: { id: string }) {
+      const { data, isLoading, isError } = useBatchedWidgetSeries(id);
+      const text = isLoading
+        ? "loading"
+        : isError
+          ? "error"
+          : `points:${data?.points.length ?? "none"}`;
+      return <div data-testid={id}>{text}</div>;
+    }
+
+    renderWithProvider(
+      [widget(W1, { kind: "chart", config: {} })],
+      <SeriesProbe id={W1} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId(W1)).toHaveTextContent("points:1"),
+    );
+    // One batched round-trip — the chart did NOT fire its own action.
+    expect(getWidgetsData).toHaveBeenCalledTimes(1);
+    expect(getWidgetsData).toHaveBeenCalledWith({ widgetIds: [W1] });
+  });
+
+  it("serves a list widget's rows slot from the same batched fetch", async () => {
+    getWidgetsData.mockResolvedValue({
+      ok: true,
+      data: {
+        results: {
+          [W1]: {
+            ok: true,
+            shape: "rows",
+            rows: {
+              columns: [],
+              rows: [{ itemId: "i1", name: "Item 1", cells: {} }],
+            },
+          },
+        },
+      },
+    });
+
+    function RowsProbe({ id }: { id: string }) {
+      const { data, isLoading, isError } = useBatchedWidgetRows(id);
+      const text = isLoading
+        ? "loading"
+        : isError
+          ? "error"
+          : `rows:${data?.rows.length ?? "none"}`;
+      return <div data-testid={id}>{text}</div>;
+    }
+
+    renderWithProvider(
+      [widget(W1, { kind: "list", config: {} })],
+      <RowsProbe id={W1} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId(W1)).toHaveTextContent("rows:1"),
+    );
+    expect(getWidgetsData).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a failed chart slot as that chart's error", async () => {
+    getWidgetsData.mockResolvedValue({
+      ok: true,
+      data: { results: { [W1]: { ok: false, error: "series boom" } } },
+    });
+
+    function SeriesProbe({ id }: { id: string }) {
+      const { isError } = useBatchedWidgetSeries(id);
+      return <div data-testid={id}>{isError ? "error" : "ok"}</div>;
+    }
+
+    renderWithProvider(
+      [widget(W1, { kind: "chart", config: {} })],
+      <SeriesProbe id={W1} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId(W1)).toHaveTextContent("error"),
+    );
   });
 
   it("degrades to a non-crashing error state when rendered without a provider", () => {

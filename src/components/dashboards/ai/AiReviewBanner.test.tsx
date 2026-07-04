@@ -39,13 +39,29 @@ describe("AiReviewBanner", () => {
     expect(screen.getByText(/ai generated/i)).toBeInTheDocument();
   });
 
-  it("clicking Keep calls router.replace to the param-less URL", async () => {
+  it("clicking Keep drops the review param via the History API (no RSC re-run) and dismisses", async () => {
+    // Keep is an in-page URL cleanup, not a navigation: it must use
+    // window.history.replaceState (0 server round-trips), NOT router.replace
+    // which would re-run the whole RSC tree.
+    const replaceState = vi
+      .spyOn(window.history, "replaceState")
+      .mockImplementation(() => {});
     render(<AiReviewBanner dashboardId="dash-42" />);
     fireEvent.click(screen.getByRole("button", { name: /keep/i }));
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/dashboards/dash-42"),
+      expect(replaceState).toHaveBeenCalledWith(
+        null,
+        "",
+        "/dashboards/dash-42",
+      ),
     );
+    // The banner dismisses itself in-page; no RSC nav, no dashboard delete.
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockDeleteDashboard).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: /keep/i }),
+    ).not.toBeInTheDocument();
+    replaceState.mockRestore();
   });
 
   it("clicking Discard calls deleteDashboard with the dashboardId then pushes /dashboards", async () => {

@@ -40,7 +40,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 export function ChartWidget({ widget }: { widget: CacheWidget }) {
   const config = (widget.config ?? {}) as Record<string, unknown>;
-  const { data, isLoading, isError } = useWidgetSeries(widget.id, config);
+  const { data, isLoading, isError } = useWidgetSeries(widget.id);
 
   if (!widget.source_board_id) return <Empty>Pick a source board</Empty>;
   if (isLoading)

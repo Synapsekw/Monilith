@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useRef } from "react";
+import { memo, useState, useTransition, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -106,7 +106,12 @@ export function onCardDropped(
 /** Shape stashed on a draggable card so onDragEnd can resolve the source. */
 type CardDragData = { itemId: string; fromColId: string };
 
-export function KanbanBoard({
+// Memoized for the same reason as BoardTable: it re-renders on real cache
+// changes via its own useBoardCache subscription, so it can safely skip the
+// parent (BoardViews) re-renders driven by presence heartbeats.
+export const KanbanBoard = memo(KanbanBoardInner);
+
+function KanbanBoardInner({
   payload,
   selectedViewId,
   members = [],
