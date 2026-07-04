@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { TimezoneForm } from "@/components/settings/timezone-form";
 import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-form";
+import { ProfileForm } from "@/components/settings/profile-form";
 import { DigestPreferenceForm } from "@/components/settings/DigestPreferenceForm";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
 
@@ -35,7 +36,7 @@ export default async function SettingsPage() {
     supabase.rpc("get_org_members", { p_org_id: org.id }),
     supabase
       .from("profiles")
-      .select("email_digest_opt_out")
+      .select("email_digest_opt_out, full_name")
       .eq("id", user.id)
       .maybeSingle(),
   ]);
@@ -71,6 +72,16 @@ export default async function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile</CardTitle>
+            <CardDescription>How you appear to your teammates.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProfileForm currentFullName={myProfile?.full_name ?? null} />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Preferences</CardTitle>

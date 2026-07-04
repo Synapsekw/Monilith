@@ -30,15 +30,24 @@ function SheetOverlay({
 function SheetContent({
   className,
   children,
+  side = "right",
   ...props
-}: React.ComponentProps<typeof SheetPrimitive.Content>) {
+}: React.ComponentProps<typeof SheetPrimitive.Content> & {
+  /** Edge the sheet docks to. Defaults to `right` (existing behavior). */
+  side?: "left" | "right";
+}) {
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
         data-slot="sheet-content"
+        data-side={side}
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right fixed inset-y-0 right-0 z-50 flex h-full w-full max-w-xl flex-col gap-4 border-l p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-300",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed inset-y-0 z-50 flex h-full w-full max-w-xl flex-col gap-4 p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-300",
+          side === "right" &&
+            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right right-0 border-l",
+          side === "left" &&
+            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left left-0 border-r",
           className,
         )}
         {...props}
