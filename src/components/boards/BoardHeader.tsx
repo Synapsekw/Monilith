@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Eye, Upload, UserPlus, Zap } from "lucide-react";
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
+import { BoardToolbar } from "@/components/boards/BoardToolbar";
 import { BoardPresenceBar } from "@/components/boards/presence/BoardPresenceBar";
 import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
 import { ShareBoardDialog } from "@/components/boards/ShareBoardDialog";
@@ -39,6 +40,8 @@ export function BoardHeader({
   groups = [],
   access = "owner",
   grants = [],
+  currentUserId = "",
+  filterable = false,
 }: {
   boardId: string;
   boardName: string;
@@ -52,6 +55,10 @@ export function BoardHeader({
   access?: BoardAccess;
   /** Existing share grants, seeding the share dialog. Only meaningful for owners. */
   grants?: HeaderGrant[];
+  /** Signed-in user id — powers the "My items" people quick-filter in the toolbar. */
+  currentUserId?: string;
+  /** Show the filter/sort/search toolbar. Only the Table + Kanban views apply it. */
+  filterable?: boolean;
 }) {
   const { renameBoard } = useBoardMutations(boardId);
   const [editing, setEditing] = useState(false);
@@ -189,6 +196,16 @@ export function BoardHeader({
           ) : null}
         </div>
       </div>
+      {/* Filter / sort / search toolbar. In-page client state mirrored to the
+          URL (History API) — 0 server round-trips; the Table + Kanban views read
+          the same URL state and narrow/order the loaded cache in memory. */}
+      {filterable ? (
+        <BoardToolbar
+          columns={columns}
+          members={members}
+          currentUserId={currentUserId}
+        />
+      ) : null}
       <AutomationsDialog
         boardId={boardId}
         columns={columns}

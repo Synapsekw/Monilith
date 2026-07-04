@@ -47,6 +47,11 @@ vi.mock("./BoardHeader", () => ({
   BoardHeader: () => <div data-testid="board-header" />,
 }));
 
+// BoardTable reads filter/sort/search state from the URL (useSearchParams).
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 const MEMBER_ID = "u-creator";
 const CREATED_AT = "2026-06-25T15:42:00Z";
 

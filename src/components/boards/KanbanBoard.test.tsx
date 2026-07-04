@@ -38,6 +38,7 @@ const push = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Presence: simulate another user focused (dragging) the card:i1 target so the

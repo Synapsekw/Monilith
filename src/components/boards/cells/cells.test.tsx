@@ -47,6 +47,7 @@ vi.mock("@/lib/boards/actions", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // jsdom has no layout, so the real virtualizer measures a 0px scroll element
