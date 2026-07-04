@@ -234,6 +234,18 @@ export async function resetMemberPassword(
   });
   if (!allowed) return fail("You don't have permission to do that.");
 
+  // Authz scope: the target must actually belong to THIS org. Without this an
+  // org admin could trigger a service-role recovery email for ANY platform
+  // user id. Read via the RLS-scoped client — the admin can see their own org's
+  // members, and a non-member simply returns no row.
+  const { data: membership } = await supabase
+    .from("org_members")
+    .select("user_id")
+    .eq("org_id", parsed.data.orgId)
+    .eq("user_id", parsed.data.userId)
+    .maybeSingle();
+  if (!membership) return fail("That member no longer exists.");
+
   const svc = createServiceClient();
   const { data: target, error: lookErr } = await svc.auth.admin.getUserById(
     parsed.data.userId,

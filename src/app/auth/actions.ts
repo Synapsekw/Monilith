@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getServerEnv } from "@/lib/env.server";
 import {
   signInSchema,
   signUpSchema,
@@ -15,7 +16,23 @@ export type AuthState = {
   success?: string;
 };
 
+/**
+ * Resolve the canonical origin used to build `emailRedirectTo` for confirmation
+ * / recovery links.
+ *
+ * Security: the `Origin`/`Host` request headers are client-controllable, so a
+ * poisoned host could make a confirmation link point at an attacker origin. We
+ * therefore PREFER the operator-set `APP_BASE_URL` env, which is not
+ * attacker-controllable. We fall back to the request headers ONLY when
+ * `APP_BASE_URL` is unset — this keeps local dev and Vercel preview deployments
+ * working, where the per-deployment URL isn't known ahead of time (and those
+ * origins are trusted). In production, set `APP_BASE_URL` to the canonical app
+ * URL so the header path is never taken.
+ */
 async function getOrigin(): Promise<string> {
+  const configured = getServerEnv().APP_BASE_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+
   const headerStore = await headers();
   const origin = headerStore.get("origin");
   if (origin) return origin;
@@ -78,7 +95,18 @@ export async function signUp(
   });
 
   if (error) {
-    return { error: error.message };
+    // Weak-password is genuinely actionable and reveals nothing about whether
+    // the email already exists — surface it verbatim so the user can fix it.
+    if (error.code === "weak_password" || /password/i.test(error.message)) {
+      return { error: error.message };
+    }
+    // Every other error (notably "User already registered", but also
+    // rate-limits) must NOT confirm account existence. Fall through to the same
+    // "check your email" outcome a brand-new signup produces, so a duplicate
+    // signup is indistinguishable from a fresh one to the client. This is the
+    // standard anti-enumeration posture; Supabase still emails the existing
+    // user when configured to.
+    return { success: "check-email" };
   }
 
   // When email confirmation is disabled, Supabase returns an active session.
