@@ -112,6 +112,12 @@ import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { CurrencyDialog } from "@/components/boards/CurrencyDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+import {
+  buildItemPredicate,
+  buildItemComparator,
+} from "@/lib/boards/board-filter";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ColumnHeader } from "@/components/boards/ColumnHeader";
 import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
 import {
@@ -407,6 +413,38 @@ function BoardTableInner({
     return byGroup;
   }, [groups, topLevel]);
 
+  // Filter / sort / quick-search state — read from the URL, applied to the
+  // already-loaded cache in memory (0 server round-trips; see AGENTS.md
+  // invariants / gotcha-09). Filtering narrows TOP-LEVEL rows only; subitems
+  // still show under an expanded parent. Sorting reorders WITHIN each group so
+  // group order (position) is preserved. Memoized so 5k rows aren't re-scanned
+  // on unrelated re-renders (presence heartbeats) or per keystroke.
+  const filter = useBoardFilterSort();
+  const predicate = useMemo(
+    () => buildItemPredicate(filter.state, { columns, cellMap }),
+    [filter.state, columns, cellMap],
+  );
+  const comparator = useMemo(
+    () => buildItemComparator(filter.state, { columns, cellMap }),
+    [filter.state, columns, cellMap],
+  );
+  const { visibleItemsByGroup, visibleCount } = useMemo(() => {
+    const out = new Map<string, Item[]>();
+    let count = 0;
+    for (const [gid, list] of itemsByGroup) {
+      let next = list.filter(predicate);
+      if (comparator) next = [...next].sort(comparator);
+      out.set(gid, next);
+      count += next.length;
+    }
+    return { visibleItemsByGroup: out, visibleCount: count };
+  }, [itemsByGroup, predicate, comparator]);
+
+  // Everything filtered away (a filter is active) → show a board-level empty
+  // state instead of a wall of empty groups. Sort alone can't reduce the count,
+  // so count 0 with items present means the predicate excluded them all.
+  const filteredToEmpty = visibleCount === 0 && topLevel.length > 0;
+
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
   // Offscreen canvas measurer at the Name cell font (Geist 14px / text-sm), used
@@ -545,6 +583,8 @@ function BoardTableInner({
         groups={groups.map((g) => ({ id: g.id, name: g.name }))}
         access={access}
         grants={grants}
+        currentUserId={currentUserId}
+        filterable
       />
 
       {columnError ? (
@@ -583,6 +623,17 @@ function BoardTableInner({
             <p className="text-muted-foreground px-4 py-6 text-sm">
               This board has no groups yet.
             </p>
+          ) : filteredToEmpty ? (
+            <EmptyState variant="inline" className="px-4 py-10">
+              No items match your filters.{" "}
+              <button
+                type="button"
+                onClick={filter.clearAll}
+                className="text-foreground underline underline-offset-2"
+              >
+                Clear all
+              </button>
+            </EmptyState>
           ) : (
             <DndContext
               id="board-groups"
@@ -598,7 +649,7 @@ function BoardTableInner({
                   <GroupSection
                     key={group.id}
                     group={group}
-                    items={itemsByGroup.get(group.id) ?? []}
+                    items={visibleItemsByGroup.get(group.id) ?? []}
                     columns={columns}
                     col={columnControls}
                     cellMap={cellMap}

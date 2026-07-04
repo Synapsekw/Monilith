@@ -48,6 +48,11 @@ vi.mock("./BoardHeader", () => ({
   BoardHeader: () => <div data-testid="board-header" />,
 }));
 
+// BoardTable reads filter/sort/search state from the URL (useSearchParams).
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 const STATUS_COL = "c-status";
 const DATE_COL = "c-date";
 const DONE_OPT = "opt-done";

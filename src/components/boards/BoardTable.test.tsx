@@ -78,6 +78,13 @@ vi.mock("./BoardHeader", () => ({
   BoardHeader: () => <div data-testid="board-header" />,
 }));
 
+// BoardTable now reads filter/sort/search state from the URL via
+// useBoardFilterSort → useSearchParams. Default to an empty (no-filter) param
+// set so existing rows still render.
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 // Spy on the shared touch-aware sensor hook (still delegating to the real
 // implementation so dnd-kit gets valid sensors). Lets us assert the three
 // DndContexts (group / item / subitem reorder) each consume it. See the

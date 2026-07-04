@@ -47,6 +47,11 @@ vi.mock("./BoardHeader", () => ({
   BoardHeader: () => <div data-testid="board-header" />,
 }));
 
+// BoardTable reads filter/sort/search state from the URL (useSearchParams).
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 const PRIORITY_COL = "c-priority";
 
 function item(id: string, name: string) {

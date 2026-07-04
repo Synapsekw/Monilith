@@ -30,6 +30,11 @@ import type {
 import type { Json } from "@/types/database.types";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+import {
+  buildItemPredicate,
+  buildItemComparator,
+} from "@/lib/boards/board-filter";
 import { resolveKanbanGroupColumn } from "@/lib/boards/views";
 import {
   buildKanbanColumns,
@@ -115,6 +120,7 @@ function KanbanBoardInner({
   payload,
   selectedViewId,
   members = [],
+  currentUserId = "",
   access = "owner",
   grants = [],
 }: {
@@ -123,6 +129,8 @@ function KanbanBoardInner({
   // summary so it renders resolved assignee names (full name → email), with a
   // count-fallback when the directory is empty — matching the Table cell.
   members?: EditorMember[];
+  /** Signed-in user id — powers the toolbar's "My items" people quick-filter. */
+  currentUserId?: string;
   selectedViewId: string;
   access?: BoardAccess;
   grants?: HeaderGrant[];
@@ -170,12 +178,43 @@ function KanbanBoardInner({
   // Status columns available to group by (drives the picker).
   const statusColumns = cache.columns.filter((c) => c.kind === "status");
 
+  const cellMap = useMemo(
+    () => buildCellMap(cache.cellValues),
+    [cache.cellValues],
+  );
+
+  // Filter / sort / quick-search state — read from the URL, applied to the
+  // already-loaded cache in memory (0 server round-trips; AGENTS.md invariants).
+  // Cards are filtered before bucketing and sorted within each lane; lane order
+  // (the status options) is unaffected. Memoized so 5k cards aren't re-scanned
+  // per keystroke or on unrelated re-renders.
+  const filter = useBoardFilterSort();
+  const filteredItems = useMemo(() => {
+    const predicate = buildItemPredicate(filter.state, {
+      columns: cache.columns,
+      cellMap,
+    });
+    const comparator = buildItemComparator(filter.state, {
+      columns: cache.columns,
+      cellMap,
+    });
+    let next = cache.items.filter(predicate);
+    if (comparator) next = [...next].sort(comparator);
+    return next;
+  }, [filter.state, cache.columns, cache.items, cellMap]);
+
   // These memos must be unconditional (above the early return) to keep hook
   // order stable. When groupColumn is null, kanbanColumns is an empty array
   // and neither it nor cellMap is rendered.
   const kanbanColumns = useMemo(
-    () => (groupColumn ? buildKanbanColumns(cache, groupColumn) : []),
-    [cache, groupColumn],
+    () =>
+      groupColumn
+        ? buildKanbanColumns(
+            { items: filteredItems, cellValues: cache.cellValues },
+            groupColumn,
+          )
+        : [],
+    [filteredItems, cache.cellValues, groupColumn],
   );
 
   // Columns surfaced read-only on each card, split into a status/label pill row
@@ -184,11 +223,6 @@ function KanbanBoardInner({
   const cardColumns = useMemo(
     () => selectCardColumns(cache.columns, groupColumn?.id ?? ""),
     [cache.columns, groupColumn?.id],
-  );
-
-  const cellMap = useMemo(
-    () => buildCellMap(cache.cellValues),
-    [cache.cellValues],
   );
 
   // Priority pills only: direct-dependent counts derived once per dependency
@@ -211,6 +245,8 @@ function KanbanBoardInner({
           groups={cache.groups.map((g) => ({ id: g.id, name: g.name }))}
           access={access}
           grants={grants}
+          currentUserId={currentUserId}
+          filterable
         />
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -272,6 +308,8 @@ function KanbanBoardInner({
         groups={cache.groups.map((g) => ({ id: g.id, name: g.name }))}
         access={access}
         grants={grants}
+        currentUserId={currentUserId}
+        filterable
       />
 
       {/* Grouping-column picker — native select keeps it dependency-light. */}

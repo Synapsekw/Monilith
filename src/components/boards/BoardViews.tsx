@@ -157,6 +157,7 @@ export function BoardViews({
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
+        currentUserId={currentUserId}
         access={access}
         grants={grants}
       />
