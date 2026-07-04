@@ -1,13 +1,14 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { MonolithMark } from "@/components/brand/monolith-mark";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
+import { FirstBoardEmptyState } from "@/components/boards/FirstBoardEmptyState";
 import {
   getUser,
   getUserOrgs,
   enforcePasswordChange,
 } from "@/lib/auth/session";
 import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
+import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 
 /**
  * Authenticated entry dispatcher. The public landing (`/`) is a static hero with
@@ -36,21 +37,17 @@ export async function HomeDispatch() {
   const sharedBoards = await listSharedBoards();
   if (sharedBoards.length > 0) redirect(`/boards/${sharedBoards[0].id}`);
 
+  // First-run: no boards at all. Guide the user to create their first board
+  // right here — the org's first workspace is the create target (a fresh org
+  // always has one from onboarding).
+  const workspaces = await listWorkspacesCached(org.id);
+
   return (
     <AuthenticatedShell>
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="bg-surface flex size-12 items-center justify-center rounded-xl border">
-          <MonolithMark className="text-foreground size-6" />
-        </div>
-        <div className="space-y-1.5">
-          <h1 className="text-xl font-semibold tracking-tight">
-            Welcome to {org.name}
-          </h1>
-          <p className="text-muted-foreground max-w-md text-sm text-pretty">
-            The only workspace you need.
-          </p>
-        </div>
-      </div>
+      <FirstBoardEmptyState
+        orgName={org.name}
+        workspaceId={workspaces[0]?.id}
+      />
     </AuthenticatedShell>
   );
 }

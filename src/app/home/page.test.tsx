@@ -2,20 +2,29 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-const { getUser, getUserOrgs, listMyBoards, listSharedBoards, redirect } =
-  vi.hoisted(() => ({
-    getUser: vi.fn(),
-    getUserOrgs: vi.fn(),
-    listMyBoards: vi.fn(),
-    listSharedBoards: vi.fn(),
-    // Real next/navigation redirect() throws to halt rendering — mirror that.
-    redirect: vi.fn((url: string) => {
-      throw new Error(`REDIRECT:${url}`);
-    }),
-  }));
+const {
+  getUser,
+  getUserOrgs,
+  listMyBoards,
+  listSharedBoards,
+  listWorkspacesCached,
+  redirect,
+} = vi.hoisted(() => ({
+  getUser: vi.fn(),
+  getUserOrgs: vi.fn(),
+  listMyBoards: vi.fn(),
+  listSharedBoards: vi.fn(),
+  listWorkspacesCached: vi.fn(),
+  // Real next/navigation redirect() throws to halt rendering — mirror that.
+  redirect: vi.fn((url: string) => {
+    throw new Error(`REDIRECT:${url}`);
+  }),
+}));
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
+  // The rendered empty state is a client component that calls useRouter().
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("@/lib/auth/session", () => ({
   getUser: () => getUser(),
@@ -26,6 +35,9 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/boards/queries", () => ({
   listMyBoards: () => listMyBoards(),
   listSharedBoards: () => listSharedBoards(),
+}));
+vi.mock("@/lib/workspaces/queries-cached", () => ({
+  listWorkspacesCached: (orgId: string) => listWorkspacesCached(orgId),
 }));
 // The org-admin guard has its own unit tests; isolate the page from its RPC.
 vi.mock("@/lib/org/guard", () => ({
@@ -101,7 +113,7 @@ describe("Home dispatcher (/home)", () => {
     expect(redirect).toHaveBeenCalledWith("/boards/s1");
   });
 
-  it("renders the welcome shell for a logged-in user with no boards", async () => {
+  it("renders the first-board empty state (with template cards) for a user with no boards", async () => {
     getUser.mockResolvedValue({
       id: "u1",
       email: "a@b.com",
@@ -110,10 +122,17 @@ describe("Home dispatcher (/home)", () => {
     getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
     listMyBoards.mockResolvedValue([]);
     listSharedBoards.mockResolvedValue([]);
+    listWorkspacesCached.mockResolvedValue([{ id: "ws1", name: "Main" }]);
 
     render(await HomeDispatch());
 
     expect(screen.getByText("Welcome to Acme")).toBeInTheDocument();
+    // The empty state surfaces the template catalogue directly + a primary CTA.
+    expect(
+      screen.getByRole("button", { name: /create your first board/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sprint planning")).toBeInTheDocument();
+    expect(listWorkspacesCached).toHaveBeenCalledWith("o1");
     expect(redirect).not.toHaveBeenCalled();
   });
 });
