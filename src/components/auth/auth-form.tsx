@@ -25,9 +25,9 @@ import {
 type AuthFormProps = {
   mode: "login" | "signup";
   footer?: ReactNode;
+  /** Seed an error banner on first render (e.g. from a `?error=` redirect). */
+  initialError?: string;
 };
-
-const initialState: AuthState = {};
 
 const copy = {
   login: {
@@ -44,12 +44,14 @@ const copy = {
   },
 } as const;
 
-export function AuthForm({ mode, footer }: AuthFormProps) {
+export function AuthForm({ mode, footer, initialError }: AuthFormProps) {
   const isSignup = mode === "signup";
   const text = copy[mode];
 
   const action = isSignup ? signUp : signIn;
-  const [state, formAction, isPending] = useActionState(action, initialState);
+  const [state, formAction, isPending] = useActionState(action, {
+    error: initialError,
+  });
 
   const form = useForm<SignInInput | SignUpInput>({
     resolver: zodResolver(isSignup ? signUpSchema : signInSchema),

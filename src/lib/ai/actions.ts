@@ -13,11 +13,23 @@ import {
 } from "@/lib/ai/proposal-schema";
 import { generateProposal } from "@/lib/ai/generate";
 import { AiNotConfiguredError } from "@/lib/ai/anthropic";
-import { widgetKindSchema } from "@/lib/validations/dashboards";
+import {
+  configSchemaForKind,
+  widgetKindSchema,
+} from "@/lib/validations/dashboards";
 import type { Json } from "@/types/database.types";
 
 type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+
+const boardSnapshotInputSchema = z.object({ boardId: z.string().uuid() });
+
+const generateProposalInputSchema = z.object({
+  boardId: z.string().uuid(),
+  // Bound free-text feedback: it flows verbatim into the Anthropic prompt, so
+  // an unbounded string is a token/cost-abuse vector.
+  feedback: z.string().max(2000).optional(),
+});
 
 /** Dimension kinds the model can chart over — also gates the empty-board check. */
 const CHARTABLE_KINDS = new Set([
@@ -56,7 +68,10 @@ export async function getBoardSnapshotSummary(input: {
     estimatedTokens: number;
   }>
 > {
-  const payload = await getBoardPayload(input.boardId);
+  const parsed = boardSnapshotInputSchema.safeParse(input);
+  if (!parsed.success) return fail("Invalid board.");
+
+  const payload = await getBoardPayload(parsed.data.boardId);
   if (!payload) return fail("Board not found.");
 
   const snap = buildBoardSnapshot({
@@ -83,7 +98,11 @@ export async function generateDashboardProposal(input: {
   boardId: string;
   feedback?: string;
 }): Promise<ActionResult<{ proposal: ValidatedProposal }>> {
-  const payload = await getBoardPayload(input.boardId);
+  const parsed = generateProposalInputSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input.");
+
+  const payload = await getBoardPayload(parsed.data.boardId);
   if (!payload) return fail("Board not found.");
 
   const snap = buildBoardSnapshot({
@@ -98,7 +117,9 @@ export async function generateDashboardProposal(input: {
     return fail("This board has no data to build a dashboard from yet.");
 
   try {
-    const proposal = await generateProposal(snap, { feedback: input.feedback });
+    const proposal = await generateProposal(snap, {
+      feedback: parsed.data.feedback,
+    });
     const validated = validateProposal(proposal, snap);
     if (validated.widgets.length === 0)
       return fail("Couldn't generate a usable layout — try Regenerate.");
@@ -154,6 +175,21 @@ export async function createDashboardFromProposal(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const { workspaceId, proposal } = parsed.data;
 
+  // The schema above only checks each widget config is a generic record. Run the
+  // real per-kind config schema on every widget before persisting anything, so
+  // an LLM-produced (or tampered) proposal can't write malformed widget configs.
+  const invalidWidgets: string[] = [];
+  const validatedWidgets = proposal.widgets.map((widget) => {
+    const cfg = configSchemaForKind(widget.kind).safeParse(widget.config);
+    if (!cfg.success) {
+      invalidWidgets.push(widget.title || widget.kind);
+      return widget;
+    }
+    return { ...widget, config: cfg.data as Record<string, unknown> };
+  });
+  if (invalidWidgets.length > 0)
+    return fail(`Invalid widget config: ${invalidWidgets.join(", ")}`);
+
   const supabase = await createClient();
 
   const { data: dashboard, error: dashErr } = await supabase.rpc(
@@ -166,7 +202,7 @@ export async function createDashboardFromProposal(input: {
 
   const layouts: { id: string; x: number; y: number; w: number; h: number }[] =
     [];
-  for (const widget of proposal.widgets) {
+  for (const widget of validatedWidgets) {
     const { data: created, error: widgetErr } = await supabase.rpc(
       "create_dashboard_widget",
       {

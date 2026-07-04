@@ -22,6 +22,26 @@ function sanitizeWorksheetName(name: string): string {
 }
 
 /**
+ * Leading characters that make a spreadsheet app interpret a CSV cell as a
+ * formula (formula injection): `= + - @` and the tab / carriage-return control
+ * chars. See OWASP "CSV Injection".
+ */
+const CSV_FORMULA_LEAD_RE = /^[=+\-@\t\r]/;
+
+/**
+ * Neutralize CSV formula injection for STRING cells only. A leading formula
+ * trigger is defused with a single-quote prefix (the spreadsheet then shows the
+ * literal text). Non-string cells (real numbers from numeric columns) pass
+ * through untouched, so a legitimate negative number like -42 stays numeric.
+ * xlsx export does NOT use this — its cells are typed, so `-2+3` is stored as
+ * text, not evaluated.
+ */
+function guardCsvCell(value: ExcelCellValue): ExcelCellValue {
+  if (typeof value !== "string") return value;
+  return CSV_FORMULA_LEAD_RE.test(value) ? `'${value}` : value;
+}
+
+/**
  * Serialize a BoardPayload into an xlsx or csv buffer for download.
  * Columns are ordered by position. Groups are ordered by position.
  * Within each group, top-level items are emitted by position, each
@@ -41,6 +61,13 @@ export async function buildExportWorkbook(
   const resolvePeopleName = peopleNames
     ? (userId: string) => peopleNames.get(userId) ?? null
     : undefined;
+
+  // CSV output is untyped text, so a user-authored cell beginning with a formula
+  // trigger would be evaluated by Excel/Sheets on open. Guard string cells in the
+  // CSV path only; xlsx cells are typed and safe.
+  const isCsv = format === "csv";
+  const guard = (value: ExcelCellValue): ExcelCellValue =>
+    isCsv ? guardCsvCell(value) : value;
 
   const wb = new ExcelJS.Workbook();
   const wsName = sanitizeWorksheetName(payload.board.name) || "Sheet1";
@@ -93,7 +120,11 @@ export async function buildExportWorkbook(
         resolvePeopleName,
       ),
     );
-    const row = ws.addRow([groupName, displayName, ...dataCells]);
+    const row = ws.addRow([
+      guard(groupName),
+      guard(displayName),
+      ...dataCells.map(guard),
+    ]);
     const rowNumber = row.number;
 
     plan.rows.push({ rowNumber, groupColor, isSubitem });

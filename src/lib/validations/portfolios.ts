@@ -18,10 +18,14 @@ export const addBoardSchema = z.object({
   doneOptionIds: doneOptionIdsSchema,
 });
 
-export const removePlacementSchema = z.object({ placementId: uuid });
+export const removePlacementSchema = z.object({
+  placementId: uuid,
+  portfolioId: uuid,
+});
 
 export const updatePlacementSchema = z.object({
   placementId: uuid,
+  portfolioId: uuid,
   ownerUserId: uuid.nullable().optional(),
   priority: prioritySchema.nullable().optional(),
   budget: z.number().finite().nonnegative().nullable().optional(),
@@ -31,6 +35,7 @@ export const updatePlacementSchema = z.object({
 
 export const updateMappingSchema = z.object({
   placementId: uuid,
+  portfolioId: uuid,
   doneColumnId: uuid.nullable(),
   doneOptionIds: doneOptionIdsSchema,
 });

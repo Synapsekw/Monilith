@@ -32,3 +32,28 @@ describe("next.config.ts (Task D)", () => {
     expect(source).toContain("export default withBundleAnalyzer(nextConfig)");
   });
 });
+
+describe("next.config.ts security headers", () => {
+  it("defines an async headers() applied to every route", () => {
+    expect(source).toMatch(/async headers\(\)/);
+    expect(source).toMatch(/source:\s*"\/\(\.\*\)"/);
+  });
+
+  it("sets the four baseline security response headers", () => {
+    expect(source).toMatch(/"X-Frame-Options"[^]*?"DENY"/);
+    expect(source).toMatch(/"X-Content-Type-Options"[^]*?"nosniff"/);
+    expect(source).toMatch(
+      /"Referrer-Policy"[^]*?"strict-origin-when-cross-origin"/,
+    );
+    expect(source).toMatch(
+      /"Strict-Transport-Security"[^]*?"max-age=63072000; includeSubDomains"/,
+    );
+  });
+
+  it("does NOT enforce a Content-Security-Policy (deliberate follow-up)", () => {
+    // An enforced CSP breaks Next's inline scripts without a nonce pipeline;
+    // it is intentionally deferred and documented as such.
+    expect(source).not.toMatch(/key:\s*"Content-Security-Policy"/);
+    expect(source).toMatch(/CSP is\s*[\s\S]*?follow-up/i);
+  });
+});

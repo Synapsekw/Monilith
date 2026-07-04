@@ -229,6 +229,70 @@ describe("buildExportWorkbook — CSV export", () => {
   });
 });
 
+describe("buildExportWorkbook — CSV formula-injection guard", () => {
+  const NOTES = "col-notes";
+  function withNotes(text: string): BoardPayload {
+    const p = makePayload();
+    p.columns.push({
+      id: NOTES,
+      name: "Notes",
+      kind: "text",
+      board_id: "board-1",
+      org_id: "org-1",
+      position: 3,
+      settings: {},
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      width: null,
+    } as unknown as BoardPayload["columns"][number]);
+    p.cellValues.push({
+      board_id: "board-1",
+      column_id: NOTES,
+      item_id: "item-1",
+      org_id: "org-1",
+      value: { text },
+      updated_at: "2024-01-01T00:00:00Z",
+    } as unknown as BoardPayload["cellValues"][number]);
+    return p;
+  }
+
+  // Notes is the appended last column → index 5 in [Group, Name, Status, Count,
+  // Progress, Notes].
+  it.each([
+    '=HYPERLINK("http://evil.example","click")',
+    "+cmd",
+    "-2+3",
+    "@SUM(A1)",
+    "\ttabbed",
+  ])(
+    "prefixes a dangerous text cell (%j) with a single quote in CSV",
+    async (danger) => {
+      const { buffer } = await buildExportWorkbook(withNotes(danger), "csv");
+      const parsed = await parseWorkbook(buffer, "export.csv");
+      expect(parsed.rows[0][5]).toBe(`'${danger}`);
+    },
+  );
+
+  it("does NOT quote a legitimate negative number in a NUMERIC column", async () => {
+    const p = makePayload();
+    const cell = p.cellValues.find(
+      (c) => c.column_id === "col-numbers" && c.item_id === "item-1",
+    )!;
+    (cell as { value: unknown }).value = { n: -42 };
+    const { buffer } = await buildExportWorkbook(p, "csv");
+    const parsed = await parseWorkbook(buffer, "export.csv");
+    // Count column is index 3 — a plain numeric string, no leading quote.
+    expect(parsed.rows[0][3]).toBe("-42");
+  });
+
+  it("does NOT prefix in the xlsx path (cells are typed text, not evaluated)", async () => {
+    const danger = '=HYPERLINK("http://evil.example")';
+    const { buffer } = await buildExportWorkbook(withNotes(danger), "xlsx");
+    const parsed = await parseWorkbook(buffer, "export.xlsx");
+    expect(parsed.rows[0][5]).toBe(danger);
+  });
+});
+
 describe("buildExportWorkbook — people column", () => {
   function makePeoplePayload(): BoardPayload {
     const p = makePayload();

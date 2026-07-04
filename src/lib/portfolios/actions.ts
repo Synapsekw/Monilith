@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { getBoardStatusColumns, type StatusColumn } from "@/lib/portfolios/queries";
+import {
+  getBoardStatusColumns,
+  type StatusColumn,
+} from "@/lib/portfolios/queries";
 import {
   addBoardSchema,
   createPortfolioSchema,
@@ -23,19 +26,27 @@ export async function createPortfolio(input: {
   name: string;
 }): Promise<ActionResult<{ portfolio: Tables<"portfolios"> }>> {
   const parsed = createPortfolioSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_portfolio", { p_name: parsed.data.name });
-  if (error || !data) return fail(error?.message ?? "Could not create portfolio.");
+  const { data, error } = await supabase.rpc("create_portfolio", {
+    p_name: parsed.data.name,
+  });
+  if (error || !data)
+    return fail(error?.message ?? "Could not create portfolio.");
 
   revalidatePath("/portfolios");
   return { ok: true, data: { portfolio: data as Tables<"portfolios"> } };
 }
 
-export async function renamePortfolio(input: { portfolioId: string; name: string }): Promise<ActionResult<null>> {
+export async function renamePortfolio(input: {
+  portfolioId: string;
+  name: string;
+}): Promise<ActionResult<null>> {
   const parsed = renamePortfolioSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -49,12 +60,18 @@ export async function renamePortfolio(input: { portfolioId: string; name: string
   return { ok: true, data: null };
 }
 
-export async function deletePortfolio(input: { portfolioId: string }): Promise<ActionResult<null>> {
+export async function deletePortfolio(input: {
+  portfolioId: string;
+}): Promise<ActionResult<null>> {
   const parsed = deletePortfolioSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("portfolios").delete().eq("id", parsed.data.portfolioId);
+  const { error } = await supabase
+    .from("portfolios")
+    .delete()
+    .eq("id", parsed.data.portfolioId);
   if (error) return fail(error.message);
 
   revalidatePath("/portfolios");
@@ -68,7 +85,8 @@ export async function addBoardToPortfolio(input: {
   doneOptionIds: string[];
 }): Promise<ActionResult<{ placement: Tables<"portfolio_boards"> }>> {
   const parsed = addBoardSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("add_portfolio_board", {
@@ -84,15 +102,22 @@ export async function addBoardToPortfolio(input: {
   return { ok: true, data: { placement: data as Tables<"portfolio_boards"> } };
 }
 
-export async function removePortfolioBoard(input: { placementId: string; portfolioId: string }): Promise<ActionResult<null>> {
-  const parsed = removePlacementSchema.safeParse({ placementId: input.placementId });
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+export async function removePortfolioBoard(input: {
+  placementId: string;
+  portfolioId: string;
+}): Promise<ActionResult<null>> {
+  const parsed = removePlacementSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("portfolio_boards").delete().eq("id", parsed.data.placementId);
+  const { error } = await supabase
+    .from("portfolio_boards")
+    .delete()
+    .eq("id", parsed.data.placementId);
   if (error) return fail(error.message);
 
-  revalidatePath(`/portfolios/${input.portfolioId}`);
+  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
   return { ok: true, data: null };
 }
 
@@ -106,20 +131,25 @@ export async function updatePortfolioPlacement(input: {
   statusNote?: string | null;
 }): Promise<ActionResult<null>> {
   const parsed = updatePlacementSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const patch: TablesUpdate<"portfolio_boards"> = {};
   if ("ownerUserId" in input) patch.owner_user_id = parsed.data.ownerUserId;
   if ("priority" in input) patch.priority = parsed.data.priority;
   if ("budget" in input) patch.budget = parsed.data.budget;
-  if ("healthOverride" in input) patch.health_override = parsed.data.healthOverride;
+  if ("healthOverride" in input)
+    patch.health_override = parsed.data.healthOverride;
   if ("statusNote" in input) patch.status_note = parsed.data.statusNote;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("portfolio_boards").update(patch).eq("id", parsed.data.placementId);
+  const { error } = await supabase
+    .from("portfolio_boards")
+    .update(patch)
+    .eq("id", parsed.data.placementId);
   if (error) return fail(error.message);
 
-  revalidatePath(`/portfolios/${input.portfolioId}`);
+  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
   return { ok: true, data: null };
 }
 
@@ -140,7 +170,8 @@ export async function updatePortfolioMapping(input: {
   doneOptionIds: string[];
 }): Promise<ActionResult<null>> {
   const parsed = updateMappingSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -152,6 +183,6 @@ export async function updatePortfolioMapping(input: {
     .eq("id", parsed.data.placementId);
   if (error) return fail(error.message);
 
-  revalidatePath(`/portfolios/${input.portfolioId}`);
+  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
   return { ok: true, data: null };
 }

@@ -4,6 +4,7 @@ import {
   addBoardSchema,
   createPortfolioSchema,
   doneOptionIdsSchema,
+  removePlacementSchema,
   updateMappingSchema,
   updatePlacementSchema,
 } from "./portfolios";
@@ -18,7 +19,9 @@ const PLACEMENT_ID = "44444444-4444-4444-8444-444444444444";
 
 describe("portfolios validations", () => {
   it("accepts a valid create input", () => {
-    expect(createPortfolioSchema.safeParse({ name: "Q3 Initiatives" }).success).toBe(true);
+    expect(
+      createPortfolioSchema.safeParse({ name: "Q3 Initiatives" }).success,
+    ).toBe(true);
   });
   it("rejects an empty name", () => {
     expect(createPortfolioSchema.safeParse({ name: "  " }).success).toBe(false);
@@ -45,12 +48,14 @@ describe("portfolios validations", () => {
     expect(
       updatePlacementSchema.safeParse({
         placementId: PLACEMENT_ID,
+        portfolioId: PORTFOLIO_ID,
         priority: "urgent",
       }).success,
     ).toBe(false);
     expect(
       updatePlacementSchema.safeParse({
         placementId: PLACEMENT_ID,
+        portfolioId: PORTFOLIO_ID,
         priority: "high",
         budget: 50000,
         healthOverride: "at_risk",
@@ -59,15 +64,56 @@ describe("portfolios validations", () => {
     ).toBe(true);
   });
   it("caps done option ids", () => {
-    expect(doneOptionIdsSchema.safeParse(Array(60).fill("x")).success).toBe(false);
+    expect(doneOptionIdsSchema.safeParse(Array(60).fill("x")).success).toBe(
+      false,
+    );
   });
   it("accepts a valid mapping update", () => {
     expect(
       updateMappingSchema.safeParse({
         placementId: PLACEMENT_ID,
+        portfolioId: PORTFOLIO_ID,
         doneColumnId: COLUMN_ID,
         doneOptionIds: ["a", "b"],
       }).success,
     ).toBe(true);
+  });
+
+  // Security: portfolioId flows into revalidatePath() and must be a parsed uuid,
+  // not raw client input.
+  it("requires portfolioId on removePlacementSchema and rejects non-uuid", () => {
+    expect(
+      removePlacementSchema.safeParse({ placementId: PLACEMENT_ID }).success,
+    ).toBe(false); // missing portfolioId
+    expect(
+      removePlacementSchema.safeParse({
+        placementId: PLACEMENT_ID,
+        portfolioId: "/evil",
+      }).success,
+    ).toBe(false); // non-uuid
+    expect(
+      removePlacementSchema.safeParse({
+        placementId: PLACEMENT_ID,
+        portfolioId: PORTFOLIO_ID,
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects a non-uuid portfolioId on updatePlacementSchema", () => {
+    expect(
+      updatePlacementSchema.safeParse({
+        placementId: PLACEMENT_ID,
+        portfolioId: "not-a-uuid",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects a non-uuid portfolioId on updateMappingSchema", () => {
+    expect(
+      updateMappingSchema.safeParse({
+        placementId: PLACEMENT_ID,
+        portfolioId: "'; DROP TABLE",
+        doneColumnId: null,
+        doneOptionIds: [],
+      }).success,
+    ).toBe(false);
   });
 });

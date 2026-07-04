@@ -3,18 +3,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const rpc = vi.fn();
 const getUser = vi.fn();
 const insert = vi.fn();
+const resetPasswordForEmail = vi.fn();
+const memberMaybeSingle = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     rpc,
-    auth: { getUser },
-    from: () => ({ insert }),
+    auth: { getUser, resetPasswordForEmail },
+    from: (table: string) =>
+      table === "org_members"
+        ? {
+            select: () => ({
+              eq: () => ({ eq: () => ({ maybeSingle: memberMaybeSingle }) }),
+            }),
+          }
+        : { insert },
   }),
 }));
 const adminInvite = vi.fn();
+const getUserById = vi.fn();
 const svcInsert = vi.fn();
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
-    auth: { admin: { inviteUserByEmail: adminInvite } },
+    auth: { admin: { inviteUserByEmail: adminInvite, getUserById } },
     from: () => ({ insert: svcInsert }),
   }),
 }));
@@ -30,6 +40,7 @@ import {
   deactivateMember,
   reactivateMember,
   inviteMember,
+  resetMemberPassword,
 } from "./admin-actions";
 const uuid = "11111111-1111-4111-8111-111111111111"; // RFC-valid v4 (Zod 4.x enforces version/variant nibbles)
 const orgUuid = "22222222-2222-4222-8222-222222222222";
@@ -38,7 +49,10 @@ beforeEach(() => {
   rpc.mockReset();
   getUser.mockReset();
   adminInvite.mockReset();
+  getUserById.mockReset();
   svcInsert.mockReset();
+  resetPasswordForEmail.mockReset();
+  memberMaybeSingle.mockReset();
   updateTag.mockReset();
 });
 
@@ -184,5 +198,42 @@ describe("inviteMember", () => {
       role: "member",
     });
     expect(r).toEqual({ ok: true, data: { emailSent: true } });
+  });
+});
+
+describe("resetMemberPassword", () => {
+  beforeEach(() => {
+    getUser.mockResolvedValue({ data: { user: { id: "actor" } } });
+    rpc.mockResolvedValue({ data: true, error: null }); // has_org_role → allowed
+    getUserById.mockResolvedValue({
+      data: { user: { email: "target@example.com" } },
+      error: null,
+    });
+    resetPasswordForEmail.mockResolvedValue({ error: null });
+    svcInsert.mockResolvedValue({ error: null });
+  });
+
+  it("refuses to email a user who is NOT a member of the org", async () => {
+    memberMaybeSingle.mockResolvedValue({ data: null }); // not a member
+    const r = await resetMemberPassword({ orgId: orgUuid, userId: uuid });
+    expect(r.ok).toBe(false);
+    // Never looks the user up or sends a service-role recovery email.
+    expect(getUserById).not.toHaveBeenCalled();
+    expect(resetPasswordForEmail).not.toHaveBeenCalled();
+  });
+
+  it("sends the reset when the target belongs to the org", async () => {
+    memberMaybeSingle.mockResolvedValue({ data: { user_id: uuid } });
+    const r = await resetMemberPassword({ orgId: orgUuid, userId: uuid });
+    expect(r.ok).toBe(true);
+    expect(resetPasswordForEmail).toHaveBeenCalledWith("target@example.com");
+  });
+
+  it("still requires the caller to be an org owner/admin", async () => {
+    rpc.mockResolvedValue({ data: false, error: null }); // has_org_role → denied
+    const r = await resetMemberPassword({ orgId: orgUuid, userId: uuid });
+    expect(r.ok).toBe(false);
+    expect(memberMaybeSingle).not.toHaveBeenCalled();
+    expect(resetPasswordForEmail).not.toHaveBeenCalled();
   });
 });

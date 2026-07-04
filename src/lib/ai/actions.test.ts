@@ -204,6 +204,57 @@ describe("createDashboardFromProposal", () => {
   });
 });
 
+describe("input validation (Zod at the boundary)", () => {
+  it("getBoardSnapshotSummary rejects a non-uuid boardId before any query", async () => {
+    const { getBoardSnapshotSummary } = await import("@/lib/ai/actions");
+    const res = await getBoardSnapshotSummary({ boardId: "not-a-uuid" });
+    expect(res.ok).toBe(false);
+    expect(getBoardPayload).not.toHaveBeenCalled();
+  });
+
+  it("generateDashboardProposal rejects a non-uuid boardId", async () => {
+    const { generateDashboardProposal } = await import("@/lib/ai/actions");
+    const res = await generateDashboardProposal({ boardId: "nope" });
+    expect(res.ok).toBe(false);
+    expect(getBoardPayload).not.toHaveBeenCalled();
+  });
+
+  it("generateDashboardProposal rejects feedback longer than 2000 chars", async () => {
+    const { generateDashboardProposal } = await import("@/lib/ai/actions");
+    const res = await generateDashboardProposal({
+      boardId: BOARD_ID,
+      feedback: "x".repeat(2001),
+    });
+    expect(res.ok).toBe(false);
+    // Never reaches the board fetch or the LLM.
+    expect(getBoardPayload).not.toHaveBeenCalled();
+    expect(generateProposal).not.toHaveBeenCalled();
+  });
+
+  it("createDashboardFromProposal rejects a widget whose config fails its kind schema", async () => {
+    const { createDashboardFromProposal } = await import("@/lib/ai/actions");
+    const res = await createDashboardFromProposal({
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+      proposal: {
+        name: "Sprint",
+        sourceBoardId: "22222222-2222-4222-8222-222222222222",
+        widgets: [
+          {
+            kind: "battery", // requires config.groupColumnId (uuid)
+            title: "Broken",
+            config: {}, // passes the generic record schema, fails the kind schema
+            layout: { x: 0, y: 0, w: 3, h: 2 },
+          },
+        ],
+      },
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("Invalid widget config");
+    // Nothing persisted.
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
 describe("listAiBoards", () => {
   it("maps workspace_id to workspaceId", async () => {
     listMyBoards.mockResolvedValueOnce([

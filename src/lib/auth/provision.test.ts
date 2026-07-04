@@ -7,8 +7,14 @@ function makeUser(meta: Record<string, unknown>): User {
   return { id: "u1", user_metadata: meta } as unknown as User;
 }
 
-function makeSupabase(orgs: { id: string }[]) {
-  const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+function makeSupabase(
+  orgs: { id: string }[],
+  rpcResult: { data: unknown; error: { message: string } | null } = {
+    data: null,
+    error: null,
+  },
+) {
+  const rpc = vi.fn().mockResolvedValue(rpcResult);
   const limit = vi.fn().mockResolvedValue({ data: orgs, error: null });
   const select = vi.fn(() => ({ limit }));
   const from = vi.fn(() => ({ select }));
@@ -44,5 +50,38 @@ describe("provisionAccountForUser", () => {
     expect(rpc).toHaveBeenCalledWith("provision_account", {
       p_org_name: "Acme",
     });
+  });
+
+  it("returns { error: null } on the happy path", async () => {
+    const { supabase } = makeSupabase([]);
+    const res = await provisionAccountForUser(
+      supabase,
+      makeUser({ org_name: "Acme" }),
+    );
+    expect(res).toEqual({ error: null });
+  });
+
+  it("surfaces the rpc error instead of silently swallowing it", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { supabase } = makeSupabase([], {
+      data: null,
+      error: { message: "boom" },
+    });
+    const res = await provisionAccountForUser(
+      supabase,
+      makeUser({ org_name: "Acme" }),
+    );
+    expect(res).toEqual({ error: "boom" });
+    expect(spy).toHaveBeenCalledOnce();
+    spy.mockRestore();
+  });
+
+  it("returns { error: null } when it skips (already has an org)", async () => {
+    const { supabase } = makeSupabase([{ id: "org1" }]);
+    const res = await provisionAccountForUser(
+      supabase,
+      makeUser({ org_name: "Acme" }),
+    );
+    expect(res).toEqual({ error: null });
   });
 });
