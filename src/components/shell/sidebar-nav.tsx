@@ -55,6 +55,7 @@ export function SidebarNav({
   isPlatformAdmin,
   isOrgAdmin,
   newFeedbackCount,
+  forceExpanded = false,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
@@ -63,10 +64,15 @@ export function SidebarNav({
   isPlatformAdmin?: boolean;
   isOrgAdmin?: boolean;
   newFeedbackCount?: number;
+  /**
+   * Render always-expanded, ignoring the persisted collapse flag. Used by the
+   * mobile drawer, which is full-width and never shows the icon-only rail.
+   */
+  forceExpanded?: boolean;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
-  const isCollapsed = hasHydrated && collapsed;
+  const isCollapsed = !forceExpanded && hasHydrated && collapsed;
   const coarse = useCoarsePointer();
   const pathname = usePathname();
 

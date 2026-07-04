@@ -110,6 +110,27 @@ describe("SidebarNav", () => {
     expect(screen.getByText("Engineering")).toBeInTheDocument();
   });
 
+  it("stays expanded when forceExpanded, ignoring the collapsed store", () => {
+    // The mobile drawer passes forceExpanded so a user who collapsed the
+    // desktop rail still gets full labels in the sheet.
+    useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
+    renderNav(
+      <SidebarNav
+        boards={[board]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+        forceExpanded
+      />,
+    );
+    // Full label text is present (expanded), not the icon-only rail.
+    expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
+    expect(screen.getByText("Goals").closest("a")).toHaveAttribute(
+      "href",
+      "/goals",
+    );
+  });
+
   it("hides text labels when collapsed", () => {
     useUIStore.setState({ sidebarCollapsed: true, hasHydrated: true });
     renderNav(
