@@ -45,6 +45,9 @@ export function ShareBoardDialog({
   const [pending, start] = useTransition();
 
   function change(userId: string, next: Access) {
+    // Capture the persisted value so a failed write can be rolled back —
+    // otherwise the <select> keeps showing the access level that never saved.
+    const previous = access.get(userId) ?? "none";
     setAccess((prev) => new Map(prev).set(userId, next));
     start(async () => {
       setError(null);
@@ -52,7 +55,10 @@ export function ShareBoardDialog({
         next === "none"
           ? await unshareBoard({ boardId, userId })
           : await shareBoard({ boardId, userId, access: next });
-      if (!r.ok) setError(r.error);
+      if (!r.ok) {
+        setAccess((prev) => new Map(prev).set(userId, previous));
+        setError(r.error);
+      }
     });
   }
 

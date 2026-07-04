@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   addSubitem,
   clearCell,
@@ -75,6 +74,7 @@ import {
   type CacheTimeEntry,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
+import { showMutationError } from "@/lib/ui/mutation-toast";
 import type { ColumnKind } from "@/lib/validations/boards";
 
 type SetCellVars = { itemId: string; columnId: string; value: unknown };
@@ -114,13 +114,11 @@ export function stripOption(
   return cv;
 }
 
-/** Surface a failed board mutation. Rollback already restored the cache;
- *  this is the user-visible half (spec F2). Mutations whose callers surface
- *  errors inline via `onError` callbacks (addItem, addSubitem, addGroup,
- *  addColumn, addDependency) deliberately skip this — no double feedback. */
-function showMutationError(action: string, err: Error) {
-  toast.error(action, { description: err.message });
-}
+// Failed board mutations surface via the shared `showMutationError` toast helper
+// (@/lib/ui/mutation-toast). Rollback restores the cache; the toast is the
+// user-visible half (spec F2). Mutations whose callers surface errors inline via
+// `onError` callbacks (addItem, addSubitem, addGroup, addColumn, addDependency)
+// deliberately skip this — no double feedback.
 
 export function useBoardMutations(boardId: string) {
   const qc = useQueryClient();

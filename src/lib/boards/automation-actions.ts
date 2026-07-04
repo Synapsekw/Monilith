@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -22,24 +23,34 @@ export async function getAutomations(boardId: string): Promise<Automation[]> {
 
 export type AutomationRun = Tables<"automation_runs">;
 
+/** Clamp the requested page size into [1, 100] — a bad/oversized limit is
+ *  coerced rather than rejected so the disclosure always renders something. */
+const runsLimitSchema = z
+  .number()
+  .catch(50)
+  .transform((n) => Math.min(100, Math.max(1, Math.trunc(n))));
+
 /**
- * Client-callable read wrapper for automation run history. RLS scopes rows to
- * the caller's org; the query is bounded (limit) and ordered by the indexed
+ * Client-callable read wrapper for automation run history. Returns the shared
+ * {@link ActionResult} shape (like every sibling action) so the caller can tell
+ * a failed read apart from an empty history. RLS scopes rows to the caller's
+ * org; the query is bounded (clamped limit, max 100) and ordered by the indexed
  * created_at desc.
  */
 export async function getAutomationRuns(
   automationId: string,
   limit = 50,
-): Promise<AutomationRun[]> {
+): Promise<ActionResult<AutomationRun[]>> {
+  const safeLimit = runsLimitSchema.parse(limit);
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("automation_runs")
     .select("*")
     .eq("automation_id", automationId)
     .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
+    .limit(safeLimit);
+  if (error) return fail(error.message);
+  return { ok: true, data: data ?? [] };
 }
 
 type ActionResult<T = void> =

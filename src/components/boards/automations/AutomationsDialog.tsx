@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { showMutationError } from "@/lib/ui/mutation-toast";
 import { OPERATOR_LABEL } from "@/lib/dashboards/filter-meta";
 import type { ListFilter } from "@/lib/validations/dashboards";
 import type { CacheColumn } from "@/lib/boards/cache";
@@ -232,8 +233,12 @@ export function AutomationsDialog({
       );
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(automationsKey(boardId), ctx.previous);
+      showMutationError(
+        "Couldn't update the automation — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -250,8 +255,12 @@ export function AutomationsDialog({
       );
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(automationsKey(boardId), ctx.previous);
+      showMutationError(
+        "Couldn't delete the automation — it was restored.",
+        err,
+      );
     },
   });
 

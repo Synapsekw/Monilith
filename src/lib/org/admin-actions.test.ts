@@ -142,4 +142,47 @@ describe("inviteMember", () => {
     });
     expect(r.ok).toBe(false);
   });
+
+  it("returns emailSent:true when the invite email is delivered", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: uuid } } });
+    insert.mockResolvedValue({ error: null }); // org_invitations insert
+    adminInvite.mockResolvedValue({ error: null });
+    svcInsert.mockResolvedValue({ error: null }); // audit log
+    const r = await inviteMember({
+      orgId: orgUuid,
+      email: "a@b.com",
+      role: "member",
+    });
+    expect(r).toEqual({ ok: true, data: { emailSent: true } });
+  });
+
+  it("returns emailSent:false (still ok) when email delivery fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    getUser.mockResolvedValue({ data: { user: { id: uuid } } });
+    insert.mockResolvedValue({ error: null });
+    adminInvite.mockResolvedValue({ error: { message: "smtp unreachable" } });
+    svcInsert.mockResolvedValue({ error: null });
+    const r = await inviteMember({
+      orgId: orgUuid,
+      email: "a@b.com",
+      role: "member",
+    });
+    expect(r).toEqual({ ok: true, data: { emailSent: false } });
+    spy.mockRestore();
+  });
+
+  it("treats an 'already registered' email as delivered (emailSent:true)", async () => {
+    getUser.mockResolvedValue({ data: { user: { id: uuid } } });
+    insert.mockResolvedValue({ error: null });
+    adminInvite.mockResolvedValue({
+      error: { message: "User already registered" },
+    });
+    svcInsert.mockResolvedValue({ error: null });
+    const r = await inviteMember({
+      orgId: orgUuid,
+      email: "a@b.com",
+      role: "member",
+    });
+    expect(r).toEqual({ ok: true, data: { emailSent: true } });
+  });
 });

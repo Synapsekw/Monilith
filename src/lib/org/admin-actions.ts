@@ -111,8 +111,12 @@ export async function reactivateMember(input: unknown): Promise<ActionResult> {
   return ok();
 }
 
-/** Auth-plane: create-or-invite the user and record the invitation. */
-export async function inviteMember(input: unknown): Promise<ActionResult> {
+/** Auth-plane: create-or-invite the user and record the invitation.
+ *  `data.emailSent` is false when the invite row persisted but the invite email
+ *  couldn't be delivered — the caller warns the admin so it isn't a silent gap. */
+export async function inviteMember(
+  input: unknown,
+): Promise<ActionResult<{ emailSent: boolean }>> {
   const parsed = inviteMemberSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid input");
@@ -139,11 +143,21 @@ export async function inviteMember(input: unknown): Promise<ActionResult> {
   const svc = createServiceClient();
   const { error: inviteErr } = await svc.auth.admin.inviteUserByEmail(email);
   // A "User already registered" error is expected & fine; only surface unexpected ones.
+  let emailSent = true;
   if (inviteErr && !/already.*regist/i.test(inviteErr.message)) {
-    // Invitation row persists; user can still redeem after a normal sign-in.
+    // Invitation row persists; user can still redeem after a normal sign-in — but
+    // the branded email failed to send, so report it back rather than swallow it.
+    console.error("[inviteMember] invite email delivery failed", {
+      orgId,
+      email,
+      error: inviteErr.message,
+    });
+    emailSent = false;
   }
 
-  await svc.from("admin_audit_log").insert({
+  // Compliance-relevant audit trail (who invited whom). Best-effort: a failed
+  // write must not fail the invite, but it must not be silent either.
+  const { error: auditErr } = await svc.from("admin_audit_log").insert({
     org_id: orgId,
     actor_id: user.id,
     actor_kind: "org",
@@ -151,9 +165,15 @@ export async function inviteMember(input: unknown): Promise<ActionResult> {
     target_email: email,
     metadata: { role },
   });
+  if (auditErr)
+    console.error("[inviteMember] audit-log insert failed (compliance)", {
+      orgId,
+      action: "member.invited",
+      error: auditErr.message,
+    });
 
   revalidatePath("/settings");
-  return ok();
+  return { ok: true, data: { emailSent } };
 }
 
 export async function revokeInvite(input: unknown): Promise<ActionResult> {
@@ -174,13 +194,23 @@ export async function revokeInvite(input: unknown): Promise<ActionResult> {
     .select("org_id")
     .maybeSingle();
   if (error || !data) return fail("Could not revoke that invitation.");
-  await createServiceClient().from("admin_audit_log").insert({
-    org_id: data.org_id,
-    actor_id: user.id,
-    actor_kind: "org",
-    action: "member.invite_revoked",
-    metadata: {},
-  });
+  // Compliance-relevant audit trail. Best-effort: don't fail the revoke on a
+  // logging error, but surface it rather than dropping it silently.
+  const { error: auditErr } = await createServiceClient()
+    .from("admin_audit_log")
+    .insert({
+      org_id: data.org_id,
+      actor_id: user.id,
+      actor_kind: "org",
+      action: "member.invite_revoked",
+      metadata: {},
+    });
+  if (auditErr)
+    console.error("[revokeInvite] audit-log insert failed (compliance)", {
+      orgId: data.org_id,
+      action: "member.invite_revoked",
+      error: auditErr.message,
+    });
   revalidatePath("/settings");
   return ok();
 }

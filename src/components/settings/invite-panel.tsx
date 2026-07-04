@@ -28,6 +28,8 @@ export function InvitePanel({
   const [pending, start] = useTransition();
   // Minimal inline error surface (no toast primitive in the project yet).
   const [error, setError] = useState<string | null>(null);
+  // Distinct from `error`: the invite was recorded but its email didn't send.
+  const [warning, setWarning] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
@@ -37,9 +39,16 @@ export function InvitePanel({
           e.preventDefault();
           start(async () => {
             setError(null);
+            setWarning(null);
             const r = await inviteMember({ orgId, email, role });
             if (!r.ok) setError(r.error);
-            else setEmail("");
+            else {
+              setEmail("");
+              if (r.data?.emailSent === false)
+                setWarning(
+                  "Invitation recorded, but email delivery failed. Ask them to sign in to redeem it.",
+                );
+            }
           });
         }}
       >
@@ -51,6 +60,7 @@ export function InvitePanel({
           onChange={(e) => {
             setEmail(e.target.value);
             setError(null);
+            setWarning(null);
           }}
           aria-label="Invite email"
           className="min-w-0 flex-1"
@@ -82,6 +92,12 @@ export function InvitePanel({
         </p>
       )}
 
+      {warning && (
+        <p role="status" className="text-xs text-amber-600 dark:text-amber-400">
+          {warning}
+        </p>
+      )}
+
       <ul className="divide-border divide-y text-sm">
         {invites.length === 0 && (
           <li className="text-muted-foreground py-2.5">No pending invites.</li>
@@ -110,12 +126,17 @@ export function InvitePanel({
                 onClick={() =>
                   start(async () => {
                     setError(null);
+                    setWarning(null);
                     const r = await inviteMember({
                       orgId,
                       email: i.email,
                       role: i.role,
                     });
                     if (!r.ok) setError(r.error);
+                    else if (r.data?.emailSent === false)
+                      setWarning(
+                        "Invitation recorded, but email delivery failed. Ask them to sign in to redeem it.",
+                      );
                   })
                 }
               >
@@ -130,6 +151,7 @@ export function InvitePanel({
                 onClick={() =>
                   start(async () => {
                     setError(null);
+                    setWarning(null);
                     const r = await revokeInvite({ inviteId: i.id });
                     if (!r.ok) setError(r.error);
                   })

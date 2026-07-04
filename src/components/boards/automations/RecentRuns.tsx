@@ -22,12 +22,14 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
 
 export function RecentRuns({ automationId }: { automationId: string }) {
   const [open, setOpen] = useState(false);
-  const { data: runs = [], isLoading } = useQuery({
+  const { data: result, isLoading } = useQuery({
     queryKey: ["automationRuns", automationId],
     enabled: open,
     staleTime: 30_000,
     queryFn: () => getAutomationRuns(automationId),
   });
+  const runs = result?.ok ? result.data : [];
+  const loadError = result != null && !result.ok;
 
   return (
     <div className="w-full">
@@ -46,6 +48,10 @@ export function RecentRuns({ automationId }: { automationId: string }) {
         <div className="mt-2 flex flex-col gap-1.5">
           {isLoading ? (
             <p className="text-muted-foreground text-xs">Loading…</p>
+          ) : loadError ? (
+            <p role="alert" className="text-destructive text-xs">
+              Couldn&rsquo;t load recent runs. Try again.
+            </p>
           ) : runs.length === 0 ? (
             <p className="text-muted-foreground text-xs">No runs yet.</p>
           ) : (

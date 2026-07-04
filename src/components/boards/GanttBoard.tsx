@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import type { BoardPayload } from "@/lib/boards/queries";
@@ -438,9 +439,18 @@ export function GanttBoard({
     };
     // In-page change over already-loaded data: update local state instantly
     // (0 server round-trips) and persist config in the background. No
-    // router.refresh() — see gotcha-09.
-    startTransition(() => {
-      void updateBoardView({ viewId: selectedViewId, config: merged });
+    // router.refresh() — see gotcha-09. The persist can still fail (RLS, network),
+    // so surface it instead of letting it look saved until the next reload.
+    startTransition(async () => {
+      const res = await updateBoardView({
+        viewId: selectedViewId,
+        config: merged,
+      });
+      if (!res.ok) {
+        toast.error("Couldn't save the view settings.", {
+          description: res.error,
+        });
+      }
     });
   }
 

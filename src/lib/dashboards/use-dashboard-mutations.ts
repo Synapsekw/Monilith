@@ -20,6 +20,7 @@ import {
   type GridRect,
 } from "@/lib/dashboards/cache";
 import { dashboardKey } from "@/lib/dashboards/use-dashboard-cache";
+import { showMutationError } from "@/lib/ui/mutation-toast";
 
 export function useDashboardMutations(dashboardId: string) {
   const qc = useQueryClient();
@@ -78,8 +79,9 @@ export function useDashboardMutations(dashboardId: string) {
       if (previous) qc.setQueryData(key, removeWidget(previous, vars.widgetId));
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError("Couldn't delete the widget — it was restored.", err);
     },
   });
 
@@ -102,8 +104,12 @@ export function useDashboardMutations(dashboardId: string) {
         qc.setQueryData(key, renameDashboardInCache(previous, vars.name));
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't rename the dashboard — your change was undone.",
+        err,
+      );
     },
   });
 
@@ -127,8 +133,12 @@ export function useDashboardMutations(dashboardId: string) {
       if (previous) qc.setQueryData(key, applyLayouts(previous, layouts));
       return { previous };
     },
-    onError: (_e, _v, ctx) => {
+    onError: (err, _v, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      showMutationError(
+        "Couldn't save the layout — your change was undone.",
+        err,
+      );
     },
   });
 

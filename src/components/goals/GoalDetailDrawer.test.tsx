@@ -7,11 +7,12 @@ import type { GoalLink } from "@/lib/goals/queries";
 
 const setGoalLinks = vi.fn().mockResolvedValue({ ok: true, data: null });
 const getStatusColumnsForBoard = vi.fn();
+const updateGoal = vi.fn().mockResolvedValue({ ok: true, data: null });
 
 vi.mock("@/lib/goals/actions", () => ({
   setGoalLinks: (...a: unknown[]) => setGoalLinks(...a),
   getStatusColumnsForBoard: (...a: unknown[]) => getStatusColumnsForBoard(...a),
-  updateGoal: vi.fn().mockResolvedValue({ ok: true, data: null }),
+  updateGoal: (...a: unknown[]) => updateGoal(...a),
   deleteGoal: vi.fn().mockResolvedValue({ ok: true, data: null }),
 }));
 
@@ -63,6 +64,7 @@ const links: Record<string, GoalLink[]> = {
 
 beforeEach(() => {
   setGoalLinks.mockClear();
+  updateGoal.mockClear().mockResolvedValue({ ok: true, data: null });
   getStatusColumnsForBoard.mockClear();
   getStatusColumnsForBoard.mockResolvedValue({
     ok: true,
@@ -134,6 +136,20 @@ describe("GoalDetailDrawer done-mapping", () => {
         },
       ],
     });
+  });
+
+  it("reverts the edited field and shows an error when updateGoal fails", async () => {
+    updateGoal.mockResolvedValueOnce({ ok: false, error: "Save failed" });
+    renderDrawer();
+    const nameInput = screen.getByDisplayValue("Ship v1");
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Ship v2");
+    // Blur to fire the onBlur → patch().
+    await userEvent.tab();
+    await waitFor(() => expect(updateGoal).toHaveBeenCalled());
+    // Name reverts to the server truth and the failure is surfaced.
+    expect(await screen.findByRole("alert")).toHaveTextContent("Save failed");
+    expect(screen.getByDisplayValue("Ship v1")).toBeInTheDocument();
   });
 
   it("does not refetch columns when re-expanding the same board", async () => {

@@ -9,6 +9,7 @@ import {
   duplicateDashboard,
   renameDashboard,
 } from "@/lib/dashboards/actions";
+import { showMutationError } from "@/lib/ui/mutation-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,14 +78,28 @@ export function DashboardItemMenu({
   function doDuplicate() {
     startTransition(async () => {
       const res = await duplicateDashboard({ dashboardId: dashboard.id });
-      if (res.ok) router.refresh();
+      if (!res.ok) {
+        // The dropdown has already closed, so there's no inline surface to host
+        // the message — toast it (delete keeps its AlertDialog open and shows
+        // the error inline instead).
+        showMutationError(
+          "Couldn't duplicate the dashboard.",
+          new Error(res.error),
+        );
+        return;
+      }
+      router.refresh();
     });
   }
 
   function doDelete() {
+    setError(null);
     startTransition(async () => {
       const res = await deleteDashboard({ dashboardId: dashboard.id });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
       setDeleteOpen(false);
       if (isActive) router.push("/dashboards");
       else router.refresh();
@@ -121,7 +136,10 @@ export function DashboardItemMenu({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
-            onSelect={() => setDeleteOpen(true)}
+            onSelect={() => {
+              setError(null);
+              setDeleteOpen(true);
+            }}
           >
             Delete
           </DropdownMenuItem>
@@ -179,6 +197,11 @@ export function DashboardItemMenu({
               cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {error ? (
+            <p role="alert" className="text-destructive text-xs">
+              {error}
+            </p>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
