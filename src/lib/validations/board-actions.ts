@@ -38,6 +38,8 @@ export const reorderItemSchema = z.object({
   itemId: uuid,
   position: z.number(),
 });
+/** Move a top-level item to a different group on the same board. */
+export const moveItemSchema = z.object({ itemId: uuid, groupId: uuid });
 
 // Cell value is validated structurally here (must be a JSON object); the
 // kind-specific shape is enforced server-side with cellValueSchema(kind).
@@ -49,6 +51,23 @@ export const upsertCellSchema = z.object({
   value: cellValue,
 });
 export const clearCellSchema = z.object({ itemId: uuid, columnId: uuid });
+
+// ── Bulk (multi-item) action schemas ────────────────────────────────────────
+// Selection is bounded so a bulk loop can never fan out unbounded server work
+// (AGENTS.md hot-path invariant). The cap matches the largest realistic manual
+// multi-select; larger sets are a spreadsheet-import concern, not bulk-edit.
+const bulkItemIds = z.array(uuid).min(1).max(500);
+export const bulkDeleteItemsSchema = z.object({ itemIds: bulkItemIds });
+export const bulkMoveItemsSchema = z.object({
+  itemIds: bulkItemIds,
+  groupId: uuid,
+});
+export const bulkSetCellSchema = z.object({
+  itemIds: bulkItemIds,
+  columnId: uuid,
+  // null = clear the cell for every selected item; an object = set that value.
+  value: cellValue.nullable(),
+});
 
 export const createColumnSchema = z.object({
   boardId: uuid,

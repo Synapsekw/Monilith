@@ -30,6 +30,7 @@ import {
   addSubitemSchema,
   deleteItemSchema,
   reorderItemSchema,
+  moveItemSchema,
   updateColumnSettingsSchema,
   removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
@@ -517,6 +518,73 @@ export async function reorderItem(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Item not found.");
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Move a top-level item to a different group on the same board. Appends it to
+ * the end of the target group (position = after the current last top-level row)
+ * and drags its subitems' denormalized `group_id` along so they stay under the
+ * parent. RLS scopes every read/write to the caller's org; the explicit
+ * same-board + top-level guards give a real answer instead of an RLS-filtered
+ * silent no-op (mirrors deleteItem's defense-in-depth). Reused per-item by the
+ * bulk "Move to group" wrapper so its authorization is identical to a single move.
+ */
+export async function moveItem(input: {
+  itemId: string;
+  groupId: string;
+}): Promise<ActionResult> {
+  const parsed = moveItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+
+  const { data: item, error: itemErr } = await supabase
+    .from("items")
+    .select("board_id, parent_id")
+    .eq("id", parsed.data.itemId)
+    .maybeSingle();
+  if (itemErr || !item) return fail("Item not found.");
+  if (item.parent_id !== null)
+    return fail("Subitems can't be moved between groups.");
+
+  const { data: group, error: groupErr } = await supabase
+    .from("groups")
+    .select("board_id")
+    .eq("id", parsed.data.groupId)
+    .maybeSingle();
+  if (groupErr || !group) return fail("Group not found.");
+  if (group.board_id !== item.board_id)
+    return fail("Group belongs to a different board.");
+
+  // Append after the target group's last top-level item (subitems have their
+  // own position scope under a parent, so exclude them from the max).
+  const { data: last } = await supabase
+    .from("items")
+    .select("position")
+    .eq("group_id", parsed.data.groupId)
+    .is("parent_id", null)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from("items")
+    .update({
+      group_id: parsed.data.groupId,
+      position: midpoint(last?.position ?? null, null),
+    })
+    .eq("id", parsed.data.itemId);
+  if (error) return fail(error.message);
+
+  // Keep subitems co-located with their parent (their denormalized group_id
+  // must match). RLS-scoped; best-effort — the parent already moved.
+  await supabase
+    .from("items")
+    .update({ group_id: parsed.data.groupId })
+    .eq("parent_id", parsed.data.itemId);
+
   return { ok: true, data: undefined };
 }
 
