@@ -46,6 +46,7 @@ import { createClient } from "@/lib/supabase/client";
 import { buildColumnFilePath } from "@/lib/collaboration/attachments-path";
 import { MAX_FILE_BYTES } from "@/lib/collaboration/use-attachment-mutations";
 import {
+  addDependency,
   insertColumn,
   insertGroup,
   insertItem,
@@ -67,13 +68,14 @@ import {
   upsertTimeEntry,
   type BoardCache,
   type CacheAttachment,
+  type CacheBoard,
   type CacheCellValue,
   type CacheColumn,
   type CacheGroup,
   type CacheItem,
   type CacheTimeEntry,
 } from "@/lib/boards/cache";
-import { boardKey } from "@/lib/boards/use-board-cache";
+import { boardKey, patchBoardCache } from "@/lib/boards/use-board-cache";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import type { ColumnKind } from "@/lib/validations/boards";
 
@@ -91,7 +93,16 @@ type SetRelationVars = {
   columnId: string;
   links: RelationLink[];
 };
-type Ctx = { previous?: BoardCache };
+/**
+ * Optimistic-mutation context. Instead of snapshotting the WHOLE BoardCache and
+ * restoring it wholesale on error (which resurrects the pre-peer snapshot and
+ * silently discards any collaborator realtime update that landed while the
+ * mutation was in flight — stability-audit finding), each mutation captures a
+ * TARGETED inverse patch: a function that reverts only the specific
+ * cell/field/entity it touched, applied over the CURRENT cache so concurrent
+ * peer changes to other entities survive the rollback.
+ */
+type Ctx = { rollback?: (cache: BoardCache) => BoardCache };
 
 /**
  * Strip a removed option id from a single status/dropdown cell value. Returns
@@ -114,6 +125,21 @@ export function stripOption(
   return cv;
 }
 
+/**
+ * Snapshot the prior values of exactly the keys a `change` patch touches, so a
+ * rollback can revert those fields (and only those) on the current row. Keeps
+ * field-level rollbacks from clobbering a peer's concurrent edit to a different
+ * field of the same entity.
+ */
+export function pickFields<T extends object>(
+  source: T,
+  change: Partial<T>,
+): Partial<T> {
+  const prior: Partial<T> = {};
+  for (const k of Object.keys(change) as (keyof T)[]) prior[k] = source[k];
+  return prior;
+}
+
 // Failed board mutations surface via the shared `showMutationError` toast helper
 // (@/lib/ui/mutation-toast). Rollback restores the cache; the toast is the
 // user-visible half (spec F2). Mutations whose callers surface errors inline via
@@ -124,6 +150,109 @@ export function useBoardMutations(boardId: string) {
   const qc = useQueryClient();
   const key = boardKey(boardId);
 
+  // Apply a mutation's targeted inverse patch over the CURRENT cache (never a
+  // stale whole-cache snapshot), so a peer's realtime update that landed during
+  // the failed mutation is preserved.
+  function rollback(ctx: Ctx | undefined) {
+    if (ctx?.rollback) patchBoardCache(qc, boardId, ctx.rollback);
+  }
+
+  // Full-board resync used as the rollback for destructive cascade mutations
+  // (delete item/group/column, remove option) whose inverse is too intertwined
+  // to reconstruct safely by hand. Cheap because it only runs on the rare error
+  // path; the queryFn re-reads the same bounded payload and reconciles peers.
+  function resyncOnError() {
+    void qc.invalidateQueries({ queryKey: key });
+  }
+
+  // Inverse of a single-cell optimistic write: restore the prior cell, or drop
+  // it if the cell didn't exist before. Shared by setCell/clearCell/setEstimate.
+  function cellRollback(
+    prior: CacheCellValue | undefined,
+    itemId: string,
+    columnId: string,
+  ): (c: BoardCache) => BoardCache {
+    return (c) =>
+      prior ? upsertCellValue(c, prior) : removeCellValue(c, itemId, columnId);
+  }
+
+  // Field-precise optimistic patch for a column: writes `change` now and returns
+  // a rollback that reverts ONLY those fields on the current column row (so a
+  // peer's concurrent edit to a different field/column survives).
+  function optimisticColumn(
+    columnId: string,
+    change: Partial<CacheColumn>,
+  ): Ctx {
+    const previous = qc.getQueryData<BoardCache>(key);
+    const current = previous?.columns.find((c) => c.id === columnId);
+    if (!previous || !current) return {};
+    qc.setQueryData<BoardCache>(
+      key,
+      replaceColumn(previous, { ...current, ...change }),
+    );
+    const prior = pickFields(current, change);
+    return {
+      rollback: (c) => {
+        const cur = c.columns.find((x) => x.id === columnId);
+        return cur ? replaceColumn(c, { ...cur, ...prior }) : c;
+      },
+    };
+  }
+
+  // Field-precise optimistic patch for an item (rename/reorder).
+  function optimisticItemField(
+    itemId: string,
+    change: Partial<CacheItem>,
+  ): Ctx {
+    const previous = qc.getQueryData<BoardCache>(key);
+    const current = previous?.items.find((i) => i.id === itemId);
+    if (!previous || !current) return {};
+    qc.setQueryData<BoardCache>(
+      key,
+      replaceItem(previous, { ...current, ...change }),
+    );
+    const prior = pickFields(current, change);
+    return {
+      rollback: (c) => {
+        const cur = c.items.find((i) => i.id === itemId);
+        return cur ? replaceItem(c, { ...cur, ...prior }) : c;
+      },
+    };
+  }
+
+  // Field-precise optimistic patch for a group (rename/reorder/color).
+  function optimisticGroupField(
+    groupId: string,
+    change: Partial<CacheGroup>,
+  ): Ctx {
+    const previous = qc.getQueryData<BoardCache>(key);
+    const current = previous?.groups.find((g) => g.id === groupId);
+    if (!previous || !current) return {};
+    qc.setQueryData<BoardCache>(
+      key,
+      replaceGroup(previous, { ...current, ...change }),
+    );
+    const prior = pickFields(current, change);
+    return {
+      rollback: (c) => {
+        const cur = c.groups.find((g) => g.id === groupId);
+        return cur ? replaceGroup(c, { ...cur, ...prior }) : c;
+      },
+    };
+  }
+
+  // Field-precise optimistic patch for the (singleton) board row.
+  function optimisticBoardField(change: Partial<CacheBoard>): Ctx {
+    const previous = qc.getQueryData<BoardCache>(key);
+    if (!previous) return {};
+    qc.setQueryData<BoardCache>(
+      key,
+      replaceBoard(previous, { ...previous.board, ...change }),
+    );
+    const prior = pickFields(previous.board, change);
+    return { rollback: (c) => replaceBoard(c, { ...c.board, ...prior }) };
+  }
+
   const setCellMutation = useMutation<unknown, Error, SetCellVars, Ctx>({
     mutationFn: async (vars) => {
       const res = await upsertCell(vars);
@@ -133,28 +262,32 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        const cell: CacheCellValue = {
-          org_id: previous.board.org_id,
-          board_id: previous.board.id,
-          item_id: vars.itemId,
-          column_id: vars.columnId,
-          value: vars.value as CacheCellValue["value"],
-          updated_at: new Date().toISOString(),
-        };
-        qc.setQueryData<BoardCache>(key, upsertCellValue(previous, cell));
-      }
-      return { previous };
+      if (!previous) return {};
+      const prior = previous.cellValues.find(
+        (c) => c.item_id === vars.itemId && c.column_id === vars.columnId,
+      );
+      const cell: CacheCellValue = {
+        org_id: previous.board.org_id,
+        board_id: previous.board.id,
+        item_id: vars.itemId,
+        column_id: vars.columnId,
+        value: vars.value as CacheCellValue["value"],
+        updated_at: new Date().toISOString(),
+      };
+      qc.setQueryData<BoardCache>(key, upsertCellValue(previous, cell));
+      return { rollback: cellRollback(prior, vars.itemId, vars.columnId) };
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't save the cell — your change was undone.",
         err,
       );
     },
     onSettled: () => {
-      // No refetch: Realtime + revalidatePath keep the cache fresh.
+      // No refetch on the happy path: Realtime keeps the cache fresh (with
+      // revalidatePath now dropped from hot-path mutations, the reconnect
+      // resync + targeted rollback are what keep the cache correct).
     },
   });
 
@@ -206,22 +339,6 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
-  function optimisticColumn(
-    columnId: string,
-    change: Partial<CacheColumn>,
-  ): { previous?: BoardCache } {
-    const previous = qc.getQueryData<BoardCache>(key);
-    if (previous) {
-      const current = previous.columns.find((c) => c.id === columnId);
-      if (current)
-        qc.setQueryData<BoardCache>(
-          key,
-          replaceColumn(previous, { ...current, ...change }),
-        );
-    }
-    return { previous };
-  }
-
   const renameColumnMutation = useMutation<
     unknown,
     Error,
@@ -238,7 +355,7 @@ export function useBoardMutations(boardId: string) {
       return optimisticColumn(vars.columnId, { name: vars.name });
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't rename the column — your change was undone.",
         err,
@@ -264,7 +381,7 @@ export function useBoardMutations(boardId: string) {
       });
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't update the column settings — your change was undone.",
         err,
@@ -283,6 +400,9 @@ export function useBoardMutations(boardId: string) {
       if (!res.ok) throw new Error(res.error);
       return res;
     },
+    // Multi-entity optimistic change (column settings + every affected cell):
+    // reconstructing a hand-written inverse is error-prone, so on failure we
+    // resync the whole board from the server (rare error path) instead.
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
@@ -312,10 +432,10 @@ export function useBoardMutations(boardId: string) {
         };
         qc.setQueryData(key, next);
       }
-      return { previous };
+      return {};
     },
-    onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    onError: (err) => {
+      resyncOnError();
       showMutationError(
         "Couldn't remove the option — your change was undone.",
         err,
@@ -339,7 +459,7 @@ export function useBoardMutations(boardId: string) {
       return optimisticColumn(vars.columnId, { width: vars.width });
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't resize the column — your change was undone.",
         err,
@@ -365,7 +485,7 @@ export function useBoardMutations(boardId: string) {
       return optimisticColumn(vars.columnId, { position: vars.position });
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't move the column — your change was undone.",
         err,
@@ -384,15 +504,17 @@ export function useBoardMutations(boardId: string) {
       if (!res.ok) throw new Error(res.error);
       return res;
     },
+    // Cascade delete (column + its cells): resync from the server on failure
+    // rather than reconstruct the removed subtree by hand (rare error path).
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
       if (previous)
         qc.setQueryData<BoardCache>(key, removeColumn(previous, vars.columnId));
-      return { previous };
+      return {};
     },
-    onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    onError: (err) => {
+      resyncOnError();
       showMutationError("Couldn't delete the column — it was restored.", err);
     },
   });
@@ -406,16 +528,18 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        qc.setQueryData<BoardCache>(
-          key,
-          removeCellValue(previous, vars.itemId, vars.columnId),
-        );
-      }
-      return { previous };
+      if (!previous) return {};
+      const prior = previous.cellValues.find(
+        (c) => c.item_id === vars.itemId && c.column_id === vars.columnId,
+      );
+      qc.setQueryData<BoardCache>(
+        key,
+        removeCellValue(previous, vars.itemId, vars.columnId),
+      );
+      return { rollback: cellRollback(prior, vars.itemId, vars.columnId) };
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't clear the cell — your change was undone.",
         err,
@@ -477,15 +601,17 @@ export function useBoardMutations(boardId: string) {
       if (!res.ok) throw new Error(res.error);
       return res;
     },
+    // Cascade delete (item + subitems + their cells): resync from the server on
+    // failure rather than reconstruct the removed subtree by hand.
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
       if (previous)
         qc.setQueryData<BoardCache>(key, removeItem(previous, vars.itemId));
-      return { previous };
+      return {};
     },
-    onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    onError: (err) => {
+      resyncOnError();
       showMutationError("Couldn't delete the item — it was restored.", err);
     },
   });
@@ -504,20 +630,10 @@ export function useBoardMutations(boardId: string) {
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        const existing = previous.items.find((i) => i.id === vars.itemId);
-        if (existing) {
-          qc.setQueryData<BoardCache>(
-            key,
-            replaceItem(previous, { ...existing, position: vars.position }),
-          );
-        }
-      }
-      return { previous };
+      return optimisticItemField(vars.itemId, { position: vars.position });
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't reorder the item — your change was undone.",
         err,
@@ -537,20 +653,10 @@ export function useBoardMutations(boardId: string) {
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        const existing = previous.items.find((i) => i.id === vars.itemId);
-        if (existing) {
-          qc.setQueryData<BoardCache>(
-            key,
-            replaceItem(previous, { ...existing, name: vars.name }),
-          );
-        }
-      }
-      return { previous };
+      return optimisticItemField(vars.itemId, { name: vars.name });
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't rename the item — your change was undone.",
         err,
@@ -567,20 +673,10 @@ export function useBoardMutations(boardId: string) {
       },
       onMutate: async (vars) => {
         await qc.cancelQueries({ queryKey: key });
-        const previous = qc.getQueryData<BoardCache>(key);
-        if (previous) {
-          const existing = previous.groups.find((g) => g.id === vars.groupId);
-          if (existing) {
-            qc.setQueryData<BoardCache>(
-              key,
-              replaceGroup(previous, { ...existing, name: vars.name }),
-            );
-          }
-        }
-        return { previous };
+        return optimisticGroupField(vars.groupId, { name: vars.name });
       },
       onError: (err, _vars, ctx) => {
-        if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+        rollback(ctx);
         showMutationError(
           "Couldn't rename the group — your change was undone.",
           err,
@@ -602,20 +698,10 @@ export function useBoardMutations(boardId: string) {
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        const existing = previous.groups.find((g) => g.id === vars.groupId);
-        if (existing) {
-          qc.setQueryData<BoardCache>(
-            key,
-            replaceGroup(previous, { ...existing, position: vars.position }),
-          );
-        }
-      }
-      return { previous };
+      return optimisticGroupField(vars.groupId, { position: vars.position });
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't reorder the group — your change was undone.",
         err,
@@ -636,20 +722,10 @@ export function useBoardMutations(boardId: string) {
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        const existing = previous.groups.find((g) => g.id === vars.groupId);
-        if (existing) {
-          qc.setQueryData<BoardCache>(
-            key,
-            replaceGroup(previous, { ...existing, color: vars.color }),
-          );
-        }
-      }
-      return { previous };
+      return optimisticGroupField(vars.groupId, { color: vars.color });
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't change the group color — your change was undone.",
         err,
@@ -668,15 +744,17 @@ export function useBoardMutations(boardId: string) {
       if (!res.ok) throw new Error(res.error);
       return res;
     },
+    // Cascade delete (group + its items + their cells): resync from the server
+    // on failure rather than reconstruct the removed subtree by hand.
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
       if (previous)
         qc.setQueryData<BoardCache>(key, removeGroup(previous, vars.groupId));
-      return { previous };
+      return {};
     },
-    onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    onError: (err) => {
+      resyncOnError();
       showMutationError("Couldn't delete the group — it was restored.", err);
     },
   });
@@ -690,17 +768,10 @@ export function useBoardMutations(boardId: string) {
       },
       onMutate: async (vars) => {
         await qc.cancelQueries({ queryKey: key });
-        const previous = qc.getQueryData<BoardCache>(key);
-        if (previous) {
-          qc.setQueryData<BoardCache>(
-            key,
-            replaceBoard(previous, { ...previous.board, name: vars.name }),
-          );
-        }
-        return { previous };
+        return optimisticBoardField({ name: vars.name });
       },
       onError: (err, _vars, ctx) => {
-        if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+        rollback(ctx);
         showMutationError(
           "Couldn't rename the board — your change was undone.",
           err,
@@ -722,20 +793,10 @@ export function useBoardMutations(boardId: string) {
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
-      const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        qc.setQueryData<BoardCache>(
-          key,
-          replaceBoard(previous, {
-            ...previous.board,
-            name_column_width: vars.width,
-          }),
-        );
-      }
-      return { previous };
+      return optimisticBoardField({ name_column_width: vars.width });
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't resize the column — your change was undone.",
         err,
@@ -774,16 +835,18 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        qc.setQueryData<BoardCache>(
-          key,
-          removeDependency(previous, vars.dependencyId),
-        );
-      }
-      return { previous };
+      if (!previous) return {};
+      const prior = previous.dependencies.find(
+        (d) => d.id === vars.dependencyId,
+      );
+      qc.setQueryData<BoardCache>(
+        key,
+        removeDependency(previous, vars.dependencyId),
+      );
+      return { rollback: (c) => (prior ? addDependency(c, prior) : c) };
     },
     onError: (err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't remove the dependency — it was restored.",
         err,
@@ -974,15 +1037,13 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
-      if (previous)
-        qc.setQueryData<BoardCache>(
-          key,
-          removeTimeEntry(previous, vars.entryId),
-        );
-      return { previous };
+      if (!previous) return {};
+      const prior = previous.timeEntries.find((t) => t.id === vars.entryId);
+      qc.setQueryData<BoardCache>(key, removeTimeEntry(previous, vars.entryId));
+      return { rollback: (c) => (prior ? upsertTimeEntry(c, prior) : c) };
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't delete the time entry — it was restored.",
         err,
@@ -1005,26 +1066,28 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
-      if (previous) {
-        const next =
-          vars.estimateSeconds == null
-            ? removeCellValue(previous, vars.itemId, vars.columnId)
-            : upsertCellValue(previous, {
-                org_id: previous.board.org_id,
-                board_id: previous.board.id,
-                item_id: vars.itemId,
-                column_id: vars.columnId,
-                value: {
-                  estimateSeconds: vars.estimateSeconds,
-                } as CacheCellValue["value"],
-                updated_at: new Date().toISOString(),
-              } as CacheCellValue);
-        qc.setQueryData<BoardCache>(key, next);
-      }
-      return { previous };
+      if (!previous) return {};
+      const prior = previous.cellValues.find(
+        (c) => c.item_id === vars.itemId && c.column_id === vars.columnId,
+      );
+      const next =
+        vars.estimateSeconds == null
+          ? removeCellValue(previous, vars.itemId, vars.columnId)
+          : upsertCellValue(previous, {
+              org_id: previous.board.org_id,
+              board_id: previous.board.id,
+              item_id: vars.itemId,
+              column_id: vars.columnId,
+              value: {
+                estimateSeconds: vars.estimateSeconds,
+              } as CacheCellValue["value"],
+              updated_at: new Date().toISOString(),
+            } as CacheCellValue);
+      qc.setQueryData<BoardCache>(key, next);
+      return { rollback: cellRollback(prior, vars.itemId, vars.columnId) };
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't save the estimate — your change was undone.",
         err,
@@ -1049,15 +1112,18 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
-      if (previous)
-        qc.setQueryData<BoardCache>(
-          key,
-          removeColumnFile(previous, vars.attachmentId),
-        );
-      return { previous };
+      if (!previous) return {};
+      const prior = previous.attachments.find(
+        (a) => a.id === vars.attachmentId,
+      );
+      qc.setQueryData<BoardCache>(
+        key,
+        removeColumnFile(previous, vars.attachmentId),
+      );
+      return { rollback: (c) => (prior ? prependColumnFile(c, prior) : c) };
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError("Couldn't delete the file — it was restored.", err);
     },
   });
@@ -1081,20 +1147,26 @@ export function useBoardMutations(boardId: string) {
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
-      if (previous)
-        qc.setQueryData<BoardCache>(
-          key,
-          setRelationLinksForCell(
-            previous,
-            vars.itemId,
-            vars.columnId,
-            vars.links,
-          ),
-        );
-      return { previous };
+      if (!previous) return {};
+      const prior = previous.relationLinks.filter(
+        (l) => l.itemId === vars.itemId && l.columnId === vars.columnId,
+      );
+      qc.setQueryData<BoardCache>(
+        key,
+        setRelationLinksForCell(
+          previous,
+          vars.itemId,
+          vars.columnId,
+          vars.links,
+        ),
+      );
+      return {
+        rollback: (c) =>
+          setRelationLinksForCell(c, vars.itemId, vars.columnId, prior),
+      };
     },
     onError: (err, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+      rollback(ctx);
       showMutationError(
         "Couldn't update the connection — your change was undone.",
         err,

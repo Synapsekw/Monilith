@@ -39,6 +39,9 @@ export function useBoardRealtime(
 
     const buffer: BoardRealtimeEvent[] = [];
     let frame: number | null = null;
+    // Whether the channel has dropped since it last held a SUBSCRIBED state.
+    // Gates the resync so only a RE-subscribe (not the first) triggers a refetch.
+    let hadDrop = false;
 
     function flush() {
       frame = null;
@@ -90,7 +93,28 @@ export function useBoardRealtime(
         (payload) =>
           enqueue({ table: "groups", payload } as BoardRealtimeEvent),
       )
-      .subscribe();
+      // Track channel status so a reconnect resyncs. After a laptop sleep /
+      // network blip the socket drops (CHANNEL_ERROR / TIMED_OUT / CLOSED) and
+      // Supabase auto-reconnects, re-firing this callback with SUBSCRIBED. Every
+      // collaborator edit during the gap was missed (postgres_changes is not
+      // replayed), so on a RE-subscribe (not the first) we invalidate the board
+      // query → the queryFn re-reads the full bounded payload and reconciles.
+      // The first SUBSCRIBED is the initial hydration (initialData already
+      // present) → no refetch. Mirrors use-board-presence.ts:67-83.
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          if (hadDrop) {
+            hadDrop = false;
+            void qc.invalidateQueries({ queryKey: key });
+          }
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          hadDrop = true;
+        }
+      });
 
     return () => {
       if (frame != null) cancelAnimationFrame(frame);

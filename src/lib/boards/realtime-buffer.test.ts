@@ -23,12 +23,13 @@ function cellEvent(
   item_id: string,
   column_id: string,
   value: unknown,
+  updated_at?: string,
 ): BoardRealtimeEvent {
   return {
     table: "cell_values",
     payload: {
       eventType: "UPDATE",
-      new: { item_id, column_id, value, board_id: "b1" },
+      new: { item_id, column_id, value, board_id: "b1", updated_at },
       old: {},
     } as never,
   };
@@ -94,6 +95,65 @@ describe("foldBoardEvents", () => {
     const { next, flashes } = foldBoardEvents(prev, [ev]);
     expect(next.cellValues).toHaveLength(0);
     expect(flashes).toHaveLength(0);
+  });
+
+  it("skips a stale cell echo whose updated_at is older than the cached row", () => {
+    const prev = emptyCache({
+      cellValues: [
+        {
+          item_id: "i1",
+          column_id: "c1",
+          value: { text: "new" },
+          updated_at: "2026-07-04T12:00:05.000Z",
+        },
+      ] as never,
+    });
+    const { next, flashes } = foldBoardEvents(prev, [
+      // Older own-write echo carrying a superseded value.
+      cellEvent("i1", "c1", { text: "old" }, "2026-07-04T12:00:00.000Z"),
+    ]);
+    expect(next).toBe(prev); // unchanged reference → newer optimistic value kept
+    expect(flashes).toHaveLength(0);
+  });
+
+  it("applies a newer cell echo over an older cached row", () => {
+    const prev = emptyCache({
+      cellValues: [
+        {
+          item_id: "i1",
+          column_id: "c1",
+          value: { text: "old" },
+          updated_at: "2026-07-04T12:00:00.000Z",
+        },
+      ] as never,
+    });
+    const { next } = foldBoardEvents(prev, [
+      cellEvent("i1", "c1", { text: "new" }, "2026-07-04T12:00:05.000Z"),
+    ]);
+    const cell = next.cellValues.find(
+      (c) => c.item_id === "i1" && c.column_id === "c1",
+    );
+    expect((cell?.value as { text: string }).text).toBe("new");
+  });
+
+  it("applies an echo when updated_at is undefined (never silently drops)", () => {
+    const prev = emptyCache({
+      cellValues: [
+        {
+          item_id: "i1",
+          column_id: "c1",
+          value: { text: "old" },
+          updated_at: "2026-07-04T12:00:00.000Z",
+        },
+      ] as never,
+    });
+    const { next } = foldBoardEvents(prev, [
+      cellEvent("i1", "c1", { text: "new" }), // no updated_at on the incoming row
+    ]);
+    const cell = next.cellValues.find(
+      (c) => c.item_id === "i1" && c.column_id === "c1",
+    );
+    expect((cell?.value as { text: string }).text).toBe("new");
   });
 
   it("mixed echo + real-change batch: one flash for the changed cell only", () => {

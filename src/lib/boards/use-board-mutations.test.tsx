@@ -12,6 +12,8 @@ const deleteGroup = vi.fn();
 const createColumn = vi.fn();
 const createItem = vi.fn();
 const reorderColumn = vi.fn();
+const deleteItem = vi.fn();
+const renameItem = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
@@ -22,6 +24,8 @@ vi.mock("@/lib/boards/actions", () => ({
   createColumn: (...a: unknown[]) => createColumn(...a),
   createItem: (...a: unknown[]) => createItem(...a),
   reorderColumn: (...a: unknown[]) => reorderColumn(...a),
+  deleteItem: (...a: unknown[]) => deleteItem(...a),
+  renameItem: (...a: unknown[]) => renameItem(...a),
 }));
 
 const toastError = vi.fn();
@@ -51,8 +55,13 @@ vi.mock("@/lib/boards/time-actions", () => ({
   setEstimate: (...a: unknown[]) => setEstimateFn(...a),
 }));
 
-import { useBoardMutations, stripOption } from "./use-board-mutations";
+import {
+  useBoardMutations,
+  stripOption,
+  pickFields,
+} from "./use-board-mutations";
 import { boardKey } from "./use-board-cache";
+import { upsertCellValue } from "./cache";
 import type {
   BoardCache,
   CacheCellValue,
@@ -604,9 +613,12 @@ describe("useBoardMutations.deleteGroup", () => {
     expect(deleteGroup).toHaveBeenCalledWith({ groupId: "g1" });
   });
 
-  it("rolls back when the action fails", async () => {
-    const qc = new QueryClient();
+  it("resyncs from the server (invalidateQueries) when the cascade delete fails", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
     seedGroups(qc);
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
     deleteGroup.mockResolvedValue({ ok: false, error: "boom" });
     const { result } = renderHook(() => useBoardMutations("b1"), {
       wrapper: wrapper(qc),
@@ -616,11 +628,11 @@ describe("useBoardMutations.deleteGroup", () => {
       result.current.deleteGroup("g1");
     });
 
-    await waitFor(() => {
-      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
-      expect(cache.groups.map((g) => g.id)).toEqual(["g1", "g2"]);
-      expect(cache.items).toHaveLength(1);
-    });
+    // Cascade deletes resync from the server on failure rather than restore a
+    // stale whole-cache snapshot (which would clobber concurrent peer changes).
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: boardKey("b1") }),
+    );
   });
 });
 
@@ -840,5 +852,168 @@ describe("useBoardMutations.startTimer", () => {
       const stopped = updated.timeEntries.find((t) => t.id === "running-id");
       expect(stopped?.ended_at).toBe("2026-06-20T14:00:00.000Z");
     });
+  });
+});
+
+describe("pickFields", () => {
+  it("snapshots only the prior values of the changed keys", () => {
+    const row = { id: "x", name: "old", position: 3, color: "#000" };
+    expect(pickFields(row, { name: "new", position: 9 })).toEqual({
+      name: "old",
+      position: 3,
+    });
+  });
+});
+
+// ─── Targeted rollback: concurrent-peer preservation ─────────────────────────
+// A whole-cache snapshot rollback would resurrect the pre-peer cache and discard
+// a collaborator's realtime update that landed while the mutation was failing.
+// These tests inject a peer change BETWEEN onMutate and the (failed) settle and
+// assert the peer change survives the rollback.
+
+describe("useBoardMutations targeted rollback", () => {
+  beforeEach(() => {
+    upsertCell.mockReset();
+    renameItem.mockReset();
+    deleteItem.mockReset();
+  });
+
+  function peerCell(itemId: string, text: string): CacheCellValue {
+    return {
+      item_id: itemId,
+      column_id: "c1",
+      org_id: "o1",
+      board_id: "b1",
+      value: { text } as CacheCellValue["value"],
+      updated_at: new Date().toISOString(),
+    } as CacheCellValue;
+  }
+
+  it("keeps a peer's cell edit when a failed setCell rolls back (not whole-snapshot)", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    seedCache(qc); // cellValues: []
+
+    let settle: (v: { ok: boolean; error?: string }) => void = () => {};
+    upsertCell.mockImplementation(() => new Promise((res) => (settle = res)));
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    // Fire my mutation; onMutate applies my optimistic (i1,c1) value.
+    await act(async () => {
+      result.current.setCell({
+        itemId: "i1",
+        columnId: "c1",
+        value: { text: "mine" },
+      });
+    });
+    expect(
+      qc
+        .getQueryData<BoardCache>(boardKey("b1"))!
+        .cellValues.find((c) => c.item_id === "i1"),
+    ).toBeDefined();
+
+    // A peer's realtime update lands on a DIFFERENT cell while I'm in flight.
+    act(() => {
+      const cur = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      qc.setQueryData(
+        boardKey("b1"),
+        upsertCellValue(cur, peerCell("i2", "peer")),
+      );
+    });
+
+    // My action now fails → targeted rollback removes only MY (i1,c1).
+    await act(async () => {
+      settle({ ok: false, error: "boom" });
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      // my optimistic value reverted…
+      expect(cache.cellValues.find((c) => c.item_id === "i1")).toBeUndefined();
+      // …but the peer's concurrent change survives.
+      const peer = cache.cellValues.find((c) => c.item_id === "i2");
+      expect((peer?.value as { text: string }).text).toBe("peer");
+    });
+  });
+
+  it("keeps a peer's rename of another item when a failed renameItem rolls back", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    qc.setQueryData(boardKey("b1"), {
+      board: { id: "b1", org_id: "o1", name: "B" },
+      groups: [],
+      columns: [],
+      items: [
+        { id: "i1", board_id: "b1", group_id: "g1", name: "One" },
+        { id: "i2", board_id: "b1", group_id: "g1", name: "Two" },
+      ],
+      cellValues: [],
+      dependencies: [],
+      attachments: [],
+      timeEntries: [],
+      relationLinks: [],
+      mirrorTargetCells: [],
+      mirrorTargetColumns: [],
+    } as never);
+
+    let settle: (v: { ok: boolean; error?: string }) => void = () => {};
+    renameItem.mockImplementation(() => new Promise((res) => (settle = res)));
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.renameItem({ itemId: "i1", name: "One!" });
+    });
+
+    // Peer renames a DIFFERENT item mid-flight.
+    act(() => {
+      const cur = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      qc.setQueryData(boardKey("b1"), {
+        ...cur,
+        items: cur.items.map((i) =>
+          i.id === "i2" ? { ...i, name: "Two (peer)" } : i,
+        ),
+      });
+    });
+
+    await act(async () => {
+      settle({ ok: false, error: "boom" });
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      // my rename reverted to the prior name…
+      expect(cache.items.find((i) => i.id === "i1")!.name).toBe("One");
+      // …peer's concurrent rename of i2 survives.
+      expect(cache.items.find((i) => i.id === "i2")!.name).toBe("Two (peer)");
+    });
+  });
+
+  it("resyncs from the server (invalidateQueries) when a cascade delete fails", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    seedCache(qc);
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    deleteItem.mockResolvedValue({ ok: false, error: "boom" });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.deleteItem("i1");
+    });
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: boardKey("b1") }),
+    );
   });
 });
