@@ -176,12 +176,24 @@ export const getBoardPayload = cache(
         .select("*")
         .eq("board_id", boardId)
         .order("position", { ascending: true }),
+      // Bounded over the board_id index. 5000 is a non-event for real boards but
+      // caps a pathological one; a server-side aggregate/pagination is the
+      // documented follow-up if a board exceeds this (matches attachments/time_entries).
       supabase
         .from("items")
         .select("*")
         .eq("board_id", boardId)
-        .order("position", { ascending: true }),
-      supabase.from("cell_values").select("*").eq("board_id", boardId),
+        .order("position", { ascending: true })
+        .limit(5000),
+      // Bounded over the board_id index. A board of 5000 items × several columns
+      // makes cell_values the widest table; 20000 is generous headroom while
+      // capping the pathological case; server-side pagination is the documented
+      // follow-up if a board exceeds this (matches attachments/time_entries).
+      supabase
+        .from("cell_values")
+        .select("*")
+        .eq("board_id", boardId)
+        .limit(20000),
       supabase
         .from("board_views")
         .select("*")

@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-// Mock the server-actions module (pulled in by useDashboardMutations and the
-// batched widget-data hook) — no Supabase in jsdom. None should be called here.
+const getWidgetPreviewData = vi.fn();
 vi.mock("@/lib/dashboards/actions", () => ({
   createWidget: vi.fn(),
   updateWidgetConfig: vi.fn(),
@@ -14,10 +13,11 @@ vi.mock("@/lib/dashboards/actions", () => ({
   getWidgetsData: vi.fn(),
   getWidgetRows: vi.fn(),
   getWidgetSeries: vi.fn(),
+  getWidgetPreviewData: (...a: unknown[]) => getWidgetPreviewData(...a),
 }));
 
-// Chart (recharts) and List previews are out of scope — the crash regression
-// under test lives in the aggregate widgets, which stay REAL below.
+// Chart (recharts) and List rendering internals are out of scope here; the
+// aggregate widgets stay REAL so we prove live data reaches the preview body.
 vi.mock("@/components/dashboards/widgets/ChartWidget", () => ({
   ChartWidget: () => <div data-testid="chart-widget" />,
 }));
@@ -66,30 +66,62 @@ function renderSheet(props: {
   );
 }
 
-// Regression: the live preview renders the REAL NumberWidget/BatteryWidget
-// outside the dashboard grid's WidgetDataProvider. useWidgetData must degrade
-// (no provider → stable error/empty state), never throw — opening "Add a
-// widget" used to crash the sheet.
-describe("WidgetConfigSheet live preview (outside WidgetDataProvider)", () => {
-  it("opens the add-widget sheet without crashing when no board exists yet", () => {
+describe("WidgetConfigSheet live preview (inside WidgetPreviewProvider)", () => {
+  it("opens the add-widget sheet without a board and issues no preview fetch", () => {
+    getWidgetPreviewData.mockReset();
     renderSheet({ boards: [] });
     expect(screen.getByText("Add a widget")).toBeInTheDocument();
     expect(screen.getByText("Live preview")).toBeInTheDocument();
-    // Default draft kind is "number" with no source board → the widget's own
-    // configure affordance renders (the pre-crash empty state).
+    // No source board → widget shows its own affordance; no server round-trip.
     expect(screen.getByText("Pick a source board")).toBeInTheDocument();
+    expect(getWidgetPreviewData).not.toHaveBeenCalled();
   });
 
-  it("renders the number preview's non-crashing state once a board is preselected", () => {
+  it("renders LIVE number data in the preview once a board is preselected", async () => {
+    getWidgetPreviewData.mockReset();
+    getWidgetPreviewData.mockResolvedValue({
+      ok: true,
+      data: {
+        ok: true,
+        shape: "aggregate",
+        payload: {
+          kind: "number",
+          config: { agg: "count" },
+          buckets: [{ group_key: null, metric: 42 }],
+          columnMeta: null,
+        },
+      },
+    });
     renderSheet({ boards: [boardOption] });
-    expect(screen.getByText("Live preview")).toBeInTheDocument();
-    // Draft has a source board, so the widget body consults useWidgetData —
-    // outside the provider it degrades to the error/empty state (same as the
-    // old per-widget hook, whose preview id failed Zod), instead of throwing.
-    expect(screen.getByText("Failed to load")).toBeInTheDocument();
+    // The real NumberWidget renders the fetched metric — not "Failed to load".
+    await waitFor(() => expect(screen.getByText("42")).toBeInTheDocument());
+    expect(screen.queryByText("Failed to load")).not.toBeInTheDocument();
+    // Debounced single-widget fetch for the draft (kind+board+config).
+    await waitFor(() =>
+      expect(getWidgetPreviewData).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "number", sourceBoardId: BOARD_ID }),
+      ),
+    );
   });
 
-  it("renders the battery preview without crashing in edit mode", () => {
+  it("renders LIVE battery data in edit mode from the draft config", async () => {
+    getWidgetPreviewData.mockReset();
+    getWidgetPreviewData.mockResolvedValue({
+      ok: true,
+      data: {
+        ok: true,
+        shape: "aggregate",
+        payload: {
+          kind: "battery",
+          config: { groupColumnId: "col-1" },
+          buckets: [{ group_key: "col-1", metric: 3 }],
+          columnMeta: {
+            kind: "status",
+            options: [{ id: "col-1", label: "Status", color: "#22c55e" }],
+          },
+        },
+      },
+    });
     const target = {
       id: WIDGET_ID,
       kind: "battery",
@@ -106,8 +138,17 @@ describe("WidgetConfigSheet live preview (outside WidgetDataProvider)", () => {
 
     renderSheet({ boards: [boardOption], editWidget: target });
     expect(screen.getByText("Edit widget")).toBeInTheDocument();
-    // Fully-configured battery outside the provider → degraded error state,
-    // not a render crash.
-    expect(screen.getByText("Failed to load")).toBeInTheDocument();
+    // BatteryWidget renders its option label from live data (no error state).
+    await waitFor(() => expect(screen.getByText("Status")).toBeInTheDocument());
+    expect(screen.queryByText("Failed to load")).not.toBeInTheDocument();
+  });
+
+  it("shows the preview error state when the draft fetch fails", async () => {
+    getWidgetPreviewData.mockReset();
+    getWidgetPreviewData.mockResolvedValue({ ok: false, error: "boom" });
+    renderSheet({ boards: [boardOption] });
+    await waitFor(() =>
+      expect(screen.getByText("Failed to load")).toBeInTheDocument(),
+    );
   });
 });

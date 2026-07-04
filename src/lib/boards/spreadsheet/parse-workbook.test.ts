@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import ExcelJS from "exceljs";
-import { parseWorkbook } from "./parse-workbook";
+import { parseWorkbook, parseWorkbookSheets } from "./parse-workbook";
 
 async function xlsxBuf(
   rows: string[][],
@@ -77,5 +77,43 @@ describe("parseWorkbook", () => {
       ["A", "Done"],
       ["B", "Pending"],
     ]);
+  });
+});
+
+describe("parseWorkbookSheets", () => {
+  it("returns every sheet with raw grids including empty rows", async () => {
+    const wb = new ExcelJS.Workbook();
+    const s1 = wb.addWorksheet("First");
+    s1.addRow(["Name", "Status"]);
+    s1.addRow([]); // empty row must be preserved
+    s1.addRow(["Task A", "Done"]);
+    const s2 = wb.addWorksheet("Second");
+    s2.addRow(["Other"]);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+
+    const sheets = await parseWorkbookSheets(buf, "file.xlsx");
+    expect(sheets.map((s) => s.name)).toEqual(["First", "Second"]);
+    expect(sheets[0].grid).toEqual([
+      ["Name", "Status"],
+      [],
+      ["Task A", "Done"],
+    ]);
+  });
+  it("names the single csv sheet after the file", async () => {
+    const sheets = await parseWorkbookSheets(
+      Buffer.from("a,b\n1,2\n"),
+      "data.csv",
+    );
+    expect(sheets).toHaveLength(1);
+    expect(sheets[0].name).toBe("data");
+    expect(sheets[0].grid).toEqual([
+      ["a", "b"],
+      ["1", "2"],
+    ]);
+  });
+  it("throws 'empty' when the workbook has no sheets", async () => {
+    const wb = new ExcelJS.Workbook();
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    await expect(parseWorkbookSheets(buf, "x.xlsx")).rejects.toThrow("empty");
   });
 });

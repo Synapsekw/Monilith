@@ -1,4 +1,10 @@
-import type { ParsedSheet, ColumnMapping } from "./types";
+import type {
+  ParsedSheet,
+  ColumnMapping,
+  ParsedTable,
+  ColumnSpec,
+} from "./types";
+import { SUBTASK_MARKER } from "./types";
 import { textToCell } from "./cell-codec";
 import { splitRows } from "./detect";
 import type { TemplatePayload } from "@/lib/boards/template-payload";
@@ -108,5 +114,117 @@ export function buildImportPayload(
       items: templateItems,
     },
     subitems: subitemSeeds,
+  };
+}
+
+export type Split2 = {
+  groups: string[];
+  items: { group: string; name: string; row: string[] }[];
+  subitems: { parentIndex: number; name: string; row: string[] }[];
+};
+
+export function splitRows2(
+  rows: string[][],
+  nameIndex: number,
+  groupIndex: number | null,
+): Split2 {
+  const groups: string[] = [];
+  const items: Split2["items"] = [];
+  const subitems: Split2["subitems"] = [];
+  const lastItemIndexByGroup = new Map<string, number>();
+
+  for (const row of rows) {
+    const group =
+      groupIndex !== null
+        ? (row[groupIndex] ?? "").trim() || "Imported"
+        : "Imported";
+    const rawName = (row[nameIndex] ?? "").trim();
+    const isSubtask = rawName.startsWith(SUBTASK_MARKER);
+
+    if (isSubtask && lastItemIndexByGroup.has(group)) {
+      subitems.push({
+        parentIndex: lastItemIndexByGroup.get(group)!,
+        name: rawName.slice(SUBTASK_MARKER.length),
+        row,
+      });
+    } else {
+      if (!groups.includes(group)) groups.push(group);
+      const name = isSubtask ? rawName.slice(SUBTASK_MARKER.length) : rawName;
+      lastItemIndexByGroup.set(group, items.length);
+      items.push({ group, name, row });
+    }
+  }
+  return { groups, items, subitems };
+}
+
+export function buildImportPayloadV2(
+  table: ParsedTable,
+  specs: ColumnSpec[],
+): ImportPayload {
+  const nameSpec = specs.find((s) => s.role === "name");
+  if (!nameSpec) throw new Error("no name column");
+  const groupSpec = specs.find((s) => s.role === "group") ?? null;
+  const dataSpecs = specs.filter(
+    (s) => s.role === "data" && s.target !== "skip",
+  );
+
+  const split = splitRows2(
+    table.rows,
+    nameSpec.sourceIndex,
+    groupSpec?.sourceIndex ?? null,
+  );
+
+  const groupIds = split.groups.map(() => crypto.randomUUID());
+  const columnIds = dataSpecs.map(() => crypto.randomUUID());
+  const itemIds = split.items.map(() => crypto.randomUUID());
+
+  const buildCells = (row: string[]) => {
+    const cells: { columnId: string; value: Json }[] = [];
+    dataSpecs.forEach((spec, i) => {
+      const value = textToCell(
+        spec.kind,
+        row[spec.sourceIndex] ?? "",
+        spec.options,
+      );
+      if (value !== null) cells.push({ columnId: columnIds[i], value });
+    });
+    return cells;
+  };
+
+  return {
+    templatePayload: {
+      groups: split.groups.map((name, i) => ({
+        id: groupIds[i],
+        name,
+        color: GROUP_COLORS[i % GROUP_COLORS.length],
+        position: i,
+      })),
+      columns: dataSpecs.map((spec, i) => ({
+        id: columnIds[i],
+        kind: spec.kind,
+        name: spec.name,
+        settings:
+          spec.options.length > 0
+            ? ({ options: spec.options } as Json)
+            : ({} as Json),
+        position: i,
+      })),
+      items: split.items.map((item, i) => ({
+        id: itemIds[i],
+        groupId: groupIds[split.groups.indexOf(item.group)],
+        name: item.name,
+        position: i,
+        cells: buildCells(item.row),
+      })),
+    },
+    subitems: split.subitems.map((sub, i) => ({
+      id: crypto.randomUUID(),
+      parentId: itemIds[sub.parentIndex],
+      groupId:
+        groupIds[split.groups.indexOf(split.items[sub.parentIndex].group)],
+      name: sub.name,
+      position: i,
+      cells: buildCells(sub.row),
+    })),
   };
 }

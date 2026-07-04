@@ -205,3 +205,14 @@ export const getWidgetDataSchema = z.object({ widgetId: uuid });
 export const getWidgetsDataSchema = z.object({
   widgetIds: z.array(uuid).max(100),
 });
+
+// Draft-aware preview fetch: the config is client draft state (never persisted),
+// so — unlike the id-keyed reads — the caller passes kind + board + config
+// directly. RLS + a server-side re-read of the board (org derivation) is the
+// authorization boundary; the kind-specific shape is enforced in the action via
+// configSchemaForKind(kind).
+export const getWidgetPreviewDataSchema = z.object({
+  kind: widgetKindSchema,
+  sourceBoardId: uuid,
+  config: configObject,
+});

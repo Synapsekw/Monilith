@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { buildImportPayload } from "./build-import-payload";
-import type { ParsedSheet, ColumnMapping, SynthOption } from "./types";
+import {
+  buildImportPayload,
+  splitRows2,
+  buildImportPayloadV2,
+} from "./build-import-payload";
+import type {
+  ParsedSheet,
+  ColumnMapping,
+  SynthOption,
+  ParsedTable,
+  ColumnSpec,
+} from "./types";
 
 // Shared option ids for the status column
 const statusOption1: SynthOption = {
@@ -139,5 +149,60 @@ describe("buildImportPayload", () => {
     const GROUP_COLORS_FIRST = "#0073ea";
     const result = buildImportPayload(parsed, mappings);
     expect(result.templatePayload.groups[0].color).toBe(GROUP_COLORS_FIRST);
+  });
+});
+
+const table: ParsedTable = {
+  header: ["Phase", "Task", "Est", "Ignore me"],
+  rows: [
+    ["Build", "Task A", "5", "x"],
+    ["Build", "↳ Sub A1", "2", "y"],
+    ["QA", "Task B", "", "z"],
+  ],
+  rowIndices: [1, 2, 3],
+};
+const specs: ColumnSpec[] = [
+  { sourceIndex: 0, name: "Phase", kind: "text", options: [], role: "group" },
+  { sourceIndex: 1, name: "Task", kind: "text", options: [], role: "name" },
+  {
+    sourceIndex: 2,
+    name: "Estimate",
+    kind: "numbers",
+    options: [],
+    role: "data",
+  },
+];
+
+describe("splitRows2", () => {
+  it("splits items/subitems by explicit name and group indices", () => {
+    const s = splitRows2(table.rows, 1, 0);
+    expect(s.groups).toEqual(["Build", "QA"]);
+    expect(s.items.map((i) => i.name)).toEqual(["Task A", "Task B"]);
+    expect(s.subitems).toEqual([
+      { parentIndex: 0, name: "Sub A1", row: table.rows[1] },
+    ]);
+  });
+  it("defaults to one 'Imported' group when groupIndex is null", () => {
+    expect(splitRows2(table.rows, 1, null).groups).toEqual(["Imported"]);
+  });
+});
+
+describe("buildImportPayloadV2", () => {
+  it("builds only included data columns, renamed, with typed cells", () => {
+    const { templatePayload, subitems } = buildImportPayloadV2(table, specs);
+    expect(templatePayload.columns).toHaveLength(1);
+    expect(templatePayload.columns[0].name).toBe("Estimate");
+    expect(templatePayload.items[0].cells).toEqual([
+      { columnId: templatePayload.columns[0].id, value: { n: 5 } },
+    ]);
+    expect(templatePayload.items[1].cells).toEqual([]); // empty raw → no cell row
+    expect(subitems[0].cells).toEqual([
+      { columnId: templatePayload.columns[0].id, value: { n: 2 } },
+    ]);
+  });
+  it("throws without a name role", () => {
+    expect(() => buildImportPayloadV2(table, specs.slice(2))).toThrow(
+      "no name column",
+    );
   });
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   IMPORTABLE_KINDS,
+  MAX_COLS,
   type ImportableKind,
 } from "@/lib/boards/spreadsheet/types";
 
@@ -23,11 +24,42 @@ const synthOption = z.object({
   color: z.string(),
 });
 
-const columnMapping = z.object({
-  header: z.string(),
+const columnRole = z.enum(["name", "group", "data"]);
+
+const columnTarget = z.union([
+  z.object({ columnId: uuid }),
+  z.literal("create"),
+  z.literal("skip"),
+]);
+
+const columnSpec = z.object({
+  sourceIndex: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_COLS - 1),
+  name: z.string().trim().min(1).max(100),
   kind: importableKind,
-  options: z.array(synthOption),
+  options: z.array(synthOption).max(200),
+  role: columnRole,
+  target: columnTarget.optional(),
 });
+
+const importDestination = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("new"),
+    workspaceId: uuid,
+    boardName,
+  }),
+  z.object({
+    type: z.literal("existing"),
+    boardId: uuid,
+    group: z.union([
+      z.object({ groupId: uuid }),
+      z.object({ newGroupName: z.string().trim().min(1).max(100) }),
+    ]),
+  }),
+]);
 
 export const exportBoardSchema = z.object({
   boardId: uuid,
@@ -39,13 +71,67 @@ export const previewImportSchema = z.object({
   fileName,
 });
 
-export const commitImportSchema = z.object({
-  fileBase64,
-  fileName,
-  workspaceId: uuid,
-  boardName,
-  columnMappings: z.array(columnMapping).min(1),
-});
+export const commitImportSchema = z
+  .object({
+    fileBase64,
+    fileName,
+    sheetName: z.string().min(1),
+    headerRow: z.number().int().min(0).nullable(),
+    excludedRows: z.array(z.number().int().min(0)),
+    columns: z.array(columnSpec).min(1),
+    destination: importDestination,
+  })
+  .superRefine((data, ctx) => {
+    const nameCount = data.columns.filter((c) => c.role === "name").length;
+    if (nameCount !== 1) {
+      ctx.addIssue({
+        code: "custom",
+        message: 'Exactly one column must have role "name".',
+        path: ["columns"],
+      });
+    }
+
+    const groupCount = data.columns.filter((c) => c.role === "group").length;
+    if (data.destination.type === "existing") {
+      if (groupCount > 0) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            'Column role "group" is not supported when importing into an existing board; rows are appended into a single chosen group.',
+          path: ["columns"],
+        });
+      }
+    } else if (groupCount > 1) {
+      ctx.addIssue({
+        code: "custom",
+        message: 'At most one column can have role "group".',
+        path: ["columns"],
+      });
+    }
+
+    if (data.destination.type === "existing") {
+      const missingTarget = data.columns.some(
+        (c) => c.role === "data" && c.target === undefined,
+      );
+      if (missingTarget) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            'Every data column must have an explicit target (an existing column, "create", or "skip") when importing into an existing board.',
+          path: ["columns"],
+        });
+      }
+    }
+
+    const sourceIndexes = data.columns.map((c) => c.sourceIndex);
+    if (new Set(sourceIndexes).size !== sourceIndexes.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Column sourceIndexes must be distinct.",
+        path: ["columns"],
+      });
+    }
+  });
 
 export type ExportBoardInput = z.infer<typeof exportBoardSchema>;
 export type PreviewImportInput = z.infer<typeof previewImportSchema>;

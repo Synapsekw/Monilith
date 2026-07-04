@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { detectColumns, splitRows } from "./detect";
+import {
+  detectColumns,
+  splitRows,
+  detectAllColumns,
+  proposeRoles,
+} from "./detect";
 import { SUBTASK_MARKER } from "./types";
 
 const header = ["Group", "Name", "Status", "Count"];
@@ -180,5 +185,59 @@ describe("splitRows edge cases", () => {
     expect(s.items[0].group).toBe("Imported");
     expect(s.subitems[0].name).toBe("Y");
     expect(s.subitems[0].parentIndex).toBe(0);
+  });
+});
+
+describe("detectAllColumns", () => {
+  const header = ["Group", "Name", "Progress", "Price", "Mail", "Site", "Tags"];
+  const rows = [
+    ["G1", "A", "10%", "$5.00", "a@x.com", "https://x.com", "red, blue"],
+    ["G1", "B", "85%", "$12.50", "b@y.org", "http://y.org", "blue"],
+    ["G2", "C", "100%", "$3.99", "c@z.io", "https://z.io", "red, green"],
+  ];
+  const cols = detectAllColumns(header, rows);
+  it("detects every column including structural ones", () => {
+    expect(cols).toHaveLength(7);
+    expect(cols.map((c) => c.header)).toEqual(header);
+  });
+  it("infers percent, currency, email, link, dropdown", () => {
+    expect(cols[2].kind).toBe("percent");
+    expect(cols[3].kind).toBe("currency");
+    expect(cols[4].kind).toBe("email");
+    expect(cols[5].kind).toBe("link");
+    expect(cols[6].kind).toBe("dropdown");
+  });
+  it("synthesizes dropdown options from comma-split parts", () => {
+    expect(cols[6].options.map((o) => o.label).sort()).toEqual([
+      "blue",
+      "green",
+      "red",
+    ]);
+  });
+  it("does not call prose with commas a dropdown", () => {
+    const prose = [
+      ["Long sentence, with a clause"],
+      ["Another sentence, quite different"],
+    ];
+    expect(detectAllColumns(["Notes"], prose)[0].kind).toBe("text");
+  });
+});
+
+describe("proposeRoles", () => {
+  it("finds Group and Name headers case-insensitively", () => {
+    expect(proposeRoles(["group", "NAME", "X"])).toEqual({
+      nameIndex: 1,
+      groupIndex: 0,
+    });
+  });
+  it("falls back to first non-group column as name", () => {
+    expect(proposeRoles(["Group", "Title", "X"])).toEqual({
+      nameIndex: 1,
+      groupIndex: 0,
+    });
+    expect(proposeRoles(["Title", "X"])).toEqual({
+      nameIndex: 0,
+      groupIndex: null,
+    });
   });
 });

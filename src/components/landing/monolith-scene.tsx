@@ -1,10 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { motion, useReducedMotion } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import { nunito } from "@/lib/fonts";
-import { LightRays } from "./light-rays";
 import styles from "./monolith-hero.module.css";
+
+// The WebGL backdrop pulls in the `ogl` renderer chunk. It's a decorative,
+// aria-hidden layer, so we defer it off the landing critical path via
+// `next/dynamic({ ssr: false })`: the hero text/CTA paint immediately and the
+// WebGL chunk streams in afterward (no `loading` fallback needed).
+const LightRays = dynamic(
+  () => import("./light-rays").then((m) => m.LightRays),
+  { ssr: false },
+);
 
 // framer-motion v12 does not export `Variants` directly; define it locally.
 type Variants = MotionProps["variants"];

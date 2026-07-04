@@ -1,5 +1,16 @@
 import path from "node:path";
+import bundleAnalyzer from "@next/bundle-analyzer";
 import type { NextConfig } from "next";
+
+// Opt-in bundle report (dev tool). Fully inert in normal builds — with
+// ANALYZE unset the wrapper returns the config untouched. NOTE: this is the
+// webpack analyzer, which our default Turbopack `next build` does NOT run: under
+// Turbopack `ANALYZE=true pnpm build` only warns and emits no report. To use it,
+// build with `--webpack`; the Turbopack-native alternative is
+// `next experimental-analyze`. See package-bundling.md.
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === "true",
+});
 
 const nextConfig: NextConfig = {
   // Cache Components / PPR by default (Next 16): the static app shell (sidebar +
@@ -22,6 +33,34 @@ const nextConfig: NextConfig = {
     // cacheLife.md, Prerendering behavior).
     widget: { stale: 30, revalidate: 30, expire: 300 },
   },
+  images: {
+    // Supabase Storage public avatar host (project-ref is a subdomain that
+    // differs dev↔prod → wildcard). Avatars currently render `unoptimized`
+    // so this allowlist is not load-bearing yet; it makes a future switch to
+    // optimized avatars one flag away.
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
+  experimental: {
+    // The import wizard advertises a 5MB file cap, and files travel to the
+    // preview/commit Server Actions as base64 (~1.37x inflation, ~6.9MB) inside
+    // a JSON body. Next's default Server Action body limit is 1MB, which would
+    // kill any real upload in transport before our friendly size guard ever
+    // runs — 8mb gives the 5MB cap headroom. See serverActions.md#bodysizelimit.
+    serverActions: {
+      bodySizeLimit: "8mb",
+    },
+    // Barrel-optimize the `radix-ui` single-package dep so a shadcn primitive
+    // that pulls one named export doesn't drag the whole barrel into the chunk.
+    // Only list packages NOT already optimized by default — `lucide-react` /
+    // `recharts` are default-optimized (see optimizePackageImports.md).
+    optimizePackageImports: ["radix-ui"],
+  },
   // Move the on-screen dev indicator (the Next.js logo button) to the bottom
   // right; it defaults to bottom-left. See devIndicators.md.
   devIndicators: {
@@ -35,4 +74,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

@@ -117,6 +117,40 @@ export function WidgetDataProvider({
 }
 
 /**
+ * Feed a single widget's already-resolved slot into WidgetDataContext — used by
+ * the config-sheet live preview, which fetches one draft widget outside the
+ * dashboard grid. `slot === undefined` while loading; a resolved `{ ok:false }`
+ * slot surfaces as that widget's error, exactly like the batched path.
+ */
+export function SingleWidgetDataProvider({
+  widgetId,
+  slot,
+  isLoading,
+  isError,
+  children,
+}: {
+  widgetId: string;
+  slot: WidgetDataResult | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  children: ReactNode;
+}) {
+  const value = useMemo<WidgetDataContextValue>(
+    () => ({
+      isLoading,
+      isError,
+      results: slot ? { [widgetId]: slot } : undefined,
+    }),
+    [widgetId, slot, isLoading, isError],
+  );
+  return (
+    <WidgetDataContext.Provider value={value}>
+      {children}
+    </WidgetDataContext.Provider>
+  );
+}
+
+/**
  * Read one widget's slice of the dashboard's batched aggregate fetch. Keeps the
  * per-widget `{ data, isLoading, isError }` shape the widget bodies already use,
  * so a failed aggregation for one widget surfaces as that widget's error only.

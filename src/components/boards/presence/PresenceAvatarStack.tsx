@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   Tooltip,
   TooltipContent,
@@ -77,10 +78,12 @@ function AvatarChip({ occupant }: { occupant: RosterOccupant }) {
       style={{ boxShadow: `inset 0 0 0 1.5px ${occupant.color}` }}
     >
       {occupant.avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- user avatars from arbitrary hosts; matches existing convention (FilesCell, AttachmentCard)
-        <img
+        <Image
           src={occupant.avatarUrl}
           alt=""
+          width={28}
+          height={28}
+          unoptimized
           className="size-full object-cover"
         />
       ) : (

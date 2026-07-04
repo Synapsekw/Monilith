@@ -1,6 +1,19 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CreatedAtCell, CreatedByCell, formatDateTime } from "./created";
+
+vi.mock("next/image", () => ({
+  default: (props: Record<string, unknown>) => {
+    const { src, alt, width, height } = props as {
+      src: string;
+      alt: string;
+      width: number;
+      height: number;
+    };
+    // eslint-disable-next-line @next/next/no-img-element -- jsdom passthrough stub for next/image
+    return <img src={src} alt={alt} width={width} height={height} />;
+  },
+}));
 
 describe("formatDateTime", () => {
   it("returns '' for null or invalid input", () => {
@@ -27,10 +40,10 @@ describe("CreatedByCell", () => {
     const { container } = render(
       <CreatedByCell name="Danijel Jovanovic" avatarUrl="https://x/y.png" />,
     );
-    expect(container.querySelector("img")).toHaveAttribute(
-      "src",
-      "https://x/y.png",
-    );
+    const img = container.querySelector("img");
+    expect(img).toHaveAttribute("src", "https://x/y.png");
+    expect(img?.getAttribute("width")).toBeTruthy();
+    expect(img?.getAttribute("height")).toBeTruthy();
   });
 });
 
