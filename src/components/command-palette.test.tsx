@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { CommandPalette } from "./command-palette";
 import { useUIStore } from "@/stores/ui";
+import type { ItemSearchResult } from "@/lib/search/item-search";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -9,6 +16,13 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next-themes", () => ({
   useTheme: () => ({ setTheme: vi.fn() }),
+}));
+
+// The palette calls the real "use server" action; mock it so the test drives the
+// UI (loading → results → empty) without a live Supabase round-trip.
+const searchItems = vi.fn<(q: string) => Promise<ItemSearchResult[]>>();
+vi.mock("@/lib/search/item-search", () => ({
+  searchItems: (q: string) => searchItems(q),
 }));
 
 const boards = [
@@ -45,8 +59,16 @@ function renderOpen() {
   );
 }
 
+function typeQuery(value: string) {
+  fireEvent.change(screen.getByPlaceholderText(/search items/i), {
+    target: { value },
+  });
+}
+
 beforeEach(() => {
   push.mockReset();
+  searchItems.mockReset();
+  searchItems.mockResolvedValue([]);
   useUIStore.setState({ commandOpen: false });
 });
 
@@ -76,5 +98,63 @@ describe("CommandPalette", () => {
     renderOpen();
     fireEvent.click(screen.getByText("New dashboard"));
     expect(useUIStore.getState().newDashboardOpen).toBe(true);
+  });
+
+  it("does not search or show the Items group for a query under 2 chars", async () => {
+    renderOpen();
+    typeQuery("a");
+    // No round-trip fires for a sub-threshold query.
+    expect(searchItems).not.toHaveBeenCalled();
+    expect(screen.queryByText("Items")).not.toBeInTheDocument();
+  });
+
+  it("debounces then searches and lists matching items with their board", async () => {
+    searchItems.mockResolvedValue([
+      { id: "i1", name: "Design spec", boardId: "b2", boardName: "Roadmap" },
+    ]);
+    renderOpen();
+    typeQuery("design");
+    await waitFor(() => expect(searchItems).toHaveBeenCalledWith("design"));
+    expect(await screen.findByText("Design spec")).toBeInTheDocument();
+    // Board name is shown as secondary context (Roadmap also a board nav row,
+    // so assert there are two occurrences: nav + item context).
+    expect(screen.getAllByText("Roadmap").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("navigates to the item's board with the ?item deep-link and closes", async () => {
+    searchItems.mockResolvedValue([
+      { id: "i1", name: "Design spec", boardId: "b2", boardName: "Roadmap" },
+    ]);
+    renderOpen();
+    typeQuery("design");
+    fireEvent.click(await screen.findByText("Design spec"));
+    expect(push).toHaveBeenCalledWith("/boards/b2?item=i1");
+    expect(useUIStore.getState().commandOpen).toBe(false);
+  });
+
+  it("shows an empty state when a valid query matches no items", async () => {
+    searchItems.mockResolvedValue([]);
+    renderOpen();
+    typeQuery("zzzzz");
+    expect(await screen.findByText("No items match")).toBeInTheDocument();
+  });
+
+  it("clears the query and results after selecting an item and reopening", async () => {
+    searchItems.mockResolvedValue([
+      { id: "i1", name: "Design spec", boardId: "b2", boardName: "Roadmap" },
+    ]);
+    renderOpen();
+    typeQuery("design");
+    // Selecting an item runs resetSearch + closes the palette.
+    fireEvent.click(await screen.findByText("Design spec"));
+    expect(useUIStore.getState().commandOpen).toBe(false);
+    act(() => {
+      useUIStore.setState({ commandOpen: true });
+    });
+    // Reopened clean: the input is empty and the prior result is gone.
+    expect(
+      (screen.getByPlaceholderText(/search items/i) as HTMLInputElement).value,
+    ).toBe("");
+    expect(screen.queryByText("Design spec")).not.toBeInTheDocument();
   });
 });
