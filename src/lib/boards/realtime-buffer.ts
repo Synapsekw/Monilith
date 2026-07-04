@@ -34,6 +34,24 @@ export type BoardRealtimeEvent =
 
 export type BoardFlash = { targetId: string; valueChanged: boolean };
 
+/**
+ * True when `row` is an older write than the `existing` cached cell, so folding
+ * it would resurrect a stale value over a newer optimistic/realtime one. Only
+ * fires when BOTH rows carry a parseable `updated_at` — a missing/garbage
+ * timestamp is treated as "not stale" (apply it) so we never silently drop a
+ * legitimate change (the board payload always includes updated_at).
+ */
+function isStaleEcho(
+  existing: CacheCellValue | undefined,
+  row: CacheCellValue,
+): boolean {
+  if (!existing?.updated_at || !row.updated_at) return false;
+  const incoming = Date.parse(row.updated_at);
+  const cached = Date.parse(existing.updated_at);
+  if (Number.isNaN(incoming) || Number.isNaN(cached)) return false;
+  return incoming < cached;
+}
+
 function applyCell(
   prev: BoardCache,
   p: RealtimePostgresChangesPayload<CacheCellValue>,
@@ -57,6 +75,10 @@ function applyCell(
   ) {
     return prev;
   }
+  // Stale-echo guard: an out-of-order own-write echo can arrive AFTER a newer
+  // optimistic value already sits in the cache. Skip it so the newer value
+  // isn't transiently clobbered (the next fresh echo/refetch reconciles).
+  if (isStaleEcho(existing, row)) return prev;
   flashes.push({
     targetId: `cell:${row.item_id}:${row.column_id}`,
     valueChanged: true,
