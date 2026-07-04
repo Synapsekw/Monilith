@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CalendarBoard } from "@/components/boards/CalendarBoard";
@@ -355,6 +356,13 @@ function presenceValue(
 }
 
 function renderCalendarWithPresence(presence: BoardPresenceContextValue) {
+  // PresenceRing/usePresenceFocus read the presence focus store now — seed it.
+  usePresenceFocusStore.getState().syncPresence({
+    focusMap: presence.focusMap,
+    flashTargetId: presence.flashTargetId,
+    selfUserId: presence.selfUserId,
+    setFocus: presence.setFocus,
+  });
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>
@@ -370,6 +378,7 @@ function renderCalendarWithPresence(presence: BoardPresenceContextValue) {
 }
 
 describe("CalendarBoard event presence ring (8c)", () => {
+  afterEach(() => usePresenceFocusStore.getState().reset());
   it("shows an editing indicator on an event another user is manipulating", () => {
     // payloadFixture dates item i1 → target event:i1
     const focusMap = new Map([["event:i1", [occupant({ name: "Sam" })]]]);

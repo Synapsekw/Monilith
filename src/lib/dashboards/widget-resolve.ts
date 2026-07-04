@@ -168,23 +168,14 @@ export async function resolveSeries(
   if (!boardId || (cfg.primary.kind !== "date" && !cfg.primary.columnId))
     return { ok: true, data: empty };
 
-  // `dashboard_series` is not yet in database.types.ts — Task 1.5 regenerates it.
-  // Until then we use an `any` cast (justified: the type will be added in T1.5).
-  type SeriesRow = {
-    primary_key: string | null;
-    series_key: string | null;
-    value: number;
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rpcResult = (await (supabase as any).rpc("dashboard_series", {
+  const { data: raw, error } = await supabase.rpc("dashboard_series", {
     p_board_id: boardId,
     p_primary: cfg.primary as Json,
     p_series: (cfg.series ?? null) as Json,
     p_measure: cfg.measure as Json,
     p_limit: 12,
-  })) as { data: SeriesRow[] | null; error: { message: string } | null };
-  if (rpcResult.error) return { ok: false, error: rpcResult.error.message };
-  const raw = rpcResult.data;
+  });
+  if (error) return { ok: false, error: error.message };
 
   // Resolve a key -> {label,color} map for a dimension.
   // NOTE: org_members → profiles has no declared FK in database.types.ts (user_id
@@ -236,8 +227,11 @@ export async function resolveSeries(
   const seriesMap = cfg.series ? await resolver(cfg.series) : new Map();
 
   const points: SeriesPoint[] = (raw ?? []).map((r, i) => {
-    const pk = r.primary_key;
-    const sk = r.series_key;
+    // The generated RPC return types the keys as non-null `string`, but the SQL
+    // function can emit NULL group keys — widen to `string | null` so the
+    // null-handling below (None / Other buckets) typechecks and stays correct.
+    const pk: string | null = r.primary_key;
+    const sk: string | null = r.series_key;
     const primaryLabel =
       pk === null
         ? "None"

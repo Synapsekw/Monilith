@@ -16,17 +16,19 @@ export default async function AdminOrgPage({
   const { id: orgId } = await params;
   const supabase = await createClient();
 
-  const { data: members } = await supabase.rpc("get_org_members", {
-    p_org_id: orgId,
-  });
+  // These two reads are independent (audit doesn't depend on members) — fetch
+  // them concurrently instead of in a waterfall. The not-found guard still runs
+  // after both resolve, so behavior is unchanged.
+  const [{ data: members }, { data: audit }] = await Promise.all([
+    supabase.rpc("get_org_members", { p_org_id: orgId }),
+    supabase
+      .from("admin_audit_log")
+      .select("id, action, target_email, created_at")
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
   if (!members) notFound();
-
-  const { data: audit } = await supabase
-    .from("admin_audit_log")
-    .select("id, action, target_email, created_at")
-    .eq("org_id", orgId)
-    .order("created_at", { ascending: false })
-    .limit(50);
 
   return (
     <div className="space-y-8">

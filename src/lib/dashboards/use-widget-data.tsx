@@ -6,6 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getWidgetsData } from "@/lib/dashboards/actions";
 import type { WidgetDataResult } from "@/lib/dashboards/actions";
 import type { CacheWidget } from "@/lib/dashboards/cache";
+import type { SeriesData } from "@/lib/dashboards/series";
+import type { WidgetRowsData } from "@/lib/dashboards/widget-resolve";
 import {
   configHash,
   type AggregateBucket,
@@ -35,22 +37,27 @@ type WidgetDataContextValue = {
 
 const WidgetDataContext = createContext<WidgetDataContextValue | null>(null);
 
-/** Widget kinds whose bodies read aggregate data via {@link useWidgetData}.
- *  Chart + list widgets use their own actions (series / rows) and are excluded
- *  from the aggregate batch. */
-function usesAggregateData(kind: CacheWidget["kind"]): boolean {
+/** Widget kinds whose bodies read their data from the batched fetch. This is now
+ *  every kind: aggregate (number/battery/completion/health) via {@link
+ *  useWidgetData}, chart via {@link useBatchedWidgetSeries}, and list via {@link
+ *  useBatchedWidgetRows}. Kept as an explicit allowlist so a not-yet-handled
+ *  future kind is excluded from the batch rather than silently mis-resolved. */
+function usesBatchedData(kind: CacheWidget["kind"]): boolean {
   return (
     kind === "number" ||
     kind === "battery" ||
     kind === "completion" ||
-    kind === "health"
+    kind === "health" ||
+    kind === "chart" ||
+    kind === "list"
   );
 }
 
 /**
- * Fetch aggregate data for *all* of a dashboard's aggregate widgets in one
- * server round-trip, and distribute the results to each widget via context.
- * Replaces the old per-widget `getWidgetData` fetches, which Next serialized
+ * Fetch data for *all* of a dashboard's widgets — aggregate, chart (series) and
+ * list (rows) alike — in one server round-trip, and distribute the results to
+ * each widget via context. Replaces the old per-widget fetches (aggregate +
+ * one `getWidgetSeries`/`getWidgetRows` per chart/list), which Next serialized
  * into a one-by-one populate. Keyed by dashboard id + a stable per-widget
  * id+config hash, so a widget-config edit refetches (read-your-own-writes) but
  * layout drags — which don't change ids/config — never do.
@@ -64,14 +71,14 @@ export function WidgetDataProvider({
   widgets: CacheWidget[];
   children: ReactNode;
 }) {
-  const aggWidgets = useMemo(
-    () => widgets.filter((w) => usesAggregateData(w.kind)),
+  const batchWidgets = useMemo(
+    () => widgets.filter((w) => usesBatchedData(w.kind)),
     [widgets],
   );
 
   const widgetIds = useMemo(
-    () => aggWidgets.map((w) => w.id).sort(),
-    [aggWidgets],
+    () => batchWidgets.map((w) => w.id).sort(),
+    [batchWidgets],
   );
 
   // Stable, order-independent cache-key fragment: any widget's config change
@@ -79,14 +86,14 @@ export function WidgetDataProvider({
   // leaves it untouched.
   const widgetsKey = useMemo(
     () =>
-      aggWidgets
+      batchWidgets
         .map(
           (w) =>
             `${w.id}:${configHash((w.config ?? {}) as Record<string, unknown>)}`,
         )
         .sort()
         .join("|"),
-    [aggWidgets],
+    [batchWidgets],
   );
 
   const query = useQuery({
@@ -174,11 +181,15 @@ export function useWidgetData(widgetId: string): {
   // A resolved batch with no slot for this id (row not visible under RLS, or a
   // stale/unknown id) is an error for this widget — not a silent blank.
   const missing = ctx.results !== undefined && entry === undefined;
+  // `"buckets" in entry` narrows to the aggregate slot (chart/list slots carry a
+  // `shape` tag and no buckets), so an aggregate widget only ever reads its own
+  // family's payload.
+  const isAggregate = entry?.ok === true && "buckets" in entry;
   return {
     isLoading: ctx.isLoading,
     // The widget errors if the whole batch failed, its slot did, or its slot is absent.
     isError: ctx.isError || missing || entry?.ok === false,
-    data: entry?.ok
+    data: isAggregate
       ? {
           buckets: entry.buckets,
           columnMeta: entry.columnMeta,
@@ -186,5 +197,59 @@ export function useWidgetData(widgetId: string): {
           health: entry.health ?? null,
         }
       : undefined,
+  };
+}
+
+/**
+ * Read one chart widget's series from the dashboard's batched fetch, in the same
+ * `{ data, isLoading, isError }` shape the ChartWidget body already consumes. A
+ * failed resolve (or a missing slot) surfaces as that widget's error only.
+ * Without a {@link WidgetDataProvider} (e.g. a stray render outside the grid),
+ * degrades to a stable non-loading error instead of throwing — the live-preview
+ * path never reaches here (it short-circuits on `preview.active`).
+ */
+export function useBatchedWidgetSeries(widgetId: string): {
+  data: SeriesData | undefined;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const ctx = useContext(WidgetDataContext);
+  if (!ctx) return { data: undefined, isLoading: false, isError: true };
+
+  const entry = ctx.results?.[widgetId];
+  const missing = ctx.results !== undefined && entry === undefined;
+  const data =
+    entry?.ok === true && "shape" in entry && entry.shape === "series"
+      ? entry.series
+      : undefined;
+  return {
+    isLoading: ctx.isLoading,
+    isError: ctx.isError || missing || entry?.ok === false,
+    data,
+  };
+}
+
+/**
+ * Read one list widget's rows from the dashboard's batched fetch — the rows
+ * analogue of {@link useBatchedWidgetSeries}.
+ */
+export function useBatchedWidgetRows(widgetId: string): {
+  data: WidgetRowsData | undefined;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const ctx = useContext(WidgetDataContext);
+  if (!ctx) return { data: undefined, isLoading: false, isError: true };
+
+  const entry = ctx.results?.[widgetId];
+  const missing = ctx.results !== undefined && entry === undefined;
+  const data =
+    entry?.ok === true && "shape" in entry && entry.shape === "rows"
+      ? entry.rows
+      : undefined;
+  return {
+    isLoading: ctx.isLoading,
+    isError: ctx.isError || missing || entry?.ok === false,
+    data,
   };
 }

@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import {
   createBoardViewSchema,
@@ -40,7 +39,6 @@ export async function createBoardView(input: {
   });
   if (error || !data) return fail(error?.message ?? "Could not create view.");
 
-  revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: { viewId: data.id } };
 }
 
@@ -84,7 +82,6 @@ export async function updateBoardView(input: {
     .eq("id", parsed.data.viewId);
   if (error) return fail(error.message);
 
-  revalidatePath(`/boards/${view.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -97,13 +94,6 @@ export async function deleteBoardView(input: {
 
   const supabase = await createClient();
 
-  // Fetch board_id for a targeted revalidate (read-only).
-  const { data: view } = await supabase
-    .from("board_views")
-    .select("board_id")
-    .eq("id", parsed.data.viewId)
-    .maybeSingle();
-
   // The "board keeps >=1 view" invariant is enforced transactionally in the
   // delete_board_view RPC (locks the board's view rows so concurrent deletes
   // serialize). It raises 'a board must keep at least one view' when violated.
@@ -112,6 +102,7 @@ export async function deleteBoardView(input: {
   });
   if (error) return fail(error.message);
 
-  if (view) revalidatePath(`/boards/${view.board_id}`);
+  // No revalidation: the board client hydrates once and never refetches the RSC;
+  // ViewSwitcher drives its own router.refresh()/push() after this resolves.
   return { ok: true, data: undefined };
 }

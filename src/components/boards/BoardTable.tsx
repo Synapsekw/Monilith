@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -270,7 +271,19 @@ type ColumnHeaderControls = {
   onEditCurrency: (col: Column) => void;
 };
 
-export function BoardTable({
+// Public component: a memo wrapper over the implementation below (function
+// declaration is hoisted, so referencing it here is safe).
+export const BoardTable = memo(BoardTableInner);
+
+// Memoized: BoardViews re-renders on every remote presence heartbeat (~6×/sec
+// per active user), but BoardTable's props (payload/members/view/access/grants)
+// are stable across those beats and it reads all live board data from its own
+// `useBoardCache` (TanStack) subscription — so it re-renders on real cache
+// changes (edits, realtime) regardless of memo, while skipping the heartbeat
+// re-render cascade that previously re-rendered every visible row/cell. Presence
+// overlays now subscribe to the presence focus store directly (see
+// presence-focus-store.ts), so they still update per-cell without this re-render.
+function BoardTableInner({
   payload,
   members = [],
   selectedViewId,
