@@ -82,6 +82,31 @@ describe("detectColumns edge cases", () => {
     expect(cols[0].kind).toBe("date");
   });
 
+  it("detects unambiguous DD/MM/YYYY slash dates as date", () => {
+    // Day-of-month > 12 pins the order — these were previously dropped by the
+    // Date.parse check that reads slashes month-first.
+    const h = ["Name", "Due"];
+    const r = [
+      ["A", "25/12/2024"],
+      ["B", "13/06/2024"],
+    ];
+    const cols = detectColumns(h, r);
+    expect(cols[0].kind).toBe("date");
+  });
+
+  it("does NOT auto-map an ambiguous dd/mm-vs-mm/dd column to date", () => {
+    // Every value has both components ≤ 12, so the order is unknowable —
+    // stay as text rather than silently importing month-first dates.
+    const h = ["Name", "Due"];
+    const r = [
+      ["A", "03/04/2024"],
+      ["B", "05/06/2024"],
+    ];
+    const cols = detectColumns(h, r);
+    expect(cols[0].kind).not.toBe("date");
+    expect(cols[0].kind).toBe("text");
+  });
+
   it("does NOT classify a single-distinct-value column as status", () => {
     // Every row is the same value → a constant, not a status.
     const h = ["Name", "Stage"];

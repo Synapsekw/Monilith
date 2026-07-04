@@ -776,6 +776,84 @@ describe("commitImport", () => {
     expect(boardsChain.eq).toHaveBeenCalledWith("id", "b1");
   });
 
+  it("commitImport blocks a row with a blank item name before hitting the RPC", async () => {
+    // The second data row has a Group but a blank Name — it survives the
+    // all-blank drop and would reach the items CHECK as name:"".
+    const buf = await xlsxBuf([
+      ["Group", "Name"],
+      ["Backlog", "Task 1"],
+      ["Backlog", ""],
+    ]);
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Group",
+          kind: "text",
+          options: [],
+          role: "group",
+        },
+        {
+          sourceIndex: 1,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+      ],
+      destination: {
+        type: "new",
+        workspaceId: BOARD_UUID,
+        boardName: "Board",
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/blank item name/i);
+    expect(result.error).toContain("row 3");
+    // Never dispatched — the whole batch is blocked, not rolled back.
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("commitImport blocks an item name longer than 255 characters", async () => {
+    const longName = "A".repeat(256);
+    const buf = await xlsxBuf([["Name"], [longName]]);
+
+    const result = await commitImport({
+      fileBase64: buf.toString("base64"),
+      fileName: "import.xlsx",
+      sheetName: "Sheet1",
+      headerRow: 0,
+      excludedRows: [],
+      columns: [
+        {
+          sourceIndex: 0,
+          name: "Name",
+          kind: "text",
+          options: [],
+          role: "name",
+        },
+      ],
+      destination: {
+        type: "new",
+        workspaceId: BOARD_UUID,
+        boardName: "Board",
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/longer than 255 characters/i);
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
   it("commitImport enforces MAX_ROWS on the selected table", async () => {
     const rows: string[][] = [["Name"]];
     for (let i = 0; i < 2001; i++) rows.push([`Task ${i}`]);
