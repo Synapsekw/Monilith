@@ -1,0 +1,28 @@
+-- Security hardening (finding #2): drop the direct org_members INSERT RLS policy.
+--
+-- 20260614174043_init_auth_tenancy.sql:229-231 created
+--   "org_members: insert if owner/admin"
+--     for insert with check (has_org_role(org_id, {owner,admin}))
+-- and it was never dropped. It lets any org owner/admin insert an ARBITRARY
+-- auth user into the org at ANY role (including 'owner') straight off the REST
+-- API, bypassing set_member_role's owner-supreme + last-owner protections and
+-- its audit-log write. (The console migration 20260619200000 dropped the
+-- UPDATE and DELETE policies and re-added a "delete self only" DELETE policy,
+-- but left this INSERT policy in place.)
+--
+-- Verification that NO legitimate path relies on this RLS insert policy — every
+-- membership-creation path is SECURITY DEFINER (bypasses RLS, does its own
+-- authorization) and therefore does not need it:
+--   * public.provision_account            (20260619184702) — definer, seeds owner
+--   * public.accept_invitation            (20260620110000) — definer, self-insert of the invited role
+--   * public.redeem_invitations           (20260619200000) — definer, self-insert from pending invites
+--   * public.platform_set_org_role        (20260619200000 / 20260619200001) — definer, platform-admin gated
+--   * public.create_organization          (20260614174043) — definer, seeds first owner
+-- App code never inserts into org_members through an authenticated/anon client:
+-- the only `from("org_members").insert(...)` call sites in src/ are integration
+-- tests using the SERVICE-ROLE `admin` client (bypasses RLS entirely). So no
+-- authenticated-role INSERT path exists that this policy is protecting — it is
+-- pure attack surface. Drop it; membership creation now flows exclusively
+-- through the guarded definer RPCs.
+
+drop policy if exists "org_members: insert if owner/admin" on public.org_members;
