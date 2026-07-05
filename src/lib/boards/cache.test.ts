@@ -600,6 +600,14 @@ describe("moveItemToGroup position", () => {
       items: [
         ...baseCache().items,
         {
+          id: "s1",
+          board_id: "b1",
+          group_id: "g1",
+          name: "Sub",
+          position: 0,
+          parent_id: "i1",
+        } as never,
+        {
           id: "i3",
           board_id: "b1",
           group_id: "g2",
@@ -616,6 +624,8 @@ describe("moveItemToGroup position", () => {
     const moved = next.items.find((i) => i.id === "i1")!;
     expect(moved.group_id).toBe("g2");
     expect(moved.position).toBe(4.5);
+    // subitems are dragged into the new group along with their parent
+    expect(next.items.find((i) => i.id === "s1")!.group_id).toBe("g2");
   });
 
   it("appends (maxPos + 1) when position omitted", () => {
@@ -623,5 +633,7 @@ describe("moveItemToGroup position", () => {
     const next = moveItemToGroup(cacheWithG2(), "i1", "g2");
     const moved = next.items.find((i) => i.id === "i1")!;
     expect(moved.position).toBe(3);
+    // subitems are dragged into the new group along with their parent
+    expect(next.items.find((i) => i.id === "s1")!.group_id).toBe("g2");
   });
 });
