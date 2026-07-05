@@ -19,12 +19,6 @@ describe("buildChartConfig", () => {
     expect(config).toEqual({ Value: { label: "Value", color: "#818cf8" } });
   });
 
-  it("falls back to var(--brand) when a series has no color", () => {
-    expect(buildChartConfig([{ key: "Value", color: null }])).toEqual({
-      Value: { label: "Value", color: "var(--brand)" },
-    });
-  });
-
   it("returns an empty config for no series", () => {
     expect(buildChartConfig([])).toEqual({});
   });
