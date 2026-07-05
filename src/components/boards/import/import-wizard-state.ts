@@ -3,7 +3,6 @@ import {
   detectAllColumns,
   proposeRoles,
 } from "@/lib/boards/spreadsheet/detect";
-import { splitRows2 } from "@/lib/boards/spreadsheet/build-import-payload";
 import { textToCell } from "@/lib/boards/spreadsheet/cell-codec";
 import {
   autoMatchColumns,
@@ -17,12 +16,14 @@ import {
   type ColumnTarget,
   type ImportableKind,
   type SynthOption,
+  type ImportGroup,
+  type RowStructureEntry,
 } from "@/lib/boards/spreadsheet/types";
 
 /**
  * Pure client-state layer for the 3-step import wizard. No React, no server
  * imports — this module is a straight composition of the spreadsheet libs
- * (`selectRows`, `detectAllColumns`/`proposeRoles`, `splitRows2`,
+ * (`selectRows`, `detectAllColumns`/`proposeRoles`,
  * `textToCell`) into the shape the wizard's step components consume.
  */
 
@@ -43,6 +44,10 @@ export type SheetState = {
   headerRow: number | null;
   excluded: number[];
   columns: ColumnState[];
+  /** Target groups for the Structure step (ordered). Empty until seeded. */
+  groups: ImportGroup[];
+  /** Per-row structure keyed by grid row index. Empty until seeded. */
+  structure: Record<number, { groupKey: string; type: "item" | "subitem" }>;
 };
 
 /**
@@ -118,7 +123,7 @@ export function deriveSheetState(
     };
   });
 
-  return { headerRow, excluded: [], columns };
+  return { headerRow, excluded: [], columns, groups: [], structure: {} };
 }
 
 /**
@@ -138,7 +143,13 @@ export function deriveSheetStateSafe(
     return deriveSheetState(grid, headerRow, boardColumns);
   } catch (err) {
     if (err instanceof Error && err.message === "empty") {
-      return { headerRow: null, excluded: [], columns: [] };
+      return {
+        headerRow: null,
+        excluded: [],
+        columns: [],
+        groups: [],
+        structure: {},
+      };
     }
     throw err;
   }
@@ -212,30 +223,190 @@ export function summarize(
 ): {
   items: number;
   subitems: number;
+  groups: number;
   columns: number;
   invalid: number;
 } {
-  const nameCol = state.columns.find((c) => c.role === "name");
-  const groupCol = state.columns.find((c) => c.role === "group") ?? null;
-
-  const split = nameCol
-    ? splitRows2(table.rows, nameCol.sourceIndex, groupCol?.sourceIndex ?? null)
-    : { groups: [], items: [], subitems: [] };
+  const orphans = new Set(orphanGridIndices(table, state));
+  let items = 0;
+  let subitems = 0;
+  for (const gridIndex of table.rowIndices) {
+    if (state.excluded.includes(gridIndex)) continue;
+    const s = state.structure[gridIndex];
+    if (s?.type === "subitem" && !orphans.has(gridIndex)) subitems += 1;
+    else items += 1;
+  }
 
   const dataColumns = state.columns.filter(
     (c) => c.include && c.role === "data" && c.target !== "skip",
   );
-
   const invalid = invalidCellMap(table, state.columns);
   const invalidCount = [...invalid.values()].reduce(
-    (sum, offenders) => sum + offenders.length,
+    (sum, o) => sum + o.length,
     0,
   );
 
   return {
-    items: split.items.length,
-    subitems: split.subitems.length,
+    items,
+    subitems,
     columns: dataColumns.length,
+    groups: buildCommitGroups(state).length,
     invalid: invalidCount,
   };
+}
+
+/**
+ * Seed the structure model from a freshly-parsed table: one default group
+ * (either a brand-new "Imported" group, or the board's first existing group
+ * in "existing" mode) with every non-excluded row assigned to it as an
+ * "item". Idempotent — a sheet that's already been organized (groups.length
+ * > 0) is returned unchanged, so re-deriving the table (e.g. after toggling
+ * the header row) doesn't clobber the user's structure choices.
+ */
+export function seedStructure(
+  state: SheetState,
+  table: ParsedTable,
+  mode: "new" | "existing",
+  existingGroups: { id: string; name: string }[],
+): SheetState {
+  // Idempotent: don't reseed if the user already organized this sheet.
+  if (state.groups.length > 0) return state;
+
+  const first: ImportGroup =
+    mode === "existing" && existingGroups[0]
+      ? {
+          key: crypto.randomUUID(),
+          name: existingGroups[0].name,
+          existingGroupId: existingGroups[0].id,
+        }
+      : { key: crypto.randomUUID(), name: "Imported", existingGroupId: null };
+
+  const structure: SheetState["structure"] = {};
+  for (const gridIndex of table.rowIndices) {
+    if (state.excluded.includes(gridIndex)) continue;
+    structure[gridIndex] = { groupKey: first.key, type: "item" };
+  }
+
+  return { ...state, groups: [first], structure };
+}
+
+/** Append a new editable group (not tied to any existing board group). */
+export function addGroup(state: SheetState): SheetState {
+  const next: ImportGroup = {
+    key: crypto.randomUUID(),
+    name: `Group ${state.groups.length + 1}`,
+    existingGroupId: null,
+  };
+  return { ...state, groups: [...state.groups, next] };
+}
+
+/** Rename a group in place, identified by its stable `key`. */
+export function renameGroup(
+  state: SheetState,
+  key: string,
+  name: string,
+): SheetState {
+  return {
+    ...state,
+    groups: state.groups.map((g) => (g.key === key ? { ...g, name } : g)),
+  };
+}
+
+/** Reference an existing board group in the group list, adding it if absent.
+ * Returns the (possibly new) group's key so a caller can immediately assign
+ * rows to it. */
+export function referenceExistingGroup(
+  state: SheetState,
+  existing: { id: string; name: string },
+): { state: SheetState; key: string } {
+  const found = state.groups.find((g) => g.existingGroupId === existing.id);
+  if (found) return { state, key: found.key };
+  const g: ImportGroup = {
+    key: crypto.randomUUID(),
+    name: existing.name,
+    existingGroupId: existing.id,
+  };
+  return { state: { ...state, groups: [...state.groups, g] }, key: g.key };
+}
+
+function patchRows(
+  state: SheetState,
+  gridIndices: number[],
+  patch: Partial<{ groupKey: string; type: "item" | "subitem" }>,
+): SheetState {
+  const structure = { ...state.structure };
+  const fallbackKey = state.groups[0]?.key ?? "";
+  for (const gi of gridIndices) {
+    const cur = structure[gi] ?? { groupKey: fallbackKey, type: "item" };
+    structure[gi] = { ...cur, ...patch };
+  }
+  return { ...state, structure };
+}
+
+/** Bulk-set the item/subitem type for the given grid rows only. */
+export function bulkSetType(
+  state: SheetState,
+  gridIndices: number[],
+  type: "item" | "subitem",
+): SheetState {
+  return patchRows(state, gridIndices, { type });
+}
+
+/** Bulk-assign the given grid rows to a group only. */
+export function bulkSetGroup(
+  state: SheetState,
+  gridIndices: number[],
+  groupKey: string,
+): SheetState {
+  return patchRows(state, gridIndices, { groupKey });
+}
+
+/** Grid indices of subitem rows that have no item above them in their group
+ * (source order) — these block the Structure step. */
+export function orphanGridIndices(
+  table: ParsedTable,
+  state: SheetState,
+): number[] {
+  const fallbackKey = state.groups[0]?.key ?? "";
+  const seenItemInGroup = new Set<string>();
+  const orphans: number[] = [];
+  for (const gridIndex of table.rowIndices) {
+    if (state.excluded.includes(gridIndex)) continue;
+    const s = state.structure[gridIndex] ?? {
+      groupKey: fallbackKey,
+      type: "item" as const,
+    };
+    if (s.type === "subitem") {
+      if (!seenItemInGroup.has(s.groupKey)) orphans.push(gridIndex);
+    } else {
+      seenItemInGroup.add(s.groupKey);
+    }
+  }
+  return orphans;
+}
+
+/** Groups that actually hold ≥1 row, in list order — the commit's `groups`. */
+export function buildCommitGroups(state: SheetState): ImportGroup[] {
+  const usedKeys = new Set(
+    Object.values(state.structure).map((s) => s.groupKey),
+  );
+  return state.groups.filter((g) => usedKeys.has(g.key));
+}
+
+/** One structure entry per non-excluded grid row (defaults applied). */
+export function buildCommitStructure(
+  table: ParsedTable,
+  state: SheetState,
+): RowStructureEntry[] {
+  const fallbackKey = state.groups[0]?.key ?? "";
+  const out: RowStructureEntry[] = [];
+  for (const gridIndex of table.rowIndices) {
+    if (state.excluded.includes(gridIndex)) continue;
+    const s = state.structure[gridIndex] ?? {
+      groupKey: fallbackKey,
+      type: "item" as const,
+    };
+    out.push({ gridIndex, groupKey: s.groupKey, type: s.type });
+  }
+  return out;
 }

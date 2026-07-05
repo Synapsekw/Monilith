@@ -5,6 +5,8 @@ import {
   invalidCellMap,
   buildCommitColumns,
   summarize,
+  seedStructure,
+  bulkSetType,
 } from "./import-wizard-state";
 
 const grid = [
@@ -59,13 +61,17 @@ describe("deriveSheetState with boardColumns (existing-board mode)", () => {
 
 describe("invalidCellMap + summarize", () => {
   it("flags unparseable cells by grid row index and counts them", () => {
-    const s = deriveSheetState(grid, 0);
-    const t = tableFor(grid, s);
+    const s0 = deriveSheetState(grid, 0);
+    const t = tableFor(grid, s0);
+    // Seed structure and mark the "↳ Sub" row (grid index 2) as a subitem —
+    // summarize now reads counts from `state.structure`, not the raw grid.
+    const s = bulkSetType(seedStructure(s0, t, "new", []), [2], "subitem");
     const invalid = invalidCellMap(t, s.columns);
     expect([...invalid.entries()]).toEqual([[2, [2]]]);
     expect(summarize(t, s)).toEqual({
       items: 2,
       subitems: 1,
+      groups: 1,
       columns: 1,
       invalid: 1,
     });
