@@ -39,7 +39,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { reorderPosition } from "@/lib/boards/group-reorder";
-import { bucketItems } from "@/lib/boards/item-tree";
+import { bucketItems, withSubitems } from "@/lib/boards/item-tree";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type {
   AggregationId,
@@ -780,8 +780,12 @@ function BoardTableInner({
             <SummaryRow
               variant="board"
               testId="board-summary-footer"
+              label="Total"
               columns={columns}
-              itemIds={topLevel.map((it) => it.id)}
+              itemIds={withSubitems(
+                topLevel.map((it) => it.id),
+                childrenByParent,
+              )}
               cellMap={cellMap}
               cache={cache}
               template={template}
@@ -1642,9 +1646,13 @@ function GroupSection({
           <SummaryRow
             variant="group"
             testId={`group-summary-${group.id}`}
+            label="Group Summary"
             groupColor={group.color}
             columns={columns}
-            itemIds={items.map((i) => i.id)}
+            itemIds={withSubitems(
+              items.map((i) => i.id),
+              childrenByParent,
+            )}
             cellMap={cellMap}
             cache={controls.cache}
             template={template}
@@ -1735,9 +1743,13 @@ function GroupSection({
             <SummaryRow
               variant="group"
               testId={`group-summary-${group.id}`}
+              label="Group Summary"
               groupColor={group.color}
               columns={columns}
-              itemIds={items.map((i) => i.id)}
+              itemIds={withSubitems(
+                items.map((i) => i.id),
+                childrenByParent,
+              )}
               cellMap={cellMap}
               cache={controls.cache}
               template={template}
