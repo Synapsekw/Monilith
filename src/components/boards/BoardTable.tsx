@@ -780,7 +780,7 @@ function BoardTableInner({
             <SummaryRow
               variant="board"
               testId="board-summary-footer"
-              label="Total"
+              label="Board Total"
               columns={columns}
               itemIds={withSubitems(
                 topLevel.map((it) => it.id),
@@ -1963,13 +1963,14 @@ function ItemRow({
         );
         return (
           <>
-            <div className="flex h-full items-center border-l px-3">
+            {/* Read-only system columns — dimmed to signal they can't be edited. */}
+            <div className="flex h-full items-center border-l px-3 opacity-60">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
-            <div className="flex h-full items-center border-l px-3">
+            <div className="flex h-full items-center border-l px-3 opacity-60">
               <CreatedAtCell iso={item.created_at} />
             </div>
           </>
@@ -2087,13 +2088,14 @@ function SortableSubitemRow({
         );
         return (
           <>
-            <div className="flex h-full items-center border-l px-3">
+            {/* Read-only system columns — dimmed to signal they can't be edited. */}
+            <div className="flex h-full items-center border-l px-3 opacity-60">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
                 avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
-            <div className="flex h-full items-center border-l px-3">
+            <div className="flex h-full items-center border-l px-3 opacity-60">
               <CreatedAtCell iso={sub.created_at} />
             </div>
           </>
