@@ -3,163 +3,183 @@
 **Date:** 2026-07-05
 **Status:** Approved (brainstorm)
 **Depends on:** Phase 1 (shadcn chart primitives) — merged to `develop` (`c9d16c0`).
-**Scope:** Visual restyle of `ChartWidget` only.
+**Scope:** `ChartWidget` visual restyle + a data-layer color-provenance change.
 
 ## Motivation
 
 Phase 1 swapped `ChartWidget` onto shadcn's chart primitives while preserving the
-old look. Phase 2 delivers the actual visual upgrade the user asked for — a
-**bold, "expressive"** chart aesthetic — chosen deliberately over the codebase's
-default monochromatic/Linear-restraint house style **for charts specifically**
-(the user was shown that tension and picked the expressive direction).
+old look. Phase 2 delivers the visual upgrade the user asked for — a **bold,
+"expressive"** chart aesthetic — chosen deliberately over the codebase's default
+monochromatic/Linear-restraint house style **for charts specifically**.
 
 Direction, palette, and motion were validated live in the brainstorm visual
-companion. This spec encodes those decisions.
+companion. A key principle emerged and governs this spec:
+
+> **Color must encode meaning — never decoration.** A color only appears when it
+> maps to something real: a value's configured semantic color, or (for a genuine
+> multi-series split) which series is which. We do **not** fabricate distinct
+> colors for a single metric.
+
+## The problem this fixes (root cause in the data layer)
+
+`widget-resolve.ts` currently **invents** a color for every series/bucket:
+
+- `status` / `dropdown` → the option's **configured** color (`o.color`) — meaningful.
+- `people` → `PALETTE[i % n]` — **invented** by index.
+- `date` / anything uncolored → falls through to `?? PALETTE[i % n]` — **invented**.
+
+So a single "count per month" bar chart gets each month a different fabricated
+color — the textbook "color for nothing" (one metric, rainbow bars). We remove
+the invention at the source and let the client apply color only where it means
+something.
 
 ## Locked decisions (from the visual companion)
 
-- **Aesthetic: "Direction C — bold spectrum", dark-first.** A confident
+- **Aesthetic: "Direction C — bold spectrum", dark-first** — a confident
   indigo → violet → magenta gradient language.
-- **Two palette modes:**
-  - **Sequential / hero** — the spectrum gradient (`#4f46e5 → #7c3aed → #db2777`),
-    used for a single generic series over ordered/date buckets. Applies as: a
-    horizontal stroke gradient (line), an area fill gradient (area), and a
-    vertical per-bar gradient (bar).
-  - **Categorical** — a curated, distinct-but-cohesive palette assigned by series
-    index: `['#6366f1' indigo (brand), '#22d3ee' cyan, '#a855f7' violet,
-'#f59e0b' amber, '#fb7185' rose, '#34d399' emerald]`. Cycles if >6 series.
-- **Motion: "Signature" (level 2).** Staggered bar/line rise with a soft
-  overshoot, gradient draw-in, and a gently glowing active dot on hover. Plays
-  **once on load** and on **hover** — never looping. Disabled under
-  `prefers-reduced-motion`.
+- **Motion: "Signature" (level 2)** — staggered rise with a soft overshoot,
+  gradient draw-in, gently glowing active dot on hover. Plays **once on load** and
+  on **hover**, never loops, disabled under `prefers-reduced-motion`.
 
-## Color-precedence rule (critical — never overwrite configured meaning)
+## Color model (the governing rule)
 
-Per series and per cell, color resolves in this strict order:
+Colors resolve per mark as follows:
 
-1. **Per-cell configured color** — `__color_<label>` on a pivot row (e.g. a
-   status column's per-category red/green). **Keep it.**
-2. **Per-series configured color** — a series' `seriesColor` that came from a
-   status/dropdown/people column. **Keep it.**
-3. **No configured color** — assign from our palette:
-   - multiple series → **categorical** palette by index;
-   - a single generic series with no per-cell colors → **spectrum hero** gradient.
+1. **Configured semantic color present** (a `status`/`dropdown` option you gave a
+   color) → **use it**. Color carries that value's meaning.
+2. **No configured color, single series** (e.g. count over time/`people`/`date`)
+   → **one cohesive treatment**: the **spectrum-hero gradient**, identical for
+   every bar / the whole line/area. No per-bucket variation — the axis already
+   labels the buckets, so per-bar color would be pure decoration.
+3. **No configured color, multiple series** (a real split whose dimension has no
+   colors) → the **categorical palette by series index**. Here color _does_ encode
+   information — which series is which — and the legend names them.
 
-Consequences by chart family:
+Per chart family:
 
-- **Pie / donut / radial** — inherently categorical. Slices keep their per-cell
-  configured color (rule 1); uncolored slices draw from the categorical palette.
-  No spectrum hero here.
-- **Line / area / bar (single generic series, no per-cell colors)** — spectrum
-  hero gradient.
-- **Bar grouped by a colored dimension (per-cell colors present)** — those colors
-  win (rule 1); no gradient override.
-- **Multi-series line/area/bar/combo** — categorical palette by index unless the
-  series carries its own configured color (rule 2).
+- **Pie / donut / radial** — slices need distinct colors to be readable (no axis):
+  configured slice colors win (rule 1); uncolored slices take the categorical
+  palette by index (rule 3 semantics — differentiation is meaningful here).
+- **Line / area / bar, single series** — configured per-cell colors win (rule 1);
+  otherwise the spectrum hero (rule 2).
+- **Line / area / bar / combo, multi series** — configured per-series colors win
+  (rule 1); otherwise categorical palette by index (rule 3).
 
-**How "configured vs fallback" is known:** today `pivotSeries` sets a single
-series' color to the hardcoded `SOLO_COLOR` and multi-series colors to the
-point's `seriesColor`. The resolver treats `SOLO_COLOR` (and the absence of a
-`__color_<label>`) as "no configured color". Per-cell `__color_<label>` presence
-means rule 1 applies. (If a future data path yields uncolored multi-series, the
-resolver already handles it via the index-based categorical assignment.)
+**How provenance is known:** the server stops inventing. `SeriesPoint.seriesColor`
+becomes `string | null` — the configured color, or `null` when unconfigured
+(`people`, `date`, colorless options). `null` flows through `pivotSeries`
+unchanged (series color `null`; `__color_<label>` omitted/`null`). The client
+resolver reads `null` as "no semantic color" and applies rule 2 or 3.
+
+## Palette + gradient tokens
+
+- **Categorical palette** — the approved hues as **theme-aware tokens**
+  `--chart-cat-1…6` in `globals.css` (light + dark), assigned to the app's
+  existing distinct hues: indigo (brand), cyan, violet, amber, rose, emerald.
+  Cycles if a chart has >6 uncolored series.
+- **Spectrum hero** — a fixed brand gradient (`#4f46e5 → #7c3aed → #db2777`)
+  rendered as: horizontal stroke gradient (line), area fill gradient (area),
+  vertical per-bar gradient (bar). Representative solid `#7c3aed` for the
+  legend/tooltip swatch.
+- **Gradient treatment applies on top of whatever solid color a mark resolves
+  to** — configured colors are rendered as a top-lit vertical gradient (bars) /
+  soft area fill (areas), not flattened away.
 
 ## Non-goals
 
-- **No behavior/data changes.** Same chart types, same queries, same 0-refetch
-  interaction model. Purely presentational + motion.
+- **No chart-type or query changes**; same 0-refetch interaction model. Only color
+  provenance changes in the data layer.
 - **`HealthWidget` / `CompletionWidget` untouched** — plain-DOM progress bars,
-  out of the lazy chart chunk; not Recharts. (Their percent bars could adopt the
-  spectrum later — explicitly out of scope here.)
-- **No interactive legend / series toggling** — deferred (was a Phase-2
-  candidate; dropped to keep this focused on the visual language). Can be a
-  Phase 3.
+  out of the lazy chart chunk.
+- **No interactive legend / series toggling** — deferred to a possible Phase 3.
 - **No new charting dependency**; stays on Recharts 3.8 + shadcn primitives.
-- **No first-paint/bundle regression** — everything stays inside the existing
-  `dynamic()` chart chunk (`ChartWidget` is the only importer).
+- **No first-paint/bundle regression** — client chart code stays inside the
+  existing `dynamic()` chart chunk (`ChartWidget` is its only importer).
+- **We do not auto-assign color to a single metric** — that's the whole point.
 
 ## Architecture
 
-Small, focused units so `ChartWidget` stays readable:
-
-- **`chart-theme.ts` (modify)** — add `CATEGORICAL_PALETTE: string[]`,
-  `SPECTRUM_STOPS` (ordered stops for the hero gradient), and any refined
-  gridline/axis constants. Existing `AXIS_PROPS` / `GRID_STROKE` stay.
-- **`chart-colors.ts` (new)** — the precedence resolver. Pure function:
-  given `pivotSeries` output (`rows`, `series`) + chart type, returns a
-  `ChartPaint` describing, per series and per cell, the resolved solid color or a
-  gradient id, plus whether the spectrum hero applies. Unit-tested in isolation.
-- **`ChartDefs.tsx` (new)** — renders the `<defs>` block a chart needs:
-  per-series/per-cell `<linearGradient>`s (vertical for bars, area fill for
-  areas, horizontal spectrum for lines) and the reusable glow `<filter>`.
-  Gradient ids are deterministic (keyed by widget id + series key) so `fill` /
-  `stroke` references resolve and multiple widgets on one dashboard don't collide.
-- **`use-reduced-motion.ts` (new)** — `matchMedia('(prefers-reduced-motion:
-reduce)')` hook (SSR-safe: defaults to "no reduce" until mounted). Gates
+- **`widget-resolve.ts` (modify)** — `resolver()` returns `color: string | null`
+  (`people` → `null`, no `PALETTE`); `seriesColor` drops the `?? PALETTE[i]`
+  invention → `string | null`. Delete the now-unused `PALETTE` constant.
+- **`series.ts` (modify)** — `SeriesPoint.seriesColor: string | null`;
+  `PivotedSeries.series[].color: string | null`; `pivotSeries` carries `null`
+  through and only writes `__color_<label>` when the color is non-null. The
+  single-series synthetic series color becomes `null` (was `SOLO_COLOR`) — the
+  "no semantic color" signal that triggers the hero. Remove `SOLO_COLOR`.
+- **`globals.css` (modify)** — add `--chart-cat-1…6` (light + dark).
+- **`chart-theme.ts` (modify)** — `CATEGORICAL_PALETTE` (the 6 token refs),
+  `SPECTRUM_STOPS`, `SPECTRUM_SOLID`; keep `AXIS_PROPS`/`GRID_STROKE`.
+- **`chart-colors.ts` (new)** — pure resolver. Given `pivotSeries` output +
+  chart type + widget id, returns per-series/per-cell `{ solid, fillId, strokeId,
+hero }` applying rules 1–3, plus deterministic gradient ids.
+- **`ChartDefs.tsx` (new)** — renders the `<defs>` a chart needs: per-series/
+  per-cell `<linearGradient>`s + the reusable glow `<filter>`; ids keyed by
+  widget id + series key so multiple widgets don't collide.
+- **`use-reduced-motion.ts` (new)** — SSR-safe `matchMedia` hook gating
   `isAnimationActive`.
-- **`ChartWidget.tsx` (modify)** — consume the resolver + `ChartDefs`; set
-  gradient `fill`/`stroke`; add a custom `activeDot` (glow filter) on line/area;
-  per-series `animationBegin` stagger, `animationDuration`, `animationEasing`;
-  wrap the chart in the mount-overshoot CSS class (see Motion).
-- **`chart-config.ts` (Phase 1, minor)** — `buildChartConfig` still feeds shadcn
-  tooltip/legend labels+colors; it now receives resolved solid colors (for the
-  legend/tooltip swatches) from the resolver so swatches match the marks. Where a
-  series uses a gradient, its legend/tooltip swatch uses the gradient's mid/solid
-  representative color.
+- **`chart-config.ts` (modify)** — `buildChartConfig` consumes resolved solid
+  colors so legend/tooltip swatches match the marks (gradient series use their
+  representative solid).
+- **`ChartWidget.tsx` (modify)** — consume the resolver + `ChartDefs`; gradient
+  `fill`/`stroke`; glow `activeDot` on line/area; per-series `animationBegin`
+  stagger + `animationDuration`/`animationEasing`; mount-overshoot wrapper.
 
 ## Motion — implementation and the one real risk
 
-Recharts drives most of it natively, per series:
-`isAnimationActive={!reducedMotion}`, `animationBegin` (stagger: `index * STEP`),
-`animationDuration`, `animationEasing="ease-out"`. The hover glow is a custom
-`activeDot` referencing the glow `<filter>`.
+Native Recharts per series: `isAnimationActive={!reducedMotion}`,
+`animationBegin` (stagger `index * STEP`), `animationDuration`,
+`animationEasing="ease-out"`; custom `activeDot` referencing the glow filter.
 
-**Risk — overshoot easing.** Recharts' built-in easings (`ease`, `ease-in`,
-`ease-out`, `ease-in-out`, `linear`) do **not** include a true overshoot/bounce.
-Decision up front: keep the native rise on `ease-out`, and add the subtle
-overshoot as a **CSS keyframe on the chart's mount wrapper** (the technique the
-mockup used), guarded by reduced-motion. Verified in the TDD/verify step. If the
-CSS overshoot visibly fights Recharts' own rise animation, we drop the overshoot
-and ship the clean `ease-out` — still clearly "Signature". **Not a blocker.**
+**Risk — overshoot easing.** Recharts' built-in easings have no true
+overshoot/bounce. Decision: keep the native rise on `ease-out` and add the subtle
+overshoot as a **CSS keyframe on the chart's mount wrapper** (reduced-motion
+guarded), verified in the TDD/verify step. If it fights Recharts' own rise, drop
+the overshoot and ship clean `ease-out` — still clearly "Signature". Not a blocker.
 
 ## Accessibility & performance
 
-- **Reduce motion:** honored — static render, `isAnimationActive={false}`, mount
-  CSS animation not applied.
-- **Contrast / redundancy:** palette hues chosen for legibility on the dark
-  surfaces; **color is never the only signal** — the shadcn legend + tooltip
-  carry text labels (upholds the existing AA redundancy rule used across widgets).
-- **Perf:** `<defs>`/gradients/filters are static and cheap; animation runs once
-  (not looped); no extra data fetches; charts remain in the lazy chart chunk →
-  no first-paint impact.
+- **Reduce motion** honored — static render, no animation, no mount keyframe.
+- **Contrast / redundancy** — palette tokens legible on dark + light; color is
+  never the only signal (legend + tooltip carry text labels — upholds the
+  existing AA redundancy rule). Removing the single-metric rainbow _improves_
+  clarity.
+- **Perf** — `<defs>`/gradients/filters are static and cheap; animation runs once;
+  no new fetches; charts stay in the lazy chart chunk → no first-paint impact.
 
 ## Testing
 
-- **`chart-colors.ts` unit tests** — all three precedence tiers; single generic
-  series → spectrum hero; multi-series → categorical by index (and cycling >6);
-  pie/donut/radial → categorical, never hero; per-cell colors preserved.
-- **`use-reduced-motion.ts` unit test** — mocked `matchMedia` true/false.
-- **`ChartWidget.test.tsx` (extend)** — per chart type: gradient `fill`/`stroke`
-  ids present where expected; categorical colors applied to multi-series;
-  configured per-cell colors preserved; glow `activeDot` present on line/area;
-  `isAnimationActive` false when reduced-motion mocked true.
+- **`widget-resolve` (extend/adjust)** — `people`/`date`/colorless → `null`
+  seriesColor; configured `status`/`dropdown` → the option color. Update existing
+  color assertions.
+- **`series.test.ts` (adjust)** — single series → `series[].color === null`, no
+  `__color_*` written for null; null carried through multi-series.
+- **`chart-colors.ts` (new tests)** — rule 1/2/3 across families: configured wins;
+  null single → hero; null multi → categorical by index (cycling >6);
+  pie/donut/radial differentiate, never hero; configured per-cell preserved.
+- **`use-reduced-motion.ts` (new test)** — mocked `matchMedia` true/false.
+- **`ChartWidget.test.tsx` (extend)** — per type: gradient `fill`/`stroke` ids
+  present; categorical applied to null multi-series; configured colors preserved;
+  glow `activeDot` on line/area; `isAnimationActive` false when reduced-motion.
 - **Full gate:** `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
-- **Manual / `verify` (for the finish handoff):** drive a real dashboard —
-  spectrum hero on a single-series line/area; distinct categorical hues on a
-  multi-series chart; status/people colors preserved; hover glow; the load
-  animation; and `prefers-reduced-motion` renders static.
+- **Manual / `verify`:** drive a real dashboard — single-series count-over-time is
+  a uniform spectrum (no rainbow); status charts keep status colors; a colorless
+  multi-series split gets distinct categorical hues; hover glow; load animation;
+  `prefers-reduced-motion` static.
 
 ## Success criteria
 
-1. Charts read as the bold "Direction C" language: spectrum hero for single/ordered
-   series, distinct categorical hues for multi-series — with configured colors
-   always preserved.
-2. "Signature" motion on load + hover; static under reduce-motion.
-3. No behavior/data change; no first-paint/bundle regression; Health/Completion
-   widgets untouched.
+1. Color encodes meaning everywhere: configured colors preserved; single metrics
+   render as one cohesive spectrum (no fabricated rainbow); genuine multi-series
+   differentiate via the categorical palette.
+2. Bold "Direction C" gradient look + "Signature" motion on load/hover; static
+   under reduce-motion.
+3. No chart-type/query change; no first-paint/bundle regression; Health/Completion
+   untouched.
 4. All gates green; behavior verified in a real browser.
 
 ## Follow-ups (out of scope)
 
 - Interactive legend (click-to-toggle series).
-- Optionally extend the spectrum language to the Health/Completion percent bars.
+- Optionally let users assign colors to `people`/`date` dimensions if they want
+  per-category color there.
