@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  beforeAll,
+  afterEach,
+} from "vitest";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,6 +15,7 @@ import {
   BoardPresenceProvider,
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
+import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import type { RosterOccupant } from "@/lib/boards/presence-types";
 
 // The tanstack virtualizer reads the scroll container's offsetWidth/offsetHeight
@@ -67,6 +76,13 @@ vi.mock("@/lib/collaboration/actions", () => ({
 // Actions) that are out of scope here; stub it to a placeholder.
 vi.mock("./BoardHeader", () => ({
   BoardHeader: () => <div data-testid="board-header" />,
+}));
+
+// BoardTable now reads filter/sort/search state from the URL via
+// useBoardFilterSort → useSearchParams. Default to an empty (no-filter) param
+// set so existing rows still render.
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Spy on the shared touch-aware sensor hook (still delegating to the real
@@ -951,6 +967,15 @@ function presenceValue(
 }
 
 function renderFooterWithPresence(presence: BoardPresenceContextValue) {
+  // PresenceRing/usePresenceFocus now read the presence focus store (per-target
+  // selectors), not the context — seed it from the same fixture. The context
+  // provider stays for the roster/avatar-bar consumers.
+  usePresenceFocusStore.getState().syncPresence({
+    focusMap: presence.focusMap,
+    flashTargetId: presence.flashTargetId,
+    selfUserId: presence.selfUserId,
+    setFocus: presence.setFocus,
+  });
   const qc = new QueryClient();
   return render(
     <QueryClientProvider client={qc}>
@@ -962,6 +987,8 @@ function renderFooterWithPresence(presence: BoardPresenceContextValue) {
 }
 
 describe("BoardTable cell presence ring (8a)", () => {
+  afterEach(() => usePresenceFocusStore.getState().reset());
+
   it("shows an editing indicator on a cell another user is focused on", () => {
     // footerPayload has item t1 / column c1 → target cell:t1:c1
     const focusMap = new Map([["cell:t1:c1", [occupant({ name: "Sam" })]]]);

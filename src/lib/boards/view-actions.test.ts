@@ -16,20 +16,6 @@ import {
 const BOARD_ID = "11111111-1111-4111-8111-111111111111";
 const VIEW_ID = "22222222-2222-4222-8222-222222222222";
 
-/**
- * Build a `from("board_views")` mock whose `.select(...).eq(...).maybeSingle()`
- * chain resolves to `view`. Used by both updateBoardView (kind + board_id read)
- * and deleteBoardView (board_id read for revalidate).
- */
-function boardViewsRead(view: { data: unknown; error: unknown }) {
-  return (table: string) => {
-    if (table !== "board_views") return {} as never;
-    return {
-      select: () => ({ eq: () => ({ maybeSingle: async () => view }) }),
-    } as never;
-  };
-}
-
 beforeEach(() => {
   rpc.mockReset();
   from.mockReset();
@@ -241,10 +227,11 @@ describe("deleteBoardView", () => {
     expect(from).not.toHaveBeenCalled();
   });
 
+  // New contract: deleteBoardView no longer pre-reads board_views for a
+  // revalidatePath (the board client hydrates once and never refetches the RSC;
+  // ViewSwitcher drives its own router.refresh()/push()). So there is no
+  // `from("board_views")` read here — the RPC is the sole authority.
   it("surfaces the friendly invariant error from the RPC", async () => {
-    from.mockImplementation(
-      boardViewsRead({ data: { board_id: BOARD_ID }, error: null }),
-    );
     rpc.mockResolvedValue({
       error: { message: "a board must keep at least one view" },
     });
@@ -252,6 +239,7 @@ describe("deleteBoardView", () => {
     expect(rpc).toHaveBeenCalledWith("delete_board_view", {
       p_view_id: VIEW_ID,
     });
+    expect(from).not.toHaveBeenCalled();
     expect(res).toEqual({
       ok: false,
       error: "a board must keep at least one view",
@@ -259,14 +247,12 @@ describe("deleteBoardView", () => {
   });
 
   it("calls the delete_board_view RPC and returns ok", async () => {
-    from.mockImplementation(
-      boardViewsRead({ data: { board_id: BOARD_ID }, error: null }),
-    );
     rpc.mockResolvedValue({ error: null });
     const res = await deleteBoardView({ viewId: VIEW_ID });
     expect(rpc).toHaveBeenCalledWith("delete_board_view", {
       p_view_id: VIEW_ID,
     });
+    expect(from).not.toHaveBeenCalled();
     expect(res).toEqual({ ok: true, data: undefined });
   });
 });

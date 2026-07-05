@@ -121,13 +121,21 @@ export async function adminUpdateFeedback(
   // block a normal insert. Skip self-notification.
   if (row.submitted_by !== user.id) {
     const service = createServiceClient();
-    await service.from("notifications").insert({
+    // Best-effort notify: the feedback update already succeeded, so a failed
+    // insert must not fail the action — but log it instead of dropping it.
+    const { error: notifyErr } = await service.from("notifications").insert({
       org_id: row.org_id,
       recipient_id: row.submitted_by,
       actor_id: user.id,
       kind: "feedback_response",
       feedback_id: row.id,
     });
+    if (notifyErr)
+      console.error("[adminUpdateFeedback] notification insert failed", {
+        feedbackId: row.id,
+        recipientId: row.submitted_by,
+        error: notifyErr.message,
+      });
   }
 
   revalidatePath("/admin/feedback");

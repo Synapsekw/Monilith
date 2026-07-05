@@ -68,18 +68,40 @@ function GoalEditor({
   >({});
   const [loadingBoardId, setLoadingBoardId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const boardName = (id: string) => boards.find((b) => b.id === id)?.name ?? id;
 
   const num = (s: string): number | null =>
     s.trim() === "" ? null : Number(s);
+
+  // Revert the controlled fields to the server truth (the goal prop is unchanged
+  // until a successful patch triggers router.refresh()). Selects/date inputs read
+  // straight from `goal`, so resetting the text inputs is enough to undo a failed
+  // edit.
+  function resetFields() {
+    setName(goal.name);
+    setPercent(goal.percent?.toString() ?? "");
+    setCurrent(goal.currentValue?.toString() ?? "");
+    setTarget(goal.targetValue?.toString() ?? "");
+    setUnit(goal.unit ?? "");
+  }
+
   function patch(input: Parameters<typeof updateGoal>[0]) {
+    setSaveError(null);
     startTransition(async () => {
       const res = await updateGoal(input);
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        router.refresh();
+      } else {
+        // Undo the optimistic field edit and tell the user it didn't save.
+        resetFields();
+        setSaveError(res.error);
+      }
     });
   }
 
   function saveLinks(next: GoalLink[]) {
+    setLinkError(null);
     startTransition(async () => {
       const res = await setGoalLinks({
         goalId: goal.id,
@@ -90,6 +112,7 @@ function GoalEditor({
         })),
       });
       if (res.ok) router.refresh();
+      else setLinkError(res.error);
     });
   }
 
@@ -173,6 +196,11 @@ function GoalEditor({
 
   return (
     <div className="flex flex-col gap-4">
+      {saveError ? (
+        <p role="alert" className="text-destructive text-xs">
+          {saveError}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="edit-name">Name</Label>
         <Input

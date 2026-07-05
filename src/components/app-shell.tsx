@@ -8,6 +8,11 @@ type AppShellProps = {
   children: ReactNode;
   /** Streamed per-user sidebar nav (already Suspense-wrapped by the caller). */
   sidebarNav: ReactNode;
+  /**
+   * Streamed mobile nav — the hamburger + drawer shown below `md` (Suspense-
+   * wrapped). Renders the same nav content as the desktop rail.
+   */
+  mobileNav: ReactNode;
   /** Streamed header user region — bell + account menu (Suspense-wrapped). */
   headerUser: ReactNode;
   /** Streamed command-palette data (Suspense-wrapped; hidden until opened). */
@@ -22,6 +27,7 @@ type AppShellProps = {
 export function AppShell({
   children,
   sidebarNav,
+  mobileNav,
   headerUser,
   commandPalette,
 }: AppShellProps) {
@@ -31,7 +37,8 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
-          <div className="md:hidden">
+          <div className="flex items-center gap-1 md:hidden">
+            {mobileNav}
             <Brand />
           </div>
           <div className="flex flex-1 items-center justify-end gap-2">

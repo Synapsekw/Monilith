@@ -5,10 +5,7 @@ import { formatCell } from "@/lib/dashboards/list-rows";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 
 export function ListWidget({ widget }: { widget: CacheWidget }) {
-  const { data, isLoading, isError } = useWidgetRows(
-    widget.id,
-    widget.config as Record<string, unknown>,
-  );
+  const { data, isLoading, isError } = useWidgetRows(widget.id);
 
   if (!widget.source_board_id)
     return (

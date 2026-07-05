@@ -61,6 +61,36 @@ const nextConfig: NextConfig = {
     // `recharts` are default-optimized (see optimizePackageImports.md).
     optimizePackageImports: ["radix-ui"],
   },
+  // Baseline security response headers applied to every route. These are the
+  // low-risk, high-value defaults:
+  //   - X-Frame-Options: DENY — clickjacking protection (no framing anywhere).
+  //   - X-Content-Type-Options: nosniff — stop MIME-type sniffing.
+  //   - Referrer-Policy: strict-origin-when-cross-origin — don't leak full URLs
+  //     (paths/query) to third-party origins.
+  //   - Strict-Transport-Security — force HTTPS for 2 years incl. subdomains.
+  // NOTE: a Content-Security-Policy is deliberately NOT set here. An enforced
+  // CSP breaks Next's inline hydration/runtime scripts without a nonce pipeline
+  // (middleware-generated per-request nonce), which is a larger change. CSP is
+  // tracked as a deliberate follow-up.
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains",
+          },
+        ],
+      },
+    ];
+  },
   // Move the on-screen dev indicator (the Next.js logo button) to the bottom
   // right; it defaults to bottom-left. See devIndicators.md.
   devIndicators: {

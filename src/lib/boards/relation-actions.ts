@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database.types";
 import { setRelationLinksSchema } from "@/lib/validations/board-actions";
@@ -19,7 +18,8 @@ export async function setRelationLinks(input: {
   linkedItemIds: string[];
 }): Promise<ActionResult<{ links: RelationLinkRow[] }>> {
   const parsed = setRelationLinksSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { data: item } = await supabase
@@ -36,6 +36,5 @@ export async function setRelationLinks(input: {
   });
   if (error) return fail(error.message);
 
-  revalidatePath(`/boards/${item.board_id}`);
   return { ok: true, data: { links: (data ?? []) as RelationLinkRow[] } };
 }

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { cellToText, cellToExcelValue, textToCell } from "./cell-codec";
+import {
+  cellToText,
+  cellToExcelValue,
+  textToCell,
+  parseNumericLoose,
+  parseImportDate,
+} from "./cell-codec";
 
 const statusSettings = {
   options: [
@@ -526,6 +532,136 @@ describe("currency codec", () => {
       cellToExcelValue("currency", { amount: 1234.5 }, { currency: "AED" }),
     ).toBe(1234.5);
     expect(cellToExcelValue("currency", null, { currency: "AED" })).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseNumericLoose — US/EU convention tolerance (fix #1)
+// ---------------------------------------------------------------------------
+describe("parseNumericLoose", () => {
+  it("parses EU decimal-comma with dot grouping", () => {
+    expect(parseNumericLoose("1.234,56")).toBe(1234.56); // EU 1,234.56
+    expect(parseNumericLoose("€1.234,56")).toBe(1234.56);
+    expect(parseNumericLoose("1.234.567,89")).toBe(1234567.89);
+  });
+
+  it("parses US decimal-dot with comma grouping", () => {
+    expect(parseNumericLoose("1,234.56")).toBe(1234.56);
+    expect(parseNumericLoose("$1,234.50")).toBe(1234.5);
+    expect(parseNumericLoose("1,234,567.89")).toBe(1234567.89);
+  });
+
+  it("treats a lone comma with 1-2 trailing digits as a decimal", () => {
+    expect(parseNumericLoose("1,5")).toBe(1.5);
+    expect(parseNumericLoose("1,56")).toBe(1.56);
+  });
+
+  it("treats a lone comma with 3 trailing digits as grouping (no NaN drop)", () => {
+    expect(parseNumericLoose("1,234")).toBe(1234);
+    expect(parseNumericLoose("12,345")).toBe(12345);
+  });
+
+  it("treats a lone single dot as the decimal point", () => {
+    expect(parseNumericLoose("1234.56")).toBe(1234.56);
+    expect(parseNumericLoose("1.234")).toBe(1.234);
+    expect(parseNumericLoose("3.14")).toBe(3.14);
+  });
+
+  it("handles signs and accounting-style parenthesised negatives", () => {
+    expect(parseNumericLoose("-42")).toBe(-42);
+    expect(parseNumericLoose("(500)")).toBe(-500);
+    expect(parseNumericLoose("($1,234.50)")).toBe(-1234.5);
+  });
+
+  it("strips a percent sign", () => {
+    expect(parseNumericLoose("50%")).toBe(50);
+    expect(parseNumericLoose("12,5%")).toBe(12.5);
+  });
+
+  it("returns null for genuinely non-numeric, non-empty input", () => {
+    expect(parseNumericLoose("abc")).toBeNull();
+    expect(parseNumericLoose("€")).toBeNull();
+    expect(parseNumericLoose("")).toBeNull();
+  });
+});
+
+describe("textToCell number kinds — locale tolerance", () => {
+  it("numbers: parses EU and US grouped values instead of dropping to null", () => {
+    expect(textToCell("numbers", "1.234,56", [])).toEqual({ n: 1234.56 });
+    expect(textToCell("numbers", "1,234.56", [])).toEqual({ n: 1234.56 });
+    expect(textToCell("numbers", "1,234", [])).toEqual({ n: 1234 });
+    expect(textToCell("numbers", "1,5", [])).toEqual({ n: 1.5 });
+  });
+
+  it("currency: parses EU/US decorated money and paren negatives", () => {
+    expect(textToCell("currency", "€1.234,56", [])).toEqual({
+      amount: 1234.56,
+    });
+    expect(textToCell("currency", "$1,234.50", [])).toEqual({ amount: 1234.5 });
+    expect(textToCell("currency", "(500)", [])).toEqual({ amount: -500 });
+  });
+
+  it("percent: tolerates a trailing % and clamps", () => {
+    expect(textToCell("percent", "50%", [])).toEqual({ percent: 50 });
+    expect(textToCell("percent", "150%", [])).toEqual({ percent: 100 });
+  });
+
+  it("still returns null (surfaced as invalid) for unparseable numbers", () => {
+    expect(textToCell("numbers", "n/a", [])).toBeNull();
+    expect(textToCell("currency", "TBD", [])).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseImportDate — dd/mm vs mm/dd disambiguation (fix #5)
+// ---------------------------------------------------------------------------
+describe("parseImportDate", () => {
+  it("keeps ISO dates and datetimes untouched", () => {
+    expect(parseImportDate("2024-03-04")).toBe("2024-03-04");
+    expect(parseImportDate("2024-01-15T12:00:00Z")).toBe("2024-01-15");
+  });
+
+  it("resolves unambiguous slash dates via a component > 12", () => {
+    expect(parseImportDate("25/12/2024")).toBe("2024-12-25"); // DD/MM
+    expect(parseImportDate("12/25/2024")).toBe("2024-12-25"); // MM/DD
+    expect(parseImportDate("01/15/2024")).toBe("2024-01-15"); // MM/DD
+  });
+
+  it("returns null for ambiguous dd/mm-vs-mm/dd values (no silent guess)", () => {
+    expect(parseImportDate("03/04/2024")).toBeNull();
+    expect(parseImportDate("05/06/2024")).toBeNull();
+  });
+
+  it("rejects impossible slash dates and prose", () => {
+    expect(parseImportDate("31/31/2024")).toBeNull(); // both > 12
+    expect(parseImportDate("13/13/2024")).toBeNull(); // both > 12
+    expect(parseImportDate("32/01/2024")).toBeNull(); // invalid day
+    expect(parseImportDate("May 2024")).toBeNull();
+    expect(parseImportDate("2024")).toBeNull();
+  });
+});
+
+describe("textToCell date — ambiguity is surfaced, not guessed", () => {
+  it("parses ISO and unambiguous slash dates", () => {
+    expect(textToCell("date", "2024-01-15", [])).toEqual({
+      date: "2024-01-15",
+    });
+    expect(textToCell("date", "25/12/2024", [])).toEqual({
+      date: "2024-12-25",
+    });
+  });
+
+  it("returns null for an ambiguous slash date instead of month-first", () => {
+    expect(textToCell("date", "03/04/2024", [])).toBeNull();
+  });
+
+  it("still parses human-readable prose dates via Date.parse", () => {
+    // Exact day is timezone-dependent (Date.parse → local, then UTC ISO), so
+    // assert only that prose still yields a valid ISO date (unchanged from the
+    // pre-fix behaviour) rather than being dropped.
+    const result = textToCell("date", "January 15, 2024", []);
+    expect(result).not.toBeNull();
+    expect((result as { date: string }).date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
 

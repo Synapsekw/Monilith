@@ -295,10 +295,26 @@ export type WidgetAggregatePayload = {
   health?: HealthCounts;
 };
 
+/** A chart widget's batched slot — its resolved series. Tagged with `shape` so
+ *  it discriminates cleanly from the (untagged) aggregate slot. */
+export type WidgetSeriesSlot = {
+  ok: true;
+  shape: "series";
+  series: SeriesData;
+};
+/** A list widget's batched slot — its resolved rows. */
+export type WidgetRowsSlot = { ok: true; shape: "rows"; rows: WidgetRowsData };
+
 /** The per-widget slot in a batched result — a discriminated union so one
- *  widget's failed aggregation surfaces as an error without blanking the rest. */
+ *  widget's failed resolve surfaces as an error without blanking the rest.
+ *  Aggregate widgets (number/battery/completion/health) carry the untagged
+ *  {@link WidgetAggregatePayload} (identified by its `buckets` field); chart and
+ *  list widgets carry a `shape`-tagged series/rows slot. Folding all three
+ *  families into one map lets a dashboard fetch every widget in one round-trip. */
 export type WidgetDataResult =
   | ({ ok: true } & WidgetAggregatePayload)
+  | WidgetSeriesSlot
+  | WidgetRowsSlot
   | { ok: false; error: string };
 
 /** The columns a widget row must carry to resolve its aggregation. Shared by the
@@ -411,15 +427,54 @@ export async function getWidgetData(input: {
 }
 
 /**
- * Batched widget-data fetch: resolves every requested widget's aggregate in a
- * single client→server round-trip (Next serializes Server Action POSTs, so N
- * per-widget calls populate a dashboard sequentially — this collapses them to
- * one). Authorization re-reads the widget rows server-side in ONE `.in("id")`
- * query (RLS scopes visibility; the client-passed ids are never trusted for
- * board/org access), then computes all aggregations concurrently with
- * `Promise.all`, reusing the same per-widget cached read. Returns a map keyed by
- * widget id whose slots are independent: one widget's failure never blanks the
- * others. Ids the caller can't see are simply absent from the map.
+ * Resolve one widget row to its batched slot, dispatching on kind: chart →
+ * series, list → rows (both uncached, over the request's RLS client, exactly as
+ * the standalone getWidgetSeries/getWidgetRows did), everything else → the cached
+ * aggregate. This is what lets chart + list widgets ride the same batched fetch
+ * as the aggregate family instead of firing a per-widget action each.
+ */
+async function resolveWidgetSlot(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  widgetId: string,
+  widget: WidgetAggRow,
+): Promise<WidgetDataResult> {
+  if (widget.kind === "chart") {
+    const r = await resolveSeries(supabase, {
+      boardId: widget.source_board_id ?? "",
+      orgId: widget.org_id,
+      config: (widget.config ?? {}) as Record<string, unknown>,
+    });
+    return r.ok
+      ? { ok: true, shape: "series", series: r.data }
+      : { ok: false, error: r.error };
+  }
+  if (widget.kind === "list") {
+    if (!widget.source_board_id)
+      return { ok: true, shape: "rows", rows: { columns: [], rows: [] } };
+    const r = await resolveRows(supabase, {
+      boardId: widget.source_board_id,
+      config: (widget.config ?? {}) as Record<string, unknown>,
+    });
+    return r.ok
+      ? { ok: true, shape: "rows", rows: r.data }
+      : { ok: false, error: r.error };
+  }
+  const res = await resolveWidgetAggregate(widgetId, widget);
+  return res.ok ? { ok: true, ...res.data } : { ok: false, error: res.error };
+}
+
+/**
+ * Batched widget-data fetch: resolves every requested widget in a single
+ * client→server round-trip (Next serializes Server Action POSTs, so N per-widget
+ * calls populate a dashboard sequentially — this collapses them to one). Handles
+ * ALL widget families — aggregate (number/battery/completion/health), chart
+ * (series) and list (rows) — so a dashboard with N chart/list widgets no longer
+ * fires N extra actions. Authorization re-reads the widget rows server-side in
+ * ONE `.in("id")` query (RLS scopes visibility; client-passed ids are never
+ * trusted for board/org access), then resolves each slot concurrently with
+ * `Promise.all`. Returns a map keyed by widget id whose slots are independent:
+ * one widget's failure never blanks the others. Ids the caller can't see are
+ * simply absent from the map.
  */
 export async function getWidgetsData(input: {
   widgetIds: string[];
@@ -440,10 +495,7 @@ export async function getWidgetsData(input: {
 
   const entries = await Promise.all(
     (widgets ?? []).map(async (widget) => {
-      const res = await resolveWidgetAggregate(widget.id, widget);
-      const slot: WidgetDataResult = res.ok
-        ? { ok: true, ...res.data }
-        : { ok: false, error: res.error };
+      const slot = await resolveWidgetSlot(supabase, widget.id, widget);
       return [widget.id, slot] as const;
     }),
   );

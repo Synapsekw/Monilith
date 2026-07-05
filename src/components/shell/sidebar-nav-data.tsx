@@ -9,16 +9,21 @@ import { isPlatformAdminCached } from "@/lib/platform/guard";
 import { isOrgAdminCached } from "@/lib/org/guard";
 import { countNewFeedback } from "@/lib/feedback/queries";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
+import type { ComponentProps } from "react";
+
+type SidebarNavProps = ComponentProps<typeof SidebarNav>;
 
 /**
- * Streamed per-user sidebar nav data. Rendered behind a <Suspense> boundary in
- * the authenticated layout, so its awaits stream into the static shell rather
- * than blocking first paint. Identity (userId/orgId) is read OUTSIDE any cache
- * via the cookie-bound session helpers, then passed into the `use cache` reads
- * (Phase 9.3) so cross-section navigation serves the cached lists instead of
- * re-hitting Supabase.
+ * Single loader for the per-user nav data. Both the desktop rail
+ * (`SidebarNavData`) and the mobile drawer (`MobileNavData`) resolve their nav
+ * through this, so there is one source for the queries — the `use cache` reads
+ * dedupe the second caller within a request. Identity (userId/orgId) is read
+ * OUTSIDE any cache via the cookie-bound session helpers, then passed into the
+ * cached reads (Phase 9.3) so cross-section navigation serves the cached lists.
  */
-export async function SidebarNavData() {
+export async function getSidebarNavData(): Promise<
+  Omit<SidebarNavProps, "forceExpanded">
+> {
   // Identity read OUTSIDE any cache (cookie-bound, uncached). getClaims is local
   // (9.1), so this is cheap. The cached reads below take these ids as args.
   const [user, orgs] = await Promise.all([getUser(), getUserOrgs()]);
@@ -45,15 +50,23 @@ export async function SidebarNavData() {
   // unnecessary RLS-gated query for regular users (it would return 0 anyway).
   const newFeedbackCount = platformAdmin ? await countNewFeedback() : 0;
 
-  return (
-    <SidebarNav
-      boards={boards}
-      sharedBoards={sharedBoards}
-      workspaces={workspaces}
-      dashboards={dashboards.map((d) => ({ id: d.id, name: d.name }))}
-      isPlatformAdmin={platformAdmin}
-      isOrgAdmin={orgAdmin}
-      newFeedbackCount={newFeedbackCount}
-    />
-  );
+  return {
+    boards,
+    sharedBoards,
+    workspaces,
+    dashboards: dashboards.map((d) => ({ id: d.id, name: d.name })),
+    isPlatformAdmin: platformAdmin,
+    isOrgAdmin: orgAdmin,
+    newFeedbackCount,
+  };
+}
+
+/**
+ * Streamed per-user sidebar nav data (desktop rail). Rendered behind a
+ * <Suspense> boundary in the authenticated layout, so its awaits stream into
+ * the static shell rather than blocking first paint.
+ */
+export async function SidebarNavData() {
+  const data = await getSidebarNavData();
+  return <SidebarNav {...data} />;
 }

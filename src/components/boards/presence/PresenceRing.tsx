@@ -1,6 +1,7 @@
 "use client";
 
-import { useBoardPresenceContextOptional } from "@/lib/boards/presence-context";
+import { memo } from "react";
+import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -10,18 +11,22 @@ import { cn } from "@/lib/utils";
  * Presentational only — render it inside a `position: relative` host; it pins
  * itself to the host's edges and draws a per-user colored ring. The per-user
  * `color` is presence data (like a status color), so it's applied inline.
+ *
+ * Subscribes to the presence focus store with a per-target selector, so on a
+ * remote heartbeat only the cell whose occupant set changed re-renders (a cell
+ * nobody is editing selects `undefined` → stable → no re-render). `memo` keeps
+ * it from re-rendering when its parent row re-renders with the same props.
  */
-export function PresenceRing({
+export const PresenceRing = memo(function PresenceRing({
   target,
   className,
 }: {
   target: string;
   className?: string;
 }) {
-  const presence = useBoardPresenceContextOptional();
-  if (!presence) return null;
-  const { focusMap, selfUserId } = presence;
-  const others = (focusMap.get(target) ?? []).filter((o) => o.userId !== selfUserId);
+  const occupants = usePresenceFocusStore((s) => s.focusMap.get(target));
+  const selfUserId = usePresenceFocusStore((s) => s.selfUserId);
+  const others = (occupants ?? []).filter((o) => o.userId !== selfUserId);
   if (others.length === 0) return null;
 
   const first = others[0];
@@ -34,7 +39,10 @@ export function PresenceRing({
     <span
       aria-label={label}
       title={others.map((o) => o.name).join(", ")}
-      className={cn("pointer-events-none absolute inset-0 z-10 rounded-md", className)}
+      className={cn(
+        "pointer-events-none absolute inset-0 z-10 rounded-md",
+        className,
+      )}
       // Per-user presence color drawn as an inset ring (data-driven, like a
       // status color); chrome stays monochrome.
       style={{ boxShadow: `inset 0 0 0 2px ${first.color}` }}
@@ -49,4 +57,4 @@ export function PresenceRing({
       ) : null}
     </span>
   );
-}
+});

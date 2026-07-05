@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   IMPORTABLE_KINDS,
@@ -58,6 +59,20 @@ export function MappingGrid({
 
   const visibleRows = table.rows.slice(0, MAX_VISIBLE_ROWS);
   const truncated = table.rows.length > MAX_VISIBLE_ROWS;
+
+  // Per-column tally of non-empty cells that won't parse under the column's
+  // kind — these would otherwise be dropped from the payload with no signal.
+  // Computed over the FULL table (via `invalid`), not just the visible slice,
+  // so the header count is honest even when rows are truncated below.
+  const invalidCountByColumn = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const offenders of invalid.values()) {
+      for (const sourceIndex of offenders) {
+        counts.set(sourceIndex, (counts.get(sourceIndex) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [invalid]);
 
   function updateColumn(index: number, patch: Partial<ColumnState>) {
     const columns = state.columns.map((c, i) =>
@@ -194,6 +209,15 @@ export function MappingGrid({
                       {missingLabels.length > 0 ? (
                         <span className="bg-status-blue/15 text-status-blue w-fit rounded-md px-1.5 py-0.5 text-[11px] font-medium">
                           +{missingLabels.length} new options
+                        </span>
+                      ) : null}
+                      {(invalidCountByColumn.get(col.sourceIndex) ?? 0) > 0 ? (
+                        <span
+                          className="bg-status-yellow/15 text-status-yellow w-fit rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+                          title={`These cells can't be parsed as ${effectiveKind} and will import empty`}
+                        >
+                          {invalidCountByColumn.get(col.sourceIndex)} won&apos;t
+                          import
                         </span>
                       ) : null}
                       <select

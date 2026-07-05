@@ -99,6 +99,12 @@ describe("upsertCell people-cell assignment fan-out", () => {
 
     expect(res).toEqual({ ok: true, data: undefined });
     expect(upsert).toHaveBeenCalledTimes(1);
+    // New contract: a cell edit is the hottest board mutation and must NOT
+    // revalidate the board RSC — the mounted client hydrates once and is kept
+    // fresh by optimistic patches + Realtime, so revalidatePath here would
+    // re-run 9 queries the client discards. (Nav/sidebar surfaces are covered by
+    // updateTag on board create/delete/rename, not by this path.)
+    expect(vi.mocked(revalidatePath)).not.toHaveBeenCalled();
     expect(notifInsert).toHaveBeenCalledTimes(1);
     expect(notifInsert).toHaveBeenCalledWith([
       expect.objectContaining({

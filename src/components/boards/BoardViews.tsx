@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
@@ -15,6 +16,7 @@ import {
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { useBoardPresence } from "@/lib/boards/use-board-presence";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
 import { useLwwFlash } from "@/lib/boards/use-lww-flash";
@@ -109,6 +111,28 @@ export function BoardViews({
     flashTargetId: flash.flashTargetId,
   };
 
+  // Feed the subscribable presence focus store (consumed by the per-cell
+  // PresenceRing/FlashHighlight/usePresenceFocus). This is what lets a remote
+  // focus heartbeat re-render only the affected cell instead of every cell that
+  // previously read focus/flash off this component's context value. The context
+  // above still carries the roster for the (non-hot) avatar bars.
+  const syncPresence = usePresenceFocusStore((s) => s.syncPresence);
+  useEffect(() => {
+    syncPresence({
+      focusMap: presence.focusMap,
+      flashTargetId: flash.flashTargetId,
+      selfUserId: presence.selfUserId,
+      setFocus: presence.setFocus,
+    });
+  }, [
+    syncPresence,
+    presence.focusMap,
+    presence.selfUserId,
+    presence.setFocus,
+    flash.flashTargetId,
+  ]);
+  useEffect(() => () => usePresenceFocusStore.getState().reset(), []);
+
   const searchParams = useSearchParams();
   const requested = searchParams.get("view") ?? initialViewId;
   const selected = resolveSelectedView(payload.views, requested || undefined);
@@ -133,6 +157,7 @@ export function BoardViews({
         payload={payload}
         members={members}
         selectedViewId={activeViewId}
+        currentUserId={currentUserId}
         access={access}
         grants={grants}
       />

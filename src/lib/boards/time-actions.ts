@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { resolveUserTimeZone } from "@/lib/datetime/user-timezone";
+import { zonedWallTimeToUtc } from "@/lib/datetime/timezone";
 import type { Tables } from "@/types/database.types";
 import {
   addManualEntrySchema,
@@ -49,8 +50,6 @@ export async function startTimer(input: {
     p_column_id: parsed.data.columnId,
   });
   if (error) return fail(error.message);
-
-  revalidatePath(`/boards/${meta.boardId}`);
   return { ok: true, data: { entries: (data ?? []) as TimeEntry[] } };
 }
 
@@ -84,7 +83,6 @@ export async function stopTimer(input: {
   if (error) return fail(error.message);
   if (!data) return fail("Entry already stopped.");
 
-  revalidatePath(`/boards/${existing.board_id}`);
   return { ok: true, data: { entry: data } };
 }
 
@@ -117,7 +115,15 @@ export async function addManualEntry(input: {
   if (!col || col.board_id !== meta.boardId || col.kind !== "time_tracking")
     return fail("Invalid time tracking column.");
 
-  const startedAt = new Date(`${parsed.data.date}T12:00:00.000Z`).toISOString();
+  // Anchor the entry to MIDDAY in the user's timezone (not noon UTC), so it
+  // buckets back onto the same local calendar day the user picked — agreeing
+  // with the /time card read path (resolveUserTimeZone + zonedDayOf).
+  const timeZone = await resolveUserTimeZone(user.id);
+  const startedAt = zonedWallTimeToUtc(
+    parsed.data.date,
+    12,
+    timeZone,
+  ).toISOString();
   const endedAt = new Date(
     Date.parse(startedAt) + parsed.data.durationSecs * 1000,
   ).toISOString();
@@ -137,8 +143,6 @@ export async function addManualEntry(input: {
     .select("*")
     .single();
   if (error || !data) return fail(error?.message ?? "Could not add time.");
-
-  revalidatePath(`/boards/${meta.boardId}`);
   return { ok: true, data: { entry: data } };
 }
 
@@ -153,7 +157,20 @@ export async function editEntry(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const startedAt = new Date(`${parsed.data.date}T12:00:00.000Z`).toISOString();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("Not authenticated.");
+
+  // Same midday-in-user-tz anchoring as addManualEntry, so an edited day
+  // renders on that local day on the /time card (RLS scopes the row to self,
+  // so the editor's tz is the owner's tz).
+  const timeZone = await resolveUserTimeZone(user.id);
+  const startedAt = zonedWallTimeToUtc(
+    parsed.data.date,
+    12,
+    timeZone,
+  ).toISOString();
   const endedAt = new Date(
     Date.parse(startedAt) + parsed.data.durationSecs * 1000,
   ).toISOString();
@@ -172,7 +189,6 @@ export async function editEntry(input: {
   if (error) return fail(error.message);
   if (!data) return fail("Entry not found or still running.");
 
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: { entry: data } };
 }
 
@@ -185,14 +201,14 @@ export async function deleteEntry(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // No board_id read needed anymore (previously fetched only for a
+  // revalidatePath, now dropped — the board client hydrates once and is kept
+  // fresh by the optimistic remove + realtime, never by RSC revalidation).
+  const { error } = await supabase
     .from("time_entries")
     .delete()
-    .eq("id", parsed.data.entryId)
-    .select("board_id")
-    .maybeSingle();
+    .eq("id", parsed.data.entryId);
   if (error) return fail(error.message);
-  if (data?.board_id) revalidatePath(`/boards/${data.board_id}`);
 
   return { ok: true, data: { id: parsed.data.entryId } };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -111,6 +112,12 @@ import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { CurrencyDialog } from "@/components/boards/CurrencyDialog";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
 import { useBoardMutations } from "@/lib/boards/use-board-mutations";
+import { useBoardFilterSort } from "@/lib/boards/use-board-filter-sort";
+import {
+  buildItemPredicate,
+  buildItemComparator,
+} from "@/lib/boards/board-filter";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ColumnHeader } from "@/components/boards/ColumnHeader";
 import { AddColumnMenu } from "@/components/boards/AddColumnMenu";
 import {
@@ -138,6 +145,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useRafCallback } from "@/lib/hooks/use-raf-callback";
+import { useBoardSelection } from "@/stores/board-selection";
+import { BoardBulkBar } from "@/components/boards/BoardBulkBar";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -270,7 +279,87 @@ type ColumnHeaderControls = {
   onEditCurrency: (col: Column) => void;
 };
 
-export function BoardTable({
+/**
+ * Per-row selection checkbox. Subscribes ONLY to whether its own id is selected
+ * (a boolean selector), so toggling one row re-renders that one checkbox — not
+ * the virtualized row tree (which subscribes to the TanStack board cache, a
+ * different store). Shift-click extends a range via the store's ordered id list.
+ */
+const RowSelectCheckbox = memo(function RowSelectCheckbox({
+  itemId,
+  name,
+}: {
+  itemId: string;
+  name: string;
+}) {
+  const selected = useBoardSelection((s) => s.selectedIds.has(itemId));
+  const toggle = useBoardSelection((s) => s.toggle);
+  return (
+    <label
+      className={cn(
+        "grid size-6 shrink-0 cursor-pointer place-items-center rounded transition-opacity pointer-coarse:size-11 pointer-coarse:opacity-100",
+        selected
+          ? "opacity-100"
+          : "opacity-0 group-hover/name:opacity-100 focus-within:opacity-100",
+      )}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        aria-label={`Select ${name}`}
+        onChange={() => {}}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle(itemId, e.shiftKey);
+        }}
+        className="accent-primary size-3.5 cursor-pointer"
+      />
+    </label>
+  );
+});
+
+/**
+ * Group-header "select all visible" checkbox. Reflects none/some/all of the
+ * group's currently-visible (filtered) top-level rows and toggles the whole set.
+ * Subscribes to the count of that group's selected ids, so it updates as rows
+ * toggle without touching the row tree.
+ */
+function GroupSelectAllCheckbox({ visibleIds }: { visibleIds: string[] }) {
+  const selectedCount = useBoardSelection(
+    (s) => visibleIds.filter((id) => s.selectedIds.has(id)).length,
+  );
+  const setSelected = useBoardSelection((s) => s.setSelected);
+  const all = visibleIds.length > 0 && selectedCount === visibleIds.length;
+  const some = selectedCount > 0 && !all;
+  return (
+    <label className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-md pointer-coarse:size-11">
+      <input
+        type="checkbox"
+        checked={all}
+        ref={(el) => {
+          if (el) el.indeterminate = some;
+        }}
+        aria-label="Select all visible items in this group"
+        onChange={() => setSelected(visibleIds, !all)}
+        className="accent-primary size-3.5 cursor-pointer"
+      />
+    </label>
+  );
+}
+
+// Public component: a memo wrapper over the implementation below (function
+// declaration is hoisted, so referencing it here is safe).
+export const BoardTable = memo(BoardTableInner);
+
+// Memoized: BoardViews re-renders on every remote presence heartbeat (~6×/sec
+// per active user), but BoardTable's props (payload/members/view/access/grants)
+// are stable across those beats and it reads all live board data from its own
+// `useBoardCache` (TanStack) subscription — so it re-renders on real cache
+// changes (edits, realtime) regardless of memo, while skipping the heartbeat
+// re-render cascade that previously re-rendered every visible row/cell. Presence
+// overlays now subscribe to the presence focus store directly (see
+// presence-focus-store.ts), so they still update per-cell without this re-render.
+function BoardTableInner({
   payload,
   members = [],
   selectedViewId,
@@ -393,6 +482,59 @@ export function BoardTable({
     }
     return byGroup;
   }, [groups, topLevel]);
+
+  // Filter / sort / quick-search state — read from the URL, applied to the
+  // already-loaded cache in memory (0 server round-trips; see AGENTS.md
+  // invariants / gotcha-09). Filtering narrows TOP-LEVEL rows only; subitems
+  // still show under an expanded parent. Sorting reorders WITHIN each group so
+  // group order (position) is preserved. Memoized so 5k rows aren't re-scanned
+  // on unrelated re-renders (presence heartbeats) or per keystroke.
+  const filter = useBoardFilterSort();
+  const predicate = useMemo(
+    () => buildItemPredicate(filter.state, { columns, cellMap }),
+    [filter.state, columns, cellMap],
+  );
+  const comparator = useMemo(
+    () => buildItemComparator(filter.state, { columns, cellMap }),
+    [filter.state, columns, cellMap],
+  );
+  const { visibleItemsByGroup, visibleCount } = useMemo(() => {
+    const out = new Map<string, Item[]>();
+    let count = 0;
+    for (const [gid, list] of itemsByGroup) {
+      let next = list.filter(predicate);
+      if (comparator) next = [...next].sort(comparator);
+      out.set(gid, next);
+      count += next.length;
+    }
+    return { visibleItemsByGroup: out, visibleCount: count };
+  }, [itemsByGroup, predicate, comparator]);
+
+  // Everything filtered away (a filter is active) → show a board-level empty
+  // state instead of a wall of empty groups. Sort alone can't reduce the count,
+  // so count 0 with items present means the predicate excluded them all.
+  const filteredToEmpty = visibleCount === 0 && topLevel.length > 0;
+
+  // ── Bulk row-selection wiring (ephemeral client state) ──────────────────────
+  // Keep the store's ordered id list in sync with what's visible so a shift-click
+  // range resolves across groups in display order, and clear the selection on
+  // view change / unmount (selection is scoped to this mounted Table view).
+  const setSelectionOrder = useBoardSelection((s) => s.setOrderedIds);
+  const clearSelection = useBoardSelection((s) => s.clear);
+  const orderedVisibleIds = useMemo(
+    () =>
+      groups.flatMap((g) =>
+        (visibleItemsByGroup.get(g.id) ?? []).map((i) => i.id),
+      ),
+    [groups, visibleItemsByGroup],
+  );
+  useEffect(() => {
+    setSelectionOrder(orderedVisibleIds);
+  }, [orderedVisibleIds, setSelectionOrder]);
+  useEffect(() => {
+    clearSelection();
+    return () => clearSelection();
+  }, [selectedViewId, clearSelection]);
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
@@ -521,7 +663,7 @@ export function BoardTable({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
       <BoardHeader
         boardId={board.id}
         boardName={board.name}
@@ -532,6 +674,8 @@ export function BoardTable({
         groups={groups.map((g) => ({ id: g.id, name: g.name }))}
         access={access}
         grants={grants}
+        currentUserId={currentUserId}
+        filterable
       />
 
       {columnError ? (
@@ -570,6 +714,17 @@ export function BoardTable({
             <p className="text-muted-foreground px-4 py-6 text-sm">
               This board has no groups yet.
             </p>
+          ) : filteredToEmpty ? (
+            <EmptyState variant="inline" className="px-4 py-10">
+              No items match your filters.{" "}
+              <button
+                type="button"
+                onClick={filter.clearAll}
+                className="text-foreground underline underline-offset-2"
+              >
+                Clear all
+              </button>
+            </EmptyState>
           ) : (
             <DndContext
               id="board-groups"
@@ -585,8 +740,9 @@ export function BoardTable({
                   <GroupSection
                     key={group.id}
                     group={group}
-                    items={itemsByGroup.get(group.id) ?? []}
+                    items={visibleItemsByGroup.get(group.id) ?? []}
                     columns={columns}
+                    selectable={canEdit}
                     col={columnControls}
                     cellMap={cellMap}
                     template={template}
@@ -753,6 +909,15 @@ export function BoardTable({
             mutations.deleteColumnFile(a.id);
             setFilesLightbox(null);
           }}
+        />
+      )}
+
+      {canEdit && (
+        <BoardBulkBar
+          boardId={board.id}
+          groups={groups.map((g) => ({ id: g.id, name: g.name }))}
+          columns={columns}
+          members={members}
         />
       )}
     </div>
@@ -1040,6 +1205,7 @@ function GroupHeaderRow({
   group,
   columns,
   template,
+  selectAll,
   collapsed,
   onToggleCollapse,
   renaming,
@@ -1058,6 +1224,8 @@ function GroupHeaderRow({
   group: Group;
   columns: Column[];
   template: string;
+  /** Group-header "select all visible" checkbox, or null for viewers/empty groups. */
+  selectAll: React.ReactNode;
   collapsed: boolean;
   onToggleCollapse: () => void;
   renaming: boolean;
@@ -1109,6 +1277,7 @@ function GroupHeaderRow({
         )}
         style={{ boxShadow: `inset 3px 0 0 0 ${group.color}` }}
       >
+        {selectAll}
         <button
           type="button"
           aria-label={`Reorder ${group.name}`}
@@ -1290,6 +1459,7 @@ function GroupSection({
   group,
   items,
   columns,
+  selectable,
   col,
   cellMap,
   template,
@@ -1313,6 +1483,8 @@ function GroupSection({
   group: Group;
   items: Item[];
   columns: Column[];
+  /** Whether bulk row-selection checkboxes are shown (editors only, not viewers). */
+  selectable: boolean;
   col: ColumnHeaderControls;
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
@@ -1438,6 +1610,11 @@ function GroupSection({
         group={group}
         columns={columns}
         template={template}
+        selectAll={
+          selectable && items.length > 0 ? (
+            <GroupSelectAllCheckbox visibleIds={items.map((i) => i.id)} />
+          ) : null
+        }
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
         renaming={renaming}
@@ -1526,6 +1703,7 @@ function GroupSection({
                           cellMap={cellMap}
                           template={template}
                           controls={controls}
+                          selectable={selectable}
                           subitems={children}
                           childCount={children.length}
                           isExpanded={isExpanded}
@@ -1587,6 +1765,7 @@ function ItemRow({
   cellMap,
   template,
   controls,
+  selectable,
   subitems,
   childCount,
   isExpanded,
@@ -1600,6 +1779,8 @@ function ItemRow({
   cellMap: Map<string, CacheCellValue["value"]>;
   template: string;
   controls: CellControls;
+  /** Whether the bulk-select checkbox is shown (editors only). */
+  selectable: boolean;
   subitems: Item[];
   childCount: number;
   isExpanded: boolean;
@@ -1718,6 +1899,9 @@ function ItemRow({
         controls={controls}
         leading={
           <>
+            {selectable && (
+              <RowSelectCheckbox itemId={item.id} name={item.name} />
+            )}
             {dragHandle}
             {chevron}
           </>

@@ -6,6 +6,9 @@
 -- auto-Critical (>= 2 dependents) state is DERIVED at render time from
 -- item_dependencies already in the board payload and is never persisted
 -- (spec: docs/superpowers/specs/2026-07-03-priority-critical-design.md).
--- Version slot 20260703110000 reserved per gotcha-43 (parallel-branch
--- migration version collision).
+-- Renumbered 20260703110000 -> 20260703110001 to resolve the gotcha-43
+-- parallel-branch version collision: two files shared version 20260703110000,
+-- which `supabase db push` cannot record (schema_migrations PK is the version).
+-- import_rows_into_board keeps the 110000 slot; this idempotent enum-add takes
+-- 110001. Safe to renumber: this migration was not yet applied to any ledger.
 alter type public.column_kind add value if not exists 'priority';

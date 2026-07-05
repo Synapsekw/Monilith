@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
@@ -9,6 +9,7 @@ import {
   Monitor,
   Moon,
   Plus,
+  Rows3,
   Sun,
 } from "lucide-react";
 import {
@@ -21,7 +22,11 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useUIStore } from "@/stores/ui";
+import { searchItems, type ItemSearchResult } from "@/lib/search/item-search";
 import type { BoardListEntry } from "@/lib/boards/queries";
+
+const MIN_QUERY = 2;
+const DEBOUNCE_MS = 200;
 
 export function CommandPalette({
   boards,
@@ -41,32 +46,112 @@ export function CommandPalette({
   const { setTheme } = useTheme();
   const canCreate = Boolean(workspaces[0]?.id);
 
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<ItemSearchResult[]>([]);
+  // The term the current `items` correspond to. `searching` is derived from the
+  // gap between the live query and this — no setState-in-effect for a spinner.
+  const [resolvedTerm, setResolvedTerm] = useState("");
+  // Ignore out-of-order responses: only the latest issued request may commit.
+  const requestId = useRef(0);
+
+  const resetSearch = useCallback(() => {
+    requestId.current += 1;
+    setQuery("");
+    setItems([]);
+    setResolvedTerm("");
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        // Closing via ⌘K clears the query so the palette reopens fresh.
+        if (useUIStore.getState().commandOpen) resetSearch();
         toggle();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [toggle]);
+  }, [toggle, resetSearch]);
+
+  // Debounced server-backed item search. Sub-threshold queries never round-trip
+  // (the group is hidden anyway); otherwise we wait DEBOUNCE_MS after the last
+  // keystroke. setState happens only in the async callback, and the requestId
+  // guard drops stale responses — no synchronous setState-in-effect.
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < MIN_QUERY) return;
+    const id = ++requestId.current;
+    const handle = setTimeout(async () => {
+      const results = await searchItems(term);
+      if (requestId.current !== id) return;
+      setItems(results);
+      setResolvedTerm(term);
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) resetSearch();
+    setOpen(next);
+  };
 
   const run = (fn: () => void) => {
+    resetSearch();
     setOpen(false);
     fn();
   };
 
+  const term = query.trim();
+  const showItemsGroup = term.length >= MIN_QUERY;
+  const searching = showItemsGroup && term !== resolvedTerm;
+
   return (
     <CommandDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       title="Command palette"
       description="Search and run actions"
     >
-      <CommandInput placeholder="Type a command or search…" />
+      <CommandInput
+        placeholder="Search items or type a command…"
+        value={query}
+        onValueChange={setQuery}
+      />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
+        {showItemsGroup && (
+          <CommandGroup heading="Items" forceMount>
+            {searching ? (
+              // value={query} keeps this status row visible under cmdk's filter.
+              <CommandItem value={query} disabled aria-live="polite">
+                <Rows3 className="size-4" /> Searching…
+              </CommandItem>
+            ) : items.length === 0 ? (
+              <CommandItem value={query} disabled aria-live="polite">
+                <Rows3 className="size-4" /> No items match
+              </CommandItem>
+            ) : (
+              items.map((it) => (
+                <CommandItem
+                  key={it.id}
+                  value={`item-${it.id} ${it.name} ${it.boardName}`}
+                  onSelect={() =>
+                    run(() =>
+                      router.push(`/boards/${it.boardId}?item=${it.id}`),
+                    )
+                  }
+                >
+                  <Rows3 className="size-4" />
+                  <span className="truncate">{it.name}</span>
+                  <span className="text-muted-foreground ml-auto truncate pl-2 text-xs">
+                    {it.boardName}
+                  </span>
+                </CommandItem>
+              ))
+            )}
+          </CommandGroup>
+        )}
         <CommandGroup heading="Navigation">
           <CommandItem onSelect={() => run(() => router.push("/dashboards"))}>
             <LayoutDashboard className="size-4" /> Dashboards

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { Readable } from "node:stream";
 import type { ParsedSheet, RawSheet } from "./types";
+import { MAX_ROWS, MAX_COLS } from "./types";
 import { selectRows } from "./select-rows";
 
 async function loadWorkbook(
@@ -33,14 +34,36 @@ export async function parseWorkbookSheets(
       .pop() || "Sheet1";
 
   return wb.worksheets.map((ws, wi) => {
+    const name = isCsv && wi === 0 ? csvName : ws.name;
+
+    // Guard BEFORE allocating the string[][] grid. `wb.xlsx.load` has already
+    // decompressed the workbook, so a zip-bomb / oversized sheet must be
+    // rejected on its declared dimensions rather than materialising a
+    // rowCount × cellCount grid first (which is the real memory-DoS vector).
+    // These caps also mean the build loops below can never exceed MAX_ROWS ×
+    // MAX_COLS allocations.
+    const rowCount = ws.rowCount;
+    const colCount = ws.columnCount;
+    if (colCount > MAX_COLS) {
+      throw new Error(
+        `Sheet "${name}" has too many columns (${colCount}). The import limit is ${MAX_ROWS} rows × ${MAX_COLS} columns.`,
+      );
+    }
+    if (rowCount > MAX_ROWS) {
+      throw new Error(
+        `Sheet "${name}" has too many rows (${rowCount}). The import limit is ${MAX_ROWS} rows × ${MAX_COLS} columns.`,
+      );
+    }
+
     const grid: string[][] = [];
-    for (let r = 1; r <= ws.rowCount; r++) {
+    for (let r = 1; r <= rowCount; r++) {
       const row = ws.getRow(r);
       const cells: string[] = [];
-      for (let c = 1; c <= row.cellCount; c++) cells.push(row.getCell(c).text);
+      const cellCount = Math.min(row.cellCount, MAX_COLS);
+      for (let c = 1; c <= cellCount; c++) cells.push(row.getCell(c).text);
       grid.push(cells);
     }
-    return { name: isCsv && wi === 0 ? csvName : ws.name, grid };
+    return { name, grid };
   });
 }
 

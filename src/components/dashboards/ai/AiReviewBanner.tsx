@@ -21,8 +21,10 @@ export function AiReviewBanner({ dashboardId }: AiReviewBannerProps) {
   if (dismissed) return null;
 
   function handleKeep() {
-    // Drop ?review=1 from the URL via the History API — no RSC re-render.
-    router.replace(`/dashboards/${dashboardId}`);
+    // Drop ?review=1 from the URL via the History API — no RSC re-render — then
+    // hide the banner locally (same in-page dismissal as the X button below).
+    window.history.replaceState(null, "", `/dashboards/${dashboardId}`);
+    setDismissed(true);
   }
 
   function handleDiscard() {

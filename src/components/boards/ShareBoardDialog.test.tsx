@@ -57,6 +57,27 @@ describe("ShareBoardDialog", () => {
     );
   });
 
+  it("reverts the select and shows an error when the share write fails", async () => {
+    shareBoard.mockResolvedValue({ ok: false, error: "Not allowed" });
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    const select = screen.getByLabelText(
+      "Access for Dana Lee",
+    ) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "editor" } });
+    // The optimistic value is rolled back to the persisted "none"…
+    await waitFor(() => expect(select.value).toBe("none"));
+    // …and the failure is surfaced inline.
+    expect(screen.getByRole("alert")).toHaveTextContent("Not allowed");
+  });
+
   it("calls unshareBoard when access is set back to none", async () => {
     unshareBoard.mockResolvedValue({ ok: true });
     render(

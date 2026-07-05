@@ -20,6 +20,7 @@ import {
   MAX_ROWS,
   MAX_COLS,
   PREVIEW_GRID_ROWS,
+  SUBTASK_MARKER,
   type ImportFormat,
   type ImportPreview,
   type SheetPreview,
@@ -76,6 +77,65 @@ function guardFile(
   }
 
   return { ok: true, buf, ext };
+}
+
+/** items.name CHECK: char_length between 1 and 255. */
+const ITEM_NAME_MAX = 255;
+
+/**
+ * Pre-commit scan mirroring the item-name derivation in `splitRows2`: every
+ * selected row becomes an item/subitem whose name is the (subtask-marker-
+ * stripped) name cell. A blank name violates the items CHECK (char_length ≥ 1)
+ * and an over-long one violates its upper bound — either aborts the whole
+ * atomic 2000-row batch in the RPC with a raw Postgres constraint message. We
+ * catch them here with a row-numbered error BEFORE the RPC runs, so the user
+ * sees which rows are at fault instead of a rolled-back import.
+ *
+ * Over-long names are blocked (not silently truncated): truncation would drop
+ * data the user can't see was lost, so we surface the offending rows and let
+ * them fix or exclude them.
+ */
+function findNameValidationError(
+  table: ParsedTable,
+  specs: ColumnSpec[],
+): string | null {
+  const nameSpec = specs.find((s) => s.role === "name");
+  // A missing name column is caught downstream by the payload builders
+  // ("no name column"); nothing to validate here.
+  if (!nameSpec) return null;
+
+  const blankRows: number[] = [];
+  const oversizedRows: number[] = [];
+
+  table.rows.forEach((row, i) => {
+    const rawName = (row[nameSpec.sourceIndex] ?? "").trim();
+    const name = rawName.startsWith(SUBTASK_MARKER)
+      ? rawName.slice(SUBTASK_MARKER.length)
+      : rawName;
+    // 1-based original grid row number — matches the wizard's row labels.
+    const rowNumber = table.rowIndices[i] + 1;
+    if (name === "") blankRows.push(rowNumber);
+    // char_length counts code points like Postgres — use the spread length.
+    else if ([...name].length > ITEM_NAME_MAX) oversizedRows.push(rowNumber);
+  });
+
+  const fmt = (rows: number[]): string => {
+    const shown = rows.slice(0, 5).map((n) => `row ${n}`);
+    const extra = rows.length - shown.length;
+    return extra > 0 ? `${shown.join(", ")}, +${extra} more` : shown.join(", ");
+  };
+
+  if (blankRows.length > 0) {
+    return `${blankRows.length} row(s) have a blank item name (${fmt(
+      blankRows,
+    )}). Every imported row needs a name — fill them in or exclude those rows.`;
+  }
+  if (oversizedRows.length > 0) {
+    return `${oversizedRows.length} row(s) have an item name longer than ${ITEM_NAME_MAX} characters (${fmt(
+      oversizedRows,
+    )}). Shorten them or exclude those rows.`;
+  }
+  return null;
 }
 
 // ─── exportBoard ──────────────────────────────────────────────────────────────
@@ -427,6 +487,11 @@ export async function commitImport(input: {
       );
     }
   }
+
+  // Block blank / over-long item names up front so a single bad row doesn't
+  // roll back the whole batch with a raw constraint error from the RPC.
+  const nameError = findNameValidationError(table, parsed.data.columns);
+  if (nameError) return fail(nameError);
 
   const supabase = await createClient();
 

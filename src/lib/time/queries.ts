@@ -2,6 +2,8 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
+import { resolveUserTimeZone } from "@/lib/datetime/user-timezone";
+import { zonedDayOf, zonedWallTimeToUtc } from "@/lib/datetime/timezone";
 import { weekDays, assembleTimeCard } from "@/lib/time/card";
 import { PRESET_CATEGORIES } from "@/lib/time/categories";
 import type {
@@ -24,30 +26,45 @@ export async function getTimeCardData(
   const from = days[0];
   const to = days[6];
 
+  // Bucket timer instants into the USER's local calendar day, not the UTC day.
+  // The week window and each entry's day are computed in this zone, so a timer
+  // run at 5pm local Monday lands under Monday regardless of UTC offset.
+  const timeZone = await resolveUserTimeZone(userId);
+  // UTC bounds of the local week [Mon 00:00 local, Mon+7 00:00 local) — the
+  // exclusive upper bound is the local midnight after Sunday (hour=24 of `to`).
+  const windowStart = zonedWallTimeToUtc(from, 0, timeZone).toISOString();
+  const windowEnd = zonedWallTimeToUtc(to, 24, timeZone).toISOString();
+
   const supabase = await createClient();
 
   // Manual allocations for the caller's week (RLS already scopes to org members;
-  // filter to self for the card surface).
-  const { data: allocRows } = await supabase
+  // filter to self for the card surface). A failed read must NOT masquerade as an
+  // empty week — throw so the /time route's error.tsx boundary renders a visible
+  // error state (distinct from "no time logged").
+  const { data: allocRows, error: allocErr } = await supabase
     .from("time_allocations")
     .select("*")
     .eq("user_id", userId)
     .gte("work_date", from)
     .lte("work_date", to);
+  if (allocErr)
+    throw new Error(`Failed to load time allocations: ${allocErr.message}`);
   const allocations = (allocRows ?? []) as TimeAllocationRow[];
 
   // Timer totals for the caller's week (completed entries only).
-  const { data: timerRows } = await supabase
+  const { data: timerRows, error: timerErr } = await supabase
     .from("time_entries")
     .select("item_id, started_at, duration_secs")
     .eq("user_id", userId)
     .not("ended_at", "is", null)
-    .gte("started_at", `${from}T00:00:00Z`)
-    .lte("started_at", `${to}T23:59:59Z`);
+    .gte("started_at", windowStart)
+    .lt("started_at", windowEnd);
+  if (timerErr)
+    throw new Error(`Failed to load timer entries: ${timerErr.message}`);
 
   const timer: TimerSecsByItemDay[] = (timerRows ?? []).map((r) => ({
     itemId: r.item_id,
-    day: (r.started_at as string).slice(0, 10),
+    day: zonedDayOf(r.started_at as string, timeZone),
     secs: Number(r.duration_secs ?? 0),
   }));
 
@@ -61,10 +78,12 @@ export async function getTimeCardData(
     { name: string; boardName: string | null }
   >();
   if (itemIds.size > 0) {
-    const { data: items } = await supabase
+    const { data: items, error: itemsErr } = await supabase
       .from("items")
       .select("id, name, boards(name)")
       .in("id", [...itemIds]);
+    if (itemsErr)
+      throw new Error(`Failed to load item metadata: ${itemsErr.message}`);
     for (const it of items ?? []) {
       itemMeta.set(it.id, {
         name: it.name,

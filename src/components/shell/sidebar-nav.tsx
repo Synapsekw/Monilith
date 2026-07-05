@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Clock, Gauge, Inbox, Target } from "lucide-react";
+import { BarChart3, Clock, Gauge, Inbox, ListTodo, Target } from "lucide-react";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { PlatformNav } from "@/components/platform/PlatformNav";
@@ -34,6 +34,7 @@ function CoarseCaption({ label }: { label: string }) {
 }
 
 const nav = [
+  { label: "My Work", icon: ListTodo, href: "/my-work" },
   { label: "Goals", icon: Target, href: "/goals" },
   { label: "Portfolios", icon: BarChart3, href: "/portfolios" },
   { label: "Workload", icon: Gauge, href: "/workload" },
@@ -55,6 +56,7 @@ export function SidebarNav({
   isPlatformAdmin,
   isOrgAdmin,
   newFeedbackCount,
+  forceExpanded = false,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
@@ -63,10 +65,15 @@ export function SidebarNav({
   isPlatformAdmin?: boolean;
   isOrgAdmin?: boolean;
   newFeedbackCount?: number;
+  /**
+   * Render always-expanded, ignoring the persisted collapse flag. Used by the
+   * mobile drawer, which is full-width and never shows the icon-only rail.
+   */
+  forceExpanded?: boolean;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const hasHydrated = useUIStore((s) => s.hasHydrated);
-  const isCollapsed = hasHydrated && collapsed;
+  const isCollapsed = !forceExpanded && hasHydrated && collapsed;
   const coarse = useCoarsePointer();
   const pathname = usePathname();
 

@@ -30,6 +30,7 @@ import {
   addSubitemSchema,
   deleteItemSchema,
   reorderItemSchema,
+  moveItemSchema,
   updateColumnSettingsSchema,
   removeColumnOptionSchema,
 } from "@/lib/validations/board-actions";
@@ -242,6 +243,17 @@ export async function duplicateBoard(input: {
   return { ok: true, data: { boardId: data.id } };
 }
 
+// ── revalidatePath rule for within-board mutations ──────────────────────────
+// The board client hydrates ONCE from the server payload (initialData,
+// staleTime Infinity) and is kept fresh by optimistic cache patches + Supabase
+// Realtime — it NEVER refetches the board RSC. So revalidatePath(`/boards/<id>`)
+// on a within-board mutation invalidates a payload the mounted client discards:
+// dead weight (9 queries, up to ~25k rows) on the hot path (every cell edit,
+// rename, drag). We DROP it from all within-board hot-path mutations below.
+// A fresh navigation to the board is dynamic and refetches regardless.
+// Revalidation is KEPT only where a mutation feeds OTHER surfaces (nav/sidebar
+// board lists) — those use updateTag(boardsTag/sharedBoardsTag); see
+// createBoard/deleteBoard/renameBoard above.
 export async function renameGroup(input: {
   groupId: string;
   name: string;
@@ -259,8 +271,6 @@ export async function renameGroup(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Group not found.");
-
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -302,7 +312,6 @@ export async function createGroup(input: {
     .single();
   if (error || !data) return fail(error?.message ?? "Could not create group.");
 
-  revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: { group: data } };
 }
 
@@ -323,8 +332,6 @@ export async function reorderGroup(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Group not found.");
-
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -345,8 +352,6 @@ export async function updateGroupColor(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Group not found.");
-
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -367,8 +372,6 @@ export async function deleteGroup(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Group not found.");
-
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -387,8 +390,6 @@ export async function createItem(input: {
     p_name: parsed.data.name,
   });
   if (error || !data) return fail(error?.message ?? "Could not create item.");
-
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: { item: data as Tables<"items"> } };
 }
 
@@ -411,7 +412,6 @@ export async function renameItem(input: {
   // maybeSingle() returns null data with no error when the item is missing or
   // hidden by RLS — treat that as a failure rather than a silent no-op success.
   if (!data) return fail("Item not found.");
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -458,7 +458,6 @@ export async function addSubitem(input: {
   if (error || !data)
     return fail(error?.message ?? "Could not create subitem.");
 
-  revalidatePath(`/boards/${parent.board_id}`);
   return { ok: true, data: { item: data } };
 }
 
@@ -498,8 +497,6 @@ export async function deleteItem(input: {
   if (!data) return fail("Item not found.");
 
   await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
-
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -521,8 +518,73 @@ export async function reorderItem(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Item not found.");
+  return { ok: true, data: undefined };
+}
 
-  revalidatePath(`/boards/${data.board_id}`);
+/**
+ * Move a top-level item to a different group on the same board. Appends it to
+ * the end of the target group (position = after the current last top-level row)
+ * and drags its subitems' denormalized `group_id` along so they stay under the
+ * parent. RLS scopes every read/write to the caller's org; the explicit
+ * same-board + top-level guards give a real answer instead of an RLS-filtered
+ * silent no-op (mirrors deleteItem's defense-in-depth). Reused per-item by the
+ * bulk "Move to group" wrapper so its authorization is identical to a single move.
+ */
+export async function moveItem(input: {
+  itemId: string;
+  groupId: string;
+}): Promise<ActionResult> {
+  const parsed = moveItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const supabase = await createClient();
+
+  const { data: item, error: itemErr } = await supabase
+    .from("items")
+    .select("board_id, parent_id")
+    .eq("id", parsed.data.itemId)
+    .maybeSingle();
+  if (itemErr || !item) return fail("Item not found.");
+  if (item.parent_id !== null)
+    return fail("Subitems can't be moved between groups.");
+
+  const { data: group, error: groupErr } = await supabase
+    .from("groups")
+    .select("board_id")
+    .eq("id", parsed.data.groupId)
+    .maybeSingle();
+  if (groupErr || !group) return fail("Group not found.");
+  if (group.board_id !== item.board_id)
+    return fail("Group belongs to a different board.");
+
+  // Append after the target group's last top-level item (subitems have their
+  // own position scope under a parent, so exclude them from the max).
+  const { data: last } = await supabase
+    .from("items")
+    .select("position")
+    .eq("group_id", parsed.data.groupId)
+    .is("parent_id", null)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase
+    .from("items")
+    .update({
+      group_id: parsed.data.groupId,
+      position: midpoint(last?.position ?? null, null),
+    })
+    .eq("id", parsed.data.itemId);
+  if (error) return fail(error.message);
+
+  // Keep subitems co-located with their parent (their denormalized group_id
+  // must match). RLS-scoped; best-effort — the parent already moved.
+  await supabase
+    .from("items")
+    .update({ group_id: parsed.data.groupId })
+    .eq("parent_id", parsed.data.itemId);
+
   return { ok: true, data: undefined };
 }
 
@@ -621,8 +683,6 @@ export async function upsertCell(input: {
         });
     }
   }
-
-  revalidatePath(`/boards/${column.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -650,8 +710,6 @@ export async function clearCell(input: {
     .eq("item_id", parsed.data.itemId)
     .eq("column_id", parsed.data.columnId);
   if (error) return fail(error.message);
-
-  revalidatePath(`/boards/${column.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -711,7 +769,6 @@ export async function createColumn(input: {
     .single();
   if (error || !data) return fail(error?.message ?? "Could not create column.");
 
-  revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: { column: data } };
 }
 
@@ -742,7 +799,6 @@ export async function renameColumn(input: {
     .update({ name: parsed.data.name })
     .eq("id", parsed.data.columnId);
   if (error) return fail(error.message);
-  revalidatePath(`/boards/${boardId}`);
   return { ok: true, data: undefined };
 }
 
@@ -761,7 +817,6 @@ export async function resizeColumn(input: {
     .update({ width: parsed.data.width })
     .eq("id", parsed.data.columnId);
   if (error) return fail(error.message);
-  revalidatePath(`/boards/${boardId}`);
   return { ok: true, data: undefined };
 }
 
@@ -783,8 +838,6 @@ export async function reorderColumn(input: {
     .maybeSingle();
   if (error) return fail(error.message);
   if (!data) return fail("Column not found.");
-
-  revalidatePath(`/boards/${data.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -806,7 +859,6 @@ export async function resizeNameColumn(input: {
     .update({ name_column_width: parsed.data.width })
     .eq("id", parsed.data.boardId);
   if (error) return fail(error.message);
-  revalidatePath(`/boards/${parsed.data.boardId}`);
   return { ok: true, data: undefined };
 }
 
@@ -838,7 +890,6 @@ export async function updateColumnSettings(input: {
     .update({ settings: settingsParsed.data as Tables<"columns">["settings"] })
     .eq("id", parsed.data.columnId);
   if (error) return fail(error.message);
-  revalidatePath(`/boards/${col.board_id}`);
   return { ok: true, data: undefined };
 }
 
@@ -862,7 +913,6 @@ export async function removeColumnOption(input: {
     p_option_id: parsed.data.optionId,
   });
   if (error) return fail(error.message);
-  revalidatePath(`/boards/${boardId}`);
   return { ok: true, data: { clearedCells: data ?? 0 } };
 }
 
@@ -881,6 +931,5 @@ export async function deleteColumn(input: {
     .delete()
     .eq("id", parsed.data.columnId);
   if (error) return fail(error.message);
-  revalidatePath(`/boards/${boardId}`);
   return { ok: true, data: undefined };
 }

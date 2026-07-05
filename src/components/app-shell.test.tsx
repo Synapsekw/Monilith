@@ -17,6 +17,7 @@ function renderShell() {
   return render(
     <AppShell
       sidebarNav={<div>SIDEBAR_NAV_SLOT</div>}
+      mobileNav={<div>MOBILE_NAV_SLOT</div>}
       headerUser={<div>HEADER_USER_SLOT</div>}
       commandPalette={<div>COMMAND_PALETTE_SLOT</div>}
     >
@@ -32,6 +33,7 @@ describe("AppShell frame", () => {
     expect(screen.getAllByText("MONOLITH").length).toBeGreaterThan(0);
     expect(screen.getByText("Search…")).toBeInTheDocument();
     expect(screen.getByText("SIDEBAR_NAV_SLOT")).toBeInTheDocument();
+    expect(screen.getByText("MOBILE_NAV_SLOT")).toBeInTheDocument();
     expect(screen.getByText("HEADER_USER_SLOT")).toBeInTheDocument();
     expect(screen.getByText("COMMAND_PALETTE_SLOT")).toBeInTheDocument();
   });

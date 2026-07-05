@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KanbanBoard, onCardDropped } from "@/components/boards/KanbanBoard";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 
 const updateBoardView = vi.fn();
 vi.mock("@/lib/boards/view-actions", () => ({
@@ -37,6 +38,7 @@ const push = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Presence: simulate another user focused (dragging) the card:i1 target so the
@@ -78,8 +80,30 @@ beforeEach(() => {
       return 600;
     },
   });
+  // PresenceRing/usePresenceFocus now read the presence focus store, not the
+  // context — seed another user (Sam) focused on card:i1 so its ring renders.
+  usePresenceFocusStore.getState().syncPresence({
+    selfUserId: "self",
+    flashTargetId: null,
+    setFocus: () => {},
+    focusMap: new Map([
+      [
+        "card:i1",
+        [
+          {
+            userId: "u2",
+            name: "Sam",
+            avatarUrl: null,
+            color: "#2d9cdb",
+            isSelf: false,
+          },
+        ],
+      ],
+    ]),
+  });
 });
 afterEach(() => {
+  usePresenceFocusStore.getState().reset();
   if (originalOffsetHeight) {
     Object.defineProperty(
       HTMLElement.prototype,

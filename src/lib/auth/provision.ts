@@ -11,15 +11,28 @@ import type { Database } from "@/types/database.types";
 export async function provisionAccountForUser(
   supabase: SupabaseClient<Database>,
   user: User,
-): Promise<void> {
+): Promise<{ error: string | null }> {
   const orgName = user.user_metadata?.org_name;
-  if (typeof orgName !== "string" || orgName.trim().length === 0) return;
+  if (typeof orgName !== "string" || orgName.trim().length === 0)
+    return { error: null };
 
   const { data: orgs } = await supabase
     .from("organizations")
     .select("id")
     .limit(1);
-  if (orgs && orgs.length > 0) return;
+  if (orgs && orgs.length > 0) return { error: null };
 
-  await supabase.rpc("provision_account", { p_org_name: orgName.trim() });
+  const { error } = await supabase.rpc("provision_account", {
+    p_org_name: orgName.trim(),
+  });
+  if (error) {
+    // A transient RPC failure here strands a confirmed user with zero orgs.
+    // Surface it (the callback route redirects to an error page) rather than
+    // silently continuing into an empty, broken app shell.
+    console.error(
+      `provision_account failed for user ${user.id}: ${error.message}`,
+    );
+    return { error: error.message };
+  }
+  return { error: null };
 }

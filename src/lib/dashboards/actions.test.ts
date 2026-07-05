@@ -286,7 +286,9 @@ describe("getWidgetsData (batched, one round-trip)", () => {
       );
       const slot = res.data.results[WIDGET];
       expect(slot.ok).toBe(true);
-      if (slot.ok)
+      // `"buckets" in slot` narrows the union to the aggregate slot (chart/list
+      // slots are `shape`-tagged and carry no buckets).
+      if (slot.ok && "buckets" in slot)
         expect(slot.buckets).toEqual([{ group_key: "g", metric: 3 }]);
     }
   });
@@ -331,7 +333,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
       const good = res.data.results[WIDGET];
       const bad = res.data.results[WIDGET_2];
       expect(good.ok).toBe(true);
-      if (good.ok)
+      if (good.ok && "buckets" in good)
         expect(good.buckets).toEqual([{ group_key: null, metric: 7 }]);
       expect(bad.ok).toBe(false);
       if (!bad.ok) expect(bad.error).toBe("boom");
@@ -381,7 +383,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     expect(getWidgetAggregationCached).not.toHaveBeenCalled();
     const slot = res.data.results[WIDGET];
     expect(slot.ok).toBe(true);
-    if (!slot.ok) return;
+    if (!slot.ok || !("buckets" in slot)) return;
     expect(slot.kind).toBe("completion");
     expect(slot.completion?.rows[0]).toMatchObject({
       groupKey: "g1",
@@ -469,7 +471,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     expect(getWidgetAggregationCached).not.toHaveBeenCalled();
     const slot = res.data.results[WIDGET];
     expect(slot.ok).toBe(true);
-    if (!slot.ok) return;
+    if (!slot.ok || !("buckets" in slot)) return;
     expect(slot.kind).toBe("health");
     expect(slot.health).toMatchObject({ overdueItems: 3, newItems7d: 1 });
     expect(slot.buckets).toEqual([]);
@@ -512,6 +514,79 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     expect(res.data.results[WIDGET_2].ok).toBe(true);
   });
 
+  it("resolves a chart widget into a `series`-shaped slot (not an aggregate call)", async () => {
+    // Chart + list widgets now ride the same batched fetch as the aggregate
+    // family (fold of the old per-widget getWidgetSeries/getWidgetRows). A chart
+    // with no source board short-circuits resolveSeries to empty points without
+    // touching the aggregate cached read.
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "chart",
+          config: {},
+          source_board_id: null,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    currentClient = { from };
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const slot = res.data.results[WIDGET];
+    expect(slot.ok).toBe(true);
+    if (!slot.ok) return;
+    expect("shape" in slot && slot.shape).toBe("series");
+    if ("series" in slot) expect(slot.series.points).toEqual([]);
+    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+  });
+
+  it("resolves a list widget into a `rows`-shaped slot via the list-rows RPC", async () => {
+    const inFn = vi.fn(async () => ({
+      data: [
+        {
+          id: WIDGET,
+          kind: "list",
+          // No columnIds ⇒ resolveRows only hits the bounded list-rows RPC.
+          config: {},
+          source_board_id: BOARD,
+          org_id: "org-9",
+        },
+      ],
+      error: null,
+    }));
+    const select = vi.fn(() => ({ in: inFn }));
+    const from = vi.fn(() => ({ select }));
+    const rpc = vi.fn(async () => ({
+      data: [{ item_id: "i1", name: "Item 1", created_at: "2026-01-01" }],
+      error: null,
+    }));
+    currentClient = { from, rpc };
+
+    const res = await getWidgetsData({ widgetIds: [WIDGET] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const slot = res.data.results[WIDGET];
+    expect(slot.ok).toBe(true);
+    if (!slot.ok) return;
+    expect("shape" in slot && slot.shape).toBe("rows");
+    if ("rows" in slot) {
+      expect(slot.rows.rows).toHaveLength(1);
+      expect(slot.rows.rows[0]).toMatchObject({ itemId: "i1", name: "Item 1" });
+      expect(slot.rows.columns).toEqual([]);
+    }
+    expect(rpc).toHaveBeenCalledWith(
+      "dashboard_list_rows",
+      expect.objectContaining({ p_board_id: BOARD }),
+    );
+    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+  });
+
   it("returns empty buckets for a widget with no source board (no aggregation call)", async () => {
     const inFn = vi.fn(async () => ({
       data: [
@@ -534,7 +609,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     if (res.ok) {
       const slot = res.data.results[WIDGET];
       expect(slot.ok).toBe(true);
-      if (slot.ok) expect(slot.buckets).toEqual([]);
+      if (slot.ok && "buckets" in slot) expect(slot.buckets).toEqual([]);
     }
     expect(getWidgetAggregationCached).not.toHaveBeenCalled();
   });

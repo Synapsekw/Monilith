@@ -82,4 +82,26 @@ describe("BoardItemMenu", () => {
     );
     expect(deleteBoard).toHaveBeenCalledWith({ boardId: "b1" });
   });
+
+  it("surfaces a failed delete inline and keeps the confirm dialog open", async () => {
+    deleteBoard.mockResolvedValueOnce({
+      ok: false,
+      error: "Delete blocked",
+    } as never);
+    render(
+      <BoardItemMenu board={{ id: "b1", name: "Roadmap" }} isActive={false} />,
+    );
+    await open();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /delete board/i }),
+    );
+    // Error is shown and the destructive confirm button is still there.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Delete blocked",
+    );
+    expect(
+      screen.getByRole("button", { name: /delete board/i }),
+    ).toBeInTheDocument();
+  });
 });
