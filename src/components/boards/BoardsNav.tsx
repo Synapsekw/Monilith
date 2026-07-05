@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/tooltip";
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
+import { NavSection } from "@/components/shell/nav-section";
 
 /**
  * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
@@ -111,12 +112,12 @@ function SortableBoardRow({
 export function BoardsNav({
   boards,
   sharedBoards,
-  workspaces,
+  activeWorkspaceId,
   collapsed = false,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
-  workspaces: { id: string; name: string }[];
+  activeWorkspaceId?: string;
   collapsed?: boolean;
 }) {
   const { boardId: activeBoardId } = useParams<{ boardId: string }>();
@@ -168,69 +169,82 @@ export function BoardsNav({
     });
   }
 
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-0.5 py-2",
-        collapsed ? "items-center px-2" : "px-2",
-      )}
-    >
-      {collapsed ? (
-        <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                aria-label="Boards"
-                className="text-muted-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
-              >
-                <FolderKanban className="size-4 shrink-0" />
-                {coarse ? <CoarseCaption label="Boards" /> : null}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="right">Boards</TooltipContent>
-          </Tooltip>
-          {/* Triggerless: keeps the dialog mounted so the ⌘K "New board"
-              command can open it even while the sidebar is collapsed. */}
-          <NewBoardDialog workspaceId={workspaces[0]?.id} collapsed />
-        </>
-      ) : (
-        <div className="flex items-center justify-between px-3 py-1">
-          <span className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
-            <FolderKanban className="size-4" />
-            Boards
+  return collapsed ? (
+    <div className="flex flex-col items-center gap-0.5 px-2 py-2">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            aria-label="Boards"
+            className="text-muted-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
+          >
+            <FolderKanban className="size-4 shrink-0" />
+            {coarse ? <CoarseCaption label="Boards" /> : null}
           </span>
-          <NewBoardDialog workspaceId={workspaces[0]?.id} />
-        </div>
-      )}
+        </TooltipTrigger>
+        <TooltipContent side="right">Boards</TooltipContent>
+      </Tooltip>
+      {/* Triggerless: keeps the dialog mounted so the ⌘K "New board"
+          command can open it even while the sidebar is collapsed. */}
+      <NewBoardDialog workspaceId={activeWorkspaceId} collapsed />
 
+      {boards.length === 0
+        ? null
+        : boards.map((b) => (
+            <Tooltip key={b.id}>
+              <TooltipTrigger asChild>
+                <Link
+                  href={`/boards/${b.id}`}
+                  aria-current={b.id === activeBoardId ? "page" : undefined}
+                  aria-label={b.name}
+                  className={cn(
+                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
+                    b.id === activeBoardId
+                      ? "bg-primary/80 text-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <span className="shrink-0">{b.name.charAt(0)}</span>
+                  {coarse ? <CoarseCaption label={b.name} /> : null}
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">{b.name}</TooltipContent>
+            </Tooltip>
+          ))}
+
+      {/* Shared with me */}
+      {sharedBoards.length > 0
+        ? sharedBoards.map((b) => (
+            <Tooltip key={b.id}>
+              <TooltipTrigger asChild>
+                <Link
+                  href={`/boards/${b.id}`}
+                  aria-current={b.id === activeBoardId ? "page" : undefined}
+                  aria-label={b.name}
+                  className={cn(
+                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
+                    b.id === activeBoardId
+                      ? "bg-primary/80 text-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  )}
+                >
+                  <span className="shrink-0">{b.name.charAt(0)}</span>
+                  {coarse ? <CoarseCaption label={b.name} /> : null}
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">{b.name}</TooltipContent>
+            </Tooltip>
+          ))
+        : null}
+    </div>
+  ) : (
+    <NavSection
+      storageKey="boards"
+      title="Boards"
+      icon={FolderKanban}
+      action={<NewBoardDialog workspaceId={activeWorkspaceId} />}
+    >
       {boards.length === 0 ? (
-        collapsed ? null : (
-          <p className="text-muted-foreground px-3 py-1 text-xs">
-            No boards yet
-          </p>
-        )
-      ) : collapsed ? (
-        boards.map((b) => (
-          <Tooltip key={b.id}>
-            <TooltipTrigger asChild>
-              <Link
-                href={`/boards/${b.id}`}
-                aria-current={b.id === activeBoardId ? "page" : undefined}
-                aria-label={b.name}
-                className={cn(
-                  "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
-                  b.id === activeBoardId
-                    ? "bg-primary/80 text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                <span className="shrink-0">{b.name.charAt(0)}</span>
-                {coarse ? <CoarseCaption label={b.name} /> : null}
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right">{b.name}</TooltipContent>
-          </Tooltip>
-        ))
+        <p className="text-muted-foreground px-3 py-1 text-xs">No boards yet</p>
       ) : (
         <DndContext
           id="sidebar-boards"
@@ -252,77 +266,51 @@ export function BoardsNav({
           </SortableContext>
         </DndContext>
       )}
-
-      {/* Shared with me */}
       {sharedBoards.length > 0 ? (
-        collapsed ? (
-          sharedBoards.map((b) => (
-            <Tooltip key={b.id}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={`/boards/${b.id}`}
-                  aria-current={b.id === activeBoardId ? "page" : undefined}
-                  aria-label={b.name}
-                  className={cn(
-                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
-                    b.id === activeBoardId
-                      ? "bg-primary/80 text-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )}
-                >
-                  <span className="shrink-0">{b.name.charAt(0)}</span>
-                  {coarse ? <CoarseCaption label={b.name} /> : null}
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">{b.name}</TooltipContent>
-            </Tooltip>
-          ))
-        ) : (
-          <>
-            <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">
-              Shared with me
-            </p>
-            {sharedBoards.map((b) => (
-              <Link
-                key={b.id}
-                href={`/boards/${b.id}`}
-                aria-current={b.id === activeBoardId ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors",
-                  b.id === activeBoardId
-                    ? "bg-primary/80 text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{b.name}</span>
-                {b.access_level === "viewer" ? (
-                  <Eye
-                    aria-label="View only"
-                    className="text-muted-foreground size-3 shrink-0"
-                  />
-                ) : null}
-                {/* Who shared it: an icon with a hover tooltip, replacing the
-                    redundant "· from {owner}" second line. */}
-                {b.owner_name ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="flex shrink-0 items-center">
-                        <Users2
-                          aria-label={`Shared by ${b.owner_name}`}
-                          className="text-muted-foreground size-3.5"
-                        />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      Shared by {b.owner_name}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </Link>
-            ))}
-          </>
-        )
+        <>
+          <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">
+            Shared with me
+          </p>
+          {sharedBoards.map((b) => (
+            <Link
+              key={b.id}
+              href={`/boards/${b.id}`}
+              aria-current={b.id === activeBoardId ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors",
+                b.id === activeBoardId
+                  ? "bg-primary/80 text-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">{b.name}</span>
+              {b.access_level === "viewer" ? (
+                <Eye
+                  aria-label="View only"
+                  className="text-muted-foreground size-3 shrink-0"
+                />
+              ) : null}
+              {/* Who shared it: an icon with a hover tooltip, replacing the
+                  redundant "· from {owner}" second line. */}
+              {b.owner_name ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex shrink-0 items-center">
+                      <Users2
+                        aria-label={`Shared by ${b.owner_name}`}
+                        className="text-muted-foreground size-3.5"
+                      />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    Shared by {b.owner_name}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
+            </Link>
+          ))}
+        </>
       ) : null}
-    </div>
+    </NavSection>
   );
 }

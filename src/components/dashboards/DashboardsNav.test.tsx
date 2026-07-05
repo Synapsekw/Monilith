@@ -23,10 +23,12 @@ beforeEach(() => {
 });
 
 describe("DashboardsNav", () => {
-  const workspaces = [{ id: "ws1", name: "WS" }];
+  const activeWorkspaceId = "ws1";
 
   it("opens the create dialog when the newDashboardOpen store flag is set", async () => {
-    render(<DashboardsNav dashboards={[]} workspaces={workspaces} />);
+    render(
+      <DashboardsNav dashboards={[]} activeWorkspaceId={activeWorkspaceId} />,
+    );
     expect(
       screen.queryByText("Give your dashboard a name to get started."),
     ).toBeNull();
@@ -39,7 +41,9 @@ describe("DashboardsNav", () => {
   });
 
   it("offers blank and AI options from the + menu, and blank opens the create dialog", async () => {
-    render(<DashboardsNav dashboards={[]} workspaces={workspaces} />);
+    render(
+      <DashboardsNav dashboards={[]} activeWorkspaceId={activeWorkspaceId} />,
+    );
 
     // The standalone AI icon is gone — generation lives inside the + menu now.
     expect(screen.queryByLabelText("Generate dashboard with AI")).toBeNull();
@@ -64,7 +68,7 @@ describe("DashboardsNav", () => {
         <DashboardsNav
           collapsed
           dashboards={[{ id: "d1", name: "Revenue" }]}
-          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
         />
       </TooltipProvider>,
     );
@@ -85,7 +89,7 @@ describe("DashboardsNav", () => {
         <DashboardsNav
           collapsed
           dashboards={[{ id: "d1", name: "Revenue" }]}
-          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
         />
       </TooltipProvider>,
     );
@@ -99,7 +103,11 @@ describe("DashboardsNav", () => {
   it("opens from the store flag even when the sidebar is collapsed", async () => {
     render(
       <TooltipProvider>
-        <DashboardsNav dashboards={[]} workspaces={workspaces} collapsed />
+        <DashboardsNav
+          dashboards={[]}
+          activeWorkspaceId={activeWorkspaceId}
+          collapsed
+        />
       </TooltipProvider>,
     );
     expect(
