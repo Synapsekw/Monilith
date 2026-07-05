@@ -3,8 +3,11 @@ import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import { formatDuration } from "@/lib/boards/time-format";
 import { PercentBar } from "@/components/boards/cells";
 
+// Pin the locale — `undefined` renders "Jan 1" on the Node server and "1 Jan"
+// in a non-US-default browser → hydration mismatch. "en-US" matches the leaf
+// DateCell this rollup mirrors and the rest of the board date formatters.
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });

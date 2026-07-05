@@ -37,8 +37,12 @@ export const AGGREGATION_LABEL: Record<AggregationId, string> = {
   total_over_estimate: "Total / Est.",
 };
 
+// Pin the locale (do NOT pass `undefined`): the default locale differs between
+// the Node server (en-US) and the user's browser, so `undefined` renders
+// "Jan 1" on the server and "1 Jan" on the client → hydration mismatch. "en-US"
+// is the convention used across the board date formatters (Gantt/Calendar/…).
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });

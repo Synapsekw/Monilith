@@ -107,7 +107,10 @@ export function DateCell({
   overdue?: boolean;
 }) {
   if (!value?.date) return <span className="text-sm" />;
-  const formatted = new Date(value.date).toLocaleDateString(undefined, {
+  // Pin the locale — `undefined` differs between the Node server (en-US) and a
+  // non-US-default browser ("Jan 1" vs "1 Jan") → hydration mismatch. "en-US"
+  // matches the rest of the board date formatters.
+  const formatted = new Date(value.date).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
