@@ -30,9 +30,20 @@ vi.mock("@/lib/workspaces/actions", () => ({
   deleteWorkspace: vi.fn(),
 }));
 
+vi.mock("@/lib/workspaces/active-actions", () => ({
+  setActiveWorkspace: vi.fn(),
+}));
+
 beforeEach(() => {
-  useUIStore.setState({ sidebarCollapsed: false, hasHydrated: true });
+  useUIStore.setState({
+    sidebarCollapsed: false,
+    hasHydrated: true,
+    collapsedSections: {},
+  });
   Element.prototype.scrollIntoView ??= () => {};
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.setPointerCapture ??= () => {};
+  Element.prototype.releasePointerCapture ??= () => {};
   vi.mocked(useCoarsePointer).mockReturnValue(false);
 });
 
@@ -70,7 +81,7 @@ describe("SidebarNav", () => {
     expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
   });
 
-  it("renders the wired section links and a disabled Inbox stub", () => {
+  it("renders the grouped section links and no Inbox", () => {
     renderNav(
       <SidebarNav
         boards={[]}
@@ -83,27 +94,28 @@ describe("SidebarNav", () => {
       "href",
       "/dashboards",
     );
-    expect(screen.getByText("Goals").closest("a")).toHaveAttribute(
-      "href",
-      "/goals",
-    );
-    expect(screen.getByText("Portfolios").closest("a")).toHaveAttribute(
-      "href",
-      "/portfolios",
-    );
-    expect(screen.getByText("Workload").closest("a")).toHaveAttribute(
-      "href",
-      "/workload",
-    );
-    expect(screen.getByText("Inbox").closest("button")).toBeDisabled();
+    for (const [label, href] of [
+      ["My Work", "/my-work"],
+      ["Goals", "/goals"],
+      ["Portfolios", "/portfolios"],
+      ["Workload", "/workload"],
+      ["My Time", "/time"],
+    ] as const) {
+      expect(screen.getByText(label).closest("a")).toHaveAttribute(
+        "href",
+        href,
+      );
+    }
+    expect(screen.queryByText("Inbox")).not.toBeInTheDocument();
   });
 
-  it("renders the Workspaces block when workspaces exist", () => {
+  it("shows the active workspace in the switcher", () => {
     renderNav(
       <SidebarNav
         boards={[]}
         sharedBoards={[]}
         workspaces={[{ id: "w1", name: "Engineering" }]}
+        activeWorkspaceId="w1"
         dashboards={[]}
       />,
     );
@@ -166,11 +178,11 @@ describe("SidebarNav", () => {
       // The label string that previously only lived in the never-opened tooltip
       // is now on-screen text (the gotcha-47 fix).
       for (const label of [
+        "My Work",
         "Goals",
         "Portfolios",
         "Workload",
         "My Time",
-        "Inbox",
       ]) {
         // The visible caption equals the aria-label (single source, no drift).
         expect(
