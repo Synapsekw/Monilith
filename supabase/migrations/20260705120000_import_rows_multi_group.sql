@@ -97,6 +97,29 @@ begin
   from jsonb_array_elements(coalesce(p_payload->'groups', '[]'::jsonb)) as g
   where (g->>'existingGroupId') is null;
 
+  -- Confine every item/subitem to a group that belongs to THIS board: either a
+  -- group just created in Step 1, or a validated reused existing group. This is
+  -- the authoritative group confinement (NULL-safe positive check) — it also
+  -- closes the reused-group id≠existingGroupId hole. Mirrors finding #5 in
+  -- 20260704112000_create_board_from_template_confine_payload.sql.
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_payload->'items', '[]'::jsonb)) as i
+    where not exists (
+      select 1 from public.groups
+      where id = (i->>'groupId')::uuid and board_id = p_board_id
+    )
+  ) or exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_payload->'subitems', '[]'::jsonb)) as s
+    where not exists (
+      select 1 from public.groups
+      where id = (s->>'groupId')::uuid and board_id = p_board_id
+    )
+  ) then
+    raise exception 'row group not on board' using errcode = '22023';
+  end if;
+
   -- 2. New columns (unchanged from the single-group version).
   insert into public.columns (id, org_id, board_id, kind, name, settings, position)
   select
