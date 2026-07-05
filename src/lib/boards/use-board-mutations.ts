@@ -10,6 +10,7 @@ import {
   deleteColumn,
   deleteGroup,
   deleteItem,
+  moveItem,
   renameBoard,
   removeColumnOption,
   renameColumn,
@@ -50,6 +51,7 @@ import {
   insertColumn,
   insertGroup,
   insertItem,
+  moveItemToGroup,
   prependColumnFile,
   prependTimeEntry,
   removeCellValue,
@@ -217,6 +219,40 @@ export function useBoardMutations(boardId: string) {
         const cur = c.items.find((i) => i.id === itemId);
         return cur ? replaceItem(c, { ...cur, ...prior }) : c;
       },
+    };
+  }
+
+  // Optimistic cross-group move: apply the cache transform, capture a targeted
+  // inverse that restores the moved item's group_id/position and each subitem's
+  // group_id (so a concurrent peer update to other entities survives rollback).
+  function optimisticMoveItem(
+    itemId: string,
+    groupId: string,
+    position?: number,
+  ): Ctx {
+    const previous = qc.getQueryData<BoardCache>(key);
+    const item = previous?.items.find((i) => i.id === itemId);
+    if (!previous || !item) return {};
+    const prior = { group_id: item.group_id, position: item.position };
+    const subGroups = new Map(
+      previous.items
+        .filter((i) => i.parent_id === itemId)
+        .map((i) => [i.id, i.group_id] as const),
+    );
+    qc.setQueryData<BoardCache>(
+      key,
+      moveItemToGroup(previous, itemId, groupId, position),
+    );
+    return {
+      rollback: (c) => ({
+        ...c,
+        items: c.items.map((i) => {
+          if (i.id === itemId) return { ...i, ...prior };
+          if (subGroups.has(i.id))
+            return { ...i, group_id: subGroups.get(i.id)! };
+          return i;
+        }),
+      }),
     };
   }
 
@@ -636,6 +672,31 @@ export function useBoardMutations(boardId: string) {
       rollback(ctx);
       showMutationError(
         "Couldn't reorder the item — your change was undone.",
+        err,
+      );
+    },
+  });
+
+  /** Move a top-level item to another group (drag-drop across groups). Optimistic; rollback on error. */
+  const moveItemToGroupMutation = useMutation<
+    unknown,
+    Error,
+    { itemId: string; groupId: string; position?: number },
+    Ctx
+  >({
+    mutationFn: async (vars) => {
+      const res = await moveItem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: key });
+      return optimisticMoveItem(vars.itemId, vars.groupId, vars.position);
+    },
+    onError: (err, _v, ctx) => {
+      rollback(ctx);
+      showMutationError(
+        "Couldn't move the item — your change was undone.",
         err,
       );
     },
@@ -1208,6 +1269,8 @@ export function useBoardMutations(boardId: string) {
     deleteItem: (itemId: string) => deleteItemMutation.mutate({ itemId }),
     reorderItem: (itemId: string, position: number) =>
       reorderItemMutation.mutate({ itemId, position }),
+    moveItemToGroup: (itemId: string, groupId: string, position?: number) =>
+      moveItemToGroupMutation.mutate({ itemId, groupId, position }),
     renameItem: (vars: RenameItemVars) => renameItemMutation.mutate(vars),
     renameGroup: (groupId: string, name: string) =>
       renameGroupMutation.mutate({ groupId, name }),

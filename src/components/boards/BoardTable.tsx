@@ -178,6 +178,7 @@ type CellControls = {
   ) => void;
   deleteItem: (itemId: string) => void;
   reorderItem: (itemId: string, position: number) => void;
+  moveItemToGroup: (itemId: string, groupId: string, position?: number) => void;
   /** Live board cache — read by Files cells to resolve their attachments. */
   cache: BoardCache;
   /** Upload a file into a Files-column cell. */
@@ -461,6 +462,7 @@ function BoardTableInner({
     addSubitem,
     deleteItem,
     reorderItem,
+    moveItemToGroup,
   } = mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
@@ -637,6 +639,7 @@ function BoardTableInner({
       }),
     deleteItem,
     reorderItem,
+    moveItemToGroup,
     cache,
     uploadColumnFile: mutations.uploadColumnFile,
     openFilesLightbox,
