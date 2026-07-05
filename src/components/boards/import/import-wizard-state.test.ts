@@ -19,7 +19,9 @@ const grid = [
 describe("deriveSheetState", () => {
   it("derives roles, kinds and includes for every column", () => {
     const s = deriveSheetState(grid, 0);
-    expect(s.columns.map((c) => c.role)).toEqual(["group", "name", "data"]);
+    // Grouping is owned by the Structure step, so a "Group"-headed column is a
+    // plain data column now (never role:"group", which the commit rejects).
+    expect(s.columns.map((c) => c.role)).toEqual(["data", "name", "data"]);
     expect(s.columns[2].kind).toBe("numbers");
     expect(s.columns.every((c) => c.include)).toBe(true);
   });
@@ -68,11 +70,13 @@ describe("invalidCellMap + summarize", () => {
     const s = bulkSetType(seedStructure(s0, t, "new", []), [2], "subitem");
     const invalid = invalidCellMap(t, s.columns);
     expect([...invalid.entries()]).toEqual([[2, [2]]]);
+    // "Group" is now a data column too, so the data-column count is 2
+    // ("Group" + "Est"); its text cells still parse, so invalid stays 1.
     expect(summarize(t, s)).toEqual({
       items: 2,
       subitems: 1,
       groups: 1,
-      columns: 1,
+      columns: 2,
       invalid: 1,
     });
   });

@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StructureStep } from "./StructureStep";
-import { deriveSheetState, seedStructure } from "./import-wizard-state";
+import {
+  bulkSetType,
+  deriveSheetState,
+  seedStructure,
+} from "./import-wizard-state";
 import type { ParsedTable } from "@/lib/boards/spreadsheet/types";
 
 const grid = [["Name"], ["Alpha"], ["Beta"]];
@@ -47,5 +51,46 @@ describe("StructureStep", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /add group/i }));
     expect(next.groups).toHaveLength(2);
+  });
+
+  it("bulk 'set type → Subitem' changes exactly the selected rows", () => {
+    const state = setup();
+    let next = state;
+    render(
+      <StructureStep
+        table={table}
+        state={state}
+        mode="new"
+        existingGroups={[]}
+        onStateChange={(s) => (next = s)}
+      />,
+    );
+
+    // Select both rows so the bulk toolbar appears, then bulk-set Subitem.
+    fireEvent.click(screen.getByLabelText("Select row 2")); // gridIndex 1
+    fireEvent.click(screen.getByLabelText("Select row 3")); // gridIndex 2
+    fireEvent.change(screen.getByLabelText("Bulk set type"), {
+      target: { value: "subitem" },
+    });
+
+    expect(next.structure[1].type).toBe("subitem");
+    expect(next.structure[2].type).toBe("subitem");
+  });
+
+  it("surfaces the orphan alert when a subitem has no item above it", () => {
+    // First row as a subitem => orphan in its group (nothing above it).
+    const state = bulkSetType(setup(), [1], "subitem");
+    render(
+      <StructureStep
+        table={table}
+        state={state}
+        mode="new"
+        existingGroups={[]}
+        onStateChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /no item above them in their group/i,
+    );
   });
 });

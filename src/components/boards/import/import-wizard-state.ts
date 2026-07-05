@@ -80,7 +80,7 @@ export function deriveSheetState(
   boardColumns?: BoardColumnRef[],
 ): SheetState {
   const table = selectRows(grid, headerRow, []);
-  const { nameIndex, groupIndex } = proposeRoles(table.header);
+  const { nameIndex } = proposeRoles(table.header);
 
   const detectionRows = table.rows.filter(
     (row) => !(row[nameIndex] ?? "").trim().startsWith(SUBTASK_MARKER),
@@ -95,12 +95,11 @@ export function deriveSheetState(
     : null;
 
   const columns: ColumnState[] = table.header.map((name, sourceIndex) => {
-    const role: ColumnRole =
-      sourceIndex === nameIndex
-        ? "name"
-        : sourceIndex === groupIndex && !boardColumns
-          ? "group"
-          : "data";
+    // Grouping is owned by the Structure step, never a column role — the
+    // commit schema rejects role:"group", and a "Group"-headed column (exactly
+    // what the board export emits) must round-trip cleanly. So collapse to
+    // name-or-data and never originate the vestigial "group" role here.
+    const role: ColumnRole = sourceIndex === nameIndex ? "name" : "data";
     const detectedKind = detected[sourceIndex].kind;
     const kind: ImportableKind = role === "data" ? detectedKind : "text";
 

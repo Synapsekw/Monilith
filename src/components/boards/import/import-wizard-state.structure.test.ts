@@ -5,6 +5,7 @@ import {
   bulkSetType,
   bulkSetGroup,
   orphanGridIndices,
+  buildCommitColumns,
   buildCommitGroups,
   buildCommitStructure,
   deriveSheetState,
@@ -75,5 +76,23 @@ describe("import structure state", () => {
     const s = addGroup(seededNew()); // Group 2 has no rows
     expect(buildCommitGroups(s).map((g) => g.name)).toEqual(["Imported"]);
     expect(buildCommitStructure(table, s)).toHaveLength(3);
+  });
+
+  it('never originates role:"group" for a "Group"-headed column (commit schema rejects it)', () => {
+    // A "Group" header is exactly what the board export emits; proposeRoles
+    // would flag it, but grouping is now owned by the Structure step, so
+    // deriveSheetState must collapse to name/data only — otherwise the app's
+    // own export→import round-trip fails at commit.
+    const groupGrid = [
+      ["Group", "Name", "Est"],
+      ["Build", "Task A", "5"],
+      ["QA", "Task B", "3"],
+    ];
+    const state = deriveSheetState(groupGrid, 0);
+
+    expect(state.columns.some((c) => c.role === "group")).toBe(false);
+    expect(buildCommitColumns(state).some((c) => c.role === "group")).toBe(
+      false,
+    );
   });
 });
