@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MONOLITH / Keystone / Marks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{--page:#f4f4f6;--surface:#ffffff;--ink:#16161a;--muted:#6c6c74;--stone:#9a9aa2;--hair:#e3e3e7;--tile:#0e0e10;--paper:#f4f4f6;--radius:12px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:"Nunito",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+
+  .labbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:16px;height:44px;
+    padding:0 18px;background:rgba(10,10,12,.85);backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(255,255,255,.09);font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11.5px;letter-spacing:.04em;color:#9a9aa2}
+  .labbar b{color:#f5f5f6;font-weight:500}
+  .labbar a{color:#9a9aa2;text-decoration:none}
+  .labbar a:hover,.labbar a.on{color:#f5f5f6}
+  .labbar .sp{flex:1}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+  .head{padding:70px 0 30px}
+  .ey{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--stone)}
+  h1{font-weight:800;font-size:clamp(32px,4.4vw,52px);letter-spacing:-.01em;margin:14px 0 14px;line-height:1.02}
+  .head p{max-width:64ch;color:var(--muted);font-size:16.5px;line-height:1.6}
+
+  h2{font-weight:800;font-size:20px;letter-spacing:-.01em;margin:44px 0 18px}
+  .h2sub{color:var(--muted);font-size:14px;font-weight:600;margin-left:10px}
+
+  .wm{font-family:"Nunito",sans-serif;font-weight:800;letter-spacing:.03em;line-height:1;white-space:nowrap;display:inline-flex;align-items:baseline;color:var(--ink)}
+  .slabI{height:.72em;width:auto;margin:0 .05em;transform:translateY(.008em)}
+  .slabI path{fill:currentColor}
+
+  /* tile wall */
+  .wall{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+  @media (max-width:900px){.wall{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:520px){.wall{grid-template-columns:repeat(2,1fr)}}
+  .wu{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .tile{background:var(--tile);border-radius:24%;display:flex;align-items:center;justify-content:center;color:var(--paper)}
+  .tile.lite{background:var(--surface);border:1px solid var(--hair);color:var(--ink)}
+  .wu .cap{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;color:var(--stone);text-align:center}
+  .wu .cap b{display:block;color:var(--ink);font-size:11.5px;letter-spacing:.12em;margin-bottom:3px}
+  .wu.sel .tile{outline:2px solid var(--ink);outline-offset:4px}
+  .wu.sel .cap .pick{display:block;color:var(--ink);font-weight:800;letter-spacing:.14em;font-size:10px;margin-top:2px}
+  .mt.sel{background:var(--ink);color:var(--paper);padding:3px 8px;border-radius:5px}
+
+  /* detail cards */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .mcard{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);overflow:hidden}
+  .mhd{display:flex;align-items:baseline;gap:12px;padding:18px 22px;border-bottom:1px solid var(--hair)}
+  .mk-idx{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--stone)}
+  .mn{font-weight:800;font-size:18px}
+  .mt{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--stone);margin-left:auto}
+  .mbody{display:flex;align-items:center;gap:26px;padding:34px 26px}
+  .mhero{flex:none;width:120px;height:120px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .msizes{flex:1;display:flex;align-items:center;gap:20px}
+  .msizes .u{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .msizes .u span{font-family:"JetBrains Mono",monospace;font-size:9.5px;color:var(--stone)}
+  .lock{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--hair);background:#fafafb}
+  .lock .lw{font-family:"Nunito";font-weight:800;font-size:18px;letter-spacing:.02em;color:var(--ink)}
+  .lock .lc{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.1em;color:var(--stone)}
+  .mnote{color:var(--muted);font-size:13px;line-height:1.55;padding:0 22px 20px}
+  .mnote b{color:var(--ink)}
+
+  .footprompt{margin:52px 0 90px;padding:26px 30px;background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius)}
+  .footprompt .k{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--stone)}
+  .footprompt p{font-size:16px;color:var(--ink);margin-top:10px;max-width:66ch;line-height:1.55}
+</style>
+</head>
+<body>
+  <nav class="labbar">
+    <b>MONOLITH</b><span>keystone</span>
+    <a href="/index.html">Overview</a>
+    <span class="sp"></span>
+    <a href="/keystone/variations.html">Variations</a>
+    <a class="on" href="/keystone/marks.html">Marks</a>
+    <a href="/keystone/landings.html">Landings</a>
+    <a href="/keystone/logo.html">Logo</a>
+    <a href="/keystone/favicon.html">Favicon</a>
+  </nav>
+
+  <!-- symbol library -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="m-slab" viewBox="0 0 100 100"><path d="M37 30 L63 22 L63 82 L37 82 Z" fill="currentColor"/></symbol>
+    <symbol id="m-cleave" viewBox="0 0 100 100"><path d="M37 26 L63 18 L63 28 L37 38 Z" fill="currentColor"/><path d="M37 42 L63 32 L63 82 L37 82 Z" fill="currentColor"/></symbol>
+    <symbol id="m-em" viewBox="0 0 100 100"><path d="M24 25 L38 22 L38 78 L24 78 Z" fill="currentColor"/><path d="M62 22 L76 25 L76 78 L62 78 Z" fill="currentColor"/><path d="M38 22 L62 22 L50 52 Z" fill="currentColor"/></symbol>
+    <symbol id="m-strata" viewBox="0 0 100 100"><path d="M37 26 L63 18 L63 36 L37 36 Z" fill="currentColor"/><path d="M37 39 L63 39 L63 57 L37 57 Z" fill="currentColor"/><path d="M37 60 L63 60 L63 82 L37 82 Z" fill="currentColor"/></symbol>
+    <symbol id="m-iso" viewBox="0 0 100 100"><path d="M38 34 L58 28 L58 80 L38 84 Z" fill="currentColor"/><path d="M38 34 L58 28 L66 24 L46 30 Z" fill="currentColor" fill-opacity=".6"/><path d="M58 28 L66 24 L66 76 L58 80 Z" fill="currentColor" fill-opacity=".38"/></symbol>
+    <symbol id="m-aperture" viewBox="0 0 100 100"><path fill-rule="evenodd" d="M34 24 L66 16 L66 84 L34 84 Z M44 39 L56 35 L56 67 L44 67 Z" fill="currentColor"/></symbol>
+  </svg>
+
+  <div class="wrap">
+    <header class="head">
+      <div class="ey">Keystone / marks</div>
+      <h1>Six ways to cut the mark.</h1>
+      <p>The wordmark stays as it is. This is only about the standalone symbol: the favicon, the app
+        icon, the avatar. From the literal slab to more abstract reads of the monolith. Compare the
+        tiles first, then see each one up close.</p>
+    </header>
+
+    <!-- TILE WALL -->
+    <h2>The favicon, side by side <span class="h2sub">the deciding view</span></h2>
+    <div class="wall">
+      <div class="wu"><div class="tile" style="width:100%;aspect-ratio:1"><svg width="60%" height="60%"><use href="#m-slab"/></svg></div><div class="cap"><b>1 SLAB</b>current</div></div>
+      <div class="wu sel"><div class="tile" style="width:100%;aspect-ratio:1"><svg width="60%" height="60%"><use href="#m-cleave"/></svg></div><div class="cap"><b>2 CLEAVE</b><span class="pick">SELECTED</span></div></div>
+      <div class="wu"><div class="tile" style="width:100%;aspect-ratio:1"><svg width="66%" height="66%"><use href="#m-em"/></svg></div><div class="cap"><b>3 MONOGRAM</b>the M</div></div>
+      <div class="wu"><div class="tile" style="width:100%;aspect-ratio:1"><svg width="60%" height="60%"><use href="#m-strata"/></svg></div><div class="cap"><b>4 STRATA</b>layers</div></div>
+      <div class="wu"><div class="tile" style="width:100%;aspect-ratio:1"><svg width="64%" height="64%"><use href="#m-iso"/></svg></div><div class="cap"><b>5 ISOMETRIC</b>3D block</div></div>
+      <div class="wu"><div class="tile" style="width:100%;aspect-ratio:1"><svg width="62%" height="62%"><use href="#m-aperture"/></svg></div><div class="cap"><b>6 APERTURE</b>portal</div></div>
+    </div>
+
+    <!-- DETAIL CARDS -->
+    <h2>Each option up close</h2>
+    <div class="grid">
+      <!-- 1 SLAB -->
+      <div class="mcard">
+        <div class="mhd"><span class="mk-idx">01</span><span class="mn">Slab</span><span class="mt">current</span></div>
+        <div class="mbody">
+          <div class="mhero"><svg width="72" height="100"><use href="#m-slab"/></svg></div>
+          <div class="msizes">
+            <div class="u"><div class="tile" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-slab"/></svg></div><span>32</span></div>
+            <div class="u"><div class="tile" style="width:26px;height:26px;border-radius:28%"><svg width="16" height="16"><use href="#m-slab"/></svg></div><span>16</span></div>
+            <div class="u"><div class="tile lite" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-slab"/></svg></div><span>light</span></div>
+          </div>
+        </div>
+        <div class="lock"><span class="lw">MONOLITH</span><span class="lc">as-is lockup</span></div>
+        <div class="mnote">The slab lifted straight from the word. Honest and consistent, but the least surprising as a standalone symbol.</div>
+      </div>
+
+      <!-- 2 CLEAVE -->
+      <div class="mcard">
+        <div class="mhd"><span class="mk-idx">02</span><span class="mn">Cleave</span><span class="mt sel">selected</span></div>
+        <div class="mbody">
+          <div class="mhero"><svg width="72" height="100"><use href="#m-cleave"/></svg></div>
+          <div class="msizes">
+            <div class="u"><div class="tile" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-cleave"/></svg></div><span>32</span></div>
+            <div class="u"><div class="tile" style="width:26px;height:26px;border-radius:28%"><svg width="16" height="16"><use href="#m-cleave"/></svg></div><span>16</span></div>
+            <div class="u"><div class="tile lite" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-cleave"/></svg></div><span>light</span></div>
+          </div>
+        </div>
+        <div class="lock"><span class="lw">MONOLITH</span><span class="lc">wordmark echoes the split</span></div>
+        <div class="mnote">The monolith cleaved: a thin diagonal of light splits the top off. Names the brand story (the cleave) rather than just showing a bar. Watch the gap at <b>16 px</b>.</div>
+      </div>
+
+      <!-- 3 MONOGRAM -->
+      <div class="mcard">
+        <div class="mhd"><span class="mk-idx">03</span><span class="mn">Monogram</span><span class="mt">the M</span></div>
+        <div class="mbody">
+          <div class="mhero"><svg width="100" height="100"><use href="#m-em"/></svg></div>
+          <div class="msizes">
+            <div class="u"><div class="tile" style="width:48px;height:48px"><svg width="34" height="34"><use href="#m-em"/></svg></div><span>32</span></div>
+            <div class="u"><div class="tile" style="width:26px;height:26px;border-radius:28%"><svg width="18" height="18"><use href="#m-em"/></svg></div><span>16</span></div>
+            <div class="u"><div class="tile lite" style="width:48px;height:48px"><svg width="34" height="34"><use href="#m-em"/></svg></div><span>light</span></div>
+          </div>
+        </div>
+        <div class="lock"><span class="lw">MONOLITH</span><span class="lc">an M built from monoliths</span></div>
+        <div class="mnote">Two monolith columns with a cleave dropped between them, reading as an <b>M</b>. Most ownable and app-icon friendly, but leans on the letter more than the object.</div>
+      </div>
+
+      <!-- 4 STRATA -->
+      <div class="mcard">
+        <div class="mhd"><span class="mk-idx">04</span><span class="mn">Strata</span><span class="mt">layers</span></div>
+        <div class="mbody">
+          <div class="mhero"><svg width="72" height="100"><use href="#m-strata"/></svg></div>
+          <div class="msizes">
+            <div class="u"><div class="tile" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-strata"/></svg></div><span>32</span></div>
+            <div class="u"><div class="tile" style="width:26px;height:26px;border-radius:28%"><svg width="16" height="16"><use href="#m-strata"/></svg></div><span>16</span></div>
+            <div class="u"><div class="tile lite" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-strata"/></svg></div><span>light</span></div>
+          </div>
+        </div>
+        <div class="lock"><span class="lw">MONOLITH</span><span class="lc">rock strata, stacked work</span></div>
+        <div class="mnote">The slab as layered rock. Doubles as a metaphor for stacked records and boards. More texture than the plain slab, still clearly one stone.</div>
+      </div>
+
+      <!-- 5 ISOMETRIC -->
+      <div class="mcard">
+        <div class="mhd"><span class="mk-idx">05</span><span class="mn">Isometric</span><span class="mt">3D block</span></div>
+        <div class="mbody">
+          <div class="mhero"><svg width="86" height="100"><use href="#m-iso"/></svg></div>
+          <div class="msizes">
+            <div class="u"><div class="tile" style="width:48px;height:48px"><svg width="32" height="32"><use href="#m-iso"/></svg></div><span>32</span></div>
+            <div class="u"><div class="tile" style="width:26px;height:26px;border-radius:28%"><svg width="18" height="18"><use href="#m-iso"/></svg></div><span>16</span></div>
+            <div class="u"><div class="tile lite" style="width:48px;height:48px"><svg width="32" height="32"><use href="#m-iso"/></svg></div><span>light</span></div>
+          </div>
+        </div>
+        <div class="lock"><span class="lw">MONOLITH</span><span class="lc">a standing stone, in depth</span></div>
+        <div class="mnote">A dimensional monolith with a lit top facet. The most premium and distinctive, but the two tones and depth are the hardest to hold at <b>16 px</b>.</div>
+      </div>
+
+      <!-- 6 APERTURE -->
+      <div class="mcard">
+        <div class="mhd"><span class="mk-idx">06</span><span class="mn">Aperture</span><span class="mt">portal</span></div>
+        <div class="mbody">
+          <div class="mhero"><svg width="72" height="100"><use href="#m-aperture"/></svg></div>
+          <div class="msizes">
+            <div class="u"><div class="tile" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-aperture"/></svg></div><span>32</span></div>
+            <div class="u"><div class="tile" style="width:26px;height:26px;border-radius:28%"><svg width="16" height="16"><use href="#m-aperture"/></svg></div><span>16</span></div>
+            <div class="u"><div class="tile lite" style="width:48px;height:48px"><svg width="30" height="30"><use href="#m-aperture"/></svg></div><span>light</span></div>
+          </div>
+        </div>
+        <div class="lock"><span class="lw">MONOLITH</span><span class="lc">the system you step into</span></div>
+        <div class="mnote">The monolith as a doorway, a slab with an opening. Suggests a place you enter and work inside. The hole closes up fastest at small sizes, so it needs a simplified <b>16 px</b> cut.</div>
+      </div>
+    </div>
+
+    <div class="footprompt">
+      <div class="k">Next</div>
+      <p>Point at one (or two to refine side by side). Whichever you pick, I will draw a clean small-size
+        cut for 16 px, set the favicon tile and app icon, and show it in the browser-tab and home-screen
+        mockups. The wordmark and its slab-I stay exactly as they are; this only changes the standalone symbol.</p>
+    </div>
+  </div>
+</body>
+</html>

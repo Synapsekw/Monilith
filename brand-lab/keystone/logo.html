@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MONOLITH / Keystone / Logo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{--page:#f4f4f6;--surface:#ffffff;--ink:#16161a;--muted:#6c6c74;--stone:#9a9aa2;--hair:#e3e3e7;--radius:12px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:"Nunito",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  /* lab bar */
+  .labbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:16px;height:44px;
+    padding:0 18px;background:rgba(10,10,12,.85);backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(255,255,255,.09);font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11.5px;letter-spacing:.04em;color:#9a9aa2}
+  .labbar b{color:#f5f5f6;font-weight:500}
+  .labbar a{color:#9a9aa2;text-decoration:none}
+  .labbar a:hover,.labbar a.on{color:#f5f5f6}
+  .labbar .sp{flex:1}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+  .head{padding:72px 0 40px}
+  .ey{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--stone)}
+  h1{font-weight:800;font-size:clamp(32px,4.4vw,52px);letter-spacing:-.01em;margin:14px 0 14px;line-height:1.02}
+  .head p{max-width:60ch;color:var(--muted);font-size:16.5px;line-height:1.6}
+
+  /* the wordmark with the slab-I */
+  .wm{font-family:"Nunito",sans-serif;font-weight:800;letter-spacing:.03em;line-height:1;white-space:nowrap;display:inline-flex;align-items:baseline}
+  .slabI{height:.72em;width:auto;margin:0 .05em;transform:translateY(.008em)}
+  .slabI path{fill:currentColor}
+
+  .card{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);overflow:hidden}
+  .card .lbl{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--stone)}
+  .card .rgt{margin-left:auto}
+  .cardhd{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--hair)}
+  .cardbd{padding:44px;display:flex;align-items:center;justify-content:center;min-height:150px}
+  .note{color:var(--muted);font-size:13.5px;line-height:1.55;padding:16px 20px;border-top:1px solid var(--hair)}
+  .note b{color:var(--ink)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  @media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  /* primary lockup */
+  .primary .cardbd{padding:64px 44px}
+  .primary .wm{font-size:clamp(40px,8vw,104px);color:var(--ink)}
+
+  /* signature: plain vs slab */
+  .sig-row{display:flex;flex-direction:column;gap:26px;align-items:center}
+  .sig-row .wm{font-size:clamp(34px,6vw,72px)}
+  .sig-cap{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--stone);text-align:center;margin-top:8px}
+  .swap{color:var(--muted)}
+
+  /* mark sizes */
+  .sizes{display:flex;align-items:flex-end;gap:48px}
+  .sizes .m{display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--ink)}
+  .sizes .m span{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;color:var(--stone)}
+  .sizes svg path{fill:currentColor}
+
+  /* proofs */
+  .proof{border-radius:var(--radius);display:flex;align-items:center;justify-content:center;min-height:150px}
+  .proof.light{background:#ffffff;border:1px solid var(--hair)}
+  .proof.dark{background:#0e0e10}
+  .proof .wm{font-size:34px}
+  .proof{padding:0 18px}
+  .proof.light .wm{color:#16161a}
+  .proof.dark .wm{color:#f4f4f6}
+  .pcap{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--stone);text-align:center;margin-top:12px}
+
+  /* clear space */
+  .clear{position:relative;padding:36px}
+  .clear .box{border:1px dashed #c9c9d0;border-radius:8px;padding:28px;display:flex;justify-content:center}
+  .clear .wm{font-size:34px}
+
+  footer{padding:40px 0 80px;color:var(--stone);font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.06em}
+  .foot-row{display:flex;gap:10px;flex-wrap:wrap}
+  .foot-row .rgt{margin-left:auto}
+</style>
+</head>
+<body>
+  <nav class="labbar">
+    <b>MONOLITH</b><span>keystone</span>
+    <a href="/index.html">Overview</a>
+    <span class="sp"></span>
+    <a href="/keystone/landings.html">Landings</a>
+    <a class="on" href="/keystone/logo.html">Logo</a>
+    <a href="/keystone/favicon.html">Favicon</a>
+    <a href="/keystone/variations.html">Variations</a>
+    <a href="/keystone/marks.html">Marks</a>
+  </nav>
+
+  <div class="wrap">
+    <header class="head">
+      <div class="ey">Keystone / logo lab</div>
+      <h1>The wordmark you ship, with the I recut.</h1>
+      <p>Same Nunito ExtraBold as the app sidebar. The one change: the letter I becomes the monolith
+        slab, angled top and all. The standalone mark takes that same monolith and cleaves it, so the
+        icon keeps a detail of its own.</p>
+    </header>
+
+    <!-- primary lockup -->
+    <section class="card primary">
+      <div class="cardhd"><span class="lbl">Primary lockup</span><span class="lbl rgt">Nunito 800</span></div>
+      <div class="cardbd">
+        <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span>
+      </div>
+      <div class="note">The slab sits at cap height and carries the same upward cleave as the standalone
+        mark. Read as an <b>I</b>, seen as a monolith.</div>
+    </section>
+
+    <!-- signature move -->
+    <section class="grid2">
+      <div class="card">
+        <div class="cardhd"><span class="lbl">Signature move / I becomes the monolith</span></div>
+        <div class="cardbd">
+          <div class="sig-row">
+            <span class="wm swap">MONOLITH</span>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--stone)">becomes</div>
+            <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span>
+          </div>
+        </div>
+        <div class="note">A one-letter swap. Nothing else about the face changes, so it still reads as the
+          same brand your team already knows.</div>
+      </div>
+      <div class="card">
+        <div class="cardhd"><span class="lbl">The mark alone / Cleave</span><span class="lbl rgt">96 / 48 / 24</span></div>
+        <div class="cardbd">
+          <div class="sizes">
+            <div class="m"><svg width="42" height="96" viewBox="36 19 28 64" aria-hidden="true"><path d="M36 27 L64 19 L64 27 L36 35 Z"/><path d="M36 40 L64 32 L64 83 L36 83 Z"/></svg><span>96</span></div>
+            <div class="m"><svg width="21" height="48" viewBox="36 19 28 64" aria-hidden="true"><path d="M36 27 L64 19 L64 27 L36 35 Z"/><path d="M36 40 L64 32 L64 83 L36 83 Z"/></svg><span>48</span></div>
+            <div class="m"><svg width="11" height="24" viewBox="34 13 32 71" aria-hidden="true"><path d="M34 24 L66 13 L66 27 L34 38 Z"/><path d="M34 50 L66 39 L66 84 L34 84 Z"/></svg><span>24</span></div>
+          </div>
+        </div>
+        <div class="note">The standalone mark is the monolith <b>cleaved</b>: the app icon, avatar, and
+          favicon. The wordmark keeps the solid slab-I; the icon gets the crack. See <b>Favicon</b> for the
+          16 px cut.</div>
+      </div>
+    </section>
+
+    <!-- proofs + clear space -->
+    <section class="grid3">
+      <div class="card">
+        <div class="cardhd"><span class="lbl">Proven on light and dark</span></div>
+        <div class="cardbd" style="gap:16px;flex-direction:column">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%">
+            <div>
+              <div class="proof light"><span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span></div>
+              <div class="pcap">ink on surface</div>
+            </div>
+            <div>
+              <div class="proof dark"><span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span></div>
+              <div class="pcap">paper on near-black</div>
+            </div>
+          </div>
+        </div>
+        <div class="note">The wordmark uses <b>currentColor</b>, so it inherits the theme exactly like the
+          sidebar does today. No recolouring needed.</div>
+      </div>
+      <div class="card">
+        <div class="cardhd"><span class="lbl">Clear space + min size</span></div>
+        <div class="cardbd clear">
+          <div class="box"><span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span></div>
+        </div>
+        <div class="note">Keep clear space of one slab-width on every side. Wordmark holds down to
+          <b>96 px</b> wide, the mark alone down to <b>16 px</b>.</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="wrap">
+    <footer>
+      <div class="foot-row"><span>MONOLITH / keystone direction</span><span class="rgt">Nunito 800 / the shipped face, one letter recut</span></div>
+    </footer>
+  </div>
+</body>
+</html>

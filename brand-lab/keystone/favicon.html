@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MONOLITH / Keystone / Favicon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{--page:#f4f4f6;--surface:#ffffff;--ink:#16161a;--muted:#6c6c74;--stone:#9a9aa2;--hair:#e3e3e7;--tile:#0e0e10;--paper:#f4f4f6;--radius:12px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:"Nunito",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .labbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:16px;height:44px;
+    padding:0 18px;background:rgba(10,10,12,.85);backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(255,255,255,.09);font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11.5px;letter-spacing:.04em;color:#9a9aa2}
+  .labbar b{color:#f5f5f6;font-weight:500}
+  .labbar a{color:#9a9aa2;text-decoration:none}
+  .labbar a:hover,.labbar a.on{color:#f5f5f6}
+  .labbar .sp{flex:1}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+  .head{padding:72px 0 40px}
+  .ey{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--stone)}
+  h1{font-weight:800;font-size:clamp(30px,4.2vw,50px);letter-spacing:-.01em;margin:14px 0 14px;line-height:1.03}
+  .head p{max-width:62ch;color:var(--muted);font-size:16.5px;line-height:1.6}
+
+  h2{font-weight:800;font-size:22px;letter-spacing:-.01em;margin:36px 0 16px}
+  .card{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius)}
+  .cardhd{display:flex;align-items:center;padding:15px 20px;border-bottom:1px solid var(--hair)}
+  .lbl{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--stone)}
+  .rgt{margin-left:auto}
+  .note{color:var(--muted);font-size:13.5px;line-height:1.55;padding:16px 20px;border-top:1px solid var(--hair)}
+  .note b{color:var(--ink)}
+
+  .tile{background:var(--tile);border-radius:22%;display:inline-flex;align-items:center;justify-content:center;color:var(--paper)}
+  .tile svg{color:inherit}
+  .setrow{display:flex;align-items:flex-end;gap:56px;justify-content:center;padding:52px 24px}
+  .setrow .u{display:flex;flex-direction:column;align-items:center;gap:16px}
+  .setrow .u span{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;color:var(--stone)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:760px){.grid2{grid-template-columns:1fr}}
+
+  /* cut compare */
+  .cuts{display:flex;gap:48px;justify-content:center;padding:44px 24px;flex-wrap:wrap}
+  .cuts .u{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .cuts .u .cap{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;color:var(--stone);text-align:center}
+  .cuts .u .cap b{display:block;color:var(--ink);font-size:11px;letter-spacing:.12em;margin-bottom:3px}
+  .glyph{color:var(--ink);display:flex;align-items:center;justify-content:center}
+
+  /* browser tab mock */
+  .browser{border-radius:10px;overflow:hidden;border:1px solid var(--hair);margin:0 20px 20px}
+  .tabstrip{display:flex;align-items:flex-end;height:40px;padding:0 8px;gap:2px}
+  .tab{display:flex;align-items:center;gap:8px;height:30px;padding:0 14px;border-radius:8px 8px 0 0;font-size:12.5px;font-weight:600}
+  .tab .fav{width:16px;height:16px;border-radius:4px;background:var(--tile);color:var(--paper);display:inline-flex;align-items:center;justify-content:center}
+  .tab .x{color:var(--stone);font-family:"JetBrains Mono",monospace;font-size:12px}
+  .tab.other{opacity:.55;font-weight:600}
+  .omni{height:34px;display:flex;align-items:center;padding:0 14px;font-family:"JetBrains Mono",monospace;font-size:11.5px}
+  .browser.light{background:#fff}
+  .browser.light .tabstrip{background:#e9e9ee}
+  .browser.light .tab.active{background:#fff;color:#16161a}
+  .browser.light .tab.other{color:#4a4a52}
+  .browser.light .omni{background:#fff;color:#6c6c74;border-top:1px solid #ededf1}
+  .browser.light .omni .u{color:#16161a}
+  .browser.dark{background:#151517}
+  .browser.dark .tabstrip{background:#0e0e10}
+  .browser.dark .tab.active{background:#151517;color:#f4f4f6}
+  .browser.dark .tab.other{color:#9a9aa2}
+  .browser.dark .omni{background:#151517;color:#9a9aa2;border-top:1px solid #24242a}
+  .browser.dark .omni .u{color:#f4f4f6}
+
+  .appicons{display:flex;gap:34px;align-items:center;padding:44px 24px;justify-content:center;flex-wrap:wrap}
+  .appicons .u{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .appicons .u span{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;color:var(--stone)}
+  .tile.alt{background:var(--paper);color:var(--tile)}
+
+  /* home screen */
+  .home{display:flex;justify-content:center;padding:40px 24px}
+  .homegrid{background:linear-gradient(160deg,#2a2b31,#17181c);border-radius:26px;padding:26px;display:flex;gap:22px}
+  .app{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .app .ic{width:58px;height:58px;border-radius:26%;display:flex;align-items:center;justify-content:center}
+  .app .ic.mono{background:var(--tile);color:var(--paper)}
+  .app .ic.g1{background:#3b3d45}
+  .app .ic.g2{background:#4a4c55}
+  .app small{color:#e7e7ea;font-size:11px}
+
+  footer{padding:38px 0 80px;color:var(--stone);font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.06em;display:flex}
+  footer .rgt{margin-left:auto}
+</style>
+</head>
+<body>
+  <nav class="labbar">
+    <b>MONOLITH</b><span>keystone</span>
+    <a href="/index.html">Overview</a>
+    <span class="sp"></span>
+    <a href="/keystone/variations.html">Variations</a>
+    <a href="/keystone/marks.html">Marks</a>
+    <a href="/keystone/landings.html">Landings</a>
+    <a href="/keystone/logo.html">Logo</a>
+    <a class="on" href="/keystone/favicon.html">Favicon</a>
+  </nav>
+
+  <!-- Cleave mark: two cuts. Refined for large, bold for 16px. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="cleave" viewBox="0 0 100 100">
+      <path d="M36 27 L64 19 L64 27 L36 35 Z" fill="currentColor"/>
+      <path d="M36 40 L64 32 L64 83 L36 83 Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="cleave16" viewBox="0 0 100 100">
+      <path d="M34 24 L66 13 L66 27 L34 38 Z" fill="currentColor"/>
+      <path d="M34 50 L66 39 L66 84 L34 84 Z" fill="currentColor"/>
+    </symbol>
+  </svg>
+
+  <div class="wrap">
+    <header class="head">
+      <div class="ey">Keystone / favicon &middot; mark: Cleave</div>
+      <h1>The cleaved monolith.</h1>
+      <p>The mark is a monolith with a thin slice sheared off the top, a diagonal of light in the crack.
+        It carries the brand story rather than just repeating the wordmark. Below full size, the crack
+        gets a bolder cut so it survives a 16 px tab.</p>
+    </header>
+
+    <h2>Two cuts, one mark</h2>
+    <section class="card">
+      <div class="cardhd"><span class="lbl">Refined vs 16px</span><span class="lbl rgt">the crack scales with the tile</span></div>
+      <div class="cuts">
+        <div class="u"><span class="glyph"><svg width="66" height="94"><use href="#cleave"/></svg></span><span class="cap"><b>REFINED</b>32 px and up</span></div>
+        <div class="u"><span class="glyph"><svg width="66" height="94"><use href="#cleave16"/></svg></span><span class="cap"><b>16 PX CUT</b>wider crack, bolder pieces</span></div>
+      </div>
+      <div class="note">The refined cut keeps a fine 5-unit crack for crisp screens. The 16 px cut widens
+        the gap and thickens both pieces so the split still reads when the whole mark is only 16 px tall.</div>
+    </section>
+
+    <h2>The tile at 180, 32, and 16 px</h2>
+    <section class="card">
+      <div class="cardhd"><span class="lbl">Favicon set</span><span class="lbl rgt">paper cleave / near-black tile</span></div>
+      <div class="setrow">
+        <div class="u"><div class="tile" style="width:180px;height:180px"><svg width="108" height="108"><use href="#cleave"/></svg></div><span>180 / touch icon</span></div>
+        <div class="u"><div class="tile" style="width:56px;height:56px;border-radius:26%"><svg width="34" height="34"><use href="#cleave"/></svg></div><span>32</span></div>
+        <div class="u"><div class="tile" style="width:28px;height:28px;border-radius:28%"><svg width="17" height="17"><use href="#cleave16"/></svg></div><span>16 / bold cut</span></div>
+      </div>
+      <div class="note">180 and 32 use the refined cut. 16 switches to the bold cut automatically, the same
+        way the OS would swap in a small-size icon asset.</div>
+    </section>
+
+    <h2>In a browser tab</h2>
+    <section class="grid2">
+      <div class="card">
+        <div class="cardhd"><span class="lbl">Light chrome</span></div>
+        <div class="browser light">
+          <div class="tabstrip">
+            <div class="tab active"><span class="fav"><svg width="10" height="10"><use href="#cleave16"/></svg></span> MONOLITH <span class="x">&times;</span></div>
+            <div class="tab other">Boards</div>
+          </div>
+          <div class="omni"><span class="u">app.monolith.work</span>&nbsp;/ my-work</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cardhd"><span class="lbl">Dark chrome</span></div>
+        <div class="browser dark">
+          <div class="tabstrip">
+            <div class="tab active"><span class="fav"><svg width="10" height="10"><use href="#cleave16"/></svg></span> MONOLITH <span class="x">&times;</span></div>
+            <div class="tab other">Boards</div>
+          </div>
+          <div class="omni"><span class="u">app.monolith.work</span>&nbsp;/ my-work</div>
+        </div>
+      </div>
+    </section>
+
+    <h2>App icon tile</h2>
+    <section class="card">
+      <div class="cardhd"><span class="lbl">Rounded tile</span><span class="lbl rgt">near-black default + paper invert</span></div>
+      <div class="appicons">
+        <div class="u"><div class="tile" style="width:96px;height:96px"><svg width="58" height="58"><use href="#cleave"/></svg></div><span>near-black</span></div>
+        <div class="u"><div class="tile alt" style="width:96px;height:96px"><svg width="58" height="58"><use href="#cleave"/></svg></div><span>paper invert</span></div>
+      </div>
+      <div class="note">On the paper invert the crack reads as a dark line, which keeps the cleave visible
+        on light home screens and printed surfaces.</div>
+    </section>
+
+    <h2>On a home screen</h2>
+    <section class="card">
+      <div class="cardhd"><span class="lbl">Among other apps</span></div>
+      <div class="home">
+        <div class="homegrid">
+          <div class="app"><div class="ic mono"><svg width="34" height="34"><use href="#cleave"/></svg></div><small>MONOLITH</small></div>
+          <div class="app"><div class="ic g1"></div><small>Mail</small></div>
+          <div class="app"><div class="ic g2"></div><small>Files</small></div>
+        </div>
+      </div>
+      <div class="note">The cleave gives the tile a single memorable detail that a plain bar would not:
+        recognisable in a glance, even next to muted system icons.</div>
+    </section>
+  </div>
+
+  <div class="wrap">
+    <footer>
+      <span>MONOLITH / keystone direction</span>
+      <span class="rgt">mark: Cleave &middot; tile #0E0E10 / mark #F4F4F6</span>
+    </footer>
+  </div>
+</body>
+</html>

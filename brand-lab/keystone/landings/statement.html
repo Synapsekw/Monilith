@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MONOLITH / Statement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#0e0e10;--elev:#161619;--paper:#f4f4f6;--muted:#9a9aa2;--stone:#6b6b72;--hair:rgba(255,255,255,.09);--hair2:rgba(255,255,255,.055)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--paper);font-family:"Nunito",system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5}
+  a{color:inherit}
+
+  /* lab bar (verbatim, dark chrome) */
+  .labbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:16px;height:44px;
+    padding:0 18px;background:rgba(10,10,12,.85);backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(255,255,255,.09);font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11.5px;letter-spacing:.04em;color:#9a9aa2}
+  .labbar b{color:#f5f5f6;font-weight:500}
+  .labbar a{color:#9a9aa2;text-decoration:none}
+  .labbar a:hover,.labbar a.on{color:#f5f5f6}
+  .labbar .sp{flex:1}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+
+  /* wordmark w/ slab-I */
+  .wm{font-family:"Nunito",sans-serif;font-weight:800;letter-spacing:.03em;line-height:1;white-space:nowrap;display:inline-flex;align-items:baseline;color:var(--paper)}
+  .slabI{height:.72em;width:auto;margin:0 .05em;transform:translateY(.008em)}
+  .slabI path{fill:currentColor}
+
+  .mono{font-family:"JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:9px;height:48px;padding:0 28px;border-radius:999px;
+    font-family:"Nunito",sans-serif;font-weight:800;font-size:15px;letter-spacing:.01em;text-decoration:none;
+    transition:transform .2s cubic-bezier(.16,1,.3,1),background .2s,box-shadow .2s,color .2s,border-color .2s;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--paper);color:#0a0a0c}
+  .btn-primary:hover{box-shadow:0 0 44px -12px rgba(255,255,255,.55)}
+  .arw{width:16px;height:16px}
+  .signin{font-weight:700;font-size:14.5px;color:var(--muted);text-decoration:none;padding:0 6px;transition:color .2s}
+  .signin:hover{color:var(--paper)}
+
+  /* ============ HERO (the statement) ============ */
+  .hero{position:relative;min-height:100dvh;display:flex;flex-direction:column;
+    padding:26px 0 44px;overflow:hidden}
+  .hero-top{display:flex;align-items:center;gap:12px}
+  .hero-top .wm{font-size:19px}
+  .hero-top .tag{margin-left:auto;font-size:11px;color:var(--stone)}
+
+  .stage{margin:auto 0;text-align:center;padding:36px 0}
+  .cleave{width:34px;height:34px;color:var(--stone);margin:0 auto 34px;display:block;opacity:.9}
+  .statement .wm{font-size:clamp(62px,17vw,248px);letter-spacing:.02em;justify-content:center}
+  .lede{color:var(--muted);font-size:clamp(16px,1.75vw,21px);max-width:40ch;margin:34px auto 0;line-height:1.45}
+  .cta{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:22px;margin-top:42px}
+
+  .hero-foot{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--stone);font-size:11px}
+  .hero-foot .ln{width:26px;height:1px;background:var(--hair)}
+
+  /* load fade-up (hero only) */
+  .fade{opacity:0}
+  @media (prefers-reduced-motion:no-preference){
+    .fade{transform:translateY(16px);animation:up .9s cubic-bezier(.16,1,.3,1) forwards}
+    .fade.d1{animation-delay:.05s}.fade.d2{animation-delay:.16s}.fade.d3{animation-delay:.27s}
+    .fade.d4{animation-delay:.38s}.fade.d5{animation-delay:.49s}.fade.d6{animation-delay:.60s}
+  }
+  @media (prefers-reduced-motion:reduce){.fade{opacity:1;transform:none}}
+  @keyframes up{to{opacity:1;transform:none}}
+
+  /* ============ manifesto band ============ */
+  .band{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+  .band-inner{padding:clamp(88px,15vh,168px) 0;text-align:center}
+  .band .rule{width:40px;height:1px;background:rgba(255,255,255,.24);margin:0 auto 40px}
+  .band h2{font-weight:800;font-size:clamp(34px,6vw,72px);letter-spacing:-.02em;line-height:1.04}
+  .band .sub{color:var(--muted);font-size:clamp(15px,1.6vw,18px);margin-top:26px;max-width:34ch;margin-left:auto;margin-right:auto}
+
+  /* ============ what it replaces (plain text list, no cards) ============ */
+  .repl{padding:clamp(78px,12vh,140px) 0}
+  .repl .kick{font-size:11px;color:var(--stone);margin-bottom:48px;text-align:center}
+  .list{max-width:760px;margin:0 auto;border-top:1px solid var(--hair2)}
+  .row{display:flex;align-items:baseline;gap:22px;padding:22px 4px;border-bottom:1px solid var(--hair2)}
+  .row .idx{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.1em;color:var(--stone);width:2ch;flex:none}
+  .row .nm{font-weight:800;font-size:clamp(19px,2.3vw,26px);letter-spacing:-.01em;flex:none;width:clamp(150px,26vw,230px)}
+  .row .ds{color:var(--muted);font-size:14.5px;line-height:1.45}
+  @media (max-width:560px){
+    .row{flex-wrap:wrap;gap:6px 16px}
+    .row .nm{width:auto}
+    .row .ds{flex-basis:100%;margin-left:calc(2ch + 16px)}
+  }
+
+  /* ============ footer ============ */
+  footer{border-top:1px solid var(--hair);padding:38px 0 56px}
+  .foot{display:flex;align-items:center;gap:20px;flex-wrap:wrap;color:var(--stone);font-size:13px}
+  .foot .wm{font-size:16px;color:var(--paper)}
+  .foot .sp{flex:1}
+  .foot a{color:var(--muted);text-decoration:none}
+  .foot a:hover{color:var(--paper)}
+</style>
+</head>
+<body>
+  <nav class="labbar">
+    <b>MONOLITH</b><span>keystone</span>
+    <a href="/index.html">Overview</a>
+    <a href="/keystone/landings.html">Landings</a>
+    <span class="sp"></span>
+    <a class="on" href="/keystone/landings/statement.html">Statement</a>
+    <a href="/keystone/landings/product.html">Product</a>
+    <a href="/keystone/landings/editorial.html">Editorial</a>
+    <a href="/keystone/landings/kinetic.html">Kinetic</a>
+  </nav>
+
+  <!-- HERO / THE STATEMENT -->
+  <header class="hero">
+    <div class="wrap" style="width:100%">
+      <div class="hero-top fade d1">
+        <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span>
+        <span class="tag mono">Invitation only</span>
+      </div>
+    </div>
+
+    <div class="wrap stage" style="width:100%">
+      <svg class="cleave fade d2" viewBox="0 0 100 100" fill="none" aria-hidden="true"><path d="M36 26 L64 18 L64 27 L36 35 Z" fill="currentColor"/><path d="M36 43 L64 35 L64 84 L36 84 Z" fill="currentColor"/></svg>
+      <h1 class="statement fade d3"><span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span></h1>
+      <p class="lede fade d4">The all-in-one Work OS. One place to run the whole operation, not ten tabs to switch between.</p>
+      <div class="cta fade d5">
+        <a class="btn btn-primary" href="#">Request access
+          <svg class="arw" viewBox="0 0 16 16" fill="none"><path d="M3 8h9M8.5 4l4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a class="signin" href="#">Sign in</a>
+      </div>
+    </div>
+
+    <div class="wrap" style="width:100%">
+      <div class="hero-foot fade d6"><span class="ln"></span><span class="mono">Access by invitation</span><span class="ln"></span></div>
+    </div>
+  </header>
+
+  <!-- MANIFESTO BAND -->
+  <section class="band">
+    <div class="wrap band-inner">
+      <div class="rule"></div>
+      <h2>One system. Not ten tabs.</h2>
+      <p class="sub">Every surface shares one set of records, permissions, and history.</p>
+    </div>
+  </section>
+
+  <!-- WHAT IT REPLACES -->
+  <section class="repl">
+    <div class="wrap">
+      <div class="kick mono">What it replaces</div>
+      <div class="list">
+        <div class="row"><span class="idx">01</span><span class="nm">Boards</span><span class="ds">Table, kanban, calendar, and timeline over the same records.</span></div>
+        <div class="row"><span class="idx">02</span><span class="nm">Dashboards</span><span class="ds">Live rollups built from the work itself, not a separate BI tool.</span></div>
+        <div class="row"><span class="idx">03</span><span class="nm">Portfolios</span><span class="ds">Every project and program in one hierarchy leadership can read.</span></div>
+        <div class="row"><span class="idx">04</span><span class="nm">Goals</span><span class="ds">Outcomes tied straight to the tasks that move them.</span></div>
+        <div class="row"><span class="idx">05</span><span class="nm">Time, workload</span><span class="ds">Who is doing what, how loaded they are, where the hours land.</span></div>
+        <div class="row"><span class="idx">06</span><span class="nm">Automations</span><span class="ds">Rules that run quietly across all of the above.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="wrap foot">
+      <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span>
+      <span class="sp"></span>
+      <a href="#">Request access</a>
+      <a href="#">Sign in</a>
+      <span class="mono" style="font-size:11px;color:#4d4d54">Invitation only</span>
+    </div>
+  </footer>
+</body>
+</html>
