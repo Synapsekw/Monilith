@@ -1739,6 +1739,11 @@ function GroupSection({
               </SortableContext>
             </DndContext>
           )}
+          <AddItemRow
+            groupId={group.id}
+            controls={controls}
+            nameWidth={nameWidth}
+          />
           {hasAssignedSummary(columns) && (
             <SummaryRow
               variant="group"
@@ -1759,11 +1764,6 @@ function GroupSection({
               onChange={summary.onChange}
             />
           )}
-          <AddItemRow
-            groupId={group.id}
-            controls={controls}
-            nameWidth={nameWidth}
-          />
         </>
       )}
     </section>
@@ -2596,7 +2596,7 @@ function AddItemRow({
             }
           }}
           disabled={isPending}
-          placeholder="Item name"
+          placeholder="Add Item"
           aria-label="Add item"
           className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
         />
