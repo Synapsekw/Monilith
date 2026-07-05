@@ -62,3 +62,162 @@ describe("buildAppendPayload (multi-group)", () => {
     expect(p.newColumns.map((c) => c.name)).toEqual(["Notes"]);
   });
 });
+
+// Column-resolution coverage (targets, kind-compat, option additions) ported
+// from the pre-Task-4 single-group tests to the current multi-group signature.
+// Fixture: two rows in one existing group — a status column mapped onto an
+// existing board column, plus a "create" numbers column.
+const resTable: ParsedTable = {
+  header: ["Name", "Status", "Extra"],
+  rows: [
+    ["Task A", "Done", "10"],
+    ["Task B", "New Label", "20"],
+  ],
+  rowIndices: [1, 2],
+};
+
+const resSpecs: ColumnSpec[] = [
+  { sourceIndex: 0, name: "Name", kind: "text", options: [], role: "name" },
+  {
+    sourceIndex: 1,
+    name: "Status",
+    kind: "status",
+    options: [
+      { id: "spec-done", label: "Done", color: "#e2445c" },
+      { id: "spec-new", label: "New Label", color: "#579bfc" },
+    ],
+    role: "data",
+    target: { columnId: "col-status" },
+  },
+  {
+    sourceIndex: 2,
+    name: "Extra",
+    kind: "numbers",
+    options: [],
+    role: "data",
+    target: "create",
+  },
+];
+
+const resBoardColumns: BoardColumnRef[] = [
+  {
+    id: "col-status",
+    name: "Status",
+    kind: "status",
+    options: [{ id: "opt-done", label: "Done", color: "#00c875" }],
+  },
+];
+
+const resGroups: ImportGroup[] = [
+  { key: "g1", name: "Backlog", existingGroupId: "board-grp-a" },
+];
+const resStructure: RowStructureEntry[] = [
+  { gridIndex: 1, groupKey: "g1", type: "item" },
+  { gridIndex: 2, groupKey: "g1", type: "item" },
+];
+
+describe("buildAppendPayload (column resolution)", () => {
+  it("encodes a mapped target with the TARGET column's kind/options and mints no new column for it", () => {
+    const p = buildAppendPayload(
+      resTable,
+      resSpecs,
+      resBoardColumns,
+      resGroups,
+      resStructure,
+    );
+
+    const itemA = p.items.find((i) => i.name === "Task A")!;
+    const statusCellA = itemA.cells.find((c) => c.columnId === "col-status")!;
+    expect(statusCellA.value).toEqual({ optionId: "opt-done" });
+
+    // The mapped target reuses the board column, so it is NOT in newColumns.
+    expect(p.newColumns.map((c) => c.name)).toEqual(["Extra"]);
+    expect(p.newColumns.find((c) => c.id === "col-status")).toBeUndefined();
+  });
+
+  it("mints an optionAdditions entry for a status label missing from the target board column", () => {
+    const p = buildAppendPayload(
+      resTable,
+      resSpecs,
+      resBoardColumns,
+      resGroups,
+      resStructure,
+    );
+
+    expect(p.optionAdditions).toHaveLength(1);
+    const addition = p.optionAdditions[0];
+    expect(addition.columnId).toBe("col-status");
+    expect(addition.options).toHaveLength(1);
+    expect(addition.options[0].label).toBe("New Label");
+    expect(addition.options[0].id).not.toBe("opt-done");
+    expect(addition.options[0].id).not.toBe("spec-new");
+    // Color picked via nextOptionColor, distinct from the existing option's.
+    expect(addition.options[0].color).not.toBe("#00c875");
+
+    const itemB = p.items.find((i) => i.name === "Task B")!;
+    const statusCellB = itemB.cells.find((c) => c.columnId === "col-status")!;
+    expect(statusCellB.value).toEqual({ optionId: addition.options[0].id });
+  });
+
+  it("throws on an unknown target columnId", () => {
+    const badSpecs: ColumnSpec[] = [
+      { sourceIndex: 0, name: "Name", kind: "text", options: [], role: "name" },
+      {
+        sourceIndex: 1,
+        name: "Status",
+        kind: "status",
+        options: [],
+        role: "data",
+        target: { columnId: "does-not-exist" },
+      },
+    ];
+    expect(() =>
+      buildAppendPayload(
+        resTable,
+        badSpecs,
+        resBoardColumns,
+        resGroups,
+        resStructure,
+      ),
+    ).toThrow("unknown target column");
+  });
+
+  it("throws on a target whose board column kind is not importable (e.g. people)", () => {
+    const peopleColumns: BoardColumnRef[] = [
+      { id: "col-people", name: "Assignee", kind: "people", options: [] },
+    ];
+    const peopleSpecs: ColumnSpec[] = [
+      { sourceIndex: 0, name: "Name", kind: "text", options: [], role: "name" },
+      {
+        sourceIndex: 1,
+        name: "Assignee",
+        kind: "text",
+        options: [],
+        role: "data",
+        target: { columnId: "col-people" },
+      },
+    ];
+    expect(() =>
+      buildAppendPayload(
+        resTable,
+        peopleSpecs,
+        peopleColumns,
+        resGroups,
+        resStructure,
+      ),
+    ).toThrow("incompatible column kind");
+  });
+
+  it("throws without a name-role spec", () => {
+    const noNameSpecs = resSpecs.filter((s) => s.role !== "name");
+    expect(() =>
+      buildAppendPayload(
+        resTable,
+        noNameSpecs,
+        resBoardColumns,
+        resGroups,
+        resStructure,
+      ),
+    ).toThrow("no name column");
+  });
+});
