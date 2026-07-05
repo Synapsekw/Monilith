@@ -56,3 +56,25 @@ describe("useUIStore create-dialog flags", () => {
     expect(useUIStore.getState().newDashboardOpen).toBe(true);
   });
 });
+
+describe("collapsedSections", () => {
+  beforeEach(() => {
+    useUIStore.setState({ collapsedSections: {} });
+  });
+
+  it("defaults a section to open (absent key)", () => {
+    expect(useUIStore.getState().collapsedSections["boards"]).toBeUndefined();
+  });
+
+  it("toggleSection flips a section collapsed then open", () => {
+    useUIStore.getState().toggleSection("boards");
+    expect(useUIStore.getState().collapsedSections["boards"]).toBe(true);
+    useUIStore.getState().toggleSection("boards");
+    expect(useUIStore.getState().collapsedSections["boards"]).toBe(false);
+  });
+
+  it("keeps sections independent", () => {
+    useUIStore.getState().toggleSection("boards");
+    expect(useUIStore.getState().collapsedSections["planning"]).toBeUndefined();
+  });
+});

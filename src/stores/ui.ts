@@ -19,6 +19,8 @@ interface UIState {
   toggleSidebar: () => void;
   hasHydrated: boolean;
   setHasHydrated: (value: boolean) => void;
+  collapsedSections: Record<string, boolean>;
+  toggleSection: (key: string) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -31,6 +33,14 @@ export const useUIStore = create<UIState>()(
       setNewBoardOpen: (open) => set({ newBoardOpen: open }),
       newDashboardOpen: false,
       setNewDashboardOpen: (open) => set({ newDashboardOpen: open }),
+      collapsedSections: {},
+      toggleSection: (key) =>
+        set((s) => ({
+          collapsedSections: {
+            ...s.collapsedSections,
+            [key]: !s.collapsedSections[key],
+          },
+        })),
       sidebarCollapsed: false,
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleSidebar: () =>
@@ -40,7 +50,10 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "pulse-ui",
-      partialize: (s) => ({ sidebarCollapsed: s.sidebarCollapsed }),
+      partialize: (s) => ({
+        sidebarCollapsed: s.sidebarCollapsed,
+        collapsedSections: s.collapsedSections,
+      }),
       onRehydrateStorage: () => (state) => state?.setHasHydrated(true),
     },
   ),
