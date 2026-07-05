@@ -54,4 +54,25 @@ describe("ChartWidget", () => {
     // recharts renders its chart tree under the stubbed container div
     expect(container.firstChild).not.toBeNull();
   });
+
+  it("wires series colors into the ChartContainer style block", () => {
+    const { container } = render(
+      <ChartWidget
+        widget={
+          {
+            id: "w2",
+            source_board_id: "b1",
+            config: {
+              chartType: "bar",
+              primary: { kind: "status", columnId: "c1" },
+            },
+          } as never
+        }
+      />,
+    );
+    // ChartContainer injects a <style> setting --color-<key> from the config.
+    // Single-series -> the synthetic "Value" series carries SOLO_COLOR.
+    expect(container.innerHTML).toContain("--color-Value");
+    expect(container.innerHTML).toContain("#818cf8");
+  });
 });
