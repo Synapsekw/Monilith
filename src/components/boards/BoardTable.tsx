@@ -1963,14 +1963,15 @@ function ItemRow({
         );
         return (
           <>
-            {/* Read-only system columns — dimmed to signal they can't be edited. */}
-            <div className="flex h-full items-center border-l px-3 opacity-60">
+            {/* Read-only system columns — text only, dimmed (via the cell
+                renderers) to signal they can't be edited. */}
+            <div className="flex h-full items-center border-l px-3">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
-                avatarUrl={creator?.avatarUrl ?? null}
+                showAvatar={false}
               />
             </div>
-            <div className="flex h-full items-center border-l px-3 opacity-60">
+            <div className="flex h-full items-center border-l px-3">
               <CreatedAtCell iso={item.created_at} />
             </div>
           </>
@@ -2088,14 +2089,15 @@ function SortableSubitemRow({
         );
         return (
           <>
-            {/* Read-only system columns — dimmed to signal they can't be edited. */}
-            <div className="flex h-full items-center border-l px-3 opacity-60">
+            {/* Read-only system columns — text only, dimmed (via the cell
+                renderers) to signal they can't be edited. */}
+            <div className="flex h-full items-center border-l px-3">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
-                avatarUrl={creator?.avatarUrl ?? null}
+                showAvatar={false}
               />
             </div>
-            <div className="flex h-full items-center border-l px-3 opacity-60">
+            <div className="flex h-full items-center border-l px-3">
               <CreatedAtCell iso={sub.created_at} />
             </div>
           </>
