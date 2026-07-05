@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findStructureValidationError } from "./spreadsheet-actions";
+import { findStructureValidationError } from "./spreadsheet/structure-validate";
 import type {
   ParsedTable,
   ImportGroup,
