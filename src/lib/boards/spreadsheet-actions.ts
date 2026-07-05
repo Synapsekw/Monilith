@@ -7,7 +7,7 @@ import { buildExportWorkbook } from "@/lib/boards/spreadsheet/export-workbook";
 import { parseWorkbookSheets } from "@/lib/boards/spreadsheet/parse-workbook";
 import { selectRows } from "@/lib/boards/spreadsheet/select-rows";
 import {
-  buildImportPayloadV2,
+  buildImportPayloadV3,
   type ImportPayload,
 } from "@/lib/boards/spreadsheet/build-import-payload";
 import { buildAppendPayload } from "@/lib/boards/spreadsheet/build-append-payload";
@@ -20,7 +20,6 @@ import {
   MAX_ROWS,
   MAX_COLS,
   PREVIEW_GRID_ROWS,
-  SUBTASK_MARKER,
   type ImportFormat,
   type ImportPreview,
   type SheetPreview,
@@ -28,6 +27,8 @@ import {
   type ImportDestination,
   type ParsedTable,
   type SynthOption,
+  type ImportGroup,
+  type RowStructureEntry,
 } from "@/lib/boards/spreadsheet/types";
 import {
   exportBoardSchema,
@@ -83,9 +84,11 @@ function guardFile(
 const ITEM_NAME_MAX = 255;
 
 /**
- * Pre-commit scan mirroring the item-name derivation in `splitRows2`: every
- * selected row becomes an item/subitem whose name is the (subtask-marker-
- * stripped) name cell. A blank name violates the items CHECK (char_length ≥ 1)
+ * Pre-commit scan mirroring the item-name derivation in `resolveStructuredRows`:
+ * every selected row becomes an item/subitem whose name is the name cell,
+ * imported verbatim (item/subitem type and grouping come from the explicit
+ * `structure`, not a name-prefix marker). A blank name violates the items
+ * CHECK (char_length ≥ 1)
  * and an over-long one violates its upper bound — either aborts the whole
  * atomic 2000-row batch in the RPC with a raw Postgres constraint message. We
  * catch them here with a row-numbered error BEFORE the RPC runs, so the user
@@ -108,10 +111,7 @@ function findNameValidationError(
   const oversizedRows: number[] = [];
 
   table.rows.forEach((row, i) => {
-    const rawName = (row[nameSpec.sourceIndex] ?? "").trim();
-    const name = rawName.startsWith(SUBTASK_MARKER)
-      ? rawName.slice(SUBTASK_MARKER.length)
-      : rawName;
+    const name = (row[nameSpec.sourceIndex] ?? "").trim();
     // 1-based original grid row number — matches the wizard's row labels.
     const rowNumber = table.rowIndices[i] + 1;
     if (name === "") blankRows.push(rowNumber);
@@ -136,6 +136,42 @@ function findNameValidationError(
     )}). Shorten them or exclude those rows.`;
   }
   return null;
+}
+
+/**
+ * Orphan-subitem guard mirroring the client's `orphanGridIndices`: a subitem
+ * with no item above it in the same group has no parent to attach to. The
+ * client blocks this, but validate server-side too so a stale/forged payload
+ * gets a friendly, row-numbered error instead of a promoted-silently import.
+ */
+export function findStructureValidationError(
+  table: ParsedTable,
+  groups: ImportGroup[],
+  structure: RowStructureEntry[],
+): string | null {
+  const byGrid = new Map(structure.map((s) => [s.gridIndex, s]));
+  const fallbackKey = groups[0]?.key ?? "";
+  const seenItemInGroup = new Set<string>();
+  const orphanRows: number[] = [];
+
+  for (const gridIndex of table.rowIndices) {
+    const entry = byGrid.get(gridIndex) ?? {
+      groupKey: fallbackKey,
+      type: "item" as const,
+    };
+    if (entry.type === "subitem") {
+      if (!seenItemInGroup.has(entry.groupKey)) orphanRows.push(gridIndex + 1);
+    } else {
+      seenItemInGroup.add(entry.groupKey);
+    }
+  }
+
+  if (orphanRows.length === 0) return null;
+  const shown = orphanRows.slice(0, 5).map((n) => `row ${n}`);
+  const extra = orphanRows.length - shown.length;
+  const list =
+    extra > 0 ? `${shown.join(", ")}, +${extra} more` : shown.join(", ");
+  return `${orphanRows.length} subitem row(s) have no item above them in their group (${list}). Make them items or move them under an item.`;
 }
 
 // ─── exportBoard ──────────────────────────────────────────────────────────────
@@ -363,7 +399,8 @@ async function appendToExistingBoard(
   boardId: string,
   table: ParsedTable,
   specs: ColumnSpec[],
-  group: { groupId: string } | { newGroupName: string },
+  groups: ImportGroup[],
+  structure: RowStructureEntry[],
 ): Promise<{ ok: true; boardId: string } | { ok: false; error: string }> {
   const { data: columnRows, error: columnsError } = await supabase
     .from("columns")
@@ -415,7 +452,7 @@ async function appendToExistingBoard(
 
   let payload;
   try {
-    payload = buildAppendPayload(table, specs, boardColumns, group);
+    payload = buildAppendPayload(table, specs, boardColumns, groups, structure);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };
@@ -438,6 +475,8 @@ export async function commitImport(input: {
   headerRow: number | null;
   excludedRows: number[];
   columns: ColumnSpec[];
+  groups: ImportGroup[];
+  structure: RowStructureEntry[];
   destination: ImportDestination;
 }): Promise<ActionResult<{ boardId: string }>> {
   const parsed = commitImportSchema.safeParse(input);
@@ -493,6 +532,13 @@ export async function commitImport(input: {
   const nameError = findNameValidationError(table, parsed.data.columns);
   if (nameError) return fail(nameError);
 
+  const structureError = findStructureValidationError(
+    table,
+    parsed.data.groups,
+    parsed.data.structure,
+  );
+  if (structureError) return fail(structureError);
+
   const supabase = await createClient();
 
   if (parsed.data.destination.type === "existing") {
@@ -501,7 +547,8 @@ export async function commitImport(input: {
       parsed.data.destination.boardId,
       table,
       parsed.data.columns,
-      parsed.data.destination.group,
+      parsed.data.groups,
+      parsed.data.structure,
     );
     if (!result.ok) return fail(result.error);
 
@@ -509,7 +556,12 @@ export async function commitImport(input: {
     return { ok: true, data: { boardId: result.boardId } };
   }
 
-  const payload = buildImportPayloadV2(table, parsed.data.columns);
+  const payload = buildImportPayloadV3(
+    table,
+    parsed.data.columns,
+    parsed.data.groups,
+    parsed.data.structure,
+  );
   const result = await insertNewBoard(
     supabase,
     parsed.data.destination.workspaceId,

@@ -66,10 +66,6 @@ const importDestination = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("existing"),
     boardId: uuid,
-    group: z.union([
-      z.object({ groupId: uuid }),
-      z.object({ newGroupName: z.string().trim().min(1).max(100) }),
-    ]),
   }),
 ]);
 

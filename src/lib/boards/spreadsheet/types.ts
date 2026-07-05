@@ -81,11 +81,7 @@ export type ColumnSpec = {
 };
 export type ImportDestination =
   | { type: "new"; workspaceId: string; boardName: string }
-  | {
-      type: "existing";
-      boardId: string;
-      group: { groupId: string } | { newGroupName: string };
-    };
+  | { type: "existing"; boardId: string };
 
 /** A target group for a structured import: either a brand-new group
  * (`existingGroupId: null`) or an existing board group being reused
