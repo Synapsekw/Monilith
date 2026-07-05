@@ -4,6 +4,55 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-07-05",
+    kind: "new",
+    title: "Bulk actions in Table view",
+    description:
+      "Select multiple rows and move, set status, assign people, or delete them all at once. Shift-click to select a range; select-all respects your active filter.",
+  },
+  {
+    date: "2026-07-05",
+    kind: "new",
+    title: "Everything assigned to you, in one place",
+    description:
+      "The new My Work page gathers every item assigned to you across all your boards, grouped by when it's due — Overdue, Today, This week, and Later.",
+  },
+  {
+    date: "2026-07-05",
+    kind: "new",
+    title: "Search across all your items",
+    description:
+      "Open the command palette and search items by name across every board, then jump straight to one.",
+  },
+  {
+    date: "2026-07-05",
+    kind: "new",
+    title: "Filter, sort and search any board",
+    description:
+      "A board toolbar to filter by column, sort, and quick-search — narrowing what you see instantly, without reloading.",
+  },
+  {
+    date: "2026-07-05",
+    kind: "improved",
+    title: "A guided start for new workspaces",
+    description:
+      "New users now land on a friendly home that walks them to their first board instead of a dead end.",
+  },
+  {
+    date: "2026-07-05",
+    kind: "improved",
+    title: "Nav that works on mobile",
+    description:
+      "Navigation collapses into a slide-in drawer on phones and small screens.",
+  },
+  {
+    date: "2026-07-05",
+    kind: "improved",
+    title: "Edit your display name",
+    description:
+      "Change the name that shows on your profile and across the workspace from Settings.",
+  },
+  {
     date: "2026-07-03",
     kind: "new",
     title: "Currency columns",
