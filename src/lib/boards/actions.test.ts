@@ -522,6 +522,130 @@ describe("reorderBoard", () => {
   });
 });
 
+import { moveItem } from "./actions";
+
+const GROUP = "55555555-5555-4555-8555-555555555555";
+
+describe("moveItem", () => {
+  it("uses the provided position instead of appending", async () => {
+    const update = vi.fn(() => ({
+      eq: () => Promise.resolve({ error: null }),
+    }));
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: (cols: string) => {
+            if (cols === "board_id, parent_id")
+              return {
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: { board_id: BOARD, parent_id: null },
+                    error: null,
+                  }),
+                }),
+              };
+            // last top-level item in target group: select("position")...maybeSingle()
+            return {
+              eq: () => ({
+                is: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({
+                        data: { position: 2 },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          },
+          update,
+        } as never;
+      if (table === "groups")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { board_id: BOARD },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await moveItem({
+      itemId: ITEM,
+      groupId: GROUP,
+      position: 3.5,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ group_id: GROUP, position: 3.5 }),
+    );
+  });
+
+  it("still appends when position is omitted", async () => {
+    // last top-level item in target group has position 2 → append = midpoint(2, null) = 3
+    const update = vi.fn(() => ({
+      eq: () => Promise.resolve({ error: null }),
+    }));
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: (cols: string) => {
+            if (cols === "board_id, parent_id")
+              return {
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: { board_id: BOARD, parent_id: null },
+                    error: null,
+                  }),
+                }),
+              };
+            return {
+              eq: () => ({
+                is: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({
+                        data: { position: 2 },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          },
+          update,
+        } as never;
+      if (table === "groups")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { board_id: BOARD },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await moveItem({ itemId: ITEM, groupId: GROUP });
+
+    expect(res.ok).toBe(true);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ group_id: GROUP, position: 3 }),
+    );
+  });
+});
+
 import {
   createBoard,
   renameBoard,

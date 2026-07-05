@@ -100,23 +100,26 @@ export function replaceItem(cache: BoardCache, item: CacheItem): BoardCache {
 
 /**
  * Optimistically move a top-level item to another group: reassign its group_id,
- * append it after that group's current last top-level item, and drag its
- * subitems' denormalized group_id along (mirrors the server's moveItem). The
- * Realtime UPDATE echo reconciles the exact server position afterwards. Immutable.
+ * set position to the provided value or append it after that group's current last
+ * top-level item, and drag its subitems' denormalized group_id along (mirrors the
+ * server's moveItem). The Realtime UPDATE echo reconciles the exact server position
+ * afterwards. Immutable.
  */
 export function moveItemToGroup(
   cache: BoardCache,
   itemId: string,
   groupId: string,
+  position?: number,
 ): BoardCache {
   const maxPos = cache.items
     .filter((i) => i.group_id === groupId && i.parent_id === null)
     .reduce((m, i) => Math.max(m, i.position), 0);
+  const nextPos = position ?? maxPos + 1;
   return {
     ...cache,
     items: cache.items.map((i) => {
       if (i.id === itemId)
-        return { ...i, group_id: groupId, position: maxPos + 1 };
+        return { ...i, group_id: groupId, position: nextPos };
       if (i.parent_id === itemId) return { ...i, group_id: groupId };
       return i;
     }),
