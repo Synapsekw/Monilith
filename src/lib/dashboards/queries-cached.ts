@@ -24,16 +24,16 @@ export const DASHBOARDS_LIMIT = 100;
  */
 export async function listDashboardsCached(
   orgId: string,
+  workspaceId?: string,
 ): Promise<Dashboard[]> {
   "use cache";
   cacheLife("nav");
   cacheTag(dashboardsTag(orgId));
 
   const supabase = createServiceClient();
-  const { data } = await supabase
-    .from("dashboards")
-    .select("*")
-    .eq("org_id", orgId)
+  let query = supabase.from("dashboards").select("*").eq("org_id", orgId);
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data } = await query
     .order("created_at", { ascending: true })
     .limit(DASHBOARDS_LIMIT);
   return data ?? [];
