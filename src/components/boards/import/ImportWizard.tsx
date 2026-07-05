@@ -7,14 +7,20 @@ import { MAX_ROWS, type ImportPreview } from "@/lib/boards/spreadsheet/types";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
 import {
   buildCommitColumns,
+  buildCommitGroups,
+  buildCommitStructure,
   deriveSheetStateSafe,
   isEmptySheetState,
+  orphanGridIndices,
+  seedStructure,
   tableFor,
   type SheetState,
 } from "./import-wizard-state";
 import { UploadStep } from "./UploadStep";
 import { MapStep } from "./MapStep";
+import { StructureStep } from "./StructureStep";
 import { ConfirmStep } from "./ConfirmStep";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -35,10 +41,11 @@ type Destination =
 const STEPS = [
   { n: 1 as const, label: "Upload" },
   { n: 2 as const, label: "Select & map" },
-  { n: 3 as const, label: "Confirm" },
+  { n: 3 as const, label: "Structure" },
+  { n: 4 as const, label: "Confirm" },
 ];
 
-function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
+function StepIndicator({ step }: { step: 1 | 2 | 3 | 4 }) {
   return (
     <ol className="flex items-center gap-2 text-sm">
       {STEPS.map((s, i) => (
@@ -71,15 +78,42 @@ function StepIndicator({ step }: { step: 1 | 2 | 3 }) {
   );
 }
 
-type GroupChoice = { groupId: string } | { newGroupName: string };
-
-/** Default group choice for the existing-board confirm step: the board's
- * first group, or a fresh "Imported" group when it has none yet. */
-function defaultGroupChoice(destination: Destination): GroupChoice {
-  if (destination.type !== "existing") return { newGroupName: "Imported" };
-  return destination.groups[0]
-    ? { groupId: destination.groups[0].id }
-    : { newGroupName: "Imported" };
+/** Pinned footer whose primary action tracks the current step: Upload has no
+ * nav (upload auto-advances), Map/Structure show Next, Confirm shows Import. */
+function WizardFooter({
+  step,
+  busy,
+  nextDisabled,
+  confirmDisabled,
+  onBack,
+  onNext,
+  onConfirm,
+}: {
+  step: 1 | 2 | 3 | 4;
+  busy: boolean;
+  nextDisabled: boolean;
+  confirmDisabled: boolean;
+  onBack: () => void;
+  onNext: () => void;
+  onConfirm: () => void;
+}) {
+  if (step === 1) return null; // upload auto-advances; no footer nav
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-2 border-t px-6 py-4">
+      <Button type="button" variant="outline" onClick={onBack}>
+        Back
+      </Button>
+      {step === 4 ? (
+        <Button type="button" disabled={confirmDisabled} onClick={onConfirm}>
+          {busy ? "Importing…" : "Import"}
+        </Button>
+      ) : (
+        <Button type="button" disabled={nextDisabled} onClick={onNext}>
+          Next
+        </Button>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -100,7 +134,7 @@ export function ImportWizard({
 }) {
   const router = useRouter();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [fileBase64, setFileBase64] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -109,9 +143,6 @@ export function ImportWizard({
   );
   const [activeSheet, setActiveSheet] = useState(0);
   const [boardName, setBoardName] = useState("");
-  const [groupChoice, setGroupChoice] = useState<GroupChoice>(() =>
-    defaultGroupChoice(destination),
-  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -127,7 +158,6 @@ export function ImportWizard({
     setSheetStates({});
     setActiveSheet(0);
     setBoardName("");
-    setGroupChoice(defaultGroupChoice(destination));
     setError(null);
     setBusy(false);
   }
@@ -206,9 +236,35 @@ export function ImportWizard({
     ? activeState.columns.some((c) => c.include && c.role === "name")
     : false;
 
+  // Step-3 (Structure) gate: subitem rows with no item above them in their
+  // group block advancing to Confirm — commit would hard-reject them anyway.
+  const structureBlocked =
+    table && activeState
+      ? orphanGridIndices(table, activeState).length > 0
+      : false;
+
   function handleNext() {
-    if (!hasNameColumn || activeSheetEmpty || overRowCap) return;
-    setStep(3);
+    if (step === 2) {
+      if (!hasNameColumn || activeSheetEmpty || overRowCap) return;
+      if (!table) return;
+      const existingGroups =
+        destination.type === "existing" ? destination.groups : [];
+      setSheetStates((prev) => ({
+        ...prev,
+        [activeSheet]: seedStructure(
+          prev[activeSheet],
+          table,
+          destination.type,
+          existingGroups,
+        ),
+      }));
+      setStep(3);
+      return;
+    }
+    if (step === 3) {
+      if (structureBlocked) return;
+      setStep(4);
+    }
   }
 
   function handleConfirm() {
@@ -225,6 +281,8 @@ export function ImportWizard({
         headerRow: activeState.headerRow,
         excludedRows: activeState.excluded,
         columns: buildCommitColumns(activeState),
+        groups: buildCommitGroups(activeState),
+        structure: table ? buildCommitStructure(table, activeState) : [],
         destination:
           destination.type === "new"
             ? {
@@ -235,7 +293,6 @@ export function ImportWizard({
             : {
                 type: "existing",
                 boardId: destination.boardId,
-                group: groupChoice,
               },
       });
 
@@ -258,13 +315,13 @@ export function ImportWizard({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="flex h-[85vh] flex-col sm:max-w-6xl">
-        <DialogHeader>
+      <DialogContent className="flex h-[90vh] w-[95vw] flex-col gap-0 p-0 sm:max-w-[1400px]">
+        <DialogHeader className="shrink-0 border-b px-6 py-4">
           <DialogTitle>Import from file</DialogTitle>
           <StepIndicator step={step} />
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           {step === 1 ? (
             <UploadStep busy={busy} error={error} onFile={handleFile} />
           ) : null}
@@ -285,9 +342,6 @@ export function ImportWizard({
                 mode={destination.type}
                 boardColumns={boardColumns}
                 rowCapWarning={rowCapWarning}
-                nextDisabled={!hasNameColumn || activeSheetEmpty || overRowCap}
-                onBack={() => setStep(1)}
-                onNext={handleNext}
               />
               {!hasNameColumn && !activeSheetEmpty ? (
                 <p role="alert" className="text-destructive text-xs">
@@ -298,7 +352,21 @@ export function ImportWizard({
             </div>
           ) : null}
 
-          {step === 3 &&
+          {step === 3 && preview && activeState && table ? (
+            <StructureStep
+              table={table}
+              state={activeState}
+              mode={destination.type}
+              existingGroups={
+                destination.type === "existing" ? destination.groups : []
+              }
+              onStateChange={(next) =>
+                setSheetStates((prev) => ({ ...prev, [activeSheet]: next }))
+              }
+            />
+          ) : null}
+
+          {step === 4 &&
           preview &&
           activeSheetPreview &&
           activeState &&
@@ -315,20 +383,30 @@ export function ImportWizard({
                       boardName,
                       onBoardNameChange: setBoardName,
                     }
-                  : {
-                      type: "existing",
-                      groups: destination.groups,
-                      groupChoice,
-                      onGroupChange: setGroupChoice,
-                    }
+                  : { type: "existing" }
               }
               error={error}
-              pending={isPending}
-              onBack={() => setStep(2)}
-              onConfirm={handleConfirm}
             />
           ) : null}
         </div>
+
+        <WizardFooter
+          step={step}
+          busy={busy || isPending}
+          nextDisabled={
+            step === 3
+              ? structureBlocked
+              : !hasNameColumn || activeSheetEmpty || overRowCap
+          }
+          confirmDisabled={
+            isPending || (destination.type === "new" && boardName.trim() === "")
+          }
+          onBack={() =>
+            setStep((s) => (s === 1 ? s : ((s - 1) as 1 | 2 | 3 | 4)))
+          }
+          onNext={handleNext}
+          onConfirm={handleConfirm}
+        />
       </DialogContent>
     </Dialog>
   );

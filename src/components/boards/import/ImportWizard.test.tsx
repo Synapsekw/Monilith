@@ -82,16 +82,23 @@ describe("ImportWizard", () => {
       expect(screen.getByDisplayValue("Name")).toBeInTheDocument(),
     );
 
+    // Step 2 -> 3: the Structure step (per-row Type/Group controls).
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(screen.getAllByLabelText(/type for row/i).length).toBeGreaterThan(
+        0,
+      ),
+    );
 
-    // Step 3: confirm step
+    // Step 3 -> 4: the Confirm step surfaces the Import action.
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: /confirm/i }),
+        screen.getByRole("button", { name: /import/i }),
       ).toBeInTheDocument(),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import/i }));
 
     await waitFor(() =>
       expect(commitImport).toHaveBeenCalledWith(
@@ -103,6 +110,13 @@ describe("ImportWizard", () => {
           excludedRows: [],
           columns: expect.arrayContaining([
             expect.objectContaining({ name: "Name", role: "name" }),
+          ]),
+          // Structure step seeds one "Imported" group with both rows as items.
+          groups: expect.arrayContaining([
+            expect.objectContaining({ name: "Imported" }),
+          ]),
+          structure: expect.arrayContaining([
+            expect.objectContaining({ type: "item" }),
           ]),
           destination: {
             type: "new",
@@ -151,19 +165,25 @@ describe("ImportWizard", () => {
     await waitFor(() =>
       expect(screen.getByDisplayValue("Name")).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" })); // -> structure
+    await waitFor(() =>
+      expect(screen.getAllByLabelText(/type for row/i).length).toBeGreaterThan(
+        0,
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Next" })); // -> confirm
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: /confirm/i }),
+        screen.getByRole("button", { name: /import/i }),
       ).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import/i }));
 
     await waitFor(() =>
       expect(screen.getByText("Server exploded")).toBeInTheDocument(),
     );
 
-    // Grid state intact: still on step 3 with the board name preserved.
+    // Grid state intact: still on step 4 with the board name preserved.
     expect(screen.getByDisplayValue("my-board")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
@@ -401,20 +421,23 @@ describe("ImportWizard", () => {
     // (well, now skipped) target we can assert on.
     fireEvent.change(targetSelect, { target: { value: "skip" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" })); // -> structure
 
+    // Structure step: seeded with the board's existing group ("Group 1").
+    await waitFor(() =>
+      expect(screen.getAllByLabelText(/type for row/i).length).toBeGreaterThan(
+        0,
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" })); // -> confirm
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: /confirm/i }),
+        screen.getByRole("button", { name: /import/i }),
       ).toBeInTheDocument(),
     );
 
-    // Default group choice: the board's only group.
-    expect((screen.getByLabelText("Group") as HTMLSelectElement).value).toBe(
-      "g1",
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    fireEvent.click(screen.getByRole("button", { name: /import/i }));
 
     await waitFor(() =>
       expect(commitImport).toHaveBeenCalledWith(
@@ -422,10 +445,13 @@ describe("ImportWizard", () => {
           columns: expect.arrayContaining([
             expect.objectContaining({ name: "Status", target: "skip" }),
           ]),
+          // The seeded group references the board's existing group by id.
+          groups: expect.arrayContaining([
+            expect.objectContaining({ existingGroupId: "g1" }),
+          ]),
           destination: {
             type: "existing",
             boardId: "board-1",
-            group: { groupId: "g1" },
           },
         }),
       ),
