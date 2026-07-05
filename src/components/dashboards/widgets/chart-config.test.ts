@@ -14,9 +14,15 @@ describe("buildChartConfig", () => {
     });
   });
 
-  it("maps the single synthetic Value series (preserving SOLO_COLOR)", () => {
+  it("maps a provided series color through unchanged", () => {
     const config = buildChartConfig([{ key: "Value", color: "#818cf8" }]);
     expect(config).toEqual({ Value: { label: "Value", color: "#818cf8" } });
+  });
+
+  it("falls back to var(--brand) when a series has no color", () => {
+    expect(buildChartConfig([{ key: "Value", color: null }])).toEqual({
+      Value: { label: "Value", color: "var(--brand)" },
+    });
   });
 
   it("returns an empty config for no series", () => {
