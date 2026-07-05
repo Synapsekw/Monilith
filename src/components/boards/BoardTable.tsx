@@ -1757,137 +1757,144 @@ function GroupSection({
         col={col}
       />
 
-      {/* Collapsed strip: the user's assigned aggregation wins; the legacy
-          hardcoded rollup remains the byte-for-byte fallback (spec D5). Wrapped
-          in the container droppable so an item dropped onto a collapsed group
-          appends into it (matches the expanded row-area drop target). */}
-      {collapsed && items.length > 0 && (
-        <div ref={setGroupDropRef}>
-          {hasAssignedSummary(columns) ? (
-            <SummaryRow
-              variant="group"
-              testId={`group-summary-${group.id}`}
-              label="Group Summary"
-              groupColor={group.color}
-              columns={columns}
-              itemIds={withSubitems(
-                items.map((i) => i.id),
-                childrenByParent,
-              )}
-              cellMap={cellMap}
-              cache={controls.cache}
-              template={template}
-              nameWidth={nameWidth}
-              canEdit={summary.canEdit}
-              nowMs={summary.nowMs}
-              onChange={summary.onChange}
-            />
-          ) : (
-            <GroupRollupRow
-              group={group}
-              items={items}
-              columns={columns}
-              cellMap={cellMap}
-              cache={controls.cache}
-              template={template}
-            />
-          )}
-        </div>
-      )}
+      {/* Group body wrapper — the `group-container` droppable. Rendered for
+          EVERY group regardless of item count / collapsed state, so even an
+          empty group is a measurable append target (drop the first item into a
+          freshly-created group). It sits BELOW the header, so it never overlaps
+          the header's group-reorder hit area. Empty groups get a min-height so
+          the rect is actually hittable; item rows inside are `type: "item"`
+          droppables that win the collision first (see boardCollision), leaving
+          this container as the gap/empty fallback that routes to append. */}
+      <div
+        ref={setGroupDropRef}
+        style={items.length === 0 ? { minHeight: ROW_HEIGHT } : undefined}
+      >
+        {collapsed
+          ? // Collapsed strip: the user's assigned aggregation wins; the legacy
+            // hardcoded rollup remains the byte-for-byte fallback (spec D5).
+            items.length > 0 &&
+            (hasAssignedSummary(columns) ? (
+              <SummaryRow
+                variant="group"
+                testId={`group-summary-${group.id}`}
+                label="Group Summary"
+                groupColor={group.color}
+                columns={columns}
+                itemIds={withSubitems(
+                  items.map((i) => i.id),
+                  childrenByParent,
+                )}
+                cellMap={cellMap}
+                cache={controls.cache}
+                template={template}
+                nameWidth={nameWidth}
+                canEdit={summary.canEdit}
+                nowMs={summary.nowMs}
+                onChange={summary.onChange}
+              />
+            ) : (
+              <GroupRollupRow
+                group={group}
+                items={items}
+                columns={columns}
+                cellMap={cellMap}
+                cache={controls.cache}
+                template={template}
+              />
+            ))
+          : null}
 
-      {!collapsed && (
-        <>
-          {items.length > 0 && (
-            // Item rows now live under the single board-level DndContext (see
-            // BoardTableInner) so rows can be dragged across groups; this group
-            // keeps only its own SortableContext + the container droppable ref.
-            <SortableContext
-              items={items.map((i) => i.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div
-                ref={(node) => {
-                  rowAreaRef.current = node;
-                  setGroupDropRef(node);
-                }}
-                data-testid={`group-rows-${group.id}`}
-                className="relative"
-                style={{ height: virtualizer.getTotalSize() }}
+        {!collapsed && (
+          <>
+            {items.length > 0 && (
+              // Item rows live under the single board-level DndContext (see
+              // BoardTableInner) so rows can be dragged across groups; this
+              // group keeps only its own SortableContext for in-group ordering.
+              <SortableContext
+                items={items.map((i) => i.id)}
+                strategy={verticalListSortingStrategy}
               >
-                {virtualRows.map((vr) => {
-                  const item = items[vr.index];
-                  const children = childrenByParent.get(item.id) ?? [];
-                  const isExpanded = expanded.has(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      data-index={vr.index}
-                      ref={virtualizer.measureElement}
-                      className="absolute top-0 left-0 w-full"
-                      style={{
-                        transform: `translateY(${vr.start - scrollMargin}px)`,
-                      }}
-                    >
-                      <ItemRow
-                        item={item}
-                        columns={columns}
-                        cellMap={cellMap}
-                        template={template}
-                        controls={controls}
-                        selectable={selectable}
-                        subitems={children}
-                        childCount={children.length}
-                        isExpanded={isExpanded}
-                        onToggle={() => onToggleExpand(item.id)}
-                        autoFocusRename={item.id === renamingItemId}
-                        onRenameSettled={onRenameItemSettled}
-                        onSubitemAdded={onSetRenamingItemId}
-                      />
-                      {isExpanded && children.length > 0 && (
-                        <SubitemBlock
-                          parentId={item.id}
-                          subitems={children}
+                <div
+                  ref={rowAreaRef}
+                  data-testid={`group-rows-${group.id}`}
+                  className="relative"
+                  style={{ height: virtualizer.getTotalSize() }}
+                >
+                  {virtualRows.map((vr) => {
+                    const item = items[vr.index];
+                    const children = childrenByParent.get(item.id) ?? [];
+                    const isExpanded = expanded.has(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        data-index={vr.index}
+                        ref={virtualizer.measureElement}
+                        className="absolute top-0 left-0 w-full"
+                        style={{
+                          transform: `translateY(${vr.start - scrollMargin}px)`,
+                        }}
+                      >
+                        <ItemRow
+                          item={item}
                           columns={columns}
                           cellMap={cellMap}
                           template={template}
                           controls={controls}
-                          renamingItemId={renamingItemId}
+                          selectable={selectable}
+                          subitems={children}
+                          childCount={children.length}
+                          isExpanded={isExpanded}
+                          onToggle={() => onToggleExpand(item.id)}
+                          autoFocusRename={item.id === renamingItemId}
                           onRenameSettled={onRenameItemSettled}
+                          onSubitemAdded={onSetRenamingItemId}
                         />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </SortableContext>
-          )}
-          <AddItemRow
-            groupId={group.id}
-            controls={controls}
-            nameWidth={nameWidth}
-          />
-          {hasAssignedSummary(columns) && (
-            <SummaryRow
-              variant="group"
-              testId={`group-summary-${group.id}`}
-              label="Group Summary"
-              groupColor={group.color}
-              columns={columns}
-              itemIds={withSubitems(
-                items.map((i) => i.id),
-                childrenByParent,
-              )}
-              cellMap={cellMap}
-              cache={controls.cache}
-              template={template}
+                        {isExpanded && children.length > 0 && (
+                          <SubitemBlock
+                            parentId={item.id}
+                            subitems={children}
+                            columns={columns}
+                            cellMap={cellMap}
+                            template={template}
+                            controls={controls}
+                            renamingItemId={renamingItemId}
+                            onRenameSettled={onRenameItemSettled}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            )}
+            <AddItemRow
+              groupId={group.id}
+              controls={controls}
               nameWidth={nameWidth}
-              canEdit={summary.canEdit}
-              nowMs={summary.nowMs}
-              onChange={summary.onChange}
             />
-          )}
-        </>
-      )}
+            {hasAssignedSummary(columns) && (
+              <SummaryRow
+                variant="group"
+                testId={`group-summary-${group.id}`}
+                label="Group Summary"
+                groupColor={group.color}
+                columns={columns}
+                itemIds={withSubitems(
+                  items.map((i) => i.id),
+                  childrenByParent,
+                )}
+                cellMap={cellMap}
+                cache={controls.cache}
+                template={template}
+                nameWidth={nameWidth}
+                canEdit={summary.canEdit}
+                nowMs={summary.nowMs}
+                onChange={summary.onChange}
+              />
+            )}
+          </>
+        )}
+      </div>
     </section>
   );
 }
