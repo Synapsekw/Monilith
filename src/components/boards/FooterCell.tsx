@@ -64,7 +64,7 @@ export function FooterValue({
         return <PercentBar percent={result.value} />;
       }
       return (
-        <span className="text-foreground text-sm font-medium tabular-nums">
+        <span className="text-foreground text-xs font-medium tabular-nums">
           {result.style === "currency" && result.currency ? (
             <CurrencyAmount
               amount={result.value}
@@ -77,26 +77,26 @@ export function FooterValue({
       );
     case "checkbox":
       return (
-        <span className="text-foreground text-sm font-medium tabular-nums">
+        <span className="text-foreground text-xs font-medium tabular-nums">
           {result.checked}/{result.total}
         </span>
       );
     case "date":
       return (
-        <span className="text-foreground text-sm font-medium">
+        <span className="text-foreground text-xs font-medium">
           {fmtDate(result.date)}
         </span>
       );
     case "dateSpan":
       return (
-        <span className="text-foreground text-sm font-medium">
+        <span className="text-foreground text-xs font-medium">
           {fmtDate(result.start)}
           {result.end !== result.start ? ` – ${fmtDate(result.end)}` : ""}
         </span>
       );
     case "duration":
       return (
-        <span className="text-foreground text-sm font-medium tabular-nums">
+        <span className="text-foreground text-xs font-medium tabular-nums">
           {formatDuration(result.totalSecs)}
           {result.estimateSecs
             ? ` / ${formatDuration(result.estimateSecs)}`
