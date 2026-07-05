@@ -3,9 +3,11 @@ import type {
   ColumnSpec,
   SynthOption,
   ImportableKind,
+  ImportGroup,
+  RowStructureEntry,
 } from "./types";
 import { IMPORTABLE_KINDS } from "./types";
-import { splitRows2 } from "./build-import-payload";
+import { resolveStructuredRows } from "./build-import-payload";
 import { textToCell } from "./cell-codec";
 import { missingOptionLabels, type BoardColumnRef } from "./match-columns";
 import { nextOptionColor } from "@/lib/boards/option-colors";
@@ -13,8 +15,13 @@ import { GROUP_COLORS } from "@/lib/boards/group-colors";
 import type { Json } from "@/types/database.types";
 
 export type AppendPayload = {
-  newGroup?: { id: string; name: string; color: string };
-  groupId?: string;
+  groups: {
+    id: string; // existing group's id, OR a freshly-minted uuid
+    existingGroupId: string | null; // null => create; set => reuse (== id)
+    name: string;
+    color: string;
+    position: number;
+  }[];
   newColumns: {
     id: string;
     kind: ImportableKind;
@@ -25,6 +32,7 @@ export type AppendPayload = {
   optionAdditions: { columnId: string; options: SynthOption[] }[];
   items: {
     id: string;
+    groupId: string;
     name: string;
     position: number;
     cells: { columnId: string; value: Json }[];
@@ -32,6 +40,7 @@ export type AppendPayload = {
   subitems: {
     id: string;
     parentId: string;
+    groupId: string;
     name: string;
     position: number;
     cells: { columnId: string; value: Json }[];
@@ -47,16 +56,22 @@ function isImportableKind(kind: string): kind is ImportableKind {
 
 /**
  * Build the `import_rows_into_board` RPC payload for appending an imported
- * sheet into an EXISTING board/group. Unlike `buildImportPayloadV2` (which
- * mints a brand-new board), every data column here resolves against either an
- * existing board column (`target: {columnId}` — encoded with the TARGET
- * column's kind + merged options) or a freshly minted one (`target:
- * "create"`, or no target at all — treated the same as "create"; the calling
- * action's Zod validation requires an explicit target for existing
- * destinations, so `undefined` reaching here is a defensive fallback, not the
- * expected path). `target: "skip"` drops the column. `role: "group"` specs
- * are not supported here — the caller rejects them before this is invoked;
- * every row lands in the single `group` the caller resolved.
+ * sheet into an EXISTING board across one or more target groups. Each of
+ * `groups` is either a reused board group (`existingGroupId` set — the
+ * payload group's `id` equals it, so items referencing that `id` resolve to
+ * the real board group) or a freshly-minted group (`existingGroupId: null`).
+ * Row-to-group and item/subitem structure come from `structure` via
+ * `resolveStructuredRows` (Task 1) — not from a `↳` name prefix or a group
+ * column.
+ *
+ * Every data column resolves against either an existing board column
+ * (`target: {columnId}` — encoded with the TARGET column's kind + merged
+ * options) or a freshly minted one (`target: "create"`, or no target at
+ * all — treated the same as "create"; the calling action's Zod validation
+ * requires an explicit target for existing destinations, so `undefined`
+ * reaching here is a defensive fallback, not the expected path). `target:
+ * "skip"` drops the column. `role: "group"` specs are not supported here —
+ * grouping is driven entirely by `groups`/`structure`.
  *
  * Throws:
  * - "no name column" — no spec has `role: "name"`.
@@ -68,7 +83,8 @@ export function buildAppendPayload(
   table: ParsedTable,
   specs: ColumnSpec[],
   boardColumns: BoardColumnRef[],
-  group: { groupId: string } | { newGroupName: string },
+  groups: ImportGroup[],
+  structure: RowStructureEntry[],
 ): AppendPayload {
   const nameSpec = specs.find((s) => s.role === "name");
   if (!nameSpec) throw new Error("no name column");
@@ -77,9 +93,21 @@ export function buildAppendPayload(
     (s) => s.role === "data" && s.target !== "skip",
   );
 
-  // All rows land in one group chosen by the caller, so there is no per-row
-  // grouping column here (any file "group" column was demoted client-side).
-  const split = splitRows2(table.rows, nameSpec.sourceIndex, null);
+  const resolved = resolveStructuredRows(
+    table,
+    nameSpec.sourceIndex,
+    groups,
+    structure,
+  );
+
+  // Existing group => reuse its id; new group => mint one. Items reference
+  // groupId == this id in both cases (the RPC creates new ones, validates
+  // reused ones).
+  const groupIdByKey = new Map(
+    resolved.groups.map(
+      (g) => [g.key, g.existingGroupId ?? crypto.randomUUID()] as const,
+    ),
+  );
 
   const boardColumnsById = new Map(boardColumns.map((c) => [c.id, c]));
 
@@ -89,17 +117,13 @@ export function buildAppendPayload(
     options: SynthOption[];
     sourceIndex: number;
   };
-
   const newColumns: AppendPayload["newColumns"] = [];
   const optionAdditions: AppendPayload["optionAdditions"] = [];
-  const resolved: Resolved[] = [];
+  const resolvedCols: Resolved[] = [];
 
   let newColumnPosition = 0;
   for (const spec of dataSpecs) {
-    // `target !== "skip"` is guaranteed by the dataSpecs filter above, so the
-    // only remaining shapes are undefined | "create" | { columnId }.
     const target = spec.target;
-
     if (target === undefined || target === "create") {
       const id = crypto.randomUUID();
       newColumns.push({
@@ -111,7 +135,7 @@ export function buildAppendPayload(
           : {}) as Json,
         position: newColumnPosition++,
       });
-      resolved.push({
+      resolvedCols.push({
         columnId: id,
         kind: spec.kind,
         options: spec.options,
@@ -119,23 +143,18 @@ export function buildAppendPayload(
       });
       continue;
     }
-
-    // target is { columnId: string } here — dataSpecs already filtered out
-    // "skip" above, but the .filter predicate doesn't narrow ColumnSpec's
-    // type, so guard explicitly for TypeScript's sake.
     if (target === "skip") continue;
     const boardColumn = boardColumnsById.get(target.columnId);
     if (!boardColumn) throw new Error("unknown target column");
-    if (!isImportableKind(boardColumn.kind)) {
+    if (!isImportableKind(boardColumn.kind))
       throw new Error("incompatible column kind");
-    }
     const targetKind = boardColumn.kind;
 
     let mergedOptions = boardColumn.options;
     if (targetKind === "status" || targetKind === "dropdown") {
       const rawValues = [
-        ...split.items.map((item) => item.row[spec.sourceIndex] ?? ""),
-        ...split.subitems.map((sub) => sub.row[spec.sourceIndex] ?? ""),
+        ...resolved.items.map((it) => it.row[spec.sourceIndex] ?? ""),
+        ...resolved.subitems.map((s) => s.row[spec.sourceIndex] ?? ""),
       ];
       const missingLabels = missingOptionLabels(
         rawValues,
@@ -159,8 +178,7 @@ export function buildAppendPayload(
         mergedOptions = [...boardColumn.options, ...minted];
       }
     }
-
-    resolved.push({
+    resolvedCols.push({
       columnId: boardColumn.id,
       kind: targetKind,
       options: mergedOptions,
@@ -170,46 +188,39 @@ export function buildAppendPayload(
 
   const buildCells = (row: string[]) => {
     const cells: { columnId: string; value: Json }[] = [];
-    for (const r of resolved) {
+    for (const r of resolvedCols) {
       const value = textToCell(r.kind, row[r.sourceIndex] ?? "", r.options);
       if (value !== null) cells.push({ columnId: r.columnId, value });
     }
     return cells;
   };
 
-  const itemIds = split.items.map(() => crypto.randomUUID());
+  const itemIds = resolved.items.map(() => crypto.randomUUID());
 
-  const items = split.items.map((item, i) => ({
-    id: itemIds[i],
-    name: item.name,
-    position: i,
-    cells: buildCells(item.row),
-  }));
-
-  const subitems = split.subitems.map((sub, i) => ({
-    id: crypto.randomUUID(),
-    parentId: itemIds[sub.parentIndex],
-    name: sub.name,
-    position: i,
-    cells: buildCells(sub.row),
-  }));
-
-  const payload: AppendPayload = {
+  return {
+    groups: resolved.groups.map((g, i) => ({
+      id: groupIdByKey.get(g.key)!,
+      existingGroupId: g.existingGroupId,
+      name: g.name,
+      color: GROUP_COLORS[i % GROUP_COLORS.length],
+      position: i,
+    })),
     newColumns,
     optionAdditions,
-    items,
-    subitems,
-  };
-
-  if ("newGroupName" in group) {
-    payload.newGroup = {
+    items: resolved.items.map((item, i) => ({
+      id: itemIds[i],
+      groupId: groupIdByKey.get(item.groupKey)!,
+      name: item.name,
+      position: i,
+      cells: buildCells(item.row),
+    })),
+    subitems: resolved.subitems.map((sub, i) => ({
       id: crypto.randomUUID(),
-      name: group.newGroupName,
-      color: GROUP_COLORS[0],
-    };
-  } else {
-    payload.groupId = group.groupId;
-  }
-
-  return payload;
+      parentId: itemIds[sub.parentIndex],
+      groupId: groupIdByKey.get(sub.groupKey)!,
+      name: sub.name,
+      position: i,
+      cells: buildCells(sub.row),
+    })),
+  };
 }
