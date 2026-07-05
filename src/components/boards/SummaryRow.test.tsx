@@ -170,6 +170,11 @@ describe("SummaryRow", () => {
     const row = screen.getByTestId("group-summary-g1");
     expect(row).toHaveTextContent("Average");
     expect(row).toHaveTextContent("50%");
+    // mirrors the percent cell: a colorized fill bar, not plain text
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "50",
+    );
   });
 
   it("renders the provided summary label on the frozen name track", () => {

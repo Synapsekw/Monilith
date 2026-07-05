@@ -8,6 +8,7 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
+import { PercentBar } from "@/components/boards/cells";
 import { formatDuration } from "@/lib/boards/time-format";
 import {
   DropdownMenu,
@@ -57,6 +58,11 @@ export function FooterValue({
     case "empty":
       return null;
     case "number":
+      // A percent summary mirrors the cell: colorized fill bar + "%" label
+      // (PercentBar is the shared primitive the leaf cell + rollup use).
+      if (result.style === "percent") {
+        return <PercentBar percent={result.value} />;
+      }
       return (
         <span className="text-foreground text-sm font-medium tabular-nums">
           {result.style === "currency" && result.currency ? (
@@ -65,7 +71,7 @@ export function FooterValue({
               settings={{ currency: result.currency, dirham_sign: dirhamSign }}
             />
           ) : (
-            `${result.value}${result.style === "percent" ? "%" : ""}`
+            result.value
           )}
         </span>
       );
