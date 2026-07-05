@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-05-1054
+last-updated: 2026-07-05-1218
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -50,8 +50,8 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** **Audit-fix sweep DONE — 11 branches merged to develop, 9 security migrations applied to DEV + verified live.** 4-agent audit (security/perf/stability/features) → closed intra-org RLS leak + SSRF/redirect/enumeration, killed hot-path revalidation + presence re-render storm, realtime self-heal, silent-failure surfacing, import/timezone fixes, + 6 new features (board filter/sort/search, My Work, ⌘K item search, onboarding CTA, bulk actions, mobile nav + profile name). ([[2026-07-05-0811-audit-fix-sweep]])
-- **Branch:** `develop == origin/develop` at `0f32b06` (subitem-aware summary footer on top of the audit-fix sweep) · `main` at `f0f71f5` — **develop is ahead of main; promotion pending.** DEV migration ledger Local==Remote, zero drift.
-- **In flight:** nothing building — subitem-summaries shipped + worktree cleaned. No open `task/*` worktrees. (Summary footer now aggregates subitems: master "Total" + per-group "Group Summary" — [[2026-07-05-1054-subitem-aware-summaries]], [[2026-07-05-gotcha-49-summaries-aggregate-top-level-only]].)
+- **Branch:** `develop == origin/develop` at `276cacc` (subitem-aware summaries + percent fill bar on top of the audit-fix sweep; other sessions also active — created-column tweak, nav-declutter planning) · `main` at `f0f71f5` — **develop is ahead of main; promotion pending.** DEV migration ledger Local==Remote, zero drift.
+- **In flight:** summary-footer work complete + worktrees cleaned (no `task/percent-summary-bar`/`subitem-summaries` left). Summary footer now aggregates subitems (master "Total" + per-group "Group Summary") and renders percent aggregates as the cell's colorized fill bar — [[2026-07-05-1054-subitem-aware-summaries]], [[2026-07-05-1218-percent-summary-fill-bar]], [[2026-07-05-gotcha-49-summaries-aggregate-top-level-only]]. Other sessions have their own active branches.
 - **Next:** **promote `develop → main`** (`/promote`) to ship the sweep to prod. Then pick up any migration-gated deferral (write schema → user applies → build slice): soft-delete/undo (`archived_at`), avatar upload (`avatars` bucket), similarity-ranked ⌘K search.
 - **Owed:** three migration-gated feature deferrals above. `.mcp.json` uncommitted; untracked `scripts/sync-prod/push-schema.sh` (foreign). Perf tier-3 **Task A** (`unstable_instant`) deferred — needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). Prod Batch B feedback rows F2/F5 flip after next prod confirm.
 
