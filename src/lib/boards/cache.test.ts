@@ -23,6 +23,7 @@ import {
   removeTimeEntry,
   upsertTimeEntry,
   timeEntriesForCell,
+  moveItemToGroup,
   type BoardCache,
   type CacheAttachment,
   type CacheColumn,
@@ -581,4 +582,46 @@ it("removeTimeEntry removes by id, no-op when absent", () => {
   expect(cache.timeEntries.map((e) => e.id)).toEqual(["b"]);
   cache = removeTimeEntry(cache, "nope");
   expect(cache.timeEntries).toHaveLength(1);
+});
+
+describe("moveItemToGroup position", () => {
+  function cacheWithG2(): BoardCache {
+    return {
+      ...baseCache(),
+      groups: [
+        {
+          id: "g2",
+          board_id: "b1",
+          name: "G2",
+          color: "#0073ea",
+          position: 1,
+        } as never,
+      ],
+      items: [
+        ...baseCache().items,
+        {
+          id: "i3",
+          board_id: "b1",
+          group_id: "g2",
+          name: "Three",
+          position: 2,
+          parent_id: null,
+        } as never,
+      ],
+    };
+  }
+
+  it("places at the explicit position when given", () => {
+    const next = moveItemToGroup(cacheWithG2(), "i1", "g2", 4.5);
+    const moved = next.items.find((i) => i.id === "i1")!;
+    expect(moved.group_id).toBe("g2");
+    expect(moved.position).toBe(4.5);
+  });
+
+  it("appends (maxPos + 1) when position omitted", () => {
+    // g2 already holds a top-level item at position 2 in cacheWithG2()
+    const next = moveItemToGroup(cacheWithG2(), "i1", "g2");
+    const moved = next.items.find((i) => i.id === "i1")!;
+    expect(moved.position).toBe(3);
+  });
 });
