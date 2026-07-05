@@ -303,3 +303,79 @@ export function buildImportPayloadV2(
     })),
   };
 }
+
+export function buildImportPayloadV3(
+  table: ParsedTable,
+  specs: ColumnSpec[],
+  groups: ImportGroup[],
+  structure: RowStructureEntry[],
+): ImportPayload {
+  const nameSpec = specs.find((s) => s.role === "name");
+  if (!nameSpec) throw new Error("no name column");
+  const dataSpecs = specs.filter(
+    (s) => s.role === "data" && s.target !== "skip",
+  );
+
+  const resolved = resolveStructuredRows(
+    table,
+    nameSpec.sourceIndex,
+    groups,
+    structure,
+  );
+
+  // New board => every group is freshly minted.
+  const groupIdByKey = new Map(
+    resolved.groups.map((g) => [g.key, crypto.randomUUID()] as const),
+  );
+  const columnIds = dataSpecs.map(() => crypto.randomUUID());
+  const itemIds = resolved.items.map(() => crypto.randomUUID());
+
+  const buildCells = (row: string[]) => {
+    const cells: { columnId: string; value: Json }[] = [];
+    dataSpecs.forEach((spec, i) => {
+      const value = textToCell(
+        spec.kind,
+        row[spec.sourceIndex] ?? "",
+        spec.options,
+      );
+      if (value !== null) cells.push({ columnId: columnIds[i], value });
+    });
+    return cells;
+  };
+
+  return {
+    templatePayload: {
+      groups: resolved.groups.map((g, i) => ({
+        id: groupIdByKey.get(g.key)!,
+        name: g.name,
+        color: GROUP_COLORS[i % GROUP_COLORS.length],
+        position: i,
+      })),
+      columns: dataSpecs.map((spec, i) => ({
+        id: columnIds[i],
+        kind: spec.kind,
+        name: spec.name,
+        settings:
+          spec.options.length > 0
+            ? ({ options: spec.options } as Json)
+            : ({} as Json),
+        position: i,
+      })),
+      items: resolved.items.map((item, i) => ({
+        id: itemIds[i],
+        groupId: groupIdByKey.get(item.groupKey)!,
+        name: item.name,
+        position: i,
+        cells: buildCells(item.row),
+      })),
+    },
+    subitems: resolved.subitems.map((sub, i) => ({
+      id: crypto.randomUUID(),
+      parentId: itemIds[sub.parentIndex],
+      groupId: groupIdByKey.get(sub.groupKey)!,
+      name: sub.name,
+      position: i,
+      cells: buildCells(sub.row),
+    })),
+  };
+}
