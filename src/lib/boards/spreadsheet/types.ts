@@ -86,3 +86,22 @@ export type ImportDestination =
       boardId: string;
       group: { groupId: string } | { newGroupName: string };
     };
+
+/** A target group for a structured import: either a brand-new group
+ * (`existingGroupId: null`) or an existing board group being reused
+ * (`existingGroupId` set). `key` is a stable client id echoed back in the
+ * commit payload so `structure` rows can reference it. */
+export type ImportGroup = {
+  key: string;
+  name: string;
+  existingGroupId: string | null;
+};
+
+/** Per-row structure assignment, keyed by the ORIGINAL grid row index (the
+ * same index space `excludedRows` uses), so the client and the re-parsing
+ * server resolve identical rows. */
+export type RowStructureEntry = {
+  gridIndex: number;
+  groupKey: string;
+  type: "item" | "subitem";
+};
