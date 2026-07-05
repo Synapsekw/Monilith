@@ -1,7 +1,7 @@
 # Navigation declutter — grouped sidebar, top workspace switcher, top-right platform admin
 
 **Date:** 2026-07-05
-**Status:** Approved (brainstorming, **Direction B**) — one open scope decision (switcher behavior) pending user review
+**Status:** Approved (brainstorming, **Direction B**) — ready for implementation plan. Switcher confirmed as **Option 1 (scoping)**.
 **Design exploration:** interactive mockup of 3 directions (A · Tidy / B · Grouped / C · Dual-rail); user selected **B**.
 
 ## Problem
@@ -53,9 +53,12 @@ The authenticated sidebar (`src/components/shell/sidebar-nav.tsx`) reads as a wa
 | Platform admin                           | **Single top-right button**; removed from sidebar `PlatformNav` **and** the user menu        |
 | Admin menu contents                      | Overview · Organizations · Users · Audit log · Feedback (with new-count badge) + SUPER badge |
 
-## OPEN DECISION — switcher behavior (needs user sign-off)
+## Switcher behavior — RESOLVED: Option 1 (scoping)
 
-Because `boards`/`dashboards` are already `workspace_id`-scoped in the schema, the switcher _can_ be real. Two options:
+**Decision (2026-07-05): Option 1.** The switcher scopes the sidebar Boards + Dashboards lists to the active
+workspace. Option 2 is recorded below only for context.
+
+Because `boards`/`dashboards` are already `workspace_id`-scoped in the schema, the switcher _can_ be real. Two options were considered:
 
 - **Option 1 — Scoping switcher (recommended).** Selecting a workspace filters the sidebar Boards + Dashboards
   lists to that workspace, and new boards/dashboards default to it. Biggest declutter, honest UX. Cost: introduce
@@ -191,6 +194,7 @@ today's flattened all-workspace lists.
 
 ## Open questions for review
 
-1. **Switcher behavior — Option 1 (scoping, recommended) or Option 2 (management-only)?** ← the main one.
+1. ~~Switcher behavior~~ — **RESOLVED: Option 1 (scoping).**
 2. Confirm v1 scopes **only** Boards + Dashboards (not Goals/Portfolios/Workload). (Assumed: yes.)
-3. Keep a "Theme" item inside the user menu, or rely solely on the header theme toggle? (Minor.)
+3. Keep a "Theme" item inside the user menu, or rely solely on the header theme toggle? (Default: header toggle
+   only — matches today; no Theme item in the user menu.)
