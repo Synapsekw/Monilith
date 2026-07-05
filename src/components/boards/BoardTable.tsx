@@ -25,7 +25,16 @@ import {
   CreatedAtCell,
   CreatedByCell,
 } from "@/components/boards/cells/created";
-import { DndContext, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  DragOverlay,
+  useDroppable,
+  pointerWithin,
+  closestCenter,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   horizontalListSortingStrategy,
@@ -39,6 +48,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { reorderPosition } from "@/lib/boards/group-reorder";
+import { crossGroupInsertPosition } from "@/lib/boards/board-dnd";
 import { bucketItems, withSubitems } from "@/lib/boards/item-tree";
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type {
@@ -654,15 +664,116 @@ function BoardTableInner({
 
   const sensors = useTouchAwareSensors();
 
-  function handleGroupDragEnd(e: DragEndEvent) {
+  // Drag overlay descriptor for the active group/item (null when idle).
+  const [activeDrag, setActiveDrag] = useState<{
+    id: string;
+    type: "item" | "group";
+    name: string;
+  } | null>(null);
+
+  // One board-level context now owns BOTH group-reorder and item drags, so its
+  // collision strategy must switch by draggable type: groups collide by center
+  // (header-to-header), item rows collide by pointer against other rows first,
+  // then fall back to the group *container* droppable when the pointer is in a
+  // gap or over a collapsed group — that container drop = append into the group.
+  const boardCollision: CollisionDetection = (args) => {
+    const type = args.active.data.current?.type;
+    if (type === "group") {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          (c) => c.data.current?.type === "group",
+        ),
+      });
+    }
+    const rowHits = pointerWithin({
+      ...args,
+      droppableContainers: args.droppableContainers.filter(
+        (c) => c.data.current?.type === "item",
+      ),
+    });
+    if (rowHits.length > 0) return rowHits;
+    return pointerWithin({
+      ...args,
+      droppableContainers: args.droppableContainers.filter(
+        (c) => c.data.current?.type === "group-container",
+      ),
+    });
+  };
+
+  function handleBoardDragStart(e: DragStartEvent) {
+    const type = e.active.data.current?.type;
+    if (type === "group") {
+      const g = groups.find((x) => x.id === e.active.id);
+      setActiveDrag(g ? { id: g.id, type: "group", name: g.name } : null);
+    } else {
+      const it = topLevel.find((x) => x.id === e.active.id);
+      setActiveDrag(it ? { id: it.id, type: "item", name: it.name } : null);
+    }
+  }
+
+  function handleBoardDragEnd(e: DragEndEvent) {
+    setActiveDrag(null);
     const { active, over } = e;
     if (!over) return;
-    const position = reorderPosition(
-      groups.map((g) => ({ id: g.id, position: g.position })),
-      String(active.id),
+    const activeType = active.data.current?.type;
+
+    if (activeType === "group") {
+      if (over.data.current?.type !== "group" || active.id === over.id) return;
+      const position = reorderPosition(
+        groups.map((g) => ({ id: g.id, position: g.position })),
+        String(active.id),
+        String(over.id),
+      );
+      if (position !== null) reorderGroup(String(active.id), position);
+      return;
+    }
+
+    // item drag
+    const fromGroup = String(active.data.current?.groupId);
+    const overData = over.data.current;
+    const toGroup =
+      overData?.type === "group-container"
+        ? String(overData.groupId)
+        : String(overData?.groupId ?? "");
+    if (!toGroup) return;
+
+    if (toGroup === fromGroup) {
+      if (active.id === over.id) return;
+      const position = reorderPosition(
+        (visibleItemsByGroup.get(fromGroup) ?? []).map((i) => ({
+          id: i.id,
+          position: i.position,
+        })),
+        String(active.id),
+        String(over.id),
+      );
+      if (position !== null) controls.reorderItem(String(active.id), position);
+      return;
+    }
+
+    // cross-group: compute the exact slot, or append when dropped on the
+    // group container (no `over` row under the pointer).
+    const targetItems = (visibleItemsByGroup.get(toGroup) ?? []).map((i) => ({
+      id: i.id,
+      position: i.position,
+    }));
+    if (overData?.type === "group-container") {
+      controls.moveItemToGroup(String(active.id), toGroup); // append
+      return;
+    }
+    const activeTop =
+      active.rect.current.translated?.top ??
+      active.rect.current.initial?.top ??
+      0;
+    const overMid = over.rect.top + over.rect.height / 2;
+    const dropBelow = activeTop > overMid;
+    const position = crossGroupInsertPosition(
+      targetItems,
       String(over.id),
+      dropBelow,
     );
-    if (position !== null) reorderGroup(String(active.id), position);
+    controls.moveItemToGroup(String(active.id), toGroup, position);
   }
 
   return (
@@ -730,10 +841,12 @@ function BoardTableInner({
             </EmptyState>
           ) : (
             <DndContext
-              id="board-groups"
+              id="board-dnd"
               sensors={sensors}
+              collisionDetection={boardCollision}
               modifiers={[restrictToVerticalAxis]}
-              onDragEnd={handleGroupDragEnd}
+              onDragStart={handleBoardDragStart}
+              onDragEnd={handleBoardDragEnd}
             >
               <SortableContext
                 items={groups.map((g) => g.id)}
@@ -768,6 +881,13 @@ function BoardTableInner({
                   />
                 ))}
               </SortableContext>
+              <DragOverlay>
+                {activeDrag ? (
+                  <div className="bg-surface flex items-center border px-4 py-1.5 text-sm shadow-lg">
+                    {activeDrag.name}
+                  </div>
+                ) : null}
+              </DragOverlay>
             </DndContext>
           )}
           <AddGroupRow
@@ -1560,20 +1680,16 @@ function GroupSection({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: group.id });
+  } = useSortable({ id: group.id, data: { type: "group" } });
 
-  const itemSensors = useTouchAwareSensors();
-
-  function handleItemDragEnd(e: DragEndEvent) {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const position = reorderPosition(
-      items.map((i) => ({ id: i.id, position: i.position })),
-      String(active.id),
-      String(over.id),
-    );
-    if (position !== null) controls.reorderItem(String(active.id), position);
-  }
+  // Container droppable for the whole group's row area — the board-level
+  // collision strategy falls back to this when an item is dragged into a gap or
+  // onto a collapsed group, so a drop here appends the item into this group.
+  // Keyed distinctly from the group's sortable id so the two don't collide.
+  const { setNodeRef: setGroupDropRef } = useDroppable({
+    id: `group-drop-${group.id}`,
+    data: { type: "group-container", groupId: group.id },
+  });
 
   // React Compiler safely skips memoizing this component because useVirtualizer
   // returns non-memoizable functions; that fallback is correct here.
@@ -1642,105 +1758,108 @@ function GroupSection({
       />
 
       {/* Collapsed strip: the user's assigned aggregation wins; the legacy
-          hardcoded rollup remains the byte-for-byte fallback (spec D5). */}
-      {collapsed &&
-        items.length > 0 &&
-        (hasAssignedSummary(columns) ? (
-          <SummaryRow
-            variant="group"
-            testId={`group-summary-${group.id}`}
-            label="Group Summary"
-            groupColor={group.color}
-            columns={columns}
-            itemIds={withSubitems(
-              items.map((i) => i.id),
-              childrenByParent,
-            )}
-            cellMap={cellMap}
-            cache={controls.cache}
-            template={template}
-            nameWidth={nameWidth}
-            canEdit={summary.canEdit}
-            nowMs={summary.nowMs}
-            onChange={summary.onChange}
-          />
-        ) : (
-          <GroupRollupRow
-            group={group}
-            items={items}
-            columns={columns}
-            cellMap={cellMap}
-            cache={controls.cache}
-            template={template}
-          />
-        ))}
+          hardcoded rollup remains the byte-for-byte fallback (spec D5). Wrapped
+          in the container droppable so an item dropped onto a collapsed group
+          appends into it (matches the expanded row-area drop target). */}
+      {collapsed && items.length > 0 && (
+        <div ref={setGroupDropRef}>
+          {hasAssignedSummary(columns) ? (
+            <SummaryRow
+              variant="group"
+              testId={`group-summary-${group.id}`}
+              label="Group Summary"
+              groupColor={group.color}
+              columns={columns}
+              itemIds={withSubitems(
+                items.map((i) => i.id),
+                childrenByParent,
+              )}
+              cellMap={cellMap}
+              cache={controls.cache}
+              template={template}
+              nameWidth={nameWidth}
+              canEdit={summary.canEdit}
+              nowMs={summary.nowMs}
+              onChange={summary.onChange}
+            />
+          ) : (
+            <GroupRollupRow
+              group={group}
+              items={items}
+              columns={columns}
+              cellMap={cellMap}
+              cache={controls.cache}
+              template={template}
+            />
+          )}
+        </div>
+      )}
 
       {!collapsed && (
         <>
           {items.length > 0 && (
-            <DndContext
-              id={`group-items-${group.id}`}
-              sensors={itemSensors}
-              modifiers={[restrictToVerticalAxis]}
-              onDragEnd={handleItemDragEnd}
+            // Item rows now live under the single board-level DndContext (see
+            // BoardTableInner) so rows can be dragged across groups; this group
+            // keeps only its own SortableContext + the container droppable ref.
+            <SortableContext
+              items={items.map((i) => i.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <SortableContext
-                items={items.map((i) => i.id)}
-                strategy={verticalListSortingStrategy}
+              <div
+                ref={(node) => {
+                  rowAreaRef.current = node;
+                  setGroupDropRef(node);
+                }}
+                data-testid={`group-rows-${group.id}`}
+                className="relative"
+                style={{ height: virtualizer.getTotalSize() }}
               >
-                <div
-                  ref={rowAreaRef}
-                  data-testid={`group-rows-${group.id}`}
-                  className="relative"
-                  style={{ height: virtualizer.getTotalSize() }}
-                >
-                  {virtualRows.map((vr) => {
-                    const item = items[vr.index];
-                    const children = childrenByParent.get(item.id) ?? [];
-                    const isExpanded = expanded.has(item.id);
-                    return (
-                      <div
-                        key={item.id}
-                        data-index={vr.index}
-                        ref={virtualizer.measureElement}
-                        className="absolute top-0 left-0 w-full"
-                        style={{
-                          transform: `translateY(${vr.start - scrollMargin}px)`,
-                        }}
-                      >
-                        <ItemRow
-                          item={item}
+                {virtualRows.map((vr) => {
+                  const item = items[vr.index];
+                  const children = childrenByParent.get(item.id) ?? [];
+                  const isExpanded = expanded.has(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      data-index={vr.index}
+                      ref={virtualizer.measureElement}
+                      className="absolute top-0 left-0 w-full"
+                      style={{
+                        transform: `translateY(${vr.start - scrollMargin}px)`,
+                      }}
+                    >
+                      <ItemRow
+                        item={item}
+                        columns={columns}
+                        cellMap={cellMap}
+                        template={template}
+                        controls={controls}
+                        selectable={selectable}
+                        subitems={children}
+                        childCount={children.length}
+                        isExpanded={isExpanded}
+                        onToggle={() => onToggleExpand(item.id)}
+                        autoFocusRename={item.id === renamingItemId}
+                        onRenameSettled={onRenameItemSettled}
+                        onSubitemAdded={onSetRenamingItemId}
+                      />
+                      {isExpanded && children.length > 0 && (
+                        <SubitemBlock
+                          parentId={item.id}
+                          subitems={children}
                           columns={columns}
                           cellMap={cellMap}
                           template={template}
                           controls={controls}
-                          selectable={selectable}
-                          subitems={children}
-                          childCount={children.length}
-                          isExpanded={isExpanded}
-                          onToggle={() => onToggleExpand(item.id)}
-                          autoFocusRename={item.id === renamingItemId}
+                          renamingItemId={renamingItemId}
                           onRenameSettled={onRenameItemSettled}
-                          onSubitemAdded={onSetRenamingItemId}
                         />
-                        {isExpanded && children.length > 0 && (
-                          <SubitemBlock
-                            parentId={item.id}
-                            subitems={children}
-                            columns={columns}
-                            cellMap={cellMap}
-                            template={template}
-                            controls={controls}
-                            renamingItemId={renamingItemId}
-                            onRenameSettled={onRenameItemSettled}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </SortableContext>
-            </DndContext>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </SortableContext>
           )}
           <AddItemRow
             groupId={group.id}
@@ -1827,7 +1946,10 @@ function ItemRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id });
+  } = useSortable({
+    id: item.id,
+    data: { type: "item", groupId: item.group_id },
+  });
 
   const dragHandle = (
     <button
