@@ -5,7 +5,7 @@ export type SeriesPoint = {
   primaryLabel: string;
   seriesKey: string | null;
   seriesLabel: string | null;
-  seriesColor: string;
+  seriesColor: string | null;
   value: number;
 };
 
@@ -21,11 +21,8 @@ export type PivotRow = Record<string, string | number>;
 
 export type PivotedSeries = {
   rows: PivotRow[];
-  series: { key: string; color: string }[];
+  series: { key: string; color: string | null }[];
 };
-
-/** Default accent for the single-series (no split) case. */
-const SOLO_COLOR = "#818cf8";
 
 /**
  * Pivot flat (primary × series) points into recharts rows.
@@ -36,7 +33,7 @@ const SOLO_COLOR = "#818cf8";
 export function pivotSeries(data: SeriesData): PivotedSeries {
   const rowByPrimary = new Map<string, PivotRow>();
   const order: string[] = [];
-  const seriesColor = new Map<string, string>();
+  const seriesColor = new Map<string, string | null>();
   const seriesOrder: string[] = [];
 
   for (const p of data.points) {
@@ -54,13 +51,14 @@ export function pivotSeries(data: SeriesData): PivotedSeries {
       }
     } else {
       row.Value = (Number(row.Value) || 0) + p.value;
-      row[`__color_${p.primaryLabel}`] = p.seriesColor;
+      if (p.seriesColor != null)
+        row[`__color_${p.primaryLabel}`] = p.seriesColor;
     }
   }
 
   const series = data.seriesKind
-    ? seriesOrder.map((key) => ({ key, color: seriesColor.get(key)! }))
-    : [{ key: "Value", color: SOLO_COLOR }];
+    ? seriesOrder.map((key) => ({ key, color: seriesColor.get(key) ?? null }))
+    : [{ key: "Value", color: null }];
 
   return { rows: order.map((k) => rowByPrimary.get(k)!), series };
 }

@@ -71,8 +71,9 @@ describe("ChartWidget", () => {
       />,
     );
     // ChartContainer injects a <style> setting --color-<key> from the config.
-    // Single-series -> the synthetic "Value" series carries SOLO_COLOR.
+    // Single-series -> the synthetic "Value" series carries a null color,
+    // which falls back to the temporary var(--brand) accent.
     expect(container.innerHTML).toContain("--color-Value");
-    expect(container.innerHTML).toContain("#818cf8");
+    expect(container.innerHTML).toContain("var(--brand)");
   });
 });

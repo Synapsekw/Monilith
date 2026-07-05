@@ -6,9 +6,12 @@ import type { ChartConfig } from "@/components/ui/chart";
  * Labels default to the series key (matches the current Legend/Tooltip text).
  */
 export function buildChartConfig(
-  series: { key: string; color: string }[],
+  series: { key: string; color: string | null }[],
 ): ChartConfig {
   return Object.fromEntries(
-    series.map((s) => [s.key, { label: s.key, color: s.color }]),
+    series.map((s) => [
+      s.key,
+      { label: s.key, color: s.color ?? "var(--brand)" },
+    ]),
   );
 }

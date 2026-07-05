@@ -123,7 +123,7 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
               <Line
                 key={s.key}
                 dataKey={s.key}
-                stroke={s.color}
+                stroke={s.color ?? "var(--brand)"}
                 strokeWidth={2}
                 dot={false}
               />
@@ -131,8 +131,8 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
               <Area
                 key={s.key}
                 dataKey={s.key}
-                stroke={s.color}
-                fill={s.color}
+                stroke={s.color ?? "var(--brand)"}
+                fill={s.color ?? "var(--brand)"}
                 fillOpacity={0.2}
               />
             ),
@@ -164,14 +164,14 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
               <Bar
                 key={s.key}
                 dataKey={s.key}
-                fill={s.color}
+                fill={s.color ?? "var(--brand)"}
                 radius={[4, 4, 0, 0]}
               />
             ) : (
               <Line
                 key={s.key}
                 dataKey={s.key}
-                stroke={s.color}
+                stroke={s.color ?? "var(--brand)"}
                 strokeWidth={2}
                 dot={false}
               />
@@ -203,14 +203,16 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
             key={s.key}
             dataKey={s.key}
             stackId={stack ? "a" : undefined}
-            fill={s.color}
+            fill={s.color ?? "var(--brand)"}
             radius={stack ? undefined : [4, 4, 0, 0]}
           >
             {series.length === 1
               ? rows.map((r) => (
                   <Cell
                     key={String(r.__label)}
-                    fill={String(r[`__color_${r.__label}`] ?? s.color)}
+                    fill={String(
+                      r[`__color_${r.__label}`] ?? s.color ?? "var(--brand)",
+                    )}
                   />
                 ))
               : null}
