@@ -14,7 +14,7 @@ describe("buildChartConfig", () => {
     });
   });
 
-  it("maps the single synthetic Value series (preserving SOLO_COLOR)", () => {
+  it("maps a provided series color through unchanged", () => {
     const config = buildChartConfig([{ key: "Value", color: "#818cf8" }]);
     expect(config).toEqual({ Value: { label: "Value", color: "#818cf8" } });
   });
