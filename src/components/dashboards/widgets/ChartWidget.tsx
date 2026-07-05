@@ -70,7 +70,6 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
   const wid = widget.id;
   const colors = resolveChartColors({ chartType: ct, rows, series });
   const gradients = collectGradients(wid, colors);
-  const seriesPaint = new Map(colors.series.map((s) => [s.key, s.paint]));
   const chartConfig = buildChartConfig(
     colors.series.map((s) => ({ key: s.key, color: solidOf(s.paint) })),
   );
@@ -239,13 +238,12 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
           <ChartLegend content={<ChartLegendContent />} />
         ) : null}
         {colors.series.map((s, i) => {
-          const paint = seriesPaint.get(s.key)!;
           return (
             <Bar
               key={s.key}
               dataKey={s.key}
               stackId={stack ? "a" : undefined}
-              fill={paintFill(wid, paint, "bar")}
+              fill={paintFill(wid, s.paint, "bar")}
               radius={stack ? undefined : [4, 4, 0, 0]}
               animationBegin={i * CHART_MOTION.staggerMs}
               {...anim}
