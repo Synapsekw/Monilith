@@ -8,27 +8,33 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
-  Legend,
   Line,
   LineChart,
   Pie,
   PieChart,
   RadialBar,
   RadialBarChart,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import { buildChartConfig } from "@/components/dashboards/widgets/chart-config";
 import { useWidgetSeries } from "@/lib/dashboards/use-widget-series";
 import { pivotSeries } from "@/lib/dashboards/series";
 import {
   AXIS_PROPS,
   GRID_STROKE,
-  TOOLTIP_STYLE,
 } from "@/components/dashboards/widgets/chart-theme";
 import type { CacheWidget } from "@/lib/dashboards/cache";
+
+const CHART_CLASS = "h-full w-full !aspect-auto";
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
@@ -49,14 +55,15 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
   if (data.points.length === 0) return <Empty>No data yet</Empty>;
 
   const { rows, series } = pivotSeries(data);
+  const chartConfig = buildChartConfig(series);
   const ct = data.chartType;
 
   // ── circular charts ──
   if (ct === "pie" || ct === "donut") {
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <PieChart>
-          <Tooltip {...TOOLTIP_STYLE} />
+          <ChartTooltip content={<ChartTooltipContent nameKey="__label" />} />
           <Pie
             data={rows}
             dataKey="Value"
@@ -72,15 +79,15 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
             ))}
           </Pie>
         </PieChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
   if (ct === "radial") {
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <RadialBarChart data={rows} innerRadius="25%" outerRadius="95%">
-          <Tooltip {...TOOLTIP_STYLE} />
+          <ChartTooltip content={<ChartTooltipContent nameKey="__label" />} />
           <RadialBar dataKey="Value" background>
             {rows.map((r) => (
               <Cell
@@ -90,7 +97,7 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
             ))}
           </RadialBar>
         </RadialBarChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
@@ -98,7 +105,7 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
   if (ct === "line" || ct === "area") {
     const Chart = ct === "line" ? LineChart : AreaChart;
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <Chart data={rows}>
           <CartesianGrid
             stroke={GRID_STROKE}
@@ -107,9 +114,9 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
           />
           <XAxis dataKey="__label" {...AXIS_PROPS} />
           <YAxis {...AXIS_PROPS} width={32} />
-          <Tooltip {...TOOLTIP_STYLE} />
+          <ChartTooltip content={<ChartTooltipContent />} />
           {series.length > 1 ? (
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <ChartLegend content={<ChartLegendContent />} />
           ) : null}
           {series.map((s) =>
             ct === "line" ? (
@@ -131,7 +138,7 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
             ),
           )}
         </Chart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
@@ -139,7 +146,7 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
   if (ct === "combo") {
     const comboMap = (config.comboMap ?? {}) as Record<string, "bar" | "line">;
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <ComposedChart data={rows}>
           <CartesianGrid
             stroke={GRID_STROKE}
@@ -148,9 +155,9 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
           />
           <XAxis dataKey="__label" {...AXIS_PROPS} />
           <YAxis {...AXIS_PROPS} width={32} />
-          <Tooltip {...TOOLTIP_STYLE} />
+          <ChartTooltip content={<ChartTooltipContent />} />
           {series.length > 1 ? (
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <ChartLegend content={<ChartLegendContent />} />
           ) : null}
           {series.map((s, i) =>
             (comboMap[s.key] ?? (i === 0 ? "bar" : "line")) === "bar" ? (
@@ -171,14 +178,14 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
             ),
           )}
         </ComposedChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
   // ── bar family (bar / stackedBar / groupedBar) ──
   const stack = ct === "stackedBar";
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer config={chartConfig} className={CHART_CLASS}>
       <BarChart data={rows}>
         <CartesianGrid
           stroke={GRID_STROKE}
@@ -187,8 +194,10 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
         />
         <XAxis dataKey="__label" {...AXIS_PROPS} />
         <YAxis {...AXIS_PROPS} width={32} />
-        <Tooltip {...TOOLTIP_STYLE} />
-        {series.length > 1 ? <Legend wrapperStyle={{ fontSize: 11 }} /> : null}
+        <ChartTooltip content={<ChartTooltipContent />} />
+        {series.length > 1 ? (
+          <ChartLegend content={<ChartLegendContent />} />
+        ) : null}
         {series.map((s) => (
           <Bar
             key={s.key}
@@ -208,6 +217,6 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
           </Bar>
         ))}
       </BarChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }
