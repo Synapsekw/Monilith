@@ -25,9 +25,6 @@ export function MapStep({
   mode,
   boardColumns,
   rowCapWarning,
-  nextDisabled = false,
-  onBack,
-  onNext,
 }: {
   sheets: SheetPreview[];
   activeSheet: number;
@@ -39,11 +36,6 @@ export function MapStep({
    * (and only passed) when `mode === "existing"`. */
   boardColumns?: BoardColumnRef[];
   rowCapWarning: string | null;
-  /** Blocks the Next button (empty sheet, missing name column upstream, or
-   * a row-cap overflow that commit would hard-reject). */
-  nextDisabled?: boolean;
-  onBack: () => void;
-  onNext: () => void;
 }) {
   const grid = useMemo(
     () => sheets[activeSheet]?.grid ?? [],
@@ -161,15 +153,6 @@ export function MapStep({
           />
         </>
       ) : null}
-
-      <div className="flex justify-between pt-2">
-        <Button type="button" variant="outline" onClick={onBack}>
-          Back
-        </Button>
-        <Button type="button" disabled={nextDisabled} onClick={onNext}>
-          Next
-        </Button>
-      </div>
     </div>
   );
 }

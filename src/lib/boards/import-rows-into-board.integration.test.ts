@@ -6,7 +6,14 @@ import {
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signInWithRetry } from "@/test/integration-auth";
-import type { Database } from "@/types/database.types";
+import type { Database, Json } from "@/types/database.types";
+import { buildAppendPayload } from "@/lib/boards/spreadsheet/build-append-payload";
+import type {
+  ParsedTable,
+  ColumnSpec,
+  ImportGroup,
+  RowStructureEntry,
+} from "@/lib/boards/spreadsheet/types";
 
 loadIntegrationEnv();
 
@@ -274,4 +281,65 @@ describe.skipIf(!integrationTargetReady())("import_rows_into_board RPC", () => {
     expect(error).not.toBeNull();
     expect(error?.code).toBe("42501");
   });
+
+  it("appends imported rows across an existing group and a new group", async () => {
+    // Fresh user/org/board so this multi-group append doesn't collide with
+    // the rows the earlier single-group test already inserted into userA's
+    // board/group.
+    const userC = await provisionUser("C");
+
+    const table: ParsedTable = {
+      header: ["Name"],
+      rows: [["A"], ["B"], ["C"]],
+      rowIndices: [1, 2, 3],
+    };
+    const specs: ColumnSpec[] = [
+      {
+        sourceIndex: 0,
+        name: "Name",
+        kind: "text",
+        options: [],
+        role: "name",
+      },
+    ];
+    const groups: ImportGroup[] = [
+      { key: "gEx", name: "Existing", existingGroupId: userC.groupId },
+      { key: "gNew", name: "Fresh", existingGroupId: null },
+    ];
+    const structure: RowStructureEntry[] = [
+      { gridIndex: 1, groupKey: "gEx", type: "item" },
+      { gridIndex: 2, groupKey: "gEx", type: "subitem" },
+      { gridIndex: 3, groupKey: "gNew", type: "item" },
+    ];
+    const payload = buildAppendPayload(table, specs, [], groups, structure);
+
+    const { error } = await userC.anon.rpc("import_rows_into_board", {
+      p_board_id: userC.boardId,
+      p_payload: payload as unknown as Json,
+    });
+    expect(error).toBeNull();
+
+    const { data: freshGroup } = await userC.anon
+      .from("groups")
+      .select("id")
+      .eq("board_id", userC.boardId)
+      .eq("name", "Fresh")
+      .single();
+    expect(freshGroup).toBeTruthy();
+
+    const { data: items } = await userC.anon
+      .from("items")
+      .select("id, name, group_id, parent_id")
+      .eq("board_id", userC.boardId);
+    const a = items!.find((i) => i.name === "A")!;
+    const b = items!.find((i) => i.name === "B")!;
+    const c = items!.find((i) => i.name === "C")!;
+
+    expect(a.group_id).toBe(userC.groupId);
+    expect(a.parent_id).toBeNull();
+    expect(b.group_id).toBe(userC.groupId);
+    expect(b.parent_id).toBe(a.id);
+    expect(c.group_id).toBe((freshGroup as { id: string }).id);
+    expect(c.parent_id).toBeNull();
+  }, 60_000);
 });

@@ -45,6 +45,18 @@ const columnSpec = z.object({
   target: columnTarget.optional(),
 });
 
+const importGroup = z.object({
+  key: z.string().min(1),
+  name: z.string().trim().min(1).max(100),
+  existingGroupId: uuid.nullable(),
+});
+
+const rowStructureEntry = z.object({
+  gridIndex: z.number().int().min(0),
+  groupKey: z.string().min(1),
+  type: z.enum(["item", "subitem"]),
+});
+
 const importDestination = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("new"),
@@ -54,10 +66,6 @@ const importDestination = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("existing"),
     boardId: uuid,
-    group: z.union([
-      z.object({ groupId: uuid }),
-      z.object({ newGroupName: z.string().trim().min(1).max(100) }),
-    ]),
   }),
 ]);
 
@@ -79,6 +87,8 @@ export const commitImportSchema = z
     headerRow: z.number().int().min(0).nullable(),
     excludedRows: z.array(z.number().int().min(0)),
     columns: z.array(columnSpec).min(1),
+    groups: z.array(importGroup).min(1),
+    structure: z.array(rowStructureEntry),
     destination: importDestination,
   })
   .superRefine((data, ctx) => {
@@ -91,21 +101,23 @@ export const commitImportSchema = z
       });
     }
 
-    const groupCount = data.columns.filter((c) => c.role === "group").length;
-    if (data.destination.type === "existing") {
-      if (groupCount > 0) {
-        ctx.addIssue({
-          code: "custom",
-          message:
-            'Column role "group" is not supported when importing into an existing board; rows are appended into a single chosen group.',
-          path: ["columns"],
-        });
-      }
-    } else if (groupCount > 1) {
+    // Grouping is set in the Structure step, never via a column role.
+    if (data.columns.some((c) => c.role === "group")) {
       ctx.addIssue({
         code: "custom",
-        message: 'At most one column can have role "group".',
+        message:
+          'Column role "group" is no longer supported; assign groups in the Structure step.',
         path: ["columns"],
+      });
+    }
+
+    // Every structure row must reference a declared group key.
+    const groupKeys = new Set(data.groups.map((g) => g.key));
+    if (data.structure.some((s) => !groupKeys.has(s.groupKey))) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Every structured row must reference a declared group.",
+        path: ["structure"],
       });
     }
 

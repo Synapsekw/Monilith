@@ -50,8 +50,6 @@ function renderMapStep(overrides: {
       mode={mode}
       boardColumns={boardColumns}
       rowCapWarning={null}
-      onBack={vi.fn()}
-      onNext={vi.fn()}
     />,
   );
 
@@ -108,8 +106,6 @@ describe("MapStep", () => {
         onStateChange={onStateChange}
         mode="new"
         rowCapWarning={null}
-        onBack={vi.fn()}
-        onNext={vi.fn()}
       />,
     );
 

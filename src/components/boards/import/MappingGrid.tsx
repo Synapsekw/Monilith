@@ -276,13 +276,6 @@ export function MappingGrid({
                           <DropdownMenuItem onSelect={() => setRole(i, "name")}>
                             Use as item name
                           </DropdownMenuItem>
-                          {mode === "existing" ? null : (
-                            <DropdownMenuItem
-                              onSelect={() => setRole(i, "group")}
-                            >
-                              Use as group
-                            </DropdownMenuItem>
-                          )}
                           <DropdownMenuItem onSelect={() => setRole(i, "data")}>
                             Regular column
                           </DropdownMenuItem>

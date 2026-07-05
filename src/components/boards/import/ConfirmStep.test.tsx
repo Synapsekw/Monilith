@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 
 import { ConfirmStep } from "@/components/boards/import/ConfirmStep";
 import type { SheetState } from "@/components/boards/import/import-wizard-state";
@@ -55,6 +54,12 @@ const state: SheetState = {
       target: null,
     },
   ],
+  // Structure step output: one group holding both rows as top-level items.
+  groups: [{ key: "grp-1", name: "Imported", existingGroupId: null }],
+  structure: {
+    1: { groupKey: "grp-1", type: "item" },
+    2: { groupKey: "grp-1", type: "item" },
+  },
 };
 
 function newDestination(boardName = "My board") {
@@ -74,21 +79,18 @@ function baseProps() {
     previewedRowCount: 3,
     destination: newDestination(),
     error: null,
-    pending: false,
-    onBack: vi.fn(),
-    onConfirm: vi.fn(),
   };
 }
 
 describe("ConfirmStep", () => {
-  it("renders the summary strip with items/subitems/columns/invalid counts", () => {
+  it("renders the summary strip with items/subitems/groups/columns/invalid counts", () => {
     render(<ConfirmStep {...baseProps()} />);
 
-    // 2 top-level items (Task A, Task B), 0 subitems, 2 included data columns
-    // (Status, Estimate), 2 invalid cells (BadStatus, abc).
+    // 2 top-level items (Task A, Task B), 0 subitems, 1 group ("Imported"),
+    // 2 included data columns (Status, Estimate), 2 invalid cells (BadStatus, abc).
     expect(
       screen.getByText(
-        "2 items · 0 subtasks · 2 columns · 2 invalid cells → empty",
+        "2 items · 0 subtasks · 1 groups · 2 columns · 2 invalid cells → empty",
       ),
     ).toBeInTheDocument();
   });
@@ -136,58 +138,16 @@ describe("ConfirmStep", () => {
     );
   });
 
-  it("disables Confirm when the new board name is blank", () => {
-    render(<ConfirmStep {...baseProps()} destination={newDestination("")} />);
+  it("shows the board-name field only in new-board mode", () => {
+    const { rerender } = render(<ConfirmStep {...baseProps()} />);
+    expect(screen.getByLabelText("Board name")).toBeInTheDocument();
 
-    expect(screen.getByRole("button", { name: "Confirm" })).toBeDisabled();
-  });
-
-  it("calls onConfirm when Confirm is clicked", async () => {
-    const user = userEvent.setup();
-    const onConfirm = vi.fn();
-    render(<ConfirmStep {...baseProps()} onConfirm={onConfirm} />);
-
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
-
-    expect(onConfirm).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders the existing-board group select and reveals a new-group input", async () => {
-    const user = userEvent.setup();
-    const onGroupChange = vi.fn();
-    const existingDestination = {
-      type: "existing" as const,
-      groups: [
-        { id: "g1", name: "Group 1" },
-        { id: "g2", name: "Group 2" },
-      ],
-      groupChoice: { groupId: "g1" },
-      onGroupChange,
-    };
-
-    const { rerender } = render(
-      <ConfirmStep {...baseProps()} destination={existingDestination} />,
-    );
-
-    const select = screen.getByLabelText("Group") as HTMLSelectElement;
-    expect(select.value).toBe("g1");
-    expect(screen.queryByLabelText("New group name")).not.toBeInTheDocument();
-
-    await user.selectOptions(select, "New group…");
-
-    expect(onGroupChange).toHaveBeenCalledWith({ newGroupName: "" });
-
-    // Simulate the parent applying the state update.
+    // Existing-board mode: grouping is handled in the Structure step, so the
+    // Confirm step drops the group picker and shows no board-name field.
     rerender(
-      <ConfirmStep
-        {...baseProps()}
-        destination={{
-          ...existingDestination,
-          groupChoice: { newGroupName: "" },
-        }}
-      />,
+      <ConfirmStep {...baseProps()} destination={{ type: "existing" }} />,
     );
-
-    expect(screen.getByLabelText("New group name")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Board name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Group")).not.toBeInTheDocument();
   });
 });

@@ -69,6 +69,18 @@ import {
 } from "./spreadsheet-actions";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { MAX_BYTES } from "@/lib/boards/spreadsheet/types";
+import type {
+  ImportGroup,
+  RowStructureEntry,
+} from "@/lib/boards/spreadsheet/types";
+
+// Default single "new" target group used by most fixtures; grouping is now
+// expressed through `groups`/`structure`, not a column role.
+const NEW_GROUP: ImportGroup = {
+  key: "g1",
+  name: "Imported",
+  existingGroupId: null,
+};
 
 // Valid RFC-4122 v4 UUID for Zod strict uuid validation
 const BOARD_UUID = "a1234567-e89b-42d3-a456-556642440000";
@@ -363,6 +375,12 @@ describe("commitImport", () => {
           target: "skip",
         },
       ],
+      groups: [NEW_GROUP],
+      // Data rows are grid indices 2 and 4 (grid 3 / "Task 2" is excluded).
+      structure: [
+        { gridIndex: 2, groupKey: "g1", type: "item" },
+        { gridIndex: 4, groupKey: "g1", type: "item" },
+      ],
       destination: {
         type: "new",
         workspaceId: BOARD_UUID,
@@ -384,6 +402,8 @@ describe("commitImport", () => {
     expect(rpcArgs.p_name).toBe("Imported Board");
     // Only the Status column is imported — Notes is skipped
     expect(rpcArgs.p_template.columns).toHaveLength(1);
+    // Both rows sit in the single seeded group g1.
+    expect(rpcArgs.p_template.groups).toHaveLength(1);
     // Task 2 is excluded, leaving Task 1 and Task 3
     expect(rpcArgs.p_template.items).toHaveLength(2);
   });
@@ -416,6 +436,8 @@ describe("commitImport", () => {
           role: "name",
         },
       ],
+      groups: [NEW_GROUP],
+      structure: [{ gridIndex: 1, groupKey: "g1", type: "item" }],
       destination: {
         type: "new",
         workspaceId: BOARD_UUID,
@@ -477,10 +499,17 @@ describe("commitImport", () => {
           target: { columnId: COL_STATUS_UUID },
         },
       ],
+      // Reuse the board's existing group (existingGroupId set) rather than
+      // minting a new one — this is what `destination.group.groupId` used to
+      // express before grouping moved into `groups`/`structure`.
+      groups: [{ key: "g1", name: "Group 1", existingGroupId: GROUP_UUID }],
+      structure: [
+        { gridIndex: 1, groupKey: "g1", type: "item" },
+        { gridIndex: 2, groupKey: "g1", type: "item" },
+      ],
       destination: {
         type: "existing",
         boardId: BOARD_UUID,
-        group: { groupId: GROUP_UUID },
       },
     });
 
@@ -494,18 +523,27 @@ describe("commitImport", () => {
       {
         p_board_id: string;
         p_payload: {
-          groupId?: string;
-          newGroup?: unknown;
+          groups: {
+            id: string;
+            existingGroupId: string | null;
+            name: string;
+          }[];
           optionAdditions: { columnId: string; options: unknown[] }[];
-          items: unknown[];
+          items: { groupId: string }[];
         };
       },
     ];
     expect(rpcName).toBe("import_rows_into_board");
     expect(rpcArgs.p_board_id).toBe(BOARD_UUID);
-    // Rows land under the resolved existing groupId, not a freshly minted group
-    expect(rpcArgs.p_payload.groupId).toBe(GROUP_UUID);
-    expect(rpcArgs.p_payload.newGroup).toBeUndefined();
+    // Rows land under the resolved existing group, not a freshly minted one:
+    // the single payload group reuses GROUP_UUID (id == existingGroupId).
+    expect(rpcArgs.p_payload.groups).toHaveLength(1);
+    expect(rpcArgs.p_payload.groups[0].id).toBe(GROUP_UUID);
+    expect(rpcArgs.p_payload.groups[0].existingGroupId).toBe(GROUP_UUID);
+    // Every item references that reused group id.
+    expect(
+      rpcArgs.p_payload.items.every((it) => it.groupId === GROUP_UUID),
+    ).toBe(true);
     // "New Status" is missing from the target's existing options -> minted
     expect(rpcArgs.p_payload.optionAdditions).toHaveLength(1);
     expect(rpcArgs.p_payload.optionAdditions[0].columnId).toBe(COL_STATUS_UUID);
@@ -541,10 +579,11 @@ describe("commitImport", () => {
           role: "name",
         },
       ],
+      groups: [NEW_GROUP],
+      structure: [{ gridIndex: 1, groupKey: "g1", type: "item" }],
       destination: {
         type: "existing",
         boardId: BOARD_UUID,
-        group: { newGroupName: "Backlog" },
       },
     });
 
@@ -592,10 +631,11 @@ describe("commitImport", () => {
           target: { columnId: COL_MISSING_UUID },
         },
       ],
+      groups: [NEW_GROUP],
+      structure: [{ gridIndex: 1, groupKey: "g1", type: "item" }],
       destination: {
         type: "existing",
         boardId: BOARD_UUID,
-        group: { groupId: GROUP_UUID },
       },
     });
 
@@ -628,10 +668,11 @@ describe("commitImport", () => {
           role: "name",
         },
       ],
+      groups: [NEW_GROUP],
+      structure: [{ gridIndex: 1, groupKey: "g1", type: "item" }],
       destination: {
         type: "existing",
         boardId: BOARD_UUID,
-        group: { groupId: GROUP_UUID },
       },
     });
 
@@ -641,10 +682,12 @@ describe("commitImport", () => {
   });
 
   it("deletes the newly created board and fails when phase-2 items insert errors", async () => {
+    // "Sub 1" is a subitem via explicit structure (type:"subitem"), attaching
+    // to "Task 1" above it in group g1 — no more "↳ " name marker.
     const buf = await xlsxBuf([
-      ["Group", "Name", "Status"],
-      ["Backlog", "Task 1", "Done"],
-      ["Backlog", "↳ Sub 1", "Working"],
+      ["Name", "Status"],
+      ["Task 1", "Done"],
+      ["Sub 1", "Working"],
     ]);
 
     const itemsChain = getFromChain("items");
@@ -667,20 +710,13 @@ describe("commitImport", () => {
       columns: [
         {
           sourceIndex: 0,
-          name: "Group",
-          kind: "text",
-          options: [],
-          role: "group",
-        },
-        {
-          sourceIndex: 1,
           name: "Name",
           kind: "text",
           options: [],
           role: "name",
         },
         {
-          sourceIndex: 2,
+          sourceIndex: 1,
           name: "Status",
           kind: "status",
           options: [
@@ -689,6 +725,11 @@ describe("commitImport", () => {
           ],
           role: "data",
         },
+      ],
+      groups: [NEW_GROUP],
+      structure: [
+        { gridIndex: 1, groupKey: "g1", type: "item" },
+        { gridIndex: 2, groupKey: "g1", type: "subitem" },
       ],
       destination: {
         type: "new",
@@ -707,9 +748,9 @@ describe("commitImport", () => {
 
   it("deletes the newly created board and fails when phase-2 cell_values insert errors", async () => {
     const buf = await xlsxBuf([
-      ["Group", "Name", "Status"],
-      ["Backlog", "Task 1", "Done"],
-      ["Backlog", "↳ Sub 1", "Working"],
+      ["Name", "Status"],
+      ["Task 1", "Done"],
+      ["Sub 1", "Working"],
     ]);
 
     // items insert succeeds
@@ -737,20 +778,13 @@ describe("commitImport", () => {
       columns: [
         {
           sourceIndex: 0,
-          name: "Group",
-          kind: "text",
-          options: [],
-          role: "group",
-        },
-        {
-          sourceIndex: 1,
           name: "Name",
           kind: "text",
           options: [],
           role: "name",
         },
         {
-          sourceIndex: 2,
+          sourceIndex: 1,
           name: "Status",
           kind: "status",
           options: [
@@ -759,6 +793,12 @@ describe("commitImport", () => {
           ],
           role: "data",
         },
+      ],
+      groups: [NEW_GROUP],
+      // "Sub 1" is a subitem attaching to "Task 1" above it in group g1.
+      structure: [
+        { gridIndex: 1, groupKey: "g1", type: "item" },
+        { gridIndex: 2, groupKey: "g1", type: "subitem" },
       ],
       destination: {
         type: "new",
@@ -777,12 +817,12 @@ describe("commitImport", () => {
   });
 
   it("commitImport blocks a row with a blank item name before hitting the RPC", async () => {
-    // The second data row has a Group but a blank Name — it survives the
-    // all-blank drop and would reach the items CHECK as name:"".
+    // The second data row has a blank Name but a non-blank Notes cell — it
+    // survives the all-blank drop and would reach the items CHECK as name:"".
     const buf = await xlsxBuf([
-      ["Group", "Name"],
-      ["Backlog", "Task 1"],
-      ["Backlog", ""],
+      ["Name", "Notes"],
+      ["Task 1", "foo"],
+      ["", "bar"],
     ]);
 
     const result = await commitImport({
@@ -794,18 +834,23 @@ describe("commitImport", () => {
       columns: [
         {
           sourceIndex: 0,
-          name: "Group",
-          kind: "text",
-          options: [],
-          role: "group",
-        },
-        {
-          sourceIndex: 1,
           name: "Name",
           kind: "text",
           options: [],
           role: "name",
         },
+        {
+          sourceIndex: 1,
+          name: "Notes",
+          kind: "text",
+          options: [],
+          role: "data",
+        },
+      ],
+      groups: [NEW_GROUP],
+      structure: [
+        { gridIndex: 1, groupKey: "g1", type: "item" },
+        { gridIndex: 2, groupKey: "g1", type: "item" },
       ],
       destination: {
         type: "new",
@@ -841,6 +886,8 @@ describe("commitImport", () => {
           role: "name",
         },
       ],
+      groups: [NEW_GROUP],
+      structure: [{ gridIndex: 1, groupKey: "g1", type: "item" }],
       destination: {
         type: "new",
         workspaceId: BOARD_UUID,
@@ -859,6 +906,12 @@ describe("commitImport", () => {
     for (let i = 0; i < 2001; i++) rows.push([`Task ${i}`]);
     const buf = await xlsxBuf(rows);
 
+    // One structure entry per data row (grid indices 1..2001).
+    const structure: RowStructureEntry[] = Array.from(
+      { length: 2001 },
+      (_, i) => ({ gridIndex: i + 1, groupKey: "g1", type: "item" }),
+    );
+
     const result = await commitImport({
       fileBase64: buf.toString("base64"),
       fileName: "import.xlsx",
@@ -874,6 +927,8 @@ describe("commitImport", () => {
           role: "name",
         },
       ],
+      groups: [NEW_GROUP],
+      structure,
       destination: {
         type: "new",
         workspaceId: BOARD_UUID,
