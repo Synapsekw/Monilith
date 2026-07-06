@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MONOLITH / Keystone / Variations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{--page:#f4f4f6;--surface:#ffffff;--ink:#16161a;--muted:#6c6c74;--stone:#9a9aa2;--hair:#e3e3e7;--tile:#0e0e10;--paper:#f4f4f6;--radius:12px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--page);color:var(--ink);font-family:"Nunito",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+
+  .labbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:16px;height:44px;
+    padding:0 18px;background:rgba(10,10,12,.85);backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(255,255,255,.09);font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:11.5px;letter-spacing:.04em;color:#9a9aa2}
+  .labbar b{color:#f5f5f6;font-weight:500}
+  .labbar a{color:#9a9aa2;text-decoration:none}
+  .labbar a:hover,.labbar a.on{color:#f5f5f6}
+  .labbar .sp{flex:1}
+
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+  .head{padding:70px 0 34px}
+  .ey{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--stone)}
+  h1{font-weight:800;font-size:clamp(32px,4.4vw,52px);letter-spacing:-.01em;margin:14px 0 14px;line-height:1.02}
+  .head p{max-width:62ch;color:var(--muted);font-size:16.5px;line-height:1.6}
+
+  h2{font-weight:800;font-size:20px;letter-spacing:-.01em;margin:44px 0 18px}
+  .h2sub{color:var(--muted);font-size:14px;font-weight:600;margin-left:10px}
+
+  /* wordmark w/ slab-I */
+  .wm{font-family:"Nunito",sans-serif;font-weight:800;letter-spacing:.03em;line-height:1;white-space:nowrap;display:inline-flex;align-items:baseline;color:var(--ink)}
+  .slabI{height:.72em;width:auto;margin:0 .05em;transform:translateY(.008em)}
+  .slabI path{fill:currentColor}
+
+  /* stacked compare */
+  .compare{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);overflow:hidden}
+  .crow{display:flex;align-items:center;gap:26px;padding:26px 34px;border-bottom:1px solid var(--hair)}
+  .crow:last-child{border-bottom:none}
+  .crow .tag{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.12em;color:var(--stone);width:150px;flex:none}
+  .crow .tag b{display:block;color:var(--ink);font-size:12.5px;letter-spacing:.14em;margin-bottom:3px}
+  .crow .wm{font-size:clamp(34px,5.6vw,60px)}
+  .crow.dark{background:var(--tile)}
+  .compare.rev{background:var(--tile)}
+  .compare.rev .crow{border-color:rgba(255,255,255,.08)}
+  .compare.rev .wm{color:var(--paper)}
+  .compare.rev .tag{color:#6b6b72}
+  .compare.rev .tag b{color:var(--paper)}
+
+  /* detail cards */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .vcard{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);overflow:hidden}
+  .vhd{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--hair)}
+  .vk{width:34px;height:34px;border-radius:9px;background:var(--ink);color:var(--paper);font-weight:800;
+    display:inline-flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+  .vn{font-weight:800;font-size:17px}
+  .vt{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--stone)}
+  .vbody{display:flex;align-items:center;gap:30px;padding:40px 30px}
+  .glyph{flex:none;width:130px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .glyph svg{height:104px;width:auto}
+  .glyph svg path{fill:currentColor}
+  .vmeta{flex:1;display:flex;flex-direction:column;gap:18px}
+  .vmeta .unit{display:flex;align-items:center;gap:14px}
+  .tile{background:var(--tile);border-radius:24%;display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .tile svg path{fill:var(--paper)}
+  .mk{color:var(--ink);display:inline-flex;align-items:center;flex:none}
+  .mk svg path{fill:currentColor}
+  .vmeta .u-lbl{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;color:var(--stone)}
+  .vnote{color:var(--muted);font-size:13.5px;line-height:1.55;padding:0 22px 20px}
+  .vnote b{color:var(--ink)}
+
+  .footprompt{margin:56px 0 90px;padding:28px 30px;background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius)}
+  .footprompt .k{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--stone)}
+  .footprompt p{font-size:16px;color:var(--ink);margin-top:10px;max-width:64ch;line-height:1.55}
+</style>
+</head>
+<body>
+  <nav class="labbar">
+    <b>MONOLITH</b><span>keystone</span>
+    <a href="/index.html">Overview</a>
+    <span class="sp"></span>
+    <a href="/keystone/landings.html">Landings</a>
+    <a href="/keystone/logo.html">Logo</a>
+    <a href="/keystone/favicon.html">Favicon</a>
+    <a class="on" href="/keystone/variations.html">Variations</a>
+    <a href="/keystone/marks.html">Marks</a>
+  </nav>
+
+  <div class="wrap">
+    <header class="head">
+      <div class="ey">Keystone / variations</div>
+      <h1>Four cuts of the I.</h1>
+      <p>Same wordmark, same Nunito, same idea: the I is the monolith. What changes here is only the
+        shape of that slab. Compare them in the word, then as the mark and the favicon, and tell me
+        which cut is the one.</p>
+    </header>
+
+    <!-- direct compare, light -->
+    <h2>In the word <span class="h2sub">the deciding view</span></h2>
+    <div class="compare">
+      <div class="crow">
+        <span class="tag"><b>A / CLEAVE</b>current</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span>
+      </div>
+      <div class="crow">
+        <span class="tag"><b>B / OBELISK</b>tapered</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="0 0 7 18" aria-hidden="true"><path d="M1.2 2 L5.8 0.8 L7 18 L0 18 Z"/></svg>TH</span>
+      </div>
+      <div class="crow">
+        <span class="tag"><b>C / REVERSE</b>mirrored</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 3.2 L15.4 5 L15.4 20.8 L8.6 20.8 Z"/></svg>TH</span>
+      </div>
+      <div class="crow">
+        <span class="tag"><b>D / CHAMFER</b>bevelled</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="0 0 6.8 17.6" aria-hidden="true"><path d="M0 0 L4.6 0 L6.8 2.2 L6.8 17.6 L0 17.6 Z"/></svg>TH</span>
+      </div>
+    </div>
+
+    <!-- detail cards -->
+    <h2>As the mark and the favicon</h2>
+    <div class="grid">
+      <!-- A -->
+      <div class="vcard">
+        <div class="vhd"><span class="vk">A</span><div><div class="vn">Cleave</div><div class="vt">current</div></div></div>
+        <div class="vbody">
+          <div class="glyph"><svg viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg></div>
+          <div class="vmeta">
+            <div class="unit"><span class="tile" style="width:44px;height:44px"><svg width="17" height="27" viewBox="8.6 3.2 6.8 17.6"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg></span><span class="u-lbl">favicon</span></div>
+            <div class="unit"><span class="mk"><svg width="9" height="24" viewBox="8.6 3.2 6.8 17.6"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg></span><span class="u-lbl">mark 24px</span></div>
+          </div>
+        </div>
+        <div class="vnote">Angled top sloping up to the right, straight sides, flat base. The silhouette the app ships today.</div>
+      </div>
+      <!-- B -->
+      <div class="vcard">
+        <div class="vhd"><span class="vk">B</span><div><div class="vn">Obelisk</div><div class="vt">tapered</div></div></div>
+        <div class="vbody">
+          <div class="glyph"><svg viewBox="0 0 7 18" aria-hidden="true"><path d="M1.2 2 L5.8 0.8 L7 18 L0 18 Z"/></svg></div>
+          <div class="vmeta">
+            <div class="unit"><span class="tile" style="width:44px;height:44px"><svg width="15" height="27" viewBox="0 0 7 18"><path d="M1.2 2 L5.8 0.8 L7 18 L0 18 Z"/></svg></span><span class="u-lbl">favicon</span></div>
+            <div class="unit"><span class="mk"><svg width="9" height="24" viewBox="0 0 7 18"><path d="M1.2 2 L5.8 0.8 L7 18 L0 18 Z"/></svg></span><span class="u-lbl">mark 24px</span></div>
+          </div>
+        </div>
+        <div class="vnote">Tapered like a standing stone, wider at the base. Reads most literally as a <b>monolith</b>.</div>
+      </div>
+      <!-- C -->
+      <div class="vcard">
+        <div class="vhd"><span class="vk">C</span><div><div class="vn">Reverse cleave</div><div class="vt">mirrored</div></div></div>
+        <div class="vbody">
+          <div class="glyph"><svg viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 3.2 L15.4 5 L15.4 20.8 L8.6 20.8 Z"/></svg></div>
+          <div class="vmeta">
+            <div class="unit"><span class="tile" style="width:44px;height:44px"><svg width="17" height="27" viewBox="8.6 3.2 6.8 17.6"><path d="M8.6 3.2 L15.4 5 L15.4 20.8 L8.6 20.8 Z"/></svg></span><span class="u-lbl">favicon</span></div>
+            <div class="unit"><span class="mk"><svg width="9" height="24" viewBox="8.6 3.2 6.8 17.6"><path d="M8.6 3.2 L15.4 5 L15.4 20.8 L8.6 20.8 Z"/></svg></span><span class="u-lbl">mark 24px</span></div>
+          </div>
+        </div>
+        <div class="vnote">The same cut, mirrored. The top rises to the left. A quieter, less forward lean.</div>
+      </div>
+      <!-- D -->
+      <div class="vcard">
+        <div class="vhd"><span class="vk">D</span><div><div class="vn">Chamfer</div><div class="vt">bevelled</div></div></div>
+        <div class="vbody">
+          <div class="glyph"><svg viewBox="0 0 6.8 17.6" aria-hidden="true"><path d="M0 0 L4.6 0 L6.8 2.2 L6.8 17.6 L0 17.6 Z"/></svg></div>
+          <div class="vmeta">
+            <div class="unit"><span class="tile" style="width:44px;height:44px"><svg width="17" height="27" viewBox="0 0 6.8 17.6"><path d="M0 0 L4.6 0 L6.8 2.2 L6.8 17.6 L0 17.6 Z"/></svg></span><span class="u-lbl">favicon</span></div>
+            <div class="unit"><span class="mk"><svg width="9" height="24" viewBox="0 0 6.8 17.6"><path d="M0 0 L4.6 0 L6.8 2.2 L6.8 17.6 L0 17.6 Z"/></svg></span><span class="u-lbl">mark 24px</span></div>
+          </div>
+        </div>
+        <div class="vnote">Flat top with a single bevelled corner. Cleaner and more architectural than a slope.</div>
+      </div>
+    </div>
+
+    <!-- dark compare -->
+    <h2>On dark <span class="h2sub">how the tab and app icon read</span></h2>
+    <div class="compare rev">
+      <div class="crow">
+        <span class="tag"><b>A / CLEAVE</b>current</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</span>
+      </div>
+      <div class="crow">
+        <span class="tag"><b>B / OBELISK</b>tapered</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="0 0 7 18" aria-hidden="true"><path d="M1.2 2 L5.8 0.8 L7 18 L0 18 Z"/></svg>TH</span>
+      </div>
+      <div class="crow">
+        <span class="tag"><b>C / REVERSE</b>mirrored</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 3.2 L15.4 5 L15.4 20.8 L8.6 20.8 Z"/></svg>TH</span>
+      </div>
+      <div class="crow">
+        <span class="tag"><b>D / CHAMFER</b>bevelled</span>
+        <span class="wm">MONOL<svg class="slabI" viewBox="0 0 6.8 17.6" aria-hidden="true"><path d="M0 0 L4.6 0 L6.8 2.2 L6.8 17.6 L0 17.6 Z"/></svg>TH</span>
+      </div>
+    </div>
+
+    <div class="footprompt">
+      <div class="k">Next</div>
+      <p>Pick a cut (or mix: "B in the word, A for the favicon") and I will lock it into the landing,
+        logo, and favicon, then refine spacing and the small-size behaviour. We can also push the winner
+        further: a light-edge on the cleave, a rounded base, or a slightly wider slab.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -15,8 +15,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createWorkspace } from "@/lib/workspaces/actions";
 
-export function NewWorkspaceDialog() {
-  const [open, setOpen] = useState(false);
+export function NewWorkspaceDialog({
+  open: openProp,
+  onOpenChange,
+  showTrigger = true,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
+} = {}) {
+  const [openLocal, setOpenLocal] = useState(false);
+  const open = openProp ?? openLocal;
+  const setOpen = (next: boolean) => {
+    setOpenLocal(next);
+    onOpenChange?.(next);
+  };
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -38,14 +51,16 @@ export function NewWorkspaceDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          aria-label="New workspace"
-          className="text-muted-foreground hover:text-foreground ml-auto"
-        >
-          <Plus className="size-4" />
-        </button>
-      </DialogTrigger>
+      {showTrigger ? (
+        <DialogTrigger asChild>
+          <button
+            aria-label="New workspace"
+            className="text-muted-foreground hover:text-foreground ml-auto"
+          >
+            <Plus className="size-4" />
+          </button>
+        </DialogTrigger>
+      ) : null}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New workspace</DialogTitle>

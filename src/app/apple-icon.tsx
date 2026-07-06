@@ -1,14 +1,14 @@
 import { ImageResponse } from "next/og";
 
 // Apple touch icon (iOS home screen / Safari pinned). iOS applies its own
-// rounded-corner mask, so the tile is full-bleed; the cleaved-slab mark matches
-// the in-app Brand logo and the SVG favicon.
+// rounded-corner mask, so the tile is full-bleed; the cleaved-monolith mark
+// matches the standalone mark, the favicon, and the collapsed nav rail.
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
-// The mark only (off-white slab on transparent), centred in a 180 box. Rendered
-// as an <img> data URI so next/og rasterises the angled path via resvg.
-const markSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" fill="none"><path d="M8.6 5 15.4 3.2V20.8H8.6Z" fill="#F5F5F6" transform="translate(90 90) scale(6.8) translate(-12 -12)"/></svg>`;
+// The cleaved mark (off-white on transparent), centred in a 180 box. Rendered
+// as an <img> data URI so next/og rasterises the angled paths via resvg.
+const markSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" fill="none"><g fill="#F5F5F6" transform="translate(90 90) scale(1.45) translate(-50 -51)"><path d="M36 26 L64 18 L64 27 L36 35 Z"/><path d="M36 43 L64 35 L64 84 L36 84 Z"/></g></svg>`;
 
 export default function AppleIcon() {
   const src = `data:image/svg+xml;base64,${Buffer.from(markSvg).toString("base64")}`;

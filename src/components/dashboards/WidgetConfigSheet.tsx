@@ -16,7 +16,7 @@ import {
   type WidgetDraft,
 } from "@/components/dashboards/WidgetConfigForm";
 import { NumberWidget } from "@/components/dashboards/widgets/NumberWidget";
-import { ChartWidget } from "@/components/dashboards/widgets/ChartWidget";
+import { LazyChartWidget } from "@/components/dashboards/widgets/LazyChartWidget";
 import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { CompletionWidget } from "@/components/dashboards/widgets/CompletionWidget";
 import { HealthWidget } from "@/components/dashboards/widgets/HealthWidget";
@@ -153,7 +153,7 @@ function WidgetConfigSheetForm({
               {draft.kind === "number" ? (
                 <NumberWidget widget={previewWidget} />
               ) : draft.kind === "chart" ? (
-                <ChartWidget widget={previewWidget} />
+                <LazyChartWidget widget={previewWidget} />
               ) : draft.kind === "battery" ? (
                 <BatteryWidget widget={previewWidget} />
               ) : draft.kind === "completion" ? (

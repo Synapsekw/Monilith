@@ -127,17 +127,6 @@ export async function resolveHealth(
   };
 }
 
-const PALETTE = [
-  "var(--brand)",
-  "var(--status-green)",
-  "var(--status-orange)",
-  "var(--status-purple)",
-  "var(--status-teal)",
-  "var(--status-red)",
-  "var(--status-yellow)",
-  "var(--status-blue)",
-];
-
 function formatBucketLabel(key: string, bucket: string): string {
   // key is "YYYY-MM-DD" (start of bucket)
   const d = new Date(key);
@@ -183,7 +172,7 @@ export async function resolveSeries(
   // We use a two-query JS join instead, matching the existing pattern in
   // src/lib/org/queries-cached.ts::listOrgMembersCached.
   async function resolver(dim: { kind: string; columnId?: string }) {
-    const map = new Map<string, { label: string; color: string }>();
+    const map = new Map<string, { label: string; color: string | null }>();
     if (dim.kind === "status" || dim.kind === "dropdown") {
       if (!dim.columnId) return map;
       const { data: col } = await supabase
@@ -212,11 +201,8 @@ export async function resolveSeries(
           .from("profiles")
           .select("id, full_name")
           .in("id", userIds);
-        (profiles ?? []).forEach((p, i) =>
-          map.set(p.id, {
-            label: p.full_name ?? "Member",
-            color: PALETTE[i % PALETTE.length],
-          }),
+        (profiles ?? []).forEach((p) =>
+          map.set(p.id, { label: p.full_name ?? "Member", color: null }),
         );
       }
     }
@@ -226,7 +212,7 @@ export async function resolveSeries(
   const primaryMap = await resolver(cfg.primary);
   const seriesMap = cfg.series ? await resolver(cfg.series) : new Map();
 
-  const points: SeriesPoint[] = (raw ?? []).map((r, i) => {
+  const points: SeriesPoint[] = (raw ?? []).map((r) => {
     // The generated RPC return types the keys as non-null `string`, but the SQL
     // function can emit NULL group keys — widen to `string | null` so the
     // null-handling below (None / Other buckets) typechecks and stays correct.
@@ -245,10 +231,10 @@ export async function resolveSeries(
         ? null
         : (seriesMap.get(sk)?.label ??
           (sk === "__other__" ? "Other" : "Unknown"));
-    const seriesColor =
+    const seriesColor: string | null =
       (sk !== null
         ? seriesMap.get(sk!)?.color
-        : primaryMap.get(pk ?? "")?.color) ?? PALETTE[i % PALETTE.length];
+        : primaryMap.get(pk ?? "")?.color) ?? null;
     return {
       primaryKey: pk,
       primaryLabel,

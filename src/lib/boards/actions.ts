@@ -522,17 +522,20 @@ export async function reorderItem(input: {
 }
 
 /**
- * Move a top-level item to a different group on the same board. Appends it to
- * the end of the target group (position = after the current last top-level row)
- * and drags its subitems' denormalized `group_id` along so they stay under the
- * parent. RLS scopes every read/write to the caller's org; the explicit
- * same-board + top-level guards give a real answer instead of an RLS-filtered
- * silent no-op (mirrors deleteItem's defense-in-depth). Reused per-item by the
- * bulk "Move to group" wrapper so its authorization is identical to a single move.
+ * Move a top-level item to a different group on the same board. When
+ * `position` is given (drag-drop exact spot), places the item there;
+ * otherwise appends it to the end of the target group (position = after the
+ * current last top-level row). Drags its subitems' denormalized `group_id`
+ * along so they stay under the parent. RLS scopes every read/write to the
+ * caller's org; the explicit same-board + top-level guards give a real answer
+ * instead of an RLS-filtered silent no-op (mirrors deleteItem's
+ * defense-in-depth). Reused per-item by the bulk "Move to group" wrapper so
+ * its authorization is identical to a single move.
  */
 export async function moveItem(input: {
   itemId: string;
   groupId: string;
+  position?: number;
 }): Promise<ActionResult> {
   const parsed = moveItemSchema.safeParse(input);
   if (!parsed.success)
@@ -558,23 +561,24 @@ export async function moveItem(input: {
   if (group.board_id !== item.board_id)
     return fail("Group belongs to a different board.");
 
-  // Append after the target group's last top-level item (subitems have their
-  // own position scope under a parent, so exclude them from the max).
-  const { data: last } = await supabase
-    .from("items")
-    .select("position")
-    .eq("group_id", parsed.data.groupId)
-    .is("parent_id", null)
-    .order("position", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Explicit position (drag-drop exact spot) wins; otherwise append after the
+  // target group's last top-level item (bulk move / collapsed-group drop).
+  let position = parsed.data.position;
+  if (position === undefined) {
+    const { data: last } = await supabase
+      .from("items")
+      .select("position")
+      .eq("group_id", parsed.data.groupId)
+      .is("parent_id", null)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    position = midpoint(last?.position ?? null, null);
+  }
 
   const { error } = await supabase
     .from("items")
-    .update({
-      group_id: parsed.data.groupId,
-      position: midpoint(last?.position ?? null, null),
-    })
+    .update({ group_id: parsed.data.groupId, position })
     .eq("id", parsed.data.itemId);
   if (error) return fail(error.message);
 

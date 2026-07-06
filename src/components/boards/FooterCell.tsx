@@ -8,6 +8,7 @@ import type {
   ColumnOption,
 } from "@/lib/validations/boards";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
+import { PercentBar } from "@/components/boards/cells";
 import { formatDuration } from "@/lib/boards/time-format";
 import {
   DropdownMenu,
@@ -36,8 +37,12 @@ export const AGGREGATION_LABEL: Record<AggregationId, string> = {
   total_over_estimate: "Total / Est.",
 };
 
+// Pin the locale (do NOT pass `undefined`): the default locale differs between
+// the Node server (en-US) and the user's browser, so `undefined` renders
+// "Jan 1" on the server and "1 Jan" on the client → hydration mismatch. "en-US"
+// is the convention used across the board date formatters (Gantt/Calendar/…).
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+  return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
@@ -57,40 +62,45 @@ export function FooterValue({
     case "empty":
       return null;
     case "number":
+      // A percent summary mirrors the cell: colorized fill bar + "%" label
+      // (PercentBar is the shared primitive the leaf cell + rollup use).
+      if (result.style === "percent") {
+        return <PercentBar percent={result.value} />;
+      }
       return (
-        <span className="text-foreground text-sm font-medium tabular-nums">
+        <span className="text-foreground text-xs font-medium tabular-nums">
           {result.style === "currency" && result.currency ? (
             <CurrencyAmount
               amount={result.value}
               settings={{ currency: result.currency, dirham_sign: dirhamSign }}
             />
           ) : (
-            `${result.value}${result.style === "percent" ? "%" : ""}`
+            result.value
           )}
         </span>
       );
     case "checkbox":
       return (
-        <span className="text-foreground text-sm font-medium tabular-nums">
+        <span className="text-foreground text-xs font-medium tabular-nums">
           {result.checked}/{result.total}
         </span>
       );
     case "date":
       return (
-        <span className="text-foreground text-sm font-medium">
+        <span className="text-foreground text-xs font-medium">
           {fmtDate(result.date)}
         </span>
       );
     case "dateSpan":
       return (
-        <span className="text-foreground text-sm font-medium">
+        <span className="text-foreground text-xs font-medium">
           {fmtDate(result.start)}
           {result.end !== result.start ? ` – ${fmtDate(result.end)}` : ""}
         </span>
       );
     case "duration":
       return (
-        <span className="text-foreground text-sm font-medium tabular-nums">
+        <span className="text-foreground text-xs font-medium tabular-nums">
           {formatDuration(result.totalSecs)}
           {result.estimateSecs
             ? ` / ${formatDuration(result.estimateSecs)}`

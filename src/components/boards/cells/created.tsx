@@ -30,9 +30,13 @@ function initials(name: string): string {
 export function CreatedByCell({
   name,
   avatarUrl,
+  showAvatar = true,
 }: {
   name: string | null;
   avatarUrl?: string | null;
+  /** When false, render the name as plain text only (no avatar). Used by the
+   *  read-only table columns; the item panel keeps the avatar. */
+  showAvatar?: boolean;
 }) {
   if (!name)
     return (
@@ -40,20 +44,22 @@ export function CreatedByCell({
     );
   return (
     <span className="flex items-center gap-2 truncate text-xs opacity-60">
-      <span className="bg-surface-muted flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-medium">
-        {avatarUrl ? (
-          <Image
-            src={avatarUrl}
-            alt=""
-            width={20}
-            height={20}
-            unoptimized
-            className="size-full object-cover"
-          />
-        ) : (
-          initials(name)
-        )}
-      </span>
+      {showAvatar ? (
+        <span className="bg-surface-muted flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-medium">
+          {avatarUrl ? (
+            <Image
+              src={avatarUrl}
+              alt=""
+              width={20}
+              height={20}
+              unoptimized
+              className="size-full object-cover"
+            />
+          ) : (
+            initials(name)
+          )}
+        </span>
+      ) : null}
       <span className="truncate">{name}</span>
     </span>
   );

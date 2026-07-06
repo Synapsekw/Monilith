@@ -9,11 +9,16 @@ describe("FooterValue", () => {
     expect(screen.getByText("30")).toBeInTheDocument();
   });
 
-  it("renders a percent", () => {
+  it("renders a percent as a colorized fill bar with a % label", () => {
     render(
       <FooterValue result={{ kind: "number", value: 67, style: "percent" }} />,
     );
+    // mirrors the cell: PercentBar (progressbar + "%" text), not plain text
     expect(screen.getByText("67%")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "67",
+    );
   });
 
   it("renders a checked/total", () => {

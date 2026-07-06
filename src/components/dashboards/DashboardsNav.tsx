@@ -41,6 +41,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { NavSection } from "@/components/shell/nav-section";
 
 /**
  * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
@@ -58,11 +59,11 @@ function CoarseCaption({ label }: { label: string }) {
 
 export function DashboardsNav({
   dashboards,
-  workspaces,
+  activeWorkspaceId,
   collapsed = false,
 }: {
   dashboards: { id: string; name: string }[];
-  workspaces: { id: string; name: string }[];
+  activeWorkspaceId?: string;
   collapsed?: boolean;
 }) {
   const router = useRouter();
@@ -87,7 +88,7 @@ export function DashboardsNav({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const coarse = useCoarsePointer();
-  const workspaceId = workspaces[0]?.id;
+  const workspaceId = activeWorkspaceId;
 
   function submit() {
     if (!workspaceId) return;
@@ -106,61 +107,113 @@ export function DashboardsNav({
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-0.5 py-2",
-        collapsed ? "items-center px-2" : "px-2",
-      )}
-    >
+    <>
       {collapsed ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              href="/dashboards"
-              aria-label="Dashboards"
-              className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
-            >
-              <LayoutGrid className="size-4 shrink-0" />
-              {coarse ? <CoarseCaption label="Dashboards" /> : null}
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">Dashboards</TooltipContent>
-        </Tooltip>
-      ) : (
-        <div className="flex items-center justify-between px-3 py-1">
-          <Link
-            href="/dashboards"
-            className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-xs font-medium transition-colors"
-          >
-            <LayoutGrid className="size-4" />
-            Dashboards
-          </Link>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="New dashboard"
-                className="size-6"
+        <div className="flex flex-col items-center gap-0.5 px-2 py-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link
+                href="/dashboards"
+                aria-label="Dashboards"
+                className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
               >
-                <Plus className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onSelect={() => setOpen(true)}>
-                <Plus className="size-4" />
-                Blank dashboard
-              </DropdownMenuItem>
-              {workspaceId ? (
-                <DropdownMenuItem onSelect={() => setAiOpen(true)}>
-                  <Sparkles className="size-4" />
-                  Generate with AI
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <LayoutGrid className="size-4 shrink-0" />
+                {coarse ? <CoarseCaption label="Dashboards" /> : null}
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Dashboards</TooltipContent>
+          </Tooltip>
+
+          {dashboards.length === 0
+            ? null
+            : dashboards.map((d) => (
+                <Tooltip key={d.id}>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={`/dashboards/${d.id}`}
+                      aria-current={
+                        d.id === activeDashboardId ? "page" : undefined
+                      }
+                      aria-label={d.name}
+                      className={cn(
+                        "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
+                        d.id === activeDashboardId
+                          ? "bg-primary/80 text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <span className="shrink-0">{d.name.charAt(0)}</span>
+                      {coarse ? <CoarseCaption label={d.name} /> : null}
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{d.name}</TooltipContent>
+                </Tooltip>
+              ))}
         </div>
+      ) : (
+        <NavSection
+          storageKey="dash"
+          title="Dashboards"
+          titleHref="/dashboards"
+          icon={LayoutGrid}
+          action={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="New dashboard"
+                  className="size-6"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onSelect={() => setOpen(true)}>
+                  <Plus className="size-4" />
+                  Blank dashboard
+                </DropdownMenuItem>
+                {workspaceId ? (
+                  <DropdownMenuItem onSelect={() => setAiOpen(true)}>
+                    <Sparkles className="size-4" />
+                    Generate with AI
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          }
+        >
+          {dashboards.length === 0 ? (
+            <p className="text-muted-foreground px-3 py-1 text-xs">
+              No dashboards yet
+            </p>
+          ) : (
+            dashboards.map((d) => (
+              <div
+                key={d.id}
+                className={cn(
+                  "group/row flex items-center rounded-md pr-1 transition-colors",
+                  d.id === activeDashboardId
+                    ? "bg-primary/80 text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <Link
+                  href={`/dashboards/${d.id}`}
+                  aria-current={d.id === activeDashboardId ? "page" : undefined}
+                  className="min-w-0 flex-1 truncate px-3 py-1 text-sm"
+                >
+                  {d.name}
+                </Link>
+                <DashboardItemMenu
+                  dashboard={{ id: d.id, name: d.name }}
+                  isActive={d.id === activeDashboardId}
+                />
+              </div>
+            ))
+          )}
+        </NavSection>
       )}
 
       {/* Controlled dialog, mounted regardless of collapsed state so the ⌘K
@@ -211,60 +264,6 @@ export function DashboardsNav({
           onOpenChange={setAiOpen}
         />
       ) : null}
-
-      {dashboards.length === 0 ? (
-        collapsed ? null : (
-          <p className="text-muted-foreground px-3 py-1 text-xs">
-            No dashboards yet
-          </p>
-        )
-      ) : (
-        dashboards.map((d) =>
-          collapsed ? (
-            <Tooltip key={d.id}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={`/dashboards/${d.id}`}
-                  aria-current={d.id === activeDashboardId ? "page" : undefined}
-                  aria-label={d.name}
-                  className={cn(
-                    "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
-                    d.id === activeDashboardId
-                      ? "bg-primary/80 text-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                  )}
-                >
-                  <span className="shrink-0">{d.name.charAt(0)}</span>
-                  {coarse ? <CoarseCaption label={d.name} /> : null}
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">{d.name}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <div
-              key={d.id}
-              className={cn(
-                "group/row flex items-center rounded-md pr-1 transition-colors",
-                d.id === activeDashboardId
-                  ? "bg-primary/80 text-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
-              )}
-            >
-              <Link
-                href={`/dashboards/${d.id}`}
-                aria-current={d.id === activeDashboardId ? "page" : undefined}
-                className="min-w-0 flex-1 truncate px-3 py-1 text-sm"
-              >
-                {d.name}
-              </Link>
-              <DashboardItemMenu
-                dashboard={{ id: d.id, name: d.name }}
-                isActive={d.id === activeDashboardId}
-              />
-            </div>
-          ),
-        )
-      )}
-    </div>
+    </>
   );
 }

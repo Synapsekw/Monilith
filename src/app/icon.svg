@@ -1,12 +1,11 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!-- Monolith favicon: near-black tile (matches dark --background #0d0d0f) with the
-       cleaved-slab mark in off-white — the same silhouette as the in-app Brand logo,
-       scaled and centred for legibility down to 16px. -->
+       cleaved-monolith mark in off-white. Uses the bold 16px cut (wider crack, thicker
+       pieces) so the split still reads down to a 16px tab. -->
   <rect width="32" height="32" rx="7" fill="#0D0D0F" />
   <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.06" />
-  <path
-    d="M8.6 5 15.4 3.2V20.8H8.6Z"
-    fill="#F5F5F6"
-    transform="translate(16 16) scale(1.35) translate(-12 -12)"
-  />
+  <g fill="#F5F5F6" transform="translate(16 16) scale(0.22) translate(-50 -48.5)">
+    <path d="M34 24 L66 13 L66 27 L34 38 Z" />
+    <path d="M34 50 L66 39 L66 84 L34 84 Z" />
+  </g>
 </svg>

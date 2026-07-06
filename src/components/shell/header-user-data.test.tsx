@@ -18,6 +18,11 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/platform/guard", () => ({
   isPlatformAdminCached: vi.fn(async () => true),
 }));
+// countNewFeedback hits supabase (via next/headers cookies()), which has no
+// request scope in tests; stub it to a fixed count.
+vi.mock("@/lib/feedback/queries", () => ({
+  countNewFeedback: vi.fn(async () => 2),
+}));
 // NotificationsBell hits realtime/supabase; stub to a marker.
 vi.mock("@/components/notifications/NotificationsBell", () => ({
   NotificationsBell: ({ userId }: { userId: string }) => (
@@ -39,14 +44,14 @@ describe("HeaderUserData", () => {
     expect(screen.getByText("bell:u1")).toBeInTheDocument();
   });
 
-  it("shows the platform-admin link in the user menu for admins", async () => {
+  it("shows the platform-admin button in the header for admins", async () => {
     const { HeaderUserData } = await import("./header-user-data");
     render(await HeaderUserData());
     await userEvent.click(
-      screen.getByRole("button", { name: /open user menu/i }),
+      screen.getByRole("button", { name: /platform admin/i }),
     );
     expect(
-      await screen.findByRole("menuitem", { name: /platform admin/i }),
+      await screen.findByRole("menuitem", { name: /overview/i }),
     ).toHaveAttribute("href", "/admin");
   });
 });

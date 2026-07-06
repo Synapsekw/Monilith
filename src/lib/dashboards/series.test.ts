@@ -51,7 +51,27 @@ describe("pivotSeries", () => {
     ]);
   });
 
-  it("uses a single synthetic series when there is no series split", () => {
+  it("uses a null-colored single synthetic series when there is no split", () => {
+    const out = pivotSeries({
+      chartType: "bar",
+      primaryKind: "status",
+      seriesKind: null,
+      points: [
+        {
+          primaryKey: "done",
+          primaryLabel: "Done",
+          seriesKey: null,
+          seriesLabel: null,
+          seriesColor: null,
+          value: 5,
+        },
+      ],
+    });
+    expect(out.rows).toEqual([{ __label: "Done", Value: 5 }]);
+    expect(out.series).toEqual([{ key: "Value", color: null }]);
+  });
+
+  it("keeps a configured per-cell color on a single series", () => {
     const out = pivotSeries({
       chartType: "bar",
       primaryKind: "status",
@@ -70,6 +90,6 @@ describe("pivotSeries", () => {
     expect(out.rows).toEqual([
       { __label: "Done", Value: 5, __color_Done: "#34d399" },
     ]);
-    expect(out.series).toEqual([{ key: "Value", color: "#818cf8" }]);
+    expect(out.series).toEqual([{ key: "Value", color: null }]);
   });
 });

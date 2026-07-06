@@ -1,7 +1,30 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+
+// Resolve next/dynamic in jsdom (same shim as DashboardWidget.test.tsx): run the
+// loader in an effect and swap in the resolved component. Only the chart preview
+// goes through the lazy path; the static widget bodies are unaffected.
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<unknown>) =>
+    function Lazy(props: Record<string, unknown>) {
+      const [Comp, setComp] = useState<ComponentType<
+        Record<string, unknown>
+      > | null>(null);
+      useEffect(() => {
+        void loader().then((m) => {
+          const resolved =
+            typeof m === "function"
+              ? (m as ComponentType<Record<string, unknown>>)
+              : ((m as { ChartWidget?: ComponentType<Record<string, unknown>> })
+                  .ChartWidget ?? null);
+          setComp(() => resolved);
+        });
+      }, []);
+      return Comp ? <Comp {...props} /> : null;
+    },
+}));
 
 const getWidgetPreviewData = vi.fn();
 vi.mock("@/lib/dashboards/actions", () => ({
@@ -150,5 +173,30 @@ describe("WidgetConfigSheet live preview (inside WidgetPreviewProvider)", () => 
     await waitFor(() =>
       expect(screen.getByText("Failed to load")).toBeInTheDocument(),
     );
+  });
+});
+
+describe("WidgetConfigSheet chart preview", () => {
+  it("renders the chart preview through the lazy path", async () => {
+    getWidgetPreviewData.mockReset();
+    getWidgetPreviewData.mockResolvedValue({ ok: false, error: "n/a" });
+    const chart = {
+      id: WIDGET_ID,
+      kind: "chart",
+      title: "My chart",
+      config: {},
+      source_board_id: BOARD_ID,
+      dashboard_id: "dash1",
+      org_id: "org1",
+      layout: {},
+      position: 0,
+      created_at: "2026-07-05T00:00:00Z",
+      updated_at: "2026-07-05T00:00:00Z",
+    } as CacheWidget;
+
+    renderSheet({ boards: [boardOption], editWidget: chart });
+    // Edit mode seeds previewCfg from the draft on first render, so
+    // LazyChartWidget → mocked next/dynamic → mocked ChartWidget stub mounts.
+    expect(await screen.findByTestId("chart-widget")).toBeInTheDocument();
   });
 });

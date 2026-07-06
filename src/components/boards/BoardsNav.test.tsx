@@ -23,8 +23,6 @@ vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
   return { useTouchAwareSensors: vi.fn(actual.useTouchAwareSensors) };
 });
 
-const noWorkspaces: { id: string; name: string }[] = [];
-
 describe("BoardsNav", () => {
   beforeEach(() => {
     mockUseParams.mockReturnValue({});
@@ -33,9 +31,7 @@ describe("BoardsNav", () => {
   });
 
   it("shows 'No boards yet' when no boards are provided", () => {
-    render(
-      <BoardsNav boards={[]} sharedBoards={[]} workspaces={noWorkspaces} />,
-    );
+    render(<BoardsNav boards={[]} sharedBoards={[]} />);
 
     expect(screen.getByText("No boards yet")).toBeInTheDocument();
   });
@@ -53,7 +49,6 @@ describe("BoardsNav", () => {
           },
         ]}
         sharedBoards={[]}
-        workspaces={noWorkspaces}
       />,
     );
 
@@ -83,7 +78,6 @@ describe("BoardsNav", () => {
           },
         ]}
         sharedBoards={[]}
-        workspaces={noWorkspaces}
       />,
     );
 
@@ -111,7 +105,7 @@ describe("BoardsNav", () => {
             },
           ]}
           sharedBoards={[]}
-          workspaces={[{ id: "w1", name: "Acme" }]}
+          activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
@@ -138,7 +132,7 @@ describe("BoardsNav", () => {
             },
           ]}
           sharedBoards={[]}
-          workspaces={[{ id: "w1", name: "Acme" }]}
+          activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
@@ -169,7 +163,7 @@ describe("BoardsNav", () => {
             },
           ]}
           sharedBoards={[]}
-          workspaces={[{ id: "w1", name: "Acme" }]}
+          activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
@@ -200,7 +194,7 @@ describe("BoardsNav", () => {
               access_level: "viewer",
             },
           ]}
-          workspaces={[{ id: "w1", name: "Acme" }]}
+          activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
@@ -245,7 +239,7 @@ describe("BoardsNav", () => {
               access_level: "editor",
             },
           ]}
-          workspaces={[{ id: "w", name: "WS" }]}
+          activeWorkspaceId="w"
         />
       </TooltipProvider>,
     );
@@ -274,7 +268,7 @@ describe("BoardsNav", () => {
           },
         ]}
         sharedBoards={[]}
-        workspaces={[{ id: "w", name: "WS" }]}
+        activeWorkspaceId="w"
       />,
     );
     // The name link is exactly "Roadmap" — the share icon is no longer nested
@@ -298,7 +292,7 @@ describe("BoardsNav", () => {
               access_level: "editor",
             },
           ]}
-          workspaces={[{ id: "w", name: "WS" }]}
+          activeWorkspaceId="w"
         />
       </TooltipProvider>,
     );
@@ -328,9 +322,7 @@ describe("BoardsNav drag-reorder", () => {
   ];
 
   it("renders a reorder handle for each owned board when expanded", () => {
-    render(
-      <BoardsNav boards={owned} sharedBoards={[]} workspaces={noWorkspaces} />,
-    );
+    render(<BoardsNav boards={owned} sharedBoards={[]} />);
     expect(
       screen.getByRole("button", { name: "Reorder Alpha" }),
     ).toBeInTheDocument();
@@ -340,9 +332,7 @@ describe("BoardsNav drag-reorder", () => {
   });
 
   it("wires the expanded reorder DndContext via the shared touch-aware sensors", () => {
-    render(
-      <BoardsNav boards={owned} sharedBoards={[]} workspaces={noWorkspaces} />,
-    );
+    render(<BoardsNav boards={owned} sharedBoards={[]} />);
     // The bespoke inline PointerSensor config is gone — reorder now uses the
     // shared long-press-on-touch sensors (TODO(touch-batch-2) cleared).
     expect(useTouchAwareSensors).toHaveBeenCalled();
@@ -355,7 +345,7 @@ describe("BoardsNav drag-reorder", () => {
           collapsed
           boards={owned}
           sharedBoards={[]}
-          workspaces={[{ id: "w1", name: "Acme" }]}
+          activeWorkspaceId="w1"
         />
       </TooltipProvider>,
     );
@@ -378,7 +368,6 @@ describe("BoardsNav drag-reorder", () => {
               access_level: "editor",
             },
           ]}
-          workspaces={noWorkspaces}
         />
       </TooltipProvider>,
     );

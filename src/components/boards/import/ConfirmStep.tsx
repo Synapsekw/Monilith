@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cellToText, textToCell } from "@/lib/boards/spreadsheet/cell-codec";
@@ -13,9 +12,6 @@ import type { ParsedTable, SynthOption } from "@/lib/boards/spreadsheet/types";
 
 /** Only the first N rows are rendered in the confirm preview grid. */
 const MAX_PREVIEW_ROWS = 50;
-
-/** Sentinel `<option>` value standing in for "create a new group". */
-const NEW_GROUP_VALUE = "__new__";
 
 export type ConfirmStepProps = {
   table: ParsedTable;
@@ -34,18 +30,8 @@ export type ConfirmStepProps = {
         boardName: string;
         onBoardNameChange: (v: string) => void;
       }
-    | {
-        type: "existing";
-        groups: { id: string; name: string }[];
-        groupChoice: { groupId: string } | { newGroupName: string };
-        onGroupChange: (
-          c: { groupId: string } | { newGroupName: string },
-        ) => void;
-      };
+    | { type: "existing" };
   error: string | null;
-  pending: boolean;
-  onBack: () => void;
-  onConfirm: () => void;
 };
 
 /** The one sanctioned place option color appears: a small dot next to the label. */
@@ -109,59 +95,6 @@ function ConfirmCell({ column, raw }: { column: ColumnState; raw: string }) {
   return <>{cellToText(column.kind, value, { options: column.options })}</>;
 }
 
-/** Existing-board arm: a group picker plus a "New group…" name input.
- * Wiring goes live in a later task — this renders purely from props. */
-function ExistingGroupFields({
-  destination,
-}: {
-  destination: Extract<ConfirmStepProps["destination"], { type: "existing" }>;
-}) {
-  const selectValue =
-    "groupId" in destination.groupChoice
-      ? destination.groupChoice.groupId
-      : NEW_GROUP_VALUE;
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="import-group-select">Group</Label>
-        <select
-          id="import-group-select"
-          value={selectValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            destination.onGroupChange(
-              v === NEW_GROUP_VALUE ? { newGroupName: "" } : { groupId: v },
-            );
-          }}
-          className="border-input focus:border-ring focus:ring-ring/50 h-9 rounded-md border bg-transparent px-2 text-sm outline-none focus:ring-2"
-        >
-          {destination.groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-          <option value={NEW_GROUP_VALUE}>New group…</option>
-        </select>
-      </div>
-
-      {"newGroupName" in destination.groupChoice ? (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="import-new-group-name">New group name</Label>
-          <Input
-            id="import-new-group-name"
-            value={destination.groupChoice.newGroupName}
-            onChange={(e) =>
-              destination.onGroupChange({ newGroupName: e.target.value })
-            }
-            placeholder="New group"
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function ConfirmStep({
   table,
   state,
@@ -169,9 +102,6 @@ export function ConfirmStep({
   previewedRowCount,
   destination,
   error,
-  pending,
-  onBack,
-  onConfirm,
 }: ConfirmStepProps) {
   const summary = summarize(table, state);
   // The preview grid is a server-side slice; when the sheet is bigger than
@@ -183,15 +113,12 @@ export function ConfirmStep({
   );
   const previewRows = table.rows.slice(0, MAX_PREVIEW_ROWS);
 
-  const confirmDisabled =
-    pending ||
-    (destination.type === "new" && destination.boardName.trim() === "");
-
   return (
     <div className="flex flex-col gap-4">
       <p className="text-muted-foreground text-sm">
-        {summary.items} items · {summary.subitems} subtasks · {summary.columns}{" "}
-        columns · {summary.invalid} invalid cells → empty
+        {summary.items} items · {summary.subitems} subtasks · {summary.groups}{" "}
+        groups · {summary.columns} columns · {summary.invalid} invalid cells →
+        empty
       </p>
 
       {previewTruncated ? (
@@ -243,24 +170,13 @@ export function ConfirmStep({
             placeholder="My board"
           />
         </div>
-      ) : (
-        <ExistingGroupFields destination={destination} />
-      )}
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-destructive text-xs">
           {error}
         </p>
       ) : null}
-
-      <div className="flex items-center justify-between gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onBack}>
-          Back
-        </Button>
-        <Button type="button" disabled={confirmDisabled} onClick={onConfirm}>
-          {pending ? "Importing…" : "Confirm"}
-        </Button>
-      </div>
     </div>
   );
 }

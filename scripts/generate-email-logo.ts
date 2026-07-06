@@ -23,32 +23,31 @@ const html = `<!doctype html>
       }
       #lockup {
         display: inline-flex;
-        align-items: center;
-        gap: 8px;
+        align-items: baseline;
         padding: 6px;
         color: #18181b;
-      }
-      #lockup svg {
-        width: 28px;
-        height: 28px;
-        display: block;
-      }
-      #lockup span {
         font-family: "Nunito", sans-serif;
         font-weight: 800;
         font-size: 26px;
         letter-spacing: 0.06em;
         line-height: 1;
       }
+      #lockup svg {
+        height: 0.72em;
+        width: auto;
+        margin: 0 0.05em;
+        transform: translateY(0.008em);
+        display: inline-block;
+      }
     </style>
   </head>
   <body>
-    <div id="lockup">
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M8.6 5 15.4 3.2V20.8H8.6Z" fill="currentColor" />
-      </svg>
-      <span>MONOLITH</span>
-    </div>
+    <!-- The MONOLITH wordmark with the letter I recut as the monolith slab. -->
+    <div id="lockup">MONOL<svg
+        viewBox="8.6 3.2 6.8 17.6"
+        fill="none"
+        aria-hidden="true"
+      ><path d="M8.6 5 15.4 3.2V20.8H8.6Z" fill="currentColor" /></svg>TH</div>
   </body>
 </html>`;
 

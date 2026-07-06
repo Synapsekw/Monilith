@@ -39,7 +39,11 @@ export const reorderItemSchema = z.object({
   position: z.number(),
 });
 /** Move a top-level item to a different group on the same board. */
-export const moveItemSchema = z.object({ itemId: uuid, groupId: uuid });
+export const moveItemSchema = z.object({
+  itemId: uuid,
+  groupId: uuid,
+  position: z.number().optional(),
+});
 
 // Cell value is validated structurally here (must be a JSON object); the
 // kind-specific shape is enforced server-side with cellValueSchema(kind).

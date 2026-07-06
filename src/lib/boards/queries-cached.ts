@@ -12,17 +12,19 @@ import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
  */
 export async function listMyBoardsCached(
   userId: string,
+  workspaceId?: string,
 ): Promise<BoardListEntry[]> {
   "use cache";
   cacheLife("nav");
   cacheTag(boardsTag(userId));
 
   const supabase = createServiceClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("boards")
     .select("id, name, workspace_id, position, board_members(user_id)")
-    .eq("created_by", userId)
-    .order("position", { ascending: true });
+    .eq("created_by", userId);
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data, error } = await query.order("position", { ascending: true });
   if (error) return [];
   return (data ?? []).map((b) => ({
     id: b.id,

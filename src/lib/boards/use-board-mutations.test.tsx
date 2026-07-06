@@ -14,6 +14,7 @@ const createItem = vi.fn();
 const reorderColumn = vi.fn();
 const deleteItem = vi.fn();
 const renameItem = vi.fn();
+const moveItem = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
@@ -26,6 +27,7 @@ vi.mock("@/lib/boards/actions", () => ({
   reorderColumn: (...a: unknown[]) => reorderColumn(...a),
   deleteItem: (...a: unknown[]) => deleteItem(...a),
   renameItem: (...a: unknown[]) => renameItem(...a),
+  moveItem: (...a: unknown[]) => moveItem(...a),
 }));
 
 const toastError = vi.fn();
@@ -458,6 +460,90 @@ function seedGroups(qc: QueryClient): void {
     attachments: [],
   } as never);
 }
+
+describe("useBoardMutations.moveItemToGroup", () => {
+  beforeEach(() => moveItem.mockReset());
+
+  function seedWithSubitem(qc: QueryClient): void {
+    qc.setQueryData(boardKey("b1"), {
+      board: { id: "b1", org_id: "o1", name: "B" },
+      groups: [
+        { id: "g1", board_id: "b1", name: "G1", color: "#0073ea", position: 0 },
+        { id: "g2", board_id: "b1", name: "G2", color: "#0073ea", position: 1 },
+      ],
+      columns: [],
+      items: [
+        {
+          id: "i1",
+          board_id: "b1",
+          group_id: "g1",
+          parent_id: null,
+          name: "One",
+          position: 1,
+        },
+        {
+          id: "i1-sub",
+          board_id: "b1",
+          group_id: "g1",
+          parent_id: "i1",
+          name: "Sub",
+          position: 1,
+        },
+      ],
+      cellValues: [],
+      dependencies: [],
+      attachments: [],
+    } as never);
+  }
+
+  it("optimistically reassigns group + position (dragging subitems along) and calls the action", async () => {
+    const qc = new QueryClient();
+    seedWithSubitem(qc);
+    moveItem.mockResolvedValue({ ok: true, data: undefined });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.moveItemToGroup("i1", "g2", 4.5);
+    });
+
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    const moved = cache.items.find((i) => i.id === "i1")!;
+    expect(moved.group_id).toBe("g2");
+    expect(moved.position).toBe(4.5);
+    const sub = cache.items.find((i) => i.id === "i1-sub")!;
+    expect(sub.group_id).toBe("g2");
+
+    expect(moveItem).toHaveBeenCalledWith({
+      itemId: "i1",
+      groupId: "g2",
+      position: 4.5,
+    });
+  });
+
+  it("rolls back the item's + subitem's group_id/position on error", async () => {
+    const qc = new QueryClient();
+    seedWithSubitem(qc);
+    moveItem.mockResolvedValue({ ok: false, error: "boom" });
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.moveItemToGroup("i1", "g2", 4.5);
+    });
+
+    await waitFor(() => {
+      const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+      const moved = cache.items.find((i) => i.id === "i1")!;
+      expect(moved.group_id).toBe("g1");
+      expect(moved.position).toBe(1);
+      const sub = cache.items.find((i) => i.id === "i1-sub")!;
+      expect(sub.group_id).toBe("g1");
+    });
+  });
+});
 
 describe("useBoardMutations.reorderGroup", () => {
   beforeEach(() => reorderGroup.mockReset());

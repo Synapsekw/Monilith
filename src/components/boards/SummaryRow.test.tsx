@@ -146,4 +146,40 @@ describe("SummaryRow", () => {
     const amount = screen.getByTestId("currency-amount");
     expect(amount).toHaveTextContent("30.00");
   });
+
+  it("averages a percent column over exactly the given (subitem) rows", () => {
+    // The whole subitem-aware fix hinges on this contract: SummaryRow
+    // aggregates whatever itemIds it receives. BoardTable now passes the
+    // subitem-expanded set, so a percent column whose values live on
+    // subitems averages instead of rendering nothing.
+    const colP = col("colP", "percent", { summary_aggregation: "avg" });
+    const pcts = new Map<string, CacheCellValue["value"]>([
+      ["s1:colP", { percent: 100 }],
+      ["s2:colP", { percent: 50 }],
+      ["s3:colP", { percent: 0 }],
+    ]);
+    render(
+      <SummaryRow
+        {...baseProps({
+          columns: [colP],
+          itemIds: ["s1", "s2", "s3"],
+          cellMap: pcts,
+        })}
+      />,
+    );
+    const row = screen.getByTestId("group-summary-g1");
+    expect(row).toHaveTextContent("Average");
+    expect(row).toHaveTextContent("50%");
+    // mirrors the percent cell: a colorized fill bar, not plain text
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "50",
+    );
+  });
+
+  it("renders the provided summary label on the frozen name track", () => {
+    render(<SummaryRow {...baseProps({ label: "Group Summary" })} />);
+    const row = screen.getByTestId("group-summary-g1");
+    expect(row.firstElementChild).toHaveTextContent("Group Summary");
+  });
 });

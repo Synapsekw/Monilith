@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Settings, Shield } from "lucide-react";
+import { Settings } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import {
   DropdownMenu,
@@ -20,13 +20,7 @@ function initialFor(user: AppShellUser): string {
   return source ? source.charAt(0).toUpperCase() : "?";
 }
 
-export function UserMenu({
-  user,
-  isPlatformAdmin,
-}: {
-  user: AppShellUser;
-  isPlatformAdmin?: boolean;
-}) {
+export function UserMenu({ user }: { user: AppShellUser }) {
   const label = user.full_name?.trim() || user.email || "Account";
 
   return (
@@ -40,14 +34,6 @@ export function UserMenu({
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {isPlatformAdmin ? (
-          <DropdownMenuItem asChild>
-            <Link href="/admin" className="flex items-center gap-2">
-              <Shield className="size-4" />
-              Platform admin
-            </Link>
-          </DropdownMenuItem>
-        ) : null}
         <DropdownMenuItem asChild>
           <Link href="/settings" className="flex items-center gap-2">
             <Settings className="size-4" />

@@ -8,27 +8,43 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
-  Legend,
   Line,
   LineChart,
   Pie,
   PieChart,
   RadialBar,
   RadialBarChart,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import { buildChartConfig } from "@/components/dashboards/widgets/chart-config";
+import {
+  collectGradients,
+  paintFill,
+  paintStroke,
+  resolveChartColors,
+  solidOf,
+} from "@/components/dashboards/widgets/chart-colors";
+import { ChartDefs, glowId } from "@/components/dashboards/widgets/ChartDefs";
+import { useReducedMotion } from "@/components/dashboards/widgets/use-reduced-motion";
+import { CHART_MOTION } from "@/components/dashboards/widgets/chart-theme";
 import { useWidgetSeries } from "@/lib/dashboards/use-widget-series";
 import { pivotSeries } from "@/lib/dashboards/series";
 import {
   AXIS_PROPS,
   GRID_STROKE,
-  TOOLTIP_STYLE,
 } from "@/components/dashboards/widgets/chart-theme";
 import type { CacheWidget } from "@/lib/dashboards/cache";
+
+const CHART_CLASS = "h-full w-full !aspect-auto";
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
@@ -40,6 +56,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 export function ChartWidget({ widget }: { widget: CacheWidget }) {
   const config = (widget.config ?? {}) as Record<string, unknown>;
+  const reduced = useReducedMotion();
   const { data, isLoading, isError } = useWidgetSeries(widget.id);
 
   if (!widget.source_board_id) return <Empty>Pick a source board</Empty>;
@@ -50,47 +67,58 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
 
   const { rows, series } = pivotSeries(data);
   const ct = data.chartType;
+  const wid = widget.id;
+  const colors = resolveChartColors({ chartType: ct, rows, series });
+  const gradients = collectGradients(wid, colors);
+  const chartConfig = buildChartConfig(
+    colors.series.map((s) => ({ key: s.key, color: solidOf(s.paint) })),
+  );
+  const anim = {
+    isAnimationActive: !reduced,
+    animationDuration: CHART_MOTION.durationMs,
+    animationEasing: "ease-out" as const,
+  };
+  const glow = { filter: `url(#${glowId(wid)})` };
 
-  // ── circular charts ──
+  // ── circular charts ── (per-cell colors from resolver.cells)
   if (ct === "pie" || ct === "donut") {
+    const cells = colors.cells ?? [];
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <PieChart>
-          <Tooltip {...TOOLTIP_STYLE} />
+          <ChartDefs widgetId={wid} specs={gradients} />
+          <ChartTooltip content={<ChartTooltipContent nameKey="__label" />} />
           <Pie
             data={rows}
             dataKey="Value"
             nameKey="__label"
             innerRadius={ct === "donut" ? "55%" : 0}
             outerRadius="80%"
+            {...anim}
           >
-            {rows.map((r) => (
-              <Cell
-                key={String(r.__label)}
-                fill={String(r[`__color_${r.__label}`] ?? "var(--brand)")}
-              />
+            {cells.map((c) => (
+              <Cell key={c.label} fill={paintFill(wid, c.paint, "bar")} />
             ))}
           </Pie>
         </PieChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
   if (ct === "radial") {
+    const cells = colors.cells ?? [];
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <RadialBarChart data={rows} innerRadius="25%" outerRadius="95%">
-          <Tooltip {...TOOLTIP_STYLE} />
-          <RadialBar dataKey="Value" background>
-            {rows.map((r) => (
-              <Cell
-                key={String(r.__label)}
-                fill={String(r[`__color_${r.__label}`] ?? "var(--brand)")}
-              />
+          <ChartDefs widgetId={wid} specs={gradients} />
+          <ChartTooltip content={<ChartTooltipContent nameKey="__label" />} />
+          <RadialBar dataKey="Value" background {...anim}>
+            {cells.map((c) => (
+              <Cell key={c.label} fill={paintFill(wid, c.paint, "bar")} />
             ))}
           </RadialBar>
         </RadialBarChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
@@ -98,8 +126,9 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
   if (ct === "line" || ct === "area") {
     const Chart = ct === "line" ? LineChart : AreaChart;
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <Chart data={rows}>
+          <ChartDefs widgetId={wid} specs={gradients} />
           <CartesianGrid
             stroke={GRID_STROKE}
             strokeDasharray="3 3"
@@ -107,31 +136,38 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
           />
           <XAxis dataKey="__label" {...AXIS_PROPS} />
           <YAxis {...AXIS_PROPS} width={32} />
-          <Tooltip {...TOOLTIP_STYLE} />
+          <ChartTooltip content={<ChartTooltipContent />} />
           {series.length > 1 ? (
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <ChartLegend content={<ChartLegendContent />} />
           ) : null}
-          {series.map((s) =>
-            ct === "line" ? (
+          {colors.series.map((s, i) => {
+            const begin = i * CHART_MOTION.staggerMs;
+            return ct === "line" ? (
               <Line
                 key={s.key}
                 dataKey={s.key}
-                stroke={s.color}
-                strokeWidth={2}
+                stroke={paintStroke(wid, s.paint)}
+                strokeWidth={2.5}
                 dot={false}
+                activeDot={{ r: 4, style: glow }}
+                animationBegin={begin}
+                {...anim}
               />
             ) : (
               <Area
                 key={s.key}
                 dataKey={s.key}
-                stroke={s.color}
-                fill={s.color}
-                fillOpacity={0.2}
+                stroke={paintStroke(wid, s.paint)}
+                fill={paintFill(wid, s.paint, "area")}
+                strokeWidth={2}
+                activeDot={{ r: 4, style: glow }}
+                animationBegin={begin}
+                {...anim}
               />
-            ),
-          )}
+            );
+          })}
         </Chart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
@@ -139,8 +175,9 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
   if (ct === "combo") {
     const comboMap = (config.comboMap ?? {}) as Record<string, "bar" | "line">;
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ChartContainer config={chartConfig} className={CHART_CLASS}>
         <ComposedChart data={rows}>
+          <ChartDefs widgetId={wid} specs={gradients} />
           <CartesianGrid
             stroke={GRID_STROKE}
             strokeDasharray="3 3"
@@ -148,38 +185,47 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
           />
           <XAxis dataKey="__label" {...AXIS_PROPS} />
           <YAxis {...AXIS_PROPS} width={32} />
-          <Tooltip {...TOOLTIP_STYLE} />
+          <ChartTooltip content={<ChartTooltipContent />} />
           {series.length > 1 ? (
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <ChartLegend content={<ChartLegendContent />} />
           ) : null}
-          {series.map((s, i) =>
-            (comboMap[s.key] ?? (i === 0 ? "bar" : "line")) === "bar" ? (
+          {colors.series.map((s, i) => {
+            const begin = i * CHART_MOTION.staggerMs;
+            const asBar =
+              (comboMap[s.key] ?? (i === 0 ? "bar" : "line")) === "bar";
+            return asBar ? (
               <Bar
                 key={s.key}
                 dataKey={s.key}
-                fill={s.color}
+                fill={paintFill(wid, s.paint, "bar")}
                 radius={[4, 4, 0, 0]}
+                animationBegin={begin}
+                {...anim}
               />
             ) : (
               <Line
                 key={s.key}
                 dataKey={s.key}
-                stroke={s.color}
-                strokeWidth={2}
+                stroke={paintStroke(wid, s.paint)}
+                strokeWidth={2.5}
                 dot={false}
+                activeDot={{ r: 4, style: glow }}
+                animationBegin={begin}
+                {...anim}
               />
-            ),
-          )}
+            );
+          })}
         </ComposedChart>
-      </ResponsiveContainer>
+      </ChartContainer>
     );
   }
 
   // ── bar family (bar / stackedBar / groupedBar) ──
   const stack = ct === "stackedBar";
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer config={chartConfig} className={CHART_CLASS}>
       <BarChart data={rows}>
+        <ChartDefs widgetId={wid} specs={gradients} />
         <CartesianGrid
           stroke={GRID_STROKE}
           strokeDasharray="3 3"
@@ -187,27 +233,30 @@ export function ChartWidget({ widget }: { widget: CacheWidget }) {
         />
         <XAxis dataKey="__label" {...AXIS_PROPS} />
         <YAxis {...AXIS_PROPS} width={32} />
-        <Tooltip {...TOOLTIP_STYLE} />
-        {series.length > 1 ? <Legend wrapperStyle={{ fontSize: 11 }} /> : null}
-        {series.map((s) => (
-          <Bar
-            key={s.key}
-            dataKey={s.key}
-            stackId={stack ? "a" : undefined}
-            fill={s.color}
-            radius={stack ? undefined : [4, 4, 0, 0]}
-          >
-            {series.length === 1
-              ? rows.map((r) => (
-                  <Cell
-                    key={String(r.__label)}
-                    fill={String(r[`__color_${r.__label}`] ?? s.color)}
-                  />
-                ))
-              : null}
-          </Bar>
-        ))}
+        <ChartTooltip content={<ChartTooltipContent />} />
+        {series.length > 1 ? (
+          <ChartLegend content={<ChartLegendContent />} />
+        ) : null}
+        {colors.series.map((s, i) => {
+          return (
+            <Bar
+              key={s.key}
+              dataKey={s.key}
+              stackId={stack ? "a" : undefined}
+              fill={paintFill(wid, s.paint, "bar")}
+              radius={stack ? undefined : [4, 4, 0, 0]}
+              animationBegin={i * CHART_MOTION.staggerMs}
+              {...anim}
+            >
+              {colors.cells
+                ? colors.cells.map((c) => (
+                    <Cell key={c.label} fill={paintFill(wid, c.paint, "bar")} />
+                  ))
+                : null}
+            </Bar>
+          );
+        })}
       </BarChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }
