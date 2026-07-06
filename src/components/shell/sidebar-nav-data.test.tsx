@@ -41,12 +41,6 @@ vi.mock("@/lib/workspaces/queries-cached", () => ({
 vi.mock("@/lib/workspaces/active", () => ({
   getActiveWorkspaceId: vi.fn(async () => "w1"),
 }));
-vi.mock("@/lib/platform/guard", () => ({
-  isPlatformAdminCached: vi.fn(async () => false),
-}));
-vi.mock("@/lib/org/guard", () => ({
-  isOrgAdminCached: vi.fn(async () => false),
-}));
 
 beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {};

@@ -20,11 +20,7 @@ const ws = [
 function renderSwitcher(active = "w1") {
   return render(
     <TooltipProvider>
-      <WorkspaceSwitcher
-        workspaces={ws}
-        activeWorkspaceId={active}
-        isOrgAdmin
-      />
+      <WorkspaceSwitcher workspaces={ws} activeWorkspaceId={active} />
     </TooltipProvider>,
   );
 }
