@@ -20,10 +20,20 @@ export type CalendarProps = DayPickerProps;
  * than react-day-picker's stylesheet, so there is no default-blue accent to
  * override and nothing to import globally.
  */
-function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
+function Calendar({
+  className,
+  classNames,
+  showOutsideDays = true,
+  fixedWeeks = true,
+  ...props
+}: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      // Render a constant 6 week-rows per month so the calendar height never
+      // changes between months — otherwise paging through months (4/5/6-week
+      // spans) makes the popover jump up and down.
+      fixedWeeks={fixedWeeks}
       className={cn("p-1", className)}
       classNames={{
         months: "relative flex flex-col gap-4",
