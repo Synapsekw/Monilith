@@ -14,6 +14,8 @@ import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-fo
 import { ProfileForm } from "@/components/settings/profile-form";
 import { DigestPreferenceForm } from "@/components/settings/DigestPreferenceForm";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
+import { AiProviderForm } from "@/components/settings/AiProviderForm";
+import { getMyAiCredential } from "@/lib/ai/credentials";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
 import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
@@ -22,11 +24,12 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  // Timezone + orgs are independent reads — resolve them in parallel (the
-  // members RPC below is the only read that depends on org.id).
-  const [myTimeZone, orgs] = await Promise.all([
+  // Timezone + orgs + AI credential are independent reads — resolve them in
+  // parallel (the members RPC below is the only read that depends on org.id).
+  const [myTimeZone, orgs, aiCredential] = await Promise.all([
     getUserTimeZoneCached(user.id),
     getUserOrgs(),
+    getMyAiCredential(),
   ]);
   const org = orgs[0];
   if (!org) redirect("/onboarding");
@@ -110,6 +113,20 @@ export default async function SettingsPage() {
             <DigestPreferenceForm
               initialOptOut={myProfile?.email_digest_opt_out ?? false}
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>AI</CardTitle>
+            <CardDescription>
+              {aiCredential
+                ? "Your AI provider key powers dashboard generation."
+                : "Not configured — add a provider key to enable AI features."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AiProviderForm initial={aiCredential} />
           </CardContent>
         </Card>
 

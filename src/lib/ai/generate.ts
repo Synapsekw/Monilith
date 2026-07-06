@@ -1,12 +1,8 @@
 import "server-only";
-import type Anthropic from "@anthropic-ai/sdk";
-import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
-import { getAnthropicClient, MODEL } from "@/lib/ai/anthropic";
-import {
-  PROPOSAL_JSON_SCHEMA,
-  type DashboardProposal,
-} from "@/lib/ai/proposal-schema";
+import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
+import { resolveUserAdapter } from "@/lib/ai/credentials";
+import type { ProviderAdapter } from "@/lib/ai/providers/types";
 
 /**
  * System prompt teaching the model the widget vocabulary and grid. Frozen and
@@ -36,50 +32,27 @@ function buildUserPrompt(snap: BoardSnapshot, feedback?: string): string {
 }
 
 /**
- * Call Opus 4.8 to propose a dashboard for the given board snapshot.
- *
- * Structured output is enforced with `messages.parse()` + `output_config.format`
- * (jsonSchemaOutputFormat) — the most robust mechanism the installed SDK
- * (0.105.0) supports for forcing a single JSON object matching
- * PROPOSAL_JSON_SCHEMA. The parsed result is read from `message.parsed_output`.
- *
- * The client is dependency-injected (`opts.client`) so tests never hit the
- * network; production passes none and we build a server-only client.
+ * Propose a dashboard for the given board snapshot using the current user's
+ * configured AI provider. The adapter + key are dependency-injected in tests
+ * (opts.adapter/opts.apiKey); production resolves them from the user's stored
+ * credential via resolveUserAdapter().
  */
 export async function generateProposal(
   snap: BoardSnapshot,
-  opts: { client?: Anthropic; feedback?: string } = {},
+  opts: {
+    adapter?: ProviderAdapter;
+    apiKey?: string;
+    feedback?: string;
+  } = {},
 ): Promise<DashboardProposal> {
-  const client = opts.client ?? getAnthropicClient();
+  const { adapter, apiKey } =
+    opts.adapter && opts.apiKey
+      ? { adapter: opts.adapter, apiKey: opts.apiKey }
+      : await resolveUserAdapter();
 
-  const message = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 16000,
-    // Adaptive thinking is the only on-mode for Opus 4.8 (verified against the
-    // installed SDK's ThinkingConfigAdaptive type).
-    thinking: { type: "adaptive" },
-    output_config: {
-      effort: "high",
-      // PROPOSAL_JSON_SCHEMA is a hand-written `as const` JSON Schema; cast to
-      // the helper's expected JSONSchema shape (the const literal is narrower
-      // than the helper's generic constraint, but structurally valid).
-      format: jsonSchemaOutputFormat(PROPOSAL_JSON_SCHEMA as never),
-    },
-    system: [
-      {
-        type: "text",
-        text: buildSystemPrompt(),
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: buildUserPrompt(snap, opts.feedback) }],
+  return adapter.generateProposal({
+    apiKey,
+    system: buildSystemPrompt(),
+    user: buildUserPrompt(snap, opts.feedback),
   });
-
-  // Prefer the SDK's parsed_output; fall back to JSON.parse of the text block.
-  const textBlock = message.content.find((b) => b.type === "text");
-  const parsed =
-    (message as { parsed_output?: unknown }).parsed_output ??
-    JSON.parse(textBlock && "text" in textBlock ? textBlock.text : "{}");
-
-  return parsed as DashboardProposal;
 }

@@ -1918,6 +1918,33 @@ export type Database = {
           },
         ];
       };
+      user_ai_credentials: {
+        Row: {
+          created_at: string;
+          key_hint: string;
+          provider: string;
+          secret_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          key_hint: string;
+          provider: string;
+          secret_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          key_hint?: string;
+          provider?: string;
+          secret_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       workspaces: {
         Row: {
           created_at: string;
@@ -2071,6 +2098,23 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      ai_credential_clear: { Args: { p_user: string }; Returns: undefined };
+      ai_credential_get: {
+        Args: { p_user: string };
+        Returns: {
+          provider: string;
+          secret: string;
+        }[];
+      };
+      ai_credential_set: {
+        Args: {
+          p_hint: string;
+          p_provider: string;
+          p_secret: string;
+          p_user: string;
+        };
+        Returns: undefined;
       };
       auth_user_orgs: { Args: never; Returns: string[] };
       board_in_org: {
