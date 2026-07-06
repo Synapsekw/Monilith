@@ -31,7 +31,6 @@ export function WorkspaceSwitcher({
   workspaces: Workspace[];
   activeWorkspaceId: string;
   collapsed?: boolean;
-  isOrgAdmin?: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();

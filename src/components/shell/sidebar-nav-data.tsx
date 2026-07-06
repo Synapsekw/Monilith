@@ -6,9 +6,6 @@ import {
 import { listDashboardsCached } from "@/lib/dashboards/queries-cached";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
-import { isPlatformAdminCached } from "@/lib/platform/guard";
-import { isOrgAdminCached } from "@/lib/org/guard";
-import { countNewFeedback } from "@/lib/feedback/queries";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import type { ComponentProps } from "react";
 
@@ -26,16 +23,11 @@ export async function getSidebarNavData(): Promise<
   const workspaces = await listWorkspacesCached(orgId);
   const activeWorkspaceId = await getActiveWorkspaceId(workspaces);
 
-  const [boards, sharedBoards, dashboards, platformAdmin, orgAdmin] =
-    await Promise.all([
-      listMyBoardsCached(userId, activeWorkspaceId),
-      listSharedBoardsCached(userId),
-      listDashboardsCached(orgId, activeWorkspaceId),
-      isPlatformAdminCached(userId),
-      isOrgAdminCached(userId, orgId),
-    ]);
-
-  const newFeedbackCount = platformAdmin ? await countNewFeedback() : 0;
+  const [boards, sharedBoards, dashboards] = await Promise.all([
+    listMyBoardsCached(userId, activeWorkspaceId),
+    listSharedBoardsCached(userId),
+    listDashboardsCached(orgId, activeWorkspaceId),
+  ]);
 
   return {
     boards,
@@ -43,9 +35,6 @@ export async function getSidebarNavData(): Promise<
     workspaces,
     activeWorkspaceId,
     dashboards: dashboards.map((d) => ({ id: d.id, name: d.name })),
-    isPlatformAdmin: platformAdmin,
-    isOrgAdmin: orgAdmin,
-    newFeedbackCount,
   };
 }
 

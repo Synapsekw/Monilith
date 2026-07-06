@@ -61,6 +61,8 @@ export function NavSection({
           <button
             type="button"
             onClick={() => toggleSection(storageKey)}
+            aria-expanded={open}
+            aria-controls={bodyId}
             className={titleCn}
           >
             {title}
@@ -70,11 +72,9 @@ export function NavSection({
           <div className="ml-auto flex items-center">{action}</div>
         ) : null}
       </div>
-      {open ? (
-        <div id={bodyId} className="flex flex-col gap-0.5">
-          {children}
-        </div>
-      ) : null}
+      <div id={bodyId} hidden={!open} className="flex flex-col gap-0.5">
+        {children}
+      </div>
     </div>
   );
 }
