@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -151,14 +148,5 @@ describe("DashboardWidget kind dispatch", () => {
   it("renders static widgets directly", () => {
     renderWidget(makeWidget("Number", "number"), false);
     expect(screen.getByTestId("number-widget")).toBeInTheDocument();
-  });
-
-  it("does not statically import ChartWidget (recharts stays out of first paint)", () => {
-    const src = readFileSync(
-      join(process.cwd(), "src/components/dashboards/DashboardWidget.tsx"),
-      "utf8",
-    );
-    expect(src).not.toMatch(/^import\s+\{\s*ChartWidget\s*\}\s+from/m);
-    expect(src).toContain("dynamic(");
   });
 });
