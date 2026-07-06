@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-06-1500
+last-updated: 2026-07-06-2022
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,7 +51,7 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** **Shipped to prod + data-synced.** Promoted `develop → main` (PR #52, squash `3659b03`) — charts P1+P2 + lazy-load, keystone brand, cross-group DnD, hydration fix, nav Direction B, import Structure step, group summaries, Batch-A cleanups (166 files) — main CI green, Vercel prod live, squash divergence healed. Then backfilled **14 migrations to PROD** — including the **07-04 audit-fix security migrations that had never reached prod** (PR#51 shipped the code, not the DB guards) — and ran `/sync-prod` (schema parity + independent-data guard passed; storage 9/9; data restored from the 14:08 dev snapshot). ([[2026-07-06-1500-promote-pr52-prod-sync]])
-- **Branch:** `develop == origin/develop` at `c3ab39d` (includes the `-s ours` squash-heal) · `origin/main` at PR#52 `3659b03`. **main is an ancestor of develop — next promotion is clean.** PROD ledger now at `20260705120000` (parity with dev's applied schema). **No live worktrees / `task/*` branches.**
+- **Branch:** `develop == origin/develop` at `7ab497d` (BYO AI keys + two UI polish fixes since the promote) · `origin/main` at PR#52 `3659b03`. **main is an ancestor of develop — next promotion is clean.** PROD ledger now at `20260705120000` (parity with dev's applied schema). **No live worktrees / `task/*` branches.**
 - **In flight:** nothing building — all worktrees closed, prod is current with `develop`.
 - **Next:** repair the **dev migration-ledger drift** (`20260705120000_import_rows_multi_group` applied to DEV's schema + recorded on PROD, but missing from DEV's ledger). Then the roadmap thrust is **Phase 10 — AI & Agents, Epic 1** (foundation + Ask Pulse) — scoped, specced, **and planned** ([[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]); build via `/develop` in a `task/ai-foundation-ask-pulse` worktree (Task 0 migration user-applied). **Landing redesign** ready once a `brand-lab` variation is picked. Migration-gated deferrals queued (write schema → user applies → build slice): soft-delete/undo (`archived_at`), avatar upload (`avatars` bucket), similarity-ranked ⌘K search.
 - **Owed:** dev ledger repair (`20260705120000`) above. Three migration-gated feature deferrals. Unsuffixed `buildImportPayload` (0 prod call sites — retire or confirm intentional keep). Perf tier-3 **Task A** (`unstable_instant`) deferred — needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). Import follow-up (non-blocking): export→import `↳`-marker round-trip asymmetry (intended). **Landing redesign: pick one of four `brand-lab` landing variations (Statement/Product/Editorial/Kinetic or a hybrid) then apply it to `/landing`** — brand-lab is committed for portability, remove once the landing lands. Two stale `_draft-*.md` (07-05 1038, 1606) left for their own blocks' wrapups.
