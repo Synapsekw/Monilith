@@ -3,10 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // cacheTag/cacheLife throw outside a compiled `use cache` scope under Vitest.
 vi.mock("next/cache", () => ({ cacheTag: vi.fn(), cacheLife: vi.fn() }));
 
-// `listDashboardsCached` path: from("dashboards").select().eq().order().limit()
+// `listDashboardsCached` path: from("dashboards").select().eq().eq?().order().limit()
 const limitForList = vi.fn();
 const orderForList = vi.fn(() => ({ limit: limitForList }));
-const listEq = vi.fn(() => ({ order: orderForList }));
+// Builder returned by each .eq(): supports chaining another .eq() or terminating with .order().
+const listBuilder: {
+  eq: ReturnType<typeof vi.fn>;
+  order: typeof orderForList;
+} = {
+  eq: vi.fn(() => listBuilder),
+  order: orderForList,
+};
+const listEq = listBuilder.eq;
 const listSelect = vi.fn(() => ({ eq: listEq }));
 
 // `getWidgetAggregationCached` path: rpc("dashboard_aggregate", …) and
@@ -62,6 +70,20 @@ describe("listDashboardsCached", () => {
   it("returns [] when none", async () => {
     limitForList.mockResolvedValue({ data: null, error: null });
     expect(await listDashboardsCached("org-A")).toEqual([]);
+  });
+
+  it("scopes to workspace_id when a workspaceId is given", async () => {
+    limitForList.mockResolvedValue({ data: [], error: null });
+    await listDashboardsCached("org-A", "ws-1");
+    expect(listEq).toHaveBeenCalledWith("org_id", "org-A");
+    expect(listEq).toHaveBeenCalledWith("workspace_id", "ws-1");
+  });
+
+  it("does not scope by workspace when no workspaceId is given", async () => {
+    limitForList.mockResolvedValue({ data: [], error: null });
+    await listDashboardsCached("org-A");
+    expect(listEq).toHaveBeenCalledWith("org_id", "org-A");
+    expect(listEq).not.toHaveBeenCalledWith("workspace_id", expect.anything());
   });
 });
 
