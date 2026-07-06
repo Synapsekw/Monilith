@@ -118,9 +118,7 @@ export function SidebarNav({
   workspaces: { id: string; name: string }[];
   activeWorkspaceId?: string;
   dashboards: { id: string; name: string }[];
-  isPlatformAdmin?: boolean;
   isOrgAdmin?: boolean;
-  newFeedbackCount?: number;
   forceExpanded?: boolean;
 }) {
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
