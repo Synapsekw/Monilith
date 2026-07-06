@@ -193,7 +193,7 @@ export function DashboardsNav({
               <div
                 key={d.id}
                 className={cn(
-                  "group/row flex items-center rounded-md pr-1 transition-colors",
+                  "group flex items-center rounded-md pr-1 transition-colors",
                   d.id === activeDashboardId
                     ? "bg-primary/80 text-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
