@@ -1,26 +1,18 @@
 import "server-only";
 import OpenAI from "openai";
 import { z } from "zod";
-import {
-  PROPOSAL_JSON_SCHEMA,
-  type DashboardProposal,
-} from "@/lib/ai/proposal-schema";
+import { type DashboardProposal } from "@/lib/ai/proposal-schema";
 import { PROVIDER_CATALOG } from "@/lib/ai/providers/catalog";
+import { withSchema } from "@/lib/ai/providers/prompt";
 import {
   ProviderAuthError,
   type ProviderAdapter,
 } from "@/lib/ai/providers/types";
 
-const MODEL = "gpt-4o";
-
 // OpenAI structured outputs reject `oneOf` (used in PROPOSAL_JSON_SCHEMA), so we
-// use plain JSON mode and embed the schema in the prompt. validateProposal()
-// downstream repairs/drops any widget that drifts.
-function withSchema(user: string): string {
-  return `${user}\n\nReturn ONLY a JSON object matching this JSON Schema (no prose):\n${JSON.stringify(
-    PROPOSAL_JSON_SCHEMA,
-  )}`;
-}
+// use plain JSON mode and embed the schema in the prompt (see withSchema).
+// validateProposal() downstream repairs/drops any widget that drifts.
+const MODEL = "gpt-4o";
 
 export const openaiAdapter: ProviderAdapter = {
   id: "openai",

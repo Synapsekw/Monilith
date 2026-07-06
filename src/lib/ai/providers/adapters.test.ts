@@ -116,6 +116,20 @@ describe("validateKey", () => {
       ProviderAuthError,
     );
   });
+
+  it("anthropic: propagates a non-auth error unmapped", async () => {
+    anthropicList.mockRejectedValueOnce(new Error("network down"));
+    const p = anthropicAdapter.validateKey("sk-ant-ok");
+    await expect(p).rejects.toThrow("network down");
+    await expect(p).rejects.not.toBeInstanceOf(ProviderAuthError);
+  });
+
+  it("openai: propagates a non-auth error unmapped", async () => {
+    openaiList.mockRejectedValueOnce(new Error("network down"));
+    const p = openaiAdapter.validateKey("sk-ok");
+    await expect(p).rejects.toThrow("network down");
+    await expect(p).rejects.not.toBeInstanceOf(ProviderAuthError);
+  });
 });
 
 describe("generateProposal", () => {

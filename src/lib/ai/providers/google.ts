@@ -1,11 +1,9 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import {
-  PROPOSAL_JSON_SCHEMA,
-  type DashboardProposal,
-} from "@/lib/ai/proposal-schema";
+import { type DashboardProposal } from "@/lib/ai/proposal-schema";
 import { PROVIDER_CATALOG } from "@/lib/ai/providers/catalog";
+import { withSchema } from "@/lib/ai/providers/prompt";
 import {
   ProviderAuthError,
   type ProviderAdapter,
@@ -13,17 +11,15 @@ import {
 
 const MODEL = "gemini-2.0-flash";
 
-function withSchema(user: string): string {
-  return `${user}\n\nReturn ONLY a JSON object matching this JSON Schema (no prose):\n${JSON.stringify(
-    PROPOSAL_JSON_SCHEMA,
-  )}`;
-}
-
 export const googleAdapter: ProviderAdapter = {
   id: "google",
   label: PROVIDER_CATALOG.google.label,
   placeholder: PROVIDER_CATALOG.google.placeholder,
-  keyFormat: z.string().trim().min(20).max(300),
+  keyFormat: z
+    .string()
+    .trim()
+    .startsWith("AIza", "Google API keys start with AIza")
+    .max(300),
   defaultModel: MODEL,
   async validateKey(rawKey) {
     const ai = new GoogleGenAI({ apiKey: rawKey });
