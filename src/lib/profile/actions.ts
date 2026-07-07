@@ -2,7 +2,7 @@
 
 import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getUserOrgs } from "@/lib/auth/session";
+import { createServiceClient } from "@/lib/supabase/service";
 import { orgMembersTag, profileTag } from "@/lib/cache/tags";
 import { pathFromPublicUrl } from "@/lib/profile/avatar-path";
 import {
@@ -93,11 +93,26 @@ export async function updateProfileFullName(input: {
 /** Expire the user's own profile cache AND every org roster that renders their
  *  avatar. The roster comment in lib/org/queries-cached.ts mandates the latter:
  *  the cached member roster stores `avatar_url` as a column, so a bare
- *  profileTag() would leave stale avatars in board cells / pickers / workload. */
+ *  profileTag() would leave stale avatars in board cells / pickers / workload.
+ *
+ *  We must invalidate every org whose cached roster CAN contain this user. That
+ *  roster (`listOrgMembersCached`) is built with the SERVICE client and includes
+ *  DEACTIVATED members, but `getUserOrgs()` → `auth_user_orgs()` filters
+ *  `deactivated_at IS NULL` — so using it would MISS an org where the user is
+ *  deactivated-but-still-rostered, leaving a stale null avatar (bounded only by
+ *  the 1h cacheLife expiry → the reported "never updates on some boards"). So we
+ *  read the caller's memberships directly via the service client (bypasses the
+ *  same RLS that excludes deactivated rows), scoped to `user_id`. Cross-org
+ *  board shares need no handling here: a board's roster is `org_members` of
+ *  `board.org_id`, so a cross-org guest is never in that roster to begin with. */
 async function invalidateProfileEverywhere(userId: string): Promise<void> {
   updateTag(profileTag(userId));
-  const orgs = await getUserOrgs();
-  for (const org of orgs) updateTag(orgMembersTag(org.id));
+  const service = createServiceClient();
+  const { data: memberships } = await service
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", userId);
+  for (const m of memberships ?? []) updateTag(orgMembersTag(m.org_id));
 }
 
 /**

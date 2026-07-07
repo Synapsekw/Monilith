@@ -24,9 +24,19 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-const getUserOrgs = vi.fn(async () => [] as { id: string }[]);
-vi.mock("@/lib/auth/session", () => ({
-  getUserOrgs: () => getUserOrgs(),
+// invalidateProfileEverywhere reads the caller's org_members via the SERVICE
+// client (bypasses RLS) so it also sees DEACTIVATED memberships — the org
+// rosters (listOrgMembersCached) include deactivated rows, but getUserOrgs()/
+// auth_user_orgs() would exclude them, leaving a stale avatar. Mock the service
+// org_members read here.
+const membersEq = vi.fn(async () => ({
+  data: [] as { org_id: string }[],
+  error: null,
+}));
+const serviceSelect = vi.fn(() => ({ eq: membersEq }));
+const serviceFrom = vi.fn(() => ({ select: serviceSelect }));
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({ from: serviceFrom }),
 }));
 
 import {
@@ -49,8 +59,10 @@ beforeEach(() => {
   storageRemove.mockReset();
   storageRemove.mockResolvedValue({ data: [], error: null });
   storageFrom.mockClear();
-  getUserOrgs.mockReset();
-  getUserOrgs.mockResolvedValue([]);
+  membersEq.mockReset();
+  membersEq.mockResolvedValue({ data: [], error: null });
+  serviceSelect.mockClear();
+  serviceFrom.mockClear();
 });
 
 describe("updateProfileTimezone", () => {
@@ -104,7 +116,7 @@ describe("updateProfileAvatar", () => {
     const publicUrl =
       "https://ref.supabase.co/storage/v1/object/public/avatars/user-1/new.webp";
     getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    getUserOrgs.mockResolvedValue([{ id: "org-1" }]);
+    membersEq.mockResolvedValue({ data: [{ org_id: "org-1" }], error: null });
     maybeSingle.mockResolvedValue({ data: { avatar_url: null } });
     update.mockReturnValue({ eq: async () => ({ error: null }) });
     getPublicUrl.mockReturnValue({ data: { publicUrl } });
@@ -118,13 +130,38 @@ describe("updateProfileAvatar", () => {
     });
     expect(updateTag).toHaveBeenCalledWith("profile:user:user-1");
     expect(updateTag).toHaveBeenCalledWith("org-members:org:org-1");
+    // Scoped to the caller's own memberships.
+    expect(serviceFrom).toHaveBeenCalledWith("org_members");
+    expect(membersEq).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("invalidates a deactivated-membership org that getUserOrgs would omit", async () => {
+    const publicUrl =
+      "https://ref.supabase.co/storage/v1/object/public/avatars/user-1/new.webp";
+    getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    // org-2 is a DEACTIVATED membership: it appears in the org roster but NOT in
+    // auth_user_orgs()/getUserOrgs(). The service-client read still returns it,
+    // so its roster tag must be invalidated too (read-your-own-writes).
+    membersEq.mockResolvedValue({
+      data: [{ org_id: "org-1" }, { org_id: "org-2" }],
+      error: null,
+    });
+    maybeSingle.mockResolvedValue({ data: { avatar_url: null } });
+    update.mockReturnValue({ eq: async () => ({ error: null }) });
+    getPublicUrl.mockReturnValue({ data: { publicUrl } });
+
+    const res = await updateProfileAvatar({ storagePath: "user-1/new.webp" });
+
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("org-members:org:org-1");
+    expect(updateTag).toHaveBeenCalledWith("org-members:org:org-2");
   });
 
   it("removes the previous object when replacing an existing avatar", async () => {
     const publicUrl =
       "https://ref.supabase.co/storage/v1/object/public/avatars/user-1/new.webp";
     getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    getUserOrgs.mockResolvedValue([{ id: "org-1" }]);
+    membersEq.mockResolvedValue({ data: [{ org_id: "org-1" }], error: null });
     maybeSingle.mockResolvedValue({
       data: {
         avatar_url:
@@ -144,7 +181,7 @@ describe("updateProfileAvatar", () => {
 describe("removeProfileAvatar", () => {
   it("nulls the column and deletes the stored object", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    getUserOrgs.mockResolvedValue([{ id: "org-1" }]);
+    membersEq.mockResolvedValue({ data: [{ org_id: "org-1" }], error: null });
     maybeSingle.mockResolvedValue({
       data: {
         avatar_url:

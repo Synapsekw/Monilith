@@ -202,6 +202,7 @@ export function BoardViews({
         members={members.map((m) => ({
           userId: m.userId,
           fullName: m.fullName,
+          avatarUrl: m.avatarUrl,
         }))}
         createdBy={openItem?.created_by ?? null}
         createdAt={openItem?.created_at ?? null}

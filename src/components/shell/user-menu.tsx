@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +14,7 @@ import {
 export type AppShellUser = {
   email?: string | null;
   full_name?: string | null;
+  avatar_url?: string | null;
 };
 
 function initialFor(user: AppShellUser): string {
@@ -22,14 +24,23 @@ function initialFor(user: AppShellUser): string {
 
 export function UserMenu({ user }: { user: AppShellUser }) {
   const label = user.full_name?.trim() || user.email || "Account";
+  const avatarUrl = user.avatar_url?.trim() || undefined;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Open user menu"
-        className="bg-surface text-foreground hover:bg-accent flex size-8 shrink-0 items-center justify-center rounded-full border text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="hover:bg-accent focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
-        {initialFor(user)}
+        {/* Supabase public avatar URL: rendered via Radix Avatar (a raw <img>,
+            not routed through the next/image optimizer) with an initials
+            fallback. First paint comes from the session (no client fetch). */}
+        <Avatar className="size-8 border-0">
+          {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+          <AvatarFallback className="hover:bg-accent text-sm font-medium">
+            {initialFor(user)}
+          </AvatarFallback>
+        </Avatar>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Check, Network, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
@@ -73,6 +74,45 @@ function memberLabel(member: EditorMember | undefined) {
   return member?.fullName || member?.email || "Unknown";
 }
 
+function memberInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+/** Small member avatar for board cells — a stable Supabase public URL rendered
+ *  via `<Image unoptimized>` (established avatar pattern; not routed through the
+ *  optimizer) with a graceful initials fallback. size-5 matches CreatedByCell so
+ *  the row height stays stable. */
+function MemberAvatar({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl: string | null;
+}) {
+  return (
+    <span className="bg-surface-muted flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-medium">
+      {avatarUrl ? (
+        <Image
+          src={avatarUrl}
+          alt=""
+          width={20}
+          height={20}
+          unoptimized
+          className="size-full object-cover"
+        />
+      ) : (
+        memberInitials(name)
+      )}
+    </span>
+  );
+}
+
 export function PeopleCell({
   value,
   members = [],
@@ -93,8 +133,26 @@ export function PeopleCell({
     );
   }
   const byId = new Map(members.map((m) => [m.userId, m]));
-  const names = userIds.map((id) => memberLabel(byId.get(id)));
-  return <span className="truncate text-sm">{names.join(", ")}</span>;
+  // Avatar (image or initials) + name per assignee, in a single truncating row
+  // so the cell never grows the row height. Reads from the cached board payload
+  // (members) — first paint, no fetch, no presence dependency.
+  return (
+    <span className="flex items-center gap-2 truncate text-sm">
+      {userIds.map((id) => {
+        const member = byId.get(id);
+        const label = memberLabel(member);
+        return (
+          <span
+            key={id}
+            className="flex min-w-0 shrink-0 items-center gap-1.5 last:min-w-0 last:shrink"
+          >
+            <MemberAvatar name={label} avatarUrl={member?.avatarUrl ?? null} />
+            <span className="truncate">{label}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 export function DateCell({
