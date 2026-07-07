@@ -1,46 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Captures what the query builder received, so we can assert the bound + the
-// escaped ilike pattern + ordering without a live database.
+// Captures the rpc call so we can assert the fn name + args without a live DB.
 const captured: {
-  select?: string;
-  limit?: number;
-  order?: [string, { ascending: boolean }];
-  ilikePattern?: string;
-  fromCalls: number;
-} = { fromCalls: 0 };
+  rpcName?: string;
+  rpcArgs?: Record<string, unknown>;
+  rpcCalls: number;
+} = { rpcCalls: 0 };
 let rows: unknown[] = [];
-let queryError: { message: string } | null = null;
-
-function makeQuery() {
-  const q: Record<string, unknown> = {
-    select: vi.fn((cols: string) => {
-      captured.select = cols;
-      return q;
-    }),
-    order: vi.fn((col: string, opts: { ascending: boolean }) => {
-      captured.order = [col, opts];
-      return q;
-    }),
-    limit: vi.fn((n: number) => {
-      captured.limit = n;
-      return q;
-    }),
-    ilike: vi.fn((_col: string, pattern: string) => {
-      captured.ilikePattern = pattern;
-      return q;
-    }),
-    then: (resolve: (v: { data: unknown; error: unknown }) => void) =>
-      resolve({ data: rows, error: queryError }),
-  };
-  return q;
-}
+let rpcError: { message: string } | null = null;
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    from: () => {
-      captured.fromCalls += 1;
-      return makeQuery();
+    rpc: (name: string, args: Record<string, unknown>) => {
+      captured.rpcCalls += 1;
+      captured.rpcName = name;
+      captured.rpcArgs = args;
+      return Promise.resolve({ data: rows, error: rpcError });
     },
   }),
 }));
@@ -48,72 +23,51 @@ vi.mock("@/lib/supabase/server", () => ({
 import { searchItems } from "./item-search";
 
 beforeEach(() => {
-  captured.select = undefined;
-  captured.limit = undefined;
-  captured.order = undefined;
-  captured.ilikePattern = undefined;
-  captured.fromCalls = 0;
-  queryError = null;
+  captured.rpcName = undefined;
+  captured.rpcArgs = undefined;
+  captured.rpcCalls = 0;
+  rpcError = null;
   rows = [
     {
       id: "i1",
       name: "Design spec",
       board_id: "b1",
-      boards: { name: "Roadmap" },
+      board_name: "Roadmap",
+      rank: 0.8,
     },
   ];
 });
 
 describe("searchItems", () => {
-  it("returns [] and never queries for a query shorter than 2 chars", async () => {
-    const res = await searchItems("a");
-    expect(res).toEqual([]);
-    expect(captured.fromCalls).toBe(0);
+  it("returns [] and never calls rpc for a query shorter than 2 chars", async () => {
+    expect(await searchItems("a")).toEqual([]);
+    expect(captured.rpcCalls).toBe(0);
   });
 
-  it("returns [] and never queries for a whitespace-only query", async () => {
-    const res = await searchItems("   ");
-    expect(res).toEqual([]);
-    expect(captured.fromCalls).toBe(0);
+  it("returns [] and never calls rpc for a whitespace-only query", async () => {
+    expect(await searchItems("   ")).toEqual([]);
+    expect(captured.rpcCalls).toBe(0);
   });
 
-  it("returns [] and never queries for an over-long query", async () => {
-    const res = await searchItems("x".repeat(101));
-    expect(res).toEqual([]);
-    expect(captured.fromCalls).toBe(0);
+  it("returns [] and never calls rpc for an over-long query", async () => {
+    expect(await searchItems("x".repeat(101))).toEqual([]);
+    expect(captured.rpcCalls).toBe(0);
   });
 
-  it("trims the query before matching", async () => {
+  it("calls search_items with the trimmed query and a 25 cap", async () => {
     await searchItems("  design  ");
-    expect(captured.ilikePattern).toBe("%design%");
+    expect(captured.rpcName).toBe("search_items");
+    expect(captured.rpcArgs).toEqual({ p_query: "design", p_limit: 25 });
   });
 
-  it("escapes LIKE wildcards (% and _) in the query", async () => {
-    await searchItems("50%_x");
-    expect(captured.ilikePattern).toBe("%50\\%\\_x%");
-  });
-
-  it("bounds the read to 25 rows ordered by updated_at desc", async () => {
-    await searchItems("design");
-    expect(captured.limit).toBe(25);
-    expect(captured.order).toEqual(["updated_at", { ascending: false }]);
-  });
-
-  it("embeds the board name via an inner join (no N+1)", async () => {
-    await searchItems("design");
-    expect(captured.select).toContain("boards!inner(name)");
-  });
-
-  it("flattens the embedded board name into the result shape", async () => {
-    const res = await searchItems("design");
-    expect(res).toEqual([
+  it("maps rows to ItemSearchResult and drops rank", async () => {
+    expect(await searchItems("design")).toEqual([
       { id: "i1", name: "Design spec", boardId: "b1", boardName: "Roadmap" },
     ]);
   });
 
-  it("returns [] on a query error rather than throwing", async () => {
-    queryError = { message: "boom" };
-    const res = await searchItems("design");
-    expect(res).toEqual([]);
+  it("returns [] on an rpc error rather than throwing", async () => {
+    rpcError = { message: "boom" };
+    expect(await searchItems("design")).toEqual([]);
   });
 });

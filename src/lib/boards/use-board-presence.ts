@@ -105,7 +105,19 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
     [trackFocus],
   );
 
-  const roster = useMemo(() => toRoster(raw, self.userId), [raw, self.userId]);
+  // Seed self (from the cached payload) so the current user's presence face
+  // renders at first paint, without waiting for the SUBSCRIBED → track → sync
+  // round-trip. `toRoster` dedupes self once the real sync arrives.
+  const roster = useMemo(
+    () =>
+      toRoster(raw, {
+        userId: self.userId,
+        name: self.name,
+        avatarUrl: self.avatarUrl,
+        color,
+      }),
+    [raw, self.userId, self.name, self.avatarUrl, color],
+  );
   const focusMap = useMemo(() => toFocusMap(raw), [raw]);
 
   return {

@@ -51,6 +51,7 @@ export async function listRelationCandidates(
     .from("items")
     .select("id, name")
     .eq("board_id", parsed.data.targetBoardId)
+    .is("archived_at", null)
     .order("position", { ascending: true })
     .limit(boundedLimit);
   const term = parsed.data.search.trim();
@@ -68,6 +69,7 @@ export async function listRelationTargetBoards(): Promise<
   const { data } = await supabase
     .from("boards")
     .select("id, name")
+    .is("archived_at", null)
     .order("name", { ascending: true });
   return data ?? [];
 }

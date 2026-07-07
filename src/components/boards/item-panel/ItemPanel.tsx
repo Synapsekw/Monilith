@@ -45,7 +45,9 @@ export function ItemPanel({
   boardId: string;
   currentUserId: string;
   columns: readonly Column[];
-  members: readonly Member[];
+  // Superset of activity's Member: the created-by row also renders the avatar
+  // (optional so activity consumers passing bare {userId, fullName} still fit).
+  members: readonly (Member & { avatarUrl?: string | null })[];
   createdBy: string | null;
   createdAt: string | null;
   onClose: () => void;
@@ -135,12 +137,17 @@ export function ItemPanel({
                       Created by
                     </dt>
                     <dd>
-                      <CreatedByCell
-                        name={
-                          members.find((m) => m.userId === createdBy)
-                            ?.fullName ?? null
-                        }
-                      />
+                      {(() => {
+                        const creator = members.find(
+                          (m) => m.userId === createdBy,
+                        );
+                        return (
+                          <CreatedByCell
+                            name={creator?.fullName ?? null}
+                            avatarUrl={creator?.avatarUrl ?? null}
+                          />
+                        );
+                      })()}
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">

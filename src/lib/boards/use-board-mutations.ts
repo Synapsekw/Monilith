@@ -3,14 +3,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   addSubitem,
+  archiveGroup,
+  archiveItem,
   clearCell,
   createColumn,
   createGroup,
   createItem,
   deleteColumn,
-  deleteGroup,
-  deleteItem,
   moveItem,
+  restoreGroup,
+  restoreItem,
   renameBoard,
   removeColumnOption,
   renameColumn,
@@ -78,7 +80,7 @@ import {
   type CacheTimeEntry,
 } from "@/lib/boards/cache";
 import { boardKey, patchBoardCache } from "@/lib/boards/use-board-cache";
-import { showMutationError } from "@/lib/ui/mutation-toast";
+import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
 import type { ColumnKind } from "@/lib/validations/boards";
 
 type SetCellVars = { itemId: string; columnId: string; value: unknown };
@@ -625,20 +627,41 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
-  /** Delete an item/subitem. Optimistic remove (cascades subitems in cache); rollback on error. */
-  const deleteItemMutation = useMutation<
+  /**
+   * Restore an archived item (+ its same-batch subitems). Non-optimistic: the
+   * archived subtree isn't in the cache, so on success we resync the board to
+   * rehydrate it (mirrors the cascade resync path). Undo handler for archiveItem.
+   */
+  const restoreItemMutation = useMutation<unknown, Error, { itemId: string }>({
+    mutationFn: async (vars) => {
+      const res = await restoreItem(vars);
+      if (!res.ok) throw new Error(res.error);
+      return res;
+    },
+    onSuccess: () => resyncOnError(),
+    onError: (err) => {
+      showMutationError("Couldn't restore the item.", err);
+    },
+  });
+
+  /**
+   * Archive an item/subitem (soft-delete → Trash). Optimistic remove (cascades
+   * subitems in cache); resync on failure. On success fire an Undo toast whose
+   * action restores the item via restoreItemMutation.
+   */
+  const archiveItemMutation = useMutation<
     unknown,
     Error,
     { itemId: string },
     Ctx
   >({
     mutationFn: async (vars) => {
-      const res = await deleteItem(vars);
+      const res = await archiveItem(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
     },
-    // Cascade delete (item + subitems + their cells): resync from the server on
-    // failure rather than reconstruct the removed subtree by hand.
+    // Cascade archive (item + subitems): resync from the server on failure
+    // rather than reconstruct the removed subtree by hand.
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<BoardCache>(key);
@@ -650,6 +673,10 @@ export function useBoardMutations(boardId: string) {
       resyncOnError();
       showMutationError("Couldn't delete the item — it was restored.", err);
     },
+    onSuccess: (_d, vars) =>
+      showUndoToast("Item moved to Trash", () =>
+        restoreItemMutation.mutate(vars),
+      ),
   });
 
   /** Reorder an item (subitem within its parent). Optimistic position patch; rollback on error. */
@@ -794,18 +821,41 @@ export function useBoardMutations(boardId: string) {
     },
   });
 
-  const deleteGroupMutation = useMutation<
+  /**
+   * Restore an archived group (+ its same-batch items). Non-optimistic: resync
+   * on success to rehydrate the restored subtree. Undo handler for archiveGroup.
+   */
+  const restoreGroupMutation = useMutation<unknown, Error, { groupId: string }>(
+    {
+      mutationFn: async (vars) => {
+        const res = await restoreGroup(vars);
+        if (!res.ok) throw new Error(res.error);
+        return res;
+      },
+      onSuccess: () => resyncOnError(),
+      onError: (err) => {
+        showMutationError("Couldn't restore the group.", err);
+      },
+    },
+  );
+
+  /**
+   * Archive a group (soft-delete → Trash; cascades to its live items + their
+   * subitems). Optimistic remove; resync on failure. On success fire an Undo
+   * toast whose action restores the group via restoreGroupMutation.
+   */
+  const archiveGroupMutation = useMutation<
     unknown,
     Error,
     { groupId: string },
     Ctx
   >({
     mutationFn: async (vars) => {
-      const res = await deleteGroup(vars);
+      const res = await archiveGroup(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
     },
-    // Cascade delete (group + its items + their cells): resync from the server
+    // Cascade archive (group + its items + their cells): resync from the server
     // on failure rather than reconstruct the removed subtree by hand.
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: key });
@@ -818,6 +868,10 @@ export function useBoardMutations(boardId: string) {
       resyncOnError();
       showMutationError("Couldn't delete the group — it was restored.", err);
     },
+    onSuccess: (_d, vars) =>
+      showUndoToast("Group moved to Trash", () =>
+        restoreGroupMutation.mutate(vars),
+      ),
   });
 
   const renameBoardMutation = useMutation<unknown, Error, RenameBoardVars, Ctx>(
@@ -1266,7 +1320,11 @@ export function useBoardMutations(boardId: string) {
           onError: (err) => callbacks?.onError?.(err),
         },
       ),
-    deleteItem: (itemId: string) => deleteItemMutation.mutate({ itemId }),
+    archiveItem: (itemId: string) => archiveItemMutation.mutate({ itemId }),
+    restoreItem: (itemId: string) => restoreItemMutation.mutate({ itemId }),
+    // `deleteItem` is kept as an alias onto the archive (soft-delete) mutation so
+    // existing callers keep working and gain Undo; a later task renames callers.
+    deleteItem: (itemId: string) => archiveItemMutation.mutate({ itemId }),
     reorderItem: (itemId: string, position: number) =>
       reorderItemMutation.mutate({ itemId, position }),
     moveItemToGroup: (itemId: string, groupId: string, position?: number) =>
@@ -1278,7 +1336,11 @@ export function useBoardMutations(boardId: string) {
       reorderGroupMutation.mutate({ groupId, position }),
     setGroupColor: (groupId: string, color: string) =>
       setGroupColorMutation.mutate({ groupId, color }),
-    deleteGroup: (groupId: string) => deleteGroupMutation.mutate({ groupId }),
+    archiveGroup: (groupId: string) => archiveGroupMutation.mutate({ groupId }),
+    restoreGroup: (groupId: string) => restoreGroupMutation.mutate({ groupId }),
+    // `deleteGroup` is kept as an alias onto the archive (soft-delete) mutation
+    // so existing callers keep working and gain Undo; callers renamed in Task 5.
+    deleteGroup: (groupId: string) => archiveGroupMutation.mutate({ groupId }),
     addGroup: (
       name: string,
       callbacks?: {

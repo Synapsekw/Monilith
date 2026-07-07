@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { generateProposal, buildSystemPrompt } from "@/lib/ai/generate";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
+import type { ProviderAdapter } from "@/lib/ai/providers/types";
 
 const snap: BoardSnapshot = {
   board: { id: "b1", name: "Sprint" },
@@ -10,18 +11,10 @@ const snap: BoardSnapshot = {
   meta: { rowCount: 5, columnCount: 1, estimatedTokens: 50 },
 };
 
-// generate.ts uses client.messages.parse() with output_config.format
-// (jsonSchemaOutputFormat) and reads message.parsed_output. The mock mimics
-// exactly that shape — parsed_output carries the structured proposal.
-function fakeClient(proposalJson: unknown) {
-  return {
-    messages: {
-      parse: vi.fn().mockResolvedValue({
-        content: [{ type: "text", text: JSON.stringify(proposalJson) }],
-        parsed_output: proposalJson,
-      }),
-    },
-  } as never;
+function fakeAdapter(proposalJson: unknown) {
+  const generate = vi.fn().mockResolvedValue(proposalJson);
+  const adapter = { generateProposal: generate } as unknown as ProviderAdapter;
+  return { adapter, generate };
 }
 
 describe("buildSystemPrompt", () => {
@@ -36,23 +29,25 @@ describe("buildSystemPrompt", () => {
 });
 
 describe("generateProposal", () => {
-  it("returns the model's proposal object", async () => {
+  it("returns the adapter's proposal object", async () => {
     const proposal = {
       name: "Sprint overview",
       widgets: [{ kind: "number", title: "Total", config: { agg: "count" } }],
     };
-    const client = fakeClient(proposal);
-    const res = await generateProposal(snap, { client });
+    const { adapter } = fakeAdapter(proposal);
+    const res = await generateProposal(snap, { adapter, apiKey: "k" });
     expect(res.name).toBe("Sprint overview");
     expect(res.widgets).toHaveLength(1);
   });
 
   it("passes feedback into the user message when provided", async () => {
-    const client = fakeClient({ name: "x", widgets: [] });
-    await generateProposal(snap, { client, feedback: "more charts please" });
-    const call = (
-      client as never as { messages: { parse: ReturnType<typeof vi.fn> } }
-    ).messages.parse.mock.calls[0][0];
-    expect(JSON.stringify(call)).toContain("more charts please");
+    const { adapter, generate } = fakeAdapter({ name: "x", widgets: [] });
+    await generateProposal(snap, {
+      adapter,
+      apiKey: "k",
+      feedback: "more charts please",
+    });
+    const call = generate.mock.calls[0][0];
+    expect(call.user).toContain("more charts please");
   });
 });

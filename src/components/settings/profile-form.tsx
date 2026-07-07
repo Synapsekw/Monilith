@@ -3,20 +3,25 @@
 import { useState, useTransition } from "react";
 import { updateProfileFullName } from "@/lib/profile/actions";
 import { MAX_FULL_NAME_LENGTH } from "@/lib/validations/profile";
+import { AvatarUploader } from "@/components/settings/avatar-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 /**
- * Set or clear the signed-in user's display name. Mirrors the inline
+ * Set or clear the signed-in user's display name and avatar. Mirrors the inline
  * message pattern of the timezone forms (the app has no toast primitive yet).
  * Trimming/empty→null normalization matches `updateProfileFullNameSchema`.
  */
 export function ProfileForm({
+  userId,
   currentFullName,
+  currentAvatarUrl,
 }: {
+  userId: string;
   currentFullName: string | null;
+  currentAvatarUrl: string | null;
 }) {
   const [name, setName] = useState(currentFullName ?? "");
   const [saved, setSaved] = useState(currentFullName ?? "");
@@ -46,46 +51,53 @@ export function ProfileForm({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Label htmlFor="display-name">Display name</Label>
-        <Input
-          id="display-name"
-          value={name}
-          maxLength={MAX_FULL_NAME_LENGTH}
-          placeholder="Your name"
-          autoComplete="name"
-          disabled={pending}
-          aria-invalid={tooLong || undefined}
-          onChange={(e) => {
-            setName(e.target.value);
-            setMsg(null);
-          }}
-        />
-        <p className="text-muted-foreground text-xs">
-          Shown across boards, comments, and presence. Leave blank to fall back
-          to your email.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <AvatarUploader
+        userId={userId}
+        name={(currentFullName ?? "").trim() || "?"}
+        currentAvatarUrl={currentAvatarUrl}
+      />
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="display-name">Display name</Label>
+          <Input
+            id="display-name"
+            value={name}
+            maxLength={MAX_FULL_NAME_LENGTH}
+            placeholder="Your name"
+            autoComplete="name"
+            disabled={pending}
+            aria-invalid={tooLong || undefined}
+            onChange={(e) => {
+              setName(e.target.value);
+              setMsg(null);
+            }}
+          />
+          <p className="text-muted-foreground text-xs">
+            Shown across boards, comments, and presence. Leave blank to fall
+            back to your email.
+          </p>
+        </div>
 
-      <div className="flex items-center gap-3">
-        <Button
-          onClick={save}
-          disabled={pending || isUnchanged || tooLong}
-          size="sm"
-        >
-          {pending ? "Saving…" : "Save"}
-        </Button>
-        {msg && (
-          <span
-            className={cn(
-              "text-xs",
-              isError ? "text-destructive" : "text-muted-foreground",
-            )}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={save}
+            disabled={pending || isUnchanged || tooLong}
+            size="sm"
           >
-            {msg}
-          </span>
-        )}
+            {pending ? "Saving…" : "Save"}
+          </Button>
+          {msg && (
+            <span
+              className={cn(
+                "text-xs",
+                isError ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {msg}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

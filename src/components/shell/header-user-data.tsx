@@ -19,6 +19,13 @@ export async function HeaderUserData() {
     typeof user.user_metadata?.full_name === "string"
       ? user.user_metadata.full_name
       : null;
+  // `updateProfileAvatar` mirrors avatar_url into user_metadata, so the header
+  // avatar paints from the session claims with no extra client/DB round-trip
+  // (same path full_name already flows through).
+  const avatarUrl =
+    typeof user.user_metadata?.avatar_url === "string"
+      ? user.user_metadata.avatar_url
+      : null;
 
   return (
     <>
@@ -28,7 +35,9 @@ export async function HeaderUserData() {
       />
       <NotificationsBell userId={user.id} />
       <FeedbackButton />
-      <UserMenu user={{ email: user.email, full_name: fullName }} />
+      <UserMenu
+        user={{ email: user.email, full_name: fullName, avatar_url: avatarUrl }}
+      />
     </>
   );
 }

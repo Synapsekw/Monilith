@@ -32,6 +32,7 @@ export default async function DashboardPage({
       .from("boards")
       .select("id, name")
       .eq("workspace_id", payload.dashboard.workspace_id)
+      .is("archived_at", null)
       .order("position", { ascending: true }),
     supabase
       .from("columns")

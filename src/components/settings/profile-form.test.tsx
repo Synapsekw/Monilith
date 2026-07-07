@@ -18,13 +18,25 @@ beforeEach(() => {
 
 describe("ProfileForm", () => {
   it("shows the current display name and disables save until it changes", () => {
-    render(<ProfileForm currentFullName="Ada Lovelace" />);
+    render(
+      <ProfileForm
+        userId="u1"
+        currentFullName="Ada Lovelace"
+        currentAvatarUrl={null}
+      />,
+    );
     expect(screen.getByLabelText(/display name/i)).toHaveValue("Ada Lovelace");
     expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
   });
 
   it("saves a trimmed name via the action", async () => {
-    render(<ProfileForm currentFullName={null} />);
+    render(
+      <ProfileForm
+        userId="u1"
+        currentFullName={null}
+        currentAvatarUrl={null}
+      />,
+    );
     await userEvent.type(screen.getByLabelText(/display name/i), "  Grace  ");
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(updateProfileFullName).toHaveBeenCalledWith({ fullName: "Grace" });
@@ -32,7 +44,9 @@ describe("ProfileForm", () => {
   });
 
   it("clears the name by submitting an empty value as null", async () => {
-    render(<ProfileForm currentFullName="Ada" />);
+    render(
+      <ProfileForm userId="u1" currentFullName="Ada" currentAvatarUrl={null} />,
+    );
     await userEvent.clear(screen.getByLabelText(/display name/i));
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(updateProfileFullName).toHaveBeenCalledWith({ fullName: null });
@@ -43,7 +57,13 @@ describe("ProfileForm", () => {
       ok: false,
       error: "Could not update your name.",
     });
-    render(<ProfileForm currentFullName={null} />);
+    render(
+      <ProfileForm
+        userId="u1"
+        currentFullName={null}
+        currentAvatarUrl={null}
+      />,
+    );
     await userEvent.type(screen.getByLabelText(/display name/i), "Grace");
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(

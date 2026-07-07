@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Eye, Upload, UserPlus, Zap } from "lucide-react";
+import { Eye, Trash2, Upload, UserPlus, Zap } from "lucide-react";
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
 import { BoardToolbar } from "@/components/boards/BoardToolbar";
 import { BoardPresenceBar } from "@/components/boards/presence/BoardPresenceBar";
 import { AutomationsDialog } from "@/components/boards/automations/AutomationsDialog";
 import { ShareBoardDialog } from "@/components/boards/ShareBoardDialog";
+import { BoardTrashDialog } from "@/components/boards/trash/BoardTrashDialog";
 import { ExportMenu } from "@/components/boards/ExportMenu";
 import { ImportWizard } from "@/components/boards/import/ImportWizard";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ export function BoardHeader({
   const [automationsOpen, setAutomationsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
 
   // The import wizard's existing-board arm matches/targets columns by their
   // real board kind + synthesized options — the same shape the commit
@@ -183,6 +185,19 @@ export function BoardHeader({
           >
             <Zap className="size-3.5" /> Automations
           </Button>
+          {/* Trash restores/purges archived groups + items — board writes, so
+              viewers (read-only) don't get the affordance, matching Import. */}
+          {!isViewer ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Trash"
+              onClick={() => setTrashOpen(true)}
+            >
+              <Trash2 className="size-3.5" /> Trash
+            </Button>
+          ) : null}
           {isOwner ? (
             <Button
               type="button"
@@ -231,6 +246,13 @@ export function BoardHeader({
           grants={grants}
           open={shareOpen}
           onOpenChange={setShareOpen}
+        />
+      ) : null}
+      {!isViewer ? (
+        <BoardTrashDialog
+          boardId={boardId}
+          open={trashOpen}
+          onOpenChange={setTrashOpen}
         />
       ) : null}
     </header>

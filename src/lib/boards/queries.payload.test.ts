@@ -13,7 +13,7 @@ type Result = { data: unknown; error: { message: string } | null };
 /** Chainable, thenable stand-in for a PostgREST builder. */
 function tableMock(result: Result) {
   const chain: Record<string, unknown> = {};
-  for (const m of ["select", "eq", "order", "limit", "not", "in"])
+  for (const m of ["select", "eq", "is", "order", "limit", "not", "in"])
     chain[m] = () => chain;
   chain.maybeSingle = async () => result;
   (chain as { then: unknown }).then = (resolve: (v: Result) => void) =>
@@ -75,7 +75,7 @@ describe("getBoardPayload error contract", () => {
           ? { data: BOARD_ROW, error: null }
           : { data: [], error: null };
       const chain: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "order", "not", "in"])
+      for (const m of ["select", "eq", "is", "order", "not", "in"])
         chain[m] = () => chain;
       chain.limit = (n: number) => {
         (limits[table] ??= []).push(n);

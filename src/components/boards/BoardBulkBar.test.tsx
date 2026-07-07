@@ -5,11 +5,11 @@ import { useBoardSelection } from "@/stores/board-selection";
 import { BoardBulkBar } from "./BoardBulkBar";
 import type { Column } from "@/lib/boards/queries";
 
-const bulkDelete = vi.fn();
+const bulkArchive = vi.fn();
 const bulkMove = vi.fn();
 const bulkSetCell = vi.fn();
 vi.mock("@/lib/boards/use-bulk-mutations", () => ({
-  useBulkMutations: () => ({ bulkDelete, bulkMove, bulkSetCell }),
+  useBulkMutations: () => ({ bulkArchive, bulkMove, bulkSetCell }),
 }));
 
 const groups = [
@@ -111,15 +111,20 @@ describe("BoardBulkBar", () => {
     });
   });
 
-  it("confirms before hard-deleting the selection", async () => {
+  it("confirms before moving the selection to Trash (reversible copy)", async () => {
     const user = userEvent.setup();
     select(["i1", "i2"]);
     renderBar();
     await user.click(screen.getByRole("button", { name: /Delete/ }));
-    // Confirm dialog appears; the destructive action fires the bulk delete.
+    // Confirm dialog appears with reversible Trash copy, not a permanent destroy.
     const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
-    expect(bulkDelete).toHaveBeenCalledWith(["i1", "i2"]);
+    expect(dialog).toHaveTextContent(/move 2 items to trash/i);
+    expect(dialog).not.toHaveTextContent(/permanent/i);
+    expect(dialog).not.toHaveTextContent(/can(no|')t be undone/i);
+    await user.click(
+      within(dialog).getByRole("button", { name: /move to trash/i }),
+    );
+    expect(bulkArchive).toHaveBeenCalledWith(["i1", "i2"]);
     expect(useBoardSelection.getState().selectedIds.size).toBe(0);
   });
 

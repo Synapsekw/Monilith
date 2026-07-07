@@ -14,6 +14,8 @@ import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-fo
 import { ProfileForm } from "@/components/settings/profile-form";
 import { DigestPreferenceForm } from "@/components/settings/DigestPreferenceForm";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
+import { AiProviderForm } from "@/components/settings/AiProviderForm";
+import { getMyAiCredential } from "@/lib/ai/credentials";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
 import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
@@ -22,11 +24,12 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  // Timezone + orgs are independent reads — resolve them in parallel (the
-  // members RPC below is the only read that depends on org.id).
-  const [myTimeZone, orgs] = await Promise.all([
+  // Timezone + orgs + AI credential are independent reads — resolve them in
+  // parallel (the members RPC below is the only read that depends on org.id).
+  const [myTimeZone, orgs, aiCredential] = await Promise.all([
     getUserTimeZoneCached(user.id),
     getUserOrgs(),
+    getMyAiCredential(),
   ]);
   const org = orgs[0];
   if (!org) redirect("/onboarding");
@@ -41,7 +44,7 @@ export default async function SettingsPage() {
     supabase.rpc("get_org_members", { p_org_id: org.id }),
     supabase
       .from("profiles")
-      .select("email_digest_opt_out, full_name")
+      .select("email_digest_opt_out, full_name, avatar_url")
       .eq("id", user.id)
       .maybeSingle(),
   ]);
@@ -66,24 +69,34 @@ export default async function SettingsPage() {
     : [{ data: [] }, { data: [] }];
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="w-full px-6 py-10 lg:px-8">
       <div className="mb-8">
         <h1 className="text-foreground font-heading text-2xl font-semibold tracking-tight">
           Settings
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Manage your organization preferences.
+          Manage your account and organization.
         </p>
       </div>
 
-      <div className="space-y-4">
+      {/* The setting cards flow into a responsive masonry that adds columns as
+          the viewport widens (1 → 2 → 3 → 4), so the page fills the full width
+          beside the app sidebar instead of a narrow centered column. CSS
+          multi-column packs the uneven card heights tightly; each card avoids
+          splitting across a column boundary. The heavier Members/admin console
+          spans full width underneath. */}
+      <div className="gap-6 space-y-6 sm:columns-2 sm:space-y-0 lg:columns-3 2xl:columns-4 [&>*]:break-inside-avoid sm:[&>*]:mb-6">
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>
             <CardDescription>How you appear to your teammates.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm currentFullName={myProfile?.full_name ?? null} />
+            <ProfileForm
+              userId={user.id}
+              currentFullName={myProfile?.full_name ?? null}
+              currentAvatarUrl={myProfile?.avatar_url ?? null}
+            />
           </CardContent>
         </Card>
 
@@ -110,6 +123,20 @@ export default async function SettingsPage() {
             <DigestPreferenceForm
               initialOptOut={myProfile?.email_digest_opt_out ?? false}
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>AI</CardTitle>
+            <CardDescription>
+              {aiCredential
+                ? "Your AI provider key powers dashboard generation."
+                : "Not configured — add a provider key to enable AI features."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AiProviderForm initial={aiCredential} />
           </CardContent>
         </Card>
 
@@ -165,8 +192,10 @@ export default async function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
 
-        {isAdmin && me && (
+      {isAdmin && me && (
+        <div className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Members</CardTitle>
@@ -188,8 +217,8 @@ export default async function SettingsPage() {
               />
             </CardContent>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

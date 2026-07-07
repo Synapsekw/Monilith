@@ -21,41 +21,29 @@ const searchItemsInputSchema = z.object({
 });
 
 /**
- * Escape LIKE/ILIKE wildcards so user search text is matched literally. Postgres
- * treats `%`, `_`, and the escape char `\` specially in LIKE patterns; without
- * this a search of "50%" or "a_b" would match far more than intended. Escape `\`
- * first, then the wildcards. (Same helper posture as relation-candidates.)
- */
-function escapeLikePattern(term: string): string {
-  return term.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
-
-/**
- * Global item search for the command palette. Case-insensitive contains match on
- * `items.name`, backed by the `items_name_trgm_idx` GIN trigram index so the
- * leading-wildcard ILIKE stays indexed. RLS scopes the read to items on boards
- * the caller can read (org-scoped + can_read_board) — no service role. Bounded to
- * {@link LIMIT} rows ordered by recency (`updated_at` desc). The board name comes
- * from a single `boards!inner` embed (RLS-scoped, no N+1). Returns [] for a query
- * that fails validation (too short / too long) so callers never see a throw.
+ * Global item search for the command palette. Delegates ranking to the
+ * `search_items` RPC: a hybrid, index-assisted read (ILIKE-contains OR pg_trgm
+ * word-similarity) ordered exact-contains -> similarity -> recency, backed by
+ * the `items_name_trgm_idx` GIN index. The RPC is SECURITY INVOKER, so RLS
+ * scopes results to items on boards the caller can read (org-scoped, no service
+ * role). Bounded to {@link LIMIT} rows. Returns [] for a query that fails
+ * validation or on any RPC error, so callers never see a throw.
  */
 export async function searchItems(query: string): Promise<ItemSearchResult[]> {
   const parsed = searchItemsInputSchema.safeParse({ query });
   if (!parsed.success) return [];
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("items")
-    .select("id, name, board_id, boards!inner(name)")
-    .ilike("name", `%${escapeLikePattern(parsed.data.query)}%`)
-    .order("updated_at", { ascending: false })
-    .limit(LIMIT);
+  const { data, error } = await supabase.rpc("search_items", {
+    p_query: parsed.data.query,
+    p_limit: LIMIT,
+  });
   if (error) return [];
 
   return (data ?? []).map((row) => ({
     id: row.id,
     name: row.name,
     boardId: row.board_id,
-    boardName: row.boards.name,
+    boardName: row.board_name,
   }));
 }

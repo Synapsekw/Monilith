@@ -273,6 +273,11 @@
   }
   html {
     @apply font-sans;
+    /* Disable the macOS trackpad two-finger swipe → browser back/forward
+       gesture. Pulse is an app-like surface with horizontally scrolling boards;
+       an accidental horizontal overscroll must not navigate away from the
+       current board. Keyboard/back-button history navigation still works. */
+    overscroll-behavior-x: none;
   }
   /* Light-mode scrollbar — neutral thumb on the page canvas. */
   html:not(.dark) * {

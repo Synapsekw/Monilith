@@ -7,6 +7,8 @@ import {
   removeCellValue,
   removeColumn,
   removeDependency,
+  removeGroup,
+  removeItem,
   replaceColumn,
   replaceGroup,
   replaceItem,
@@ -95,6 +97,11 @@ function applyItem(
     return { ...prev, items: prev.items.filter((i) => i.id !== oldRow.id) };
   }
   const row = p.new as CacheItem;
+  // An archive-UPDATE reads as a delete: drop the row (and its cascade) from the
+  // cache so an archived item leaves every open board. An unarchive (archived_at
+  // null) falls through to insert-if-absent / replace-if-present, so a peer's
+  // undo/restore reappears live.
+  if (row.archived_at != null) return removeItem(prev, row.id);
   return prev.items.some((i) => i.id === row.id)
     ? replaceItem(prev, row)
     : insertItem(prev, row);
@@ -134,6 +141,10 @@ function applyGroup(
     return { ...prev, groups: prev.groups.filter((g) => g.id !== oldRow.id) };
   }
   const row = p.new as CacheGroup;
+  // Archive-UPDATE ⇒ remove the group (and its items) from the cache; unarchive
+  // (archived_at null) falls through to insert-if-absent / replace-if-present so a
+  // peer's restore reappears live. Mirrors applyItem.
+  if (row.archived_at != null) return removeGroup(prev, row.id);
   return prev.groups.some((g) => g.id === row.id)
     ? replaceGroup(prev, row)
     : insertGroup(prev, row);

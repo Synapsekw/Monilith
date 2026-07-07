@@ -81,7 +81,8 @@ export async function getTimeCardData(
     const { data: items, error: itemsErr } = await supabase
       .from("items")
       .select("id, name, boards(name)")
-      .in("id", [...itemIds]);
+      .in("id", [...itemIds])
+      .is("archived_at", null);
     if (itemsErr)
       throw new Error(`Failed to load item metadata: ${itemsErr.message}`);
     for (const it of items ?? []) {
@@ -115,6 +116,7 @@ export async function searchAllocatableItems(
     .from("items")
     .select("id, name, board_id, boards(name)")
     .is("parent_id", null)
+    .is("archived_at", null)
     .ilike("name", `%${term}%`)
     .limit(20);
   return (data ?? []).map((it) => ({

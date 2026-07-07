@@ -44,6 +44,37 @@ describe("HeaderUserData", () => {
     expect(screen.getByText("bell:u1")).toBeInTheDocument();
   });
 
+  it("passes the session avatar_url through to the account menu avatar", async () => {
+    const { requireUser } = await import("@/lib/auth/session");
+    vi.mocked(requireUser).mockResolvedValueOnce({
+      id: "u1",
+      email: "info@synapse-solutions.ai",
+      user_metadata: {
+        avatar_url:
+          "https://ref.supabase.co/storage/v1/object/public/avatars/u1/a.webp",
+      },
+      app_metadata: {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- partial session user for the test
+    } as any);
+    class LoadedImage {
+      complete = true;
+      naturalWidth = 1;
+      set src(_v: string) {}
+      addEventListener() {}
+      removeEventListener() {}
+    }
+    vi.stubGlobal("Image", LoadedImage);
+
+    const { HeaderUserData } = await import("./header-user-data");
+    const { container } = render(await HeaderUserData());
+
+    const img = container.querySelector("img");
+    expect(img).toHaveAttribute(
+      "src",
+      "https://ref.supabase.co/storage/v1/object/public/avatars/u1/a.webp",
+    );
+  });
+
   it("shows the platform-admin button in the header for admins", async () => {
     const { HeaderUserData } = await import("./header-user-data");
     render(await HeaderUserData());

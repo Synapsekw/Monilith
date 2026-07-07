@@ -276,8 +276,10 @@ describe("KanbanBoard", () => {
       },
       { userId: "u2", fullName: null, email: "grace@x.com", avatarUrl: null },
     ]);
-    // fullName for u1, email fallback for u2, joined with ", "
-    expect(screen.getByText("Ada Lovelace, grace@x.com")).toBeInTheDocument();
+    // fullName for u1, email fallback for u2 — each rendered as an avatar+name
+    // chip (no longer comma-joined into one text node).
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+    expect(screen.getByText("grace@x.com")).toBeInTheDocument();
   });
 
   it("falls back to a people count on the card when no directory is provided", () => {
