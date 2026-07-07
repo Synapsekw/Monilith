@@ -16,6 +16,7 @@ function makeClient(rows: unknown[] | null, error: unknown = null) {
   };
   qb.select = () => chain("select");
   qb.eq = (col: string, val: unknown) => chain("eq:" + col, val);
+  qb.is = (col: string, val: unknown) => chain("is:" + col, val);
   qb.order = () => Promise.resolve({ data: rows, error });
   return {
     client: { from: () => ({ select: () => qb }) },
