@@ -62,6 +62,23 @@ export const clearCellSchema = z.object({ itemId: uuid, columnId: uuid });
 // multi-select; larger sets are a spreadsheet-import concern, not bulk-edit.
 const bulkItemIds = z.array(uuid).min(1).max(500);
 export const bulkDeleteItemsSchema = z.object({ itemIds: bulkItemIds });
+
+// ── Soft-delete lifecycle schemas (archive / restore / purge) ────────────────
+// Delete becomes a reversible archive; permanent purge is Trash-only. Same id
+// shapes as the delete schemas — the lifecycle differs in behavior, not input.
+export const archiveBoardSchema = z.object({ boardId: uuid });
+export const restoreBoardSchema = z.object({ boardId: uuid });
+export const purgeBoardSchema = z.object({ boardId: uuid });
+export const archiveGroupSchema = z.object({ groupId: uuid });
+export const restoreGroupSchema = z.object({ groupId: uuid });
+export const purgeGroupSchema = z.object({ groupId: uuid });
+export const archiveItemSchema = z.object({ itemId: uuid });
+export const restoreItemSchema = z.object({ itemId: uuid });
+export const purgeItemSchema = z.object({ itemId: uuid });
+export const bulkArchiveItemsSchema = z.object({ itemIds: bulkItemIds });
+export const bulkRestoreItemsSchema = z.object({ itemIds: bulkItemIds });
+export const bulkPurgeItemsSchema = z.object({ itemIds: bulkItemIds });
+
 export const bulkMoveItemsSchema = z.object({
   itemIds: bulkItemIds,
   groupId: uuid,
