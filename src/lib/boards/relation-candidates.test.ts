@@ -11,6 +11,7 @@ function makeQuery() {
   const q: Record<string, unknown> = {
     select: vi.fn(() => q),
     eq: vi.fn(() => q),
+    is: vi.fn(() => q),
     order: vi.fn(() => q),
     limit: vi.fn((n: number) => {
       captured.limit = n;

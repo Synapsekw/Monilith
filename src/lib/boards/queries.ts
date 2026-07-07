@@ -55,6 +55,7 @@ export async function listMyBoards(): Promise<BoardListEntry[]> {
     .from("boards")
     .select("id, name, workspace_id, position, board_members(user_id)")
     .eq("created_by", user.id)
+    .is("archived_at", null)
     .order("position", { ascending: true });
   if (error) return [];
   return (data ?? []).map((b) => ({
@@ -75,6 +76,7 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
     .from("board_members")
     .select("access_level, boards!inner(id, name, position, created_by)")
     .eq("user_id", user.id)
+    .is("boards.archived_at", null)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
   const rows = data.filter((r) => r.boards && r.boards.created_by !== user.id);
@@ -170,6 +172,7 @@ export const getBoardPayload = cache(
         .from("groups")
         .select("*")
         .eq("board_id", boardId)
+        .is("archived_at", null)
         .order("position", { ascending: true }),
       supabase
         .from("columns")
@@ -183,6 +186,7 @@ export const getBoardPayload = cache(
         .from("items")
         .select("*")
         .eq("board_id", boardId)
+        .is("archived_at", null)
         .order("position", { ascending: true })
         .limit(5000),
       // Bounded over the board_id index. A board of 5000 items × several columns
@@ -262,7 +266,8 @@ export const getBoardPayload = cache(
       const { data: linkedItems, error: linkedErr } = await supabase
         .from("items")
         .select("id, name")
-        .in("id", linkedIds);
+        .in("id", linkedIds)
+        .is("archived_at", null);
       if (linkedErr)
         throw new Error(
           `Failed to load board linked items: ${linkedErr.message}`,

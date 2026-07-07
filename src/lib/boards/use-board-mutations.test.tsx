@@ -15,6 +15,10 @@ const reorderColumn = vi.fn();
 const deleteItem = vi.fn();
 const renameItem = vi.fn();
 const moveItem = vi.fn();
+const archiveItem = vi.fn();
+const restoreItem = vi.fn();
+const archiveGroup = vi.fn();
+const restoreGroup = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
@@ -28,12 +32,19 @@ vi.mock("@/lib/boards/actions", () => ({
   deleteItem: (...a: unknown[]) => deleteItem(...a),
   renameItem: (...a: unknown[]) => renameItem(...a),
   moveItem: (...a: unknown[]) => moveItem(...a),
+  archiveItem: (...a: unknown[]) => archiveItem(...a),
+  restoreItem: (...a: unknown[]) => restoreItem(...a),
+  archiveGroup: (...a: unknown[]) => archiveGroup(...a),
+  restoreGroup: (...a: unknown[]) => restoreGroup(...a),
 }));
 
 const toastError = vi.fn();
-vi.mock("sonner", () => ({
-  toast: { error: (...a: unknown[]) => toastError(...a) },
-}));
+const toastBase = vi.fn();
+vi.mock("sonner", () => {
+  const toast = (...a: unknown[]) => toastBase(...a);
+  toast.error = (...a: unknown[]) => toastError(...a);
+  return { toast };
+});
 
 const createDependency = vi.fn();
 const deleteDependency = vi.fn();
@@ -678,13 +689,17 @@ describe("useBoardMutations.setGroupColor", () => {
   });
 });
 
-describe("useBoardMutations.deleteGroup", () => {
-  beforeEach(() => deleteGroup.mockReset());
+describe("useBoardMutations.deleteGroup (archive alias)", () => {
+  beforeEach(() => {
+    archiveGroup.mockReset();
+    restoreGroup.mockReset();
+    toastBase.mockReset();
+  });
 
-  it("optimistically removes the group and its items", async () => {
+  it("optimistically removes the group and its items (via archiveGroup)", async () => {
     const qc = new QueryClient();
     seedGroups(qc);
-    deleteGroup.mockResolvedValue({ ok: true, data: undefined });
+    archiveGroup.mockResolvedValue({ ok: true, data: undefined });
     const { result } = renderHook(() => useBoardMutations("b1"), {
       wrapper: wrapper(qc),
     });
@@ -696,16 +711,17 @@ describe("useBoardMutations.deleteGroup", () => {
     const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
     expect(cache.groups.map((g) => g.id)).toEqual(["g2"]);
     expect(cache.items).toHaveLength(0);
-    expect(deleteGroup).toHaveBeenCalledWith({ groupId: "g1" });
+    expect(archiveGroup).toHaveBeenCalledWith({ groupId: "g1" });
+    expect(deleteGroup).not.toHaveBeenCalled();
   });
 
-  it("resyncs from the server (invalidateQueries) when the cascade delete fails", async () => {
+  it("resyncs from the server (invalidateQueries) when the cascade archive fails", async () => {
     const qc = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
     seedGroups(qc);
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-    deleteGroup.mockResolvedValue({ ok: false, error: "boom" });
+    archiveGroup.mockResolvedValue({ ok: false, error: "boom" });
     const { result } = renderHook(() => useBoardMutations("b1"), {
       wrapper: wrapper(qc),
     });
@@ -718,6 +734,84 @@ describe("useBoardMutations.deleteGroup", () => {
     // stale whole-cache snapshot (which would clobber concurrent peer changes).
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: boardKey("b1") }),
+    );
+  });
+});
+
+describe("useBoardMutations.archiveItem (soft-delete + Undo)", () => {
+  beforeEach(() => {
+    archiveItem.mockReset();
+    restoreItem.mockReset();
+    deleteItem.mockReset();
+    toastBase.mockReset();
+  });
+
+  it("archives an item optimistically, fires an Undo toast, and restores on Undo", async () => {
+    const qc = new QueryClient();
+    seedCache(qc); // items: [i1]
+    archiveItem.mockResolvedValue({ ok: true, data: undefined });
+    restoreItem.mockResolvedValue({ ok: true, data: undefined });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.archiveItem("i1");
+    });
+
+    // Optimistic removal from the cache.
+    const cache = qc.getQueryData<BoardCache>(boardKey("b1"))!;
+    expect(cache.items.find((i) => i.id === "i1")).toBeUndefined();
+
+    // Archives (soft-delete) — never the hard deleteItem action.
+    await waitFor(() =>
+      expect(archiveItem).toHaveBeenCalledWith({ itemId: "i1" }),
+    );
+    expect(deleteItem).not.toHaveBeenCalled();
+
+    // Undo toast fired with an "Undo" action.
+    await waitFor(() => expect(toastBase).toHaveBeenCalledTimes(1));
+    const [message, opts] = toastBase.mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe("Item moved to Trash");
+    expect(opts.action.label).toBe("Undo");
+
+    // Clicking Undo calls the restore server action.
+    await act(async () => {
+      opts.action.onClick();
+    });
+    await waitFor(() =>
+      expect(restoreItem).toHaveBeenCalledWith({ itemId: "i1" }),
+    );
+  });
+
+  it("exposes deleteItem as an alias that archives (soft-delete) + offers Undo", async () => {
+    const qc = new QueryClient();
+    seedCache(qc);
+    archiveItem.mockResolvedValue({ ok: true, data: undefined });
+
+    const { result } = renderHook(() => useBoardMutations("b1"), {
+      wrapper: wrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.deleteItem("i1");
+    });
+
+    await waitFor(() =>
+      expect(archiveItem).toHaveBeenCalledWith({ itemId: "i1" }),
+    );
+    expect(deleteItem).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(toastBase).toHaveBeenCalledWith(
+        "Item moved to Trash",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Undo" }),
+        }),
+      ),
     );
   });
 });
@@ -962,6 +1056,7 @@ describe("useBoardMutations targeted rollback", () => {
     upsertCell.mockReset();
     renameItem.mockReset();
     deleteItem.mockReset();
+    archiveItem.mockReset();
   });
 
   function peerCell(itemId: string, text: string): CacheCellValue {
@@ -1082,13 +1177,13 @@ describe("useBoardMutations targeted rollback", () => {
     });
   });
 
-  it("resyncs from the server (invalidateQueries) when a cascade delete fails", async () => {
+  it("resyncs from the server (invalidateQueries) when a cascade archive fails", async () => {
     const qc = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
     seedCache(qc);
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-    deleteItem.mockResolvedValue({ ok: false, error: "boom" });
+    archiveItem.mockResolvedValue({ ok: false, error: "boom" });
 
     const { result } = renderHook(() => useBoardMutations("b1"), {
       wrapper: wrapper(qc),

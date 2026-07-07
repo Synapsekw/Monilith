@@ -2,7 +2,8 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  bulkDeleteItems,
+  bulkArchiveItems,
+  bulkRestoreItems,
   bulkMoveItems,
   bulkSetCell,
   type BulkOutcome,
@@ -16,7 +17,7 @@ import {
   type CacheCellValue,
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
-import { showMutationError } from "@/lib/ui/mutation-toast";
+import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
 
 /**
  * Bulk (multi-item) board mutations for the Table view's floating action bar.
@@ -51,33 +52,77 @@ export function useBulkMutations(boardId: string) {
     );
   }
 
-  const deleteMutation = useMutation<BulkOutcome, Error, { itemIds: string[] }>(
-    {
-      mutationFn: async ({ itemIds }) => {
-        const res = await bulkDeleteItems({ itemIds });
-        if (!res.ok) throw new Error(res.error);
-        return res.data;
-      },
-      onMutate: async ({ itemIds }) => {
-        await qc.cancelQueries({ queryKey: key });
-        const previous = qc.getQueryData<BoardCache>(key);
-        if (previous) {
-          qc.setQueryData<BoardCache>(
-            key,
-            itemIds.reduce((c, id) => removeItem(c, id), previous),
-          );
-        }
-      },
-      onSuccess: (outcome) => reconcile(outcome, "delete"),
-      onError: (err) => {
-        resync();
-        showMutationError(
-          "Couldn't delete the items — they were restored.",
-          err,
-        );
-      },
+  /**
+   * Restore every archived item in a batch (Undo handler for the bulk archive).
+   * Non-optimistic: the archived rows aren't in the cache, so resync on success
+   * to rehydrate them; reconcile surfaces any per-item failures.
+   */
+  const restoreMutation = useMutation<
+    BulkOutcome,
+    Error,
+    { itemIds: string[] }
+  >({
+    mutationFn: async ({ itemIds }) => {
+      const res = await bulkRestoreItems({ itemIds });
+      if (!res.ok) throw new Error(res.error);
+      return res.data;
     },
-  );
+    onSuccess: (outcome) => {
+      resync();
+      reconcile(outcome, "restore");
+    },
+    onError: (err) => {
+      resync();
+      showMutationError("Couldn't restore the items.", err);
+    },
+  });
+
+  /**
+   * Archive (soft-delete → Trash) every selected item. Optimistic remove; resync
+   * on failure. On a clean success fire ONE Undo toast whose action restores the
+   * whole batch via bulkRestoreItems.
+   */
+  const archiveMutation = useMutation<
+    BulkOutcome,
+    Error,
+    { itemIds: string[] }
+  >({
+    mutationFn: async ({ itemIds }) => {
+      const res = await bulkArchiveItems({ itemIds });
+      if (!res.ok) throw new Error(res.error);
+      return res.data;
+    },
+    onMutate: async ({ itemIds }) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<BoardCache>(key);
+      if (previous) {
+        qc.setQueryData<BoardCache>(
+          key,
+          itemIds.reduce((c, id) => removeItem(c, id), previous),
+        );
+      }
+    },
+    onSuccess: (outcome, { itemIds }) => {
+      reconcile(outcome, "delete");
+      // Only offer Undo for the items that actually archived.
+      const archivedIds =
+        outcome.failed.length === 0
+          ? itemIds
+          : itemIds.filter(
+              (id) => !outcome.failed.some((f) => f.itemId === id),
+            );
+      if (archivedIds.length > 0) {
+        showUndoToast(
+          `${archivedIds.length} ${archivedIds.length === 1 ? "item" : "items"} moved to Trash`,
+          () => restoreMutation.mutate({ itemIds: archivedIds }),
+        );
+      }
+    },
+    onError: (err) => {
+      resync();
+      showMutationError("Couldn't delete the items — they were restored.", err);
+    },
+  });
 
   const moveMutation = useMutation<
     BulkOutcome,
@@ -149,7 +194,11 @@ export function useBulkMutations(boardId: string) {
   });
 
   return {
-    bulkDelete: (itemIds: string[]) => deleteMutation.mutate({ itemIds }),
+    bulkArchive: (itemIds: string[]) => archiveMutation.mutate({ itemIds }),
+    bulkRestore: (itemIds: string[]) => restoreMutation.mutate({ itemIds }),
+    // `bulkDelete` is kept as an alias onto the archive (soft-delete) mutation so
+    // BoardBulkBar keeps working and gains Undo; callers renamed in Task 5.
+    bulkDelete: (itemIds: string[]) => archiveMutation.mutate({ itemIds }),
     bulkMove: (itemIds: string[], groupId: string) =>
       moveMutation.mutate({ itemIds, groupId }),
     bulkSetCell: (

@@ -42,6 +42,10 @@ const updateGroupColor = vi.fn();
 const deleteGroup = vi.fn();
 const addSubitem = vi.fn();
 const deleteItem = vi.fn();
+// Deletes are now soft-deletes: the hook's deleteGroup/deleteItem aliases call
+// the archive server actions, so the row/group menus exercise these.
+const archiveGroup = vi.fn();
+const archiveItem = vi.fn();
 const reorderItem = vi.fn();
 const updateColumnSettings = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
@@ -50,6 +54,8 @@ vi.mock("@/lib/boards/actions", () => ({
   deleteGroup: (...a: unknown[]) => deleteGroup(...a),
   addSubitem: (...a: unknown[]) => addSubitem(...a),
   deleteItem: (...a: unknown[]) => deleteItem(...a),
+  archiveGroup: (...a: unknown[]) => archiveGroup(...a),
+  archiveItem: (...a: unknown[]) => archiveItem(...a),
   reorderItem: (...a: unknown[]) => reorderItem(...a),
   updateColumnSettings: (...a: unknown[]) => updateColumnSettings(...a),
 }));
@@ -139,6 +145,8 @@ beforeEach(() => {
   deleteGroup.mockReset();
   addSubitem.mockReset();
   deleteItem.mockReset();
+  archiveGroup.mockReset();
+  archiveItem.mockReset();
   reorderItem.mockReset();
   updateColumnSettings.mockReset();
   touchSensorsSpy.mockReset();
@@ -190,17 +198,17 @@ describe("BoardTable group menu", () => {
     );
   });
 
-  it("deletes a group after confirmation", async () => {
-    deleteGroup.mockResolvedValue({ ok: true, data: undefined });
+  it("archives a group (moves to Trash) after confirmation", async () => {
+    archiveGroup.mockResolvedValue({ ok: true, data: undefined });
     renderBoard();
 
     fireEvent.click(screen.getByLabelText("Group 1 group menu"));
     fireEvent.click(screen.getByText("Delete"));
-    expect(deleteGroup).not.toHaveBeenCalled(); // dialog open, not confirmed
+    expect(archiveGroup).not.toHaveBeenCalled(); // dialog open, not confirmed
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Move to Trash" }));
     await waitFor(() =>
-      expect(deleteGroup).toHaveBeenCalledWith({ groupId: "g1" }),
+      expect(archiveGroup).toHaveBeenCalledWith({ groupId: "g1" }),
     );
   });
 });
@@ -331,36 +339,36 @@ describe("BoardTable subitems", () => {
   });
 
   it("deletes a subitem from its row menu", async () => {
-    deleteItem.mockResolvedValue({ ok: true, data: undefined });
+    archiveItem.mockResolvedValue({ ok: true, data: undefined });
     renderNested();
     fireEvent.click(screen.getByRole("button", { name: "Expand Epic" }));
     fireEvent.click(screen.getByLabelText("Design menu"));
     fireEvent.click(screen.getByText("Delete")); // subitem: no confirm dialog
     await waitFor(() =>
-      expect(deleteItem).toHaveBeenCalledWith({ itemId: "s1" }),
+      expect(archiveItem).toHaveBeenCalledWith({ itemId: "s1" }),
     );
   });
 
   it("shows an AlertDialog before deleting a parent with children", async () => {
-    deleteItem.mockResolvedValue({ ok: true, data: undefined });
+    archiveItem.mockResolvedValue({ ok: true, data: undefined });
     renderNested();
 
     // Open the "Epic" row menu and click Delete
     fireEvent.click(screen.getByLabelText("Epic menu"));
     fireEvent.click(screen.getByText("Delete"));
 
-    // deleteItem must NOT have been called yet — the dialog is open
-    expect(deleteItem).not.toHaveBeenCalled();
+    // archiveItem must NOT have been called yet — the dialog is open
+    expect(archiveItem).not.toHaveBeenCalled();
 
-    // The confirm dialog should be visible
+    // The confirm dialog should be visible with reversible Trash copy.
     expect(
-      screen.getByText(/permanently deletes the item and all of its subitems/i),
+      screen.getByText(/moves the item and all of its subitems to trash/i),
     ).toBeInTheDocument();
 
-    // Clicking the dialog's Delete button confirms
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    // Clicking the dialog's confirm button archives (moves to Trash)
+    fireEvent.click(screen.getByRole("button", { name: "Move to Trash" }));
     await waitFor(() =>
-      expect(deleteItem).toHaveBeenCalledWith({ itemId: "p1" }),
+      expect(archiveItem).toHaveBeenCalledWith({ itemId: "p1" }),
     );
   });
 

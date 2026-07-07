@@ -6,15 +6,28 @@ const deleteItem = vi.fn();
 const moveItem = vi.fn();
 const upsertCell = vi.fn();
 const clearCell = vi.fn();
+const archiveItem = vi.fn();
+const restoreItem = vi.fn();
+const purgeItem = vi.fn();
 
 vi.mock("@/lib/boards/actions", () => ({
   deleteItem: (...a: unknown[]) => deleteItem(...a),
   moveItem: (...a: unknown[]) => moveItem(...a),
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
+  archiveItem: (...a: unknown[]) => archiveItem(...a),
+  restoreItem: (...a: unknown[]) => restoreItem(...a),
+  purgeItem: (...a: unknown[]) => purgeItem(...a),
 }));
 
-import { bulkDeleteItems, bulkMoveItems, bulkSetCell } from "./bulk-actions";
+import {
+  bulkDeleteItems,
+  bulkMoveItems,
+  bulkSetCell,
+  bulkArchiveItems,
+  bulkRestoreItems,
+  bulkPurgeItems,
+} from "./bulk-actions";
 
 const ok = { ok: true, data: undefined } as const;
 // Valid v4-shaped UUIDs (version nibble 4, variant 8) so zod's `.uuid()` accepts
@@ -67,6 +80,45 @@ describe("bulkDeleteItems", () => {
     const res = await bulkDeleteItems({ itemIds: ids });
     expect(res.ok).toBe(false);
     expect(deleteItem).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulkArchiveItems", () => {
+  it("reuses archiveItem per id and reports all succeeded", async () => {
+    archiveItem.mockResolvedValue(ok);
+    const res = await bulkArchiveItems({ itemIds: [uuid(1), uuid(2)] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.succeeded).toEqual([uuid(1), uuid(2)]);
+    expect(res.data.failed).toEqual([]);
+    expect(archiveItem).toHaveBeenCalledTimes(2);
+    expect(archiveItem).toHaveBeenCalledWith({ itemId: uuid(1) });
+  });
+
+  it("rejects an over-cap batch (bounded fan-out)", async () => {
+    const ids = Array.from({ length: 501 }, (_, i) => uuid(i));
+    const res = await bulkArchiveItems({ itemIds: ids });
+    expect(res.ok).toBe(false);
+    expect(archiveItem).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulkRestoreItems", () => {
+  it("reuses restoreItem per id", async () => {
+    restoreItem.mockResolvedValue(ok);
+    const res = await bulkRestoreItems({ itemIds: [uuid(1), uuid(2)] });
+    expect(res.ok).toBe(true);
+    expect(restoreItem).toHaveBeenCalledWith({ itemId: uuid(1) });
+    expect(restoreItem).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("bulkPurgeItems", () => {
+  it("reuses purgeItem per id", async () => {
+    purgeItem.mockResolvedValue(ok);
+    const res = await bulkPurgeItems({ itemIds: [uuid(1)] });
+    expect(res.ok).toBe(true);
+    expect(purgeItem).toHaveBeenCalledWith({ itemId: uuid(1) });
   });
 });
 

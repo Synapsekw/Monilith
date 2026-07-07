@@ -450,6 +450,8 @@ export type Database = {
       };
       boards: {
         Row: {
+          archived_at: string | null;
+          archived_by: string | null;
           created_at: string;
           created_by: string;
           description: string | null;
@@ -462,6 +464,8 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           created_at?: string;
           created_by: string;
           description?: string | null;
@@ -474,6 +478,8 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           created_at?: string;
           created_by?: string;
           description?: string | null;
@@ -973,6 +979,8 @@ export type Database = {
       };
       groups: {
         Row: {
+          archived_at: string | null;
+          archived_by: string | null;
           board_id: string;
           color: string;
           created_at: string;
@@ -983,6 +991,8 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           board_id: string;
           color?: string;
           created_at?: string;
@@ -993,6 +1003,8 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           board_id?: string;
           color?: string;
           created_at?: string;
@@ -1209,6 +1221,8 @@ export type Database = {
       };
       items: {
         Row: {
+          archived_at: string | null;
+          archived_by: string | null;
           board_id: string;
           created_at: string;
           created_by: string;
@@ -1221,6 +1235,8 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           board_id: string;
           created_at?: string;
           created_by?: string;
@@ -1233,6 +1249,8 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archived_at?: string | null;
+          archived_by?: string | null;
           board_id?: string;
           created_at?: string;
           created_by?: string;
@@ -2116,6 +2134,8 @@ export type Database = {
         };
         Returns: undefined;
       };
+      archive_group: { Args: { p_group_id: string }; Returns: number };
+      archive_item: { Args: { p_item_id: string }; Returns: number };
       auth_user_orgs: { Args: never; Returns: string[] };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
@@ -2139,6 +2159,8 @@ export type Database = {
       create_board: {
         Args: { p_name: string; p_workspace_id: string };
         Returns: {
+          archived_at: string | null;
+          archived_by: string | null;
           created_at: string;
           created_by: string;
           description: string | null;
@@ -2160,6 +2182,8 @@ export type Database = {
       create_board_from_template: {
         Args: { p_name: string; p_template: Json; p_workspace_id: string };
         Returns: {
+          archived_at: string | null;
+          archived_by: string | null;
           created_at: string;
           created_by: string;
           description: string | null;
@@ -2298,6 +2322,8 @@ export type Database = {
       create_item: {
         Args: { p_group_id: string; p_name: string };
         Returns: {
+          archived_at: string | null;
+          archived_by: string | null;
           board_id: string;
           created_at: string;
           created_by: string;
@@ -2440,6 +2466,8 @@ export type Database = {
       duplicate_board_structure: {
         Args: { p_board_id: string };
         Returns: {
+          archived_at: string | null;
+          archived_by: string | null;
           created_at: string;
           created_by: string;
           description: string | null;
@@ -2611,6 +2639,8 @@ export type Database = {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
       };
+      restore_group: { Args: { p_group_id: string }; Returns: number };
+      restore_item: { Args: { p_item_id: string }; Returns: number };
       search_items: {
         Args: { p_limit?: number; p_query: string };
         Returns: {

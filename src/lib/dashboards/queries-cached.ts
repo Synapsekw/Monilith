@@ -143,6 +143,7 @@ export async function getWidgetCompletionCached(input: {
       .from("groups")
       .select("id, name, color")
       .eq("board_id", input.boardId)
+      .is("archived_at", null)
       .order("position", { ascending: true })
       .limit(100), // bounded: groups are user-managed row bands (groups_board_id_idx)
   ]);

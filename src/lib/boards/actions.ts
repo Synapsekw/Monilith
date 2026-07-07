@@ -12,8 +12,18 @@ import {
   createGroupSchema,
   createItemSchema,
   deleteBoardSchema,
+  loadBoardTrashSchema,
   duplicateBoardSchema,
   deleteGroupSchema,
+  archiveBoardSchema,
+  restoreBoardSchema,
+  purgeBoardSchema,
+  archiveGroupSchema,
+  restoreGroupSchema,
+  purgeGroupSchema,
+  archiveItemSchema,
+  restoreItemSchema,
+  purgeItemSchema,
   renameBoardSchema,
   renameGroupSchema,
   reorderBoardSchema,
@@ -36,6 +46,7 @@ import {
 } from "@/lib/validations/board-actions";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 import { getBoardAccess } from "@/lib/boards/queries";
+import { getBoardTrash } from "@/lib/boards/trash-queries";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -497,6 +508,262 @@ export async function deleteItem(input: {
   if (!data) return fail("Item not found.");
 
   await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
+  return { ok: true, data: undefined };
+}
+
+// ── Soft-delete lifecycle: archive / restore / purge ─────────────────────────
+// A delete now ARCHIVES (reversible) instead of destroying. Item/group cascade
+// archive+restore run through SECURITY INVOKER RPCs (one transaction, RLS-scoped,
+// shared timestamp so a batch restores as a unit). Board archive is an O(1) row
+// update (its groups/items stay put — the board is simply hidden). PERMANENT
+// removal (`purge*`) reuses the old hard-delete bodies (+ Storage cleanup) and is
+// guarded so only an already-archived row can be purged (Trash-only). The legacy
+// `deleteBoard`/`deleteGroup`/`deleteItem` above stay in place until callers move.
+
+/** Archive an item (+ its live subitems) via the cascade RPC. Reversible. */
+export async function archiveItem(input: {
+  itemId: string;
+}): Promise<ActionResult> {
+  const parsed = archiveItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("archive_item", {
+    p_item_id: parsed.data.itemId,
+  });
+  if (error) return fail(error.message);
+  return { ok: true, data: undefined };
+}
+
+/** Restore an item archived in the same batch (matching timestamp) via RPC. */
+export async function restoreItem(input: {
+  itemId: string;
+}): Promise<ActionResult> {
+  const parsed = restoreItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("restore_item", {
+    p_item_id: parsed.data.itemId,
+  });
+  if (error) return fail(error.message);
+  return { ok: true, data: undefined };
+}
+
+/** Archive a group (+ its live items and their subitems) via the cascade RPC. */
+export async function archiveGroup(input: {
+  groupId: string;
+}): Promise<ActionResult> {
+  const parsed = archiveGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("archive_group", {
+    p_group_id: parsed.data.groupId,
+  });
+  if (error) return fail(error.message);
+  return { ok: true, data: undefined };
+}
+
+/** Restore a group + the items archived in the same batch via RPC. */
+export async function restoreGroup(input: {
+  groupId: string;
+}): Promise<ActionResult> {
+  const parsed = restoreGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("restore_group", {
+    p_group_id: parsed.data.groupId,
+  });
+  if (error) return fail(error.message);
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Archive a board (O(1) row update). Owner-only, mirroring deleteBoard's
+ * defense-in-depth guard: an RLS-filtered update affecting 0 rows is a lying
+ * success, so check access explicitly. Its groups/items are NOT cascade-archived
+ * — the board is hidden from every list and its page is guarded, so they are
+ * already invisible; restore just clears the flag and everything reappears.
+ */
+export async function archiveBoard(input: {
+  boardId: string;
+}): Promise<ActionResult> {
+  const parsed = archiveBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const access = await getBoardAccess(parsed.data.boardId);
+  if (access !== "owner")
+    return fail("Only the board owner can delete this board.");
+  const supabase = await createClient();
+  const user = await getUser();
+  const { error } = await supabase
+    .from("boards")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: user?.id ?? null,
+    })
+    .eq("id", parsed.data.boardId);
+  if (error) return fail(error.message);
+  await invalidateMyBoards();
+  return { ok: true, data: undefined };
+}
+
+/** Restore an archived board (clears the flag). Owner-only (mirrors archive). */
+export async function restoreBoard(input: {
+  boardId: string;
+}): Promise<ActionResult> {
+  const parsed = restoreBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const access = await getBoardAccess(parsed.data.boardId);
+  if (access !== "owner")
+    return fail("Only the board owner can restore this board.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("boards")
+    .update({ archived_at: null, archived_by: null })
+    .eq("id", parsed.data.boardId);
+  if (error) return fail(error.message);
+  await invalidateMyBoards();
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Client-callable wrapper over the `server-only` `getBoardTrash` read. The
+ * per-board Trash dialog is a client component and cannot import a `server-only`
+ * module directly, so this thin `"use server"` action validates the board id and
+ * delegates. `getBoardTrash` already enforces RLS via the server client, so no
+ * extra authorization is needed here. Throws on an invalid id (the caller shows
+ * an error toast).
+ */
+export async function loadBoardTrash(boardId: string): Promise<{
+  groups: Tables<"groups">[];
+  items: Tables<"items">[];
+}> {
+  const parsed = loadBoardTrashSchema.safeParse({ boardId });
+  if (!parsed.success)
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid board id");
+  return getBoardTrash(parsed.data.boardId);
+}
+
+/**
+ * Permanently delete an archived item (Trash-only). Today's deleteItem body —
+ * gather Storage paths (item + subitems), hard-delete (FK cascade), free the
+ * objects — plus a guard that the row is already archived: the delete is scoped
+ * `archived_at is not null`, and 0 rows removed means "not found or not archived".
+ */
+export async function purgeItem(input: {
+  itemId: string;
+}): Promise<ActionResult> {
+  const parsed = purgeItemSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+
+  const { data: subitems } = await supabase
+    .from("items")
+    .select("id")
+    .eq("parent_id", parsed.data.itemId);
+  const itemIds = [parsed.data.itemId, ...(subitems ?? []).map((s) => s.id)];
+  const { data: attachments } = await supabase
+    .from("attachments")
+    .select("storage_path")
+    .in("item_id", itemIds);
+
+  const { data, error } = await supabase
+    .from("items")
+    .delete()
+    .eq("id", parsed.data.itemId)
+    .not("archived_at", "is", null)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Item not found or not archived.");
+
+  await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Permanently delete an archived group (Trash-only). Items cascade via the
+ * group_id FK, but their Storage objects do not — gather the group's items'
+ * attachment paths first (mirror deleteBoard's query, narrowed to the group's
+ * items), hard-delete the archived group (cascade), then free the objects.
+ */
+export async function purgeGroup(input: {
+  groupId: string;
+}): Promise<ActionResult> {
+  const parsed = purgeGroupSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  const supabase = await createClient();
+
+  // Gather attachment objects for every item in the group (subitems carry the
+  // same denormalized group_id, so this one read covers them too).
+  const { data: items } = await supabase
+    .from("items")
+    .select("id")
+    .eq("group_id", parsed.data.groupId);
+  const itemIds = (items ?? []).map((i) => i.id);
+  const { data: attachments } =
+    itemIds.length > 0
+      ? await supabase
+          .from("attachments")
+          .select("storage_path")
+          .in("item_id", itemIds)
+      : { data: [] as { storage_path: string }[] };
+
+  const { data, error } = await supabase
+    .from("groups")
+    .delete()
+    .eq("id", parsed.data.groupId)
+    .not("archived_at", "is", null)
+    .select("board_id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Group not found or not archived.");
+
+  await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Permanently delete an archived board (Trash-only). Today's deleteBoard body —
+ * owner-only guard, free every attachment object on the board, hard-delete —
+ * plus a guard that the board is already archived (0 rows removed ⇒ not archived).
+ */
+export async function purgeBoard(input: {
+  boardId: string;
+}): Promise<ActionResult> {
+  const parsed = purgeBoardSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
+
+  const access = await getBoardAccess(parsed.data.boardId);
+  if (access !== "owner")
+    return fail("Only the board owner can delete this board.");
+
+  const supabase = await createClient();
+
+  const { data: attachments } = await supabase
+    .from("attachments")
+    .select("storage_path")
+    .eq("board_id", parsed.data.boardId);
+
+  const { data, error } = await supabase
+    .from("boards")
+    .delete()
+    .eq("id", parsed.data.boardId)
+    .not("archived_at", "is", null)
+    .select("id")
+    .maybeSingle();
+  if (error) return fail(error.message);
+  if (!data) return fail("Board not found or not archived.");
+
+  await removeAttachmentObjects((attachments ?? []).map((a) => a.storage_path));
+  await invalidateMyBoards();
   return { ok: true, data: undefined };
 }
 

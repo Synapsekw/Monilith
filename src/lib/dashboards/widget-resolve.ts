@@ -85,6 +85,7 @@ export async function resolveCompletion(
       .from("groups")
       .select("id, name, color")
       .eq("board_id", boardId)
+      .is("archived_at", null)
       .order("position", { ascending: true })
       .limit(100),
   ]);

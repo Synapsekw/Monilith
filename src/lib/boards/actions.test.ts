@@ -647,6 +647,288 @@ describe("moveItem", () => {
 });
 
 import {
+  archiveItem,
+  restoreItem,
+  archiveGroup,
+  restoreGroup,
+  archiveBoard,
+  restoreBoard,
+  purgeBoard,
+  purgeGroup,
+  purgeItem,
+} from "./actions";
+
+const GRP = "66666666-6666-4666-8666-666666666666";
+
+describe("archive / restore (RPC-backed cascade)", () => {
+  it("archiveItem calls archive_item RPC and never touches from()/delete", async () => {
+    rpc.mockResolvedValue({ data: 1, error: null });
+    const res = await archiveItem({ itemId: ITEM });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(rpc).toHaveBeenCalledWith("archive_item", { p_item_id: ITEM });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("archiveItem rejects a non-uuid id before touching Supabase", async () => {
+    const res = await archiveItem({ itemId: "nope" });
+    expect(res.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("archiveItem surfaces an RPC error", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+    const res = await archiveItem({ itemId: ITEM });
+    expect(res).toEqual({ ok: false, error: "boom" });
+  });
+
+  it("restoreItem calls restore_item RPC", async () => {
+    rpc.mockResolvedValue({ data: 1, error: null });
+    const res = await restoreItem({ itemId: ITEM });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(rpc).toHaveBeenCalledWith("restore_item", { p_item_id: ITEM });
+  });
+
+  it("archiveGroup calls archive_group RPC", async () => {
+    rpc.mockResolvedValue({ data: 2, error: null });
+    const res = await archiveGroup({ groupId: GRP });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(rpc).toHaveBeenCalledWith("archive_group", { p_group_id: GRP });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("restoreGroup calls restore_group RPC", async () => {
+    rpc.mockResolvedValue({ data: 2, error: null });
+    const res = await restoreGroup({ groupId: GRP });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(rpc).toHaveBeenCalledWith("restore_group", { p_group_id: GRP });
+  });
+});
+
+describe("archiveBoard / restoreBoard (owner-guarded O(1) row update)", () => {
+  it("archiveBoard blocks a non-owner without touching the db", async () => {
+    getBoardAccess.mockResolvedValue("editor");
+    const res = await archiveBoard({ boardId: BOARD });
+    expect(res.ok).toBe(false);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("archiveBoard (owner) sets archived_at/by + invalidates boards tag", async () => {
+    getBoardAccess.mockResolvedValue("owner");
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    let updatePayload: Record<string, unknown> = {};
+    const update = vi.fn((p: Record<string, unknown>) => {
+      updatePayload = p;
+      return { eq };
+    });
+    from.mockImplementation(
+      (t: string) => (t === "boards" ? { update } : {}) as never,
+    );
+    const res = await archiveBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ archived_by: "owner-1" }),
+    );
+    expect(updatePayload.archived_at).toBeTruthy();
+    expect(eq).toHaveBeenCalledWith("id", BOARD);
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+  });
+
+  it("restoreBoard (owner) clears archived_at/by + invalidates", async () => {
+    getBoardAccess.mockResolvedValue("owner");
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn(() => ({ eq }));
+    from.mockImplementation(
+      (t: string) => (t === "boards" ? { update } : {}) as never,
+    );
+    const res = await restoreBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(update).toHaveBeenCalledWith({
+      archived_at: null,
+      archived_by: null,
+    });
+    expect(updateTag).toHaveBeenCalledWith("boards:user:owner-1");
+  });
+
+  it("restoreBoard blocks a non-owner", async () => {
+    getBoardAccess.mockResolvedValue("viewer");
+    const res = await restoreBoard({ boardId: BOARD });
+    expect(res.ok).toBe(false);
+    expect(from).not.toHaveBeenCalled();
+  });
+});
+
+describe("purge (permanent, archived-only, storage cleanup)", () => {
+  it("purgeBoard blocks a non-owner without touching the db", async () => {
+    getBoardAccess.mockResolvedValue("editor");
+    const res = await purgeBoard({ boardId: BOARD });
+    expect(res.ok).toBe(false);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("purgeBoard hard-deletes an archived board and frees storage", async () => {
+    getBoardAccess.mockResolvedValue("owner");
+    const not = vi.fn(() => ({
+      select: () => ({
+        maybeSingle: async () => ({ data: { id: BOARD }, error: null }),
+      }),
+    }));
+    const del = vi.fn(() => ({ eq: () => ({ not }) }));
+    from.mockImplementation((t: string) => {
+      if (t === "attachments")
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: [{ storage_path: "o/b/i/1.png" }],
+              error: null,
+            }),
+          }),
+        } as never;
+      if (t === "boards") return { delete: del } as never;
+      return {} as never;
+    });
+    const res = await purgeBoard({ boardId: BOARD });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(del).toHaveBeenCalled();
+    expect(not).toHaveBeenCalledWith("archived_at", "is", null);
+    expect(removeAttachmentObjects).toHaveBeenCalledWith(["o/b/i/1.png"]);
+  });
+
+  it("purgeBoard fails when the board is not archived (0 rows)", async () => {
+    getBoardAccess.mockResolvedValue("owner");
+    const not = vi.fn(() => ({
+      select: () => ({
+        maybeSingle: async () => ({ data: null, error: null }),
+      }),
+    }));
+    const del = vi.fn(() => ({ eq: () => ({ not }) }));
+    from.mockImplementation((t: string) => {
+      if (t === "attachments")
+        return {
+          select: () => ({ eq: async () => ({ data: [], error: null }) }),
+        } as never;
+      if (t === "boards") return { delete: del } as never;
+      return {} as never;
+    });
+    const res = await purgeBoard({ boardId: BOARD });
+    expect(res.ok).toBe(false);
+    expect(removeAttachmentObjects).not.toHaveBeenCalled();
+  });
+
+  it("purgeItem hard-deletes an archived item + subitem storage", async () => {
+    const not = vi.fn(() => ({
+      select: () => ({
+        maybeSingle: async () => ({ data: { board_id: BOARD }, error: null }),
+      }),
+    }));
+    from.mockImplementation((t: string) => {
+      if (t === "items")
+        return {
+          select: () => ({
+            eq: async () => ({ data: [{ id: SUB }], error: null }),
+          }),
+          delete: () => ({ eq: () => ({ not }) }),
+        } as never;
+      if (t === "attachments")
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{ storage_path: "o/b/i/1.png" }],
+              error: null,
+            }),
+          }),
+        } as never;
+      return {} as never;
+    });
+    const res = await purgeItem({ itemId: ITEM });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(not).toHaveBeenCalledWith("archived_at", "is", null);
+    expect(removeAttachmentObjects).toHaveBeenCalledWith(["o/b/i/1.png"]);
+  });
+
+  it("purgeItem fails when the item is not archived", async () => {
+    const not = vi.fn(() => ({
+      select: () => ({
+        maybeSingle: async () => ({ data: null, error: null }),
+      }),
+    }));
+    from.mockImplementation((t: string) => {
+      if (t === "items")
+        return {
+          select: () => ({ eq: async () => ({ data: [], error: null }) }),
+          delete: () => ({ eq: () => ({ not }) }),
+        } as never;
+      if (t === "attachments")
+        return {
+          select: () => ({ in: async () => ({ data: [], error: null }) }),
+        } as never;
+      return {} as never;
+    });
+    const res = await purgeItem({ itemId: ITEM });
+    expect(res.ok).toBe(false);
+    expect(removeAttachmentObjects).not.toHaveBeenCalled();
+  });
+
+  it("purgeGroup frees its items' storage then cascade-deletes archived group", async () => {
+    const not = vi.fn(() => ({
+      select: () => ({
+        maybeSingle: async () => ({ data: { board_id: BOARD }, error: null }),
+      }),
+    }));
+    const del = vi.fn(() => ({ eq: () => ({ not }) }));
+    let attachmentIds: string[] = [];
+    from.mockImplementation((t: string) => {
+      if (t === "items")
+        return {
+          select: () => ({
+            eq: async () => ({ data: [{ id: ITEM }], error: null }),
+          }),
+        } as never;
+      if (t === "attachments")
+        return {
+          select: () => ({
+            in: async (_c: string, ids: string[]) => {
+              attachmentIds = ids;
+              return { data: [{ storage_path: "o/b/g/1.png" }], error: null };
+            },
+          }),
+        } as never;
+      if (t === "groups") return { delete: del } as never;
+      return {} as never;
+    });
+    const res = await purgeGroup({ groupId: GRP });
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(attachmentIds).toContain(ITEM);
+    expect(del).toHaveBeenCalled();
+    expect(not).toHaveBeenCalledWith("archived_at", "is", null);
+    expect(removeAttachmentObjects).toHaveBeenCalledWith(["o/b/g/1.png"]);
+  });
+
+  it("purgeGroup fails when the group is not archived", async () => {
+    const not = vi.fn(() => ({
+      select: () => ({
+        maybeSingle: async () => ({ data: null, error: null }),
+      }),
+    }));
+    const del = vi.fn(() => ({ eq: () => ({ not }) }));
+    from.mockImplementation((t: string) => {
+      if (t === "items")
+        return {
+          select: () => ({ eq: async () => ({ data: [], error: null }) }),
+        } as never;
+      if (t === "attachments")
+        return {
+          select: () => ({ in: async () => ({ data: [], error: null }) }),
+        } as never;
+      if (t === "groups") return { delete: del } as never;
+      return {} as never;
+    });
+    const res = await purgeGroup({ groupId: GRP });
+    expect(res.ok).toBe(false);
+    expect(removeAttachmentObjects).not.toHaveBeenCalled();
+  });
+});
+
+import {
   createBoard,
   renameBoard,
   duplicateBoard,

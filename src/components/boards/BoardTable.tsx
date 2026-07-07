@@ -1180,8 +1180,8 @@ function GroupMenu({
               Delete &ldquo;{group.name}&rdquo;?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the group and all of its items on this
-              board. This can&apos;t be undone.
+              This moves the group and all of its items to Trash. You can
+              restore them from Trash.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1190,7 +1190,7 @@ function GroupMenu({
               className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={onDelete}
             >
-              Delete
+              Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1237,8 +1237,8 @@ function RowMenu({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete &ldquo;{label}&rdquo;?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the item and all of its subitems. This
-              can&apos;t be undone.
+              This moves the item and all of its subitems to Trash. You can
+              restore them from Trash.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1247,7 +1247,7 @@ function RowMenu({
               className="bg-destructive hover:bg-destructive/90 text-white"
               onClick={onDelete}
             >
-              Delete
+              Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -209,21 +209,21 @@ export function BoardBulkBar({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete {count} {count === 1 ? "item" : "items"}?
+              Move {count} {count === 1 ? "item" : "items"} to Trash?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the selected{" "}
-              {count === 1 ? "item" : "items"} and all of their subitems. This
-              can&apos;t be undone.
+              The selected {count === 1 ? "item" : "items"} and all of their
+              subitems move to Trash. You can restore{" "}
+              {count === 1 ? "it" : "them"} from Trash.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90 text-white"
-              onClick={() => runAndClear(() => bulk.bulkDelete(ids))}
+              onClick={() => runAndClear(() => bulk.bulkArchive(ids))}
             >
-              Delete
+              Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

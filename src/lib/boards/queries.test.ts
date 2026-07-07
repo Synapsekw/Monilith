@@ -18,6 +18,7 @@ function makeChain() {
   const thenable: Record<string, unknown> = {
     select: () => thenable,
     eq: () => thenable,
+    is: () => thenable,
     in: () => thenable,
     not: () => thenable,
     limit: () => thenable,

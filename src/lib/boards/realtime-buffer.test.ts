@@ -156,6 +156,74 @@ describe("foldBoardEvents", () => {
     expect((cell?.value as { text: string }).text).toBe("new");
   });
 
+  it("folds an item UPDATE with archived_at set as a removal (archive reads as delete)", () => {
+    const prev = emptyCache({
+      items: [{ id: "i1", group_id: "g1", archived_at: null }] as never,
+      cellValues: [
+        { item_id: "i1", column_id: "c1", value: { text: "x" } },
+      ] as never,
+    });
+    const ev: BoardRealtimeEvent = {
+      table: "items",
+      payload: {
+        eventType: "UPDATE",
+        new: { id: "i1", group_id: "g1", archived_at: "2026-07-06T00:00:00Z" },
+        old: { id: "i1" },
+      } as never,
+    };
+    const { next } = foldBoardEvents(prev, [ev]);
+    expect(next.items.find((i) => i.id === "i1")).toBeUndefined();
+    // cascade: the archived item's cell values are dropped too
+    expect(next.cellValues.find((c) => c.item_id === "i1")).toBeUndefined();
+  });
+
+  it("folds an unarchive item UPDATE (archived_at null) for an absent item as an insert (peer restore)", () => {
+    const prev = emptyCache({ items: [] as never });
+    const ev: BoardRealtimeEvent = {
+      table: "items",
+      payload: {
+        eventType: "UPDATE",
+        new: { id: "i1", group_id: "g1", archived_at: null },
+        old: { id: "i1" },
+      } as never,
+    };
+    const { next } = foldBoardEvents(prev, [ev]);
+    expect(next.items.find((i) => i.id === "i1")).toBeDefined();
+  });
+
+  it("folds a group UPDATE with archived_at set as a removal (cascades to its items)", () => {
+    const prev = emptyCache({
+      groups: [{ id: "g1", position: 0, archived_at: null }] as never,
+      items: [{ id: "i1", group_id: "g1", archived_at: null }] as never,
+    });
+    const ev: BoardRealtimeEvent = {
+      table: "groups",
+      payload: {
+        eventType: "UPDATE",
+        new: { id: "g1", position: 0, archived_at: "2026-07-06T00:00:00Z" },
+        old: { id: "g1" },
+      } as never,
+    };
+    const { next } = foldBoardEvents(prev, [ev]);
+    expect(next.groups.find((g) => g.id === "g1")).toBeUndefined();
+    // removeGroup cascades: the group's items leave too
+    expect(next.items.find((i) => i.id === "i1")).toBeUndefined();
+  });
+
+  it("folds an unarchive group UPDATE (archived_at null) for an absent group as an insert (peer restore)", () => {
+    const prev = emptyCache({ groups: [] as never });
+    const ev: BoardRealtimeEvent = {
+      table: "groups",
+      payload: {
+        eventType: "UPDATE",
+        new: { id: "g1", position: 0, archived_at: null },
+        old: { id: "g1" },
+      } as never,
+    };
+    const { next } = foldBoardEvents(prev, [ev]);
+    expect(next.groups.find((g) => g.id === "g1")).toBeDefined();
+  });
+
   it("mixed echo + real-change batch: one flash for the changed cell only", () => {
     const prev = emptyCache({
       cellValues: [
