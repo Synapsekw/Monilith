@@ -36,3 +36,24 @@ export const updateProfileFullNameSchema = z.object({
 export type UpdateProfileFullNameInput = z.infer<
   typeof updateProfileFullNameSchema
 >;
+
+/** Avatar upload bounds. Client guards on these before normalizing; the bucket
+ *  enforces the same size + mime set as defense-in-depth (see the avatars
+ *  migration). Normalization re-encodes to webp/jpeg, so accepted *input* types
+ *  are broad but bounded to the three the bucket allows. */
+export const AVATAR_MAX_BYTES = 5_242_880; // 5 MB
+export const AVATAR_ACCEPTED_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+] as const;
+
+/** The Server Action receives only the uploaded object key. The action ALSO
+ *  enforces `storagePath.startsWith(`${user.id}/`)` (path-spoof guard) — the
+ *  schema just bounds the shape. */
+export const updateProfileAvatarSchema = z.object({
+  storagePath: z.string().min(1).max(200),
+});
+export type UpdateProfileAvatarInput = z.infer<
+  typeof updateProfileAvatarSchema
+>;
