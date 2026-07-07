@@ -701,3 +701,45 @@ begin
 end;
 $$;
 grant execute on function public.create_item(uuid, text) to authenticated;
+
+-- search_items — from 20260707120000_search_items_ranked_rpc.sql. SECURITY
+-- INVOKER, so RLS scopes the read — but RLS does NOT filter archived rows (by
+-- design), so the ⌘K global search must exclude them explicitly. Body copied
+-- verbatim, gaining `i.archived_at is null` on the items scan.
+create or replace function public.search_items(
+  p_query text,
+  p_limit int default 25
+)
+returns table (id uuid, name text, board_id uuid, board_name text, rank real)
+language plpgsql
+security invoker
+stable
+set search_path = ''
+as $$
+begin
+  perform set_config('pg_trgm.word_similarity_threshold', '0.3', true);
+
+  return query
+    select
+      i.id,
+      i.name,
+      i.board_id,
+      b.name as board_name,
+      extensions.word_similarity(p_query, i.name) as rank
+    from public.items i
+    join public.boards b on b.id = i.board_id
+    where i.archived_at is null
+      and (
+        i.name operator(extensions.%>) p_query
+        or i.name ilike '%' || public.escape_like(p_query) || '%'
+      )
+    order by
+      (i.name ilike '%' || public.escape_like(p_query) || '%') desc,
+      extensions.word_similarity(p_query, i.name) desc,
+      i.updated_at desc,
+      i.id
+    limit least(greatest(coalesce(p_limit, 25), 1), 50);
+end;
+$$;
+revoke execute on function public.search_items(text, int) from public;
+grant execute on function public.search_items(text, int) to authenticated, service_role;
