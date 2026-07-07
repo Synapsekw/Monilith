@@ -12,3 +12,15 @@ import { toast } from "sonner";
 export function showMutationError(action: string, err: Error): void {
   toast.error(action, { description: err.message });
 }
+
+/**
+ * Success toast with an Undo action for a reversible destructive op (archive /
+ * "move to Trash"). The 8s window is the approved undo grace period; clicking
+ * Undo fires `onUndo` (the paired restore mutation).
+ */
+export function showUndoToast(message: string, onUndo: () => void): void {
+  toast(message, {
+    action: { label: "Undo", onClick: onUndo },
+    duration: 8000,
+  });
+}
