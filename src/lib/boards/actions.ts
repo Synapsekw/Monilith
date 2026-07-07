@@ -12,6 +12,7 @@ import {
   createGroupSchema,
   createItemSchema,
   deleteBoardSchema,
+  loadBoardTrashSchema,
   duplicateBoardSchema,
   deleteGroupSchema,
   archiveBoardSchema,
@@ -45,6 +46,7 @@ import {
 } from "@/lib/validations/board-actions";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 import { getBoardAccess } from "@/lib/boards/queries";
+import { getBoardTrash } from "@/lib/boards/trash-queries";
 import { getTemplate } from "@/lib/boards/templates";
 import { buildTemplatePayload } from "@/lib/boards/template-payload";
 import type { ColumnKind } from "@/lib/validations/boards";
@@ -626,6 +628,24 @@ export async function restoreBoard(input: {
   if (error) return fail(error.message);
   await invalidateMyBoards();
   return { ok: true, data: undefined };
+}
+
+/**
+ * Client-callable wrapper over the `server-only` `getBoardTrash` read. The
+ * per-board Trash dialog is a client component and cannot import a `server-only`
+ * module directly, so this thin `"use server"` action validates the board id and
+ * delegates. `getBoardTrash` already enforces RLS via the server client, so no
+ * extra authorization is needed here. Throws on an invalid id (the caller shows
+ * an error toast).
+ */
+export async function loadBoardTrash(boardId: string): Promise<{
+  groups: Tables<"groups">[];
+  items: Tables<"items">[];
+}> {
+  const parsed = loadBoardTrashSchema.safeParse({ boardId });
+  if (!parsed.success)
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid board id");
+  return getBoardTrash(parsed.data.boardId);
 }
 
 /**

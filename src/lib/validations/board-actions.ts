@@ -18,6 +18,7 @@ export const reorderBoardSchema = z.object({
   position: z.number().finite(),
 });
 export const deleteBoardSchema = z.object({ boardId: uuid });
+export const loadBoardTrashSchema = z.object({ boardId: uuid });
 export const duplicateBoardSchema = z.object({ boardId: uuid });
 export const createGroupSchema = z.object({ boardId: uuid, name });
 export const renameGroupSchema = z.object({ groupId: uuid, name });
