@@ -4,8 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 
-import { deleteBoard, duplicateBoard, renameBoard } from "@/lib/boards/actions";
-import { showMutationError } from "@/lib/ui/mutation-toast";
+import {
+  archiveBoard,
+  duplicateBoard,
+  renameBoard,
+  restoreBoard,
+} from "@/lib/boards/actions";
+import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,12 +92,27 @@ export function BoardItemMenu({
   function doDelete() {
     setError(null);
     startTransition(async () => {
-      const res = await deleteBoard({ boardId: board.id });
+      const res = await archiveBoard({ boardId: board.id });
       if (!res.ok) {
         setError(res.error);
         return;
       }
       setDeleteOpen(false);
+      // Reversible: offer an immediate Undo that restores the board, then bring
+      // it back into view. Trash is the durable recovery path once this expires.
+      showUndoToast("Board moved to Trash", () => {
+        startTransition(async () => {
+          const undo = await restoreBoard({ boardId: board.id });
+          if (!undo.ok) {
+            showMutationError(
+              "Couldn't restore the board.",
+              new Error(undo.error),
+            );
+            return;
+          }
+          router.refresh();
+        });
+      });
       if (isActive) router.push("/boards");
       else router.refresh();
     });
@@ -178,11 +198,11 @@ export function BoardItemMenu({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Delete &ldquo;{board.name}&rdquo;?
+              Move &ldquo;{board.name}&rdquo; to Trash?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the board and all its items. This cannot
-              be undone.
+              The board and all its items move to Trash. You can restore it from
+              Trash.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error ? (
@@ -200,7 +220,7 @@ export function BoardItemMenu({
               }}
               disabled={isPending}
             >
-              Delete board
+              Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
