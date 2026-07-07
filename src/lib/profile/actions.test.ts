@@ -8,7 +8,9 @@ vi.mock("next/cache", () => ({
 const getUser = vi.fn();
 const updateUser = vi.fn(async () => ({ data: {}, error: null }));
 const update = vi.fn();
-const maybeSingle = vi.fn(async () => ({ data: { avatar_url: null } }));
+const maybeSingle = vi.fn(async () => ({
+  data: { avatar_url: null as string | null },
+}));
 const select = vi.fn(() => ({ eq: () => ({ maybeSingle }) }));
 const from = vi.fn(() => ({ update, select }));
 const getPublicUrl = vi.fn();
