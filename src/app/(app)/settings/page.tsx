@@ -44,7 +44,7 @@ export default async function SettingsPage() {
     supabase.rpc("get_org_members", { p_org_id: org.id }),
     supabase
       .from("profiles")
-      .select("email_digest_opt_out, full_name")
+      .select("email_digest_opt_out, full_name, avatar_url")
       .eq("id", user.id)
       .maybeSingle(),
   ]);
@@ -92,7 +92,11 @@ export default async function SettingsPage() {
             <CardDescription>How you appear to your teammates.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ProfileForm currentFullName={myProfile?.full_name ?? null} />
+            <ProfileForm
+              userId={user.id}
+              currentFullName={myProfile?.full_name ?? null}
+              currentAvatarUrl={myProfile?.avatar_url ?? null}
+            />
           </CardContent>
         </Card>
 
