@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-07-1022
+last-updated: 2026-07-07-1117
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -50,9 +50,9 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Batch A migration-gated deferrals shipped to `develop` (dev-only, not yet promoted).** `/whats-next` on a clean tree → scoped 3 deferrals in parallel worktrees, built + merged sequentially: **⌘K similarity search** (`1eeff8c`, migration `20260707120000`), **avatar upload** (`28ccfe0`, `20260707130000`), **soft-delete/undo** (`ad137da`, `20260707140000`). All four gates green per slice; three migrations applied to **DEV** only. ([[2026-07-07-1022-batch-a-soft-delete-avatar-kbar-search]]) Prior: promoted PR#52 to prod + `/sync-prod` (schema parity, storage 9/9). ([[2026-07-06-1500-promote-pr52-prod-sync]])
-- **Branch:** `develop == origin/develop` at `ad137da`. **`origin/main` behind by all of Batch A + the 07-06 UI fixes — a `develop → main` promote is due.** PROD ledger at `20260705120000`; DEV now has `20260707120000/130000/140000` applied. **No live worktrees / `task/*` branches.**
-- **In flight:** nothing building — all Batch A worktrees closed.
+- **Phase:** **Batch A + avatar-surfaces fix on `develop` (dev-only, not yet promoted).** `/whats-next` → 3 deferrals scoped in parallel, built + merged: **⌘K similarity search** (`1eeff8c`, migration `20260707120000`), **avatar upload** (`28ccfe0`, `20260707130000`), **soft-delete/undo** (`ad137da`, `20260707140000`). Then a debugging follow-up on avatar rendering: header avatar + first-paint presence face + board-column avatars + a stale-roster invalidation fix (`f9359cb`, no migration). ([[2026-07-07-1022-batch-a-soft-delete-avatar-kbar-search]], [[2026-07-07-1117-avatar-surfaces-header-presence-columns]]) Prior: promoted PR#52 to prod + `/sync-prod`. ([[2026-07-06-1500-promote-pr52-prod-sync]])
+- **Branch:** `develop == origin/develop` at `f9359cb`. **`origin/main` behind by all of Batch A + avatar-surfaces + the 07-06 UI fixes — a `develop → main` promote is due.** PROD ledger at `20260705120000`; DEV now has `20260707120000/130000/140000` applied. **No live worktrees / `task/*` branches.**
+- **In flight:** nothing building — all worktrees closed.
 - **Next:** the roadmap thrust is **Phase 10 — AI & Agents, Epic 1** (foundation + Ask Pulse) — scoped, specced, **and planned** ([[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]); build via `/develop` in a `task/ai-foundation-ask-pulse` worktree (Task 0 migration user-applied). Repair the **dev migration-ledger drift** (`20260705120000` applied to DEV's schema + recorded on PROD, missing from DEV's ledger) first. A **promote** of Batch A to prod is due when smoke-tested. **Landing redesign** ready once a `brand-lab` variation is picked.
 - **Owed:** dev ledger repair (`20260705120000`). Promote Batch A `develop → main`. Two Batch-A follow-ups: a top-level nav link to the `/boards` archived-boards Trash; surface `archived_by` in Trash UI (stored, deferred). Unsuffixed `buildImportPayload` (0 prod call sites — retire or confirm keep). Perf tier-3 **Task A** (`unstable_instant`) — needs its own architecture spec, not a config task ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). Import follow-up (non-blocking): export→import `↳`-marker round-trip asymmetry (intended). **Landing redesign: pick one of four `brand-lab` variations (Statement/Product/Editorial/Kinetic or hybrid) then apply to `/landing`** — remove `brand-lab` once it lands. Two stale `_draft-*.md` (07-05 1038, 1606) left for their own blocks' wrapups.
 
