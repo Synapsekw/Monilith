@@ -2095,12 +2095,13 @@ function ItemRow({
         );
         return (
           <>
-            {/* Read-only system columns — text only, dimmed (via the cell
-                renderers) to signal they can't be edited. */}
+            {/* Read-only system columns — dimmed (via the cell renderers) to
+                signal they can't be edited. Created-by shows the member avatar
+                (from the cached board payload — first paint, no fetch). */}
             <div className="flex h-full items-center border-l px-3">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
-                showAvatar={false}
+                avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
             <div className="flex h-full items-center border-l px-3">
@@ -2221,12 +2222,13 @@ function SortableSubitemRow({
         );
         return (
           <>
-            {/* Read-only system columns — text only, dimmed (via the cell
-                renderers) to signal they can't be edited. */}
+            {/* Read-only system columns — dimmed (via the cell renderers) to
+                signal they can't be edited. Created-by shows the member avatar
+                (from the cached board payload — first paint, no fetch). */}
             <div className="flex h-full items-center border-l px-3">
               <CreatedByCell
                 name={creator?.fullName ?? creator?.email ?? null}
-                showAvatar={false}
+                avatarUrl={creator?.avatarUrl ?? null}
               />
             </div>
             <div className="flex h-full items-center border-l px-3">

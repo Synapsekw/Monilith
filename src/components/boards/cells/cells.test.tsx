@@ -21,6 +21,14 @@ import {
 } from "./index";
 import { CurrencyEditor } from "./editors";
 
+vi.mock("next/image", () => ({
+  default: (props: Record<string, unknown>) => {
+    const { src, alt } = props as { src: string; alt: string };
+    // eslint-disable-next-line @next/next/no-img-element -- jsdom passthrough stub for next/image
+    return <img src={src} alt={alt} />;
+  },
+}));
+
 const upsertCellMock = vi.fn();
 const renameItemMock = vi.fn();
 vi.mock("@/lib/boards/actions", () => ({
@@ -130,6 +138,46 @@ describe("cell renderers (read-only, 2a)", () => {
   it("PeopleCell falls back to the count when no members are provided", () => {
     render(<PeopleCell value={{ userIds: ["u1", "u2"] }} settings={{}} />);
     expect(screen.getByText(/2 people/)).toBeInTheDocument();
+  });
+
+  it("PeopleCell renders a member's avatar image when they have one", () => {
+    const { container } = render(
+      <PeopleCell
+        value={{ userIds: ["u1"] }}
+        settings={{}}
+        members={[
+          {
+            userId: "u1",
+            fullName: "Ada Lovelace",
+            email: null,
+            avatarUrl: "https://cdn/ada.webp",
+          },
+        ]}
+      />,
+    );
+    const img = container.querySelector("img");
+    expect(img).toHaveAttribute("src", "https://cdn/ada.webp");
+    expect(screen.getByText(/Ada Lovelace/)).toBeInTheDocument();
+  });
+
+  it("PeopleCell shows initials (no image) when a member has no avatar", () => {
+    const { container } = render(
+      <PeopleCell
+        value={{ userIds: ["u1"] }}
+        settings={{}}
+        members={[
+          {
+            userId: "u1",
+            fullName: "Ada Lovelace",
+            email: null,
+            avatarUrl: null,
+          },
+        ]}
+      />,
+    );
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+    expect(screen.getByText(/Ada Lovelace/)).toBeInTheDocument();
+    expect(screen.getByText("AL")).toBeInTheDocument();
   });
 
   it("DateCell shows the formatted date", () => {
