@@ -2476,6 +2476,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      escape_like: { Args: { p_text: string }; Returns: string };
       get_org_members: {
         Args: { p_limit?: number; p_offset?: number; p_org_id: string };
         Returns: {
@@ -2609,6 +2610,16 @@ export type Database = {
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
+      };
+      search_items: {
+        Args: { p_limit?: number; p_query: string };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          id: string;
+          name: string;
+          rank: number;
+        }[];
       };
       set_goal_links: {
         Args: { p_goal_id: string; p_links: Json };
