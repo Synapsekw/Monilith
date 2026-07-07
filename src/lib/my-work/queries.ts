@@ -99,8 +99,13 @@ export async function getMyWorkItems(): Promise<MyWorkItem[]> {
       .from("items")
       .select("id, name, board_id, group_id, groups(id, name)")
       .in("id", itemIds)
+      .is("archived_at", null)
       .limit(MY_WORK_ITEM_LIMIT),
-    supabase.from("boards").select("id, name").in("id", boardIds),
+    supabase
+      .from("boards")
+      .select("id, name")
+      .in("id", boardIds)
+      .is("archived_at", null),
     supabase
       .from("columns")
       .select("id, board_id, position")

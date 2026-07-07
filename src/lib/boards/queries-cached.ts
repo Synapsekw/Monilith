@@ -22,7 +22,8 @@ export async function listMyBoardsCached(
   let query = supabase
     .from("boards")
     .select("id, name, workspace_id, position, board_members(user_id)")
-    .eq("created_by", userId);
+    .eq("created_by", userId)
+    .is("archived_at", null);
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   const { data, error } = await query.order("position", { ascending: true });
   if (error) return [];
@@ -52,6 +53,7 @@ export async function listSharedBoardsCached(
     .from("board_members")
     .select("access_level, boards!inner(id, name, position, created_by)")
     .eq("user_id", userId)
+    .is("boards.archived_at", null)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
   const rows = data.filter((r) => r.boards && r.boards.created_by !== userId);
