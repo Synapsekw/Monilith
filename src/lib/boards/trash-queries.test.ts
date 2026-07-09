@@ -14,12 +14,14 @@ const calls = vi.hoisted(() => ({
   eq: [] as [string, unknown][],
   is: [] as [string, unknown][],
   not: [] as [string, string, unknown][],
+  in: [] as [string, unknown][],
   order: [] as unknown[],
   limit: [] as number[],
-  rows: [] as unknown[],
+  rows: [] as unknown[], // boards rows
+  profileRows: [] as unknown[], // profiles rows
 }));
 
-function makeChain() {
+function makeChain(table: string) {
   const chain: Record<string, unknown> = {
     select: () => chain,
     eq: (col: string, val: unknown) => {
@@ -34,6 +36,10 @@ function makeChain() {
       calls.not.push([col, op, val]);
       return chain;
     },
+    in: (col: string, val: unknown) => {
+      calls.in.push([col, val]);
+      return chain;
+    },
     order: (o: unknown) => {
       calls.order.push(o);
       return chain;
@@ -43,7 +49,10 @@ function makeChain() {
       return chain;
     },
     then: (onF: (r: { data: unknown[]; error: null }) => unknown) =>
-      Promise.resolve({ data: calls.rows, error: null }).then(onF),
+      Promise.resolve({
+        data: table === "profiles" ? calls.profileRows : calls.rows,
+        error: null,
+      }).then(onF),
   };
   return chain;
 }
@@ -52,7 +61,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     from: (table: string) => {
       calls.from.push(table);
-      return makeChain();
+      return makeChain(table);
     },
   })),
 }));
@@ -65,9 +74,11 @@ afterEach(() => {
   calls.eq.length = 0;
   calls.is.length = 0;
   calls.not.length = 0;
+  calls.in.length = 0;
   calls.order.length = 0;
   calls.limit.length = 0;
   calls.rows.length = 0;
+  calls.profileRows.length = 0;
   getUser.mockResolvedValue({ id: "u1", email: "u@x.com" } as unknown);
 });
 
@@ -78,6 +89,7 @@ describe("getArchivedBoards", () => {
       name: "Old board",
       workspace_id: "w1",
       archived_at: "2026-07-06T00:00:00Z",
+      archived_by: null,
     });
 
     const result = await getArchivedBoards();
@@ -97,8 +109,54 @@ describe("getArchivedBoards", () => {
         name: "Old board",
         workspace_id: "w1",
         archived_at: "2026-07-06T00:00:00Z",
+        archived_by: null,
+        archived_by_name: null,
       },
     ]);
+  });
+
+  it("selects archived_by and resolves it to a display name via one profiles lookup", async () => {
+    calls.rows.push({
+      id: "b1",
+      name: "Old board",
+      workspace_id: "w1",
+      archived_at: "2026-07-06T00:00:00Z",
+      archived_by: "u1",
+    });
+    calls.profileRows.push({ id: "u1", full_name: "Ada Lovelace" });
+
+    const result = await getArchivedBoards();
+
+    expect(calls.from).toContain("boards");
+    expect(calls.from).toContain("profiles");
+    // exactly one profiles lookup, keyed by the distinct archived_by ids
+    expect(calls.from.filter((t) => t === "profiles")).toHaveLength(1);
+    expect(calls.in).toContainEqual(["id", ["u1"]]);
+    expect(result).toEqual([
+      {
+        id: "b1",
+        name: "Old board",
+        workspace_id: "w1",
+        archived_at: "2026-07-06T00:00:00Z",
+        archived_by: "u1",
+        archived_by_name: "Ada Lovelace",
+      },
+    ]);
+  });
+
+  it("skips the profiles lookup when no board has a non-null archived_by", async () => {
+    calls.rows.push({
+      id: "b1",
+      name: "Old board",
+      workspace_id: "w1",
+      archived_at: "2026-07-06T00:00:00Z",
+      archived_by: null,
+    });
+
+    const result = await getArchivedBoards();
+
+    expect(calls.from).not.toContain("profiles");
+    expect(result[0]!.archived_by_name).toBeNull();
   });
 
   it("returns an empty list (no query) when there is no authenticated user", async () => {

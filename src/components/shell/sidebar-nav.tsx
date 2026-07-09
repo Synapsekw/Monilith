@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Clock, Gauge, ListTodo, Target } from "lucide-react";
+import {
+  BarChart3,
+  Clock,
+  Gauge,
+  ListTodo,
+  Target,
+  Trash2,
+} from "lucide-react";
 import type { ComponentType } from "react";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
@@ -32,7 +39,12 @@ const PLANNING: NavLink[] = [
   { label: "Workload", href: "/workload", icon: Gauge },
 ];
 const PERSONAL: NavLink[] = [{ label: "My Time", href: "/time", icon: Clock }];
-const ALL_LINKS: NavLink[] = [HOME, ...PLANNING, ...PERSONAL];
+const TRASH: NavLink = {
+  label: "Trash",
+  href: "/boards#archived",
+  icon: Trash2,
+};
+const ALL_LINKS: NavLink[] = [HOME, ...PLANNING, ...PERSONAL, TRASH];
 
 function CoarseCaption({ label }: { label: string }) {
   return (
@@ -197,6 +209,12 @@ export function SidebarNav({
             />
           ))}
         </NavSection>
+      ) : null}
+
+      {!isCollapsed ? (
+        <nav className="flex flex-col gap-0.5 px-2 pb-2">
+          <ExpandedLink item={TRASH} active={isActive(TRASH.href)} />
+        </nav>
       ) : null}
     </div>
   );

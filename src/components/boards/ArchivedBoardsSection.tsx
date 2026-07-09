@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArchiveX, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 
 import { purgeBoard, restoreBoard } from "@/lib/boards/actions";
+import { timeAgo } from "@/lib/boards/automation-runs";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,8 @@ export type ArchivedBoard = {
   name: string;
   workspace_id: string;
   archived_at: string | null;
+  archived_by: string | null;
+  archived_by_name: string | null;
 };
 
 /**
@@ -45,6 +48,18 @@ export function ArchivedBoardsSection({ boards }: { boards: ArchivedBoard[] }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Landing on /boards#archived (the sidebar Trash link) opens the list. Handles
+  // both a fresh mount and a same-page hash change (Link to the current pathname
+  // doesn't remount the RSC), so clicking Trash while already on /boards expands it.
+  useEffect(() => {
+    const openIfHash = () => {
+      if (window.location.hash === "#archived") setOpen(true);
+    };
+    openIfHash();
+    window.addEventListener("hashchange", openIfHash);
+    return () => window.removeEventListener("hashchange", openIfHash);
+  }, []);
 
   // The list is empty (nothing archived) → render no affordance at all.
   if (rows.length === 0) return null;
@@ -84,7 +99,7 @@ export function ArchivedBoardsSection({ boards }: { boards: ArchivedBoard[] }) {
   const confirmBoard = rows.find((b) => b.id === confirmId) ?? null;
 
   return (
-    <section className="bg-surface rounded-md border">
+    <section id="archived" className="bg-surface scroll-mt-4 rounded-md border">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -113,9 +128,16 @@ export function ArchivedBoardsSection({ boards }: { boards: ArchivedBoard[] }) {
                 i > 0 && "border-t",
               )}
             >
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {board.name}
-              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm">{board.name}</p>
+                {board.archived_at ? (
+                  <p className="text-muted-foreground truncate text-xs">
+                    {board.archived_by_name
+                      ? `archived by ${board.archived_by_name}, ${timeAgo(board.archived_at)}`
+                      : `archived ${timeAgo(board.archived_at)}`}
+                  </p>
+                ) : null}
+              </div>
               <Button
                 type="button"
                 variant="ghost"
