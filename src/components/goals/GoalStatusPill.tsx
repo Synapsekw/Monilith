@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { StatusPill, type StatusPillColor } from "@/components/ui/status-pill";
 import type { GoalHealth, GoalStatus } from "@/lib/goals/types";
 
 const LABEL: Record<GoalStatus, string> = {
@@ -7,11 +7,14 @@ const LABEL: Record<GoalStatus, string> = {
   off_track: "Off track",
   done: "Done",
 };
-const TONE: Record<GoalStatus, string> = {
-  on_track: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  at_risk: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  off_track: "bg-red-500/15 text-red-600 dark:text-red-400",
-  done: "bg-primary/15 text-primary",
+// Status semantics on the sanctioned --status-* palette (was a forked raw
+// emerald/amber/red map): on-track=green, at-risk=yellow, off-track=red,
+// done=brand accent — matching the boards' status rendering.
+const COLOR: Record<GoalStatus, StatusPillColor> = {
+  on_track: "green",
+  at_risk: "yellow",
+  off_track: "red",
+  done: "primary",
 };
 const AUTO_LABEL: Record<GoalHealth, string> = {
   on_track: "on track",
@@ -30,20 +33,19 @@ export function GoalStatusPill({
   status: GoalStatus;
   autoHealth: GoalHealth | null;
 }) {
-  const showAuto = autoHealth !== null && (autoHealth as string) !== (status as string);
+  const showAuto =
+    autoHealth !== null && (autoHealth as string) !== (status as string);
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium",
-        TONE[status],
-      )}
-    >
+    <StatusPill color={COLOR[status]} variant="soft" className="gap-1">
       {LABEL[status]}
       {showAuto ? (
-        <span className="opacity-60" title={`Auto (from pace): ${AUTO_LABEL[autoHealth]}`}>
+        <span
+          className="opacity-60"
+          title={`Auto (from pace): ${AUTO_LABEL[autoHealth]}`}
+        >
           ·auto: {AUTO_LABEL[autoHealth]}
         </span>
       ) : null}
-    </span>
+    </StatusPill>
   );
 }

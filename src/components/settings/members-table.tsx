@@ -12,6 +12,7 @@ import {
 import { platformSetOrgRole } from "@/lib/platform/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { statusToneClasses } from "@/components/ui/status-pill";
 
 type Role = Database["public"]["Enums"]["org_role"];
 
@@ -121,8 +122,11 @@ export function MembersTable({
                   <td className="px-3 py-2.5 align-middle">
                     <span
                       className={cn(
-                        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium text-white",
-                        deactivated ? "bg-status-gray" : "bg-status-green",
+                        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+                        statusToneClasses(
+                          deactivated ? "gray" : "green",
+                          "solid",
+                        ),
                       )}
                     >
                       {deactivated ? "Deactivated" : "Active"}

@@ -15,6 +15,11 @@ import type { AdminUpdateFeedbackInput } from "@/lib/validations/feedback";
 import type { ActionResult } from "@/lib/feedback/actions";
 import type { Tables } from "@/types/database.types";
 import { cn } from "@/lib/utils";
+import {
+  STATUS_BG,
+  statusToneClasses,
+  type StatusColor,
+} from "@/components/ui/status-pill";
 
 type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 
@@ -27,13 +32,16 @@ const STATUS_LABELS: Record<FeedbackStatus, string> = {
   declined: "Declined",
 };
 
-const STATUS_COLORS: Record<FeedbackStatus, string> = {
-  new: "bg-status-blue",
-  triaged: "bg-status-teal",
-  planned: "bg-status-purple",
-  in_progress: "bg-status-orange",
-  resolved: "bg-status-green",
-  declined: "bg-status-gray",
+// Feedback triage states on the sanctioned status palette. statusToneClasses
+// derives AA-legible text per fill (was a hardcoded `text-white`, which fails
+// on the pale orange/green/teal fills in dark mode).
+const STATUS_TONE: Record<FeedbackStatus, StatusColor> = {
+  new: "blue",
+  triaged: "teal",
+  planned: "purple",
+  in_progress: "orange",
+  resolved: "green",
+  declined: "gray",
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -109,8 +117,8 @@ export function AdminFeedbackDetail({ row, save }: Props) {
               <button
                 type="button"
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white transition-colors focus-visible:ring-2 focus-visible:outline-none",
-                  STATUS_COLORS[status],
+                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                  statusToneClasses(STATUS_TONE[status], "solid"),
                 )}
                 aria-label="Change status"
               >
@@ -129,7 +137,10 @@ export function AdminFeedbackDetail({ row, save }: Props) {
                   )}
                 >
                   <span
-                    className={cn("size-2 rounded-full", STATUS_COLORS[s])}
+                    className={cn(
+                      "size-2 rounded-full",
+                      STATUS_BG[STATUS_TONE[s]],
+                    )}
                   />
                   {STATUS_LABELS[s]}
                 </DropdownMenuItem>
