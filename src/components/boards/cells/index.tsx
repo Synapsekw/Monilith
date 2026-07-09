@@ -339,7 +339,7 @@ export function RatingCell({
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`size-3.5 ${i <= r ? "fill-current text-amber-400" : "text-muted-foreground/30"}`}
+          className={`size-3.5 ${i <= r ? "text-status-yellow fill-current" : "text-muted-foreground/30"}`}
         />
       ))}
     </span>

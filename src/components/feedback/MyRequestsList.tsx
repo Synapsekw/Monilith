@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { statusToneClasses } from "@/components/ui/status-pill";
 import type { ActionResult, MyFeedback } from "@/lib/feedback/actions";
 
 type StatusColor =
@@ -95,8 +96,8 @@ export function MyRequestsList({ load }: Props) {
               </span>
               <span
                 className={cn(
-                  "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white",
-                  `bg-status-${meta.color}`,
+                  "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                  statusToneClasses(meta.color, "solid"),
                 )}
               >
                 {meta.label}
