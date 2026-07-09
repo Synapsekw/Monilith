@@ -34,7 +34,7 @@ export function ActivityTab({
     return <EmptyState variant="inline">No activity yet.</EmptyState>;
   }
   return (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col gap-2">
       {cache.activities.map((a) => (
         <ActivityRow
           key={a.id}

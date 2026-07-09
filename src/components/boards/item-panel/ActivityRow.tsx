@@ -12,7 +12,7 @@ function Chip({
   if (typeof value === "string") return <span>{value}</span>;
   return (
     <span
-      className="rounded px-1.5 py-0.5 text-xs font-medium"
+      className="rounded-sm px-1.5 py-0.5 text-xs font-medium"
       style={{
         backgroundColor: value.color,
         color: pillTextColor(value.color),
@@ -34,10 +34,12 @@ export function ActivityRow({
 }) {
   const time = new Date(when).toLocaleString();
   return (
-    <li className="flex flex-col gap-1 border-b py-2 text-sm">
+    <li className="bg-surface-muted border-border flex flex-col gap-1 rounded-lg border p-3 text-sm">
       <div className="text-muted-foreground flex items-center gap-2 text-xs">
-        <span className="text-foreground font-medium">{actorName}</span>
-        <span>{time}</span>
+        <span className="text-foreground font-bold">{actorName}</span>
+        <span className="text-kicker font-mono text-[9.5px] tracking-wide uppercase">
+          {time}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         {descriptor.kind === "item_created" && <span>created this item</span>}
