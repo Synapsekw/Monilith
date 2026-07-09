@@ -30,7 +30,7 @@ export function UserMenu({ user }: { user: AppShellUser }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Open user menu"
-        className="hover:bg-accent focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="border-border hover:border-border-bright hover:bg-accent focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         {/* Supabase public avatar URL: rendered via Radix Avatar (a raw <img>,
             not routed through the next/image optimizer) with an initials

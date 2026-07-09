@@ -51,7 +51,7 @@ export function WorkspaceSwitcher({
   if (workspaces.length === 0) return null;
 
   const avatar = (
-    <span className="bg-primary text-primary-foreground flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold">
+    <span className="bg-primary/[0.18] text-primary flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold">
       {initial}
     </span>
   );
@@ -64,7 +64,7 @@ export function WorkspaceSwitcher({
             <TooltipTrigger asChild>
               <DropdownMenuTrigger
                 aria-label="Switch workspace"
-                className="hover:bg-accent flex size-9 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                className="bg-surface-muted border-border card-lift hover:border-border-bright flex size-9 items-center justify-center rounded-lg border focus-visible:ring-2 focus-visible:outline-none"
               >
                 {avatar}
               </DropdownMenuTrigger>
@@ -74,7 +74,7 @@ export function WorkspaceSwitcher({
         ) : (
           <DropdownMenuTrigger
             aria-label="Switch workspace"
-            className="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            className="bg-surface-muted border-border card-lift hover:border-border-bright flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left focus-visible:ring-2 focus-visible:outline-none"
           >
             {avatar}
             <span className="min-w-0 flex-1 truncate text-sm font-semibold">

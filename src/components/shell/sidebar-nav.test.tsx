@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { usePathname } from "next/navigation";
 import { SidebarNav } from "./sidebar-nav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui";
@@ -17,7 +18,7 @@ function renderNav(ui: React.ReactElement) {
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-  usePathname: () => "/",
+  usePathname: vi.fn(() => "/"),
   useParams: () => ({}),
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -45,6 +46,7 @@ beforeEach(() => {
   Element.prototype.setPointerCapture ??= () => {};
   Element.prototype.releasePointerCapture ??= () => {};
   vi.mocked(useCoarsePointer).mockReturnValue(false);
+  vi.mocked(usePathname).mockReturnValue("/");
 });
 
 const board = {
@@ -134,6 +136,24 @@ describe("SidebarNav", () => {
       />,
     );
     expect(screen.getByText("Engineering")).toBeInTheDocument();
+  });
+
+  it("marks the active nav item with the Keystone periwinkle wash", () => {
+    // Keystone active state = translucent periwinkle wash + tinted hairline
+    // (no longer the old solid `bg-primary/80`). Assert the semantic tokens.
+    vi.mocked(usePathname).mockReturnValue("/my-work");
+    renderNav(
+      <SidebarNav
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />,
+    );
+    const active = screen.getByText("My Work").closest("a");
+    expect(active).toHaveClass("bg-primary/10");
+    expect(active).toHaveClass("border-primary/25");
+    expect(active?.className).toContain("text-foreground");
   });
 
   it("stays expanded when forceExpanded, ignoring the collapsed store", () => {
