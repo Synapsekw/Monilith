@@ -18,13 +18,20 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-nunito);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-heading: var(--font-nunito);
 
   /* Brand highlight (semantic alias of the configurable accent) */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+
+  /* Keystone additions */
+  --color-kicker: var(--kicker);
+  --color-border-hover: var(--border-hover);
+  --color-border-bright: var(--border-bright);
+  --shadow-glow-primary: var(--glow-primary);
+  --ease-keystone: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Surfaces (brief's semantic names) */
   --color-surface: var(--surface);
@@ -108,37 +115,37 @@
 }
 
 :root {
-  /* Configurable highlight — override per workspace by setting --brand on a wrapper */
-  --brand: oklch(0.546 0.215 262.9);
-  --brand-foreground: oklch(0.985 0 0);
+  /* Keystone light — deepened periwinkle for AA on white */
+  --brand: #5b6fd6;
+  --brand-foreground: #ffffff;
 
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
-  --surface: oklch(1 0 0);
-  --surface-muted: oklch(0.97 0 0);
-  /* Recessed/nested band (e.g. subitems) — darker than -muted so it reads
-     clearly against white surfaces in light mode. */
-  --surface-sunken: oklch(0.94 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --background: #f6f6f8;
+  --foreground: #1a1a1f;
+  --surface: #ffffff;
+  --surface-muted: #f1f1f4;
+  --surface-sunken: #f1f1f4;
+  --card: #ffffff;
+  --card-foreground: #1a1a1f;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1f;
 
-  /* Primary actions + focus rings carry the brand highlight */
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
 
-  /* Chrome stays monochrome */
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: #f1f1f4;
+  --secondary-foreground: #1a1a1f;
+  --muted: #f1f1f4;
+  --muted-foreground: #6b6b72;
+  --kicker: #9a9aa2;
+  --accent: #f1f1f4;
+  --accent-foreground: #1a1a1f;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.14);
+  --border-bright: rgba(0, 0, 0, 0.22);
+  --input: rgba(0, 0, 0, 0.12);
   --ring: var(--brand);
+  --glow-primary: 0 0 30px -8px rgba(91, 111, 214, 0.35);
 
   /* Status / label palette (the one controlled multi-color set) */
   --status-gray: oklch(0.65 0 0);
@@ -171,17 +178,17 @@
   --chart-cat-4: #f59e0b;
   --chart-cat-5: #fb7185;
   --chart-cat-6: #34d399;
-  --radius: 0.625rem;
-  --elevation-panel: 0 8px 24px rgba(0, 0, 0, 0.08);
-  --elevation-card: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --radius: 0.875rem; /* 14px — Keystone cards/panels; radius-sm→~8px chips */
+  --elevation-panel: 0 8px 24px -14px rgba(0, 0, 0, 0.18);
+  --elevation-card: none;
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar: #f6f6f8;
+  --sidebar-foreground: #1a1a1f;
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--brand-foreground);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-accent: #f1f1f4;
+  --sidebar-accent-foreground: #1a1a1f;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
   --sidebar-ring: var(--brand);
 }
 
@@ -194,34 +201,36 @@
    *   border #2a2a30 · border-light #34343c · accent #6366f1
    *   txt #e7e7ea · txt-dim #a1a1aa
    */
-  --brand: oklch(0.585 0.204 277); /* #6366f1 indigo accent */
-  --brand-foreground: oklch(0.985 0 0);
+  --brand: #8ea2eb; /* periwinkle */
+  --brand-foreground: #0e0e10; /* near-black text on periwinkle fill (AA) */
 
-  --background: oklch(0.16 0.004 289); /* #0d0d0f near-black base */
-  --foreground: oklch(0.925 0.003 286); /* #e7e7ea */
-  --surface: oklch(0.205 0.005 286); /* #16161a primary panel */
-  --surface-muted: oklch(0.245 0.006 286); /* #1f1f24 elevated */
-  --surface-sunken: oklch(0.245 0.006 286); /* nested band — elevated in dark */
-  --card: oklch(0.205 0.005 286);
-  --card-foreground: oklch(0.925 0.003 286);
-  --popover: oklch(
-    0.245 0.006 286
-  ); /* prototype popovers sit on elevated surface */
-  --popover-foreground: oklch(0.925 0.003 286);
+  --background: #0e0e10;
+  --foreground: #f4f4f6;
+  --surface: #161619;
+  --surface-muted: #1c1c20;
+  --surface-sunken: #1c1c20;
+  --card: #161619;
+  --card-foreground: #f4f4f6;
+  --popover: #1c1c20;
+  --popover-foreground: #f4f4f6;
 
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
 
-  --secondary: oklch(0.275 0.007 286); /* #26262c */
-  --secondary-foreground: oklch(0.925 0.003 286);
-  --muted: oklch(0.245 0.006 286);
-  --muted-foreground: oklch(0.7 0.008 286); /* #a1a1aa */
-  --accent: oklch(0.275 0.007 286); /* #26262c subtle monochrome hover */
-  --accent-foreground: oklch(0.925 0.003 286);
+  --secondary: #26262c;
+  --secondary-foreground: #f4f4f6;
+  --muted: #1c1c20;
+  --muted-foreground: #9a9aa2;
+  --kicker: #6b6b72;
+  --accent: #1c1c20;
+  --accent-foreground: #f4f4f6;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.3 0.008 286); /* #2a2a30 solid hairline */
-  --input: oklch(0.34 0.009 286); /* #34343c */
+  --border: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.16);
+  --border-bright: rgba(255, 255, 255, 0.26);
+  --input: rgba(255, 255, 255, 0.14);
   --ring: var(--brand);
+  --glow-primary: 0 0 36px -6px rgba(255, 255, 255, 0.35);
 
   --status-gray: oklch(0.7 0 0);
   --status-blue: oklch(0.66 0.16 250);
@@ -252,16 +261,16 @@
   --chart-cat-5: #fb7185;
   --chart-cat-6: #34d399;
 
-  --sidebar: oklch(0.205 0.005 286); /* #16161a, raised from the base canvas */
-  --sidebar-foreground: oklch(0.925 0.003 286);
+  --sidebar: #161619;
+  --sidebar-foreground: #f4f4f6;
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--brand-foreground);
-  --sidebar-accent: oklch(0.275 0.007 286);
-  --sidebar-accent-foreground: oklch(0.925 0.003 286);
-  --sidebar-border: oklch(0.3 0.008 286);
+  --sidebar-accent: #1c1c20;
+  --sidebar-accent-foreground: #f4f4f6;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
   --sidebar-ring: var(--brand);
-  --elevation-panel: 0 8px 30px rgba(0, 0, 0, 0.5);
-  --elevation-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --elevation-panel: 0 8px 30px -12px rgba(0, 0, 0, 0.7);
+  --elevation-card: none;
 }
 
 @layer base {
@@ -316,6 +325,18 @@
   }
   .dark ::-webkit-scrollbar-thumb:hover {
     background: var(--input);
+  }
+  /* Keystone signature: interactive cards lift + hairline brightens on hover. */
+  .card-lift {
+    transition:
+      transform 300ms var(--ease-keystone),
+      border-color 300ms var(--ease-keystone),
+      box-shadow 300ms var(--ease-keystone);
+  }
+  @media (hover: hover) {
+    .card-lift:hover {
+      transform: translateY(-4px);
+    }
   }
   /* Respect reduced-motion globally */
   @media (prefers-reduced-motion: reduce) {

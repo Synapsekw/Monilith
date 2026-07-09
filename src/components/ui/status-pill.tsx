@@ -6,9 +6,12 @@ import { cn } from "@/lib/utils";
  * status semantics (on-track / at-risk / off-track, feedback triage states,
  * member active/deactivated, …) on the `--status-*` design tokens.
  *
- * Geometry matches the boards' `OptionPill` (the canonical pill spec):
- * `rounded-md px-2.5 py-0.5 text-xs font-medium`. Dense call sites may
- * override via `className` (merged with tailwind-merge, so later wins).
+ * Keystone chip geometry: `rounded-sm px-2.5 py-0.5 text-xs font-medium` with a
+ * Keystone-eased transition on transform/filter. The pill itself is static — it
+ * does NOT move on its own hover; interactive call sites (e.g. board status
+ * cells) opt into motion by adding `hover:-translate-y-px hover:brightness-110`
+ * so static pills stay put. Dense call sites may override geometry via
+ * `className` (merged with tailwind-merge, so later wins).
  *
  * Never hand-roll `bg-status-* text-white` — white text fails WCAG AA on the
  * pale dark-mode fills (yellow/green/orange are oklch L 0.74–0.85 in `.dark`).
@@ -123,7 +126,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center truncate rounded-md px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex max-w-full items-center truncate rounded-sm px-2.5 py-0.5 text-xs font-medium transition-[transform,filter] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
         statusToneClasses(color, variant),
         className,
       )}

@@ -179,7 +179,7 @@ export function FooterCell({
   const body = (
     <span className="flex min-w-0 items-center gap-1.5 truncate">
       {label && result.kind !== "empty" && (
-        <span className="text-muted-foreground shrink-0 text-[11px] tracking-wide uppercase">
+        <span className="text-kicker shrink-0 font-mono text-[10px] tracking-wide uppercase">
           {label}
         </span>
       )}

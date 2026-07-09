@@ -86,14 +86,19 @@ export function UpdatesTab({
       ) : (
         <ul className="flex flex-col gap-3">
           {cache.updates.map((u) => (
-            <li key={u.id} className="group rounded-md border p-3 text-sm">
+            <li
+              key={u.id}
+              className="group bg-surface-muted card-lift border-border hover:border-border-bright rounded-lg border p-3.5 text-sm"
+            >
               <div className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
                 <span className="flex items-center gap-2">
-                  <span className="text-foreground font-medium">
+                  <span className="text-foreground font-extrabold">
                     {members.find((m) => m.userId === u.author_id)?.fullName ??
                       "Someone"}
                   </span>
-                  <DateTime value={u.created_at} />
+                  <span className="text-kicker font-mono text-[9.5px] tracking-wide uppercase">
+                    <DateTime value={u.created_at} />
+                  </span>
                 </span>
                 <RevealOnHover>
                   <Button

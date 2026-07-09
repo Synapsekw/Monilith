@@ -192,8 +192,10 @@ function ViewTab({
   return (
     <div
       className={cn(
-        "group/tab flex items-center rounded-md",
-        selected && "bg-primary text-primary-foreground",
+        "group/tab ease-keystone flex items-center rounded-full border transition-colors",
+        selected
+          ? "bg-surface-muted border-border-bright"
+          : "hover:border-border border-transparent",
       )}
     >
       <button
@@ -202,10 +204,10 @@ function ViewTab({
         aria-selected={selected}
         onClick={selectView}
         className={cn(
-          "focus-visible:ring-ring flex h-7 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          "focus-visible:ring-ring ease-keystone flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
           selected
-            ? "text-primary-foreground"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            ? "text-foreground"
+            : "text-muted-foreground hover:text-foreground",
           pending && "opacity-60",
         )}
       >
@@ -223,8 +225,7 @@ function ViewTab({
             disabled={pending}
             className={cn(
               "mr-0.5 size-6",
-              selected &&
-                "text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground",
+              selected && "text-foreground hover:bg-foreground/10",
             )}
           >
             <MoreHorizontal aria-hidden />

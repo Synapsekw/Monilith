@@ -67,7 +67,7 @@ export function MentionTextarea({
         }
       />
       {suggestions.length > 0 && (
-        <ul className="bg-surface absolute z-50 mt-1 w-64 overflow-hidden rounded-md border shadow-md">
+        <ul className="bg-surface border-border absolute z-50 mt-1 w-64 overflow-hidden rounded-lg border shadow-md">
           {suggestions.map((m) => (
             <li key={m.userId}>
               <button

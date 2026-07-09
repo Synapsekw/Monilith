@@ -153,7 +153,7 @@ export function SummaryRow({
     >
       <div
         className={cn(
-          "bg-surface-muted text-muted-foreground sticky left-0 z-10 flex items-center px-4 py-1.5 text-xs font-medium",
+          "bg-surface-muted text-kicker sticky left-0 z-10 flex items-center px-4 py-1.5 font-mono text-[10px] tracking-wide uppercase",
           NAME_FREEZE_EDGE,
         )}
         style={{

@@ -131,7 +131,9 @@ export function ColumnHeader({
               <GripVertical className="size-3.5" />
             </button>
           )}
-          <span className="truncate">{column.name}</span>
+          <span className="text-kicker truncate font-mono text-[10.5px] font-medium tracking-[0.12em] uppercase">
+            {column.name}
+          </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

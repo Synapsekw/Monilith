@@ -3,6 +3,7 @@
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { Kicker } from "@/components/ui/kicker";
 import { useUIStore } from "@/stores/ui";
 
 /**
@@ -32,8 +33,11 @@ export function NavSection({
   const open = !collapsedSections[storageKey];
   const bodyId = `nav-section-${storageKey}`;
 
-  const titleCn =
-    "text-muted-foreground hover:text-foreground text-xs font-semibold uppercase tracking-wide transition-colors";
+  // Keystone section label: a mono `<Kicker>` eyebrow whose dim `--kicker`
+  // color brightens to `--foreground` when the (group) toggle is hovered.
+  const titleCn = "group flex items-center";
+  const kickerCn =
+    "transition-colors duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:text-foreground";
 
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2">
@@ -55,7 +59,7 @@ export function NavSection({
         {Icon ? <Icon className="text-muted-foreground size-3.5" /> : null}
         {titleHref ? (
           <Link href={titleHref} className={titleCn}>
-            {title}
+            <Kicker className={kickerCn}>{title}</Kicker>
           </Link>
         ) : (
           <button
@@ -65,7 +69,7 @@ export function NavSection({
             aria-controls={bodyId}
             className={titleCn}
           >
-            {title}
+            <Kicker className={kickerCn}>{title}</Kicker>
           </button>
         )}
         {action ? (

@@ -13,6 +13,7 @@ import { ExportMenu } from "@/components/boards/ExportMenu";
 import { ImportWizard } from "@/components/boards/import/ImportWizard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kicker } from "@/components/ui/kicker";
 import type { BoardView } from "@/lib/boards/queries";
 import type { CacheColumn } from "@/lib/boards/cache";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
@@ -112,7 +113,9 @@ export function BoardHeader({
   }
 
   return (
-    <header className="flex flex-col gap-2 border-b px-6 py-2">
+    <header className="border-border flex flex-col gap-2 border-b px-6 py-2">
+      {/* Non-interactive breadcrumb eyebrow — index prop allowed here (§Kicker). */}
+      <Kicker index="01">Boards</Kicker>
       <div className="flex items-center gap-2">
         {editing && !isViewer ? (
           <Input
@@ -131,17 +134,17 @@ export function BoardHeader({
               }
             }}
             aria-label="Board name"
-            className="h-8 max-w-md text-xl font-semibold"
+            className="h-8 max-w-md text-[22px] font-extrabold tracking-tight"
           />
         ) : isViewer ? (
-          <h1 className="flex h-8 items-center truncate text-xl font-semibold tracking-tight">
+          <h1 className="flex h-8 items-center truncate text-[22px] font-extrabold tracking-tight">
             {boardName}
           </h1>
         ) : (
           <button
             type="button"
             onClick={openRename}
-            className="hover:text-muted-foreground focus-visible:ring-ring flex h-8 items-center rounded-sm text-left text-xl font-semibold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone flex h-8 items-center rounded-sm text-left text-[22px] font-extrabold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {boardName}
           </button>
