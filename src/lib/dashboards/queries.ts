@@ -22,13 +22,23 @@ export const getDashboardPayload = cache(
       .select("*")
       .eq("id", dashboardId)
       .maybeSingle();
-    if (error || !dashboard) return null;
+    // A DB failure is not a 404: throw so the dashboards error boundary
+    // renders (same policy as boards/queries.ts getBoardPayload).
+    // Missing/RLS-hidden row stays null → notFound().
+    if (error) throw new Error(`Failed to load dashboard: ${error.message}`);
+    if (!dashboard) return null;
 
-    const { data: widgets } = await supabase
+    const { data: widgets, error: widgetsErr } = await supabase
       .from("dashboard_widgets")
       .select("*")
       .eq("dashboard_id", dashboardId)
       .order("position", { ascending: true });
+    // A silently-empty dashboard is indistinguishable from deleted widgets:
+    // fail loudly instead of rendering an empty canvas.
+    if (widgetsErr)
+      throw new Error(
+        `Failed to load dashboard widgets: ${widgetsErr.message}`,
+      );
 
     return { dashboard, widgets: widgets ?? [] };
   },
