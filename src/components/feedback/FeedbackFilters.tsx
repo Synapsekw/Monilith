@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { Tables } from "@/types/database.types";
 import { cn } from "@/lib/utils";
+import {
+  statusToneClasses,
+  type StatusColor,
+} from "@/components/ui/status-pill";
 
 type Row = Tables<"feedback">;
 
@@ -43,13 +47,13 @@ const STATUS_LABELS: Record<string, string> = {
   declined: "Declined",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  new: "bg-status-blue",
-  triaged: "bg-status-teal",
-  planned: "bg-status-purple",
-  in_progress: "bg-status-orange",
-  resolved: "bg-status-green",
-  declined: "bg-status-gray",
+const STATUS_TONE: Record<string, StatusColor> = {
+  new: "blue",
+  triaged: "teal",
+  planned: "purple",
+  in_progress: "orange",
+  resolved: "green",
+  declined: "gray",
 };
 
 /**
@@ -160,7 +164,7 @@ export function FeedbackFilters({ rows }: { rows: Row[] }) {
               </span>
               <span>
                 <span
-                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium text-white ${STATUS_COLORS[row.status] ?? "bg-status-gray"}`}
+                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${statusToneClasses(STATUS_TONE[row.status] ?? "gray", "solid")}`}
                 >
                   {STATUS_LABELS[row.status] ?? row.status}
                 </span>

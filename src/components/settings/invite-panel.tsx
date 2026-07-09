@@ -93,7 +93,7 @@ export function InvitePanel({
       )}
 
       {warning && (
-        <p role="status" className="text-xs text-amber-600 dark:text-amber-400">
+        <p role="status" className="text-status-orange text-xs">
           {warning}
         </p>
       )}

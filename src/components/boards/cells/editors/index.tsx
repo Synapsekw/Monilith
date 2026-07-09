@@ -498,7 +498,7 @@ export function RatingEditor({
             className="grid place-items-center pointer-coarse:size-11"
           >
             <Star
-              className={`size-5 ${i <= current ? "fill-current text-amber-400" : "text-muted-foreground/40"}`}
+              className={`size-5 ${i <= current ? "text-status-yellow fill-current" : "text-muted-foreground/40"}`}
             />
           </button>
         ))}

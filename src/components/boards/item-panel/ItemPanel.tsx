@@ -164,6 +164,7 @@ export function ItemPanel({
             {tab === "updates" && (
               <UpdatesTab
                 cache={updates.data}
+                isError={updates.isError}
                 members={members}
                 onAdd={mutations.addUpdate}
                 onDelete={mutations.deleteUpdate}
@@ -172,6 +173,7 @@ export function ItemPanel({
             {tab === "activity" && (
               <ActivityTab
                 cache={activity.data}
+                isError={activity.isError}
                 columns={columns}
                 members={members}
               />

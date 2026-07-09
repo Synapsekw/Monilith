@@ -18,11 +18,14 @@ export async function listPortfolios(): Promise<
   { id: string; name: string }[]
 > {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("portfolios")
     .select("id, name")
     .order("created_at", { ascending: true })
     .limit(PORTFOLIO_LIMIT);
+  // A DB failure is not "no portfolios": throw so the portfolios error
+  // boundary renders instead of a silently-empty list.
+  if (error) throw new Error(`Failed to load portfolios: ${error.message}`);
   return data ?? [];
 }
 
@@ -30,11 +33,14 @@ export async function getPortfolio(
   portfolioId: string,
 ): Promise<Tables<"portfolios"> | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("portfolios")
     .select("*")
     .eq("id", portfolioId)
     .maybeSingle();
+  // A DB failure is not a 404: throw so the error boundary renders.
+  // Missing/RLS-hidden row stays null → notFound().
+  if (error) throw new Error(`Failed to load portfolio: ${error.message}`);
   return data ?? null;
 }
 
@@ -84,6 +90,18 @@ export async function getPortfolioRows(
       p_today: today,
     }),
   ]);
+  // A silently-empty grid (`.data ?? []` below) is indistinguishable from a
+  // portfolio with no boards. Fail loudly; the portfolios error boundary
+  // offers retry. Checked before the not-found return: a DB failure is a DB
+  // failure even on the cold 404 path.
+  if (placementsRes.error)
+    throw new Error(
+      `Failed to load portfolio placements: ${placementsRes.error.message}`,
+    );
+  if (rollupRes.error)
+    throw new Error(
+      `Failed to load portfolio rollup: ${rollupRes.error.message}`,
+    );
   if (!portfolio) return null;
 
   const placements = (placementsRes.data ?? []).map(toPlacement);
@@ -119,12 +137,16 @@ export async function getBoardStatusColumns(
   boardId: string,
 ): Promise<StatusColumn[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("columns")
     .select("id, name, kind, settings")
     .eq("board_id", boardId)
     .eq("kind", "status")
     .order("position", { ascending: true });
+  // A DB failure is not "no status columns": throw so callers (the
+  // ActionResult-wrapping server actions) surface it instead of silently
+  // offering an empty picker.
+  if (error) throw new Error(`Failed to load status columns: ${error.message}`);
   return (data ?? []).map((c) => ({
     id: c.id,
     name: c.name,

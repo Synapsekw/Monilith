@@ -109,6 +109,20 @@ describe("SidebarNav", () => {
     expect(screen.queryByText("Inbox")).not.toBeInTheDocument();
   });
 
+  it("renders a Trash link to the workspace archived-boards hash", () => {
+    useUIStore.setState({ sidebarCollapsed: false, hasHydrated: true });
+    renderNav(
+      <SidebarNav
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />,
+    );
+    const trash = screen.getByRole("link", { name: /trash/i });
+    expect(trash).toHaveAttribute("href", "/boards#archived");
+  });
+
   it("shows the active workspace in the switcher", () => {
     renderNav(
       <SidebarNav

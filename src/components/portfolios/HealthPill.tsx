@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { StatusPill, type StatusPillColor } from "@/components/ui/status-pill";
 import type { PortfolioHealth } from "@/lib/portfolios/types";
 
 const LABEL: Record<PortfolioHealth, string> = {
@@ -6,10 +6,12 @@ const LABEL: Record<PortfolioHealth, string> = {
   at_risk: "At risk",
   off_track: "Off track",
 };
-const TONE: Record<PortfolioHealth, string> = {
-  on_track: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  at_risk: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  off_track: "bg-red-500/15 text-red-600 dark:text-red-400",
+// On the sanctioned --status-* palette (was a forked raw emerald/amber/red
+// map): on-track=green, at-risk=yellow, off-track=red.
+const COLOR: Record<PortfolioHealth, StatusPillColor> = {
+  on_track: "green",
+  at_risk: "yellow",
+  off_track: "red",
 };
 
 export function HealthPill({
@@ -21,18 +23,13 @@ export function HealthPill({
 }) {
   if (!health) return <span className="text-muted-foreground text-xs">—</span>;
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium",
-        TONE[health],
-      )}
-    >
+    <StatusPill color={COLOR[health]} variant="soft" className="gap-1">
       {LABEL[health]}
       {isAuto ? (
         <span className="opacity-60" title="Auto (from pace)">
           ·auto
         </span>
       ) : null}
-    </span>
+    </StatusPill>
   );
 }

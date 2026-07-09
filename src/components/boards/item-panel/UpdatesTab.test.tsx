@@ -79,6 +79,22 @@ describe("UpdatesTab", () => {
     expect(screen.getByText(/no updates yet/i).className).toContain("py-8");
   });
 
+  it("shows an error state instead of the empty state when the fetch failed", () => {
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          cache={undefined}
+          isError
+          members={members}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    expect(screen.getByText(/couldn't load updates/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no updates yet/i)).not.toBeInTheDocument();
+  });
+
   it("reveals the per-update delete always-on for a coarse pointer and fires onDelete", () => {
     vi.mocked(useCoarsePointer).mockReturnValue(true);
     const onDelete = vi.fn();

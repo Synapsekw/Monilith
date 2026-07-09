@@ -41,12 +41,15 @@ export function useItemCollab(itemId: string | null) {
     staleTime: Infinity,
     queryFn: async (): Promise<UpdatesCache> => {
       const supabase = createClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("item_updates")
         .select("*")
         .eq("item_id", itemId!)
         .order("created_at", { ascending: false })
         .limit(UPDATES_LIMIT);
+      // Throw, don't swallow: a discarded error was cached as a SUCCESSFUL
+      // empty list, so the panel rendered blank and react-query never retried.
+      if (error) throw error;
       return { updates: (data ?? []) as ItemUpdate[] };
     },
   });
@@ -57,12 +60,15 @@ export function useItemCollab(itemId: string | null) {
     staleTime: Infinity,
     queryFn: async (): Promise<ActivityCache> => {
       const supabase = createClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("item_activities")
         .select("*")
         .eq("item_id", itemId!)
         .order("created_at", { ascending: false })
         .limit(ACTIVITY_LIMIT);
+      // Throw, don't swallow (see item_updates read above): surface isError
+      // so the Activity tab shows a retryable error instead of a blank list.
+      if (error) throw error;
       return { activities: (data ?? []) as ItemActivity[] };
     },
   });

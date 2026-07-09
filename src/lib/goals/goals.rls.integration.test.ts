@@ -47,6 +47,7 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   let aAnon: SupabaseClient<Database>; // org A creator/owner
   let bAnon: SupabaseClient<Database>; // org B outsider
   let orgA: string;
+  let orgB: string;
   let bBoardId: string;
 
   async function provisionUser(label: string) {
@@ -85,6 +86,7 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
 
     const b = await provisionUser("b");
     bAnon = b.anon;
+    orgB = b.orgId;
 
     // Org B gets a board (used to prove set_goal_links' can_read_board gate).
     const { data: ws } = await bAnon
@@ -188,5 +190,50 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
       ] as unknown as Database["public"]["Functions"]["set_goal_links"]["Args"]["p_links"],
     });
     expect(error, "linking an unreadable board must fail").not.toBeNull();
+  });
+
+  it("write confinement: a goal editor cannot inject goal_links rows into another org", async () => {
+    // A edits their OWN goal, so the old can_edit_goal-only policy passed —
+    // but org_id / board_id pointed at org B (cross-tenant pollution).
+    const { data: g, error: gErr } = await aAnon.rpc(
+      "create_goal",
+      createGoalArgs({ name: "A inject", mode: "auto_boards" }),
+    );
+    expect(gErr, "create_goal (org A)").toBeNull();
+    const goalId = (g as { id: string }).id;
+
+    // (a) row stamped with org B's org_id → goal_in_org(goal, orgB) fails
+    const pollute = await aAnon.from("goal_links").insert({
+      org_id: orgB,
+      goal_id: goalId,
+      board_id: bBoardId,
+    });
+    expect(
+      pollute.error,
+      "cross-org org_id stamp must be rejected",
+    ).not.toBeNull();
+
+    // (b) own org_id, but board_id references org B's board → board_in_org fails
+    const crossFk = await aAnon.from("goal_links").insert({
+      org_id: orgA,
+      goal_id: goalId,
+      board_id: bBoardId,
+    });
+    expect(crossFk.error, "cross-org board FK must be rejected").not.toBeNull();
+  });
+
+  it("write confinement: a legitimate same-org direct goal_links insert still passes", async () => {
+    const { data: g, error: gErr } = await bAnon.rpc(
+      "create_goal",
+      createGoalArgs({ name: "B auto", mode: "auto_boards" }),
+    );
+    expect(gErr, "create_goal (org B)").toBeNull();
+
+    const { error } = await bAnon.from("goal_links").insert({
+      org_id: orgB,
+      goal_id: (g as { id: string }).id,
+      board_id: bBoardId,
+    });
+    expect(error, "same-org insert must still be allowed").toBeNull();
   });
 });

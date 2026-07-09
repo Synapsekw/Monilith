@@ -11,11 +11,13 @@ import type { Member } from "@/lib/collaboration/activity";
 
 export function UpdatesTab({
   cache,
+  isError = false,
   members,
   onAdd,
   onDelete,
 }: {
   cache: UpdatesCache | undefined;
+  isError?: boolean;
   members: readonly Member[];
   onAdd: (text: string, mentionIds: string[]) => void;
   onDelete: (updateId: string) => void;
@@ -75,7 +77,11 @@ export function UpdatesTab({
         </div>
       )}
 
-      {!cache || cache.updates.length === 0 ? (
+      {isError ? (
+        <EmptyState variant="inline">
+          Couldn&apos;t load updates. Reopen the item to try again.
+        </EmptyState>
+      ) : !cache || cache.updates.length === 0 ? (
         <EmptyState variant="inline">No updates yet for this item.</EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
