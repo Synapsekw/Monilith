@@ -31,6 +31,7 @@ describe.skipIf(!integrationTargetReady())("RLS + rollup: workload", () => {
   let orgAId: string;
   let aOwnerId: string;
   let aMemberId: string;
+  let bId: string;
   let seededBoardId: string;
   let seededItemId: string;
   let seededTtColumnId: string;
@@ -225,6 +226,7 @@ describe.skipIf(!integrationTargetReady())("RLS + rollup: workload", () => {
     // -- outsider in a separate org B --
     const b = await provisionUser("b");
     bAnon = b.anon;
+    bId = b.id;
   }, 120_000);
 
   afterAll(async () => {
@@ -319,5 +321,35 @@ describe.skipIf(!integrationTargetReady())("RLS + rollup: workload", () => {
       { onConflict: "org_id,user_id" },
     );
     expect(bad.error).not.toBeNull(); // editing someone else's capacity is RLS-denied
+  });
+
+  it("capacity write confinement: a non-member cannot write a self row into another org", async () => {
+    // Old can_edit_member_capacity returned true for ANY user_id = auth.uid(),
+    // with no is_org_member(org_id) check — org B's user could pollute org A.
+    const { error } = await bAnon.from("member_capacity").insert({
+      org_id: orgAId,
+      user_id: bId,
+      hours_per_day: 2,
+      working_days: [1],
+      created_by: bId,
+    });
+    expect(
+      error,
+      "self-write into a foreign org must be rejected",
+    ).not.toBeNull();
+  });
+
+  it("capacity admin branch preserved: an org owner can still edit another member's capacity", async () => {
+    const { error } = await aAnon.from("member_capacity").upsert(
+      {
+        org_id: orgAId,
+        user_id: aMemberId,
+        hours_per_day: 7,
+        working_days: [1, 2, 3, 4, 5],
+        created_by: aOwnerId,
+      },
+      { onConflict: "org_id,user_id" },
+    );
+    expect(error, "org owner editing a member's capacity must pass").toBeNull();
   });
 });

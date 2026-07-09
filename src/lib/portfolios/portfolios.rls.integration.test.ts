@@ -39,6 +39,7 @@ describe.skipIf(!integrationTargetReady())("RLS + rollup: portfolios", () => {
   let aAnon: SupabaseClient<Database>;
   let bAnon: SupabaseClient<Database>;
   let orgId: string;
+  let orgBId: string;
   let portfolioId: string;
   let boardId: string;
   let statusColumnId: string;
@@ -189,6 +190,7 @@ describe.skipIf(!integrationTargetReady())("RLS + rollup: portfolios", () => {
     // -- outsider in a separate org B --
     const b = await provisionUser("b");
     bAnon = b.anon;
+    orgBId = b.orgId;
   }, 90_000);
 
   afterAll(async () => {
@@ -242,5 +244,50 @@ describe.skipIf(!integrationTargetReady())("RLS + rollup: portfolios", () => {
       p_done_option_ids: [doneOptionId],
     });
     expect(error).not.toBeNull();
+  });
+
+  it("write confinement: an editor cannot inject portfolio_boards rows into another org", async () => {
+    // B edits their OWN portfolio, so the old can_edit_portfolio-only WITH CHECK
+    // passed — but org_id / board_id pointed at org A (cross-tenant pollution).
+    const { data: pfB, error: pfBErr } = await bAnon.rpc("create_portfolio", {
+      p_name: "B pf",
+    });
+    expect(pfBErr, "create_portfolio (org B)").toBeNull();
+    const pfBId = (pfB as { id: string }).id;
+
+    // (a) row stamped with org A's org_id → portfolio_in_org(pfB, orgA) fails
+    const pollute = await bAnon.from("portfolio_boards").insert({
+      org_id: orgId,
+      portfolio_id: pfBId,
+      board_id: boardId,
+    });
+    expect(
+      pollute.error,
+      "cross-org org_id stamp must be rejected",
+    ).not.toBeNull();
+
+    // (b) own org_id, but board_id references org A's board → board_in_org fails
+    const crossFk = await bAnon.from("portfolio_boards").insert({
+      org_id: orgBId,
+      portfolio_id: pfBId,
+      board_id: boardId,
+    });
+    expect(crossFk.error, "cross-org board FK must be rejected").not.toBeNull();
+  });
+
+  it("write confinement: a legitimate same-org direct insert still passes", async () => {
+    const { data: pf2, error: pf2Err } = await aAnon.rpc("create_portfolio", {
+      p_name: "Q4",
+    });
+    expect(pf2Err, "create_portfolio (org A)").toBeNull();
+
+    const { error } = await aAnon.from("portfolio_boards").insert({
+      org_id: orgId,
+      portfolio_id: (pf2 as { id: string }).id,
+      board_id: boardId,
+      done_column_id: statusColumnId,
+      done_option_ids: [doneOptionId],
+    });
+    expect(error, "same-org insert must still be allowed").toBeNull();
   });
 });
