@@ -96,6 +96,26 @@ describe("cell renderers (read-only, 2a)", () => {
     expect(screen.getByText("Done")).toBeInTheDocument();
   });
 
+  it("StatusCell renders a soft pill with contrast-aware per-theme text vars", () => {
+    // Use a very dark option color so the light/dark text colors must diverge.
+    render(
+      <StatusCell
+        value={{ optionId: "o1" }}
+        settings={{
+          options: [{ id: "o1", label: "Blocked", color: "#1e3a8a" }],
+        }}
+      />,
+    );
+    const pill = screen.getByText("Blocked");
+    // Translucent fill (soft look), and distinct light/dark text derived for AA.
+    expect(pill.className).toContain("bg-[color-mix(in_oklab,var(--pill)_15%");
+    const light = pill.style.getPropertyValue("--pill-fg-light");
+    const dark = pill.style.getPropertyValue("--pill-fg-dark");
+    expect(light).not.toBe("");
+    expect(dark).not.toBe("");
+    expect(light).not.toBe(dark);
+  });
+
   it("StatusCell shows nothing for a null optionId", () => {
     const { container } = render(
       <StatusCell value={{ optionId: null }} settings={statusSettings} />,
@@ -188,17 +208,15 @@ describe("cell renderers (read-only, 2a)", () => {
   it("DateCell tints an overdue date and labels it for AT", () => {
     render(<DateCell value={{ date: "2026-06-15" }} settings={{}} overdue />);
     const el = screen.getByLabelText("Overdue");
-    expect(el.className).toContain("text-destructive");
-    expect(el.className).toContain("bg-destructive/10");
+    expect(el.className).toContain("text-status-red");
+    expect(el.className).toContain("bg-status-red/10");
     expect(el).toHaveAttribute("title", "Overdue");
   });
 
   it("DateCell renders untinted without the overdue prop", () => {
     render(<DateCell value={{ date: "2026-06-15" }} settings={{}} />);
     expect(screen.queryByLabelText("Overdue")).not.toBeInTheDocument();
-    expect(screen.getByText(/2026/).className).not.toContain(
-      "text-destructive",
-    );
+    expect(screen.getByText(/2026/).className).not.toContain("text-status-red");
   });
 
   it("NumberCell shows the number with its unit", () => {

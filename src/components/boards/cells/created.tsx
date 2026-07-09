@@ -68,5 +68,9 @@ export function CreatedByCell({
 export function CreatedAtCell({ iso }: { iso: string | null }) {
   const formatted = formatDateTime(iso);
   if (!formatted) return <span className="text-xs" />;
-  return <span className="text-xs tabular-nums opacity-60">{formatted}</span>;
+  return (
+    <span className="font-mono text-xs tabular-nums opacity-60">
+      {formatted}
+    </span>
+  );
 }
