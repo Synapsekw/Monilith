@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getUserOrgs } from "@/lib/auth/session";
 import { onboardingSchema } from "@/lib/validations/onboarding";
 
 export type OnboardingState = {
@@ -31,38 +32,48 @@ export async function createWorkspaceOrg(
     return { error: parsed.error.issues[0]?.message ?? "Invalid details" };
   }
 
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getUser();
   if (!user) {
     return { error: "You must be signed in to continue." };
   }
 
+  // Server-side re-check of the onboarding page's gate: the action is directly
+  // invokable, so without this a member could loop it to mint orgs. getUserOrgs
+  // throws on DB failure — map that to a friendly retry message rather than
+  // letting the raw error escape the action.
+  try {
+    const orgs = await getUserOrgs();
+    if (orgs.length > 0) {
+      return { error: "You already belong to an organization." };
+    }
+  } catch {
+    return { error: "Could not verify your account. Please try again." };
+  }
+
+  const supabase = await createClient();
+
+  // One transaction: org + owner membership + first workspace. The previous
+  // two-step (RPC then a separate workspaces insert) could fail halfway,
+  // leaving an org with no workspace and letting a retry mint a second org.
   const { data: org, error: orgError } = await supabase.rpc(
     "create_organization",
     {
       p_name: parsed.data.orgName,
       p_slug: slugify(parsed.data.orgName),
+      p_workspace_name: parsed.data.workspaceName,
     },
   );
 
   if (orgError || !org) {
+    // P0001 = the RPC's own `raise exception` guard messages, written to be
+    // user-facing ("You already have an organization."). Anything else is raw
+    // Postgres text — keep it out of the UI.
     return {
-      error: orgError?.message ?? "Could not create your organization.",
+      error:
+        orgError?.code === "P0001"
+          ? orgError.message
+          : "Could not create your organization. Please try again.",
     };
-  }
-
-  const { error: workspaceError } = await supabase.from("workspaces").insert({
-    org_id: org.id,
-    name: parsed.data.workspaceName,
-    created_by: user.id,
-  });
-
-  if (workspaceError) {
-    return { error: workspaceError.message };
   }
 
   // redirect() throws — must be called outside the try/catch logic above.

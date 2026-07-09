@@ -2361,7 +2361,7 @@ export type Database = {
         };
       };
       create_organization: {
-        Args: { p_name: string; p_slug: string };
+        Args: { p_name: string; p_slug: string; p_workspace_name?: string };
         Returns: {
           created_at: string;
           created_by: string;

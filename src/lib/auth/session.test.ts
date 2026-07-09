@@ -2,15 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // getClaims verifies the JWT locally (asymmetric signing keys); we mock it to
 // drive each case. redirect() throws to halt, like the real next/navigation.
-const { getClaims, redirect } = vi.hoisted(() => ({
+// from() drives the getUserOrgs organizations read.
+const { getClaims, redirect, from } = vi.hoisted(() => ({
   getClaims: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
   }),
+  from: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getClaims } }),
+  createClient: async () => ({ auth: { getClaims }, from }),
 }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
@@ -22,6 +24,7 @@ beforeEach(() => {
   vi.resetModules();
   getClaims.mockReset();
   redirect.mockClear();
+  from.mockReset();
 });
 
 function claims(overrides: Record<string, unknown> = {}) {
@@ -72,6 +75,42 @@ describe("getUser", () => {
     const { getUser } = await import("./session");
 
     expect(await getUser()).toBeNull();
+  });
+});
+
+describe("getUserOrgs", () => {
+  function orgsRead(result: {
+    data: unknown[] | null;
+    error: { message: string } | null;
+  }) {
+    from.mockReturnValue({ select: vi.fn(async () => result) });
+  }
+
+  it("returns the RLS-scoped orgs", async () => {
+    const rows = [{ id: "o1", name: "Acme", timezone: "UTC" }];
+    orgsRead({ data: rows, error: null });
+    const { getUserOrgs } = await import("./session");
+
+    expect(await getUserOrgs()).toEqual(rows);
+    expect(from).toHaveBeenCalledWith("organizations");
+  });
+
+  it("returns [] when the user genuinely belongs to no org", async () => {
+    orgsRead({ data: [], error: null });
+    const { getUserOrgs } = await import("./session");
+
+    expect(await getUserOrgs()).toEqual([]);
+  });
+
+  it("throws on a DB error instead of returning [] (a failure is not 'no org')", async () => {
+    // Silent [] here misrouted users to /onboarding on transient DB failures
+    // (home/page.tsx and onboarding/page.tsx treat [] as "no org yet").
+    orgsRead({ data: null, error: { message: "connection refused" } });
+    const { getUserOrgs } = await import("./session");
+
+    await expect(getUserOrgs()).rejects.toThrow(
+      /Failed to load organizations: connection refused/,
+    );
   });
 });
 

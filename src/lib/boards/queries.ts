@@ -57,7 +57,10 @@ export async function listMyBoards(): Promise<BoardListEntry[]> {
     .eq("created_by", user.id)
     .is("archived_at", null)
     .order("position", { ascending: true });
-  if (error) return [];
+  // A DB failure is not "no boards": throw so the error boundary renders
+  // (silent [] sent users with boards to the first-run empty state — or, via
+  // /home's dispatch, toward onboarding). Same policy as getBoardPayload.
+  if (error) throw new Error(`Failed to load boards: ${error.message}`);
   return (data ?? []).map((b) => ({
     id: b.id,
     name: b.name,
@@ -78,8 +81,11 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
     .eq("user_id", user.id)
     .is("boards.archived_at", null)
     .order("created_at", { ascending: true });
-  if (error || !data) return [];
-  const rows = data.filter((r) => r.boards && r.boards.created_by !== user.id);
+  // Same fail-loud policy as listMyBoards: an error is not an empty list.
+  if (error) throw new Error(`Failed to load shared boards: ${error.message}`);
+  const rows = (data ?? []).filter(
+    (r) => r.boards && r.boards.created_by !== user.id,
+  );
 
   const ownerIds = [...new Set(rows.map((r) => r.boards.created_by))];
   const { data: profiles } = await supabase
