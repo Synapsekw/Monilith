@@ -5,7 +5,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import type { Database } from "@/types/database.types";
 
-const AUTH_ROUTES = ["/login", "/signup", "/auth"];
+// Auth-flow routes an unauthenticated visitor must reach. `/forgot-password`
+// is the self-serve reset-request page — without it here the proxy's
+// authed-only fallback (below) would bounce a logged-out user to /login,
+// making the flow impossible. The recovery link lands on /change-password with
+// a session already established, so that one gates on isAuthenticated normally.
+const AUTH_ROUTES = ["/login", "/signup", "/auth", "/forgot-password"];
 // Public routes an unauthenticated visitor may view (exact match). `/` is the
 // static MONOLITH landing for logged-out visitors (the proxy redirects an
 // authenticated hit on `/` to /home below); `/landing` is the always-on splash

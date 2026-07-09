@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, startTransition, useActionState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Loader2 } from "lucide-react";
@@ -163,6 +164,14 @@ export function AuthForm({ mode, footer, initialError }: AuthFormProps) {
               <p className="text-destructive text-xs">
                 {form.formState.errors.password.message}
               </p>
+            ) : null}
+            {!isSignup ? (
+              <Link
+                href="/forgot-password"
+                className="text-muted-foreground hover:text-foreground self-end text-xs underline-offset-4 hover:underline"
+              >
+                Forgot password?
+              </Link>
             ) : null}
           </div>
 

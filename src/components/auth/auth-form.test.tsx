@@ -16,6 +16,21 @@ describe("AuthForm", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows a forgot-password link in login mode", () => {
+    render(<AuthForm mode="login" />);
+
+    const link = screen.getByRole("link", { name: /forgot password/i });
+    expect(link).toHaveAttribute("href", "/forgot-password");
+  });
+
+  it("does not show a forgot-password link in signup mode", () => {
+    render(<AuthForm mode="signup" />);
+
+    expect(
+      screen.queryByRole("link", { name: /forgot password/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders an organization name field in signup mode", () => {
     render(<AuthForm mode="signup" />);
 
