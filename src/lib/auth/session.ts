@@ -77,12 +77,17 @@ export async function requireUser(): Promise<SessionUser> {
  * authenticated render (sidebar + command palette + page + guards) share a
  * single query instead of re-hitting `organizations` each time. The select is
  * narrowed to the fields every caller reads (see `UserOrg`).
+ *
+ * A DB failure THROWS instead of returning [] — silent [] was indistinguishable
+ * from "no org yet", so /home and /onboarding misrouted fully-provisioned users
+ * into onboarding on a transient DB error. Same policy as getBoardPayload:
+ * a DB failure is not a 404; let the error boundary render.
  */
 export const getUserOrgs = cache(async (): Promise<UserOrg[]> => {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("organizations")
     .select("id, name, timezone");
-  if (error) return [];
+  if (error) throw new Error(`Failed to load organizations: ${error.message}`);
   return data ?? [];
 });
