@@ -9,6 +9,7 @@ import {
   signInSchema,
   signUpSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
 } from "@/lib/validations/auth";
 
 export type AuthState = {
@@ -115,6 +116,40 @@ export async function signUp(
   }
 
   return { success: "check-email" };
+}
+
+/**
+ * Self-serve "forgot password": email a recovery link that lands the user on
+ * the existing change-password screen (via the PKCE `/auth/callback` code
+ * exchange, `?next=/change-password`).
+ *
+ * Anti-enumeration: after validation this ALWAYS reports success — a
+ * nonexistent account, a rate-limit, or any other Supabase error is
+ * indistinguishable from the account-exists outcome, mirroring `signUp`
+ * above. Supabase only actually sends the email when the account exists.
+ */
+export async function requestPasswordReset(
+  _prevState: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  const parsed = forgotPasswordSchema.safeParse({
+    email: formData.get("email"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid email" };
+  }
+
+  const origin = await getOrigin();
+  const supabase = await createClient();
+  // `recovery=1` makes /change-password show self-serve copy (not the
+  // admin-forced wording). Encoded because it rides as the `next` param value.
+  const next = encodeURIComponent("/change-password?recovery=1");
+  // Result deliberately ignored — see anti-enumeration note above.
+  await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${origin}/auth/callback?next=${next}`,
+  });
+
+  return { success: "reset-email-sent" };
 }
 
 export async function changeOwnPassword(

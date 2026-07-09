@@ -17,7 +17,17 @@ import { Label } from "@/components/ui/label";
 
 const initialState: AuthState = {};
 
-export function ChangePasswordForm() {
+/**
+ * `forced` (default) — the admin-set-temporary-password path (app_metadata
+ * must_change_password). `recovery` — the self-serve forgot-password flow,
+ * reached via the recovery link → /auth/callback → here; same form, honest
+ * copy (no "administrator" framing).
+ */
+export function ChangePasswordForm({
+  variant = "forced",
+}: {
+  variant?: "forced" | "recovery";
+} = {}) {
   const [state, action, pending] = useActionState<AuthState, FormData>(
     changeOwnPassword,
     initialState,
@@ -31,8 +41,9 @@ export function ChangePasswordForm() {
         </div>
         <CardTitle>Choose a new password</CardTitle>
         <CardDescription>
-          Your administrator set a temporary password. Pick a new one to
-          continue.
+          {variant === "recovery"
+            ? "Enter a new password for your account to finish resetting it."
+            : "Your administrator set a temporary password. Pick a new one to continue."}
         </CardDescription>
       </CardHeader>
       <CardContent>
