@@ -8,7 +8,7 @@ describe("root PWA metadata", () => {
     const colors = Array.isArray(tc)
       ? tc.map((t) => (typeof t === "string" ? t : t.color))
       : [typeof tc === "string" ? tc : tc?.color];
-    expect(colors).toContain("#0d0d0f");
+    expect(colors).toContain("#0e0e10");
   });
 
   it("declares itself an installable apple web app", () => {
