@@ -32,7 +32,46 @@ const cache: UpdatesCache = {
 
 const members = [{ userId: "user-1", fullName: "Ada Lovelace" }];
 
+const cacheWithMention: UpdatesCache = {
+  updates: [
+    {
+      id: "u2",
+      org_id: "o1",
+      board_id: "b1",
+      item_id: "i1",
+      author_id: "user-1",
+      body: { text: "Hey @Ada Lovelace ship it", mentions: [] },
+      body_text: "Hey @Ada Lovelace ship it",
+      edited_at: null,
+      created_at: "2026-06-21T15:45:00Z",
+      updated_at: "2026-06-21T15:45:00Z",
+    },
+  ],
+};
+
 describe("UpdatesTab", () => {
+  it("accents a known member's @mention in the update body without touching surrounding text", () => {
+    render(
+      <TimeZoneProvider timeZone="UTC">
+        <UpdatesTab
+          cache={cacheWithMention}
+          members={members}
+          onAdd={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </TimeZoneProvider>,
+    );
+    const mention = screen.getByText("@Ada Lovelace");
+    expect(mention.className).toContain("text-primary");
+
+    const paragraph = mention.closest("p");
+    expect(paragraph).not.toBeNull();
+    // Exact original text is preserved — only the mention span is wrapped.
+    expect(paragraph?.textContent).toBe("Hey @Ada Lovelace ship it");
+    // "Hey" and "ship it" render as plain (unaccented) text.
+    expect(paragraph?.querySelectorAll(".text-primary")).toHaveLength(1);
+  });
+
   it("renders the author name and a formatted timestamp", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
