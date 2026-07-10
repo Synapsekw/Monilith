@@ -63,6 +63,14 @@ describe("TimeCard optimistic totals", () => {
     expect(screen.getByText(label(3600))).toBeInTheDocument(); // day2 1h
   });
 
+  it("renders the Total header label with the Keystone kicker recipe", () => {
+    render(<TimeCard data={makeData(9000)} categories={[]} />);
+
+    const total = screen.getByText("Total");
+    expect(total.className).toContain("font-mono");
+    expect(total.className).toContain("text-kicker");
+  });
+
   it("updates row Total, daily total, and week total synchronously on commit", () => {
     render(<TimeCard data={makeData(9000)} categories={[]} />);
 

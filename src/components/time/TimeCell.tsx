@@ -66,7 +66,7 @@ export function TimeCell({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
         className={cn(
-          "focus-visible:ring-ring h-8 w-14 rounded border bg-transparent text-center text-sm tabular-nums focus-visible:ring-2 focus-visible:outline-none",
+          "focus-visible:ring-ring h-8 w-14 rounded border bg-transparent text-center font-mono text-sm tabular-nums focus-visible:ring-2 focus-visible:outline-none",
           disabled && "opacity-50",
         )}
         placeholder="—"

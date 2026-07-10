@@ -12,6 +12,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Kicker } from "@/components/ui/kicker";
 import {
   Popover,
   PopoverContent,
@@ -75,7 +76,7 @@ export function AddRowPicker({
           <CommandList>
             <CommandEmpty>No matches.</CommandEmpty>
             {items.length > 0 ? (
-              <CommandGroup heading="Items">
+              <CommandGroup heading={<Kicker>Items</Kicker>}>
                 {items.map((it) => (
                   <CommandItem
                     key={it.id}
@@ -101,7 +102,7 @@ export function AddRowPicker({
                 ))}
               </CommandGroup>
             ) : null}
-            <CommandGroup heading="Categories">
+            <CommandGroup heading={<Kicker>Categories</Kicker>}>
               {categoryMatches.map((c) => (
                 <CommandItem
                   key={c}

@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import { cn } from "@/lib/utils";
 import { formatHours } from "@/lib/time/hours";
 import { upsertTimeAllocation, deleteTimeAllocation } from "@/lib/time/actions";
@@ -156,7 +157,7 @@ export function TimeCard({
           >
             <ChevronLeft aria-hidden />
           </Button>
-          <span className="text-sm font-medium tabular-nums">
+          <span className="font-mono text-sm font-medium tabular-nums">
             Week of {weekLabel(data.weekStart)}
           </span>
           <Button
@@ -176,19 +177,19 @@ export function TimeCard({
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-20">
             <tr>
-              <th className="bg-card text-muted-foreground sticky left-0 z-30 w-64 min-w-64 border-r border-b px-4 py-2 text-left text-xs font-medium">
-                Task / Category
+              <th className="bg-card sticky left-0 z-30 w-64 min-w-64 border-r border-b px-4 py-2 text-left">
+                <Kicker>Task / Category</Kicker>
               </th>
               {data.days.map((day) => (
                 <th
                   key={day}
-                  className="bg-card text-muted-foreground min-w-20 border-b px-2 py-2 text-center text-xs font-medium"
+                  className="bg-card min-w-20 border-b px-2 py-2 text-center"
                 >
-                  {dayLabel(day)}
+                  <Kicker>{dayLabel(day)}</Kicker>
                 </th>
               ))}
-              <th className="bg-card text-muted-foreground min-w-20 border-b border-l px-2 py-2 text-center text-xs font-medium">
-                Total
+              <th className="bg-card min-w-20 border-b border-l px-2 py-2 text-center">
+                <Kicker>Total</Kicker>
               </th>
             </tr>
           </thead>
@@ -229,7 +230,7 @@ export function TimeCard({
                       />
                     </td>
                   ))}
-                  <td className="border-b border-l px-2 py-1.5 text-center align-middle tabular-nums">
+                  <td className="border-b border-l px-2 py-1.5 text-center align-middle font-mono tabular-nums">
                     {formatHours(rowTotal) || "0"}h
                   </td>
                 </tr>
@@ -249,21 +250,21 @@ export function TimeCard({
           </tbody>
           <tfoot>
             <tr>
-              <td className="bg-card sticky left-0 z-10 border-t border-r px-4 py-2 text-xs font-medium">
-                Daily total
+              <td className="bg-card sticky left-0 z-10 border-t border-r px-4 py-2">
+                <Kicker>Daily total</Kicker>
               </td>
               {dayTotals.map((secs, i) => (
                 <td
                   key={data.days[i]}
                   className={cn(
-                    "border-t px-2 py-2 text-center text-xs tabular-nums",
+                    "border-t px-2 py-2 text-center font-mono text-xs tabular-nums",
                     secs > 0 ? "text-foreground" : "text-muted-foreground/50",
                   )}
                 >
                   {formatHours(secs) || "0"}h
                 </td>
               ))}
-              <td className="border-t border-l px-2 py-2 text-center text-xs font-semibold tabular-nums">
+              <td className="border-t border-l px-2 py-2 text-center font-mono text-xs font-semibold tabular-nums">
                 {formatHours(weekTotal) || "0"}h
               </td>
             </tr>
