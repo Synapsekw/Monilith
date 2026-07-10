@@ -8,7 +8,14 @@ import {
   afterEach,
 } from "vitest";
 import { reorderPosition } from "@/lib/boards/group-reorder";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
+import { useBoardSelection } from "@/stores/board-selection";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BoardTable } from "./BoardTable";
 import {
@@ -1201,6 +1208,25 @@ describe("BoardTable frozen Name column", () => {
     scroller.scrollLeft = 120;
     fireEvent.scroll(scroller);
     expect(scroller).toHaveAttribute("data-scrolledx", "true");
+  });
+
+  it("keeps every frozen name cell opaque when a row is selected (no horizontal-scroll bleed)", () => {
+    const { container } = renderNested();
+    // Select the top-level Epic row.
+    act(() => {
+      useBoardSelection.getState().setOrderedIds(["p1"]);
+      useBoardSelection.getState().toggle("p1");
+    });
+    // The Name column is `sticky left-0`, so the other columns scroll UNDER it;
+    // its background must stay opaque. A translucent selection wash
+    // (bg-primary/[0.08]) on a frozen cell would let scrolled content bleed
+    // through — the reskin regression this guards against.
+    const frozen = container.querySelectorAll<HTMLElement>(".sticky.left-0");
+    expect(frozen.length).toBeGreaterThan(0);
+    frozen.forEach((el) => {
+      expect(el.className).not.toContain("bg-primary/[0.08]");
+    });
+    useBoardSelection.getState().clear();
   });
 
   it("renders windowed rows for every group against the shared scroll container", () => {

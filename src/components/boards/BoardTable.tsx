@@ -2665,12 +2665,27 @@ function NameCell({
 
   return (
     <div
+      // The frozen Name column is `sticky left-0`, so the other columns scroll
+      // UNDERNEATH it — its background MUST be opaque or scrolled content bleeds
+      // through. The selection tint therefore can't be a translucent
+      // `bg-primary/[0.08]`; use an opaque composite (periwinkle mixed into the
+      // surface) that reads identically to the row wash but occludes fully.
+      style={
+        selected
+          ? {
+              backgroundColor: `color-mix(in srgb, var(--primary) 8%, var(--${
+                indented ? "surface-sunken" : "surface"
+              }))`,
+            }
+          : undefined
+      }
       className={cn(
         "group/name ease-keystone relative sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
-        // Selected: periwinkle wash + a 3px accent bar (::before, inset 6px). The
-        // bar is pointer-events-none so it never blocks the checkbox/drag targets.
+        // Selected: opaque periwinkle wash (via style, above) + a 3px accent bar
+        // (::before, inset 6px). The bar is pointer-events-none so it never
+        // blocks the checkbox/drag targets.
         selected
-          ? "bg-primary/[0.08] before:bg-primary before:pointer-events-none before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded"
+          ? "before:bg-primary before:pointer-events-none before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded"
           : indented
             ? "bg-surface-sunken hover:bg-surface"
             : "bg-surface hover:bg-surface-muted",
