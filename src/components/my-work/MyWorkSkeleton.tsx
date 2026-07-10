@@ -37,7 +37,7 @@ export function MyWorkSkeleton() {
                   <Skeleton className="h-3 w-20" />
                   <Skeleton className="h-3 w-6" />
                 </div>
-                <ul className="bg-surface divide-y overflow-hidden rounded-md border">
+                <ul className="bg-surface divide-y overflow-hidden rounded-[14px] border">
                   {Array.from({ length: rows }).map((_, i) => (
                     <li
                       key={i}

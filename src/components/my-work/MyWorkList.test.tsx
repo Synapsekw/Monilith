@@ -82,4 +82,40 @@ describe("MyWorkList", () => {
     expect(screen.getByText(/Launch/)).toBeInTheDocument();
     expect(screen.getByText("In progress")).toBeInTheDocument();
   });
+
+  it("renders the status label as a soft ColorChip carrying the status color", () => {
+    const groups = bucketMyWork(
+      [
+        item({
+          itemId: "x",
+          itemName: "Draft",
+          status: { label: "In progress", color: "#3b82f6" },
+        }),
+      ],
+      today,
+    );
+    render(<MyWorkList groups={groups} today={today} />);
+    const chip = screen.getByText("In progress");
+    expect(chip.className).toContain("rounded-sm");
+    expect(chip.style.getPropertyValue("--pill")).toBe("#3b82f6");
+  });
+
+  it("renders bucket headings as mono Kicker labels", () => {
+    const groups = bucketMyWork([item({ itemId: "a" })], today); // no date
+    render(<MyWorkList groups={groups} today={today} />);
+    const heading = screen.getByText("No date");
+    expect(heading.className).toContain("font-mono");
+    expect(heading.className).toContain("text-kicker");
+  });
+
+  it("keeps the overdue bucket heading in the destructive color", () => {
+    const groups = bucketMyWork(
+      [item({ itemId: "a", dueDate: "2026-07-01" })], // overdue
+      today,
+    );
+    render(<MyWorkList groups={groups} today={today} />);
+    const heading = screen.getByText("Overdue");
+    expect(heading.className).toContain("font-mono");
+    expect(heading.className).toContain("text-destructive");
+  });
 });

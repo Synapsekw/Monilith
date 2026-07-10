@@ -644,9 +644,57 @@ Recon confirmed no valid Keystone chrome (avatar glyph is a preserve; section ti
 
 ---
 
-## Clusters 5–6 (planned just-in-time)
+# Wave 5 — Personal & chrome
 
-Each is its own worktree → `develop`, verified before the next (Approach B). Written as a same-structured plan (four moves + recon specifics + TDD anchor per surface) immediately before its worktree starts, against the then-current `develop`:
+**Depends on:** Waves 0–4 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-personal-chrome` → `.claude/worktrees/keystone-personal-chrome`.
+**Recon (2026-07-10, against post-Wave-4 `develop`):** four surfaces, all file-disjoint after one coordination call. **Notifications has no route** — it's the header-bell popover; the "accent unread marker" is **already** `bg-primary` (satisfied, preserve). **`ui/command.tsx` is shared** by Command palette (D) and Time's `AddRowPicker` (B): group headings are done **per-call** (`heading={<Kicker>}`) in each consumer, and the single `ui/command.tsx` accent-active-wash edit is assigned **only to the Command-palette implementer** (AddRowPicker inherits it — desirable). **My Work rows are a list, not cards:** MetaChip can't hold the overdue `text-destructive` and `.card-lift` doesn't fit list rows, so those spec bullets are adapted (ColorChip status + Kicker buckets + 14px container) and the ill-fitting parts skipped — documented.
+
+**Preserve (all surfaces):** never touch cmdk selection/keyboard/`onSelect`/debounce, notification mark-read/realtime, Time input/Server-Action/optimistic logic, `<Link href>` nav, `pushState`. Unread dot stays `rounded-full` `bg-primary`. `text-destructive`/data-color conditionals (My Work overdue, Time `secs>0`) preserved. Focus rings + `transition-colors` that tests lock stay.
+
+### Task 5.1: My Work
+
+**Files:** `src/components/my-work/MyWorkList.tsx`, `src/components/my-work/MyWorkSkeleton.tsx`. Test: extend `MyWorkList.test.tsx` (keep "In progress"/bucket text + deep-link href).
+
+- [ ] **TDD:** assert the status renders via soft `ColorChip` (`rounded-sm`, `--pill` set) and a bucket heading uses the kicker recipe (`font-mono`/`text-kicker`).
+- [ ] **Moves:** (1) `MyWorkList.tsx:34-42` status pill → `<ColorChip color={item.status.color} className="max-w-40 shrink-0 truncate">{item.status.label}</ColorChip>`; drop `pillTextColor` import if unused. (2) `:97-106` bucket `<h2>` → `<Kicker className={cn(group.bucket === "overdue" && "text-destructive")}>{group.label}</Kicker>` (preserve overdue color via className). (3) `:111` list `<ul>` `rounded-md` → `rounded-[14px]`; mirror in `MyWorkSkeleton.tsx`. **Skip** due→MetaChip + card-lift (overdue destructive + list-not-cards).
+- [ ] `pnpm exec vitest run --project unit src/components/my-work/` green. Commit `feat(ui): keystone-polish my work (soft status chip + kicker buckets)`.
+
+### Task 5.2: Time
+
+**Files:** `src/components/time/TimeCard.tsx`, `src/components/time/TimeCell.tsx`, `src/components/time/AddRowPicker.tsx`. **Do NOT touch `ui/command.tsx`.** Test: extend `TimeCard.test.tsx` (keep `3.5h`/`4h` readouts).
+
+- [ ] **TDD:** assert a header label (e.g. "Total") uses the kicker recipe (`font-mono`+`text-kicker`).
+- [ ] **Moves:** (1) header `<th>` labels (Task/Category ~`:179`, day labels ~`:182-189`, Total ~`:190`) + footer "Daily total" (~`:252`) → `<Kicker>` (keep the `th/td` cell/border classes). (2) mono numerics: add `font-mono` to the week label (~`:159`), row Total (~`:232-233`), daily totals (~`:255-264`, keep the `secs>0` foreground/muted conditional), week total (~`:266-267`), and `TimeCell.tsx` input (~`:69`). (3) `AddRowPicker.tsx` `:78`/`:104` `heading="Items"/"Categories"` → `heading={<Kicker>Items</Kicker>}` / `heading={<Kicker>Categories</Kicker>}`.
+- [ ] `pnpm exec vitest run --project unit src/components/time/` green. Commit `feat(ui): keystone-polish time (kicker headers + mono numerics)`.
+
+### Task 5.3: Notifications
+
+**Files:** `src/components/notifications/NotificationsList.tsx`, `src/components/notifications/InvitationsSection.tsx`. Test: check `NotificationsList.test.tsx` (locks dot `bg-primary`/`bg-transparent` + focus ring + `transition-colors`) and `InvitationsSection.test.tsx` before restyling.
+
+- [ ] **TDD:** assert the "Invitations" label uses the kicker recipe.
+- [ ] **Moves:** (1) `InvitationsSection.tsx:23` `<p ...>Invitations</p>` → `<Kicker className="block px-3 pt-2">Invitations</Kicker>` (only if its test doesn't assert the old `<p>` classes; adapt if it does). (2) `NotificationsList.tsx:47` row hover `hover:bg-accent` → `hover:bg-accent/60` (translucent). **Keep** `transition-colors` + `focus-visible:ring-*` (test-locked) and the unread dot exactly (already accent).
+- [ ] `pnpm exec vitest run --project unit src/components/notifications/` green. Commit `feat(ui): keystone-polish notifications (kicker label + translucent rows)`.
+
+### Task 5.4: Command palette
+
+**Files:** `src/components/command-palette.tsx`, `src/components/ui/command.tsx`. Test: `command-palette.test.tsx` asserts group text + selection→push flow (keep green).
+
+- [ ] **TDD:** assert the "Items" group heading renders with the kicker recipe (`font-mono`).
+- [ ] **Moves:** (1) `command-palette.tsx` `:124`/`:155`/`:178`/`:193` `heading="Items|Navigation|Create|Theme"` → `heading={<Kicker>Items</Kicker>}` etc. (2) `ui/command.tsx:158` CommandItem — `data-selected:bg-muted` → `data-selected:bg-primary/10` (keep `data-selected:text-foreground`); accent active-row wash (also washes AddRowPicker — intended). **Never touch** cmdk `onSelect`/`data-selected` logic, the ⌘K keydown, debounce/`requestId`, `resetSearch`.
+- [ ] `pnpm exec vitest run --project unit src/components/command-palette.test.tsx src/components/ui/command.test.tsx` green (run whichever exist). Commit `feat(ui): keystone-polish command palette (kicker groups + accent active row)`.
+
+### Task 5.5: Integrate, smoke-check, finish Wave 5
+
+- [ ] gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` green.
+- [ ] visual smoke both themes — /my-work (soft status chips + mono kicker buckets + 14px list), /time (mono kicker headers + mono numerics), header bell (Invitations kicker + translucent rows, accent unread dot), ⌘K (mono kicker group labels + accent-washed active row; arrow-key nav still works).
+- [ ] `scripts/finish-task.sh`. Then numbered "How to test this" walkthrough.
+
+---
+
+## Wave 6 — Core touch-ups (planned just-in-time)
+
+Written just before its worktree starts, against the then-current `develop`. On already-shipped surfaces (extra smoke-check): sidebar keystone wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency (spec §4.3).
 
 - **Wave 5 · Personal & chrome** — My Work · Time · Notifications · Command palette.
 - **Wave 6 · Core touch-ups** — sidebar wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency.

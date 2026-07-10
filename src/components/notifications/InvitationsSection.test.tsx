@@ -43,6 +43,20 @@ describe("InvitationsSection", () => {
     expect(onDecline).toHaveBeenCalledWith("inv-1");
   });
 
+  it("renders the Invitations label as a Keystone kicker", () => {
+    render(
+      <InvitationsSection
+        invites={[invite]}
+        onAccept={() => {}}
+        onDecline={() => {}}
+      />,
+    );
+    const label = screen.getByText("Invitations");
+    expect(label.className).toContain("font-mono");
+    expect(label.className).toContain("text-kicker");
+    expect(label.className).toContain("uppercase");
+  });
+
   it("renders an error message when provided", () => {
     render(
       <InvitationsSection
