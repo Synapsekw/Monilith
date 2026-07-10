@@ -822,7 +822,7 @@ function BoardTableInner({
           // 0 ⇄ >0 boundary (cheap during scroll).
           setScrolledX(next);
         }}
-        className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover m-3 flex-1 overflow-auto rounded-lg border transition-colors"
+        className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover mx-3 mt-3 mb-6 flex-1 overflow-auto rounded-lg border transition-colors"
       >
         <div ref={contentRef} className="min-w-fit">
           {groups.length === 0 ? (
