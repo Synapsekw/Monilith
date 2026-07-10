@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useTransition, useRef, useMemo } from "react";
+import {
+  useState,
+  useTransition,
+  useRef,
+  useMemo,
+  type CSSProperties,
+} from "react";
 import { DndContext, useDraggable, type DragEndEvent } from "@dnd-kit/core";
 import {
   CalendarDays,
@@ -31,7 +37,7 @@ import {
 } from "@/lib/boards/gantt";
 import { itemDateRange, defaultTimelineColumns } from "@/lib/boards/dates";
 import { colorForItem } from "@/lib/boards/timeline-color";
-import { pillTextColor } from "@/lib/boards/contrast";
+import { softPillText } from "@/components/boards/cells/soft-pill-color";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
@@ -39,6 +45,7 @@ import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { PresenceRing } from "@/components/boards/presence/PresenceRing";
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -608,10 +615,10 @@ export function GanttBoard({
             <div className="bg-background sticky top-0 z-20 flex border-b">
               {/* Name rail header */}
               <div
-                className="text-muted-foreground bg-background sticky left-0 z-10 shrink-0 border-r px-4 py-2.5 text-[11px] font-semibold tracking-wide uppercase"
+                className="bg-background hover:border-border-hover sticky left-0 z-10 flex shrink-0 items-center border-r px-4 py-2.5"
                 style={{ width: LABEL_W }}
               >
-                Item
+                <Kicker>Item</Kicker>
               </div>
               {/* Timeline header */}
               <div className="relative" style={{ width: totalW, height: 38 }}>
@@ -869,6 +876,13 @@ function GanttRowItem({
     ? BAR_H // diamond
     : Math.max(DAY_W, (row.spanCols ?? 1) * DAY_W);
 
+  // Keystone soft-pill treatment for an arbitrary option color: a 15% tint of
+  // the hue over the surface with per-theme AA-clamped text (mirrors ColorChip /
+  // OptionPill). The bar hosts children (drag handle, resize strip, presence
+  // ring), so we replicate ColorChip's CSS-var contract inline rather than
+  // nesting the primitive.
+  const soft = color ? softPillText(color) : null;
+
   // Predecessors of this item (items that must finish before this starts)
   const predecessorDeps = useMemo(
     () => dependencies.filter((d) => d.successor_id === row.itemId),
@@ -964,8 +978,8 @@ function GanttRowItem({
           <DropdownMenuContent align="end" className="w-48">
             {otherItems.length > 0 && (
               <>
-                <div className="text-muted-foreground px-2 py-1 text-[11px] font-semibold tracking-wide uppercase">
-                  Blocked by…
+                <div className="px-2 py-1">
+                  <Kicker>Blocked by…</Kicker>
                 </div>
                 {otherItems.map((other) => (
                   <DropdownMenuItem
@@ -1047,8 +1061,10 @@ function GanttRowItem({
           <div
             ref={setNodeRef}
             className={cn(
-              "absolute flex cursor-grab items-center rounded-md shadow-sm",
-              color ? "" : "bg-primary",
+              "shadow-card absolute flex cursor-grab items-center rounded-sm transition-[filter] duration-200 hover:brightness-110",
+              color
+                ? "bg-[color-mix(in_oklab,var(--pill)_15%,transparent)]"
+                : "bg-primary",
               isDragging && "opacity-50",
             )}
             style={{
@@ -1056,7 +1072,13 @@ function GanttRowItem({
               top: ROW_H / 2 - BAR_H / 2,
               width: barWidth,
               height: BAR_H,
-              ...(color ? { backgroundColor: color } : {}),
+              ...(color && soft
+                ? ({
+                    "--pill": color,
+                    "--pill-fg-light": soft.light,
+                    "--pill-fg-dark": soft.dark,
+                  } as CSSProperties)
+                : {}),
               ...barStyle,
             }}
           >
@@ -1076,9 +1098,10 @@ function GanttRowItem({
               <span
                 className={cn(
                   "truncate text-[11px] font-medium",
-                  color ? "" : "text-primary-foreground",
+                  color
+                    ? "text-[color:var(--pill-fg-light)] dark:text-[color:var(--pill-fg-dark)]"
+                    : "text-primary-foreground",
                 )}
-                style={color ? { color: pillTextColor(color) } : undefined}
               >
                 {row.name}
               </span>
@@ -1089,7 +1112,7 @@ function GanttRowItem({
               onPointerMove={handleResizeMove}
               onPointerUp={handleResizeEnd}
               onPointerLeave={handleResizeEnd}
-              className="hover:bg-primary-foreground/20 h-full w-2 cursor-ew-resize touch-none rounded-r-md pointer-coarse:w-11"
+              className="hover:bg-primary-foreground/20 h-full w-2 cursor-ew-resize touch-none rounded-r-sm pointer-coarse:w-11"
               aria-label={`Resize ${row.name}`}
             />
           </div>

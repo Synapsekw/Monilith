@@ -158,6 +158,13 @@ describe("GanttBoard", () => {
     renderGantt();
     expect(screen.getByText("My Board")).toBeInTheDocument();
   });
+
+  it("renders the name-rail section header with the kicker recipe", () => {
+    renderGantt();
+    // The sticky name-rail column header reads "Item".
+    const header = screen.getByText("Item");
+    expect(header).toHaveClass("font-mono", "text-kicker", "uppercase");
+  });
 });
 
 function occupant(over: Partial<RosterOccupant>): RosterOccupant {
@@ -395,20 +402,19 @@ describe("GanttBoard — two-column spans + color", () => {
     expect(screen.getByText(/Unscheduled \(1\)/)).toBeInTheDocument();
   });
 
-  it("colors the spanned bar from its status option", () => {
+  it("colors the spanned bar from its status option as a soft pill", () => {
     renderBoard(twoColPayload());
-    // The bar span (smaller text-[11px]) is the element inside the colored bar div.
-    // Find it by matching the exact bar text class — it's the only span at 11px.
-    const barSpan = screen
-      .getAllByText("Spanned")
-      .find(
-        (el) => el.tagName === "SPAN" && el.className.includes("text-[11px]"),
-      );
-    expect(barSpan).toBeDefined();
-    // Walk up to the bar div that carries the inline backgroundColor
-    const bar = barSpan!.closest("[style*='background']") as HTMLElement;
+    // The bar body (drag handle) carries the item name as its aria-label; its
+    // parent is the colored bar surface.
+    const bar = screen.getByLabelText("Spanned").parentElement as HTMLElement;
     expect(bar).not.toBeNull();
-    expect(bar.style.backgroundColor).toBe("rgb(0, 200, 117)"); // #00c875
+    // Keystone soft treatment: the hue flows through as the --pill tint var, not
+    // an opaque inline background fill.
+    expect(bar.style.getPropertyValue("--pill")).toBe("#00c875");
+    expect(bar.style.backgroundColor).toBe("");
+    // Sanctioned chip geometry + card elevation (not rounded-md/shadow-sm).
+    expect(bar.className).toContain("rounded-sm");
+    expect(bar.className).toContain("shadow-card");
   });
 
   it("does not call router.refresh when changing the Color by picker", () => {
