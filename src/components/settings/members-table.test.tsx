@@ -92,6 +92,35 @@ describe("MembersTable hierarchy disabled-states", () => {
   });
 });
 
+describe("MembersTable status pill", () => {
+  it("renders the status chip as a soft StatusPill (rounded-sm), not the old hand-rolled rounded-md badge", () => {
+    const deactivatedRow: Member = {
+      user_id: "u-deactivated",
+      email: "gone@x.com",
+      full_name: "Gone Guy",
+      role: "member",
+      deactivated_at: "2026-01-01T00:00:00Z",
+    };
+    render(
+      <MembersTable
+        orgId={ORG}
+        members={[memberRow, deactivatedRow]}
+        currentUserId="u-owner"
+        currentUserRole="owner"
+        mode="org"
+      />,
+    );
+
+    const active = screen.getByText("Active");
+    expect(active.className).toContain("rounded-sm");
+    expect(active.className).not.toContain("rounded-md");
+
+    const deactivated = screen.getByText("Deactivated");
+    expect(deactivated.className).toContain("rounded-sm");
+    expect(deactivated.className).not.toContain("rounded-md");
+  });
+});
+
 describe("MembersTable actions", () => {
   it("calls setMemberRole with the right args when a member's role changes", () => {
     render(

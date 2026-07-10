@@ -19,6 +19,7 @@ import { getMyAiCredential } from "@/lib/ai/credentials";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
 import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
+import { Kicker } from "@/components/ui/kicker";
 
 export const metadata = { title: "Settings" };
 
@@ -71,6 +72,7 @@ export default async function SettingsPage() {
   return (
     <div className="w-full px-6 py-10 lg:px-8">
       <div className="mb-8">
+        <Kicker className="mb-1.5 block">ADMIN</Kicker>
         <h1 className="text-foreground font-heading text-2xl font-semibold tracking-tight">
           Settings
         </h1>
