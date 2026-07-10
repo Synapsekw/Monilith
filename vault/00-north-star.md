@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-10-0907
+last-updated: 2026-07-10-0940
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,11 +51,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Batch A shipped to prod** (PR#54, squash `1277bc8`; main CI + Vercel deploy green; squash divergence healed at `2ef9135`). The **"Monolith Keystone" reskin** was then **built + iterated on `develop`** (foundation tokens dark+light, Nunito Sans + JetBrains Mono, `<Kicker>`, translucent status pills; sidebar + board table + item panel reskinned) — **not yet promoted to `main`**. ([[2026-07-10-0907-keystone-reskin-build-and-polish]], [[dark-first-monday-reskin]])
-- **Branch:** `develop == origin/develop` at `f655eec`; `main` at `1277bc8` (Batch A) — **the Keystone reskin is unpromoted, so a `/promote` is due.** Reskin spec+plan: `docs/superpowers/{specs,plans}/2026-07-09-keystone-reskin*.md`. **No live `task/*` worktrees.**
+- **Phase:** **All shipped to prod — `develop` and `main` in sync.** PR#55 (`74db50a`) promoted the **"Monolith Keystone" reskin** (tokens dark+light, Nunito Sans + JetBrains Mono, `<Kicker>`, translucent status pills; sidebar + board table + item panel reskins + a slimmed single-row board header) to prod (main CI + Vercel deploy green); squash divergence healed (`806345b`). Batch A shipped earlier this cycle (PR#54, `1277bc8`). ([[2026-07-10-0907-keystone-reskin-build-and-polish]], [[dark-first-monday-reskin]])
+- **Branch:** `develop == origin/develop` at `806345b`; `main` at `74db50a` (heal merge makes them tree-identical). Reskin spec+plan: `docs/superpowers/{specs,plans}/2026-07-09-keystone-reskin*.md`. **No live `task/*` worktrees.**
 - **In flight:** none building.
-- **Next:** **promote the Keystone reskin `develop → main`** first. Then: **secondary-surface Keystone polish** (calendar/gantt/kanban/dashboards/settings/auth inherit the palette but lack bespoke polish), and the two standing tracks — **Phase 10 — AI & Agents E1** (scope-reconciliation first; [[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]) and **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, **skip A4** — shipped). A scoped **Batch B** (org switcher, auth rate limiting, notification prefs + due-date reminders, saved views, cached-reader membership assertions) remains in the audit report §04.
-- **Owed:** **Manual, blocking forgot-password in prod:** add `/auth/callback` to Supabase Auth **Redirect URLs** allowlist (PROD dashboard). **Promote due:** Keystone reskin `develop → main`. **Keystone follow-ups:** secondary-surface polish, sidebar wordmark mark, item-panel meta-chips/tab-counts, `@mention` highlighting. **Landing redesign:** apply Keystone to `/landing` (converges with the app reskin) — remove `brand-lab` once it lands. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **Phase 10 scope-reconciliation.**
+- **Next:** **secondary-surface Keystone polish** (calendar/gantt/kanban/dashboards/settings/auth inherit the palette but lack bespoke polish), then the two standing tracks — **Phase 10 — AI & Agents E1** (scope-reconciliation first; [[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]) and **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, **skip A4** — shipped). A scoped **Batch B** (org switcher, auth rate limiting, notification prefs + due-date reminders, saved views, cached-reader membership assertions) remains in the audit report §04.
+- **Owed:** **Manual, blocking forgot-password in prod:** add `/auth/callback` to Supabase Auth **Redirect URLs** allowlist (PROD dashboard). **Keystone follow-ups:** secondary-surface polish, sidebar wordmark mark, item-panel meta-chips/tab-counts, `@mention` highlighting, sidebar easing-utility consistency. **Landing redesign:** apply Keystone to `/landing` (converges with the app reskin) — remove `brand-lab` once it lands. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **Phase 10 scope-reconciliation.**
 
 ### Last session
 
