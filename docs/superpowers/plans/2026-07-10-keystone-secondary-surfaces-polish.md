@@ -692,11 +692,44 @@ Recon confirmed no valid Keystone chrome (avatar glyph is a preserve; section ti
 
 ---
 
-## Wave 6 — Core touch-ups (planned just-in-time)
+# Wave 6 — Core touch-ups
 
-Written just before its worktree starts, against the then-current `develop`. On already-shipped surfaces (extra smoke-check): sidebar keystone wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency (spec §4.3).
+**Depends on:** Waves 0–5 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-core-touchups` → `.claude/worktrees/keystone-core-touchups`.
+**Recon (2026-07-10, against post-Wave-5 `develop`):** targeted touch-ups on already-shipped surfaces → **extra smoke-check** (spec §8). Three file-disjoint buckets. Key constraints: (1) **`ItemPanel` receives only `createdBy`/`createdAt`** — not status/due — so the spec's illustrative "STATUS/DUE" chips have no data at this boundary (plumbing them = data-flow change, forbidden); the honest MetaChip realization is **OWNER + CREATED**. (2) The **wordmark mark** spec (`2026-07-09-keystone-reskin-design.md` §6.1) is one line ("angled-slab clip-path, ink-on-paper"); the existing `MonolithMark` (cleaved-slab SVG, `currentColor`) IS that mark and its doc comment says it's meant to pair with the wordmark → prepend it to the expanded lockup (reversible; user reviews at smoke-check before promote). (3) Item-panel tabs already use `ease-keystone` + `rounded-full`; the only stray easing is `sidebar.tsx:47`.
 
-- **Wave 5 · Personal & chrome** — My Work · Time · Notifications · Command palette.
+**Preserve (all buckets):** never touch data flow, Server Actions, realtime, mention DATA/parsing (`mentions.ts`, `MentionTextarea`), `mentionIds`/notification path, tab-switch client state, keyboard handlers, `sr-only`/`aria-*` accessible names, the `pointer-coarse:min-h-11` tab token (test-locked). Visual/render-class only.
+
+### Task 6.1: Sidebar (wordmark mark + easing)
+
+**Files:** `src/components/brand/brand.tsx`, `src/components/sidebar.tsx`. Tests keep green: `brand.test.tsx` (must NOT add a 2nd visible "MONOLITH" text node; keep the `sr-only` "MONOLITH"), `sidebar.test.tsx` (no easing asserted).
+
+- [ ] **6.1a — mark:** `brand.tsx` expanded branch (~`:23-45`) — prepend `<MonolithMark className="text-foreground size-5" />` as the first child inside the fragment, before the wordmark `<span>`. The `<Link>` already has `flex items-center gap-2`, so it lays out as `[mark] MONOL[slab-I]TH`. MonolithMark is `aria-hidden` already → no accessible-name/text-node change (tests stay green). Keep the collapsed branch as-is.
+- [ ] **6.1b — easing:** `sidebar.tsx:47` — `"…transition-[width] duration-200 ease-out"` → `ease-out` → `ease-keystone`. Nothing else.
+- [ ] **TDD:** extend `brand.test.tsx` — assert an svg mark renders in the expanded brand (e.g. `container.querySelector("svg")` present) AND `getByText("MONOLITH")` (sr-only) still present + link href `/landing`. Run `pnpm exec vitest run --project unit src/components/brand/ src/components/sidebar.test.tsx` green.
+- [ ] Commit `feat(ui): keystone sidebar wordmark mark + keystone easing`.
+
+### Task 6.2: Item panel (meta-chips + tab count)
+
+**Files:** `src/components/boards/item-panel/ItemPanel.tsx`. Test: extend `ItemPanel.test.tsx` (keep the `getByRole("tab", {name:/updates/i})` matches + `pointer-coarse:min-h-11` per tab + fields-tab metadata assertions).
+
+- [ ] **Moves:** (1) **Meta chips** — after the title row (~`:103`, the `</div>` closing the SheetTitle+viewers flex row, before `<SheetDescription>`), add a compact mono meta row: `<div className="flex flex-wrap gap-x-4 gap-y-1"> {creatorName && <MetaChip label="OWNER">{creatorName}</MetaChip>} <MetaChip label="CREATED">{formatCreated(createdAt)}</MetaChip> </div>` where `creatorName = members.find(m => m.userId === createdBy)?.fullName` (same lookup the fields tab uses) and `formatCreated` reuses the fields-tab date formatting (inspect `CreatedAtCell`/the fields `<dl>` ~`:142-169`; reuse its formatter, don't invent). Import `MetaChip` from `@/components/ui/meta-chip`. (2) **Tab count** — in the tab label render (~`:127`, `{t === "activity" ? "Activity Log" : t}`), append an accent count to the Updates tab: `{t === "updates" && (updates.data?.updates.length ?? 0) > 0 ? <span className="text-primary ml-1 tabular-nums">{String(updates.data.updates.length).padStart(2, "0")}</span> : null}`. **Keep the word "updates"/"Updates" in the label** so the accessible name still matches `/updates/i` (test-locked); the count is a child span. `updates` is already destructured (`:58`).
+- [ ] **TDD:** extend `ItemPanel.test.tsx` — assert the header renders an OWNER MetaChip (mono `text-kicker` label) from a fixture, and (with a fixture that has ≥1 update) the Updates tab shows a `text-primary` count. Reuse existing render/fixtures. Run `pnpm exec vitest run --project unit src/components/boards/item-panel/ItemPanel.test.tsx` green.
+- [ ] Commit `feat(ui): keystone item panel meta chips + accent tab count`.
+
+### Task 6.3: @mention accent-highlighting
+
+**Files:** `src/components/boards/item-panel/UpdatesTab.tsx`. **Do NOT touch** `MentionTextarea.tsx` or `mentions.ts` (composer/parsing/data). Test: extend `UpdatesTab.test.tsx`.
+
+- [ ] **Move:** `UpdatesTab.tsx:114` — `<p className="whitespace-pre-wrap">{u.body_text}</p>` → render the body through a small **display-only** highlighter: tokenize `u.body_text` against the known `members` full names (longest-match `@{fullName}`) and wrap each matched `@Name` in `<span className="text-primary">@Name</span>`; leave all other text as plain nodes; keep `whitespace-pre-wrap` on the `<p>`. Implement the tokenizer as a local pure helper in this file (or a co-located util). This is purely rendering an already-persisted string — it cannot affect linking/notifications (those ride `mentionIds`, not the display text). Match against `members` (prop, `:15/:21`) so only real mentions accent.
+- [ ] **TDD:** extend `UpdatesTab.test.tsx` — with a fixture whose `body_text` contains `@{a member's fullName}`, assert that `@Name` renders inside an element with `text-primary` and non-mention text stays plain. Keep the existing author/timestamp/delete assertions. Run `pnpm exec vitest run --project unit src/components/boards/item-panel/UpdatesTab.test.tsx` green.
+- [ ] Commit `feat(ui): keystone accent-highlight @mentions in updates`.
+
+### Task 6.4: Integrate, smoke-check, finish Wave 6
+
+- [ ] gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` green.
+- [ ] visual smoke both themes — sidebar shows the mark+wordmark lockup and its collapse animates with keystone easing; an item panel shows OWNER/CREATED mono meta chips + an accent "02"-style count on the Updates tab; an update comment with an @mention renders the mention in periwinkle. **Extra care:** these are already-shipped surfaces — confirm no regression to tab switching, collapse toggle, or update posting.
+- [ ] `scripts/finish-task.sh`. Then numbered "How to test this" walkthrough (call out the wordmark mark for user sign-off before promote).
 - **Wave 6 · Core touch-ups** — sidebar wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency.
 
 ---
