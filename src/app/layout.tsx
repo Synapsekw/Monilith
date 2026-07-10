@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito, JetBrains_Mono } from "next/font/google";
+import { Nunito_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const nunito = Nunito({
-  variable: "--font-nunito",
+const nunitoSans = Nunito_Sans({
+  variable: "--font-nunito-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
 });
@@ -44,7 +44,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${nunito.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${nunitoSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <Providers>{children}</Providers>

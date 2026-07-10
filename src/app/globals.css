@@ -18,9 +18,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-nunito);
+  --font-sans: var(--font-nunito-sans);
   --font-mono: var(--font-jetbrains-mono);
-  --font-heading: var(--font-nunito);
+  --font-heading: var(--font-nunito-sans);
 
   /* Brand highlight (semantic alias of the configurable accent) */
   --color-brand: var(--brand);
