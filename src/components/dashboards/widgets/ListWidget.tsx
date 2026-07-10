@@ -2,7 +2,7 @@
 
 import { useWidgetRows } from "@/lib/dashboards/use-widget-rows";
 import { formatCell } from "@/lib/dashboards/list-rows";
-import { pillTextColor } from "@/lib/boards/contrast";
+import { ColorChip } from "@/components/ui/color-chip";
 import type { CacheWidget } from "@/lib/dashboards/cache";
 
 export function ListWidget({ widget }: { widget: CacheWidget }) {
@@ -47,15 +47,7 @@ export function ListWidget({ widget }: { widget: CacheWidget }) {
                 return (
                   <td key={c.id} className="px-2 py-1">
                     {cell.color ? (
-                      <span
-                        className="inline-block rounded px-1.5 py-0.5 text-xs font-medium"
-                        style={{
-                          backgroundColor: cell.color,
-                          color: pillTextColor(cell.color),
-                        }}
-                      >
-                        {cell.text}
-                      </span>
+                      <ColorChip color={cell.color}>{cell.text}</ColorChip>
                     ) : (
                       <span className="text-muted-foreground">{cell.text}</span>
                     )}

@@ -33,7 +33,7 @@ describe("DashboardCanvasSkeleton", () => {
   it("widget card mirrors the real card chrome (border + header divider)", () => {
     render(<DashboardWidgetSkeleton />);
     const card = screen.getByTestId("widget-skeleton");
-    expect(card.className).toContain("rounded-xl");
+    expect(card.className).toContain("rounded-[14px]");
     expect(card.className).toContain("border");
     expect(card.className).toContain("flex-col");
   });

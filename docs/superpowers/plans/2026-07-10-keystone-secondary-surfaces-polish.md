@@ -485,11 +485,58 @@ Expected: rebased onto latest `develop`, gates green on merged state, merged, wo
 
 ---
 
-## Clusters 2–6 (planned just-in-time)
+# Wave 2 — Dashboards
+
+**Depends on:** Wave 0 + Wave 1 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-dashboards` → `.claude/worktrees/keystone-dashboards`.
+**Recon (2026-07-10, against post-Wave-1 `develop`):** reshaped the wave. Of the three named surfaces, **dashboards-nav has zero valid Keystone chrome** (its section title is delegated to the shared `<NavSection>` — shell scope; spec §4.2's "`DashboardsNav.tsx:139` avatar tiles" is a single-initial **avatar glyph**, a decorative preserve, not a Kicker). **Canvas** reduces to one skeleton line that must mirror the widget card. All real work is in **widgets**. Two file-disjoint parallel subagents; nav is a documented no-op.
+
+**Preserve (data, not chrome — do NOT touch):** every `chart-*` fill/stroke/gradient (`ChartWidget`, `ChartDefs`, `chart-colors/config/theme`), the `NumberWidget` gauge `<circle>` metric arc, `BatteryWidget`/`CompletionWidget`/`HealthWidget` meter bars + `percentBandColor` fills, all `size-1.5/2/2.5 rounded-*` decorative/option-color dots (incl. `DashboardWidget:58` brand dot, `WidgetConfigForm:622` option swatch). Never touch RGL drag/resize config, `onMouseDown`-stopPropagation handlers, or any mutation/data flow.
+
+### Task 2.1: Widget card + canvas skeleton (coupled pair)
+
+**Files:** Modify `src/components/dashboards/DashboardWidget.tsx`, `src/components/dashboards/DashboardCanvasSkeleton.tsx`. Tests: extend `DashboardWidget.test.tsx` (behavioral — keep green), `DashboardCanvasSkeleton.test.tsx` (keep `data-testid="widget-skeleton"`).
+
+- [ ] **Step 1 (TDD):** add an assertion that the widget card root carries the keystone card treatment (`rounded-[14px]` + `card-lift`) and no longer `rounded-xl`.
+- [ ] **Step 2:** watch it fail (card is `rounded-xl`, no `card-lift`).
+- [ ] **Step 3 — the moves:**
+  1. `DashboardWidget.tsx:55` — `rounded-xl` → `rounded-[14px]`; add `.card-lift` + `hover:border-border-hover` (move 3/4). Keep the brand-wash radial-gradient background exactly. **RGL-drag-safe:** `.card-lift` is a hover transform; RGL sets an inline `transform` during active drag which wins, so the lift only shows on idle hover — verify no visual fight in edit mode.
+  2. `DashboardWidget.tsx:56` — header `border-b` → add `group-hover:border-border-hover` (needs `group` on the L55 root) so the hairline brightens with the card. Layout untouched.
+  3. `DashboardCanvasSkeleton.tsx:12` (+ doc comment L5) — mirror the widget card radius: `rounded-xl` → `rounded-[14px]`. (Skeleton is static → no card-lift.)
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/dashboards/DashboardWidget.test.tsx src/components/dashboards/DashboardCanvasSkeleton.test.tsx` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish dashboard widget card + canvas skeleton`.
+
+### Task 2.2: Widget contents (Kickers · preview card · list chip)
+
+**Files:** Modify `src/components/dashboards/widgets/NumberWidget.tsx`, `src/components/dashboards/WidgetConfigSheet.tsx`, `src/components/dashboards/widgets/ListWidget.tsx`. Tests: `WidgetConfigSheet.test.tsx` behavioral (keep green); add a `ListWidget.test.tsx` anchor for the ColorChip contract (no existing test).
+
+- [ ] **Step 1 (TDD):** new `ListWidget.test.tsx` — a colored cell renders a soft `ColorChip` (`rounded-sm`, `--pill` set, no opaque inline `backgroundColor`).
+- [ ] **Step 2:** watch it fail (current pill is opaque `style={{ backgroundColor }}`).
+- [ ] **Step 3 — the moves:**
+  1. `NumberWidget.tsx:74` — the `text-xs tracking-wide uppercase` agg-unit label `<span>` → `<Kicker>{agg === "count" ? "items" : agg}</Kicker>` (import `@/components/ui/kicker`). Keep `mt-1`; drop the redundant hand-rolled classes.
+  2. `WidgetConfigSheet.tsx:143` — the "Live preview" `text-xs tracking-wide uppercase` `<span>` → `<Kicker>Live preview</Kicker>`.
+  3. `WidgetConfigSheet.tsx:146` — preview card `rounded-xl` → `rounded-[14px]` (radius consistency; not interactive → no card-lift).
+  4. `ListWidget.tsx:49–58` — replace the opaque `<span style={{ backgroundColor: cell.color, color: pillTextColor(cell.color) }}>` with `<ColorChip color={cell.color}>{cell.text}</ColorChip>` (import `@/components/ui/color-chip`). Remove the now-unused `pillTextColor` import (L5) if nothing else uses it (nothing does).
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/dashboards/widgets/ListWidget.test.tsx src/components/dashboards/WidgetConfigSheet.test.tsx` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish dashboard widget contents (kickers + soft list chips)`.
+
+### Task 2.3: dashboards-nav — no-op (documented)
+
+Recon confirmed no valid Keystone chrome (avatar glyph is a preserve; section title is shell-owned `<NavSection>`). **No file change.** Recorded here so the wave's coverage of spec §4.2 is explicit: nav's only spec callout (`:139`) is intentionally left as a decorative avatar glyph.
+
+### Task 2.4: Integrate, smoke-check, finish Wave 2
+
+- [ ] **Step 1:** gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green.
+- [ ] **Step 2:** visual smoke-check both themes — open a dashboard: widget cards show 14px radius + hover card-lift + brightening hairline (brand-wash intact), NumberWidget unit label is a mono kicker, list-widget colored cells are soft translucent chips (no opaque solids), skeleton→live transition has no radius jump. Confirm charts/gauges/meters unchanged.
+- [ ] **Step 3:** `scripts/finish-task.sh`.
+- [ ] **Step 4:** hand the user a numbered "How to test this" walkthrough (both themes).
+
+---
+
+## Clusters 3–6 (planned just-in-time)
 
 Each is its own worktree → `develop`, verified before the next (Approach B). Written as a same-structured plan (four moves + recon specifics + TDD anchor per surface) immediately before its worktree starts, against the then-current `develop`:
 
-- **Wave 2 · Dashboards** — canvas · widgets · dashboards-nav (spec §4.2 Dashboards; preserve `chart-*` color-data).
 - **Wave 3 · Admin & entry** — Settings · Auth (from stock shadcn → brand-washed card + kicker eyebrow + panel elevation) · Onboarding.
 - **Wave 4 · Planning** — Goals · Portfolios · Workload.
 - **Wave 5 · Personal & chrome** — My Work · Time · Notifications · Command palette.

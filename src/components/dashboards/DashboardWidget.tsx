@@ -52,8 +52,11 @@ export function DashboardWidget({
 
   return (
     <>
-      <div className="bg-card relative flex h-full flex-col overflow-hidden rounded-xl border [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
-        <div className="flex items-center justify-between border-b px-3 py-2">
+      <div
+        data-testid="widget-card"
+        className="bg-card group card-lift hover:border-border-hover relative flex h-full flex-col overflow-hidden rounded-[14px] border [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]"
+      >
+        <div className="group-hover:border-border-hover flex items-center justify-between border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <span
               className="size-1.5 shrink-0 rounded-[3px] bg-[var(--brand)]"

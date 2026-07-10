@@ -21,6 +21,7 @@ import { BatteryWidget } from "@/components/dashboards/widgets/BatteryWidget";
 import { CompletionWidget } from "@/components/dashboards/widgets/CompletionWidget";
 import { HealthWidget } from "@/components/dashboards/widgets/HealthWidget";
 import { ListWidget } from "@/components/dashboards/widgets/ListWidget";
+import { Kicker } from "@/components/ui/kicker";
 import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
 import { WidgetPreviewProvider } from "@/lib/dashboards/use-widget-preview";
 import { useDashboardMutations } from "@/lib/dashboards/use-dashboard-mutations";
@@ -140,10 +141,8 @@ function WidgetConfigSheetForm({
       <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto py-4 md:grid-cols-[1fr_1.1fr]">
         <WidgetConfigForm boards={boards} value={draft} onChange={setDraft} />
         <div className="flex flex-col gap-2">
-          <span className="text-muted-foreground text-xs tracking-wide uppercase">
-            Live preview
-          </span>
-          <div className="bg-card relative h-64 rounded-xl border p-3">
+          <Kicker>Live preview</Kicker>
+          <div className="bg-card relative h-64 rounded-[14px] border p-3">
             <WidgetPreviewProvider
               previewWidgetId={previewWidget.id}
               kind={draft.kind}
