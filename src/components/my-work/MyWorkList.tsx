@@ -92,11 +92,15 @@ export function MyWorkList({
         {groups.map((group) => (
           <section key={group.bucket}>
             <div className="mb-2 flex items-baseline justify-between px-1">
-              <Kicker
-                className={cn(group.bucket === "overdue" && "text-destructive")}
-              >
-                {group.label}
-              </Kicker>
+              <h2 className="contents">
+                <Kicker
+                  className={cn(
+                    group.bucket === "overdue" && "text-destructive",
+                  )}
+                >
+                  {group.label}
+                </Kicker>
+              </h2>
               <span className="text-muted-foreground text-xs tabular-nums">
                 {group.items.length}
               </span>
