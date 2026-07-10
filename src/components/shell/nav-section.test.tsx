@@ -49,6 +49,18 @@ describe("NavSection", () => {
     expect(titleBtn).toHaveAttribute("aria-controls", "nav-section-planning");
   });
 
+  it("renders the section label as a mono Keystone kicker", () => {
+    renderSection();
+    // The title text is wrapped in <Kicker> — mono, uppercase, dim --kicker
+    // color — while the toggle button keeps its accessible name.
+    const label = screen.getByText("Planning");
+    expect(label.className).toContain("font-mono");
+    expect(label).toHaveClass("text-kicker", "uppercase");
+    expect(
+      screen.getByRole("button", { name: "Planning" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders the title as a link when titleHref is set", () => {
     render(
       <NavSection storageKey="dash" title="Dashboards" titleHref="/dashboards">

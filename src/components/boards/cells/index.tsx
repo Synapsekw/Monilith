@@ -1,10 +1,12 @@
+import type { CSSProperties } from "react";
 import Image from "next/image";
 import { Check, Network, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
-import { pillTextColor } from "@/lib/boards/contrast";
-import { percentBandColor } from "@/lib/boards/percent-color";
 import { effectivePriority } from "@/lib/boards/priority";
+import { percentBandColor } from "@/lib/boards/percent-color";
+import { cn } from "@/lib/utils";
+import { softPillText } from "./soft-pill-color";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
 
@@ -24,15 +26,27 @@ function optionById(settings: Settings, id: string | null) {
   return settings.options?.find((o) => o.id === id);
 }
 
-/** Status/label pill — the one sanctioned place for option color. */
+/**
+ * Status/label pill — the one sanctioned place for option color. Keystone soft
+ * look: a translucent 15% tint of the user-chosen option color, with text
+ * derived from that same color but contrast-clamped per theme (see
+ * {@link softPillText}) so an arbitrary user hex still clears WCAG AA in both
+ * modes — the `--pill-*` custom properties carry the fill + per-theme text so
+ * the `dark:` variant picks the right one. Interactive (the cell is
+ * click-to-edit), so it opts into the pill hover motion.
+ */
 function OptionPill({ option }: { option: ColumnOption }) {
+  const fg = softPillText(option.color);
   return (
     <span
-      className="inline-flex max-w-full items-center truncate rounded-md px-2.5 py-0.5 text-xs font-medium"
-      style={{
-        backgroundColor: option.color,
-        color: pillTextColor(option.color),
-      }}
+      style={
+        {
+          "--pill": option.color,
+          "--pill-fg-light": fg.light,
+          "--pill-fg-dark": fg.dark,
+        } as CSSProperties
+      }
+      className="ease-keystone inline-flex max-w-full items-center truncate rounded-sm bg-[color-mix(in_oklab,var(--pill)_15%,transparent)] px-2.5 py-0.5 text-xs font-medium text-[color:var(--pill-fg-light)] transition-[transform,filter] duration-300 hover:-translate-y-px hover:brightness-110 dark:text-[color:var(--pill-fg-dark)]"
     >
       {option.label}
     </span>
@@ -173,14 +187,20 @@ export function DateCell({
     month: "short",
     day: "numeric",
   });
-  if (!overdue) return <span className="text-sm">{formatted}</span>;
+  // Keystone: dates read as mono, uppercase, wide-tracked metadata.
+  if (!overdue)
+    return (
+      <span className="text-muted-foreground font-mono text-[11px] tracking-wide uppercase">
+        {formatted}
+      </span>
+    );
   // Negative margins cancel the padding so the date text does not shift when
   // the tint appears. aria-label/title carry the state — never color alone.
   return (
     <span
       aria-label="Overdue"
       title="Overdue"
-      className="bg-destructive/10 text-destructive -mx-1.5 -my-0.5 rounded-md px-1.5 py-0.5 text-sm"
+      className="bg-status-red/10 text-status-red -mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5 font-mono text-[11px] tracking-wide uppercase"
     >
       {formatted}
     </span>
@@ -231,9 +251,10 @@ export function CheckboxCell({
 /**
  * Shared progress/fill bar for the percent column — used by both the leaf cell
  * (PercentCell) and the collapsed-parent rollup (RollupCell), so a manually-set
- * value and an averaged rollup read identically. Monochrome track; the fill
- * color comes from percentBandColor(value) — red near 0, green near 100.
- * The numeric label carries the value (never color alone — AA + colorblind).
+ * value and an averaged rollup read identically. Keystone: a translucent
+ * `--foreground` track with the value-based red→green fill ramp
+ * (`percentBandColor`) + a mono numeric label (color is redundant with the
+ * number — never the sole signal).
  */
 export function PercentBar({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, Math.round(percent)));
@@ -245,14 +266,17 @@ export function PercentBar({ percent }: { percent: number }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={`${clamped}%`}
-        className="bg-muted relative h-1.5 w-full max-w-[120px] min-w-[2.5rem] overflow-hidden rounded-full"
+        className="bg-foreground/[0.07] relative h-1.5 w-full max-w-[120px] min-w-[2.5rem] overflow-hidden rounded-full"
       >
         <span
-          className={`absolute inset-y-0 left-0 rounded-full ${percentBandColor(clamped)}`}
+          className={cn(
+            "absolute inset-y-0 left-0 rounded-full",
+            percentBandColor(clamped),
+          )}
           style={{ width: `${clamped}%` }}
         />
       </span>
-      <span className="text-muted-foreground text-xs tabular-nums">
+      <span className="text-muted-foreground font-mono text-xs tabular-nums">
         {clamped}%
       </span>
     </span>
@@ -314,7 +338,7 @@ export function PriorityCell({
       <span
         aria-label={label}
         title={label}
-        className="bg-status-red inline-flex max-w-full items-center gap-1 truncate rounded-md px-2.5 py-0.5 text-xs font-medium text-white"
+        className="bg-status-red inline-flex max-w-full items-center gap-1 truncate rounded-sm px-2.5 py-0.5 text-xs font-medium text-white"
       >
         {auto && <Network className="size-3 shrink-0" aria-hidden />}
         Critical

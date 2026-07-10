@@ -12,7 +12,14 @@ import { Button } from "@/components/ui/button";
 import { exportBoard } from "@/lib/boards/spreadsheet-actions";
 import type { ImportFormat } from "@/lib/boards/spreadsheet/types";
 
-export function ExportMenu({ boardId }: { boardId: string }) {
+export function ExportMenu({
+  boardId,
+  iconOnly = false,
+}: {
+  boardId: string;
+  /** Render just the download icon (accessible name stays "Export"). */
+  iconOnly?: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -50,11 +57,12 @@ export function ExportMenu({ boardId }: { boardId: string }) {
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size={iconOnly ? "icon" : "sm"}
             aria-label="Export"
             disabled={isPending}
           >
-            <Download className="size-3.5" /> Export
+            <Download className="size-3.5" />
+            {iconOnly ? null : "Export"}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

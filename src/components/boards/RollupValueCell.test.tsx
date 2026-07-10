@@ -16,7 +16,7 @@ function twoItems(): Item[] {
 }
 
 describe("RollupValueCell", () => {
-  it("renders the averaged, color-banded percent bar over a group's items", () => {
+  it("renders the averaged accent percent bar over a group's items", () => {
     const cellMap = new Map<string, CacheCellValue["value"]>([
       [cellKey("i1", "c1"), { percent: 40 }],
       [cellKey("i2", "c1"), { percent: 80 }],
@@ -31,10 +31,10 @@ describe("RollupValueCell", () => {
       />,
     );
     const bar = container.querySelector('[role="progressbar"]');
-    // average of 40 and 80 is 60
+    // average of 40 and 80 is 60 (aria-valuenow carries the value)
     expect(bar?.getAttribute("aria-valuenow")).toBe("60");
     const fill = bar?.firstElementChild as HTMLElement;
-    // 60 falls in the lime band
+    // average 60 sits in the lime band of the value-based red→green ramp
     expect(fill.className).toContain("bg-[var(--progress-lime)]");
   });
 

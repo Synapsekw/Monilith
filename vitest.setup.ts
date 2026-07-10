@@ -7,7 +7,13 @@ import { afterEach, vi } from "vitest";
 // tests without per-file mocks.
 vi.mock("next/font/google", () => {
   const font = () => ({ className: "font-mock", variable: "", style: {} });
-  return { Nunito: font, Geist: font, Geist_Mono: font };
+  return {
+    Nunito_Sans: font,
+    Nunito: font,
+    JetBrains_Mono: font,
+    Geist: font,
+    Geist_Mono: font,
+  };
 });
 
 // ogl spins up a real WebGL context, which jsdom lacks. Stub the four primitives

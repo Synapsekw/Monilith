@@ -62,7 +62,7 @@ describe("StatusPill", () => {
   it("renders its label with the boards' canonical pill geometry", () => {
     render(<StatusPill color="green">Active</StatusPill>);
     const pill = screen.getByText("Active");
-    expect(pill.className).toContain("rounded-md");
+    expect(pill.className).toContain("rounded-sm");
     expect(pill.className).toContain("px-2.5");
     expect(pill.className).toContain("py-0.5");
     expect(pill.className).toContain("text-xs");
@@ -80,6 +80,15 @@ describe("StatusPill", () => {
     const pill = screen.getByText("At risk");
     expect(pill.className).toContain("text-xs");
     expect(pill.className).toContain("color-mix");
+  });
+
+  it("soft variant uses a translucent token fill", () => {
+    render(
+      <StatusPill color="green" variant="soft">
+        Done
+      </StatusPill>,
+    );
+    expect(screen.getByText("Done").className).toContain("bg-status-green/15");
   });
 
   it("lets dense call sites override geometry via className", () => {

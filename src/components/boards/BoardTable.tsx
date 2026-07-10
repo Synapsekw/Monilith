@@ -100,6 +100,7 @@ import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { BoardHeader } from "@/components/boards/BoardHeader";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import { Input } from "@/components/ui/input";
+import { Kicker } from "@/components/ui/kicker";
 import {
   CellEditor,
   type EditorMember,
@@ -550,7 +551,7 @@ function BoardTableInner({
 
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
 
-  // Offscreen canvas measurer at the Name cell font (Geist 14px / text-sm), used
+  // Offscreen canvas measurer at the Name cell font (Nunito Sans 14px / text-sm), used
   // to auto-fit the Name column to the longest item name across ALL items (not
   // just the virtualized rows). Pure measurement — no server round-trip.
   const measureName = useMemo(() => {
@@ -821,7 +822,7 @@ function BoardTableInner({
           // 0 ⇄ >0 boundary (cheap during scroll).
           setScrolledX(next);
         }}
-        className="group/scroll flex-1 overflow-auto"
+        className="group/scroll bg-surface ease-keystone border-border hover:border-border-hover mx-3 mt-3 mb-6 flex-1 overflow-auto rounded-lg border transition-colors"
       >
         <div ref={contentRef} className="min-w-fit">
           {groups.length === 0 ? (
@@ -852,10 +853,11 @@ function BoardTableInner({
                 items={groups.map((g) => g.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {groups.map((group) => (
+                {groups.map((group, groupIndex) => (
                   <GroupSection
                     key={group.id}
                     group={group}
+                    groupIndex={groupIndex}
                     items={visibleItemsByGroup.get(group.id) ?? []}
                     columns={columns}
                     selectable={canEdit}
@@ -1265,9 +1267,11 @@ function CreatedHeaderCell({
   label: string;
 }) {
   return (
-    <div className="text-muted-foreground flex items-center gap-1.5 border-l px-3 text-xs font-medium opacity-60">
+    <div className="text-kicker flex items-center gap-1.5 border-l px-3">
       <Icon className="size-3.5" />
-      <span className="truncate">{label}</span>
+      <span className="truncate font-mono text-[10.5px] font-medium tracking-[0.12em] uppercase">
+        {label}
+      </span>
     </div>
   );
 }
@@ -1330,6 +1334,7 @@ function SortableColumnHeader({
  */
 function GroupHeaderRow({
   group,
+  groupIndex,
   columns,
   template,
   selectAll,
@@ -1349,6 +1354,8 @@ function GroupHeaderRow({
   col,
 }: {
   group: Group;
+  /** Zero-based position among visible groups — powers the Keystone head kicker. */
+  groupIndex: number;
   columns: Column[];
   template: string;
   /** Group-header "select all visible" checkbox, or null for viewers/empty groups. */
@@ -1454,9 +1461,21 @@ function GroupHeaderRow({
           <button
             type="button"
             onClick={onOpenRename}
+            aria-label={group.name}
             className="focus-visible:ring-ring min-w-0 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
           >
-            {group.name}
+            {/* Keystone group head: mono "NN / NAME" kicker; the first group
+                reads bright, the rest dim — hierarchy by weight/tone, not color
+                (title text stays monochrome). */}
+            <Kicker
+              index={String(groupIndex + 1).padStart(2, "0")}
+              className={cn(
+                "truncate",
+                groupIndex === 0 ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {group.name}
+            </Kicker>
           </button>
         )}
         <span className="text-muted-foreground text-xs font-normal">
@@ -1584,6 +1603,7 @@ function GroupRollupRow({
 
 function GroupSection({
   group,
+  groupIndex,
   items,
   columns,
   selectable,
@@ -1608,6 +1628,8 @@ function GroupSection({
   contentRef,
 }: {
   group: Group;
+  /** Zero-based position among visible groups — powers the Keystone head kicker. */
+  groupIndex: number;
   items: Item[];
   columns: Column[];
   /** Whether bulk row-selection checkboxes are shown (editors only, not viewers). */
@@ -1731,6 +1753,7 @@ function GroupSection({
     >
       <GroupHeaderRow
         group={group}
+        groupIndex={groupIndex}
         columns={columns}
         template={template}
         selectAll={
@@ -1939,6 +1962,10 @@ function ItemRow({
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as rollupNowMs; virtualized rows remount as they scroll).
   const [todayISO] = useState(() => localTodayISO());
+  // Keystone selected-row treatment (periwinkle wash + 3px accent bar). Subscribes
+  // to just this row's boolean membership, so toggling one row re-renders only the
+  // affected (visible) rows — not the whole cache tree. Selection is top-level only.
+  const selected = useBoardSelection((s) => s.selectedIds.has(item.id));
   // Priority cells only: direct-dependent counts derived from the cached
   // dependency edges (one O(E) pass — see @/lib/boards/priority; overdue-tint
   // precedent: render-time signal, nothing persisted, 0 extra round-trips).
@@ -2028,7 +2055,10 @@ function ItemRow({
     <div
       ref={setNodeRef}
       className={cn(
-        "hover:bg-surface grid w-full border-b transition-colors",
+        "ease-keystone border-border grid w-full border-b transition-colors",
+        selected
+          ? "bg-primary/[0.08]"
+          : "hover:bg-foreground/[0.025] hover:border-border-hover",
         isDragging && "relative z-10 shadow-lg",
       )}
       style={{
@@ -2041,6 +2071,7 @@ function ItemRow({
       <NameCell
         item={item}
         controls={controls}
+        selected={selected}
         leading={
           <>
             {selectable && (
@@ -2174,7 +2205,7 @@ function SortableSubitemRow({
         gridTemplateColumns: template,
       }}
       className={cn(
-        "hover:bg-surface grid w-full border-b transition-colors",
+        "ease-keystone border-border hover:border-border-hover hover:bg-foreground/[0.025] grid w-full border-b transition-colors",
         isDragging && "relative z-10 shadow-lg",
       )}
     >
@@ -2566,6 +2597,7 @@ function NameCell({
   leading,
   trailing,
   indented = false,
+  selected = false,
   autoFocusRename = false,
   onRenameSettled,
 }: {
@@ -2574,6 +2606,8 @@ function NameCell({
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
   indented?: boolean;
+  /** Row is bulk-selected — frozen cell carries the periwinkle wash + accent bar. */
+  selected?: boolean;
   autoFocusRename?: boolean;
   onRenameSettled?: () => void;
 }) {
@@ -2631,11 +2665,30 @@ function NameCell({
 
   return (
     <div
+      // The frozen Name column is `sticky left-0`, so the other columns scroll
+      // UNDERNEATH it — its background MUST be opaque or scrolled content bleeds
+      // through. The selection tint therefore can't be a translucent
+      // `bg-primary/[0.08]`; use an opaque composite (periwinkle mixed into the
+      // surface) that reads identically to the row wash but occludes fully.
+      style={
+        selected
+          ? {
+              backgroundColor: `color-mix(in srgb, var(--primary) 8%, var(--${
+                indented ? "surface-sunken" : "surface"
+              }))`,
+            }
+          : undefined
+      }
       className={cn(
-        "group/name sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
-        indented
-          ? "bg-surface-sunken hover:bg-surface"
-          : "bg-surface hover:bg-surface-muted",
+        "group/name ease-keystone relative sticky left-0 z-10 flex h-full items-center pr-2 transition-colors",
+        // Selected: opaque periwinkle wash (via style, above) + a 3px accent bar
+        // (::before, inset 6px). The bar is pointer-events-none so it never
+        // blocks the checkbox/drag targets.
+        selected
+          ? "before:bg-primary before:pointer-events-none before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded"
+          : indented
+            ? "bg-surface-sunken hover:bg-surface"
+            : "bg-surface hover:bg-surface-muted",
         NAME_FREEZE_EDGE,
       )}
     >

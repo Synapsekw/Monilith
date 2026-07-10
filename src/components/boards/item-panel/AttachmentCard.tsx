@@ -39,8 +39,8 @@ export function AttachmentCard({
   const canPreview = canPreviewInline(attachment.mime_type);
 
   return (
-    <div className="group bg-surface relative flex flex-col overflow-hidden rounded-md border">
-      <div className="bg-surface-muted relative flex aspect-video items-center justify-center">
+    <div className="group bg-surface-muted card-lift border-border hover:border-border-bright relative flex flex-col overflow-hidden rounded-lg border">
+      <div className="bg-background relative flex aspect-video items-center justify-center">
         {previewable && kind === "image" && previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

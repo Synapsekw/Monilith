@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { Kicker } from "@/components/ui/kicker";
 import {
   Sheet,
   SheetContent,
@@ -88,10 +90,15 @@ export function ItemPanel({
 
   return (
     <Sheet open={!!itemId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent>
+      <SheetContent className="bg-surface">
         <SheetHeader>
+          <Kicker index="ITEM" className="block">
+            Details
+          </Kicker>
           <div className="flex items-center justify-between gap-3">
-            <SheetTitle>{itemName}</SheetTitle>
+            <SheetTitle className="text-[17px] font-extrabold">
+              {itemName}
+            </SheetTitle>
             <ItemViewersBar itemId={itemId} />
           </div>
           <SheetDescription className="sr-only">
@@ -102,7 +109,7 @@ export function ItemPanel({
         <div
           role="tablist"
           aria-label="Item panel sections"
-          className="flex gap-1 border-b"
+          className="flex gap-1"
         >
           {(["fields", "updates", "activity", "files"] as const).map((t) => (
             <button
@@ -110,11 +117,12 @@ export function ItemPanel({
               role="tab"
               aria-selected={tab === t}
               onClick={() => setTab(t)}
-              className={`focus-visible:ring-ring rounded-sm px-3 py-2 text-sm capitalize transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 ${
+              className={cn(
+                "focus-visible:ring-ring ease-keystone rounded-full border px-3 py-1.5 text-sm capitalize transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11",
                 tab === t
-                  ? "border-primary border-b-2 font-medium"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+                  ? "bg-surface-muted border-border-bright text-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:border-border border-transparent",
+              )}
             >
               {t === "activity" ? "Activity Log" : t}
             </button>

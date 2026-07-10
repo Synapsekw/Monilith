@@ -175,7 +175,7 @@ export function BoardToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Quick search */}
-      <InputGroup className="h-7 w-52">
+      <InputGroup className="ease-keystone focus-within:border-border-bright h-7 w-52 rounded-full transition-colors">
         <InputGroupAddon>
           <Search className="size-3.5" />
         </InputGroupAddon>
@@ -205,6 +205,7 @@ export function BoardToolbar({
             type="button"
             variant="ghost"
             size="sm"
+            className="ease-keystone border-border hover:border-border-bright rounded-full border transition-colors"
             aria-label={
               facetCount > 0 ? `Filter (${facetCount} active)` : "Filter"
             }
@@ -297,7 +298,13 @@ export function BoardToolbar({
       {/* Sort */}
       <Popover open={sortOpen} onOpenChange={setSortOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="ghost" size="sm" aria-label="Sort">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ease-keystone border-border hover:border-border-bright rounded-full border transition-colors"
+            aria-label="Sort"
+          >
             <ArrowDownUp className="size-3.5" />
             {state.sort ? (
               <span className="flex items-center gap-1">
@@ -371,7 +378,7 @@ export function BoardToolbar({
           type="button"
           variant="ghost"
           size="sm"
-          className="text-muted-foreground"
+          className="text-muted-foreground ease-keystone border-border hover:border-border-bright rounded-full border transition-colors"
           onClick={clearAll}
         >
           <X className="size-3.5" /> Clear all
