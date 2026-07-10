@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-10-1011
+last-updated: 2026-07-10-1727
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,11 +51,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **All shipped to prod — `develop` and `main` in sync.** PR#55 (`74db50a`) promoted the **"Monolith Keystone" reskin** (tokens dark+light, Nunito Sans + JetBrains Mono, `<Kicker>`, translucent status pills; sidebar + board table + item panel reskins + a slimmed single-row board header) to prod (main CI + Vercel deploy green); squash divergence healed (`806345b`) and surfaced on `/updates` (`d8031a4`). Batch A shipped earlier this cycle (PR#54, `1277bc8`). ([[2026-07-10-1011-keystone-promote-changelog]], [[2026-07-10-0907-keystone-reskin-build-and-polish]], [[dark-first-monday-reskin]])
-- **Branch:** `develop == origin/develop` at `806345b`; `main` at `74db50a` (heal merge makes them tree-identical). Reskin spec+plan: `docs/superpowers/{specs,plans}/2026-07-09-keystone-reskin*.md`. **No live `task/*` worktrees.**
+- **Phase:** **Keystone secondary-surface polish in progress (Approach B — cluster worktrees, ship incrementally).** Waves 0–1 shipped to `develop`: **Wave 0 Foundation** (`<MetaChip>` + `<ColorChip>` primitives, `bb87ac5`) and **Wave 1 Board views** (Calendar/Gantt/Kanban bespoke-polished, `bccae63`). Spec+plan `docs/superpowers/{specs,plans}/2026-07-10-keystone-secondary-surfaces-polish*.md`. Waves 2–6 remain (Dashboards → Admin/Auth → Planning → Personal/chrome → Core touch-ups). **Not yet promoted — `main` is behind `develop`.** ([[2026-07-10-1727-keystone-secondary-surfaces-waves-0-1]], [[2026-07-10-1011-keystone-promote-changelog]], [[dark-first-monday-reskin]])
+- **Branch:** `develop == origin/develop` at `bccae63`; `main` at `74db50a` (behind by the earlier changelog/vault commits + Keystone Waves 0–1). **No live `task/*` worktrees.**
 - **In flight:** none building.
-- **Next:** **secondary-surface Keystone polish** (calendar/gantt/kanban/dashboards/settings/auth inherit the palette but lack bespoke polish), then the two standing tracks — **Phase 10 — AI & Agents E1** (scope-reconciliation first; [[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]) and **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, **skip A4** — shipped). A scoped **Batch B** (org switcher, auth rate limiting, notification prefs + due-date reminders, saved views, cached-reader membership assertions) remains in the audit report §04.
-- **Owed:** **Manual, blocking forgot-password in prod:** add `/auth/callback` to Supabase Auth **Redirect URLs** allowlist (PROD dashboard). **Keystone follow-ups:** secondary-surface polish, sidebar wordmark mark, item-panel meta-chips/tab-counts, `@mention` highlighting, sidebar easing-utility consistency. **Landing redesign:** apply Keystone to `/landing` (converges with the app reskin) — remove `brand-lab` once it lands. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **Phase 10 scope-reconciliation.**
+- **Next:** **Keystone Wave 2 — Dashboards** (recon → just-in-time plan → worktree → parallel subagents → gates → finish), or `/promote` Waves 0–1 to prod first. Then Waves 3–6, and the two standing tracks — **Phase 10 — AI & Agents E1** (scope-reconciliation first; [[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]) and **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, **skip A4** — shipped). Scoped **Batch B** (org switcher, auth rate limiting, notification prefs + reminders, saved views, cached-reader membership assertions) remains in the audit report §04.
+- **Owed:** **Manual, blocking forgot-password in prod:** add `/auth/callback` to Supabase Auth **Redirect URLs** allowlist (PROD dashboard). **Keystone remaining:** Waves 2–6 (incl. sidebar wordmark mark, item-panel meta-chips/tab-counts, `@mention` highlighting, sidebar easing — folded into Wave 6). Deferred cleanup: DRY board `OptionPill` onto `<ColorChip>`. **Landing redesign:** apply Keystone to `/landing` — remove `brand-lab` once it lands (out of this pass). Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **Phase 10 scope-reconciliation.**
 
 ### Last session
 
