@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
 
 const initialState: AuthState = {};
@@ -34,11 +35,12 @@ export function ChangePasswordForm({
   );
 
   return (
-    <Card>
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
       <CardHeader>
         <div className="bg-surface mb-1 flex size-9 items-center justify-center rounded-lg border">
           <KeyRound className="text-primary size-4" />
         </div>
+        <Kicker>SECURITY</Kicker>
         <CardTitle>Choose a new password</CardTitle>
         <CardDescription>
           {variant === "recovery"
@@ -70,7 +72,11 @@ export function ChangePasswordForm({
               {state.error}
             </p>
           )}
-          <Button type="submit" className="w-full" disabled={pending}>
+          <Button
+            type="submit"
+            className="shadow-glow-primary w-full"
+            disabled={pending}
+          >
             {pending && <Loader2 className="size-4 animate-spin" />}
             Update password
           </Button>

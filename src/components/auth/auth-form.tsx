@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
 import {
   type SignInInput,
@@ -63,7 +64,7 @@ export function AuthForm({ mode, footer, initialError }: AuthFormProps) {
 
   if (state.success === "check-email") {
     return (
-      <Card>
+      <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
         <CardHeader className="items-center text-center">
           <CheckCircle2 className="text-primary mb-1 size-8" />
           <CardTitle>Check your email</CardTitle>
@@ -77,8 +78,9 @@ export function AuthForm({ mode, footer, initialError }: AuthFormProps) {
   }
 
   return (
-    <Card>
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
       <CardHeader>
+        <Kicker>{isSignup ? "GET STARTED" : "WELCOME"}</Kicker>
         <CardTitle>{text.title}</CardTitle>
         <CardDescription>{text.description}</CardDescription>
       </CardHeader>
@@ -175,7 +177,11 @@ export function AuthForm({ mode, footer, initialError }: AuthFormProps) {
             ) : null}
           </div>
 
-          <Button type="submit" disabled={isPending} className="w-full">
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="shadow-glow-primary w-full"
+          >
             {isPending ? (
               <>
                 <Loader2 className="animate-spin" />
