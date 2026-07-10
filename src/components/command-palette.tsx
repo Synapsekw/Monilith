@@ -21,6 +21,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { Kicker } from "@/components/ui/kicker";
 import { useUIStore } from "@/stores/ui";
 import { searchItems, type ItemSearchResult } from "@/lib/search/item-search";
 import type { BoardListEntry } from "@/lib/boards/queries";
@@ -121,7 +122,7 @@ export function CommandPalette({
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         {showItemsGroup && (
-          <CommandGroup heading="Items" forceMount>
+          <CommandGroup heading={<Kicker>Items</Kicker>} forceMount>
             {searching ? (
               // value={query} keeps this status row visible under cmdk's filter.
               <CommandItem value={query} disabled aria-live="polite">
@@ -152,7 +153,7 @@ export function CommandPalette({
             )}
           </CommandGroup>
         )}
-        <CommandGroup heading="Navigation">
+        <CommandGroup heading={<Kicker>Navigation</Kicker>}>
           <CommandItem onSelect={() => run(() => router.push("/dashboards"))}>
             <LayoutDashboard className="size-4" /> Dashboards
           </CommandItem>
@@ -175,7 +176,7 @@ export function CommandPalette({
             </CommandItem>
           ))}
         </CommandGroup>
-        <CommandGroup heading="Create">
+        <CommandGroup heading={<Kicker>Create</Kicker>}>
           <CommandItem
             disabled={!canCreate}
             onSelect={() => run(() => setNewBoardOpen(true))}
@@ -190,7 +191,7 @@ export function CommandPalette({
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
-        <CommandGroup heading="Theme">
+        <CommandGroup heading={<Kicker>Theme</Kicker>}>
           <CommandItem onSelect={() => run(() => setTheme("light"))}>
             <Sun className="size-4" /> Light
           </CommandItem>

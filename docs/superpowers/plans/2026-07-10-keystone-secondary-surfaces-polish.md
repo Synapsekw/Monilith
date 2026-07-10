@@ -485,14 +485,251 @@ Expected: rebased onto latest `develop`, gates green on merged state, merged, wo
 
 ---
 
-## Clusters 2–6 (planned just-in-time)
+# Wave 2 — Dashboards
 
-Each is its own worktree → `develop`, verified before the next (Approach B). Written as a same-structured plan (four moves + recon specifics + TDD anchor per surface) immediately before its worktree starts, against the then-current `develop`:
+**Depends on:** Wave 0 + Wave 1 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-dashboards` → `.claude/worktrees/keystone-dashboards`.
+**Recon (2026-07-10, against post-Wave-1 `develop`):** reshaped the wave. Of the three named surfaces, **dashboards-nav has zero valid Keystone chrome** (its section title is delegated to the shared `<NavSection>` — shell scope; spec §4.2's "`DashboardsNav.tsx:139` avatar tiles" is a single-initial **avatar glyph**, a decorative preserve, not a Kicker). **Canvas** reduces to one skeleton line that must mirror the widget card. All real work is in **widgets**. Two file-disjoint parallel subagents; nav is a documented no-op.
 
-- **Wave 2 · Dashboards** — canvas · widgets · dashboards-nav (spec §4.2 Dashboards; preserve `chart-*` color-data).
-- **Wave 3 · Admin & entry** — Settings · Auth (from stock shadcn → brand-washed card + kicker eyebrow + panel elevation) · Onboarding.
-- **Wave 4 · Planning** — Goals · Portfolios · Workload.
-- **Wave 5 · Personal & chrome** — My Work · Time · Notifications · Command palette.
+**Preserve (data, not chrome — do NOT touch):** every `chart-*` fill/stroke/gradient (`ChartWidget`, `ChartDefs`, `chart-colors/config/theme`), the `NumberWidget` gauge `<circle>` metric arc, `BatteryWidget`/`CompletionWidget`/`HealthWidget` meter bars + `percentBandColor` fills, all `size-1.5/2/2.5 rounded-*` decorative/option-color dots (incl. `DashboardWidget:58` brand dot, `WidgetConfigForm:622` option swatch). Never touch RGL drag/resize config, `onMouseDown`-stopPropagation handlers, or any mutation/data flow.
+
+### Task 2.1: Widget card + canvas skeleton (coupled pair)
+
+**Files:** Modify `src/components/dashboards/DashboardWidget.tsx`, `src/components/dashboards/DashboardCanvasSkeleton.tsx`. Tests: extend `DashboardWidget.test.tsx` (behavioral — keep green), `DashboardCanvasSkeleton.test.tsx` (keep `data-testid="widget-skeleton"`).
+
+- [ ] **Step 1 (TDD):** add an assertion that the widget card root carries the keystone card treatment (`rounded-[14px]` + `card-lift`) and no longer `rounded-xl`.
+- [ ] **Step 2:** watch it fail (card is `rounded-xl`, no `card-lift`).
+- [ ] **Step 3 — the moves:**
+  1. `DashboardWidget.tsx:55` — `rounded-xl` → `rounded-[14px]`; add `.card-lift` + `hover:border-border-hover` (move 3/4). Keep the brand-wash radial-gradient background exactly. **RGL-drag-safe:** `.card-lift` is a hover transform; RGL sets an inline `transform` during active drag which wins, so the lift only shows on idle hover — verify no visual fight in edit mode.
+  2. `DashboardWidget.tsx:56` — header `border-b` → add `group-hover:border-border-hover` (needs `group` on the L55 root) so the hairline brightens with the card. Layout untouched.
+  3. `DashboardCanvasSkeleton.tsx:12` (+ doc comment L5) — mirror the widget card radius: `rounded-xl` → `rounded-[14px]`. (Skeleton is static → no card-lift.)
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/dashboards/DashboardWidget.test.tsx src/components/dashboards/DashboardCanvasSkeleton.test.tsx` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish dashboard widget card + canvas skeleton`.
+
+### Task 2.2: Widget contents (Kickers · preview card · list chip)
+
+**Files:** Modify `src/components/dashboards/widgets/NumberWidget.tsx`, `src/components/dashboards/WidgetConfigSheet.tsx`, `src/components/dashboards/widgets/ListWidget.tsx`. Tests: `WidgetConfigSheet.test.tsx` behavioral (keep green); add a `ListWidget.test.tsx` anchor for the ColorChip contract (no existing test).
+
+- [ ] **Step 1 (TDD):** new `ListWidget.test.tsx` — a colored cell renders a soft `ColorChip` (`rounded-sm`, `--pill` set, no opaque inline `backgroundColor`).
+- [ ] **Step 2:** watch it fail (current pill is opaque `style={{ backgroundColor }}`).
+- [ ] **Step 3 — the moves:**
+  1. `NumberWidget.tsx:74` — the `text-xs tracking-wide uppercase` agg-unit label `<span>` → `<Kicker>{agg === "count" ? "items" : agg}</Kicker>` (import `@/components/ui/kicker`). Keep `mt-1`; drop the redundant hand-rolled classes.
+  2. `WidgetConfigSheet.tsx:143` — the "Live preview" `text-xs tracking-wide uppercase` `<span>` → `<Kicker>Live preview</Kicker>`.
+  3. `WidgetConfigSheet.tsx:146` — preview card `rounded-xl` → `rounded-[14px]` (radius consistency; not interactive → no card-lift).
+  4. `ListWidget.tsx:49–58` — replace the opaque `<span style={{ backgroundColor: cell.color, color: pillTextColor(cell.color) }}>` with `<ColorChip color={cell.color}>{cell.text}</ColorChip>` (import `@/components/ui/color-chip`). Remove the now-unused `pillTextColor` import (L5) if nothing else uses it (nothing does).
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/dashboards/widgets/ListWidget.test.tsx src/components/dashboards/WidgetConfigSheet.test.tsx` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish dashboard widget contents (kickers + soft list chips)`.
+
+### Task 2.3: dashboards-nav — no-op (documented)
+
+Recon confirmed no valid Keystone chrome (avatar glyph is a preserve; section title is shell-owned `<NavSection>`). **No file change.** Recorded here so the wave's coverage of spec §4.2 is explicit: nav's only spec callout (`:139`) is intentionally left as a decorative avatar glyph.
+
+### Task 2.4: Integrate, smoke-check, finish Wave 2
+
+- [ ] **Step 1:** gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green.
+- [ ] **Step 2:** visual smoke-check both themes — open a dashboard: widget cards show 14px radius + hover card-lift + brightening hairline (brand-wash intact), NumberWidget unit label is a mono kicker, list-widget colored cells are soft translucent chips (no opaque solids), skeleton→live transition has no radius jump. Confirm charts/gauges/meters unchanged.
+- [ ] **Step 3:** `scripts/finish-task.sh`.
+- [ ] **Step 4:** hand the user a numbered "How to test this" walkthrough (both themes).
+
+---
+
+# Wave 3 — Admin & entry
+
+**Depends on:** Waves 0–2 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-admin-entry` → `.claude/worktrees/keystone-admin-entry`.
+**Recon (2026-07-10, against post-Wave-2 `develop`):** three file-disjoint surfaces → 3 parallel implementers. Key correction to spec §4.2: **Auth pages live under `src/app/(auth)/*`**, not `src/app/auth/*` (which holds only server `actions.ts` + `callback/route.ts` — DO NOT TOUCH). All cards are the shared shadcn `<Card>` (`rounded-xl bg-card ring-1 ring-foreground/10`, no shadow) — never edit `card.tsx`; apply per-call-site `className` overrides. There are **zero** hand-rolled uppercase labels and **zero** inline-bg/`rounded-full` status chips in these surfaces, so Kicker eyebrows are net-new and the only chip conversion is one members-table status badge.
+
+**Shared entry-surface treatment (Auth + Onboarding cards):** brand-wash bg + `shadow-panel` on the `<Card>`, a `<Kicker>` eyebrow above `<CardTitle>`, and the submit CTA gets `shadow-glow-primary`. Exact brand-wash string (from `DashboardWidget`): `[background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]`. Utilities verified: `shadow-panel` (globals.css L89), `shadow-glow-primary` (maps `--glow-primary` L148). Cards are static form containers → **no `.card-lift`**.
+
+**Preserve (all surfaces):** every `useActionState`/`useForm`/`zodResolver`/`startTransition`/`formAction`/`action` wiring, `noValidate`+FormData construction, redirect/callback flows, `aria-invalid`/`aria-describedby`, all `text-destructive`/`text-status-*` semantic error/warn text, tested button/description copy, and `src/app/auth/*` server files. Avatar `rounded-full` stays. Visual classes / element wrapping only.
+
+### Task 3.1: Auth (roughest — bespoke §4.2 pass)
+
+**Files:** `src/components/auth/auth-form.tsx`, `change-password-form.tsx`, `forgot-password-form.tsx`. Tests: extend the three existing `*.test.tsx` (role/text-based — keep button text + description copy + forgot-password link intact).
+
+- [ ] **Step 1 (TDD):** in `auth-form.test.tsx`, add an assertion that the form card carries the entry-surface treatment (query the card container; assert it has `shadow-panel` and a Kicker eyebrow is present, e.g. `getByText("WELCOME")`/`"GET STARTED"`). Assert semantic classes, not the gradient string.
+- [ ] **Step 2:** watch it fail (stock `<Card>`, no eyebrow).
+- [ ] **Step 3 — moves:**
+  1. `auth-form.tsx` — main `<Card>` (L80) and check-email `<Card>` (L66): add `className="[background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)] shadow-panel"`. Add a `<Kicker>` above `<CardTitle>` (L82): `isSignup ? "GET STARTED" : "WELCOME"`. CTA (L178): add `shadow-glow-primary` to the Button `className`.
+  2. `change-password-form.tsx` — `<Card>` (L37) same brand-wash+`shadow-panel`; `<Kicker>SECURITY</Kicker>` above title (L42); CTA (L73) `shadow-glow-primary`. Keep both variant copy strings + the KeyRound tile.
+  3. `forgot-password-form.tsx` — both `<Card>`s (main L52, sent L38) brand-wash+`shadow-panel`; `<Kicker>RESET</Kicker>` above title (L54); CTA (L99) `shadow-glow-primary`.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/auth/` green (all three files).
+- [ ] **Step 5:** commit `feat(ui): keystone-polish auth (brand-washed cards + kicker eyebrows + glow cta)`.
+
+### Task 3.2: Onboarding (entry-surface consistency)
+
+**Files:** `src/components/onboarding/onboarding-form.tsx`. Test: extend `onboarding-form.test.tsx`.
+
+- [ ] **Step 1 (TDD):** assert the onboarding card has `shadow-panel` + a Kicker eyebrow (`getByText("GET STARTED")`).
+- [ ] **Step 2:** watch it fail.
+- [ ] **Step 3 — moves:** `<Card>` (L40) brand-wash+`shadow-panel`; `<Kicker>GET STARTED</Kicker>` above `<CardTitle>` (L42); CTA (L103) `shadow-glow-primary`. Same brand-wash string as auth.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/onboarding/onboarding-form.test.tsx` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish onboarding entry card (kicker + glow cta)`.
+
+### Task 3.3: Settings (StatusPill + Kicker + input hairlines)
+
+**Files:** `src/components/settings/members-table.tsx`, `src/components/settings/invite-panel.tsx`, `src/components/settings/org-admin-console.tsx`, `src/app/(app)/settings/page.tsx`. Tests: extend `members-table.test.tsx` (keep `<tr>` structure + "Remove" button); the others are behavioral — keep green. `loading.test.tsx` asserts `max-w-3xl`+`mx-auto` — untouched (not in scope).
+
+- [ ] **Step 1 (TDD):** in `members-table.test.tsx`, assert the member status renders via the soft `StatusPill` contract — `rounded-sm` (not the old `rounded-md`) and the tone class for active(green)/deactivated(gray).
+- [ ] **Step 2:** watch it fail (current badge is hand-rolled `rounded-md` + `statusToneClasses(..., "solid")`).
+- [ ] **Step 3 — moves:**
+  1. `members-table.tsx` (L123–133) — replace the hand-rolled `<span>` status badge with `<StatusPill color={deactivated ? "gray" : "green"} variant="soft">{deactivated ? "Deactivated" : "Active"}</StatusPill>` (import `@/components/ui/status-pill`; drop the now-unused `statusToneClasses`/`cn` import iff nothing else uses them — verify). Role `<select>` (L109): add `hover:border-border-hover` (keep `onChange`/`disabled`/`aria-label`).
+  2. `settings/page.tsx` (L74) — add a `<Kicker>ADMIN</Kicker>` eyebrow above the `<h1>Settings` (import `@/components/ui/kicker`).
+  3. `org-admin-console.tsx` tab buttons (L50–66) — add `hover:border-border-hover` to inactive tabs; keep `role="tab"`/`aria-selected`/`onClick`/`capitalize`.
+  4. `invite-panel.tsx` role `<select>` (L68) — add `hover:border-border-hover`; keep handlers.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/settings/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish settings (soft status pill + kicker + input hairlines)`.
+
+### Task 3.4: Integrate, smoke-check, finish Wave 3
+
+- [ ] **Step 1:** gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green.
+- [ ] **Step 2:** visual smoke-check both themes — /login, /signup, /forgot-password, /change-password, /onboarding show a brand-washed elevated card with a mono Kicker eyebrow + glowing primary CTA; Settings members table shows soft status pills, page has an ADMIN kicker, inputs/tabs brighten on hover. No layout breakage; forms still submit.
+- [ ] **Step 3:** `scripts/finish-task.sh`.
+- [ ] **Step 4:** hand the user a numbered "How to test this" walkthrough (both themes).
+
+---
+
+# Wave 4 — Planning
+
+**Depends on:** Waves 0–3 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-planning` → `.claude/worktrees/keystone-planning`.
+**Recon (2026-07-10, against post-Wave-3 `develop`):** a **lighter cluster** — these three surfaces are table/grid-based and already largely on-primitive. Findings: (1) **zero** hand-rolled uppercase labels (Kicker is additive on page headers, matching the Wave 3 `ADMIN / Settings` precedent → use `PLANNING`); (2) status chips mostly already migrated (`GoalStatusPill`/`HealthPill` are already soft `<StatusPill>`) — the one un-migrated chip is Portfolios' `PriorityPill` (plain text span); (3) the only interactive-card candidate is the portfolios index list (a `<ul>`, not real cards) → surface polish, not `.card-lift` on rows; (4) no `shadow-sm/md` anywhere; the substance is the progress/capacity bars → **accent-progress treatment = keystone easing on the fill, geometry/track only, data colors + width untouched**. 3 file-disjoint implementers.
+
+**Preserve (all surfaces):** progress/capacity bar **fill colors + width calcs encode data** (goal %, portfolio %, workload under/at/over capacity via `bg-foreground/40`/`bg-primary`/`bg-destructive`) — keep them; only add keystone easing/track chrome. Small `size-2.5 rounded-full` status dots (`DoneMappingFields`), avatar `rounded-full` (`MemberRowHeader`), table-row `hover:bg-accent/*` (asserted by tests), all Server Actions / `onChange` / `pushState` / filter logic — untouched.
+
+### Task 4.1: Goals
+
+**Files:** `src/components/goals/ProgressBar.tsx`, `src/app/(app)/goals/page.tsx`. Test: add `src/components/goals/ProgressBar.test.tsx` (none exists). Keep `GoalTree.test.tsx` green (asserts row `hover:bg-accent/30`+`transition-colors` — untouched).
+
+- [ ] **Step 1 (TDD):** `ProgressBar.test.tsx` — render `<ProgressBar progress={0.5} />`; assert the fill div has `bg-primary`, `ease-keystone`, and `style width: 50%`.
+- [ ] **Step 2:** watch it fail (fill has no `ease-keystone`).
+- [ ] **Step 3 — moves:**
+  1. `ProgressBar.tsx:9` fill — `className="bg-primary h-full rounded-full"` → add `transition-[width] duration-500 ease-keystone`. Keep `bg-primary`, `rounded-full`, and the `width: ${pct}%` style. Track (L8) untouched.
+  2. `app/(app)/goals/page.tsx` (~L30, the `<div>` wrapping `<h1>Goals`) — add `<Kicker>PLANNING</Kicker>` above the `<h1>` (import `@/components/ui/kicker`). Don't disturb the flex layout / subtitle / `NewGoalDialog`.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/goals/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish goals (planning kicker + eased progress bar)`.
+
+### Task 4.2: Portfolios
+
+**Files:** `src/components/portfolios/PriorityPill.tsx`, `src/components/portfolios/ProgressBar.tsx`, `src/app/(app)/portfolios/page.tsx`, `src/app/(app)/portfolios/[portfolioId]/page.tsx`. Test: add `src/components/portfolios/PriorityPill.test.tsx` (none exists). Keep skeleton/loading tests green (untouched).
+
+- [ ] **Step 1 (TDD):** `PriorityPill.test.tsx` — `<PriorityPill priority="critical" />` renders "Critical" in a soft StatusPill (`rounded-sm`, red tone class); `priority={null}` renders "—".
+- [ ] **Step 2:** watch it fail (currently a plain `text-xs font-medium` span, no `rounded-sm`).
+- [ ] **Step 3 — moves:**
+  1. `PriorityPill.tsx:17` — replace `<span className="text-xs font-medium">{LABEL[priority]}</span>` with `<StatusPill variant="soft" color={PRIORITY_COLOR[priority]}>{LABEL[priority]}</StatusPill>`. Add a `const PRIORITY_COLOR: Record<PortfolioPriority, StatusColor> = { critical: "red", high: "orange", medium: "yellow", low: "gray" }`. Import `StatusPill`, `StatusColor` from `@/components/ui/status-pill`. Keep the `null → <span>—</span>` branch (L15-16) exactly.
+  2. `portfolios/ProgressBar.tsx:8` fill — same keystone easing as Goals (`transition-[width] duration-500 ease-keystone`; keep `bg-primary`/`rounded-full`/width).
+  3. `app/(app)/portfolios/page.tsx` — the index `<ul className="divide-y rounded-md border">` (~L20) → `divide-y overflow-hidden rounded-[14px] border shadow-card` (keystone surface; keep the `<Link>` rows + `hover:bg-accent/40`). Above `<h1>Portfolios` (~L12) add `<Kicker>PLANNING</Kicker>` (wrap the h1 as needed; keep the flex row + `NewPortfolioDialog`).
+  4. `app/(app)/portfolios/[portfolioId]/page.tsx` (~L30) — add `<Kicker>PLANNING</Kicker>` above `<h1>{portfolio.name}`.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/portfolios/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish portfolios (soft priority pill + planning kicker + surface)`.
+
+### Task 4.3: Workload
+
+**Files:** `src/components/workload/CapacityCell.tsx`, `src/components/workload/WorkloadGrid.tsx`. Test: extend `CapacityCell.test.tsx` (keep the `18h/40h/…` readout assertions).
+
+- [ ] **Step 1 (TDD):** in `CapacityCell.test.tsx`, assert the fill inside `[data-testid="capacity-bar"]` carries `ease-keystone` for an at-capacity cell, and still carries its state color (`bg-primary`).
+- [ ] **Step 2:** watch it fail (fill has `transition-[width]` but no `ease-keystone`).
+- [ ] **Step 3 — moves:**
+  1. `CapacityCell.tsx:126` fill className — `"h-full rounded-full transition-[width]"` → `"h-full rounded-full transition-[width] duration-500 ease-keystone"`. **Keep the three state colors (L127-129) and the width calc (L131-138) EXACTLY** (data). Track (L122) untouched.
+  2. `WorkloadGrid.tsx` (~L245, the `<div>` wrapping `<h1>Workload`) — add `<Kicker>PLANNING</Kicker>` above the `<h1>` (import `@/components/ui/kicker`). Keep the subtitle + toolbar.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/workload/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish workload (planning kicker + eased capacity bar)`.
+
+### Task 4.4: Integrate, smoke-check, finish Wave 4
+
+- [ ] **Step 1:** gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green.
+- [ ] **Step 2:** visual smoke-check both themes — /goals, /portfolios, /portfolios/[id], /workload each show a `PLANNING` mono kicker above the heading; portfolio priority renders as a soft colored pill; the portfolios index list is a 14px elevated surface; progress + capacity bars animate width with keystone easing (colors unchanged). No layout breakage.
+- [ ] **Step 3:** `scripts/finish-task.sh`.
+- [ ] **Step 4:** hand the user a numbered "How to test this" walkthrough (both themes).
+
+---
+
+# Wave 5 — Personal & chrome
+
+**Depends on:** Waves 0–4 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-personal-chrome` → `.claude/worktrees/keystone-personal-chrome`.
+**Recon (2026-07-10, against post-Wave-4 `develop`):** four surfaces, all file-disjoint after one coordination call. **Notifications has no route** — it's the header-bell popover; the "accent unread marker" is **already** `bg-primary` (satisfied, preserve). **`ui/command.tsx` is shared** by Command palette (D) and Time's `AddRowPicker` (B): group headings are done **per-call** (`heading={<Kicker>}`) in each consumer, and the single `ui/command.tsx` accent-active-wash edit is assigned **only to the Command-palette implementer** (AddRowPicker inherits it — desirable). **My Work rows are a list, not cards:** MetaChip can't hold the overdue `text-destructive` and `.card-lift` doesn't fit list rows, so those spec bullets are adapted (ColorChip status + Kicker buckets + 14px container) and the ill-fitting parts skipped — documented.
+
+**Preserve (all surfaces):** never touch cmdk selection/keyboard/`onSelect`/debounce, notification mark-read/realtime, Time input/Server-Action/optimistic logic, `<Link href>` nav, `pushState`. Unread dot stays `rounded-full` `bg-primary`. `text-destructive`/data-color conditionals (My Work overdue, Time `secs>0`) preserved. Focus rings + `transition-colors` that tests lock stay.
+
+### Task 5.1: My Work
+
+**Files:** `src/components/my-work/MyWorkList.tsx`, `src/components/my-work/MyWorkSkeleton.tsx`. Test: extend `MyWorkList.test.tsx` (keep "In progress"/bucket text + deep-link href).
+
+- [ ] **TDD:** assert the status renders via soft `ColorChip` (`rounded-sm`, `--pill` set) and a bucket heading uses the kicker recipe (`font-mono`/`text-kicker`).
+- [ ] **Moves:** (1) `MyWorkList.tsx:34-42` status pill → `<ColorChip color={item.status.color} className="max-w-40 shrink-0 truncate">{item.status.label}</ColorChip>`; drop `pillTextColor` import if unused. (2) `:97-106` bucket `<h2>` → `<Kicker className={cn(group.bucket === "overdue" && "text-destructive")}>{group.label}</Kicker>` (preserve overdue color via className). (3) `:111` list `<ul>` `rounded-md` → `rounded-[14px]`; mirror in `MyWorkSkeleton.tsx`. **Skip** due→MetaChip + card-lift (overdue destructive + list-not-cards).
+- [ ] `pnpm exec vitest run --project unit src/components/my-work/` green. Commit `feat(ui): keystone-polish my work (soft status chip + kicker buckets)`.
+
+### Task 5.2: Time
+
+**Files:** `src/components/time/TimeCard.tsx`, `src/components/time/TimeCell.tsx`, `src/components/time/AddRowPicker.tsx`. **Do NOT touch `ui/command.tsx`.** Test: extend `TimeCard.test.tsx` (keep `3.5h`/`4h` readouts).
+
+- [ ] **TDD:** assert a header label (e.g. "Total") uses the kicker recipe (`font-mono`+`text-kicker`).
+- [ ] **Moves:** (1) header `<th>` labels (Task/Category ~`:179`, day labels ~`:182-189`, Total ~`:190`) + footer "Daily total" (~`:252`) → `<Kicker>` (keep the `th/td` cell/border classes). (2) mono numerics: add `font-mono` to the week label (~`:159`), row Total (~`:232-233`), daily totals (~`:255-264`, keep the `secs>0` foreground/muted conditional), week total (~`:266-267`), and `TimeCell.tsx` input (~`:69`). (3) `AddRowPicker.tsx` `:78`/`:104` `heading="Items"/"Categories"` → `heading={<Kicker>Items</Kicker>}` / `heading={<Kicker>Categories</Kicker>}`.
+- [ ] `pnpm exec vitest run --project unit src/components/time/` green. Commit `feat(ui): keystone-polish time (kicker headers + mono numerics)`.
+
+### Task 5.3: Notifications
+
+**Files:** `src/components/notifications/NotificationsList.tsx`, `src/components/notifications/InvitationsSection.tsx`. Test: check `NotificationsList.test.tsx` (locks dot `bg-primary`/`bg-transparent` + focus ring + `transition-colors`) and `InvitationsSection.test.tsx` before restyling.
+
+- [ ] **TDD:** assert the "Invitations" label uses the kicker recipe.
+- [ ] **Moves:** (1) `InvitationsSection.tsx:23` `<p ...>Invitations</p>` → `<Kicker className="block px-3 pt-2">Invitations</Kicker>` (only if its test doesn't assert the old `<p>` classes; adapt if it does). (2) `NotificationsList.tsx:47` row hover `hover:bg-accent` → `hover:bg-accent/60` (translucent). **Keep** `transition-colors` + `focus-visible:ring-*` (test-locked) and the unread dot exactly (already accent).
+- [ ] `pnpm exec vitest run --project unit src/components/notifications/` green. Commit `feat(ui): keystone-polish notifications (kicker label + translucent rows)`.
+
+### Task 5.4: Command palette
+
+**Files:** `src/components/command-palette.tsx`, `src/components/ui/command.tsx`. Test: `command-palette.test.tsx` asserts group text + selection→push flow (keep green).
+
+- [ ] **TDD:** assert the "Items" group heading renders with the kicker recipe (`font-mono`).
+- [ ] **Moves:** (1) `command-palette.tsx` `:124`/`:155`/`:178`/`:193` `heading="Items|Navigation|Create|Theme"` → `heading={<Kicker>Items</Kicker>}` etc. (2) `ui/command.tsx:158` CommandItem — `data-selected:bg-muted` → `data-selected:bg-primary/10` (keep `data-selected:text-foreground`); accent active-row wash (also washes AddRowPicker — intended). **Never touch** cmdk `onSelect`/`data-selected` logic, the ⌘K keydown, debounce/`requestId`, `resetSearch`.
+- [ ] `pnpm exec vitest run --project unit src/components/command-palette.test.tsx src/components/ui/command.test.tsx` green (run whichever exist). Commit `feat(ui): keystone-polish command palette (kicker groups + accent active row)`.
+
+### Task 5.5: Integrate, smoke-check, finish Wave 5
+
+- [ ] gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` green.
+- [ ] visual smoke both themes — /my-work (soft status chips + mono kicker buckets + 14px list), /time (mono kicker headers + mono numerics), header bell (Invitations kicker + translucent rows, accent unread dot), ⌘K (mono kicker group labels + accent-washed active row; arrow-key nav still works).
+- [ ] `scripts/finish-task.sh`. Then numbered "How to test this" walkthrough.
+
+---
+
+# Wave 6 — Core touch-ups
+
+**Depends on:** Waves 0–5 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-core-touchups` → `.claude/worktrees/keystone-core-touchups`.
+**Recon (2026-07-10, against post-Wave-5 `develop`):** targeted touch-ups on already-shipped surfaces → **extra smoke-check** (spec §8). Three file-disjoint buckets. Key constraints: (1) **`ItemPanel` receives only `createdBy`/`createdAt`** — not status/due — so the spec's illustrative "STATUS/DUE" chips have no data at this boundary (plumbing them = data-flow change, forbidden); the honest MetaChip realization is **OWNER + CREATED**. (2) The **wordmark mark** spec (`2026-07-09-keystone-reskin-design.md` §6.1) is one line ("angled-slab clip-path, ink-on-paper"); the existing `MonolithMark` (cleaved-slab SVG, `currentColor`) IS that mark and its doc comment says it's meant to pair with the wordmark → prepend it to the expanded lockup (reversible; user reviews at smoke-check before promote). (3) Item-panel tabs already use `ease-keystone` + `rounded-full`; the only stray easing is `sidebar.tsx:47`.
+
+**Preserve (all buckets):** never touch data flow, Server Actions, realtime, mention DATA/parsing (`mentions.ts`, `MentionTextarea`), `mentionIds`/notification path, tab-switch client state, keyboard handlers, `sr-only`/`aria-*` accessible names, the `pointer-coarse:min-h-11` tab token (test-locked). Visual/render-class only.
+
+### Task 6.1: Sidebar (wordmark mark + easing)
+
+**Files:** `src/components/brand/brand.tsx`, `src/components/sidebar.tsx`. Tests keep green: `brand.test.tsx` (must NOT add a 2nd visible "MONOLITH" text node; keep the `sr-only` "MONOLITH"), `sidebar.test.tsx` (no easing asserted).
+
+- [ ] **6.1a — mark:** `brand.tsx` expanded branch (~`:23-45`) — prepend `<MonolithMark className="text-foreground size-5" />` as the first child inside the fragment, before the wordmark `<span>`. The `<Link>` already has `flex items-center gap-2`, so it lays out as `[mark] MONOL[slab-I]TH`. MonolithMark is `aria-hidden` already → no accessible-name/text-node change (tests stay green). Keep the collapsed branch as-is.
+- [ ] **6.1b — easing:** `sidebar.tsx:47` — `"…transition-[width] duration-200 ease-out"` → `ease-out` → `ease-keystone`. Nothing else.
+- [ ] **TDD:** extend `brand.test.tsx` — assert an svg mark renders in the expanded brand (e.g. `container.querySelector("svg")` present) AND `getByText("MONOLITH")` (sr-only) still present + link href `/landing`. Run `pnpm exec vitest run --project unit src/components/brand/ src/components/sidebar.test.tsx` green.
+- [ ] Commit `feat(ui): keystone sidebar wordmark mark + keystone easing`.
+
+### Task 6.2: Item panel (meta-chips + tab count)
+
+**Files:** `src/components/boards/item-panel/ItemPanel.tsx`. Test: extend `ItemPanel.test.tsx` (keep the `getByRole("tab", {name:/updates/i})` matches + `pointer-coarse:min-h-11` per tab + fields-tab metadata assertions).
+
+- [ ] **Moves:** (1) **Meta chips** — after the title row (~`:103`, the `</div>` closing the SheetTitle+viewers flex row, before `<SheetDescription>`), add a compact mono meta row: `<div className="flex flex-wrap gap-x-4 gap-y-1"> {creatorName && <MetaChip label="OWNER">{creatorName}</MetaChip>} <MetaChip label="CREATED">{formatCreated(createdAt)}</MetaChip> </div>` where `creatorName = members.find(m => m.userId === createdBy)?.fullName` (same lookup the fields tab uses) and `formatCreated` reuses the fields-tab date formatting (inspect `CreatedAtCell`/the fields `<dl>` ~`:142-169`; reuse its formatter, don't invent). Import `MetaChip` from `@/components/ui/meta-chip`. (2) **Tab count** — in the tab label render (~`:127`, `{t === "activity" ? "Activity Log" : t}`), append an accent count to the Updates tab: `{t === "updates" && (updates.data?.updates.length ?? 0) > 0 ? <span className="text-primary ml-1 tabular-nums">{String(updates.data.updates.length).padStart(2, "0")}</span> : null}`. **Keep the word "updates"/"Updates" in the label** so the accessible name still matches `/updates/i` (test-locked); the count is a child span. `updates` is already destructured (`:58`).
+- [ ] **TDD:** extend `ItemPanel.test.tsx` — assert the header renders an OWNER MetaChip (mono `text-kicker` label) from a fixture, and (with a fixture that has ≥1 update) the Updates tab shows a `text-primary` count. Reuse existing render/fixtures. Run `pnpm exec vitest run --project unit src/components/boards/item-panel/ItemPanel.test.tsx` green.
+- [ ] Commit `feat(ui): keystone item panel meta chips + accent tab count`.
+
+### Task 6.3: @mention accent-highlighting
+
+**Files:** `src/components/boards/item-panel/UpdatesTab.tsx`. **Do NOT touch** `MentionTextarea.tsx` or `mentions.ts` (composer/parsing/data). Test: extend `UpdatesTab.test.tsx`.
+
+- [ ] **Move:** `UpdatesTab.tsx:114` — `<p className="whitespace-pre-wrap">{u.body_text}</p>` → render the body through a small **display-only** highlighter: tokenize `u.body_text` against the known `members` full names (longest-match `@{fullName}`) and wrap each matched `@Name` in `<span className="text-primary">@Name</span>`; leave all other text as plain nodes; keep `whitespace-pre-wrap` on the `<p>`. Implement the tokenizer as a local pure helper in this file (or a co-located util). This is purely rendering an already-persisted string — it cannot affect linking/notifications (those ride `mentionIds`, not the display text). Match against `members` (prop, `:15/:21`) so only real mentions accent.
+- [ ] **TDD:** extend `UpdatesTab.test.tsx` — with a fixture whose `body_text` contains `@{a member's fullName}`, assert that `@Name` renders inside an element with `text-primary` and non-mention text stays plain. Keep the existing author/timestamp/delete assertions. Run `pnpm exec vitest run --project unit src/components/boards/item-panel/UpdatesTab.test.tsx` green.
+- [ ] Commit `feat(ui): keystone accent-highlight @mentions in updates`.
+
+### Task 6.4: Integrate, smoke-check, finish Wave 6
+
+- [ ] gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` green.
+- [ ] visual smoke both themes — sidebar shows the mark+wordmark lockup and its collapse animates with keystone easing; an item panel shows OWNER/CREATED mono meta chips + an accent "02"-style count on the Updates tab; an update comment with an @mention renders the mention in periwinkle. **Extra care:** these are already-shipped surfaces — confirm no regression to tab switching, collapse toggle, or update posting.
+- [ ] `scripts/finish-task.sh`. Then numbered "How to test this" walkthrough (call out the wordmark mark for user sign-off before promote).
 - **Wave 6 · Core touch-ups** — sidebar wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency.
 
 ---

@@ -70,7 +70,7 @@ export function InvitePanel({
           onChange={(e) => setRole(e.target.value)}
           aria-label="Invite role"
           className={cn(
-            "border-border bg-background text-foreground hover:bg-accent focus-visible:ring-ring/50 focus-visible:border-ring h-9 rounded-md border px-3 text-sm capitalize transition-colors",
+            "border-border bg-background text-foreground hover:bg-accent hover:border-border-hover focus-visible:ring-ring/50 focus-visible:border-ring h-9 rounded-md border px-3 text-sm capitalize transition-colors",
             "focus-visible:ring-3 focus-visible:outline-none",
             "disabled:pointer-events-none disabled:opacity-50",
           )}

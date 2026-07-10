@@ -12,7 +12,7 @@ import {
 import { platformSetOrgRole } from "@/lib/platform/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { statusToneClasses } from "@/components/ui/status-pill";
+import { StatusPill } from "@/components/ui/status-pill";
 
 type Role = Database["public"]["Enums"]["org_role"];
 
@@ -107,7 +107,7 @@ export function MembersTable({
                       }
                       onChange={(e) => changeRole(m, e.target.value as Role)}
                       className={cn(
-                        "border-border bg-background text-foreground hover:bg-accent focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-2 py-1 text-xs capitalize transition-colors",
+                        "border-border bg-background text-foreground hover:bg-accent hover:border-border-hover focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-2 py-1 text-xs capitalize transition-colors",
                         "focus-visible:ring-3 focus-visible:outline-none",
                         "disabled:pointer-events-none disabled:opacity-50",
                       )}
@@ -120,17 +120,12 @@ export function MembersTable({
                     </select>
                   </td>
                   <td className="px-3 py-2.5 align-middle">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
-                        statusToneClasses(
-                          deactivated ? "gray" : "green",
-                          "solid",
-                        ),
-                      )}
+                    <StatusPill
+                      color={deactivated ? "gray" : "green"}
+                      variant="soft"
                     >
                       {deactivated ? "Deactivated" : "Active"}
-                    </span>
+                    </StatusPill>
                   </td>
                   <td className="py-2.5 pl-3 align-middle">
                     <div className="flex flex-wrap justify-end gap-1">

@@ -123,7 +123,7 @@ export function CapacityCell({
         >
           <div
             className={cn(
-              "h-full rounded-full transition-[width]",
+              "ease-keystone h-full rounded-full transition-[width] duration-500",
               displayState === "under" && "bg-foreground/40",
               displayState === "at" && "bg-primary",
               displayState === "over" && "bg-destructive",

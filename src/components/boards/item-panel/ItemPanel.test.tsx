@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ItemPanel } from "./ItemPanel";
@@ -9,6 +9,8 @@ import {
 } from "@/lib/boards/presence-context";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { presenceTarget } from "@/lib/boards/presence-target";
+import { itemUpdatesKey } from "@/lib/collaboration/use-item-collab";
+import type { ItemUpdate } from "@/lib/collaboration/cache";
 
 afterEach(() => usePresenceFocusStore.getState().reset());
 
@@ -82,10 +84,16 @@ describe("ItemPanel creation metadata", () => {
       </QueryClientProvider>,
     );
     await user.click(screen.getByRole("tab", { name: /fields/i }));
-    expect(screen.getByText("Created by")).toBeInTheDocument();
-    expect(screen.getByText("Danijel Jovanovic")).toBeInTheDocument();
-    expect(screen.getByText("Created at")).toBeInTheDocument();
-    expect(screen.getByText(/2026/)).toBeInTheDocument();
+    // Scope to the fields tab's <dl> — the Keystone header now also renders an
+    // OWNER/CREATED meta chip with the same values, so unscoped queries would
+    // match twice.
+    const fieldsList = screen.getByText("Created by").closest("dl")!;
+    expect(within(fieldsList).getByText("Created by")).toBeInTheDocument();
+    expect(
+      within(fieldsList).getByText("Danijel Jovanovic"),
+    ).toBeInTheDocument();
+    expect(within(fieldsList).getByText("Created at")).toBeInTheDocument();
+    expect(within(fieldsList).getByText(/2026/)).toBeInTheDocument();
   });
 });
 
@@ -144,5 +152,60 @@ describe("ItemPanel presence", () => {
     expect(setFocus).not.toHaveBeenCalledWith(
       expect.objectContaining({ viewKind: "panel" }),
     );
+  });
+});
+
+describe("ItemPanel meta chips (Keystone)", () => {
+  it("renders an OWNER meta chip with the creator's name in the header", () => {
+    const qc = new QueryClient();
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardPresenceProvider value={ctx(vi.fn())}>
+          <ItemPanel
+            {...baseProps}
+            itemId="item-1"
+            members={[{ userId: "u-1", fullName: "Danijel Jovanovic" }]}
+            createdBy="u-1"
+            createdAt="2026-06-25T15:42:00Z"
+          />
+        </BoardPresenceProvider>
+      </QueryClientProvider>,
+    );
+    const ownerLabel = screen.getByText("OWNER");
+    expect(ownerLabel.className).toContain("font-mono");
+    expect(ownerLabel.className).toContain("text-kicker");
+    expect(screen.getByText("Danijel Jovanovic")).toBeInTheDocument();
+  });
+});
+
+describe("ItemPanel updates tab count (Keystone)", () => {
+  it("shows an accent count on the Updates tab when updates exist", () => {
+    const qc = new QueryClient();
+    const fixture: ItemUpdate[] = [
+      {
+        id: "upd-1",
+        item_id: "item-1",
+        board_id: "board1",
+        org_id: "org1",
+        author_id: "u-1",
+        body: {},
+        body_text: "First update",
+        created_at: "2026-06-25T15:42:00Z",
+        updated_at: "2026-06-25T15:42:00Z",
+        edited_at: null,
+      },
+    ];
+    qc.setQueryData(itemUpdatesKey("item-1"), { updates: fixture });
+    render(
+      <QueryClientProvider client={qc}>
+        <BoardPresenceProvider value={ctx(vi.fn())}>
+          <ItemPanel {...baseProps} itemId="item-1" />
+        </BoardPresenceProvider>
+      </QueryClientProvider>,
+    );
+    const updatesTab = screen.getByRole("tab", { name: /updates/i });
+    const count = updatesTab.querySelector(".text-primary");
+    expect(count).toBeTruthy();
+    expect(count).toHaveTextContent("01");
   });
 });

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/session";
 import { listPortfolios } from "@/lib/portfolios/queries";
 import { NewPortfolioDialog } from "@/components/portfolios/NewPortfolioDialog";
+import { Kicker } from "@/components/ui/kicker";
 
 export default async function PortfoliosIndex() {
   await requireUser();
@@ -9,7 +10,10 @@ export default async function PortfoliosIndex() {
   return (
     <div className="mx-auto max-w-3xl p-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Portfolios</h1>
+        <div>
+          <Kicker>PLANNING</Kicker>
+          <h1 className="text-lg font-semibold">Portfolios</h1>
+        </div>
         <NewPortfolioDialog />
       </div>
       {portfolios.length === 0 ? (
@@ -17,7 +21,7 @@ export default async function PortfoliosIndex() {
           No portfolios yet. Create one to roll up boards across your org.
         </p>
       ) : (
-        <ul className="divide-y rounded-md border">
+        <ul className="shadow-card divide-y overflow-hidden rounded-[14px] border">
           {portfolios.map((p) => (
             <li key={p.id}>
               <Link

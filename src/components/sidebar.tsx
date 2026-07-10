@@ -44,7 +44,7 @@ export function Sidebar({ navSlot }: { navSlot: ReactNode }) {
         data-collapsed={isCollapsed}
         className={cn(
           "bg-sidebar hidden shrink-0 flex-col border-r md:flex",
-          hasHydrated && "transition-[width] duration-200 ease-out",
+          hasHydrated && "ease-keystone transition-[width] duration-200",
           isCollapsed ? "w-14" : "w-60",
         )}
       >

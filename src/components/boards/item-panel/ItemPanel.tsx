@@ -25,7 +25,9 @@ import { FilesTab } from "./FilesTab";
 import {
   CreatedByCell,
   CreatedAtCell,
+  formatDateTime,
 } from "@/components/boards/cells/created";
+import { MetaChip } from "@/components/ui/meta-chip";
 
 type Tab = "fields" | "updates" | "activity" | "files";
 
@@ -56,6 +58,7 @@ export function ItemPanel({
 }) {
   const [tab, setTab] = useState<Tab>("updates");
   const { updates, activity } = useItemCollab(itemId);
+  const creatorName = members.find((m) => m.userId === createdBy)?.fullName;
   const mutations = useUpdateMutations(itemId ?? "none", currentUserId, {
     orgId,
     boardId,
@@ -101,6 +104,14 @@ export function ItemPanel({
             </SheetTitle>
             <ItemViewersBar itemId={itemId} />
           </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {creatorName ? (
+              <MetaChip label="OWNER">{creatorName}</MetaChip>
+            ) : null}
+            {createdAt ? (
+              <MetaChip label="CREATED">{formatDateTime(createdAt)}</MetaChip>
+            ) : null}
+          </div>
           <SheetDescription className="sr-only">
             Item details, updates, and activity.
           </SheetDescription>
@@ -125,6 +136,11 @@ export function ItemPanel({
               )}
             >
               {t === "activity" ? "Activity Log" : t}
+              {t === "updates" && (updates.data?.updates.length ?? 0) > 0 ? (
+                <span className="text-primary ml-1 tabular-nums">
+                  {String(updates.data!.updates.length).padStart(2, "0")}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>

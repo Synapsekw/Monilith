@@ -68,6 +68,22 @@ describe("CapacityCell", () => {
     expect(screen.getByTestId("capacity-bar")).toBeInTheDocument();
   });
 
+  it("applies the keystone easing transition to the capacity bar fill, keeping its state color", () => {
+    render(
+      <CapacityCell
+        effortSecs={32 * 3600}
+        capacitySecs={40 * 3600}
+        state="at"
+        metric="planned"
+      />,
+    );
+    const bar = screen.getByTestId("capacity-bar");
+    const fill = bar.firstElementChild;
+    expect(fill).not.toBeNull();
+    expect(fill).toHaveClass("ease-keystone");
+    expect(fill).toHaveClass("bg-primary");
+  });
+
   it("omits the capacity bar when there is no capacity (none state)", () => {
     render(
       <CapacityCell

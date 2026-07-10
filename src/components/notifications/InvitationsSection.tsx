@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Kicker } from "@/components/ui/kicker";
 import type { PendingInvitation } from "@/lib/collaboration/invitations";
 
 export function InvitationsSection({
@@ -20,9 +21,7 @@ export function InvitationsSection({
 
   return (
     <div className="border-b">
-      <p className="text-muted-foreground px-3 pt-2 text-xs font-medium">
-        Invitations
-      </p>
+      <Kicker className="block px-3 pt-2">Invitations</Kicker>
       <ul>
         {invites.map((i) => (
           <li key={i.id} className="space-y-2 px-3 py-2 text-sm">

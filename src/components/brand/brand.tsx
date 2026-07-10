@@ -21,6 +21,7 @@ export function Brand({ collapsed = false }: { collapsed?: boolean }) {
         <MonolithMark className="text-foreground size-6" />
       ) : (
         <>
+          <MonolithMark className="text-foreground size-5" />
           <span
             aria-hidden="true"
             className={cn(

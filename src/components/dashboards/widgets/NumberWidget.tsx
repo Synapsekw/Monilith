@@ -3,6 +3,7 @@
 import { useWidgetData } from "@/lib/dashboards/use-widget-data";
 import { formatMetric, numberFromBuckets } from "@/lib/dashboards/widget-data";
 import type { CacheWidget } from "@/lib/dashboards/cache";
+import { Kicker } from "@/components/ui/kicker";
 
 export function NumberWidget({ widget }: { widget: CacheWidget }) {
   const config = (widget.config ?? {}) as {
@@ -71,9 +72,7 @@ export function NumberWidget({ widget }: { widget: CacheWidget }) {
       <span className="from-foreground to-foreground/60 bg-gradient-to-b bg-clip-text text-4xl font-semibold text-transparent tabular-nums">
         {formatMetric(value, agg)}
       </span>
-      <span className="text-muted-foreground mt-1 text-xs tracking-wide uppercase">
-        {agg === "count" ? "items" : agg}
-      </span>
+      <Kicker className="mt-1">{agg === "count" ? "items" : agg}</Kicker>
     </div>
   );
 }

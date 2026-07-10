@@ -2,14 +2,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Single dashboard-widget card chrome. Mirrors DashboardWidget:
- * `bg-card flex h-full flex-col overflow-hidden rounded-xl border`,
+ * `bg-card flex h-full flex-col overflow-hidden rounded-[14px] border`,
  * header `border-b px-3 py-2`, body `min-h-0 flex-1 p-3`.
  */
 export function DashboardWidgetSkeleton() {
   return (
     <div
       data-testid="widget-skeleton"
-      className="bg-card flex h-full flex-col overflow-hidden rounded-xl border"
+      className="bg-card flex h-full flex-col overflow-hidden rounded-[14px] border"
     >
       <div className="flex items-center justify-between border-b px-3 py-2">
         <Skeleton className="h-4 w-28" />
