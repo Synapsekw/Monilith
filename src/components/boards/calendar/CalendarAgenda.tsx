@@ -6,6 +6,7 @@ import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { cellKey } from "@/lib/boards/cache";
 import type { Json } from "@/types/database.types";
 import { agendaGroups } from "@/lib/boards/calendar-agenda";
+import { Kicker } from "@/components/ui/kicker";
 import { CellRenderer } from "@/components/boards/cells";
 
 type CellMap = Map<string, BoardCache["cellValues"][number]["value"]>;
@@ -75,9 +76,7 @@ export function CalendarAgenda({
             )}
           >
             <div className="border-r p-3">
-              <div className="text-muted-foreground text-[10px] font-semibold uppercase">
-                {weekday(group.dateISO)}
-              </div>
+              <Kicker className="block">{weekday(group.dateISO)}</Kicker>
               <div
                 className={cn(
                   "text-xl font-semibold tabular-nums",
@@ -109,7 +108,7 @@ export function CalendarAgenda({
                         {item.name}
                       </span>
                       {isSpan && (
-                        <span className="text-muted-foreground bg-surface-muted rounded-full border px-2 py-0.5 text-[10px]">
+                        <span className="text-muted-foreground bg-surface-muted border-border rounded-sm border px-2 py-0.5 text-[10px]">
                           {fmt(item.range.start)} – {fmt(item.range.end)}
                         </span>
                       )}

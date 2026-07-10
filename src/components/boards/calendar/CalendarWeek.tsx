@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { addDaysISO, layOutWeek } from "@/lib/boards/calendar";
 import { itemDateRange } from "@/lib/boards/dates";
+import { Kicker } from "@/components/ui/kicker";
 import { EventBar } from "./EventBar";
 
 type CellMap = Map<string, BoardCache["cellValues"][number]["value"]>;
@@ -54,9 +55,7 @@ export function CalendarWeek({
               iso === today && "bg-primary/8",
             )}
           >
-            <div className="text-muted-foreground text-[10px] font-semibold uppercase">
-              {WEEKDAYS[i]}
-            </div>
+            <Kicker className="block">{WEEKDAYS[i]}</Kicker>
             <div
               className={cn(
                 "text-base font-semibold tabular-nums",
@@ -87,7 +86,7 @@ export function CalendarWeek({
               }
             }}
             className={cn(
-              "hover:bg-accent/10 cursor-pointer border-r last:border-r-0",
+              "hover:bg-surface-muted border-border hover:border-border-hover cursor-pointer border-r last:border-r-0",
               iso === today && "bg-primary/8",
             )}
           />

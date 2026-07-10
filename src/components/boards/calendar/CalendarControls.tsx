@@ -77,7 +77,7 @@ export function CalendarControls({
               aria-selected={mode === m.id}
               onClick={() => onModeChange(m.id)}
               className={cn(
-                "rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11",
+                "rounded-sm px-2.5 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-11",
                 mode === m.id
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground",
