@@ -533,11 +533,66 @@ Recon confirmed no valid Keystone chrome (avatar glyph is a preserve; section ti
 
 ---
 
-## Clusters 3–6 (planned just-in-time)
+# Wave 3 — Admin & entry
+
+**Depends on:** Waves 0–2 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-admin-entry` → `.claude/worktrees/keystone-admin-entry`.
+**Recon (2026-07-10, against post-Wave-2 `develop`):** three file-disjoint surfaces → 3 parallel implementers. Key correction to spec §4.2: **Auth pages live under `src/app/(auth)/*`**, not `src/app/auth/*` (which holds only server `actions.ts` + `callback/route.ts` — DO NOT TOUCH). All cards are the shared shadcn `<Card>` (`rounded-xl bg-card ring-1 ring-foreground/10`, no shadow) — never edit `card.tsx`; apply per-call-site `className` overrides. There are **zero** hand-rolled uppercase labels and **zero** inline-bg/`rounded-full` status chips in these surfaces, so Kicker eyebrows are net-new and the only chip conversion is one members-table status badge.
+
+**Shared entry-surface treatment (Auth + Onboarding cards):** brand-wash bg + `shadow-panel` on the `<Card>`, a `<Kicker>` eyebrow above `<CardTitle>`, and the submit CTA gets `shadow-glow-primary`. Exact brand-wash string (from `DashboardWidget`): `[background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]`. Utilities verified: `shadow-panel` (globals.css L89), `shadow-glow-primary` (maps `--glow-primary` L148). Cards are static form containers → **no `.card-lift`**.
+
+**Preserve (all surfaces):** every `useActionState`/`useForm`/`zodResolver`/`startTransition`/`formAction`/`action` wiring, `noValidate`+FormData construction, redirect/callback flows, `aria-invalid`/`aria-describedby`, all `text-destructive`/`text-status-*` semantic error/warn text, tested button/description copy, and `src/app/auth/*` server files. Avatar `rounded-full` stays. Visual classes / element wrapping only.
+
+### Task 3.1: Auth (roughest — bespoke §4.2 pass)
+
+**Files:** `src/components/auth/auth-form.tsx`, `change-password-form.tsx`, `forgot-password-form.tsx`. Tests: extend the three existing `*.test.tsx` (role/text-based — keep button text + description copy + forgot-password link intact).
+
+- [ ] **Step 1 (TDD):** in `auth-form.test.tsx`, add an assertion that the form card carries the entry-surface treatment (query the card container; assert it has `shadow-panel` and a Kicker eyebrow is present, e.g. `getByText("WELCOME")`/`"GET STARTED"`). Assert semantic classes, not the gradient string.
+- [ ] **Step 2:** watch it fail (stock `<Card>`, no eyebrow).
+- [ ] **Step 3 — moves:**
+  1. `auth-form.tsx` — main `<Card>` (L80) and check-email `<Card>` (L66): add `className="[background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)] shadow-panel"`. Add a `<Kicker>` above `<CardTitle>` (L82): `isSignup ? "GET STARTED" : "WELCOME"`. CTA (L178): add `shadow-glow-primary` to the Button `className`.
+  2. `change-password-form.tsx` — `<Card>` (L37) same brand-wash+`shadow-panel`; `<Kicker>SECURITY</Kicker>` above title (L42); CTA (L73) `shadow-glow-primary`. Keep both variant copy strings + the KeyRound tile.
+  3. `forgot-password-form.tsx` — both `<Card>`s (main L52, sent L38) brand-wash+`shadow-panel`; `<Kicker>RESET</Kicker>` above title (L54); CTA (L99) `shadow-glow-primary`.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/auth/` green (all three files).
+- [ ] **Step 5:** commit `feat(ui): keystone-polish auth (brand-washed cards + kicker eyebrows + glow cta)`.
+
+### Task 3.2: Onboarding (entry-surface consistency)
+
+**Files:** `src/components/onboarding/onboarding-form.tsx`. Test: extend `onboarding-form.test.tsx`.
+
+- [ ] **Step 1 (TDD):** assert the onboarding card has `shadow-panel` + a Kicker eyebrow (`getByText("GET STARTED")`).
+- [ ] **Step 2:** watch it fail.
+- [ ] **Step 3 — moves:** `<Card>` (L40) brand-wash+`shadow-panel`; `<Kicker>GET STARTED</Kicker>` above `<CardTitle>` (L42); CTA (L103) `shadow-glow-primary`. Same brand-wash string as auth.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/onboarding/onboarding-form.test.tsx` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish onboarding entry card (kicker + glow cta)`.
+
+### Task 3.3: Settings (StatusPill + Kicker + input hairlines)
+
+**Files:** `src/components/settings/members-table.tsx`, `src/components/settings/invite-panel.tsx`, `src/components/settings/org-admin-console.tsx`, `src/app/(app)/settings/page.tsx`. Tests: extend `members-table.test.tsx` (keep `<tr>` structure + "Remove" button); the others are behavioral — keep green. `loading.test.tsx` asserts `max-w-3xl`+`mx-auto` — untouched (not in scope).
+
+- [ ] **Step 1 (TDD):** in `members-table.test.tsx`, assert the member status renders via the soft `StatusPill` contract — `rounded-sm` (not the old `rounded-md`) and the tone class for active(green)/deactivated(gray).
+- [ ] **Step 2:** watch it fail (current badge is hand-rolled `rounded-md` + `statusToneClasses(..., "solid")`).
+- [ ] **Step 3 — moves:**
+  1. `members-table.tsx` (L123–133) — replace the hand-rolled `<span>` status badge with `<StatusPill color={deactivated ? "gray" : "green"} variant="soft">{deactivated ? "Deactivated" : "Active"}</StatusPill>` (import `@/components/ui/status-pill`; drop the now-unused `statusToneClasses`/`cn` import iff nothing else uses them — verify). Role `<select>` (L109): add `hover:border-border-hover` (keep `onChange`/`disabled`/`aria-label`).
+  2. `settings/page.tsx` (L74) — add a `<Kicker>ADMIN</Kicker>` eyebrow above the `<h1>Settings` (import `@/components/ui/kicker`).
+  3. `org-admin-console.tsx` tab buttons (L50–66) — add `hover:border-border-hover` to inactive tabs; keep `role="tab"`/`aria-selected`/`onClick`/`capitalize`.
+  4. `invite-panel.tsx` role `<select>` (L68) — add `hover:border-border-hover`; keep handlers.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/settings/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish settings (soft status pill + kicker + input hairlines)`.
+
+### Task 3.4: Integrate, smoke-check, finish Wave 3
+
+- [ ] **Step 1:** gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green.
+- [ ] **Step 2:** visual smoke-check both themes — /login, /signup, /forgot-password, /change-password, /onboarding show a brand-washed elevated card with a mono Kicker eyebrow + glowing primary CTA; Settings members table shows soft status pills, page has an ADMIN kicker, inputs/tabs brighten on hover. No layout breakage; forms still submit.
+- [ ] **Step 3:** `scripts/finish-task.sh`.
+- [ ] **Step 4:** hand the user a numbered "How to test this" walkthrough (both themes).
+
+---
+
+## Clusters 4–6 (planned just-in-time)
 
 Each is its own worktree → `develop`, verified before the next (Approach B). Written as a same-structured plan (four moves + recon specifics + TDD anchor per surface) immediately before its worktree starts, against the then-current `develop`:
 
-- **Wave 3 · Admin & entry** — Settings · Auth (from stock shadcn → brand-washed card + kicker eyebrow + panel elevation) · Onboarding.
 - **Wave 4 · Planning** — Goals · Portfolios · Workload.
 - **Wave 5 · Personal & chrome** — My Work · Time · Notifications · Command palette.
 - **Wave 6 · Core touch-ups** — sidebar wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency.
