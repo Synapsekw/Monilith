@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ListTodo } from "lucide-react";
-import { pillTextColor } from "@/lib/boards/contrast";
+import { ColorChip } from "@/components/ui/color-chip";
+import { Kicker } from "@/components/ui/kicker";
 import { cn } from "@/lib/utils";
 import type { MyWorkGroup, MyWorkItem } from "@/lib/my-work/bucket";
 
@@ -31,15 +32,12 @@ function Row({ item, today }: { item: MyWorkItem; today: string }) {
           </p>
         </div>
         {item.status ? (
-          <span
-            className="inline-flex max-w-40 shrink-0 items-center truncate rounded-md px-2 py-0.5 text-xs font-medium"
-            style={{
-              backgroundColor: item.status.color,
-              color: pillTextColor(item.status.color),
-            }}
+          <ColorChip
+            color={item.status.color}
+            className="max-w-40 shrink-0 truncate"
           >
             {item.status.label}
-          </span>
+          </ColorChip>
         ) : null}
         {item.dueDate ? (
           <span
@@ -94,21 +92,16 @@ export function MyWorkList({
         {groups.map((group) => (
           <section key={group.bucket}>
             <div className="mb-2 flex items-baseline justify-between px-1">
-              <h2
-                className={cn(
-                  "text-xs font-medium tracking-wide uppercase",
-                  group.bucket === "overdue"
-                    ? "text-destructive"
-                    : "text-muted-foreground",
-                )}
+              <Kicker
+                className={cn(group.bucket === "overdue" && "text-destructive")}
               >
                 {group.label}
-              </h2>
+              </Kicker>
               <span className="text-muted-foreground text-xs tabular-nums">
                 {group.items.length}
               </span>
             </div>
-            <ul className="bg-surface divide-y overflow-hidden rounded-md border">
+            <ul className="bg-surface divide-y overflow-hidden rounded-[14px] border">
               {group.items.map((item) => (
                 <Row key={item.itemId} item={item} today={today} />
               ))}
