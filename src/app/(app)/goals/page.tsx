@@ -8,6 +8,7 @@ import {
 import { GoalTree } from "@/components/goals/GoalTree";
 import { GoalDetailDrawer } from "@/components/goals/GoalDetailDrawer";
 import { NewGoalDialog } from "@/components/goals/NewGoalDialog";
+import { Kicker } from "@/components/ui/kicker";
 
 export default async function GoalsIndex() {
   // Identity read OUTSIDE the cache scope (9.3 rule) — the user id keys the
@@ -27,6 +28,7 @@ export default async function GoalsIndex() {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-6 py-3">
         <div>
+          <Kicker>PLANNING</Kicker>
           <h1 className="text-lg font-semibold">Goals</h1>
           <p className="text-muted-foreground text-xs">
             Measurable objectives that roll up across your org.

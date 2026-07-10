@@ -589,11 +589,65 @@ Recon confirmed no valid Keystone chrome (avatar glyph is a preserve; section ti
 
 ---
 
-## Clusters 4–6 (planned just-in-time)
+# Wave 4 — Planning
+
+**Depends on:** Waves 0–3 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-planning` → `.claude/worktrees/keystone-planning`.
+**Recon (2026-07-10, against post-Wave-3 `develop`):** a **lighter cluster** — these three surfaces are table/grid-based and already largely on-primitive. Findings: (1) **zero** hand-rolled uppercase labels (Kicker is additive on page headers, matching the Wave 3 `ADMIN / Settings` precedent → use `PLANNING`); (2) status chips mostly already migrated (`GoalStatusPill`/`HealthPill` are already soft `<StatusPill>`) — the one un-migrated chip is Portfolios' `PriorityPill` (plain text span); (3) the only interactive-card candidate is the portfolios index list (a `<ul>`, not real cards) → surface polish, not `.card-lift` on rows; (4) no `shadow-sm/md` anywhere; the substance is the progress/capacity bars → **accent-progress treatment = keystone easing on the fill, geometry/track only, data colors + width untouched**. 3 file-disjoint implementers.
+
+**Preserve (all surfaces):** progress/capacity bar **fill colors + width calcs encode data** (goal %, portfolio %, workload under/at/over capacity via `bg-foreground/40`/`bg-primary`/`bg-destructive`) — keep them; only add keystone easing/track chrome. Small `size-2.5 rounded-full` status dots (`DoneMappingFields`), avatar `rounded-full` (`MemberRowHeader`), table-row `hover:bg-accent/*` (asserted by tests), all Server Actions / `onChange` / `pushState` / filter logic — untouched.
+
+### Task 4.1: Goals
+
+**Files:** `src/components/goals/ProgressBar.tsx`, `src/app/(app)/goals/page.tsx`. Test: add `src/components/goals/ProgressBar.test.tsx` (none exists). Keep `GoalTree.test.tsx` green (asserts row `hover:bg-accent/30`+`transition-colors` — untouched).
+
+- [ ] **Step 1 (TDD):** `ProgressBar.test.tsx` — render `<ProgressBar progress={0.5} />`; assert the fill div has `bg-primary`, `ease-keystone`, and `style width: 50%`.
+- [ ] **Step 2:** watch it fail (fill has no `ease-keystone`).
+- [ ] **Step 3 — moves:**
+  1. `ProgressBar.tsx:9` fill — `className="bg-primary h-full rounded-full"` → add `transition-[width] duration-500 ease-keystone`. Keep `bg-primary`, `rounded-full`, and the `width: ${pct}%` style. Track (L8) untouched.
+  2. `app/(app)/goals/page.tsx` (~L30, the `<div>` wrapping `<h1>Goals`) — add `<Kicker>PLANNING</Kicker>` above the `<h1>` (import `@/components/ui/kicker`). Don't disturb the flex layout / subtitle / `NewGoalDialog`.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/goals/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish goals (planning kicker + eased progress bar)`.
+
+### Task 4.2: Portfolios
+
+**Files:** `src/components/portfolios/PriorityPill.tsx`, `src/components/portfolios/ProgressBar.tsx`, `src/app/(app)/portfolios/page.tsx`, `src/app/(app)/portfolios/[portfolioId]/page.tsx`. Test: add `src/components/portfolios/PriorityPill.test.tsx` (none exists). Keep skeleton/loading tests green (untouched).
+
+- [ ] **Step 1 (TDD):** `PriorityPill.test.tsx` — `<PriorityPill priority="critical" />` renders "Critical" in a soft StatusPill (`rounded-sm`, red tone class); `priority={null}` renders "—".
+- [ ] **Step 2:** watch it fail (currently a plain `text-xs font-medium` span, no `rounded-sm`).
+- [ ] **Step 3 — moves:**
+  1. `PriorityPill.tsx:17` — replace `<span className="text-xs font-medium">{LABEL[priority]}</span>` with `<StatusPill variant="soft" color={PRIORITY_COLOR[priority]}>{LABEL[priority]}</StatusPill>`. Add a `const PRIORITY_COLOR: Record<PortfolioPriority, StatusColor> = { critical: "red", high: "orange", medium: "yellow", low: "gray" }`. Import `StatusPill`, `StatusColor` from `@/components/ui/status-pill`. Keep the `null → <span>—</span>` branch (L15-16) exactly.
+  2. `portfolios/ProgressBar.tsx:8` fill — same keystone easing as Goals (`transition-[width] duration-500 ease-keystone`; keep `bg-primary`/`rounded-full`/width).
+  3. `app/(app)/portfolios/page.tsx` — the index `<ul className="divide-y rounded-md border">` (~L20) → `divide-y overflow-hidden rounded-[14px] border shadow-card` (keystone surface; keep the `<Link>` rows + `hover:bg-accent/40`). Above `<h1>Portfolios` (~L12) add `<Kicker>PLANNING</Kicker>` (wrap the h1 as needed; keep the flex row + `NewPortfolioDialog`).
+  4. `app/(app)/portfolios/[portfolioId]/page.tsx` (~L30) — add `<Kicker>PLANNING</Kicker>` above `<h1>{portfolio.name}`.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/portfolios/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish portfolios (soft priority pill + planning kicker + surface)`.
+
+### Task 4.3: Workload
+
+**Files:** `src/components/workload/CapacityCell.tsx`, `src/components/workload/WorkloadGrid.tsx`. Test: extend `CapacityCell.test.tsx` (keep the `18h/40h/…` readout assertions).
+
+- [ ] **Step 1 (TDD):** in `CapacityCell.test.tsx`, assert the fill inside `[data-testid="capacity-bar"]` carries `ease-keystone` for an at-capacity cell, and still carries its state color (`bg-primary`).
+- [ ] **Step 2:** watch it fail (fill has `transition-[width]` but no `ease-keystone`).
+- [ ] **Step 3 — moves:**
+  1. `CapacityCell.tsx:126` fill className — `"h-full rounded-full transition-[width]"` → `"h-full rounded-full transition-[width] duration-500 ease-keystone"`. **Keep the three state colors (L127-129) and the width calc (L131-138) EXACTLY** (data). Track (L122) untouched.
+  2. `WorkloadGrid.tsx` (~L245, the `<div>` wrapping `<h1>Workload`) — add `<Kicker>PLANNING</Kicker>` above the `<h1>` (import `@/components/ui/kicker`). Keep the subtitle + toolbar.
+- [ ] **Step 4:** `pnpm exec vitest run --project unit src/components/workload/` green.
+- [ ] **Step 5:** commit `feat(ui): keystone-polish workload (planning kicker + eased capacity bar)`.
+
+### Task 4.4: Integrate, smoke-check, finish Wave 4
+
+- [ ] **Step 1:** gates `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green.
+- [ ] **Step 2:** visual smoke-check both themes — /goals, /portfolios, /portfolios/[id], /workload each show a `PLANNING` mono kicker above the heading; portfolio priority renders as a soft colored pill; the portfolios index list is a 14px elevated surface; progress + capacity bars animate width with keystone easing (colors unchanged). No layout breakage.
+- [ ] **Step 3:** `scripts/finish-task.sh`.
+- [ ] **Step 4:** hand the user a numbered "How to test this" walkthrough (both themes).
+
+---
+
+## Clusters 5–6 (planned just-in-time)
 
 Each is its own worktree → `develop`, verified before the next (Approach B). Written as a same-structured plan (four moves + recon specifics + TDD anchor per surface) immediately before its worktree starts, against the then-current `develop`:
 
-- **Wave 4 · Planning** — Goals · Portfolios · Workload.
 - **Wave 5 · Personal & chrome** — My Work · Time · Notifications · Command palette.
 - **Wave 6 · Core touch-ups** — sidebar wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency.
 
