@@ -132,7 +132,7 @@ describe("BoardHeader", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("editor: hides Share, shows no View only badge, but keeps the rename control", () => {
+  it("editor: hides Share, shows no View only badge, but keeps the rename control", async () => {
     renderHeader(
       <BoardHeader
         boardId="b1"
@@ -150,11 +150,16 @@ describe("BoardHeader", () => {
     expect(
       screen.getByRole("button", { name: "Sprint backlog" }),
     ).toBeInTheDocument();
-    // Editors can append rows, so the Import affordance stays.
-    expect(screen.getByRole("button", { name: "Import" })).toBeInTheDocument();
+    // Editors can append rows, so the Import affordance stays (in the ⋯ menu).
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Import" }),
+    ).toBeInTheDocument();
   });
 
-  it("viewer: shows the View only badge, hides Share, and renders the name as a static heading", () => {
+  it("viewer: shows the View only badge, hides Share, and renders the name as a static heading", async () => {
     renderHeader(
       <BoardHeader
         boardId="b1"
@@ -176,13 +181,16 @@ describe("BoardHeader", () => {
     expect(
       screen.queryByRole("button", { name: "Sprint backlog" }),
     ).not.toBeInTheDocument();
-    // Import appends rows — a write — so viewers never see the affordance.
+    // Import appends rows — a write — so viewers never see it in the ⋯ menu.
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
     expect(
-      screen.queryByRole("button", { name: "Import" }),
+      screen.queryByRole("menuitem", { name: "Import" }),
     ).not.toBeInTheDocument();
   });
 
-  it("board title occupies a stable h-8 line box in display mode", () => {
+  it("board title occupies a stable h-7 line box in display mode", () => {
     renderHeader(
       <BoardHeader
         boardId="b1"
@@ -194,11 +202,11 @@ describe("BoardHeader", () => {
     );
 
     const title = screen.getByRole("button", { name: "Sprint backlog" });
-    expect(title.className).toContain("h-8");
+    expect(title.className).toContain("h-7");
     expect(title.className).toContain("items-center");
   });
 
-  it("viewer heading occupies the same stable h-8 line box", () => {
+  it("viewer heading occupies the same stable h-7 line box", () => {
     renderHeader(
       <BoardHeader
         boardId="b1"
@@ -210,11 +218,11 @@ describe("BoardHeader", () => {
     );
 
     const heading = screen.getByRole("heading", { name: "Sprint backlog" });
-    expect(heading.className).toContain("h-8");
+    expect(heading.className).toContain("h-7");
     expect(heading.className).toContain("items-center");
   });
 
-  it("shows the Import button and opens the import wizard dialog", async () => {
+  it("opens the import wizard dialog from the overflow menu", async () => {
     renderHeader(
       <BoardHeader
         boardId="b1"
@@ -236,10 +244,12 @@ describe("BoardHeader", () => {
       />,
     );
 
-    const importButton = screen.getByRole("button", { name: "Import" });
-    expect(importButton).toBeInTheDocument();
-
-    await userEvent.click(importButton);
+    await userEvent.click(
+      screen.getByRole("button", { name: "More board actions" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Import" }),
+    );
 
     expect(
       screen.getByRole("dialog", { name: "Import from file" }),

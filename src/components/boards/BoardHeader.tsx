@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Eye, Trash2, Upload, UserPlus, Zap } from "lucide-react";
+import {
+  Eye,
+  MoreHorizontal,
+  Trash2,
+  Upload,
+  UserPlus,
+  Zap,
+} from "lucide-react";
 
 import { ViewSwitcher } from "@/components/boards/ViewSwitcher";
 import { BoardToolbar } from "@/components/boards/BoardToolbar";
@@ -12,8 +19,14 @@ import { BoardTrashDialog } from "@/components/boards/trash/BoardTrashDialog";
 import { ExportMenu } from "@/components/boards/ExportMenu";
 import { ImportWizard } from "@/components/boards/import/ImportWizard";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Kicker } from "@/components/ui/kicker";
 import type { BoardView } from "@/lib/boards/queries";
 import type { CacheColumn } from "@/lib/boards/cache";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
@@ -113,10 +126,9 @@ export function BoardHeader({
   }
 
   return (
-    <header className="border-border flex flex-col gap-2 border-b px-6 py-2">
-      {/* Non-interactive breadcrumb eyebrow — index prop allowed here (§Kicker). */}
-      <Kicker index="01">Boards</Kicker>
-      <div className="flex items-center gap-2">
+    <header className="border-border flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-6 py-2">
+      {/* Title — compact, editable in place (stable h-7 line box). */}
+      <div className="flex min-w-0 items-center gap-2">
         {editing && !isViewer ? (
           <Input
             autoFocus
@@ -134,17 +146,17 @@ export function BoardHeader({
               }
             }}
             aria-label="Board name"
-            className="h-8 max-w-md text-[22px] font-extrabold tracking-tight"
+            className="h-7 w-56 text-[15px] font-bold"
           />
         ) : isViewer ? (
-          <h1 className="flex h-8 items-center truncate text-[22px] font-extrabold tracking-tight">
+          <h1 className="flex h-7 items-center truncate text-[15px] font-bold">
             {boardName}
           </h1>
         ) : (
           <button
             type="button"
             onClick={openRename}
-            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone flex h-8 items-center rounded-sm text-left text-[22px] font-extrabold tracking-tight transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone flex h-7 items-center truncate rounded-sm text-left text-[15px] font-bold transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {boardName}
           </button>
@@ -156,74 +168,75 @@ export function BoardHeader({
           </span>
         ) : null}
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <ViewSwitcher
-          boardId={boardId}
-          views={views}
-          selectedViewId={selectedViewId}
-        />
-        <div className="flex items-center gap-2">
-          <BoardPresenceBar />
-          <ExportMenu boardId={boardId} />
-          {/* Import appends rows — a board-level write — so viewers don't get
-              the affordance (the RPC also rejects them server-side). Export
-              stays: it's a read, allowed for viewers. */}
-          {!isViewer ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label="Import"
-              onClick={() => setImportOpen(true)}
-            >
-              <Upload className="size-3.5" /> Import
-            </Button>
-          ) : null}
+
+      {/* Divider + inline view tabs. */}
+      <span className="bg-border h-4 w-px shrink-0" aria-hidden />
+      <ViewSwitcher
+        boardId={boardId}
+        views={views}
+        selectedViewId={selectedViewId}
+      />
+
+      {/* Right control cluster — filter/search toolbar, presence, primary Share,
+          and an overflow menu for the low-frequency board actions. */}
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        {/* Filter / sort / search. In-page client state mirrored to the URL
+            (History API) — 0 server round-trips; Table + Kanban read the same
+            URL state and narrow/order the loaded cache in memory. */}
+        {filterable ? (
+          <BoardToolbar
+            columns={columns}
+            members={members}
+            currentUserId={currentUserId}
+          />
+        ) : null}
+        <BoardPresenceBar />
+        {/* Export is a read — allowed for viewers. Icon-only to stay compact. */}
+        <ExportMenu boardId={boardId} iconOnly />
+        {isOwner ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            aria-label="Automations"
-            onClick={() => setAutomationsOpen(true)}
+            aria-label="Share board"
+            onClick={() => setShareOpen(true)}
           >
-            <Zap className="size-3.5" /> Automations
+            <UserPlus className="size-3.5" /> Share
           </Button>
-          {/* Trash restores/purges archived groups + items — board writes, so
-              viewers (read-only) don't get the affordance, matching Import. */}
-          {!isViewer ? (
+        ) : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              aria-label="Trash"
-              onClick={() => setTrashOpen(true)}
+              size="icon"
+              aria-label="More board actions"
             >
-              <Trash2 className="size-3.5" /> Trash
+              <MoreHorizontal className="size-4" />
             </Button>
-          ) : null}
-          {isOwner ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label="Share board"
-              onClick={() => setShareOpen(true)}
-            >
-              <UserPlus className="size-3.5" /> Share
-            </Button>
-          ) : null}
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setAutomationsOpen(true)}>
+              <Zap className="size-3.5" /> Automations
+            </DropdownMenuItem>
+            {/* Import/Trash are board writes — hidden from viewers (the RPCs
+                also reject them server-side). */}
+            {!isViewer ? (
+              <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                <Upload className="size-3.5" /> Import
+              </DropdownMenuItem>
+            ) : null}
+            {!isViewer ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setTrashOpen(true)}>
+                  <Trash2 className="size-3.5" /> Trash
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      {/* Filter / sort / search toolbar. In-page client state mirrored to the
-          URL (History API) — 0 server round-trips; the Table + Kanban views read
-          the same URL state and narrow/order the loaded cache in memory. */}
-      {filterable ? (
-        <BoardToolbar
-          columns={columns}
-          members={members}
-          currentUserId={currentUserId}
-        />
-      ) : null}
       <AutomationsDialog
         boardId={boardId}
         columns={columns}
