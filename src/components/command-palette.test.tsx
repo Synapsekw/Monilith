@@ -139,6 +139,18 @@ describe("CommandPalette", () => {
     expect(await screen.findByText("No items match")).toBeInTheDocument();
   });
 
+  it("renders the Items group heading with the kicker recipe", async () => {
+    searchItems.mockResolvedValue([
+      { id: "i1", name: "Design spec", boardId: "b2", boardName: "Roadmap" },
+    ]);
+    renderOpen();
+    typeQuery("design");
+    await screen.findByText("Design spec");
+    const heading = screen.getByText("Items");
+    expect(heading).toHaveClass("font-mono");
+    expect(heading).toHaveClass("text-kicker");
+  });
+
   it("clears the query and results after selecting an item and reopening", async () => {
     searchItems.mockResolvedValue([
       { id: "i1", name: "Design spec", boardId: "b2", boardName: "Roadmap" },
