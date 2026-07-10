@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-07-10",
+    kind: "improved",
+    title: "A refreshed look for Monolith",
+    description:
+      "A cleaner, dark-first redesign across boards and tables — new type, calmer color, and sharper detail throughout.",
+  },
+  {
     date: "2026-07-05",
     kind: "new",
     title: "Bulk actions in Table view",
