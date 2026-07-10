@@ -1,0 +1,504 @@
+# Keystone Secondary-Surface Polish — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Add the bespoke Keystone layer (`<Kicker>` eyebrows, translucent `soft` chips, elevation-step surfaces with brightening hairlines, `card-lift` motion, accent-on-states) to the app's secondary surfaces, at the same depth the core surfaces got.
+
+**Architecture:** Two thin shared primitives land first (Wave 0), then each surface cluster is built in its own worktree by parallel subagents (disjoint files) and shipped incrementally (Approach B). This plan covers **Wave 0 (Foundation)** and **Wave 1 (Board views)** in full detail; clusters 2–6 each get their own same-structured plan written just before their worktree starts, because their line-anchors shift as earlier clusters merge and each is an independently shippable subsystem.
+
+**Tech Stack:** Next.js 16 (App Router, RSC), React 19, Tailwind v4 (`@theme inline` tokens), shadcn primitives, Vitest + Testing Library.
+
+**Spec:** `docs/superpowers/specs/2026-07-10-keystone-secondary-surfaces-polish-design.md`
+
+---
+
+## Conventions for every task
+
+- **TDD:** write the failing test first, watch it fail, implement the minimum, watch it pass, commit.
+- **Assert semantics, not hex.** Tests assert token/utility classes (`text-kicker`, `bg-surface`, `rounded-sm`, `card-lift`) and behavior/roles — never raw color hex (brittle vs. token retunes). Rationale: spec §6 / reskin spec §9.
+- **Commit identity** is pinned by `start-task.sh` (`Danijel Jovanovic <info@synapse-solutions.ai>`). Commit subjects are **lowercase** (commitlint `subject-case`).
+- **Stage by path** — never `git add -A`.
+- **Run in the worktree.** Each cluster runs `scripts/start-task.sh <name>` then builds inside `.claude/worktrees/<name>`; `EnterWorktree({ path: ".claude/worktrees/<name>" })` for subagent-driven work.
+- **Gates before finish:** `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green, then `scripts/finish-task.sh`.
+
+---
+
+## File Structure
+
+**Wave 0 (Foundation) — new files, no surface edits:**
+
+- `src/components/ui/meta-chip.tsx` — mono `LABEL value` meta chip. One responsibility: render a static labelled value.
+- `src/components/ui/meta-chip.test.tsx` — unit test.
+- `src/components/ui/color-chip.tsx` — soft translucent chip for an **arbitrary hex**, wrapping `softPillText` (extracted from `boards/cells/index.tsx` `OptionPill`). One responsibility: render one arbitrary-color soft chip, AA-safe in both themes.
+- `src/components/ui/color-chip.test.tsx` — unit test.
+- `src/app/globals.css` — token-export audit only (add a missing `@theme` export **iff** one is missing; otherwise no change).
+
+**Wave 1 (Board views) — modified surface files:**
+
+- `src/components/boards/calendar/CalendarMonth.tsx`, `CalendarWeek.tsx`, `CalendarAgenda.tsx`, `EventBar.tsx` (+ existing tests)
+- `src/components/boards/GanttBoard.tsx` (+ existing test)
+- `src/components/boards/KanbanBoard.tsx` (+ existing test)
+
+---
+
+# Wave 0 — Foundation
+
+**Worktree:** `scripts/start-task.sh keystone-foundation` → build in `.claude/worktrees/keystone-foundation`.
+
+This wave is small and serial (two primitives + an audit). No surface files change.
+
+### Task 0.1: `<MetaChip>` primitive
+
+**Files:**
+
+- Create: `src/components/ui/meta-chip.tsx`
+- Test: `src/components/ui/meta-chip.test.tsx`
+
+- [ ] **Step 1: Write the failing test**
+
+```tsx
+// src/components/ui/meta-chip.test.tsx
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { MetaChip } from "./meta-chip";
+
+describe("MetaChip", () => {
+  it("renders an uppercased mono label and its value", () => {
+    render(<MetaChip label="Due">Jul 14</MetaChip>);
+    const label = screen.getByText("Due");
+    // label carries the kicker recipe (mono + kicker color + uppercase)
+    expect(label).toHaveClass("font-mono", "text-kicker", "uppercase");
+    // value is rendered and readable
+    expect(screen.getByText("Jul 14")).toBeInTheDocument();
+  });
+
+  it("applies the accent tone to the value when tone='accent'", () => {
+    render(
+      <MetaChip label="Status" tone="accent">
+        Working
+      </MetaChip>,
+    );
+    expect(screen.getByText("Working")).toHaveClass("text-primary");
+  });
+
+  it("merges a passed className onto the root", () => {
+    const { container } = render(
+      <MetaChip label="Owner" className="test-hook">
+        Synapse
+      </MetaChip>,
+    );
+    expect(container.firstChild).toHaveClass("test-hook");
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm test -- src/components/ui/meta-chip.test.tsx`
+Expected: FAIL — `Failed to resolve import "./meta-chip"`.
+
+- [ ] **Step 3: Write the minimal implementation**
+
+```tsx
+// src/components/ui/meta-chip.tsx
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+
+/**
+ * Keystone meta chip — a mono `LABEL value` pair (e.g. `DUE Jul 14`,
+ * `STATUS Working`). The label uses the shared kicker recipe (mono, uppercase,
+ * `--kicker`); the value is foreground, or accent when `tone="accent"`. Static
+ * and decorative — for panel/card metadata, not interactive controls.
+ */
+export function MetaChip({
+  label,
+  tone = "default",
+  className,
+  children,
+}: {
+  label: string;
+  tone?: "default" | "accent";
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className={cn("inline-flex items-baseline gap-1 text-xs", className)}>
+      <span className="text-kicker font-mono text-[10px] font-medium tracking-[0.1em] uppercase">
+        {label}
+      </span>
+      <span
+        className={cn(
+          "font-medium",
+          tone === "accent" ? "text-primary" : "text-foreground",
+        )}
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pnpm test -- src/components/ui/meta-chip.test.tsx`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/ui/meta-chip.tsx src/components/ui/meta-chip.test.tsx
+git commit -m "feat(ui): add MetaChip keystone meta-label primitive"
+```
+
+### Task 0.2: `<ColorChip>` primitive
+
+Extracts the `OptionPill` pattern (`src/components/boards/cells/index.tsx:38–53`) into a reusable primitive: a soft translucent chip for an **arbitrary hex**, AA-safe in both themes via `softPillText`. Static base (no self-hover) — interactive call sites add `hover:-translate-y-px hover:brightness-110` themselves, matching `StatusPill`.
+
+**Files:**
+
+- Create: `src/components/ui/color-chip.tsx`
+- Test: `src/components/ui/color-chip.test.tsx`
+
+- [ ] **Step 1: Write the failing test**
+
+```tsx
+// src/components/ui/color-chip.test.tsx
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { ColorChip } from "./color-chip";
+
+describe("ColorChip", () => {
+  it("renders children at the sanctioned chip geometry", () => {
+    render(<ColorChip color="#8ea2eb">Sprint 24</ColorChip>);
+    const chip = screen.getByText("Sprint 24");
+    expect(chip).toHaveClass("rounded-sm", "text-xs");
+  });
+
+  it("carries per-theme AA-derived text colors as CSS custom properties", () => {
+    render(<ColorChip color="#8ea2eb">Label</ColorChip>);
+    const chip = screen.getByText("Label");
+    // both --pill-fg-light and --pill-fg-dark are set from softPillText()
+    expect(chip.style.getPropertyValue("--pill-fg-light")).toMatch(/^#/);
+    expect(chip.style.getPropertyValue("--pill-fg-dark")).toMatch(/^#/);
+    expect(chip.style.getPropertyValue("--pill")).toBe("#8ea2eb");
+  });
+
+  it("merges a passed className (so callers can opt into hover motion)", () => {
+    render(
+      <ColorChip color="#8ea2eb" className="hover:-translate-y-px">
+        L
+      </ColorChip>,
+    );
+    expect(screen.getByText("L")).toHaveClass("hover:-translate-y-px");
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm test -- src/components/ui/color-chip.test.tsx`
+Expected: FAIL — `Failed to resolve import "./color-chip"`.
+
+- [ ] **Step 3: Write the minimal implementation**
+
+```tsx
+// src/components/ui/color-chip.tsx
+import type { CSSProperties, ReactNode } from "react";
+import { softPillText } from "@/components/boards/cells/soft-pill-color";
+import { cn } from "@/lib/utils";
+
+/**
+ * Soft translucent chip for an arbitrary user hex — a 15% tint of `color` over
+ * the surface, with text derived from that same color but contrast-clamped per
+ * theme (see {@link softPillText}) so any hue clears WCAG AA in both modes. The
+ * `--pill*` custom properties carry the fill + per-theme text; the `dark:`
+ * variant picks the right text. Static base — interactive call sites add
+ * `hover:-translate-y-px hover:brightness-110` via `className` (matches
+ * `StatusPill`). This is the one sanctioned rendering of arbitrary option color.
+ */
+export function ColorChip({
+  color,
+  className,
+  children,
+}: {
+  color: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const fg = softPillText(color);
+  return (
+    <span
+      style={
+        {
+          "--pill": color,
+          "--pill-fg-light": fg.light,
+          "--pill-fg-dark": fg.dark,
+        } as CSSProperties
+      }
+      className={cn(
+        "ease-keystone inline-flex max-w-full items-center truncate rounded-sm bg-[color-mix(in_oklab,var(--pill)_15%,transparent)] px-2.5 py-0.5 text-xs font-medium text-[color:var(--pill-fg-light)] transition-[transform,filter] duration-300 dark:text-[color:var(--pill-fg-dark)]",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pnpm test -- src/components/ui/color-chip.test.tsx`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/ui/color-chip.tsx src/components/ui/color-chip.test.tsx
+git commit -m "feat(ui): add ColorChip arbitrary-hue soft-pill primitive"
+```
+
+> **Deferred cleanup (non-blocking, note for a later wave):** DRY `OptionPill` in
+> `src/components/boards/cells/index.tsx` onto `<ColorChip>`. Not done in Wave 0 because the spec keeps
+> Foundation to zero surface edits (clean rebase under every cluster). Do it in the cluster that next
+> touches board cells, or as a standalone trivial edit.
+
+### Task 0.3: Token-export audit
+
+**Files:**
+
+- Read: `src/app/globals.css`
+- Modify (only if a needed export is missing): `src/app/globals.css`
+
+- [ ] **Step 1: Verify the utility exports exist**
+
+Run:
+
+```bash
+grep -nE -- "--color-kicker|--shadow-card|--shadow-panel|--color-border-hover|--color-border-bright|--radius-sm|--ease-keystone|\.card-lift" src/app/globals.css
+```
+
+Expected: every one of `text-kicker`, `shadow-card`, `shadow-panel`, `border-border-hover`, `border-border-bright`, `rounded-sm`, `ease-keystone`, and the `.card-lift` utility resolves to a definition. (Recon confirmed these are present — this step is a guard, not a change.)
+
+- [ ] **Step 2: Build the per-surface fix-list (recon grep)**
+
+Run:
+
+```bash
+grep -rnE "rounded-full|rounded-\[|shadow-sm|shadow-md|backgroundColor|uppercase tracking-wide" \
+  src/components/boards/calendar src/components/boards/GanttBoard.tsx src/components/boards/KanbanBoard.tsx
+```
+
+Record hits — these are the concrete conversion sites for Wave 1. (No file change in this step.)
+
+- [ ] **Step 3: Add a missing export only if Step 1 found a gap**
+
+If (and only if) Step 1 showed a utility is consumed by the plan but not exported, add the `@theme inline` export line next to its siblings. If Step 1 was clean, **skip** — no commit.
+
+- [ ] **Step 4: Commit (only if Step 3 changed a file)**
+
+```bash
+git add src/app/globals.css
+git commit -m "chore(theme): export <utility> for keystone secondary surfaces"
+```
+
+### Task 0.4: Gate & finish Wave 0
+
+- [ ] **Step 1: Run all gates**
+
+Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+Expected: all green.
+
+- [ ] **Step 2: Finish the task (merge to develop, remove worktree)**
+
+Run: `scripts/finish-task.sh`
+Expected: rebased onto latest `develop`, gates re-run on merged state, merged, branch + worktree removed.
+
+---
+
+# Wave 1 — Board views
+
+**Depends on:** Wave 0 merged to `develop`.
+**Worktree:** `scripts/start-task.sh keystone-board-views` (cut from the updated `develop`, so `<MetaChip>`/`<ColorChip>` are present) → `.claude/worktrees/keystone-board-views`.
+**Concurrency:** Calendar, Gantt, Kanban touch disjoint files → build as **3 parallel subagents** (`superpowers:dispatching-parallel-agents`) inside the one worktree, then integrate + gate + finish serially.
+
+Each surface applies the four cross-cutting moves (spec §4.1) plus its recon specifics. Below, each task gives a concrete TDD anchor test + an itemized implementation checklist keyed to recon line-refs. Line numbers are the pre-Wave-1 positions — re-grep if they've drifted.
+
+### Task 1.1: Calendar
+
+**Files:**
+
+- Modify: `src/components/boards/calendar/CalendarMonth.tsx` (label ~`:59`), `CalendarWeek.tsx` (~`:57`), `CalendarAgenda.tsx` (~`:78`), `EventBar.tsx` (event chips ~`:112`, `:131–145`)
+- Test: the calendar test file(s) under `src/components/boards/calendar/` (locate with `ls src/components/boards/calendar/*.test.tsx`); if none asserts the label/chip contract, add `EventBar.test.tsx`.
+
+- [ ] **Step 1: Write the failing test** — assert the event chip renders via the soft `ColorChip` contract and day-of-week labels use the kicker recipe.
+
+```tsx
+// src/components/boards/calendar/EventBar.test.tsx  (create if absent)
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { EventBar } from "./EventBar";
+
+// Use the minimal props EventBar needs — mirror an existing render in a sibling
+// calendar test; the assertion is the chip geometry/vars, not exact layout.
+describe("EventBar", () => {
+  it("renders a soft translucent chip (not an inline solid fill)", () => {
+    render(<EventBar /* …minimal event props with color="#8ea2eb"… */ />);
+    const chip = screen.getByText(/* the event title */);
+    // ColorChip contract: soft tint via --pill, sanctioned geometry
+    expect(chip).toHaveClass("rounded-sm");
+    expect(chip.style.getPropertyValue("--pill")).toBe("#8ea2eb");
+    // no opaque inline background
+    expect(chip.style.backgroundColor).toBe("");
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm test -- src/components/boards/calendar/EventBar.test.tsx`
+Expected: FAIL — current `EventBar` sets `style={{ backgroundColor }}` (opaque), so `--pill` is unset and `backgroundColor` is non-empty.
+
+- [ ] **Step 3: Implement the four moves in Calendar**
+
+  1. **Labels → `<Kicker>`:** replace the hand-rolled `text-[10px] font-semibold uppercase` day/section labels at `CalendarMonth.tsx:59`, `CalendarWeek.tsx:57`, `CalendarAgenda.tsx:78` with `<Kicker>…</Kicker>` (import from `@/components/ui/kicker`).
+  2. **Event chips → `<ColorChip>`:** in `EventBar.tsx`, replace the multi-day/solid branches (`~:112`, `:131–145`) that use `style={{ backgroundColor: color }}` with `<ColorChip color={color}>{title}</ColorChip>`. For the neutral (no-color) branch, keep `bg-surface-muted` but move to `rounded-sm` and add `border-border`.
+  3. **Interactive states:** event chips are click-to-open → add `hover:-translate-y-px hover:brightness-110` via `ColorChip`'s `className`. Day cells get `hover:bg-surface-muted` + `border-border` → `hover:border-border-hover`.
+  4. **Radius/shadow:** swap any `rounded-md` on chips/cells for `rounded-sm` (chips) / keep cells at the card radius; no `shadow-sm/md` on chips.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pnpm test -- src/components/boards/calendar/`
+Expected: PASS (new + existing calendar tests green).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/boards/calendar/
+git commit -m "feat(ui): keystone-polish the calendar view (kicker labels + soft event chips)"
+```
+
+### Task 1.2: Gantt / Timeline
+
+**Files:**
+
+- Modify: `src/components/boards/GanttBoard.tsx` (section headers ~`:611`, `:967`; task bars ~`:1050`)
+- Test: existing `src/components/boards/GanttBoard.test.tsx` (or add an assertion for the header/bar contract).
+
+- [ ] **Step 1: Write the failing test** — assert a section/column header uses the kicker recipe and task bars carry a keystone shadow token, not the generic `shadow-sm`.
+
+```tsx
+// add to src/components/boards/GanttBoard.test.tsx
+it("renders section headers with the kicker recipe", () => {
+  // render GanttBoard with a minimal board fixture (reuse the file's existing setup)
+  // query a known section/column header label
+  const header = screen.getByText(/* a column header label */);
+  expect(header).toHaveClass("font-mono", "text-kicker", "uppercase");
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm test -- src/components/boards/GanttBoard.test.tsx`
+Expected: FAIL — headers are `text-[11px] font-semibold tracking-wide uppercase` (sans, no `text-kicker`).
+
+- [ ] **Step 3: Implement the four moves in Gantt**
+
+  1. **Labels → `<Kicker>`:** headers at `:611` and `:967`.
+  2. **Task bars → soft status treatment:** at `~:1050`, where a bar carries an arbitrary option color use `<ColorChip>`-style vars (or `<ColorChip>` if the bar can host children); where it carries a status token use `statusToneClasses(color, "soft")`. Replace `rounded-md shadow-sm` → `rounded-sm shadow-card`.
+  3. **Interactive states:** sticky-header hairlines `border`/`border-r` → add `hover:border-border-hover` where the header is a hover target; task bars are draggable → keep DnD handlers untouched, add `hover:brightness-110`.
+  4. **Radius/shadow:** no generic `shadow-sm/md`; use `shadow-card`.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pnpm test -- src/components/boards/GanttBoard.test.tsx`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/boards/GanttBoard.tsx src/components/boards/GanttBoard.test.tsx
+git commit -m "feat(ui): keystone-polish the gantt view (kicker headers + soft task bars)"
+```
+
+### Task 1.3: Kanban
+
+**Files:**
+
+- Modify: `src/components/boards/KanbanBoard.tsx` (label pill ~`:427`, count chip ~`:443`, column headers, cards)
+- Test: existing `src/components/boards/KanbanBoard.test.tsx`.
+
+- [ ] **Step 1: Write the failing test** — assert the count chip uses the sanctioned `rounded-sm` chip geometry (not `rounded-full`) and column headers use the kicker recipe.
+
+```tsx
+// add to src/components/boards/KanbanBoard.test.tsx
+it("renders the column count chip at the sanctioned chip geometry", () => {
+  // render KanbanBoard with a minimal fixture (reuse existing setup)
+  const count = screen.getByText(/* the column item count, e.g. "3" */);
+  expect(count).toHaveClass("rounded-sm");
+  expect(count).not.toHaveClass("rounded-full");
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm test -- src/components/boards/KanbanBoard.test.tsx`
+Expected: FAIL — count chip is `rounded-full px-2 py-0.5`.
+
+- [ ] **Step 3: Implement the four moves in Kanban**
+
+  1. **Labels → `<Kicker>`:** column headers.
+  2. **Chips → primitives:** label/status row at `:427` (`pillTextColor(column.color)` + inline solid bg) → `<ColorChip color={column.color}>`; count chip at `:443` `rounded-full` → `rounded-sm` (keep `bg-accent`).
+  3. **Cards → `card-lift`:** replace the ad-hoc `transition` on cards with the `.card-lift` utility + `border-border` → `hover:border-border-hover`. Keep all DnD sensors/handlers untouched.
+  4. **Radius/shadow:** cards keep `shadow-card`; no `rounded-full` on chips.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `pnpm test -- src/components/boards/KanbanBoard.test.tsx`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/components/boards/KanbanBoard.tsx src/components/boards/KanbanBoard.test.tsx
+git commit -m "feat(ui): keystone-polish the kanban view (kicker headers + soft label chips + card-lift)"
+```
+
+### Task 1.4: Integrate, smoke-check, finish Wave 1
+
+- [ ] **Step 1: Run all gates**
+
+Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+Expected: all green.
+
+- [ ] **Step 2: Visual smoke-check both themes**
+
+Open the running app on a board, switch to **Calendar**, **Timeline/Gantt**, **Kanban** in **dark** then **light**. Confirm: mono kicker labels, soft translucent event/label chips (no opaque solids), `card-lift` on kanban cards, `rounded-sm` count chip, no layout breakage.
+
+- [ ] **Step 3: Finish the task**
+
+Run: `scripts/finish-task.sh`
+Expected: rebased onto latest `develop`, gates green on merged state, merged, worktree + branch removed.
+
+- [ ] **Step 4: Hand the user a "How to test this" walkthrough** (AGENTS.md working agreement #1) — numbered, per-view, both themes.
+
+---
+
+## Clusters 2–6 (planned just-in-time)
+
+Each is its own worktree → `develop`, verified before the next (Approach B). Written as a same-structured plan (four moves + recon specifics + TDD anchor per surface) immediately before its worktree starts, against the then-current `develop`:
+
+- **Wave 2 · Dashboards** — canvas · widgets · dashboards-nav (spec §4.2 Dashboards; preserve `chart-*` color-data).
+- **Wave 3 · Admin & entry** — Settings · Auth (from stock shadcn → brand-washed card + kicker eyebrow + panel elevation) · Onboarding.
+- **Wave 4 · Planning** — Goals · Portfolios · Workload.
+- **Wave 5 · Personal & chrome** — My Work · Time · Notifications · Command palette.
+- **Wave 6 · Core touch-ups** — sidebar wordmark mark · item-panel meta-chips (`<MetaChip>`) + tab counts · `@mention` accent-highlighting · sidebar easing consistency.
+
+---
+
+## Self-review
+
+- **Spec coverage:** Wave 0 implements spec §3 (both primitives + token audit). Wave 1 implements spec §4.2 Calendar/Gantt/Kanban via §4.1's four moves. Clusters 2–6 map 1:1 to spec §5.1 waves 2–6 and are scheduled (just-in-time plans). Perf budget (spec §7) holds — no server round-trips added. ✅
+- **Placeholder scan:** the TDD anchor tests intentionally leave `/* minimal fixture */` markers where the surface's existing test setup must be reused (the fixture shape lives in each surface's current test file); these are pointers to existing code, not unwritten logic. Every new-file task (0.1, 0.2) has complete code. ✅
+- **Type consistency:** `MetaChip` props (`label`, `tone`, `className`, `children`), `ColorChip` props (`color`, `className`, `children`), `softPillText(bg) → { light, dark }`, `statusToneClasses(color, "soft")` all match their source definitions. ✅

@@ -70,6 +70,21 @@ describe("EventBar", () => {
     expect(screen.queryByText("Carryover")).not.toBeInTheDocument();
   });
 
+  it("renders a colored span as a soft ColorChip (not an inline solid fill)", () => {
+    // A multi-day span with a resolved status color renders via <ColorChip>:
+    // a translucent tint carried on `--pill`, at the sanctioned chip geometry —
+    // NOT an opaque inline `background-color` fill.
+    const cellMap = new Map([["i1:s1", { optionId: "o1" }]]);
+    renderBar(placed({ name: "Colored", isSingle: false, endCol: 3 }), cellMap);
+    const chip = screen.getByText("Colored");
+    expect(chip).toHaveClass("rounded-sm");
+    // the event color flows through as the pill tint var, not an opaque fill
+    expect(chip.style.getPropertyValue("--pill")).toBe("#46d18a");
+    expect(chip.style.backgroundColor).toBe("");
+    // interactive hover motion is opted in by the call site
+    expect(chip).toHaveClass("hover:-translate-y-px", "hover:brightness-110");
+  });
+
   it("calls onOpen with the item id when clicked", () => {
     const onOpen = vi.fn();
     render(
