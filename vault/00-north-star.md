@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-10-0940
+last-updated: 2026-07-10-1011
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,7 +51,7 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **All shipped to prod — `develop` and `main` in sync.** PR#55 (`74db50a`) promoted the **"Monolith Keystone" reskin** (tokens dark+light, Nunito Sans + JetBrains Mono, `<Kicker>`, translucent status pills; sidebar + board table + item panel reskins + a slimmed single-row board header) to prod (main CI + Vercel deploy green); squash divergence healed (`806345b`). Batch A shipped earlier this cycle (PR#54, `1277bc8`). ([[2026-07-10-0907-keystone-reskin-build-and-polish]], [[dark-first-monday-reskin]])
+- **Phase:** **All shipped to prod — `develop` and `main` in sync.** PR#55 (`74db50a`) promoted the **"Monolith Keystone" reskin** (tokens dark+light, Nunito Sans + JetBrains Mono, `<Kicker>`, translucent status pills; sidebar + board table + item panel reskins + a slimmed single-row board header) to prod (main CI + Vercel deploy green); squash divergence healed (`806345b`) and surfaced on `/updates` (`d8031a4`). Batch A shipped earlier this cycle (PR#54, `1277bc8`). ([[2026-07-10-1011-keystone-promote-changelog]], [[2026-07-10-0907-keystone-reskin-build-and-polish]], [[dark-first-monday-reskin]])
 - **Branch:** `develop == origin/develop` at `806345b`; `main` at `74db50a` (heal merge makes them tree-identical). Reskin spec+plan: `docs/superpowers/{specs,plans}/2026-07-09-keystone-reskin*.md`. **No live `task/*` worktrees.**
 - **In flight:** none building.
 - **Next:** **secondary-surface Keystone polish** (calendar/gantt/kanban/dashboards/settings/auth inherit the palette but lack bespoke polish), then the two standing tracks — **Phase 10 — AI & Agents E1** (scope-reconciliation first; [[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]) and **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, **skip A4** — shipped). A scoped **Batch B** (org switcher, auth rate limiting, notification prefs + due-date reminders, saved views, cached-reader membership assertions) remains in the audit report §04.
