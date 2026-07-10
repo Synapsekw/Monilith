@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
@@ -8,6 +8,55 @@ import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea"
 import { DateTime } from "@/components/datetime/date-time";
 import type { UpdatesCache } from "@/lib/collaboration/cache";
 import type { Member } from "@/lib/collaboration/activity";
+
+/**
+ * Display-only accenting of `@Full Name` mention tokens inside a persisted
+ * update body. Purely cosmetic: scans the plain-text string for occurrences
+ * of a known member's full name after an `@`, and returns the original text
+ * split into plain-string fragments interleaved with accented `<span>`s for
+ * each match. Never mutates, reformats, or reparses the underlying text —
+ * mention linking/notifications are driven by the separate `mentionIds`
+ * array, not by this render.
+ */
+function renderBody(text: string, names: string[]): ReactNode[] {
+  // Longest name first so "@John Doe" is matched before a shorter "@John".
+  const candidates = Array.from(new Set(names.filter(Boolean))).sort(
+    (a, b) => b.length - a.length,
+  );
+  if (candidates.length === 0) return [text];
+
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+
+  while (cursor < text.length) {
+    if (text[cursor] === "@") {
+      const name = candidates.find((candidate) => {
+        if (!text.startsWith(candidate, cursor + 1)) return false;
+        // Require a word boundary after the match so a member named "John"
+        // doesn't get carved out of "@Johnny".
+        const nextChar = text[cursor + 1 + candidate.length];
+        return nextChar === undefined || !/[\p{L}\p{N}]/u.test(nextChar);
+      });
+      if (name) {
+        nodes.push(
+          <span key={key++} className="text-primary">
+            {`@${name}`}
+          </span>,
+        );
+        cursor += name.length + 1;
+        continue;
+      }
+    }
+    // Accumulate plain text up to (but not including) the next '@'.
+    const nextAt = text.indexOf("@", cursor + 1);
+    const end = nextAt === -1 ? text.length : nextAt;
+    nodes.push(text.slice(cursor, end));
+    cursor = end;
+  }
+
+  return nodes;
+}
 
 export function UpdatesTab({
   cache,
@@ -111,7 +160,12 @@ export function UpdatesTab({
                   </Button>
                 </RevealOnHover>
               </div>
-              <p className="whitespace-pre-wrap">{u.body_text}</p>
+              <p className="whitespace-pre-wrap">
+                {renderBody(
+                  u.body_text,
+                  members.flatMap((m) => (m.fullName ? [m.fullName] : [])),
+                )}
+              </p>
               {u.edited_at && (
                 <span className="text-muted-foreground text-xs">(edited)</span>
               )}
