@@ -150,3 +150,13 @@ describe("DashboardWidget kind dispatch", () => {
     expect(screen.getByTestId("number-widget")).toBeInTheDocument();
   });
 });
+
+describe("DashboardWidget Keystone card chrome", () => {
+  it("gives the card root the Keystone radius and hover-lift, not the old radius", () => {
+    renderWidget(makeWidget("Old Title"), false);
+    const card = screen.getByTestId("widget-card");
+    expect(card.className).toContain("rounded-[14px]");
+    expect(card.className).toContain("card-lift");
+    expect(card.className).not.toContain("rounded-xl");
+  });
+});
