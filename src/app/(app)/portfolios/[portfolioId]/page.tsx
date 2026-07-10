@@ -4,6 +4,7 @@ import { getPortfolioRows } from "@/lib/portfolios/queries";
 import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { PortfolioGrid } from "@/components/portfolios/PortfolioGrid";
+import { Kicker } from "@/components/ui/kicker";
 
 export default async function PortfolioPage({
   params,
@@ -27,6 +28,7 @@ export default async function PortfolioPage({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b px-4 py-3">
+        <Kicker>PLANNING</Kicker>
         <h1 className="text-base font-semibold">{result.portfolio.name}</h1>
       </div>
       <div className="min-h-0 flex-1">
