@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
 import {
   type OnboardingInput,
@@ -37,8 +38,9 @@ export function OnboardingForm() {
   });
 
   return (
-    <Card>
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
       <CardHeader>
+        <Kicker>GET STARTED</Kicker>
         <CardTitle>Create your organization</CardTitle>
         <CardDescription>
           Set up your organization and first workspace to get started with
@@ -100,7 +102,11 @@ export function OnboardingForm() {
             ) : null}
           </div>
 
-          <Button type="submit" disabled={isPending} className="w-full">
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="shadow-glow-primary w-full"
+          >
             {isPending ? (
               <>
                 <Loader2 className="animate-spin" />
