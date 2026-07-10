@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
 import {
   type ForgotPasswordInput,
@@ -35,7 +36,7 @@ export function ForgotPasswordForm({ footer }: { footer?: ReactNode }) {
 
   if (state.success === "reset-email-sent") {
     return (
-      <Card>
+      <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
         <CardHeader className="items-center text-center">
           <CheckCircle2 className="text-primary mb-1 size-8" />
           <CardTitle>Check your email</CardTitle>
@@ -49,8 +50,9 @@ export function ForgotPasswordForm({ footer }: { footer?: ReactNode }) {
   }
 
   return (
-    <Card>
+    <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
       <CardHeader>
+        <Kicker>RESET</Kicker>
         <CardTitle>Reset your password</CardTitle>
         <CardDescription>
           Enter your email and we&apos;ll send you a reset link.
@@ -96,7 +98,11 @@ export function ForgotPasswordForm({ footer }: { footer?: ReactNode }) {
             ) : null}
           </div>
 
-          <Button type="submit" disabled={isPending} className="w-full">
+          <Button
+            type="submit"
+            disabled={isPending}
+            className="shadow-glow-primary w-full"
+          >
             {isPending ? (
               <>
                 <Loader2 className="animate-spin" />

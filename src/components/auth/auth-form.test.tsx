@@ -42,4 +42,20 @@ describe("AuthForm", () => {
     ).toBeInTheDocument();
     expect(screen.queryByLabelText(/full name/i)).not.toBeInTheDocument();
   });
+
+  it("renders a Keystone kicker eyebrow and panel elevation on the login card", () => {
+    render(<AuthForm mode="login" />);
+
+    const kicker = screen.getByText("WELCOME");
+    expect(kicker).toBeInTheDocument();
+    const card = kicker.closest('[data-slot="card"]');
+    expect(card).not.toBeNull();
+    expect(card).toHaveClass("shadow-panel");
+  });
+
+  it("renders a different kicker eyebrow in signup mode", () => {
+    render(<AuthForm mode="signup" />);
+
+    expect(screen.getByText("GET STARTED")).toBeInTheDocument();
+  });
 });

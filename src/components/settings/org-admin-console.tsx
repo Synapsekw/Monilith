@@ -57,7 +57,7 @@ export function OrgAdminConsole({
               "focus-visible:ring-ring/50 rounded-t-sm focus-visible:ring-2 focus-visible:outline-none",
               tab === t
                 ? "border-primary text-foreground"
-                : "text-muted-foreground hover:text-foreground border-transparent",
+                : "text-muted-foreground hover:text-foreground hover:border-border-hover border-transparent",
             )}
             onClick={() => select(t)}
           >

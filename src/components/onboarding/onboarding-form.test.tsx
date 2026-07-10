@@ -12,4 +12,19 @@ describe("OnboardingForm", () => {
       screen.getByRole("button", { name: /create organization/i }),
     ).toBeInTheDocument();
   });
+
+  it("renders the Keystone entry-card treatment", () => {
+    render(<OnboardingForm />);
+
+    const kicker = screen.getByText("GET STARTED");
+    expect(kicker).toBeInTheDocument();
+
+    const card = kicker.closest(".shadow-panel");
+    expect(card).not.toBeNull();
+
+    const submit = screen.getByRole("button", {
+      name: /create organization/i,
+    });
+    expect(submit).toHaveClass("shadow-glow-primary");
+  });
 });
