@@ -13,7 +13,8 @@ import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { Plus, Calendar, Users, Hash, Banknote } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { pillTextColor } from "@/lib/boards/contrast";
+import { ColorChip } from "@/components/ui/color-chip";
+import { Kicker } from "@/components/ui/kicker";
 import {
   selectCardColumns,
   isCardCellEmpty,
@@ -420,27 +421,17 @@ function KanbanColumnView({
       {/* Column header — outside the scroll container */}
       <header className="flex items-center gap-2 px-3 py-2.5">
         {column.color ? (
-          <span
-            className="inline-flex items-center truncate rounded-md px-2 py-0.5 text-xs font-medium"
-            style={{
-              backgroundColor: column.color,
-              color: pillTextColor(column.color),
-            }}
-          >
-            {column.label}
-          </span>
+          <ColorChip color={column.color}>{column.label}</ColorChip>
         ) : (
           <span className="flex items-center gap-2">
             <span
               className="bg-muted-foreground/60 size-2 shrink-0 rounded-full"
               aria-hidden
             />
-            <span className="text-muted-foreground text-xs font-medium">
-              {column.label}
-            </span>
+            <Kicker>{column.label}</Kicker>
           </span>
         )}
-        <span className="bg-accent text-muted-foreground ml-auto rounded-full px-2 py-0.5 text-xs font-medium tabular-nums">
+        <span className="bg-accent text-muted-foreground ml-auto rounded-sm px-2 py-0.5 text-xs font-medium tabular-nums">
           {column.cards.length}
         </span>
       </header>
@@ -537,7 +528,7 @@ function KanbanCard({
       {...listeners}
       {...attributes}
       className={cn(
-        "bg-surface focus-visible:ring-ring shadow-card relative cursor-grab rounded-lg border p-3 text-left transition-shadow focus-visible:ring-2 focus-visible:outline-none",
+        "bg-surface focus-visible:ring-ring shadow-card card-lift border-border hover:border-border-hover relative cursor-grab rounded-lg border p-3 text-left focus-visible:ring-2 focus-visible:outline-none",
         isDragging && "opacity-50",
       )}
     >

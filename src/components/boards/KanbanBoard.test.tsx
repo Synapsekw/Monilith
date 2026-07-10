@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KanbanBoard, onCardDropped } from "@/components/boards/KanbanBoard";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
@@ -205,6 +211,17 @@ describe("KanbanBoard", () => {
     // The add-card affordance is the input + its row; assert the touch target on
     // whichever element carries the sizing (input here).
     expect(input.className).toContain("pointer-coarse:min-h-11");
+  });
+
+  it("renders the column count chip at the sanctioned chip geometry (rounded-sm, not rounded-full)", () => {
+    renderKanban();
+    // The "Working" lane holds exactly Card A → its count chip reads "1".
+    const working = screen.getByRole("region", { name: "Working" });
+    const count = within(working).getByText("1");
+    expect(count).toHaveClass("rounded-sm");
+    expect(count).not.toHaveClass("rounded-full");
+    // Keep the accent fill + tabular figures the design mandates.
+    expect(count).toHaveClass("bg-accent", "tabular-nums");
   });
 
   it("renders a No-status column + one column per option", () => {

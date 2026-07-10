@@ -14,6 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Kicker } from "@/components/ui/kicker";
 import { EventBar } from "./EventBar";
 
 export const MONTH_LANE_CAP = 3;
@@ -54,12 +55,9 @@ export function CalendarMonth({
     <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3">
       <div className="mb-1 grid grid-cols-7 gap-px">
         {WEEKDAYS.map((d) => (
-          <div
-            key={d}
-            className="text-muted-foreground px-1 text-[10px] font-semibold tracking-wide uppercase"
-          >
+          <Kicker key={d} className="block px-1">
             {d}
-          </div>
+          </Kicker>
         ))}
       </div>
 
@@ -105,7 +103,7 @@ export function CalendarMonth({
                       }
                     }}
                     className={cn(
-                      "bg-surface hover:bg-accent/20 flex min-h-[6.5rem] cursor-pointer flex-col p-1.5",
+                      "bg-surface hover:bg-surface-muted flex min-h-[6.5rem] cursor-pointer flex-col p-1.5",
                       !day.inMonth && "bg-surface-muted opacity-50",
                       day.inMonth && isWeekend && "bg-surface-muted/40",
                       day.dateISO === today &&

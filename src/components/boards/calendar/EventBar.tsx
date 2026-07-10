@@ -1,11 +1,11 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 import { cn } from "@/lib/utils";
 import type { BoardCache, CacheColumn } from "@/lib/boards/cache";
 import { cellKey } from "@/lib/boards/cache";
-import { pillTextColor } from "@/lib/boards/contrast";
+import { ColorChip } from "@/components/ui/color-chip";
 import { presenceTarget } from "@/lib/boards/presence-target";
 import { usePresenceFocus } from "@/lib/boards/use-presence-focus";
 import { PresenceRing } from "@/components/boards/presence/PresenceRing";
@@ -88,12 +88,17 @@ export function EventBar({
   };
 
   const common = cn(
-    "relative flex h-[18px] min-w-0 cursor-grab items-center gap-1.5 px-1.5 text-[11px] font-medium",
+    "relative flex h-[18px] min-w-0 cursor-grab items-center gap-1.5 text-[11px] font-medium",
     "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
     isDragging && "opacity-50",
-    roundLeft ? "rounded-l-md" : "rounded-l-none",
-    roundRight ? "rounded-r-md" : "rounded-r-none",
+    roundLeft ? "rounded-l-sm" : "rounded-l-none",
+    roundRight ? "rounded-r-sm" : "rounded-r-none",
   );
+
+  const onChipClick = (e: MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    onOpen?.(interval.itemId, e.currentTarget.getBoundingClientRect());
+  };
 
   if (interval.isSingle) {
     return (
@@ -104,12 +109,9 @@ export function EventBar({
         {...attributes}
         tabIndex={0}
         aria-label={interval.name}
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen?.(interval.itemId, e.currentTarget.getBoundingClientRect());
-        }}
+        onClick={onChipClick}
         onKeyDown={handleKeyDown}
-        className={cn(common, "bg-surface-muted border")}
+        className={cn(common, "bg-surface-muted border-border border px-1.5")}
       >
         <PresenceRing target={target} />
         {color && (
@@ -124,25 +126,44 @@ export function EventBar({
     );
   }
 
-  // Multi-day span: filled with the status color (or a neutral surface fallback).
+  // Multi-day span with a status color: a soft translucent ColorChip fills the
+  // bar (no opaque inline fill). The wrapper stays the draggable/clickable shell.
+  if (color) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...listeners}
+        {...attributes}
+        tabIndex={0}
+        aria-label={interval.name}
+        onClick={onChipClick}
+        onKeyDown={handleKeyDown}
+        className={cn(common, "overflow-hidden")}
+      >
+        <PresenceRing target={target} />
+        <ColorChip
+          color={color}
+          className="h-full w-full items-center rounded-sm px-1.5 hover:-translate-y-px hover:brightness-110"
+        >
+          {showName ? interval.name : ""}
+        </ColorChip>
+      </div>
+    );
+  }
+
+  // Multi-day span without a status color: neutral surface fallback.
   return (
     <div
       ref={setNodeRef}
-      style={{
-        ...style,
-        backgroundColor: color ?? undefined,
-        color: color ? pillTextColor(color) : undefined,
-      }}
+      style={style}
       {...listeners}
       {...attributes}
       tabIndex={0}
       aria-label={interval.name}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen?.(interval.itemId, e.currentTarget.getBoundingClientRect());
-      }}
+      onClick={onChipClick}
       onKeyDown={handleKeyDown}
-      className={cn(common, !color && "bg-surface-muted border")}
+      className={cn(common, "bg-surface-muted border-border border px-1.5")}
     >
       <PresenceRing target={target} />
       {showName && <span className="truncate">{interval.name}</span>}
