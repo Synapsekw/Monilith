@@ -4,6 +4,8 @@ import { Check, Network, Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { effectivePriority } from "@/lib/boards/priority";
+import { percentBandColor } from "@/lib/boards/percent-color";
+import { cn } from "@/lib/utils";
 import { softPillText } from "./soft-pill-color";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
 import type { EditorMember } from "./editors";
@@ -250,8 +252,9 @@ export function CheckboxCell({
  * Shared progress/fill bar for the percent column — used by both the leaf cell
  * (PercentCell) and the collapsed-parent rollup (RollupCell), so a manually-set
  * value and an averaged rollup read identically. Keystone: a translucent
- * `--foreground` track with a single periwinkle accent fill + a mono numeric
- * label (the value carries the meaning — never color alone).
+ * `--foreground` track with the value-based red→green fill ramp
+ * (`percentBandColor`) + a mono numeric label (color is redundant with the
+ * number — never the sole signal).
  */
 export function PercentBar({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, Math.round(percent)));
@@ -266,7 +269,10 @@ export function PercentBar({ percent }: { percent: number }) {
         className="bg-foreground/[0.07] relative h-1.5 w-full max-w-[120px] min-w-[2.5rem] overflow-hidden rounded-full"
       >
         <span
-          className="bg-primary absolute inset-y-0 left-0 rounded-full"
+          className={cn(
+            "absolute inset-y-0 left-0 rounded-full",
+            percentBandColor(clamped),
+          )}
           style={{ width: `${clamped}%` }}
         />
       </span>

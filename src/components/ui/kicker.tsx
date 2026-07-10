@@ -3,8 +3,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * Keystone eyebrow label — mono, uppercase, wide tracking, dim `--kicker` color,
- * with an optional accent-colored index prefix ("01 / SPRINT 24"). Decorative;
- * keep it for section labels, not body content.
+ * with an optional index prefix ("01 / SPRINT 24"). The index inherits the
+ * kicker's own (monochrome) color — the accent is reserved for interactive
+ * states/indicators, not static label text. Decorative; keep it for section
+ * labels, not body content.
  */
 export function Kicker({
   index,
@@ -24,7 +26,7 @@ export function Kicker({
     >
       {index ? (
         <>
-          <span className="text-primary">{index}</span>
+          <span>{index}</span>
           <span aria-hidden="true">{" / "}</span>
         </>
       ) : null}

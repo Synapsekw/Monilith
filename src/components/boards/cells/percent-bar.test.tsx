@@ -10,13 +10,15 @@ function fill(container: HTMLElement): HTMLElement {
 }
 
 describe("PercentBar", () => {
-  // Keystone: a single periwinkle accent fill (no red→green band); the numeric
-  // label carries the value, so color is never the sole signal.
-  it("fills with the periwinkle accent regardless of value", () => {
+  // Value-based red→green ramp so completion reads at a glance; the numeric
+  // label carries the value too, so color is never the sole signal.
+  it("colors the fill by value along the red→green ramp", () => {
     const { container: low } = render(<PercentBar percent={10} />);
-    expect(fill(low).className).toContain("bg-primary");
+    expect(fill(low).className).toContain("bg-[var(--progress-red)]");
+    const { container: mid } = render(<PercentBar percent={60} />);
+    expect(fill(mid).className).toContain("bg-[var(--progress-lime)]");
     const { container: full } = render(<PercentBar percent={100} />);
-    expect(fill(full).className).toContain("bg-primary");
+    expect(fill(full).className).toContain("bg-[var(--progress-complete)]");
   });
 
   it("sets the fill width to the clamped percent", () => {

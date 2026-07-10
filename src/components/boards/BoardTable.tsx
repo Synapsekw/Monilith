@@ -1464,13 +1464,14 @@ function GroupHeaderRow({
             aria-label={group.name}
             className="focus-visible:ring-ring min-w-0 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
           >
-            {/* Keystone group head: mono "NN / NAME" kicker; the first group's
-                name carries the periwinkle accent, the rest read dim. */}
+            {/* Keystone group head: mono "NN / NAME" kicker; the first group
+                reads bright, the rest dim — hierarchy by weight/tone, not color
+                (title text stays monochrome). */}
             <Kicker
               index={String(groupIndex + 1).padStart(2, "0")}
               className={cn(
                 "truncate",
-                groupIndex === 0 ? "text-primary" : "text-muted-foreground",
+                groupIndex === 0 ? "text-foreground" : "text-muted-foreground",
               )}
             >
               {group.name}

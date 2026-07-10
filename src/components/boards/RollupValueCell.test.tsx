@@ -34,8 +34,8 @@ describe("RollupValueCell", () => {
     // average of 40 and 80 is 60 (aria-valuenow carries the value)
     expect(bar?.getAttribute("aria-valuenow")).toBe("60");
     const fill = bar?.firstElementChild as HTMLElement;
-    // Keystone: a single periwinkle accent fill (no red→green band)
-    expect(fill.className).toContain("bg-primary");
+    // average 60 sits in the lime band of the value-based red→green ramp
+    expect(fill.className).toContain("bg-[var(--progress-lime)]");
   });
 
   it("renders blank (no bar) when the group has no items", () => {
