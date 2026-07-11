@@ -14,6 +14,8 @@ interface UIState {
   setNewBoardOpen: (open: boolean) => void;
   newDashboardOpen: boolean;
   setNewDashboardOpen: (open: boolean) => void;
+  askPulseOpen: boolean;
+  setAskPulseOpen: (open: boolean) => void;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
@@ -33,6 +35,8 @@ export const useUIStore = create<UIState>()(
       setNewBoardOpen: (open) => set({ newBoardOpen: open }),
       newDashboardOpen: false,
       setNewDashboardOpen: (open) => set({ newDashboardOpen: open }),
+      askPulseOpen: false,
+      setAskPulseOpen: (open) => set({ askPulseOpen: open }),
       collapsedSections: {},
       toggleSection: (key) =>
         set((s) => ({
