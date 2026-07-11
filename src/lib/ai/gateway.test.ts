@@ -89,6 +89,23 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     });
   });
 
+  it("org_byo → vault rpc error propagates raw (not ByoKeyMissingError)", async () => {
+    settingsRow("org_byo", { byo_provider: "google" });
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "vault down" },
+    });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    let caught: unknown;
+    try {
+      await resolveAiAdapter("org-1");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toMatchObject({ message: "vault down" });
+    expect((caught as { name?: string })?.name).not.toBe("ByoKeyMissingError");
+  });
+
   it("per_user (and missing row) → resolveUserAdapter passthrough", async () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
     resolveUserAdapter.mockResolvedValue({

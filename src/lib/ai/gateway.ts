@@ -54,6 +54,9 @@ export async function resolveAiAdapter(orgId: string): Promise<ResolvedAi> {
         provider,
       };
     }
+    // per_user resolves the SESSION user's key (cookie-bound requireUser). Callers must
+    // pass runAi a userId equal to the session user, or the ledger will attribute one
+    // user's spend to another.
     case "per_user": {
       const { adapter, apiKey } = await resolveUserAdapter();
       return { adapter, apiKey, mode: "per_user", provider: adapter.id };
@@ -65,6 +68,10 @@ export async function resolveAiAdapter(orgId: string): Promise<ResolvedAi> {
  * Wraps one AI call: resolve → invoke → meter. All spend flows through here.
  * A ledger-write failure is logged, never surfaced — telemetry loss must not
  * break the user's request (revisit when managed billing hardens in E6).
+ *
+ * Usage is only metered when fn resolves — a provider call that consumes
+ * tokens and then throws during post-processing is not billed (no usage is
+ * available on the error path).
  */
 export async function runAi<T>(
   args: { orgId: string; userId: string; feature: string },
@@ -75,6 +82,7 @@ export async function runAi<T>(
   const resolved = await resolveAiAdapter(args.orgId);
   const { result, usage, model } = await fn(resolved);
   const costUsd = computeCostUsd(model, usage);
+  const credits = costToCredits(costUsd);
   const svc = createServiceClient();
   const { error } = await svc.rpc("record_ai_usage", {
     p_org: args.orgId,
@@ -85,8 +93,15 @@ export async function runAi<T>(
     p_input_tokens: usage.inputTokens,
     p_output_tokens: usage.outputTokens,
     p_cost_usd: costUsd,
-    p_credits: costToCredits(costUsd),
+    p_credits: credits,
   });
-  if (error) console.error("[ai] record_ai_usage failed:", error.message);
+  if (error)
+    console.error("[ai] record_ai_usage failed:", {
+      org: args.orgId,
+      feature: args.feature,
+      model,
+      credits,
+      cause: error.message,
+    });
   return result;
 }
