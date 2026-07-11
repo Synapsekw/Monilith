@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-import { AiNotConfiguredError } from "@/lib/ai/anthropic";
+import {
+  AiNotConfiguredError,
+  AiDisabledError,
+  AiQuotaExceededError,
+  ByoKeyMissingError,
+} from "@/lib/ai/errors";
 
 const rpc = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
@@ -19,6 +24,41 @@ vi.mock("@/lib/ai/generate", () => ({
   generateProposal: (...args: unknown[]) => generateProposal(...args),
 }));
 
+// The gateway resolver is faked: runAi invokes its callback with a resolved
+// adapter+key (as the real gateway would) and returns the callback's result,
+// so the action's proposal still flows through the metered path in tests.
+const FAKE_RESOLVED = {
+  adapter: { defaultModel: "claude-opus-4-8", supportsTools: true },
+  apiKey: "k",
+  mode: "per_user",
+  provider: "anthropic",
+};
+const runAi = vi.fn(
+  async (
+    _args: { orgId: string; userId: string; feature: string },
+    fn: (resolved: typeof FAKE_RESOLVED) => Promise<{ result: unknown }>,
+  ) => {
+    const { result } = await fn(FAKE_RESOLVED);
+    return result;
+  },
+);
+vi.mock("@/lib/ai/gateway", () => ({
+  runAi: (...args: unknown[]) =>
+    (runAi as unknown as (...a: unknown[]) => unknown)(...args),
+}));
+
+const requireAiEntitlement = vi.fn();
+vi.mock("@/lib/ai/entitlement", () => ({
+  requireAiEntitlement: (...args: unknown[]) => requireAiEntitlement(...args),
+}));
+
+const getUserOrgs = vi.fn();
+const requireUser = vi.fn();
+vi.mock("@/lib/auth/session", () => ({
+  getUserOrgs: (...args: unknown[]) => getUserOrgs(...args),
+  requireUser: (...args: unknown[]) => requireUser(...args),
+}));
+
 const updateTag = vi.fn();
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
@@ -27,6 +67,8 @@ vi.mock("next/cache", () => ({
 
 const BOARD_ID = "33333333-3333-4333-8333-333333333333";
 const STATUS_COL = "44444444-4444-4444-8444-444444444444";
+const ORG_ID = "55555555-5555-4555-8555-555555555555";
+const USER_ID = "66666666-6666-4666-8666-666666666666";
 
 /** A board payload with one status column. `items`/`cells` are caller-supplied. */
 function payload(
@@ -59,6 +101,19 @@ beforeEach(() => {
   listMyBoards.mockReset();
   generateProposal.mockReset();
   updateTag.mockReset();
+  requireAiEntitlement.mockReset();
+  requireAiEntitlement.mockResolvedValue(undefined);
+  getUserOrgs.mockReset();
+  getUserOrgs.mockResolvedValue([
+    { id: ORG_ID, name: "Acme", timezone: "UTC" },
+  ]);
+  requireUser.mockReset();
+  requireUser.mockResolvedValue({ id: USER_ID });
+  runAi.mockClear();
+  runAi.mockImplementation(async (_args, fn) => {
+    const { result } = await fn(FAKE_RESOLVED);
+    return result;
+  });
 });
 
 describe("generateDashboardProposal", () => {
@@ -115,7 +170,127 @@ describe("generateDashboardProposal", () => {
       expect(res.data.proposal.widgets).toHaveLength(1);
       expect(res.data.proposal.widgets[0].kind).toBe("battery");
     }
+    // Entitlement is checked for the active org + feature...
+    expect(requireAiEntitlement).toHaveBeenCalledWith(ORG_ID, "dashboard_gen");
+    // ...BEFORE any provider work runs.
+    expect(requireAiEntitlement.mock.invocationCallOrder[0]).toBeLessThan(
+      generateProposal.mock.invocationCallOrder[0],
+    );
+    // The proposal flows through the metered gateway, scoped to org+user+feature.
+    expect(runAi).toHaveBeenCalledOnce();
+    expect(runAi.mock.calls[0][0]).toEqual({
+      orgId: ORG_ID,
+      userId: USER_ID,
+      feature: "dashboard_gen",
+    });
   });
+
+  it("fails when the user has no organization (no entitlement / LLM call)", async () => {
+    getBoardPayload.mockResolvedValueOnce(
+      payload(
+        [{ id: "item-1" }],
+        [
+          {
+            item_id: "item-1",
+            column_id: STATUS_COL,
+            value: { optionId: "opt-done" },
+          },
+        ],
+      ),
+    );
+    getUserOrgs.mockResolvedValueOnce([]);
+    const { generateDashboardProposal } = await import("@/lib/ai/actions");
+    const res = await generateDashboardProposal({ boardId: BOARD_ID });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBe("No organization.");
+    expect(requireAiEntitlement).not.toHaveBeenCalled();
+    expect(generateProposal).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "AiDisabledError",
+      () => new AiDisabledError(),
+      "AI is turned off for your organization.",
+    ],
+    [
+      "AiQuotaExceededError",
+      () => new AiQuotaExceededError(),
+      "You've used this month's AI allowance.",
+    ],
+    [
+      "ByoKeyMissingError",
+      () => new ByoKeyMissingError(),
+      "Your organization's AI key is missing — ask an admin to update Settings.",
+    ],
+  ])(
+    "maps %s from requireAiEntitlement to its exact message",
+    async (_name, makeError, message) => {
+      getBoardPayload.mockResolvedValueOnce(
+        payload(
+          [{ id: "item-1" }],
+          [
+            {
+              item_id: "item-1",
+              column_id: STATUS_COL,
+              value: { optionId: "opt-done" },
+            },
+          ],
+        ),
+      );
+      requireAiEntitlement.mockRejectedValueOnce(makeError());
+      const { generateDashboardProposal } = await import("@/lib/ai/actions");
+      const res = await generateDashboardProposal({ boardId: BOARD_ID });
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error).toBe(message);
+      // Entitlement failed closed — no provider call.
+      expect(runAi).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      "AiDisabledError",
+      () => new AiDisabledError(),
+      "AI is turned off for your organization.",
+    ],
+    [
+      "AiQuotaExceededError",
+      () => new AiQuotaExceededError(),
+      "You've used this month's AI allowance.",
+    ],
+    [
+      "ByoKeyMissingError",
+      () => new ByoKeyMissingError(),
+      "Your organization's AI key is missing — ask an admin to update Settings.",
+    ],
+    [
+      "AiNotConfiguredError",
+      () => new AiNotConfiguredError(),
+      "AI generation isn't configured.",
+    ],
+  ])(
+    "maps %s thrown from runAi to its exact message",
+    async (_name, makeError, message) => {
+      getBoardPayload.mockResolvedValueOnce(
+        payload(
+          [{ id: "item-1" }],
+          [
+            {
+              item_id: "item-1",
+              column_id: STATUS_COL,
+              value: { optionId: "opt-done" },
+            },
+          ],
+        ),
+      );
+      runAi.mockRejectedValueOnce(makeError());
+      const { generateDashboardProposal } = await import("@/lib/ai/actions");
+      const res = await generateDashboardProposal({ boardId: BOARD_ID });
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error).toBe(message);
+    },
+  );
 
   it("returns the not-configured message when generateProposal throws AiNotConfiguredError", async () => {
     getBoardPayload.mockResolvedValueOnce(
