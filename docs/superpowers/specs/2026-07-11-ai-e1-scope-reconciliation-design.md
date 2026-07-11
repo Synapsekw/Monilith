@@ -52,8 +52,8 @@ in the same task, then `get_advisors` (expect zero new warnings).
 - **Functions (SECURITY DEFINER, service-role-only, mirroring the shipped, RLS-tested
   `ai_credential_*` pattern from `20260706164829_user_ai_credentials.sql`):**
   - `org_ai_secret_set(p_org uuid, p_provider text, p_secret text, p_hint text)` — replaces any
-    existing org secret (delete Vault secret + re-create), stores `byo_secret_id` + `byo_provider`
-    - `byo_key_last4` on `org_ai_settings` (upserting the row).
+    existing org secret (delete Vault secret + re-create), stores `byo_secret_id`, `byo_provider`,
+    and `byo_key_last4` on `org_ai_settings` (upserting the row).
   - `org_ai_secret_get(p_org uuid) returns table (provider text, secret text)` — the only decrypt
     path; `revoke` from `public, anon, authenticated`, `grant execute` to `service_role`.
   - `org_ai_secret_clear(p_org uuid)` — deletes the Vault secret and nulls the org-BYO columns.
