@@ -1,7 +1,7 @@
 import "server-only";
+import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
-import { resolveUserAdapter } from "@/lib/ai/credentials";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 
 /**
@@ -32,26 +32,21 @@ function buildUserPrompt(snap: BoardSnapshot, feedback?: string): string {
 }
 
 /**
- * Propose a dashboard for the given board snapshot using the current user's
- * configured AI provider. The adapter + key are dependency-injected in tests
- * (opts.adapter/opts.apiKey); production resolves them from the user's stored
- * credential via resolveUserAdapter().
+ * Propose a dashboard for the given board snapshot. The adapter + key are
+ * resolved by the metered AI gateway (see runAi in @/lib/ai/gateway) and passed
+ * in — this function no longer resolves credentials itself, so every call is
+ * entitlement-gated and metered by the caller.
  */
 export async function generateProposal(
   snap: BoardSnapshot,
   opts: {
-    adapter?: ProviderAdapter;
-    apiKey?: string;
+    adapter: ProviderAdapter;
+    apiKey: string;
     feedback?: string;
-  } = {},
-): Promise<DashboardProposal> {
-  const { adapter, apiKey } =
-    opts.adapter && opts.apiKey
-      ? { adapter: opts.adapter, apiKey: opts.apiKey }
-      : await resolveUserAdapter();
-
-  return adapter.generateProposal({
-    apiKey,
+  },
+): Promise<{ proposal: DashboardProposal; usage: AiUsageTokens }> {
+  return opts.adapter.generateProposal({
+    apiKey: opts.apiKey,
     system: buildSystemPrompt(),
     user: buildUserPrompt(snap, opts.feedback),
   });

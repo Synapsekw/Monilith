@@ -8,6 +8,7 @@ import {
   platformSetOrgRoleSchema,
   platformUserTargetSchema,
   platformSetPasswordSchema,
+  setOrgAiPlanSchema,
 } from "@/lib/validations/admin";
 
 type ActionResult<T = void> =
@@ -37,6 +38,39 @@ export async function platformSetOrgRole(
     return fail("Could not change that role.");
   }
   updateTag(orgAdminTag(parsed.data.userId, parsed.data.orgId));
+  revalidatePath(`/admin/organizations/${parsed.data.orgId}`);
+  return ok();
+}
+
+/**
+ * Platform-set an org's AI plan: the operator-controlled entitlement (tier +
+ * monthly credit ceiling). Writes go through the SERVICE client — platform
+ * admins are not necessarily org members, so RLS would hide the row. Deliberately
+ * does NOT touch `ai_mode`: the operator grants the allowance; the org's own
+ * admins choose how (if at all) to spend it.
+ */
+export async function setOrgAiPlan(input: unknown): Promise<ActionResult> {
+  const parsed = setOrgAiPlanSchema.safeParse(input);
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input");
+  const supabase = await createClient();
+  const {
+    data: { user: actor },
+  } = await supabase.auth.getUser();
+  if (!actor) return fail("Not authenticated.");
+  if (!(await isPlatformAdmin())) return fail("Not authorized.");
+
+  const svc = createServiceClient();
+  const { error } = await svc.from("org_ai_settings").upsert(
+    {
+      org_id: parsed.data.orgId,
+      tier: parsed.data.tier,
+      monthly_credit_limit: parsed.data.monthlyCreditLimit,
+      updated_by: actor.id,
+    },
+    { onConflict: "org_id" },
+  );
+  if (error) return fail("Could not update the AI plan.");
   revalidatePath(`/admin/organizations/${parsed.data.orgId}`);
   return ok();
 }

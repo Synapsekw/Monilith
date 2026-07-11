@@ -11,8 +11,12 @@ const snap: BoardSnapshot = {
   meta: { rowCount: 5, columnCount: 1, estimatedTokens: 50 },
 };
 
+const USAGE = { inputTokens: 10, outputTokens: 5 };
+
 function fakeAdapter(proposalJson: unknown) {
-  const generate = vi.fn().mockResolvedValue(proposalJson);
+  const generate = vi
+    .fn()
+    .mockResolvedValue({ proposal: proposalJson, usage: USAGE });
   const adapter = { generateProposal: generate } as unknown as ProviderAdapter;
   return { adapter, generate };
 }
@@ -36,8 +40,9 @@ describe("generateProposal", () => {
     };
     const { adapter } = fakeAdapter(proposal);
     const res = await generateProposal(snap, { adapter, apiKey: "k" });
-    expect(res.name).toBe("Sprint overview");
-    expect(res.widgets).toHaveLength(1);
+    expect(res.proposal.name).toBe("Sprint overview");
+    expect(res.proposal.widgets).toHaveLength(1);
+    expect(res.usage).toEqual(USAGE);
   });
 
   it("passes feedback into the user message when provided", async () => {

@@ -23,6 +23,7 @@ export const anthropicAdapter: ProviderAdapter = {
     .startsWith("sk-ant-", "Anthropic keys start with sk-ant-")
     .max(300),
   defaultModel: MODEL,
+  supportsTools: true,
   async validateKey(rawKey) {
     const client = new Anthropic({ apiKey: rawKey });
     try {
@@ -52,6 +53,12 @@ export const anthropicAdapter: ProviderAdapter = {
     const parsed =
       (message as { parsed_output?: unknown }).parsed_output ??
       JSON.parse(textBlock && "text" in textBlock ? textBlock.text : "{}");
-    return parsed as DashboardProposal;
+    return {
+      proposal: parsed as DashboardProposal,
+      usage: {
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+      },
+    };
   },
 };

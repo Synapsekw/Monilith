@@ -33,6 +33,15 @@ export type PlatformSetOrgRoleInput = SetMemberRoleInput;
 export const platformUserTargetSchema = z.object({ userId: z.string().uuid() });
 export type PlatformUserTargetInput = z.infer<typeof platformUserTargetSchema>;
 
+// Platform: grant an org's AI allowance (tier + monthly credit ceiling). This is
+// the operator-controlled entitlement only — `ai_mode` stays with the org admin.
+export const setOrgAiPlanSchema = z.object({
+  orgId: z.string().uuid(),
+  tier: z.enum(["none", "starter", "pro", "enterprise"]),
+  monthlyCreditLimit: z.number().int().min(0).max(1_000_000),
+});
+export type SetOrgAiPlanInput = z.infer<typeof setOrgAiPlanSchema>;
+
 // Platform: set a temporary password for a user (admin-typed). Min 8 chars.
 export const platformSetPasswordSchema = z.object({
   userId: z.string().uuid(),

@@ -21,6 +21,7 @@ export const googleAdapter: ProviderAdapter = {
     .startsWith("AIza", "Google API keys start with AIza")
     .max(300),
   defaultModel: MODEL,
+  supportsTools: false,
   async validateKey(rawKey) {
     const ai = new GoogleGenAI({ apiKey: rawKey });
     try {
@@ -40,6 +41,12 @@ export const googleAdapter: ProviderAdapter = {
         responseMimeType: "application/json",
       },
     });
-    return JSON.parse(res.text ?? "{}") as DashboardProposal;
+    return {
+      proposal: JSON.parse(res.text ?? "{}") as DashboardProposal,
+      usage: {
+        inputTokens: res.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: res.usageMetadata?.candidatesTokenCount ?? 0,
+      },
+    };
   },
 };
