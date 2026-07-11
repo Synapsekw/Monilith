@@ -58,6 +58,56 @@ export type Database = {
           },
         ];
       };
+      ai_usage: {
+        Row: {
+          cost_usd: number;
+          created_at: string;
+          credits: number;
+          feature: string;
+          id: string;
+          input_tokens: number;
+          model: string | null;
+          org_id: string;
+          output_tokens: number;
+          provider: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          cost_usd?: number;
+          created_at?: string;
+          credits?: number;
+          feature: string;
+          id?: string;
+          input_tokens?: number;
+          model?: string | null;
+          org_id: string;
+          output_tokens?: number;
+          provider?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          cost_usd?: number;
+          created_at?: string;
+          credits?: number;
+          feature?: string;
+          id?: string;
+          input_tokens?: number;
+          model?: string | null;
+          org_id?: string;
+          output_tokens?: number;
+          provider?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       attachments: {
         Row: {
           board_id: string;
@@ -1425,6 +1475,50 @@ export type Database = {
           },
         ];
       };
+      org_ai_settings: {
+        Row: {
+          ai_mode: Database["public"]["Enums"]["ai_mode"];
+          byo_key_last4: string | null;
+          byo_provider: string | null;
+          byo_secret_id: string | null;
+          monthly_credit_limit: number;
+          org_id: string;
+          tier: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          ai_mode?: Database["public"]["Enums"]["ai_mode"];
+          byo_key_last4?: string | null;
+          byo_provider?: string | null;
+          byo_secret_id?: string | null;
+          monthly_credit_limit?: number;
+          org_id: string;
+          tier?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          ai_mode?: Database["public"]["Enums"]["ai_mode"];
+          byo_key_last4?: string | null;
+          byo_provider?: string | null;
+          byo_secret_id?: string | null;
+          monthly_credit_limit?: number;
+          org_id?: string;
+          tier?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_ai_settings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       org_invitations: {
         Row: {
           accepted_at: string | null;
@@ -2134,6 +2228,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      ai_credits_used_this_month: { Args: { p_org: string }; Returns: number };
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };
       auth_user_orgs: { Args: never; Returns: string[] };
@@ -2516,6 +2611,10 @@ export type Database = {
           user_id: string;
         }[];
       };
+      goal_in_org: {
+        Args: { p_goal_id: string; p_org_id: string };
+        Returns: boolean;
+      };
       goals_rollup: {
         Args: never;
         Returns: {
@@ -2565,6 +2664,23 @@ export type Database = {
           role: Database["public"]["Enums"]["org_role"];
         }[];
       };
+      org_ai_secret_clear: { Args: { p_org: string }; Returns: undefined };
+      org_ai_secret_get: {
+        Args: { p_org: string };
+        Returns: {
+          provider: string;
+          secret: string;
+        }[];
+      };
+      org_ai_secret_set: {
+        Args: {
+          p_hint: string;
+          p_org: string;
+          p_provider: string;
+          p_secret: string;
+        };
+        Returns: undefined;
+      };
       platform_search_users: {
         Args: { p_limit?: number; p_offset?: number; p_query?: string };
         Returns: {
@@ -2598,6 +2714,10 @@ export type Database = {
           org_id: string;
           org_name: string;
         }[];
+      };
+      portfolio_in_org: {
+        Args: { p_org_id: string; p_portfolio_id: string };
+        Returns: boolean;
       };
       portfolio_rollup: {
         Args: { p_portfolio_id: string; p_today: string };
@@ -2634,6 +2754,20 @@ export type Database = {
         Returns: undefined;
       };
       readable_board_ids: { Args: never; Returns: string[] };
+      record_ai_usage: {
+        Args: {
+          p_cost_usd: number;
+          p_credits: number;
+          p_feature: string;
+          p_input_tokens: number;
+          p_model: string;
+          p_org: string;
+          p_output_tokens: number;
+          p_provider: string;
+          p_user: string;
+        };
+        Returns: undefined;
+      };
       redeem_invitations: { Args: never; Returns: number };
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
@@ -2768,6 +2902,7 @@ export type Database = {
         | "item_deleted"
         | "cell_changed"
         | "update_added";
+      ai_mode: "off" | "managed" | "org_byo" | "per_user";
       board_access: "viewer" | "editor";
       column_kind:
         | "text"
@@ -2950,6 +3085,7 @@ export const Constants = {
         "cell_changed",
         "update_added",
       ],
+      ai_mode: ["off", "managed", "org_byo", "per_user"],
       board_access: ["viewer", "editor"],
       column_kind: [
         "text",

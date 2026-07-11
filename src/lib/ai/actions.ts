@@ -12,7 +12,15 @@ import {
   type ValidatedProposal,
 } from "@/lib/ai/proposal-schema";
 import { generateProposal } from "@/lib/ai/generate";
-import { AiNotConfiguredError } from "@/lib/ai/anthropic";
+import { runAi } from "@/lib/ai/gateway";
+import { requireAiEntitlement } from "@/lib/ai/entitlement";
+import {
+  AiDisabledError,
+  AiQuotaExceededError,
+  ByoKeyMissingError,
+  AiNotConfiguredError,
+} from "@/lib/ai/errors";
+import { requireUser, getUserOrgs } from "@/lib/auth/session";
 import {
   configSchemaForKind,
   widgetKindSchema,
@@ -117,14 +125,35 @@ export async function generateDashboardProposal(input: {
     return fail("This board has no data to build a dashboard from yet.");
 
   try {
-    const proposal = await generateProposal(snap, {
-      feedback: parsed.data.feedback,
-    });
+    const orgs = await getUserOrgs();
+    const org = orgs[0];
+    if (!org) return fail("No organization.");
+    await requireAiEntitlement(org.id, "dashboard_gen");
+    const user = await requireUser();
+    const proposal = await runAi(
+      { orgId: org.id, userId: user.id, feature: "dashboard_gen" },
+      async ({ adapter, apiKey }) => {
+        const { proposal, usage } = await generateProposal(snap, {
+          adapter,
+          apiKey,
+          feedback: parsed.data.feedback,
+        });
+        return { result: proposal, usage, model: adapter.defaultModel };
+      },
+    );
     const validated = validateProposal(proposal, snap);
     if (validated.widgets.length === 0)
       return fail("Couldn't generate a usable layout — try Regenerate.");
     return { ok: true, data: { proposal: validated } };
   } catch (e) {
+    if (e instanceof AiDisabledError)
+      return fail("AI is turned off for your organization.");
+    if (e instanceof AiQuotaExceededError)
+      return fail("You've used this month's AI allowance.");
+    if (e instanceof ByoKeyMissingError)
+      return fail(
+        "Your organization's AI key is missing — ask an admin to update Settings.",
+      );
     if (e instanceof AiNotConfiguredError)
       return fail("AI generation isn't configured.");
     return fail("AI generation failed. Please try again.");

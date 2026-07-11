@@ -10,6 +10,7 @@ import {
   Moon,
   Plus,
   Rows3,
+  Sparkles,
   Sun,
 } from "lucide-react";
 import {
@@ -43,6 +44,7 @@ export function CommandPalette({
   const toggle = useUIStore((s) => s.toggleCommand);
   const setNewBoardOpen = useUIStore((s) => s.setNewBoardOpen);
   const setNewDashboardOpen = useUIStore((s) => s.setNewDashboardOpen);
+  const setAskPulseOpen = useUIStore((s) => s.setAskPulseOpen);
   const router = useRouter();
   const { setTheme } = useTheme();
   const canCreate = Boolean(workspaces[0]?.id);
@@ -153,6 +155,11 @@ export function CommandPalette({
             )}
           </CommandGroup>
         )}
+        <CommandGroup heading={<Kicker>Ask</Kicker>}>
+          <CommandItem onSelect={() => run(() => setAskPulseOpen(true))}>
+            <Sparkles className="size-4" /> Ask Pulse…
+          </CommandItem>
+        </CommandGroup>
         <CommandGroup heading={<Kicker>Navigation</Kicker>}>
           <CommandItem onSelect={() => run(() => router.push("/dashboards"))}>
             <LayoutDashboard className="size-4" /> Dashboards

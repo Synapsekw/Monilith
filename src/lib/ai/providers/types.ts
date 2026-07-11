@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
 
@@ -17,6 +18,8 @@ export interface ProviderAdapter {
   /** Cheap shape check before the live ping. */
   keyFormat: z.ZodType<string>;
   defaultModel: string;
+  /** True when the provider path implements tool use (Ask Pulse etc.). v1: Anthropic only. */
+  supportsTools: boolean;
   /** Resolves if the key is accepted; throws ProviderAuthError if rejected. */
   validateKey(rawKey: string): Promise<void>;
   /** Runs the provider to produce a raw (unvalidated) proposal. */
@@ -24,5 +27,5 @@ export interface ProviderAdapter {
     apiKey: string;
     system: string;
     user: string;
-  }): Promise<DashboardProposal>;
+  }): Promise<{ proposal: DashboardProposal; usage: AiUsageTokens }>;
 }
