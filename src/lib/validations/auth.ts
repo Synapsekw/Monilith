@@ -15,9 +15,15 @@ export const signUpSchema = z.object({
     .max(100, "Organization name must be 100 characters or fewer"),
 });
 
-export const changePasswordSchema = z.object({
-  password: z.string().min(8, "Password must be at least 8 characters."),
-});
+export const changePasswordSchema = z
+  .object({
+    password: z.string().min(8, "Password must be at least 8 characters."),
+    confirmPassword: z.string().min(1, "Please confirm your new password."),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 export const forgotPasswordSchema = z.object({
