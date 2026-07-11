@@ -158,6 +158,7 @@ export async function changeOwnPassword(
 ): Promise<AuthState> {
   const parsed = changePasswordSchema.safeParse({
     password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid password" };
