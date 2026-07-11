@@ -15,6 +15,7 @@ export async function getAiEntitlement(orgId: string): Promise<AiEntitlement> {
   const svc = createServiceClient();
   const settings = await readOrgAiSettings(svc, orgId);
   if (settings.mode !== "managed") {
+    // Infinity = unmetered; never serialize this shape directly (JSON.stringify(Infinity) → null).
     return {
       mode: settings.mode,
       tier: settings.tier,
@@ -38,6 +39,8 @@ export async function getAiEntitlement(orgId: string): Promise<AiEntitlement> {
 }
 
 /** Gate every AI Server Action BEFORE doing any work. Fails closed with typed errors. */
+// Check-then-spend is not atomic: concurrent calls may slightly overshoot the ceiling.
+// Acceptable for v1 — the ledger sum remains the source of truth.
 export async function requireAiEntitlement(
   orgId: string,
   _feature: string,

@@ -51,7 +51,7 @@ describe("entitlement", () => {
       name: "AiQuotaExceededError",
     });
 
-    rpc.mockResolvedValueOnce({ data: 100, error: null });
+    rpc.mockResolvedValueOnce({ data: "100", error: null });
     expect(await getAiEntitlement("org-1")).toEqual({
       mode: "managed",
       tier: "pro",

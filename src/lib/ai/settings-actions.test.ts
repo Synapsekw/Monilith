@@ -127,3 +127,27 @@ describe("org ai settings actions", () => {
     expect(res.ok).toBe(true);
   });
 });
+
+describe("removeOrgByoKey", () => {
+  it("rejects non-admins", async () => {
+    admin(false);
+    const { removeOrgByoKey } = await import("@/lib/ai/settings-actions");
+    const res = await removeOrgByoKey();
+    expect(res).toEqual({
+      ok: false,
+      error: "Only organization admins can change AI settings.",
+    });
+    expect(svcRpc).not.toHaveBeenCalled();
+  });
+
+  it("clears the key via org_ai_secret_clear for admins", async () => {
+    admin(true);
+    svcRpc.mockResolvedValue({ data: null, error: null });
+    const { removeOrgByoKey } = await import("@/lib/ai/settings-actions");
+    const res = await removeOrgByoKey();
+    expect(svcRpc).toHaveBeenCalledWith("org_ai_secret_clear", {
+      p_org: "org-1",
+    });
+    expect(res.ok).toBe(true);
+  });
+});
