@@ -4,9 +4,8 @@ export type AiUsageTokens = { inputTokens: number; outputTokens: number };
  * USD per million tokens, by model id. Source of truth for metering.
  * Maintain alongside the provider catalog when models change.
  */
-export const MODEL_PRICES_PER_MTOK: Record<
-  string,
-  { input: number; output: number }
+export const MODEL_PRICES_PER_MTOK: Readonly<
+  Record<string, Readonly<{ input: number; output: number }>>
 > = {
   "claude-opus-4-8": { input: 5, output: 25 },
   "gpt-4o": { input: 2.5, output: 10 },
@@ -25,5 +24,6 @@ export function computeCostUsd(model: string, usage: AiUsageTokens): number {
 
 /** 1 credit = $0.01, rounded to 2 decimal places. */
 export function costToCredits(costUsd: number): number {
-  return Math.round(costUsd * 100 * 100) / 100;
+  // USD → credits (×100), then round to 2dp
+  return Math.round(costUsd * 10000) / 100;
 }

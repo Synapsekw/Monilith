@@ -28,6 +28,7 @@ describe("pricing", () => {
 
   it("converts cost to credits at 1 credit = $0.01, 2dp", () => {
     expect(costToCredits(0.0225)).toBe(2.25);
+    expect(costToCredits(0.02255)).toBe(2.26);
     expect(costToCredits(0)).toBe(0);
   });
 });
