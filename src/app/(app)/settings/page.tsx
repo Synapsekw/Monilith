@@ -15,7 +15,9 @@ import { ProfileForm } from "@/components/settings/profile-form";
 import { DigestPreferenceForm } from "@/components/settings/DigestPreferenceForm";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
 import { AiProviderForm } from "@/components/settings/AiProviderForm";
+import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
 import { getMyAiCredential } from "@/lib/ai/credentials";
+import { getOrgAiSettings } from "@/lib/ai/settings-actions";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
 import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
@@ -27,11 +29,14 @@ export default async function SettingsPage() {
   const user = await requireUser();
   // Timezone + orgs + AI credential are independent reads — resolve them in
   // parallel (the members RPC below is the only read that depends on org.id).
-  const [myTimeZone, orgs, aiCredential] = await Promise.all([
+  const [myTimeZone, orgs, aiCredential, orgAi] = await Promise.all([
     getUserTimeZoneCached(user.id),
     getUserOrgs(),
     getMyAiCredential(),
+    getOrgAiSettings(),
   ]);
+  const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
+  const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
   const org = orgs[0];
   if (!org) redirect("/onboarding");
 
@@ -128,17 +133,39 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
 
+        {isAdmin && orgAi.ok && (
+          <Card>
+            <CardHeader>
+              <CardTitle>AI — Organization</CardTitle>
+              <CardDescription>
+                How AI features are powered for everyone in this org.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <OrgAiSettingsForm initial={orgAi.data} />
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>AI</CardTitle>
             <CardDescription>
-              {aiCredential
-                ? "Your AI provider key powers dashboard generation."
-                : "Not configured — add a provider key to enable AI features."}
+              {personalKeyManaged
+                ? "AI is powered by your organization's settings."
+                : aiCredential
+                  ? "Your AI provider key powers dashboard generation."
+                  : "Not configured — add a provider key to enable AI features."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <AiProviderForm initial={aiCredential} />
+            {personalKeyManaged ? (
+              <p className="text-muted-foreground text-sm">
+                AI is managed by your organization — no personal key needed.
+              </p>
+            ) : (
+              <AiProviderForm initial={aiCredential} />
+            )}
           </CardContent>
         </Card>
 
