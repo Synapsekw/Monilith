@@ -162,6 +162,20 @@ describe("generateProposal", () => {
     expect(res.usage).toEqual({ inputTokens: 800, outputTokens: 200 });
   });
 
+  it("openai falls back to zero usage when the response omits it", async () => {
+    openaiCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(PROPOSAL) } }],
+      usage: undefined,
+    });
+    const res = await openaiAdapter.generateProposal({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+    });
+    expect(res.proposal.name).toBe("X");
+    expect(res.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
+  });
+
   it("google parses response.text", async () => {
     googleGenerate.mockResolvedValueOnce({ text: JSON.stringify(PROPOSAL) });
     const res = await googleAdapter.generateProposal({

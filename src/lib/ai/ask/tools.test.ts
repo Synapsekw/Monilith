@@ -220,4 +220,41 @@ describe("executeAskTool: error handling", () => {
     );
     expect(JSON.parse(result.content)).toEqual({ error: "invalid tool input" });
   });
+
+  it("returns board-not-found and no boardId for query_items when the board is not visible", async () => {
+    getBoardPayload.mockResolvedValue(null);
+
+    const result = await executeAskTool(
+      "query_items",
+      { board_id: "11111111-1111-4111-8111-111111111111" },
+      ctx,
+    );
+
+    expect(JSON.parse(result.content)).toEqual({ error: "board not found" });
+    expect(result.boardId).toBeUndefined();
+  });
+
+  it("never throws when a dispatched tool rejects, and does not leak the raw error message", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    getBoardPayload.mockRejectedValue(new Error("db connection lost"));
+
+    const result = await executeAskTool(
+      "get_board_overview",
+      { board_id: "11111111-1111-4111-8111-111111111111" },
+      ctx,
+    );
+
+    expect(JSON.parse(result.content)).toEqual({ error: "tool failed" });
+    expect(result.content).not.toContain("db connection lost");
+    expect(result.boardId).toBeUndefined();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[ask] tool failed:",
+      "get_board_overview",
+      expect.any(Error),
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
 });

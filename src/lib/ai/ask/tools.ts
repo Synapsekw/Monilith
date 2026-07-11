@@ -145,22 +145,29 @@ async function runQueryItems(
   return { content: JSON.stringify(rows), boardId: parsed.data.board_id };
 }
 
-/** Dispatch + execute an Ask Pulse tool call. Never throws — invalid input or
- *  an unknown tool name resolves to an `{"error": ...}` content payload so the
- *  model gets a chance to self-correct within the tool-use loop. */
+/** Dispatch + execute an Ask Pulse tool call. Never throws — invalid input, an
+ *  unknown tool name, or an underlying error (e.g. a DB failure inside
+ *  `getBoardPayload`/`listMyBoards`/`listSharedBoards`) all resolve to an
+ *  `{"error": ...}` content payload so the model gets a chance to self-correct
+ *  within the tool-use loop. */
 export async function executeAskTool(
   name: string,
   input: unknown,
   ctx: { workspaceId: string },
 ): Promise<{ content: string; boardId?: string }> {
-  switch (name) {
-    case "list_boards":
-      return runListBoards(ctx);
-    case "get_board_overview":
-      return runGetBoardOverview(input);
-    case "query_items":
-      return runQueryItems(input);
-    default:
-      return errorResult("unknown tool");
+  try {
+    switch (name) {
+      case "list_boards":
+        return await runListBoards(ctx);
+      case "get_board_overview":
+        return await runGetBoardOverview(input);
+      case "query_items":
+        return await runQueryItems(input);
+      default:
+        return errorResult("unknown tool");
+    }
+  } catch (err) {
+    console.error("[ask] tool failed:", name, err);
+    return errorResult("tool failed");
   }
 }
