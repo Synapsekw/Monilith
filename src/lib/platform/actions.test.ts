@@ -14,10 +14,11 @@ const getUserById = vi.fn();
 const updateUserById = vi.fn();
 const deleteUser = vi.fn();
 const svcInsert = vi.fn();
+const svcUpsert = vi.fn();
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
     auth: { admin: { getUserById, updateUserById, deleteUser } },
-    from: () => ({ insert: svcInsert }),
+    from: () => ({ insert: svcInsert, upsert: svcUpsert }),
   }),
 }));
 
@@ -34,6 +35,7 @@ import {
   platformSetUserPassword,
   platformDeleteUser,
   platformSetOrgRole,
+  setOrgAiPlan,
 } from "./actions";
 
 const actor = "00000000-0000-4000-8000-000000000000";
@@ -55,6 +57,7 @@ beforeEach(() => {
     .mockResolvedValue({ data: { user: {} }, error: null });
   deleteUser.mockReset().mockResolvedValue({ error: null });
   svcInsert.mockReset().mockResolvedValue({ error: null });
+  svcUpsert.mockReset().mockResolvedValue({ error: null });
   isPlatformAdmin.mockReset().mockResolvedValue(true);
   updateTag.mockReset();
 });
@@ -111,6 +114,47 @@ describe("platformSetUserPassword", () => {
       password: "longenough1",
       app_metadata: { x: 1, must_change_password: true },
     });
+  });
+});
+
+describe("setOrgAiPlan", () => {
+  it("rejects a non-admin caller without upserting", async () => {
+    isPlatformAdmin.mockResolvedValue(false);
+    const r = await setOrgAiPlan({
+      orgId: orgUuid,
+      tier: "pro",
+      monthlyCreditLimit: 5000,
+    });
+    expect(r.ok).toBe(false);
+    expect(svcUpsert).not.toHaveBeenCalled();
+  });
+
+  it("upserts the entitlements for a platform admin (mode untouched)", async () => {
+    const r = await setOrgAiPlan({
+      orgId: orgUuid,
+      tier: "pro",
+      monthlyCreditLimit: 5000,
+    });
+    expect(r.ok).toBe(true);
+    expect(svcUpsert).toHaveBeenCalledWith(
+      {
+        org_id: orgUuid,
+        tier: "pro",
+        monthly_credit_limit: 5000,
+        updated_by: actor,
+      },
+      { onConflict: "org_id" },
+    );
+  });
+
+  it("rejects an invalid tier without upserting", async () => {
+    const r = await setOrgAiPlan({
+      orgId: orgUuid,
+      tier: "unlimited",
+      monthlyCreditLimit: 5000,
+    });
+    expect(r.ok).toBe(false);
+    expect(svcUpsert).not.toHaveBeenCalled();
   });
 });
 
