@@ -24,7 +24,7 @@ type TestUser = {
 };
 
 describe.skipIf(!integrationTargetReady())(
-  "RLS: org_ai_settings / ai_usage boundary — member reads, admin writes, definer fns service-only, tenant isolation",
+  "RLS: org_ai_settings / ai_usage boundary — member reads, no client write path, definer fns service-only, tenant isolation",
   () => {
     let admin: SupabaseClient<Database>;
     const createdUserIds: string[] = [];
@@ -102,7 +102,8 @@ describe.skipIf(!integrationTargetReady())(
       expect(memberErr, "seed userB as member of org A").toBeNull();
 
       // Seed org A's settings row via the service client (bypasses RLS). Default
-      // ai_mode is 'per_user'; the admin-write test flips it to 'off'.
+      // ai_mode is 'per_user'; no client (admin or member) can mutate it —
+      // writes are service-role only via server actions.
       const { error: seedSettingsErr } = await admin
         .from("org_ai_settings")
         .insert({ org_id: orgA });
@@ -169,47 +170,49 @@ describe.skipIf(!integrationTargetReady())(
     });
 
     // -------------------------------------------------------------------------
-    // org_ai_settings: non-admin members cannot write; admins can update
+    // org_ai_settings: no client write path — writes are service-role only via
+    // server actions. tier/monthly_credit_limit are platform-controlled
+    // entitlements, so NO authenticated client (admin or member) may write —
+    // there are no INSERT/UPDATE policies, only the member SELECT policy.
     // -------------------------------------------------------------------------
 
-    it("a non-admin member (B) cannot INSERT org_ai_settings for org A", async () => {
-      const { error } = await userB.anon
+    it("no authenticated client can INSERT org_ai_settings (admin or member) — no write policy exists", async () => {
+      // No INSERT policy exists → default-deny rejects both the org admin and a
+      // plain member, regardless of role.
+      const { error: adminErr } = await userA.anon
         .from("org_ai_settings")
         .insert({ org_id: orgA, ai_mode: "managed" });
-      // insert WITH CHECK requires has_org_role(['owner','admin']); userB is a
-      // plain member → the write is rejected.
-      expect(error).not.toBeNull();
+      expect(adminErr).not.toBeNull();
+
+      const { error: memberErr } = await userB.anon
+        .from("org_ai_settings")
+        .insert({ org_id: orgA, ai_mode: "managed" });
+      expect(memberErr).not.toBeNull();
     });
 
-    it("a non-admin member (B) cannot UPDATE org A's settings — the write does not land", async () => {
-      const { error } = await userB.anon
+    it("no authenticated client can UPDATE org A's settings (admin or member) — the write does not land", async () => {
+      // No UPDATE policy exists → the row is invisible to any client UPDATE, so
+      // the write affects 0 rows (may also surface as an explicit error). Both
+      // the org admin (owner A) and a plain member (B) are blocked; verify
+      // nothing changed after each attempt.
+      const { error: memberErr } = await userB.anon
         .from("org_ai_settings")
         .update({ ai_mode: "off" })
         .eq("org_id", orgA);
-      // RLS may surface as an explicit error OR as 0 rows affected (the row is
-      // invisible to the UPDATE policy). Either way, verify nothing changed.
-      void error;
+      void memberErr;
+
+      const { error: adminErr } = await userA.anon
+        .from("org_ai_settings")
+        .update({ ai_mode: "off" })
+        .eq("org_id", orgA);
+      void adminErr;
+
       const { data: after } = await admin
         .from("org_ai_settings")
         .select("ai_mode")
         .eq("org_id", orgA)
         .single();
       expect((after as { ai_mode: string }).ai_mode).toBe("per_user");
-    });
-
-    it("an admin (owner of A) CAN update org A's settings row", async () => {
-      const { error } = await userA.anon
-        .from("org_ai_settings")
-        .update({ ai_mode: "off" })
-        .eq("org_id", orgA);
-      expect(error).toBeNull();
-
-      const { data: after } = await admin
-        .from("org_ai_settings")
-        .select("ai_mode")
-        .eq("org_id", orgA)
-        .single();
-      expect((after as { ai_mode: string }).ai_mode).toBe("off");
     });
 
     // -------------------------------------------------------------------------
