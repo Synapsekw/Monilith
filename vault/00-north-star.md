@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-11-1510
+last-updated: 2026-07-11-1816
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -52,10 +52,10 @@ advisors + regenerate types before moving on.**
 ## 3. Now
 
 - **Phase:** **Keystone secondary-surface polish — DONE, all in prod.** Waves 0–6 shipped and promoted: Foundation + Board views (PR#56) and Dashboards · Admin/Auth · Planning · Personal & chrome · Core touch-ups (**PR#57, `main` at `77052bc`**). The bespoke Keystone layer (`<Kicker>`, soft chips, elevation/brightening hairlines, `card-lift`, accent-on-states, sidebar wordmark mark, item-panel meta chips, `@mention` accent) now covers the whole authed app at core-surface depth. Only **Landing** (`/landing`) remains — its own separate track. Spec+plan `docs/superpowers/{specs,plans}/2026-07-10-keystone-secondary-surfaces-polish*.md`. ([[2026-07-11-1510-keystone-waves-4-6-and-promote]], [[2026-07-10-2058-keystone-wave3-admin-entry]], [[dark-first-monday-reskin]])
-- **Branch:** `develop == origin/develop` at `c0f3a39` (heal); `main` at `77052bc` (Waves 0–6 live). **No live `task/*` worktrees.**
+- **Branch:** `develop == origin/develop` at `baa5270` — 3 commits ahead of `main` (`77052bc`): OptionPill→ColorChip DRY, forgot-password reset UX (confirm field + visibility toggle). **Promotion to `main` pending.** No live `task/*` worktrees. ([[2026-07-11-1816-auth-reset-ux-and-optionpill-dry]])
 - **In flight:** none building.
-- **Next:** pick a major track — **Phase 10 — AI & Agents E1** (scope-reconciliation first; [[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]), **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, **skip A4** — shipped), or the **Landing** Keystone redesign (retire `brand-lab`). Scoped **Batch B** (org switcher, auth rate limiting, notification prefs + reminders, saved views, cached-reader membership assertions) remains in the audit report §04.
-- **Owed:** **Manual, blocking forgot-password in prod:** add `/auth/callback` to Supabase Auth **Redirect URLs** allowlist (PROD dashboard). **Wordmark mark** now in prod — one-line revert in `brand.tsx` if the cleaved-slab-beside-slab-I lockup reads busy (keep the easing). Deferred cleanup: DRY board `OptionPill` onto `<ColorChip>`. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **Phase 10 scope-reconciliation.**
+- **Next:** promote `develop → main`, then pick a major track — **Phase 10 — AI & Agents E1** (scope-reconciliation first; [[2026-07-05-1746-phase-10-ai-roadmap-scope]], [[2026-07-05-decision-26-ai-platform-dual-billing]]), **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, **skip A4** — shipped), or the **Landing** Keystone redesign (retire `brand-lab`). Scoped **Batch B** (org switcher, auth rate limiting, notification prefs + reminders, saved views, cached-reader membership assertions) remains in the audit report §04.
+- **Owed:** ~~forgot-password prod redirect allowlist~~ **DONE** (`/auth/callback` added to PROD Redirect URLs — reset flow verified working). ~~DRY board `OptionPill`~~ **DONE** (ConfirmStep variant intentionally left — different design). **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy (keep the easing). Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **Phase 10 scope-reconciliation.**
 
 ### Last session
 
