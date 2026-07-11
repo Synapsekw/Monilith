@@ -60,9 +60,10 @@ beforeEach(() => {
   headerMap.clear();
 });
 
-const fd = (password: string) => {
+const fd = (password: string, confirmPassword: string = password) => {
   const f = new FormData();
   f.set("password", password);
+  f.set("confirmPassword", confirmPassword);
   return f;
 };
 
@@ -77,6 +78,11 @@ const signupFd = () => {
 describe("changeOwnPassword", () => {
   it("rejects a too-short password", async () => {
     const r = await changeOwnPassword({}, fd("short"));
+    expect(r.error).toBeTruthy();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+  it("rejects when the confirmation does not match", async () => {
+    const r = await changeOwnPassword({}, fd("longenough1", "different123"));
     expect(r.error).toBeTruthy();
     expect(updateUser).not.toHaveBeenCalled();
   });
