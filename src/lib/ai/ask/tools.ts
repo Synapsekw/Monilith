@@ -1,0 +1,166 @@
+import "server-only";
+import type Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
+import {
+  getBoardPayload,
+  listMyBoards,
+  listSharedBoards,
+} from "@/lib/boards/queries";
+import { buildBoardSnapshot } from "@/lib/ai/board-snapshot";
+
+/** Hard cap on rows `query_items` may return, regardless of requested limit —
+ *  keeps tool output (and downstream model context) bounded. */
+export const QUERY_ITEMS_MAX = 50;
+
+const getBoardOverviewSchema = z.object({
+  board_id: z.string().uuid(),
+});
+
+const queryItemsSchema = z.object({
+  board_id: z.string().uuid(),
+  limit: z.number().int().positive().optional(),
+});
+
+/** Read-only tool declarations for the Ask Pulse Anthropic tool-use loop.
+ *  Every tool resolves through RLS-scoped queries (`@/lib/boards/queries`,
+ *  cookie-bound client) — cross-org access is impossible by construction.
+ *  Never wire the service client into this module. */
+export const ASK_TOOLS: Anthropic.Tool[] = [
+  {
+    name: "list_boards",
+    description:
+      "List the boards visible to the current user in the current workspace (owned or shared with them). Returns id and name for each board.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_board_overview",
+    description:
+      "Get a board's schema and aggregate statistics (row count, column definitions, fill rates, distributions, numeric/date ranges) — no raw item rows. Use this to understand a board's shape before querying items.",
+    input_schema: {
+      type: "object",
+      properties: {
+        board_id: { type: "string", description: "UUID of the board." },
+      },
+      required: ["board_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "query_items",
+    description: `List up to ${QUERY_ITEMS_MAX} items on a board with their group and column values.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        board_id: { type: "string", description: "UUID of the board." },
+        limit: {
+          type: "number",
+          description: `Max items to return (default/cap ${QUERY_ITEMS_MAX}).`,
+        },
+      },
+      required: ["board_id"],
+      additionalProperties: false,
+    },
+  },
+];
+
+const errorResult = (message: string) => ({
+  content: JSON.stringify({ error: message }),
+});
+
+async function runListBoards(ctx: {
+  workspaceId: string;
+}): Promise<{ content: string }> {
+  const [mine, shared] = await Promise.all([
+    listMyBoards(),
+    listSharedBoards(),
+  ]);
+  const byId = new Map<string, { id: string; name: string }>();
+  for (const b of mine)
+    if (b.workspace_id === ctx.workspaceId)
+      byId.set(b.id, { id: b.id, name: b.name });
+  // SharedBoardEntry carries no workspace_id (targets can live in another
+  // workspace only via cross-workspace sharing, which the RLS-scoped read
+  // already gates) — include as-is, keyed by id so a board shared into and
+  // also owned within the workspace dedupes to a single entry.
+  for (const b of shared)
+    if (!byId.has(b.id)) byId.set(b.id, { id: b.id, name: b.name });
+  return { content: JSON.stringify([...byId.values()]) };
+}
+
+async function runGetBoardOverview(
+  input: unknown,
+): Promise<{ content: string; boardId?: string }> {
+  const parsed = getBoardOverviewSchema.safeParse(input);
+  if (!parsed.success) return errorResult("invalid tool input");
+  const payload = await getBoardPayload(parsed.data.board_id);
+  if (!payload) return errorResult("board not found");
+  const snapshot = buildBoardSnapshot({
+    board: payload.board,
+    columns: payload.columns,
+    items: payload.items,
+    cellValues: payload.cellValues,
+  });
+  return { content: JSON.stringify(snapshot), boardId: parsed.data.board_id };
+}
+
+async function runQueryItems(
+  input: unknown,
+): Promise<{ content: string; boardId?: string }> {
+  const parsed = queryItemsSchema.safeParse(input);
+  if (!parsed.success) return errorResult("invalid tool input");
+  const payload = await getBoardPayload(parsed.data.board_id);
+  if (!payload) return errorResult("board not found");
+
+  const groupNameById = new Map(payload.groups.map((g) => [g.id, g.name]));
+  const columnNameById = new Map(payload.columns.map((c) => [c.id, c.name]));
+  const cellsByItem = new Map<
+    string,
+    { column_id: string; value: unknown }[]
+  >();
+  for (const cell of payload.cellValues) {
+    const arr = cellsByItem.get(cell.item_id) ?? [];
+    arr.push({ column_id: cell.column_id, value: cell.value });
+    cellsByItem.set(cell.item_id, arr);
+  }
+
+  const limit = Math.min(parsed.data.limit ?? QUERY_ITEMS_MAX, QUERY_ITEMS_MAX);
+  const rows = payload.items.slice(0, limit).map((item) => {
+    const values: Record<string, unknown> = {};
+    for (const cell of cellsByItem.get(item.id) ?? []) {
+      const columnName = columnNameById.get(cell.column_id);
+      if (columnName) values[columnName] = cell.value;
+    }
+    return {
+      name: item.name,
+      group: groupNameById.get(item.group_id) ?? null,
+      values,
+    };
+  });
+
+  return { content: JSON.stringify(rows), boardId: parsed.data.board_id };
+}
+
+/** Dispatch + execute an Ask Pulse tool call. Never throws — invalid input or
+ *  an unknown tool name resolves to an `{"error": ...}` content payload so the
+ *  model gets a chance to self-correct within the tool-use loop. */
+export async function executeAskTool(
+  name: string,
+  input: unknown,
+  ctx: { workspaceId: string },
+): Promise<{ content: string; boardId?: string }> {
+  switch (name) {
+    case "list_boards":
+      return runListBoards(ctx);
+    case "get_board_overview":
+      return runGetBoardOverview(input);
+    case "query_items":
+      return runQueryItems(input);
+    default:
+      return errorResult("unknown tool");
+  }
+}
