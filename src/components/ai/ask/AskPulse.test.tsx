@@ -83,6 +83,19 @@ describe("AskPulse", () => {
     expect(screen.getByText(/consulted 1 board\b/i)).toBeInTheDocument();
   });
 
+  it("submits on Cmd+Enter in the textarea", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    const textbox = screen.getByRole("textbox");
+    await user.type(textbox, "What is overdue across my boards?");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+
+    expect(mockAsk).toHaveBeenCalledWith({
+      question: "What is overdue across my boards?",
+    });
+  });
+
   it("renders a returned error in an alert", async () => {
     mockAsk.mockResolvedValue({
       ok: false,

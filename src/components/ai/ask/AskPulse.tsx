@@ -99,26 +99,28 @@ export function AskPulse({
           </div>
         </form>
 
-        {isPending ? (
-          <p aria-live="polite" className="text-muted-foreground py-2 text-sm">
-            Looking across your boards…
-          </p>
-        ) : null}
+        <div aria-live="polite">
+          {isPending ? (
+            <p className="text-muted-foreground py-2 text-sm">
+              Looking across your boards…
+            </p>
+          ) : null}
+
+          {answer && !isPending ? (
+            <div className="space-y-2">
+              <p className="text-sm whitespace-pre-wrap">{answer.text}</p>
+              <p className="text-muted-foreground text-xs">
+                Consulted {answer.boardsConsulted}{" "}
+                {answer.boardsConsulted === 1 ? "board" : "boards"}
+              </p>
+            </div>
+          ) : null}
+        </div>
 
         {error ? (
           <p role="alert" className="text-destructive text-sm">
             {error}
           </p>
-        ) : null}
-
-        {answer && !isPending ? (
-          <div className="space-y-2">
-            <p className="text-sm whitespace-pre-wrap">{answer.text}</p>
-            <p className="text-muted-foreground text-xs">
-              Consulted {answer.boardsConsulted}{" "}
-              {answer.boardsConsulted === 1 ? "board" : "boards"}
-            </p>
-          </div>
         ) : null}
       </DialogContent>
     </Dialog>
