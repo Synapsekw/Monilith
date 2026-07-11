@@ -117,7 +117,7 @@ export async function generateDashboardProposal(input: {
     return fail("This board has no data to build a dashboard from yet.");
 
   try {
-    const proposal = await generateProposal(snap, {
+    const { proposal } = await generateProposal(snap, {
       feedback: parsed.data.feedback,
     });
     const validated = validateProposal(proposal, snap);

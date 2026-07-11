@@ -137,25 +137,29 @@ describe("generateProposal", () => {
     anthropicParse.mockResolvedValueOnce({
       content: [{ type: "text", text: JSON.stringify(PROPOSAL) }],
       parsed_output: PROPOSAL,
+      usage: { input_tokens: 1200, output_tokens: 340 },
     });
     const res = await anthropicAdapter.generateProposal({
       apiKey: "k",
       system: "s",
       user: "u",
     });
-    expect(res.name).toBe("X");
+    expect(res.proposal.name).toBe("X");
+    expect(res.usage).toEqual({ inputTokens: 1200, outputTokens: 340 });
   });
 
   it("openai parses the JSON message content", async () => {
     openaiCreate.mockResolvedValueOnce({
       choices: [{ message: { content: JSON.stringify(PROPOSAL) } }],
+      usage: { prompt_tokens: 800, completion_tokens: 200 },
     });
     const res = await openaiAdapter.generateProposal({
       apiKey: "k",
       system: "s",
       user: "u",
     });
-    expect(res.name).toBe("X");
+    expect(res.proposal.name).toBe("X");
+    expect(res.usage).toEqual({ inputTokens: 800, outputTokens: 200 });
   });
 
   it("google parses response.text", async () => {
@@ -165,6 +169,15 @@ describe("generateProposal", () => {
       system: "s",
       user: "u",
     });
-    expect(res.name).toBe("X");
+    expect(res.proposal.name).toBe("X");
+    expect(res.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
+  });
+});
+
+describe("supportsTools", () => {
+  it("is true for anthropic and false for openai/google", () => {
+    expect(anthropicAdapter.supportsTools).toBe(true);
+    expect(openaiAdapter.supportsTools).toBe(false);
+    expect(googleAdapter.supportsTools).toBe(false);
   });
 });

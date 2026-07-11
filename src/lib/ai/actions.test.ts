@@ -93,15 +93,18 @@ describe("generateDashboardProposal", () => {
       ),
     );
     generateProposal.mockResolvedValueOnce({
-      name: "Sprint Overview",
-      widgets: [
-        {
-          kind: "battery",
-          title: "Status",
-          config: { groupColumnId: STATUS_COL },
-          layout: { x: 0, y: 0, w: 4, h: 4 },
-        },
-      ],
+      proposal: {
+        name: "Sprint Overview",
+        widgets: [
+          {
+            kind: "battery",
+            title: "Status",
+            config: { groupColumnId: STATUS_COL },
+            layout: { x: 0, y: 0, w: 4, h: 4 },
+          },
+        ],
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
     });
     const { generateDashboardProposal } = await import("@/lib/ai/actions");
     const res = await generateDashboardProposal({ boardId: BOARD_ID });

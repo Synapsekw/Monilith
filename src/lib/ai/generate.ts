@@ -1,4 +1,5 @@
 import "server-only";
+import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
 import { resolveUserAdapter } from "@/lib/ai/credentials";
@@ -44,7 +45,7 @@ export async function generateProposal(
     apiKey?: string;
     feedback?: string;
   } = {},
-): Promise<DashboardProposal> {
+): Promise<{ proposal: DashboardProposal; usage: AiUsageTokens }> {
   const { adapter, apiKey } =
     opts.adapter && opts.apiKey
       ? { adapter: opts.adapter, apiKey: opts.apiKey }

@@ -24,6 +24,7 @@ export const openaiAdapter: ProviderAdapter = {
     .startsWith("sk-", "OpenAI keys start with sk-")
     .max(300),
   defaultModel: MODEL,
+  supportsTools: false,
   async validateKey(rawKey) {
     const client = new OpenAI({ apiKey: rawKey });
     try {
@@ -44,8 +45,14 @@ export const openaiAdapter: ProviderAdapter = {
       ],
       response_format: { type: "json_object" },
     });
-    return JSON.parse(
-      res.choices[0]?.message.content ?? "{}",
-    ) as DashboardProposal;
+    return {
+      proposal: JSON.parse(
+        res.choices[0]?.message.content ?? "{}",
+      ) as DashboardProposal,
+      usage: {
+        inputTokens: res.usage?.prompt_tokens ?? 0,
+        outputTokens: res.usage?.completion_tokens ?? 0,
+      },
+    };
   },
 };
