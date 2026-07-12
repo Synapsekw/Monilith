@@ -25,6 +25,13 @@ vi.mock("@/lib/search/item-search", () => ({
   searchItems: (q: string) => searchItems(q),
 }));
 
+// The lazily-mounted QuickAction imports the "use server" write engine (server-only);
+// mock it so mounting the composer doesn't pull server-only code into jsdom.
+vi.mock("@/lib/ai/write/actions", () => ({
+  proposeActions: vi.fn(),
+  executeActions: vi.fn(),
+}));
+
 const boards = [
   {
     id: "b1",
@@ -149,6 +156,23 @@ describe("CommandPalette", () => {
     const heading = screen.getByText("Items");
     expect(heading).toHaveClass("font-mono");
     expect(heading).toHaveClass("text-kicker");
+  });
+
+  it("opens the quick-action composer from the Actions group", async () => {
+    renderOpen();
+    fireEvent.click(screen.getByText("Run a command…"));
+    // The composer mounts lazily (next/dynamic); its command textarea appears.
+    expect(await screen.findByLabelText(/command/i)).toBeInTheDocument();
+    // The command list is replaced — the search input is gone.
+    expect(
+      screen.queryByPlaceholderText(/search items/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the existing Ask Pulse entry alongside the new Actions entry", () => {
+    renderOpen();
+    expect(screen.getByText("Ask Pulse…")).toBeInTheDocument();
+    expect(screen.getByText("Run a command…")).toBeInTheDocument();
   });
 
   it("clears the query and results after selecting an item and reopening", async () => {
