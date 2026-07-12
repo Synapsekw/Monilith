@@ -42,6 +42,14 @@ emit the report in its `⛔ Stopped` form (see Report) with the relevant link an
 claim**. All CI/deploy watches are **bounded** — on timeout, report "still running after N min, here
 is the link" rather than blocking.
 
+**How to watch CI (all waits in steps 2, 4, 7):** launch exactly **one**
+`scripts/watch-ci.sh …` per wait, as a **single background Bash task**, and act on its exit code:
+`0` → green, proceed · `1` → failed, it prints which run/check — investigate/stop · `2` → timed
+out, report "still running after N min" + the link · `3` → usage/prereq error, read its guidance.
+**Never** spawn a second watcher for the same target, never use `gh run watch` /
+`gh pr checks --watch` (unbounded), never `timeout(1)` (absent on macOS), and never improvise
+`until`/`grep` polling loops — the script is the only watch mechanism.
+
 ### 1. Preflight (read-only)
 
 - Verify `gh auth status` succeeds and the network is reachable. If not → **stop** ("`gh`
@@ -62,8 +70,10 @@ is the link" rather than blocking.
 - Find its CI run:
   `gh run list --branch develop --workflow ci.yml -L 1 --json databaseId,status,conclusion,headSha,url`.
   Confirm `headSha` matches the develop SHA (if no run exists for it yet, wait briefly, then re-list).
-- If `status` ≠ `completed` → `gh run watch <databaseId> --exit-status` (bounded).
-- `conclusion` ≠ `success` → **stop** with the run `url`. Never promote an un-green `develop`.
+- If `status` ≠ `completed` → run `scripts/watch-ci.sh branch develop` as one background task and
+  wait on its exit code (per the watch policy above).
+- `conclusion` ≠ `success` (or watch exit `1`) → **stop** with the run `url`. Never promote an
+  un-green `develop`.
 
 ### 3. Commit quality — "properly described"
 
@@ -86,8 +96,9 @@ and **stop here** ("dry run — no PR opened, `main` untouched").
 - Reuse an existing open PR if present:
   `gh pr list --base main --head develop --state open --json number,url`. Otherwise
   `gh pr create --base main --head develop --title "<composed>" --body "<composed>"`.
-- Watch its checks: `gh pr checks <number> --watch` (covers `verify`, `commitlint`, `changelog`).
-  Any failure → **stop** with the PR `url` and the failing check.
+- Watch its checks: run `scripts/watch-ci.sh pr <number>` as one background task (covers `verify`,
+  `commitlint`, `changelog`). Exit `1` (it prints the failing check) → **stop** with the PR `url`
+  and the failing check.
 - Also confirm the PR is mergeable (`gh pr view <number> --json mergeable,mergeStateStatus`). Not
   mergeable (conflict / behind) → **stop** with the link.
 
@@ -139,10 +150,13 @@ promotion ever still shows `CONFLICTING`, this heal was skipped — re-run it.)
 
 ### 7. Watch production
 
-- **GitHub Actions on `main`:** find the `verify` run for the new SHA
-  (`gh run list --branch main --workflow ci.yml -L 1 --json databaseId,status,conclusion,headSha,url`),
-  then `gh run watch <databaseId> --exit-status` (bounded). Record pass/fail + `url`.
-- **Vercel production deploy:** poll the commit status (~every 15s, bounded ~10 min):
+- **GitHub Actions on `main`:** run `scripts/watch-ci.sh branch main` as one background task — it
+  finds the newest run for the branch itself (with a grace period if the run hasn't been created
+  yet) and follows it to completion. Record pass/fail + the `url` it prints.
+- **Vercel production deploy:** the deploy reports as a _commit status_, not an Actions run, so
+  `watch-ci.sh` doesn't cover it. Poll it as **one** bounded background Bash task (a plain
+  `while … sleep 15 …` loop capped at ~10 min — no `timeout(1)`, and never a second poller for the
+  same SHA):
 
   ```bash
   gh api repos/Synapsekw/Monilith/commits/<sha>/status \
@@ -215,8 +229,9 @@ Stop (any hard stop above):
   commit on `develop` — that is intentional and required, not a content change.
 - **Honest reporting.** Never report success while a check or deploy is red or still running past the
   timeout. Surface the link and the real state.
-- **Bounded waits.** Every watch/poll has a ceiling; on timeout, hand back the link instead of
-  hanging.
+- **Bounded waits, one watcher per target.** Every watch/poll has a ceiling; on timeout, hand back
+  the link instead of hanging. CI waits go through `scripts/watch-ci.sh` (exit `2` = timed out) —
+  one background task per wait, never a duplicate watcher.
 - **Report, don't clean.** Stale `task/*` branches and other hygiene findings are noted, never
   auto-deleted (that is the user's call / `finish-task.sh`'s job).
 - **`/promote` never writes prod data; it only offers to chain `/sync-prod` after a confirmed
