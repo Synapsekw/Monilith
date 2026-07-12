@@ -80,6 +80,10 @@ export async function askPulseLoop(args: {
         content: result.content,
       });
     }
+    // Guard: the model signalled tool_use but emitted no tool_use blocks.
+    // Pushing an empty user turn wastes a round (or errors on the next call),
+    // so bail to the final-answer fallback instead.
+    if (toolResults.length === 0) break;
     messages.push({ role: "user", content: toolResults });
   }
 
