@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   LayoutGrid,
   Rocket,
@@ -9,10 +10,18 @@ import {
   BarChart3,
   Plus,
   Upload,
+  Sparkles,
 } from "lucide-react";
 import { createBoardFromTemplate } from "@/lib/boards/actions";
 import { BOARD_TEMPLATES } from "@/lib/boards/templates";
 import { ImportWizard } from "@/components/boards/import/ImportWizard";
+
+// Lazy-load the AI wizard (and its action/SDK imports) only when needed.
+const AiBoardWizard = dynamic(
+  () =>
+    import("@/components/boards/ai/AiBoardWizard").then((m) => m.AiBoardWizard),
+  { ssr: false },
+);
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,6 +52,7 @@ export function NewBoardDialog({
   collapsed?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const storeOpen = useUIStore((s) => s.newBoardOpen);
   const setNewBoardOpen = useUIStore((s) => s.setNewBoardOpen);
   const [localOpen, setLocalOpen] = useState(false);
@@ -56,6 +66,10 @@ export function NewBoardDialog({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
+  // Auto-open the AI wizard once when arriving with ?ai=1 (the review banner's
+  // "Regenerate" routes back here to reopen it). Seeded from the initial URL via
+  // a lazy initializer so later navigations that drop the param don't reopen it.
+  const [aiOpen, setAiOpen] = useState(() => searchParams.get("ai") === "1");
 
   function pick(id: string, defaultName: string) {
     setTemplateId(id);
@@ -135,19 +149,35 @@ export function NewBoardDialog({
           </div>
 
           {workspaceId ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full gap-2"
-              onClick={() => {
-                setOpen(false);
-                setImportOpen(true);
-              }}
-            >
-              <Upload className="size-4" />
-              Import from file
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setOpen(false);
+                  setAiOpen(true);
+                }}
+                aria-label="Generate a board with AI"
+              >
+                <Sparkles className="size-4" />
+                Generate with AI
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setOpen(false);
+                  setImportOpen(true);
+                }}
+              >
+                <Upload className="size-4" />
+                Import from file
+              </Button>
+            </div>
           ) : null}
 
           <form
@@ -184,6 +214,13 @@ export function NewBoardDialog({
           destination={{ type: "new", workspaceId }}
           open={importOpen}
           onOpenChange={setImportOpen}
+        />
+      ) : null}
+      {workspaceId && aiOpen ? (
+        <AiBoardWizard
+          workspaceId={workspaceId}
+          open={aiOpen}
+          onOpenChange={setAiOpen}
         />
       ) : null}
     </>

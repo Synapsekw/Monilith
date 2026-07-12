@@ -6,6 +6,7 @@ const push = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, refresh }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const createBoardFromTemplate = vi.fn();
