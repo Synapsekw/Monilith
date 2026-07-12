@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import { Kicker } from "@/components/ui/kicker";
 import {
@@ -28,6 +29,17 @@ import {
   formatCreatedAt,
 } from "@/components/boards/cells/created";
 import { MetaChip } from "@/components/ui/meta-chip";
+
+// Lazy-load the AI assist panel (and its action/SDK imports) only when the
+// fields tab is first opened — keeps opening the item panel / switching to
+// updates|activity|files at 0 extra bundle/round-trip cost (gotcha-09).
+const ItemAssistPanel = dynamic(
+  () =>
+    import("@/components/ai/item-assist/ItemAssistPanel").then(
+      (m) => m.ItemAssistPanel,
+    ),
+  { ssr: false },
+);
 
 type Tab = "fields" | "updates" | "activity" | "files";
 
@@ -151,10 +163,13 @@ export function ItemPanel({
           <div key={tab} className="animate-fadein">
             {tab === "fields" && (
               <div className="space-y-4 py-6">
-                <p className="text-muted-foreground text-sm">
-                  Edit fields in the board grid. (Inline field editing in the
-                  panel is a fast-follow.)
-                </p>
+                {itemId && (
+                  <ItemAssistPanel
+                    itemId={itemId}
+                    boardId={boardId}
+                    columns={columns}
+                  />
+                )}
                 <dl className="space-y-2 border-t pt-4">
                   <div className="flex items-center justify-between gap-4">
                     <dt className="text-muted-foreground text-sm">
