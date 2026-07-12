@@ -30,18 +30,18 @@ You MUST create a TodoWrite item per step and work them in order.
 Read (bounded — do **not** scan the whole vault):
 
 - `vault/00-north-star.md` — **§2** (phase slices + every `Next:` breadcrumb) and **§3 "Now"**
-  (`Latest`, `In flight`, `Manual gates`, `Branch`).
+  (`Phase`, `Branch`, `In flight`, `Next`, `Owed`).
 - The most recent ~8 `vault/sessions/*.md` — pull `Open threads`, `Known follow-up`, `deferred`,
   and `Next session entry point` lines.
 
 Bucket every candidate by type:
 
-| Source                                                     | Bucket         |
-| ---------------------------------------------------------- | -------------- |
-| §2 phase slices + `Next:` breadcrumbs                      | `phase-slice`  |
-| §3 `In flight`                                             | `in-flight`    |
-| session `Open threads` / `Known follow-up` / `deferred`    | `deferred-gap` |
-| §3 `Manual gates` / ops (promote, advisors, cross-browser) | `ops`          |
+| Source                                                  | Bucket         |
+| ------------------------------------------------------- | -------------- |
+| §2 phase slices + §3 `Next` breadcrumbs                 | `phase-slice`  |
+| §3 `In flight`                                          | `in-flight`    |
+| session `Open threads` / `Known follow-up` / `deferred` | `deferred-gap` |
+| §3 `Owed` / ops items (promote, advisors, checks)       | `ops`          |
 
 ### 2. Reconcile with git (drift detection)
 
@@ -82,56 +82,38 @@ count of carryover vs new candidates. Example:
 
 > **Snapshot:** `develop` 1 ahead of origin · 1 live worktree (`task/portfolios-7a`) · 3 carryover, 2 new.
 
-**Lead with a colour legend** so the status column reads at a glance:
+The exact columns are yours to shape, but the board must make these legible at a glance using
+**plain-text markers** (no emoji — see Discipline):
 
-> **🚦 Status:** 🟢 ready now · 🟡 needs your input / depends on another row · 🔴 blocked
-> **Type:** ⏳ in-flight · 🐛 deferred-gap · 🛠️ ops · ✨ new feature
-
-**Group 1 — 🔄 Carryover (unfinished from prior sessions)** — the `in-flight`, `deferred-gap`, and
-`ops` buckets:
-
-| #   | 🚦  | Work                        | Type            | Size | Batch | Blocker / note                  | From                  |
-| --- | --- | --------------------------- | --------------- | ---- | ----- | ------------------------------- | --------------------- |
-| 1   | 🟢  | Changelog Tasks 6–7         | ⏳ in-flight    | S    | A     | —                               | 2026-06-18 session    |
-| 2   | 🟢  | page.tsx `listSharedBoards` | 🐛 deferred-gap | S    | A     | —                               | board-sharing session |
-| 3   | 🔴  | Promote develop→main        | 🛠️ ops          | —    | —     | WebGL cross-browser check (you) | §3 manual gates       |
-
-**Group 2 — ✨ New feature work (roadmap)** — the `phase-slice` bucket:
-
-| #   | 🚦  | Work           | Phase | Size | Batch | Blocker / note | Critical path? |
-| --- | --- | -------------- | ----- | ---- | ----- | -------------- | -------------- |
-| 4   | 🟢  | Mirror columns | 6d-2  | L    | A     | —              | ⭐ yes         |
-| 5   | 🟡  | Docs           | 6e    | L    | B     | depends on #4  | —              |
-
-Column meanings (state these once, below the tables):
-
-- **🚦 Status** — 🟢 ready now · 🟡 has a dependency or needs your input · 🔴 blocked. Only 🟢 rows
-  are launchable in step 6.
+- **Status** — `ready` / `needs-input` (depends on another row, or on the user) / `blocked`. Only
+  `ready` rows are offered in step 6.
+- **Type** — the bucket from step 1 (`in-flight`, `deferred-gap`, `ops`, `phase-slice`).
 - **Batch** — the parallel group from the DAG (`A`, `B`, …). Same letter = disjoint footprints, safe
   to run at once. `—` = not batchable (blocked or solo).
 - **Size** — `S`/`M`/`L` from the Explore footprint.
-- **Critical path** — `⭐ yes` marks the longest dependency chain (the real wall-clock floor).
+- **Critical path** — mark the rows on the longest dependency chain (the real wall-clock floor).
+- Per row: any **blocker/note** and the **source** (session note / north-star section).
+
+**Group 1 — Carryover (unfinished from prior sessions)** holds the `in-flight`, `deferred-gap`, and
+`ops` buckets; **Group 2 — New feature work (roadmap)** holds the `phase-slice` bucket.
 
 Then, **only if there are mismatches**, a short **Drift** callout (vault-vs-reality):
 
-> ⚠️ **Drift:** §2 says 6f PDF preview "not pushed", but §3 says "shipped + pushed" and it's on
+> **Drift:** §2 says 6f PDF preview "not pushed", but §3 says "shipped + pushed" and it's on
 > origin — vault is stale.
 
-Then a plain-prose **Recommendation**:
-
-> **Recommended:** dispatch **Batch A** (#1, #2, #4) in parallel — 3 worktrees, no file overlap.
-> Critical path is **#4 (6d-2 mirror)**. #3 is blocked on you (cross-browser check). #5 (6e docs)
-> waits on #4.
-
-(The numbers/rows above are an _illustrative shape_, not fixed content — fill from the live triage.)
+Then a plain-prose **Recommendation**: which batch to dispatch in parallel (row numbers, worktree
+count, no file overlap), what the critical path is, and what's blocked on the user or on another
+row.
 
 ### 6. Interactive pick
 
-Offer only the **🟢-status items** for selection — never 🟡 (dependent) or 🔴 (blocked) rows.
+Offer only the **`ready`-status items** for selection — never `needs-input` (dependent) or
+`blocked` rows.
 
-- **≤ 4 🟢 items:** use `AskUserQuestion` (**multiSelect**), one option per 🟢 item, labelled
+- **≤ 4 ready items:** use `AskUserQuestion` (**multiSelect**), one option per ready item, labelled
   with its row number + name, plus the recommended batch noted in the first option's description.
-- **> 4 🟢 items** (AskUserQuestion caps at 4 options): do **not** truncate silently. Present the
+- **> 4 ready items** (AskUserQuestion caps at 4 options): do **not** truncate silently. Present the
   recommended batch as the first `AskUserQuestion` option (e.g. "Dispatch recommended Batch A
   (#1, #2, #4)"), with up to 3 alternative single picks, and tell the user they can instead reply
   with any row numbers to launch a custom set.
