@@ -19,8 +19,9 @@ vi.mock("@anthropic-ai/sdk", () => {
   }
   return { default: Anthropic };
 });
+const jsonSchemaOutputFormat = vi.hoisted(() => vi.fn(() => ({})));
 vi.mock("@anthropic-ai/sdk/helpers/json-schema", () => ({
-  jsonSchemaOutputFormat: () => ({}),
+  jsonSchemaOutputFormat,
 }));
 
 // --- OpenAI SDK stub ---
@@ -68,6 +69,7 @@ beforeEach(() => {
     googleList,
     googleGenerate,
   ].forEach((m) => m.mockReset());
+  jsonSchemaOutputFormat.mockClear();
 });
 
 describe("registry", () => {
@@ -185,6 +187,76 @@ describe("generateProposal", () => {
     });
     expect(res.proposal.name).toBe("X");
     expect(res.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
+  });
+});
+
+describe("generateStructured", () => {
+  const SCHEMA = { type: "object", properties: { ok: { type: "boolean" } } };
+
+  it("anthropic passes the schema through jsonSchemaOutputFormat and returns data + usage", async () => {
+    anthropicParse.mockResolvedValueOnce({
+      content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      parsed_output: { ok: true },
+      usage: { input_tokens: 1, output_tokens: 2 },
+    });
+    const res = await anthropicAdapter.generateStructured({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      schema: SCHEMA,
+    });
+    expect(res.data).toEqual({ ok: true });
+    expect(res.usage).toEqual({ inputTokens: 1, outputTokens: 2 });
+    expect(jsonSchemaOutputFormat).toHaveBeenCalledWith(SCHEMA);
+  });
+
+  it("anthropic falls back to parsing the text block when parsed_output is absent", async () => {
+    anthropicParse.mockResolvedValueOnce({
+      content: [{ type: "text", text: JSON.stringify({ ok: false }) }],
+      usage: { input_tokens: 3, output_tokens: 4 },
+    });
+    const res = await anthropicAdapter.generateStructured({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      schema: SCHEMA,
+    });
+    expect(res.data).toEqual({ ok: false });
+    expect(res.usage).toEqual({ inputTokens: 3, outputTokens: 4 });
+  });
+
+  it("openai returns the parsed JSON body + usage and embeds the schema in the prompt", async () => {
+    openaiCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ ok: true }) } }],
+      usage: { prompt_tokens: 5, completion_tokens: 6 },
+    });
+    const res = await openaiAdapter.generateStructured({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      schema: SCHEMA,
+    });
+    expect(res.data).toEqual({ ok: true });
+    expect(res.usage).toEqual({ inputTokens: 5, outputTokens: 6 });
+    const call = openaiCreate.mock.calls[0][0];
+    expect(call.messages[1].content).toContain(JSON.stringify(SCHEMA));
+  });
+
+  it("google returns the parsed text body + usage and embeds the schema in the prompt", async () => {
+    googleGenerate.mockResolvedValueOnce({
+      text: JSON.stringify({ ok: true }),
+      usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 8 },
+    });
+    const res = await googleAdapter.generateStructured({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      schema: SCHEMA,
+    });
+    expect(res.data).toEqual({ ok: true });
+    expect(res.usage).toEqual({ inputTokens: 7, outputTokens: 8 });
+    const call = googleGenerate.mock.calls[0][0];
+    expect(call.contents[0].parts[0].text).toContain(JSON.stringify(SCHEMA));
   });
 });
 

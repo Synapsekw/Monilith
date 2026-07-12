@@ -37,7 +37,7 @@ export const anthropicAdapter: ProviderAdapter = {
       throw e;
     }
   },
-  async generateProposal({ apiKey, system, user }) {
+  async generateStructured({ apiKey, system, user, schema }) {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.parse({
       model: MODEL,
@@ -45,7 +45,7 @@ export const anthropicAdapter: ProviderAdapter = {
       thinking: { type: "adaptive" },
       output_config: {
         effort: "high",
-        format: jsonSchemaOutputFormat(PROPOSAL_JSON_SCHEMA as never),
+        format: jsonSchemaOutputFormat(schema as never),
       },
       system: [
         { type: "text", text: system, cache_control: { type: "ephemeral" } },
@@ -57,11 +57,20 @@ export const anthropicAdapter: ProviderAdapter = {
       (message as { parsed_output?: unknown }).parsed_output ??
       JSON.parse(textBlock && "text" in textBlock ? textBlock.text : "{}");
     return {
-      proposal: parsed as DashboardProposal,
+      data: parsed,
       usage: {
         inputTokens: message.usage.input_tokens,
         outputTokens: message.usage.output_tokens,
       },
     };
+  },
+  async generateProposal({ apiKey, system, user }) {
+    const { data, usage } = await this.generateStructured({
+      apiKey,
+      system,
+      user,
+      schema: PROPOSAL_JSON_SCHEMA,
+    });
+    return { proposal: data as DashboardProposal, usage };
   },
 };

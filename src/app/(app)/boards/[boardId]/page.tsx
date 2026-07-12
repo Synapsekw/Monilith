@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { BoardViews } from "@/components/boards/BoardViews";
+import { AiBoardReviewBanner } from "@/components/boards/ai/AiBoardReviewBanner";
 import { deriveBoardAccess, getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { resolveSelectedView } from "@/lib/boards/views";
@@ -11,7 +12,7 @@ export default async function BoardPage({
   searchParams,
 }: {
   params: Promise<{ boardId: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; review?: string }>;
 }) {
   const { boardId } = await params;
   const user = await requireUser();
@@ -31,8 +32,8 @@ export default async function BoardPage({
   ]);
   if (!payload) notFound();
 
-  const { view } = await searchParams;
-  const selected = resolveSelectedView(payload.views, view);
+  const sp = await searchParams;
+  const selected = resolveSelectedView(payload.views, sp.view);
   const selectedViewId = selected?.id ?? payload.views[0]?.id ?? "";
 
   const members = await listOrgMembersCached(payload.board.org_id);
@@ -44,13 +45,20 @@ export default async function BoardPage({
   const access = deriveBoardAccess(payload.board, grants, user.id);
 
   return (
-    <BoardViews
-      payload={payload}
-      members={members}
-      initialViewId={selectedViewId}
-      currentUserId={user.id}
-      access={access ?? "viewer"}
-      grants={grants}
-    />
+    <>
+      {sp.review === "1" && (
+        <div className="px-4 pt-4">
+          <AiBoardReviewBanner boardId={boardId} />
+        </div>
+      )}
+      <BoardViews
+        payload={payload}
+        members={members}
+        initialViewId={selectedViewId}
+        currentUserId={user.id}
+        access={access ?? "viewer"}
+        grants={grants}
+      />
+    </>
   );
 }
