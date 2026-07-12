@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import {
   DndContext,
@@ -74,6 +75,16 @@ import {
   type GroupSummaryControls,
 } from "./shared";
 
+// Lazy-load the Smart Fill dialog (and its AI action imports) only when a
+// text column's header menu opens it — matches the AskPulseHost pattern.
+const SmartFillDialog = dynamic(
+  () =>
+    import("@/components/ai/column-fill/SmartFillDialog").then(
+      (m) => m.SmartFillDialog,
+    ),
+  { ssr: false },
+);
+
 // Memoized: BoardViews re-renders on every remote presence heartbeat (~6×/sec
 // per active user), but BoardTable's props (payload/members/view/access/grants)
 // are stable across those beats and it reads all live board data from its own
@@ -116,6 +127,8 @@ export function BoardTableInner({
   const [optionsFor, setOptionsFor] = useState<CacheColumn | null>(null);
   // "Change currency" dialog target (currency columns only).
   const [currencyFor, setCurrencyFor] = useState<CacheColumn | null>(null);
+  // "Smart fill…" dialog source column (text columns only).
+  const [smartFillFor, setSmartFillFor] = useState<CacheColumn | null>(null);
   // Relation add-column flow: when "Relation" is picked we collect a target
   // board + allow-multiple before creating the column (settings are required).
   const [relationConfigOpen, setRelationConfigOpen] = useState(false);
@@ -342,6 +355,7 @@ export function BoardTableInner({
     },
     onEditOptions: (c) => setOptionsFor(c),
     onEditCurrency: (c) => setCurrencyFor(c),
+    onSmartFill: (c) => setSmartFillFor(c),
   };
 
   const controls: CellControls = {
@@ -677,6 +691,17 @@ export function BoardTableInner({
           )}
         </DialogContent>
       </Dialog>
+
+      {smartFillFor && (
+        <SmartFillDialog
+          boardId={board.id}
+          sourceColumn={smartFillFor}
+          targetColumns={columns.filter(
+            (c) => c.kind === "status" || c.kind === "dropdown",
+          )}
+          onClose={() => setSmartFillFor(null)}
+        />
+      )}
 
       <Dialog open={relationConfigOpen} onOpenChange={setRelationConfigOpen}>
         <DialogContent className="sm:max-w-sm">

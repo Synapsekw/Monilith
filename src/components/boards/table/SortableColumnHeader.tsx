@@ -38,6 +38,7 @@ export function SortableColumnHeader({
       onResizeEnd={(w) => col.resizeColumn(column.id, w)}
       onEditOptions={() => col.onEditOptions(column)}
       onEditCurrency={() => col.onEditCurrency(column)}
+      onSmartFill={() => col.onSmartFill(column)}
       reorder={{
         setNodeRef,
         style: {
