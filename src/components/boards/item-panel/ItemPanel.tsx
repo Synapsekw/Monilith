@@ -202,6 +202,7 @@ export function ItemPanel({
             )}
             {tab === "updates" && (
               <UpdatesTab
+                itemId={itemId ?? ""}
                 cache={updates.data}
                 isError={updates.isError}
                 members={members}

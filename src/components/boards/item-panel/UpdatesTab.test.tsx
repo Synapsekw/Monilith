@@ -54,6 +54,7 @@ describe("UpdatesTab", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
         <UpdatesTab
+          itemId="item-1"
           cache={cacheWithMention}
           members={members}
           onAdd={vi.fn()}
@@ -76,6 +77,7 @@ describe("UpdatesTab", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
         <UpdatesTab
+          itemId="item-1"
           cache={cache}
           members={members}
           onAdd={vi.fn()}
@@ -92,6 +94,7 @@ describe("UpdatesTab", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
         <UpdatesTab
+          itemId="item-1"
           cache={cache}
           members={members}
           onAdd={vi.fn()}
@@ -108,6 +111,7 @@ describe("UpdatesTab", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
         <UpdatesTab
+          itemId="item-1"
           cache={{ updates: [] }}
           members={members}
           onAdd={vi.fn()}
@@ -122,6 +126,7 @@ describe("UpdatesTab", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
         <UpdatesTab
+          itemId="item-1"
           cache={undefined}
           isError
           members={members}
@@ -140,6 +145,7 @@ describe("UpdatesTab", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
         <UpdatesTab
+          itemId="item-1"
           cache={cache}
           members={members}
           onAdd={vi.fn()}
@@ -161,6 +167,7 @@ describe("UpdatesTab", () => {
     render(
       <TimeZoneProvider timeZone="UTC">
         <UpdatesTab
+          itemId="item-1"
           cache={cache}
           members={members}
           onAdd={vi.fn()}
