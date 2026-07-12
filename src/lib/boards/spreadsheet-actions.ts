@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getBoardPayload, type BoardPayload } from "@/lib/boards/queries";
 import { buildExportWorkbook } from "@/lib/boards/spreadsheet/export-workbook";
 import { parseWorkbookSheets } from "@/lib/boards/spreadsheet/parse-workbook";
@@ -36,15 +37,7 @@ import {
   previewImportSchema,
   commitImportSchema,
 } from "@/lib/validations/board-spreadsheet";
-import type { Json } from "@/types/database.types";
-
-export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 /** Characters forbidden in file names across Windows/Linux/macOS. */
 const FORBIDDEN_FILENAME_RE = /[<>:"/\\|?*\x00-\x1f]/g;
@@ -281,12 +274,13 @@ async function insertNewBoard(
   boardName: string,
   payload: ImportPayload,
 ): Promise<{ ok: true; boardId: string } | { ok: false; error: string }> {
-  const { data: board, error: rpcError } = await supabase.rpc(
+  const { data: board, error: rpcError } = await typedRpc(
+    supabase,
     "create_board_from_template",
     {
       p_workspace_id: workspaceId,
       p_name: boardName,
-      p_template: payload.templatePayload as unknown as Json,
+      p_template: payload.templatePayload,
     },
   );
 
@@ -423,10 +417,14 @@ async function appendToExistingBoard(
     return { ok: false, error: msg };
   }
 
-  const { error: rpcError } = await supabase.rpc("import_rows_into_board", {
-    p_board_id: boardId,
-    p_payload: payload as unknown as Json,
-  });
+  const { error: rpcError } = await typedRpc(
+    supabase,
+    "import_rows_into_board",
+    {
+      p_board_id: boardId,
+      p_payload: payload,
+    },
+  );
 
   if (rpcError) return { ok: false, error: rpcError.message };
 

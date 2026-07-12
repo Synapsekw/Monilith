@@ -30,18 +30,18 @@ You MUST create a TodoWrite item per step and work them in order.
 Read (bounded — do **not** scan the whole vault):
 
 - `vault/00-north-star.md` — **§2** (phase slices + every `Next:` breadcrumb) and **§3 "Now"**
-  (`Latest`, `In flight`, `Manual gates`, `Branch`).
+  (`Phase`, `Branch`, `In flight`, `Next`, `Owed`).
 - The most recent ~8 `vault/sessions/*.md` — pull `Open threads`, `Known follow-up`, `deferred`,
   and `Next session entry point` lines.
 
 Bucket every candidate by type:
 
-| Source                                                     | Bucket         |
-| ---------------------------------------------------------- | -------------- |
-| §2 phase slices + `Next:` breadcrumbs                      | `phase-slice`  |
-| §3 `In flight`                                             | `in-flight`    |
-| session `Open threads` / `Known follow-up` / `deferred`    | `deferred-gap` |
-| §3 `Manual gates` / ops (promote, advisors, cross-browser) | `ops`          |
+| Source                                                  | Bucket         |
+| ------------------------------------------------------- | -------------- |
+| §2 phase slices + §3 `Next` breadcrumbs                 | `phase-slice`  |
+| §3 `In flight`                                          | `in-flight`    |
+| session `Open threads` / `Known follow-up` / `deferred` | `deferred-gap` |
+| §3 `Owed` / ops items (promote, advisors, checks)       | `ops`          |
 
 ### 2. Reconcile with git (drift detection)
 
@@ -82,7 +82,8 @@ count of carryover vs new candidates. Example:
 
 > **Snapshot:** `develop` 1 ahead of origin · 1 live worktree (`task/portfolios-7a`) · 3 carryover, 2 new.
 
-**Lead with a colour legend** so the status column reads at a glance:
+**Lead with a colour legend** so the status column reads at a glance (the colour-coded board is a
+user-commissioned format — the one sanctioned emoji surface, see Discipline):
 
 > **🚦 Status:** 🟢 ready now · 🟡 needs your input / depends on another row · 🔴 blocked
 > **Type:** ⏳ in-flight · 🐛 deferred-gap · 🛠️ ops · ✨ new feature
@@ -94,7 +95,7 @@ count of carryover vs new candidates. Example:
 | --- | --- | --------------------------- | --------------- | ---- | ----- | ------------------------------- | --------------------- |
 | 1   | 🟢  | Changelog Tasks 6–7         | ⏳ in-flight    | S    | A     | —                               | 2026-06-18 session    |
 | 2   | 🟢  | page.tsx `listSharedBoards` | 🐛 deferred-gap | S    | A     | —                               | board-sharing session |
-| 3   | 🔴  | Promote develop→main        | 🛠️ ops          | —    | —     | WebGL cross-browser check (you) | §3 manual gates       |
+| 3   | 🔴  | Promote develop→main        | 🛠️ ops          | —    | —     | WebGL cross-browser check (you) | §3 Owed               |
 
 **Group 2 — ✨ New feature work (roadmap)** — the `phase-slice` bucket:
 
@@ -123,7 +124,8 @@ Then a plain-prose **Recommendation**:
 > Critical path is **#4 (6d-2 mirror)**. #3 is blocked on you (cross-browser check). #5 (6e docs)
 > waits on #4.
 
-(The numbers/rows above are an _illustrative shape_, not fixed content — fill from the live triage.)
+(The numbers/rows above are an _illustrative shape_, not fixed content — fill from the live triage.
+The table columns ARE fixed: follow the template, don't invent a new layout per run.)
 
 ### 6. Interactive pick
 
@@ -162,7 +164,8 @@ with plans," reviews, then greenlights. Full-send is intentionally **not** the d
 - **Read-only until dispatch.** Steps 1–6 touch nothing. Step 7 only runs `start-task.sh` and
   dispatches scoping agents — it does **not** modify the vault or build source.
 - **Respect in-flight worktrees** — anything a live `task/*` branch owns is dropped, not recommended.
-- **No emoji** in output unless the user asked for them.
+- **Emoji live in the status board only.** The step-5 legend + table markers (🚦🟢🟡🔴⏳🐛🛠️✨⭐⚠️🔄)
+  are a user-commissioned format — use exactly those, there. No emoji anywhere else in the output.
 
 ## Edge cases
 

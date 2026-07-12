@@ -33,13 +33,17 @@ Pulse is a Next.js 16 (App Router) + Supabase multi-tenant "Work OS". Orientatio
 - **Schema changes are versioned migrations** in `supabase/migrations/` (never dashboard
   click-ops). After a migration, regenerate types with `pnpm db:types` and commit them in the same
   PR — stale types are the main source of `any` creep.
-- **In-page state must not refetch server data.** View toggles, tabs, filters, and sorts over data
-  already loaded are **client state + the History API** (`window.history.pushState`/`replaceState`,
-  which Next.js 16 syncs into `useSearchParams()` with no RSC re-run) — never a `<Link>`/`router`
-  navigation, which re-runs the whole page (every query in it) on each interaction. Reserve RSC
-  navigation / Server Actions for changes to server data. Hot-path list/board reads must be
-  **bounded** (pagination/virtualization) over **indexed** filter columns — no unbounded `select *`
-  on growing tables. See `vault/decisions/2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch.md`.
+- **Migrations are minted only via `scripts/new-migration.sh <slug>`** — never hand-invent a
+  version stamp (hand-stamped hour-24/25 versions have shipped). Apply to DEV via the
+  `supabase-dev` MCP with the **same version + name** as the committed file, verify the ledger
+  (`list_migrations`), and run `scripts/reconcile-migration-version.sh` on any drift.
+- **Reuse canonical modules — grep before writing a helper.** Server actions use `ActionResult` /
+  `fail` imported from `src/lib/actions/result.ts`; typed RPC calls go through the helper in
+  `src/lib/supabase/typed-rpc.ts`. Never re-declare these shapes locally — and in general, before
+  writing any small helper, grep for an existing one first.
+- **In-page state must not refetch server data; hot-path reads must be bounded over indexed
+  columns** — the performance & data-fetching budget in working agreement #5 below is the
+  canonical statement.
 
 # Dev memory
 
@@ -151,8 +155,11 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
    over the same data**, the spec/plan MUST answer: (a) what loads on **first paint** vs. each
    **interaction** — in-page toggles should be **0 new server round-trips**; (b) does the
    interaction change **server data** (yes → Server Action + targeted revalidation; no → client
-   state + History API); (c) is the hot-path read **bounded** (pagination/virtualization) over
-   **indexed** columns. A plan that can't answer these isn't ready to build. Rationale:
+   state + the History API — `window.history.pushState`/`replaceState`, which Next.js 16 syncs
+   into `useSearchParams()` with no RSC re-run — never a `<Link>`/`router` navigation, which
+   re-runs every query in the page); (c) is the hot-path read **bounded**
+   (pagination/virtualization) over **indexed** columns — no unbounded `select *` on growing
+   tables. A plan that can't answer these isn't ready to build. Rationale:
    `vault/decisions/2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch.md`.
 
 6. **Plans and specs state a parallelization plan (execution DAG).** Every spec and plan for

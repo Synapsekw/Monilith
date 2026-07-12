@@ -9,7 +9,7 @@ import {
   restoreItem,
   purgeItem,
 } from "@/lib/boards/actions";
-import type { ActionResult } from "@/lib/boards/actions";
+import type { ActionResult } from "@/lib/actions/result";
 import {
   bulkDeleteItemsSchema,
   bulkMoveItemsSchema,

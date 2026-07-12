@@ -7,6 +7,7 @@ import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { signInWithRetry } from "@/test/integration-auth";
 import type { Database } from "@/types/database.types";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 
 loadIntegrationEnv();
 
@@ -16,7 +17,6 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PASSWORD = "Test-Password-123!";
 
 type Mode = Database["public"]["Enums"]["goal_progress_mode"];
-type Status = Database["public"]["Enums"]["goal_status"];
 
 /** create_goal has 13 positional args; this fills the optionals with null. */
 function createGoalArgs(over: {
@@ -27,17 +27,17 @@ function createGoalArgs(over: {
   return {
     p_name: over.name,
     p_progress_mode: over.mode,
-    p_owner_id: null as unknown as string,
-    p_parent_goal_id: (over.parent ?? null) as unknown as string,
-    p_workspace_id: null as unknown as string,
-    p_status: null as unknown as Status,
-    p_start_value: null as unknown as number,
-    p_current_value: null as unknown as number,
-    p_target_value: null as unknown as number,
-    p_unit: null as unknown as string,
-    p_percent: null as unknown as number,
-    p_start_date: null as unknown as string,
-    p_due_date: null as unknown as string,
+    p_owner_id: null,
+    p_parent_goal_id: over.parent ?? null,
+    p_workspace_id: null,
+    p_status: null,
+    p_start_value: null,
+    p_current_value: null,
+    p_target_value: null,
+    p_unit: null,
+    p_percent: null,
+    p_start_date: null,
+    p_due_date: null,
   };
 }
 
@@ -107,7 +107,8 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   });
 
   it("create_goal derives org, sets created_by + owner, and is readable by the creator", async () => {
-    const { data, error } = await aAnon.rpc(
+    const { data, error } = await typedRpc(
+      aAnon,
       "create_goal",
       createGoalArgs({ name: "Company goal", mode: "auto_subgoals" }),
     );
@@ -123,12 +124,14 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   });
 
   it("rejects a self-parent and a parent↔child cycle", async () => {
-    const { data: parent } = await aAnon.rpc(
+    const { data: parent } = await typedRpc(
+      aAnon,
       "create_goal",
       createGoalArgs({ name: "Parent", mode: "auto_subgoals" }),
     );
     const parentId = (parent as { id: string }).id;
-    const { data: child } = await aAnon.rpc(
+    const { data: child } = await typedRpc(
+      aAnon,
       "create_goal",
       createGoalArgs({
         name: "Child",
@@ -154,7 +157,8 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   });
 
   it("cross-org isolation: org B cannot read or edit org A's goals", async () => {
-    const { data: g } = await aAnon.rpc(
+    const { data: g } = await typedRpc(
+      aAnon,
       "create_goal",
       createGoalArgs({ name: "A private", mode: "manual_percent" }),
     );
@@ -177,17 +181,18 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   });
 
   it("set_goal_links rejects a board the caller cannot read (can_read_board gate)", async () => {
-    const { data: g } = await aAnon.rpc(
+    const { data: g } = await typedRpc(
+      aAnon,
       "create_goal",
       createGoalArgs({ name: "A auto", mode: "auto_boards" }),
     );
     const goalId = (g as { id: string }).id;
 
-    const { error } = await aAnon.rpc("set_goal_links", {
+    const { error } = await typedRpc(aAnon, "set_goal_links", {
       p_goal_id: goalId,
       p_links: [
         { board_id: bBoardId, done_column_id: null, done_option_ids: [] },
-      ] as unknown as Database["public"]["Functions"]["set_goal_links"]["Args"]["p_links"],
+      ],
     });
     expect(error, "linking an unreadable board must fail").not.toBeNull();
   });
@@ -195,7 +200,8 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   it("write confinement: a goal editor cannot inject goal_links rows into another org", async () => {
     // A edits their OWN goal, so the old can_edit_goal-only policy passed —
     // but org_id / board_id pointed at org B (cross-tenant pollution).
-    const { data: g, error: gErr } = await aAnon.rpc(
+    const { data: g, error: gErr } = await typedRpc(
+      aAnon,
       "create_goal",
       createGoalArgs({ name: "A inject", mode: "auto_boards" }),
     );
@@ -223,7 +229,8 @@ describe.skipIf(!integrationTargetReady())("RLS + RPCs: goals", () => {
   });
 
   it("write confinement: a legitimate same-org direct goal_links insert still passes", async () => {
-    const { data: g, error: gErr } = await bAnon.rpc(
+    const { data: g, error: gErr } = await typedRpc(
+      bAnon,
       "create_goal",
       createGoalArgs({ name: "B auto", mode: "auto_boards" }),
     );

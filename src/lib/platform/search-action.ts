@@ -7,7 +7,7 @@ import {
   platformDeleteUser,
 } from "./actions";
 
-type ActionResult = { ok: true; data: unknown } | { ok: false; error: string };
+import type { ActionResult } from "@/lib/actions/result";
 
 /**
  * Async server-action wrappers for ban/unban, callable from the client

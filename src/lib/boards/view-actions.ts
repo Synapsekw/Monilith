@@ -7,12 +7,8 @@ import {
   configSchemaForKind,
   updateBoardViewSchema,
 } from "@/lib/validations/view-actions";
-import type { ActionResult } from "@/lib/boards/actions";
+import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Json, TablesUpdate } from "@/types/database.types";
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
 
 const DEFAULT_NAME: Record<string, string> = {
   table: "Main Table",

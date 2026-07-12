@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import {
   getBoardStatusColumns,
   type StatusColumn,
@@ -18,9 +19,7 @@ import {
   updatePlacementSchema,
 } from "@/lib/validations/portfolios";
 import type { Json, Tables, TablesUpdate } from "@/types/database.types";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createPortfolio(input: {
   name: string;
@@ -89,12 +88,11 @@ export async function addBoardToPortfolio(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("add_portfolio_board", {
+  const { data, error } = await typedRpc(supabase, "add_portfolio_board", {
     p_portfolio_id: parsed.data.portfolioId,
     p_board_id: parsed.data.boardId,
-    // RPC arg is nullable in SQL (uuid); generated types narrow it to string.
-    p_done_column_id: parsed.data.doneColumnId as unknown as string,
-    p_done_option_ids: parsed.data.doneOptionIds as unknown as Json,
+    p_done_column_id: parsed.data.doneColumnId,
+    p_done_option_ids: parsed.data.doneOptionIds,
   });
   if (error || !data) return fail(error?.message ?? "Could not add board.");
 

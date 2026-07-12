@@ -15,11 +15,8 @@ import {
   inviteMemberSchema,
   revokeInviteSchema,
 } from "@/lib/validations/admin";
+import { fail, type ActionResult } from "@/lib/actions/result";
 
-type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
 const ok = (): ActionResult => ({ ok: true, data: undefined });
 
 /** Map raised SQL exception messages to friendly, non-leaking copy. */

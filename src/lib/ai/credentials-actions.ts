@@ -7,9 +7,7 @@ import { getAdapter } from "@/lib/ai/providers/registry";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
 import { PROVIDER_CATALOG, type AiProvider } from "@/lib/ai/providers/catalog";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 const saveSchema = z.object({
   provider: z.enum(["anthropic", "openai", "google"]),

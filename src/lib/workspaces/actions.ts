@@ -10,14 +10,7 @@ import {
   renameWorkspaceSchema,
   deleteWorkspaceSchema,
 } from "@/lib/validations/workspace-actions";
-
-export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createWorkspace(input: {
   name: string;

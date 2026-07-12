@@ -2,14 +2,12 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { fail, type ActionResult } from "@/lib/actions/result";
 import { sharedBoardsTag } from "@/lib/cache/tags";
 import {
   shareBoardSchema,
   unshareBoardSchema,
 } from "@/lib/validations/board-sharing";
-
-export type ShareActionResult = { ok: true } | { ok: false; error: string };
-const fail = (error: string): ShareActionResult => ({ ok: false, error });
 
 function friendly(message: string): string {
   const m = message.toLowerCase();
@@ -20,7 +18,7 @@ function friendly(message: string): string {
   return "Something went wrong. Please try again.";
 }
 
-export async function shareBoard(input: unknown): Promise<ShareActionResult> {
+export async function shareBoard(input: unknown): Promise<ActionResult> {
   const parsed = shareBoardSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid input");
@@ -34,10 +32,10 @@ export async function shareBoard(input: unknown): Promise<ShareActionResult> {
   // The recipient's cached shared-boards list is what changed.
   updateTag(sharedBoardsTag(parsed.data.userId));
   revalidatePath("/boards", "layout");
-  return { ok: true };
+  return { ok: true, data: undefined };
 }
 
-export async function unshareBoard(input: unknown): Promise<ShareActionResult> {
+export async function unshareBoard(input: unknown): Promise<ActionResult> {
   const parsed = unshareBoardSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid input");
@@ -49,5 +47,5 @@ export async function unshareBoard(input: unknown): Promise<ShareActionResult> {
   if (error) return fail(friendly(error.message));
   updateTag(sharedBoardsTag(parsed.data.userId));
   revalidatePath("/boards", "layout");
-  return { ok: true };
+  return { ok: true, data: undefined };
 }

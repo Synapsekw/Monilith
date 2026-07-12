@@ -2,11 +2,7 @@
 
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-
-type ActionResult<T = null> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 const inputSchema = z.object({ optOut: z.boolean() });
 

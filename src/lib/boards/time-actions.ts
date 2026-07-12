@@ -12,13 +12,10 @@ import {
   startTimerSchema,
   stopTimerSchema,
 } from "@/lib/validations/board-actions";
-import { type ActionResult, upsertCell, clearCell } from "@/lib/boards/actions";
+import { upsertCell, clearCell } from "@/lib/boards/actions";
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 type TimeEntry = Tables<"time_entries">;
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
 
 async function itemBoard(
   supabase: Awaited<ReturnType<typeof createClient>>,

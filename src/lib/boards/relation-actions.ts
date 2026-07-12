@@ -3,13 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database.types";
 import { setRelationLinksSchema } from "@/lib/validations/board-actions";
-import type { ActionResult } from "@/lib/boards/actions";
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 type RelationLinkRow = Tables<"relation_links">;
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
 
 /** Replace a relation cell's links (link/unlink/reorder in one call). */
 export async function setRelationLinks(input: {

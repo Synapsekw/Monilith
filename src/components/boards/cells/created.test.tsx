@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { CreatedAtCell, CreatedByCell, formatDateTime } from "./created";
+import { CreatedAtCell, CreatedByCell, formatCreatedAt } from "./created";
 
 vi.mock("next/image", () => ({
   default: (props: Record<string, unknown>) => {
@@ -15,13 +15,13 @@ vi.mock("next/image", () => ({
   },
 }));
 
-describe("formatDateTime", () => {
+describe("formatCreatedAt", () => {
   it("returns '' for null or invalid input", () => {
-    expect(formatDateTime(null)).toBe("");
-    expect(formatDateTime("not-a-date")).toBe("");
+    expect(formatCreatedAt(null)).toBe("");
+    expect(formatCreatedAt("not-a-date")).toBe("");
   });
   it("formats a valid ISO string to a non-empty, year-bearing label", () => {
-    const out = formatDateTime("2026-06-25T15:42:00Z");
+    const out = formatCreatedAt("2026-06-25T15:42:00Z");
     expect(out).not.toBe("");
     expect(out).toContain("2026");
   });

@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/anthropic";
+import { MODEL } from "@/lib/ai/providers/anthropic";
 import { ASK_TOOLS, executeAskTool } from "@/lib/ai/ask/tools";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 
@@ -80,6 +80,10 @@ export async function askPulseLoop(args: {
         content: result.content,
       });
     }
+    // Guard: the model signalled tool_use but emitted no tool_use blocks.
+    // Pushing an empty user turn wastes a round (or errors on the next call),
+    // so bail to the final-answer fallback instead.
+    if (toolResults.length === 0) break;
     messages.push({ role: "user", content: toolResults });
   }
 
