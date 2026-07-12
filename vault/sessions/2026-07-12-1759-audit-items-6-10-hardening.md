@@ -50,15 +50,15 @@ importable instead of prose, and give god-files a gate that pushes back.
    refactor; 591 board tests + full suite green, but a human eye on the hot surface is owed).
 3. `pnpm lint` — expect 0 errors and max-lines warnings only for GanttBoard, AutomationBuilder,
    boards/actions.ts (the remaining candidates).
-4. GitHub → Actions: the develop push shows the new `author-email` job green; "Nightly
-   integration" appears under workflows (it will skip-with-notice until secrets are added).
-5. To activate nightly integration: add repo secrets `PULSE_TEST_SUPABASE_URL`,
-   `PULSE_TEST_SUPABASE_ANON_KEY`, `PULSE_TEST_SUPABASE_SERVICE_ROLE_KEY` (a dedicated test
-   project — DEV/PROD refs are refused).
+4. GitHub → Actions: the develop push shows the new `author-email` job green.
 
 ## Open threads
 
-- Nightly integration CI inert until the three `PULSE_TEST_*` secrets are added (step 5 above).
+- **Nightly integration DROPPED post-merge (owner decision, `7ce8f4b`)**: only DEV and PROD
+  Supabase projects exist — no test DB, so the secrets-gated workflow would skip forever.
+  Integration suites remain local-only opt-in (`PULSE_TEST_DB`, decision-25). If automated
+  integration coverage is ever wanted, the no-new-DB option is an ephemeral `supabase start`
+  stack in the CI runner.
 - Remaining max-lines offenders: `GanttBoard.tsx`, `AutomationBuilder.tsx`, `boards/actions.ts`
   (the reviewer-noted catch-all; splitting it was out of scope).
 - Other repo docs still cite "gotcha-10"/"gotcha-43" by bare number; the index is the resolution

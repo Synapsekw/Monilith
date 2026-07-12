@@ -55,7 +55,7 @@ advisors + regenerate types before moving on.**
 - **Branch:** `develop == origin/develop` at `b1d27c4` — ahead of `main` by auth-reset/OptionPill, **all of Phase 10 E1, and both process-hardening batches. Promotion to `main` pending.** No live `task/*` worktrees.
 - **In flight:** none building.
 - **Next:** promote `develop → main`, then pick — **Phase 10 Batch 2** (E2–E4/E6 as parallel worktrees; E5 after), **Ask Pulse full-page** (standalone `/ask` chat page + history + streaming; spec+Phase-1 plan written 2026-07-12, not started — `docs/superpowers/plans/2026-07-12-ask-pulse-full-page-conversational.md`), **PF — Polish & Fluidity** (batch A first, skip A4), or the **Landing** Keystone redesign. Audit Batch B (org switcher, auth rate limiting, notification prefs, saved views) still in report §04.
-- **Owed:** **Nightly-integration secrets** — add `PULSE_TEST_SUPABASE_URL`/`_ANON_KEY`/`_SERVICE_ROLE_KEY` repo secrets to activate the new nightly CI. **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). Phase-10 cleanups remaining: Vault-secret orphan on org delete, ask-loop empty-tool-block bail (dead `getAnthropicClient()` retired 2026-07-12).
+- **Owed:** **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). Phase-10 cleanups remaining: Vault-secret orphan on org delete, ask-loop empty-tool-block bail (dead `getAnthropicClient()` retired 2026-07-12).
 
 ### Last session
 
