@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { statusToneClasses } from "@/components/ui/status-pill";
-import type { ActionResult, MyFeedback } from "@/lib/feedback/actions";
+import type { ActionResult } from "@/lib/actions/result";
+import type { MyFeedback } from "@/lib/feedback/actions";
 
 type StatusColor =
   | "gray"

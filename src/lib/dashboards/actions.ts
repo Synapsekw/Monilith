@@ -42,9 +42,7 @@ import {
 } from "@/lib/validations/dashboards";
 import type { Json, Tables } from "@/types/database.types";
 import type { DisplayColumn } from "@/lib/dashboards/list-rows";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 type Widget = Tables<"dashboard_widgets">;
 

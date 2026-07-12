@@ -44,6 +44,29 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // God-file tripwire: warn (never error — `pnpm lint` runs bare `eslint` with
+  // no --max-warnings, so warnings keep the gate green) when a source file
+  // exceeds 800 real lines (blank lines/comments don't count). This codebase
+  // accretes god-files because nothing pushes back (BoardTable.tsx reached
+  // 2,802 lines); the warning makes the accretion visible at every lint run so
+  // a split can be scheduled deliberately. Exemptions: generated files (the
+  // Supabase types and the generated changelog) and test land, where long
+  // suites are normal.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: [
+      "src/types/database.types.ts", // generated (pnpm db:types) — never hand-edit
+      "src/lib/changelog/generated.ts", // generated (pnpm changelog:gen)
+      "src/test/**",
+      "src/**/*.test.{ts,tsx}",
+    ],
+    rules: {
+      "max-lines": [
+        "warn",
+        { max: 800, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

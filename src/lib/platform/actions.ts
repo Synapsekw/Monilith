@@ -10,11 +10,8 @@ import {
   platformSetPasswordSchema,
   setOrgAiPlanSchema,
 } from "@/lib/validations/admin";
+import { fail, type ActionResult } from "@/lib/actions/result";
 
-type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
 const ok = (): ActionResult => ({ ok: true, data: undefined });
 
 const BAN_FOREVER = "876000h"; // ~100 years

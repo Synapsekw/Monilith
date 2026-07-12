@@ -2,7 +2,7 @@ import "server-only";
 import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
-import { AiNotConfiguredError } from "@/lib/ai/anthropic";
+import { AiNotConfiguredError } from "@/lib/ai/errors";
 import { getAdapter } from "@/lib/ai/providers/registry";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";

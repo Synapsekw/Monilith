@@ -1,8 +1,11 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getServerEnv } from "@/lib/env.server";
-import { AiNotConfiguredError } from "@/lib/ai/anthropic";
-import { AiDisabledError, ByoKeyMissingError } from "@/lib/ai/errors";
+import {
+  AiNotConfiguredError,
+  AiDisabledError,
+  ByoKeyMissingError,
+} from "@/lib/ai/errors";
 import { resolveUserAdapter } from "@/lib/ai/credentials";
 import { getAdapter } from "@/lib/ai/providers/registry";
 import type { AiProvider } from "@/lib/ai/providers/catalog";

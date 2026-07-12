@@ -10,9 +10,7 @@ import { maskKey } from "@/lib/ai/credentials";
 import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { type AiProvider } from "@/lib/ai/providers/catalog";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 const NOT_ADMIN = "Only organization admins can change AI settings.";
 

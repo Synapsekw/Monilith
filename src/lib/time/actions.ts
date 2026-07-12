@@ -13,9 +13,7 @@ import {
   upsertTimeAllocationSchema,
   deleteTimeAllocationSchema,
 } from "@/lib/validations/time";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 /** Upsert one card cell (self-only). The unique partial index drives the
  * upsert: (user_id, work_date, item_id) or (user_id, work_date, category).

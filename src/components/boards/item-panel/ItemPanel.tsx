@@ -25,7 +25,7 @@ import { FilesTab } from "./FilesTab";
 import {
   CreatedByCell,
   CreatedAtCell,
-  formatDateTime,
+  formatCreatedAt,
 } from "@/components/boards/cells/created";
 import { MetaChip } from "@/components/ui/meta-chip";
 
@@ -109,7 +109,7 @@ export function ItemPanel({
               <MetaChip label="OWNER">{creatorName}</MetaChip>
             ) : null}
             {createdAt ? (
-              <MetaChip label="CREATED">{formatDateTime(createdAt)}</MetaChip>
+              <MetaChip label="CREATED">{formatCreatedAt(createdAt)}</MetaChip>
             ) : null}
           </div>
           <SheetDescription className="sr-only">

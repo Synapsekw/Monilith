@@ -89,6 +89,49 @@ jobs:
       - name: Lighthouse CI
         run: pnpm exec lhci autorun
 
+  # Vercel only deploys commits authored by the verified Synapsekw identity
+  # (info@synapse-solutions.ai); any other author email makes it SILENTLY skip
+  # the deploy. The local guard is start-task.sh pinning the identity per
+  # worktree — this job is the loud alarm for anything that slips past it onto
+  # develop. Separate parallel job so it never slows `verify`.
+  author-email:
+    name: author email (Vercel deploy identity)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history so `github.event.before` is resolvable locally —
+          # checking the pushed range via git log is the non-flaky option
+          # (github.event.commits truncates at 2048 commits and omits emails
+          # on some push shapes).
+          fetch-depth: 0
+
+      - name: Verify pushed commit author emails
+        env:
+          ALLOWED: info@synapse-solutions.ai
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # Pushed-commits-only is enough: the goal is a loud alarm on the way
+          # in, not a retroactive audit of all history. If `before` is the
+          # null SHA (branch creation) or unknown, fall back to the head
+          # commit — the one Vercel's deploy decision looks at.
+          if [[ "$BEFORE" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            COMMITS=$(git log -1 --format='%H %ae' "$AFTER")
+          else
+            COMMITS=$(git log --format='%H %ae' "$BEFORE..$AFTER")
+          fi
+          BAD=$(echo "$COMMITS" | awk -v ok="$ALLOWED" 'NF && tolower($2) != tolower(ok)') || true
+          if [ -n "$BAD" ]; then
+            echo "::error title=Wrong commit author email on develop::Commits below are not authored as $ALLOWED — Vercel will SILENTLY skip deploys for this identity. Amend/reauthor before promoting."
+            echo "Offending commits (sha author-email):"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "OK: all pushed commits authored as $ALLOWED"
+          echo "$COMMITS"
+
   commitlint:
     name: commitlint (PR)
     runs-on: ubuntu-latest

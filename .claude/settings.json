@@ -26,10 +26,44 @@
       "Bash(git status)",
       "Bash(git status:*)",
       "Bash(git log)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(scripts/start-task.sh *)",
+      "Bash(scripts/finish-task.sh)",
+      "Bash(scripts/new-migration.sh *)",
+      "Bash(scripts/reconcile-migration-version.sh *)",
+      "Bash(scripts/watch-ci.sh *)",
+      "Bash(scripts/wrapup-context.sh)",
+      "Bash(git fetch *)",
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(git branch *)",
+      "Bash(git worktree *)",
+      "Bash(git rebase *)",
+      "Bash(git rev-parse *)",
+      "Bash(git rev-list *)",
+      "Bash(git show *)",
+      "Bash(git pull *)",
+      "Bash(gh pr *)",
+      "Bash(gh run *)",
+      "Bash(gh api *)",
+      "Bash(gh auth status)",
+      "Bash(pnpm install)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm changelog:gen)",
+      "Bash(obsidian *)"
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-context.sh\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",

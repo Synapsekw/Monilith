@@ -1,0 +1,105 @@
+# Nightly live-DB integration suite.
+#
+# The `*.integration.test.ts(x)` suites (vitest project "integration") hit a
+# real remote Supabase project and SKIP unless pointed at an explicitly-marked
+# test DB — src/test/integration-env.ts requires SUPABASE_SERVICE_ROLE_KEY,
+# PULSE_TEST_DB=1, and a URL that is NOT a known DEV/PROD project ref. Regular
+# CI (ci.yml) is unit-only, so without this workflow the integration/RLS
+# suites never run automatically anywhere ("local green, reality red").
+#
+# REQUIRED REPOSITORY SECRETS (GitHub → Settings → Secrets and variables →
+# Actions → Repository secrets) — add these manually:
+#
+#   PULSE_TEST_SUPABASE_URL
+#     https://<test-project-ref>.supabase.co — a DEDICATED test-only Supabase
+#     project. DEV/PROD refs are deny-listed by src/test/integration-env.ts
+#     and rejected loudly by the gate step below.
+#   PULSE_TEST_SUPABASE_ANON_KEY
+#     The test project's anon/publishable key.
+#   PULSE_TEST_SUPABASE_SERVICE_ROLE_KEY
+#     The test project's service-role key (server-only; suites provision and
+#     purge throwaway @example.com users/orgs with it).
+#
+# Provisioning the test project (one-time): CONTRIBUTING.md → "Running
+# integration tests (.env.test)" — create the project, `supabase db push` the
+# migrations, then add the three secrets above. Why this is opt-in rather than
+# a merge gate: vault/decisions/2026-07-02-decision-25-no-isolated-test-db-
+# integration-opt-in.md.
+#
+# With the secrets ABSENT the workflow SKIPS with a clear notice and exits 0 —
+# it never fails for lack of configuration.
+
+name: Nightly integration
+
+on:
+  schedule:
+    # 03:00 UTC daily. Scheduled runs execute on the default branch (develop).
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-integration
+  cancel-in-progress: false
+
+jobs:
+  integration:
+    name: integration (live test DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Mapped to the exact variable names the suites read
+      # (src/test/integration-env.ts / src/lib/env*.ts). No .env.local or
+      # .env.test exists in CI, so the dotenv loads no-op and these
+      # process-level values pass straight through.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.PULSE_TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PULSE_TEST_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PULSE_TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      # Positive opt-in marker required by integrationTargetReady() /
+      # isSafeTestTarget() before any suite runs or the global-teardown purge
+      # may touch the target.
+      PULSE_TEST_DB: "1"
+    steps:
+      - name: Gate on test-DB secrets
+        id: gate
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Nightly integration SKIPPED::Test-DB secrets (PULSE_TEST_SUPABASE_URL / PULSE_TEST_SUPABASE_ANON_KEY / PULSE_TEST_SUPABASE_SERVICE_ROLE_KEY) are not configured. Add them under Settings > Secrets and variables > Actions to enable the nightly live-DB run. See the comment block in .github/workflows/nightly-integration.yml."
+            exit 0
+          fi
+          # Refuse DEV/PROD targets loudly instead of letting every suite
+          # self-skip (which would show a useless green run). Refs mirror
+          # src/lib/supabase/project-refs.ts (dev: hjqca…, prod: jzsyq…).
+          case "$NEXT_PUBLIC_SUPABASE_URL" in
+            *hjqcahbbbdaknbbnfnvl*|*jzsyqhxynswolgijkktn*)
+              echo "::error title=Refusing DEV/PROD target::PULSE_TEST_SUPABASE_URL points at the known DEV or PROD Supabase project. The integration suites provision and PURGE data — configure a dedicated test-only project instead."
+              exit 1
+              ;;
+          esac
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        if: steps.gate.outputs.ready == 'true'
+
+      - name: Install pnpm
+        if: steps.gate.outputs.ready == 'true'
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.gate.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # The integration vitest project runs serially (fileParallelism: false)
+      # with generous timeouts + retry: 1 — see vitest.config.ts for why
+      # (live-network suites + GoTrue auth rate limits). The global teardown
+      # then purges the @example.com fixtures it provisioned.
+      - name: Integration tests (live test DB)
+        if: steps.gate.outputs.ready == 'true'
+        run: pnpm exec vitest run --project integration

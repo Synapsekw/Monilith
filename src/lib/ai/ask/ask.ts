@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/anthropic";
+import { MODEL } from "@/lib/ai/providers/anthropic";
 import { ASK_TOOLS, executeAskTool } from "@/lib/ai/ask/tools";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 
