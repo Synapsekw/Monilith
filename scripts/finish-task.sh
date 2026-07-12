@@ -31,14 +31,53 @@ case "$BRANCH" in
     ;;
 esac
 
+WT="$(git rev-parse --show-toplevel)"
+MAIN="$(cd "$(dirname "$(git rev-parse --git-common-dir)")" && pwd)"
+
+# Stop-hook session drafts are generated noise — clear them BEFORE the clean-tree
+# check so they never block a finish (they were being rm'd by hand every session).
+rm -f "$WT"/vault/sessions/_draft-*.md
+
 if [ -n "$(git status --porcelain)" ]; then
   echo "error: you have uncommitted changes — commit them before finishing." >&2
   git status --short >&2
   exit 1
 fi
 
-WT="$(git rev-parse --show-toplevel)"
-MAIN="$(cd "$(dirname "$(git rev-parse --git-common-dir)")" && pwd)"
+# gotcha-54: two worktrees running the heavy gates (vitest forks + next build)
+# concurrently exhaust the machine → phantom cross-suite failures and 10× runs.
+# Serialize the whole rebase→gate→merge pipeline machine-wide with an atomic
+# mkdir lock in the shared git dir (bash-3.2/macOS safe — no flock). Holding it
+# from before the rebase is what makes serialization *correct*, not just calm:
+# each finisher rebases onto — and gates against — the previous finisher's merge.
+GATE_LOCK="$(cd "$(git rev-parse --git-common-dir)" && pwd)/finish-task-gate.lock"
+GATE_LOCK_HELD=""
+release_gate_lock() { [ -n "$GATE_LOCK_HELD" ] && rm -rf "$GATE_LOCK"; return 0; }
+trap release_gate_lock EXIT
+
+echo "→ acquiring machine-wide gate lock (serialized finishes — gotcha-54)…"
+WAITED=0
+while ! mkdir "$GATE_LOCK" 2>/dev/null; do
+  HOLDER="$(cat "$GATE_LOCK/pid" 2>/dev/null || true)"
+  # Steal the lock if the recorded holder process is gone (crashed finish).
+  if [ -n "$HOLDER" ] && ! kill -0 "$HOLDER" 2>/dev/null; then
+    echo "  lock holder (pid $HOLDER) is dead — stealing the stale lock"
+    rm -rf "$GATE_LOCK"
+    continue
+  fi
+  if [ "$WAITED" -ge 1800 ]; then
+    echo "error: gave up after 30min waiting for the gate lock (held by pid ${HOLDER:-unknown})." >&2
+    echo "       if no other finish-task.sh is really running:  rm -rf \"$GATE_LOCK\"  and re-run." >&2
+    exit 1
+  fi
+  if [ $((WAITED % 30)) -eq 0 ]; then
+    echo "  another worktree is running its gates (pid ${HOLDER:-unknown}) — waiting… (${WAITED}s)"
+  fi
+  sleep 2
+  WAITED=$((WAITED + 2))
+done
+echo "$$" > "$GATE_LOCK/pid"
+GATE_LOCK_HELD=1
 
 # 1. Refresh the integration target. `pull --rebase` covers every case in one go:
 #    local behind → fast-forward · local ahead (unpushed vault/doc commits) → no-op ·
@@ -67,6 +106,23 @@ if ! git rebase develop; then
   exit 1
 fi
 
+# gotcha-39: the rebase can bring dependency changes from develop, but a rebase
+# never runs pnpm install — refresh node_modules so the gates don't run stale.
+echo "→ refreshing dependencies after rebase (pnpm install --prefer-offline)…"
+pnpm install --prefer-offline
+
+# gotcha-43: parallel branches mint the same migration version; two files sharing
+# a version prefix corrupt the supabase ledger — hard-fail before it can land.
+DUP_VERSIONS="$(ls "$WT/supabase/migrations" 2>/dev/null | sed -n 's/^\([0-9]\{14\}\)_.*\.sql$/\1/p' | sort | uniq -d || true)"
+if [ -n "$DUP_VERSIONS" ]; then
+  echo "error: duplicate migration version prefix(es) in supabase/migrations after rebase:" >&2
+  for V in $DUP_VERSIONS; do
+    ls "$WT/supabase/migrations" | grep "^${V}_" | sed 's/^/         /' >&2
+  done
+  echo "       re-mint yours with scripts/new-migration.sh <slug> (real UTC stamp), then re-run." >&2
+  exit 1
+fi
+
 # 3. Keep the generated changelog in sync with `Changelog:` commit trailers.
 #    CI has a develop-only drift gate (`git diff --exit-code src/lib/changelog/generated.ts`
 #    after `pnpm changelog:gen`) that the local gates below do NOT cover — so a commit
@@ -83,11 +139,30 @@ if ! git diff --quiet -- src/lib/changelog/generated.ts; then
 fi
 
 # 4. Gates — now against the integrated (rebased) state.
+# cacheLife stale-types trap: typecheck runs before build, so a rebase that
+# brings a new cacheLife("X") profile from develop fails typecheck against the
+# worktree's stale generated .next/types even though the code is fine. Drop
+# only the generated types — keep the rest of .next (build cache).
+rm -rf "$WT/.next/types"
 echo "→ running checks (typecheck / lint / test / build) against integrated state…"
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+
+# Author-email assertion: Vercel only deploys commits authored as
+# info@synapse-solutions.ai (verified on Synapsekw) — any other email makes it
+# SILENTLY skip the deploy. Block the merge while it's still cheap to rewrite.
+BAD_AUTHORS="$(git log develop..HEAD --format='%h %ae' | grep -v ' info@synapse-solutions\.ai$' || true)"
+if [ -n "$BAD_AUTHORS" ]; then
+  echo "error: commits in develop..HEAD not authored as info@synapse-solutions.ai:" >&2
+  echo "$BAD_AUTHORS" | sed 's/^/         /' >&2
+  echo "       fix the identity, rewrite the branch's authors, then re-run finish-task.sh:" >&2
+  echo "         git config user.name \"Danijel Jovanovic\"" >&2
+  echo "         git config user.email info@synapse-solutions.ai" >&2
+  echo "         git rebase develop --exec 'git commit --amend --no-edit --reset-author'" >&2
+  exit 1
+fi
 
 # 5. Merge + push. The task is already rebased onto develop, so --no-ff is
 #    conflict-free and keeps the merge-commit convention. Retry the push once if
