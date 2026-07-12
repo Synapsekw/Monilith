@@ -20,8 +20,8 @@ related:
 ClickUp (nested hierarchy, docs, native time tracking) and Asana (goals/OKRs, workload, portfolios)
 into one coherent product. Not a clone: the _ultimate_ version. Monday's visual, color-coded board
 experience as the foundation; ClickUp's depth; Asana's polish. Design language: modern monochromatic
-(neutral grayscale) with a single configurable accent, **dark-first** (layered near-black surfaces +
-indigo accent; light supported but secondary), Linear-grade restraint applied to a colorful category.
+(neutral grayscale) with a single configurable accent, **dark-first** ("Monolith Keystone": layered near-black surfaces +
+periwinkle accent; light supported but secondary), Linear-grade restraint applied to a colorful category.
 Built on **Next.js 16 + React 19 + Tailwind v4 + Supabase**, multi-tenant (org-scoped RLS) from day one.
 
 Master spec: [[2026-06-14-pulse-design]] (`docs/superpowers/specs/2026-06-14-pulse-design.md`).
