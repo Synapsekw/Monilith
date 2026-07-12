@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-11-2116
+last-updated: 2026-07-12-0938
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,10 +51,10 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Phase 10 E1 — DONE on develop.** Scope reconciled (hybrid `per_user` default) → spec + plan → subagent-driven build (16 tasks, two-stage reviews, final integration review) → merged `task/ai-e1-foundation` (`dc3d403`). Gateway + metering + entitlements + org/admin AI settings UI + **Ask Pulse** all live on develop; two migrations applied to DEV; `ANTHROPIC_API_KEY` confirmed in Vercel Prod+Preview (managed mode ready). ([[2026-07-11-2116-ai-e1-hybrid-gateway-ask-pulse]])
-- **Branch:** `develop == origin/develop` at `dc3d403` — ahead of `main` by the auth-reset/OptionPill batch (PR#58 promoted mid-session) **plus all of Phase 10 E1. Promotion to `main` pending.** No live `task/*` worktrees.
+- **Phase:** **Process hardening (Claude-usage audit items 1–5) — DONE on develop** (`6547ee5`): pulse-ui skill rewritten for Keystone, CONTRIBUTING realigned to the worktree model, migration minting/reconcile scripts, finish-task.sh hardened (gate lock, install-after-rebase, dup-migration + author-email gates), wrapup-context.sh + watch-ci.sh wired into `/wrapup`/`/promote`. Phase 10 E1 (gateway + metering + Ask Pulse) also complete on develop from the prior session. ([[2026-07-12-0938-usage-audit-process-hardening]], [[2026-07-11-2116-ai-e1-hybrid-gateway-ask-pulse]])
+- **Branch:** `develop == origin/develop` at `6547ee5` — ahead of `main` by auth-reset/OptionPill, **all of Phase 10 E1, and the process-hardening batch. Promotion to `main` pending.** No live `task/*` worktrees.
 - **In flight:** none building.
-- **Next:** promote `develop → main`, then pick — **Phase 10 Batch 2** (E2 item assist · E3 ⌘K NL actions · E4 generation · E6 billing as parallel worktrees per the scope DAG; E5 agentic after), **PF — Polish & Fluidity** (`docs/superpowers/plans/2026-07-09-perf-polish-fluidity.md`; batch A first, skip A4), or the **Landing** Keystone redesign. Audit Batch B (org switcher, auth rate limiting, notification prefs, saved views) still in report §04.
+- **Next:** promote `develop → main`, then pick — **audit items 6–10** (SessionStart context hook · settings.json allowlist · Stop-hook fixes · canonical `ActionResult`/typed-RPC modules · gardening: split `BoardTable.tsx`/`use-board-mutations.ts`, ESLint `max-lines`, nightly integration CI), **Phase 10 Batch 2** (E2–E4/E6 as parallel worktrees; E5 after), **PF — Polish & Fluidity** (batch A first, skip A4), or the **Landing** Keystone redesign. Audit Batch B (org switcher, auth rate limiting, notification prefs, saved views) still in report §04.
 - **Owed:** **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). Phase-10 cleanups: dead `getAnthropicClient()`, Vault-secret orphan on org delete, ask-loop empty-tool-block bail (all noted in the session note).
 
 ### Last session
