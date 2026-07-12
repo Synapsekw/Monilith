@@ -5,11 +5,7 @@ import {
   createDependencySchema,
   deleteDependencySchema,
 } from "@/lib/validations/dependency-actions";
-import type { ActionResult } from "@/lib/boards/actions";
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createDependency(input: {
   predecessorId: string;

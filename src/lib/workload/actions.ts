@@ -9,9 +9,7 @@ import {
   setWorkloadDefaultsSchema,
   upsertMemberCapacitySchema,
 } from "@/lib/validations/workload";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function upsertMemberCapacity(
   input: z.input<typeof upsertMemberCapacitySchema>,

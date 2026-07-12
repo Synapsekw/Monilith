@@ -10,13 +10,9 @@ import {
   updateProfileFullNameSchema,
   updateProfileTimezoneSchema,
 } from "@/lib/validations/profile";
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 const AVATARS_BUCKET = "avatars";
-
-type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
 
 /** Update the signed-in user's personal display timezone (null = Automatic). */
 export async function updateProfileTimezone(input: {

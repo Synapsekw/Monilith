@@ -13,12 +13,8 @@ import {
   attachmentPdfUrlSchema,
 } from "@/lib/validations/collaboration-actions";
 import { isPreviewable } from "@/lib/collaboration/attachments-format";
-import type { ActionResult } from "@/lib/boards/actions";
+import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Json } from "@/types/database.types";
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
 
 export async function addUpdate(input: {
   itemId: string;

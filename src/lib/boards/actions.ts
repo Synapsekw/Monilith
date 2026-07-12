@@ -56,14 +56,7 @@ import {
   columnSettingsSchema,
 } from "@/lib/validations/boards";
 import type { Json, Tables } from "@/types/database.types";
-
-export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 /**
  * Invalidate the current user's cached `boards:user:<me>` list

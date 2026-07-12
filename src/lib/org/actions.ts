@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { updateOrgTimezoneSchema } from "@/lib/validations/org";
-
-type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function updateOrgTimezone(input: {
   orgId: string;

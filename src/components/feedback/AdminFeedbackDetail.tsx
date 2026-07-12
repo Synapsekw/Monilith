@@ -12,7 +12,7 @@ import {
 import { ChevronDown, CheckCircle, AlertCircle } from "lucide-react";
 import { FEEDBACK_STATUSES } from "@/lib/validations/feedback";
 import type { AdminUpdateFeedbackInput } from "@/lib/validations/feedback";
-import type { ActionResult } from "@/lib/feedback/actions";
+import type { ActionResult } from "@/lib/actions/result";
 import type { Tables } from "@/types/database.types";
 import { cn } from "@/lib/utils";
 import {

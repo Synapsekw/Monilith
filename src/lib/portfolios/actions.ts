@@ -18,9 +18,7 @@ import {
   updatePlacementSchema,
 } from "@/lib/validations/portfolios";
 import type { Json, Tables, TablesUpdate } from "@/types/database.types";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createPortfolio(input: {
   name: string;

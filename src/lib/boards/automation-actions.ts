@@ -11,6 +11,7 @@ import {
 import { listAutomations, type Automation } from "@/lib/boards/queries";
 import type { Json, Tables } from "@/types/database.types";
 import { actionsContainWebhook } from "@/lib/boards/automation-action-helpers";
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 /**
  * Client-callable read wrapper around {@link listAutomations} so the
@@ -52,11 +53,6 @@ export async function getAutomationRuns(
   if (error) return fail(error.message);
   return { ok: true, data: data ?? [] };
 }
-
-type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
 
 async function isOrgAdmin(
   supabase: Awaited<ReturnType<typeof createClient>>,

@@ -26,9 +26,7 @@ import {
   widgetKindSchema,
 } from "@/lib/validations/dashboards";
 import type { Json } from "@/types/database.types";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 const boardSnapshotInputSchema = z.object({ boardId: z.string().uuid() });
 

@@ -14,9 +14,7 @@ import {
 } from "@/lib/ai/errors";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 const askSchema = z.object({
   // Bounded free text: it flows verbatim into the Anthropic prompt, so an

@@ -37,14 +37,7 @@ import {
   commitImportSchema,
 } from "@/lib/validations/board-spreadsheet";
 import type { Json } from "@/types/database.types";
-
-export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-
-function fail(message: string): { ok: false; error: string } {
-  return { ok: false, error: message };
-}
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 /** Characters forbidden in file names across Windows/Linux/macOS. */
 const FORBIDDEN_FILENAME_RE = /[<>:"/\\|?*\x00-\x1f]/g;

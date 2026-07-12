@@ -12,6 +12,7 @@ import {
 import { platformSetOrgRole } from "@/lib/platform/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { ActionResult } from "@/lib/actions/result";
 import { StatusPill } from "@/components/ui/status-pill";
 
 type Role = Database["public"]["Enums"]["org_role"];
@@ -25,8 +26,6 @@ export type Member = {
 };
 
 const ROLES: Role[] = ["owner", "admin", "member", "guest"];
-
-type ActionResult = { ok: true } | { ok: false; error: string };
 
 export function MembersTable({
   orgId,
@@ -49,7 +48,7 @@ export function MembersTable({
     null,
   );
 
-  const run = (id: string, fn: () => Promise<ActionResult>) =>
+  const run = (id: string, fn: () => Promise<ActionResult<unknown>>) =>
     start(async () => {
       setError(null);
       const res = await fn();

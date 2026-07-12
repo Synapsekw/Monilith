@@ -13,15 +13,14 @@ import {
   updateGoalSchema,
 } from "@/lib/validations/goals";
 import type { Json, Tables, TablesUpdate } from "@/types/database.types";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createGoal(
   input: z.input<typeof createGoalSchema>,
 ): Promise<ActionResult<{ goal: Tables<"goals"> }>> {
   const parsed = createGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const d = parsed.data;
 
   const supabase = await createClient();
@@ -50,7 +49,8 @@ export async function updateGoal(
   input: z.input<typeof updateGoalSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = updateGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const d = parsed.data;
 
   const patch: TablesUpdate<"goals"> = {};
@@ -70,7 +70,10 @@ export async function updateGoal(
   if ("dueDate" in input) patch.due_date = d.dueDate;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("goals").update(patch).eq("id", d.goalId);
+  const { error } = await supabase
+    .from("goals")
+    .update(patch)
+    .eq("id", d.goalId);
   if (error) return fail(error.message);
 
   revalidatePath("/goals");
@@ -81,7 +84,8 @@ export async function reorderGoal(
   input: z.input<typeof reorderGoalSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = reorderGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -98,10 +102,14 @@ export async function deleteGoal(
   input: z.input<typeof deleteGoalSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = deleteGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("goals").delete().eq("id", parsed.data.goalId);
+  const { error } = await supabase
+    .from("goals")
+    .delete()
+    .eq("id", parsed.data.goalId);
   if (error) return fail(error.message);
 
   revalidatePath("/goals");
@@ -112,7 +120,8 @@ export async function setGoalLinks(
   input: z.input<typeof setGoalLinksSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = setGoalLinksSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_goal_links", {

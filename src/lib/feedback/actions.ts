@@ -10,11 +10,7 @@ import {
   type AdminUpdateFeedbackInput,
 } from "@/lib/validations/feedback";
 import type { Tables } from "@/types/database.types";
-
-export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+import { fail, type ActionResult } from "@/lib/actions/result";
 
 export type MyFeedback = Pick<
   Tables<"feedback">,
