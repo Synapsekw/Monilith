@@ -82,38 +82,58 @@ count of carryover vs new candidates. Example:
 
 > **Snapshot:** `develop` 1 ahead of origin · 1 live worktree (`task/portfolios-7a`) · 3 carryover, 2 new.
 
-The exact columns are yours to shape, but the board must make these legible at a glance using
-**plain-text markers** (no emoji — see Discipline):
+**Lead with a colour legend** so the status column reads at a glance (the colour-coded board is a
+user-commissioned format — the one sanctioned emoji surface, see Discipline):
 
-- **Status** — `ready` / `needs-input` (depends on another row, or on the user) / `blocked`. Only
-  `ready` rows are offered in step 6.
-- **Type** — the bucket from step 1 (`in-flight`, `deferred-gap`, `ops`, `phase-slice`).
+> **🚦 Status:** 🟢 ready now · 🟡 needs your input / depends on another row · 🔴 blocked
+> **Type:** ⏳ in-flight · 🐛 deferred-gap · 🛠️ ops · ✨ new feature
+
+**Group 1 — 🔄 Carryover (unfinished from prior sessions)** — the `in-flight`, `deferred-gap`, and
+`ops` buckets:
+
+| #   | 🚦  | Work                        | Type            | Size | Batch | Blocker / note                  | From                  |
+| --- | --- | --------------------------- | --------------- | ---- | ----- | ------------------------------- | --------------------- |
+| 1   | 🟢  | Changelog Tasks 6–7         | ⏳ in-flight    | S    | A     | —                               | 2026-06-18 session    |
+| 2   | 🟢  | page.tsx `listSharedBoards` | 🐛 deferred-gap | S    | A     | —                               | board-sharing session |
+| 3   | 🔴  | Promote develop→main        | 🛠️ ops          | —    | —     | WebGL cross-browser check (you) | §3 Owed               |
+
+**Group 2 — ✨ New feature work (roadmap)** — the `phase-slice` bucket:
+
+| #   | 🚦  | Work           | Phase | Size | Batch | Blocker / note | Critical path? |
+| --- | --- | -------------- | ----- | ---- | ----- | -------------- | -------------- |
+| 4   | 🟢  | Mirror columns | 6d-2  | L    | A     | —              | ⭐ yes         |
+| 5   | 🟡  | Docs           | 6e    | L    | B     | depends on #4  | —              |
+
+Column meanings (state these once, below the tables):
+
+- **🚦 Status** — 🟢 ready now · 🟡 has a dependency or needs your input · 🔴 blocked. Only 🟢 rows
+  are launchable in step 6.
 - **Batch** — the parallel group from the DAG (`A`, `B`, …). Same letter = disjoint footprints, safe
   to run at once. `—` = not batchable (blocked or solo).
 - **Size** — `S`/`M`/`L` from the Explore footprint.
-- **Critical path** — mark the rows on the longest dependency chain (the real wall-clock floor).
-- Per row: any **blocker/note** and the **source** (session note / north-star section).
-
-**Group 1 — Carryover (unfinished from prior sessions)** holds the `in-flight`, `deferred-gap`, and
-`ops` buckets; **Group 2 — New feature work (roadmap)** holds the `phase-slice` bucket.
+- **Critical path** — `⭐ yes` marks the longest dependency chain (the real wall-clock floor).
 
 Then, **only if there are mismatches**, a short **Drift** callout (vault-vs-reality):
 
-> **Drift:** §2 says 6f PDF preview "not pushed", but §3 says "shipped + pushed" and it's on
+> ⚠️ **Drift:** §2 says 6f PDF preview "not pushed", but §3 says "shipped + pushed" and it's on
 > origin — vault is stale.
 
-Then a plain-prose **Recommendation**: which batch to dispatch in parallel (row numbers, worktree
-count, no file overlap), what the critical path is, and what's blocked on the user or on another
-row.
+Then a plain-prose **Recommendation**:
+
+> **Recommended:** dispatch **Batch A** (#1, #2, #4) in parallel — 3 worktrees, no file overlap.
+> Critical path is **#4 (6d-2 mirror)**. #3 is blocked on you (cross-browser check). #5 (6e docs)
+> waits on #4.
+
+(The numbers/rows above are an _illustrative shape_, not fixed content — fill from the live triage.
+The table columns ARE fixed: follow the template, don't invent a new layout per run.)
 
 ### 6. Interactive pick
 
-Offer only the **`ready`-status items** for selection — never `needs-input` (dependent) or
-`blocked` rows.
+Offer only the **🟢-status items** for selection — never 🟡 (dependent) or 🔴 (blocked) rows.
 
-- **≤ 4 ready items:** use `AskUserQuestion` (**multiSelect**), one option per ready item, labelled
+- **≤ 4 🟢 items:** use `AskUserQuestion` (**multiSelect**), one option per 🟢 item, labelled
   with its row number + name, plus the recommended batch noted in the first option's description.
-- **> 4 ready items** (AskUserQuestion caps at 4 options): do **not** truncate silently. Present the
+- **> 4 🟢 items** (AskUserQuestion caps at 4 options): do **not** truncate silently. Present the
   recommended batch as the first `AskUserQuestion` option (e.g. "Dispatch recommended Batch A
   (#1, #2, #4)"), with up to 3 alternative single picks, and tell the user they can instead reply
   with any row numbers to launch a custom set.
@@ -144,7 +164,8 @@ with plans," reviews, then greenlights. Full-send is intentionally **not** the d
 - **Read-only until dispatch.** Steps 1–6 touch nothing. Step 7 only runs `start-task.sh` and
   dispatches scoping agents — it does **not** modify the vault or build source.
 - **Respect in-flight worktrees** — anything a live `task/*` branch owns is dropped, not recommended.
-- **No emoji** in output unless the user asked for them.
+- **Emoji live in the status board only.** The step-5 legend + table markers (🚦🟢🟡🔴⏳🐛🛠️✨⭐⚠️🔄)
+  are a user-commissioned format — use exactly those, there. No emoji anywhere else in the output.
 
 ## Edge cases
 
