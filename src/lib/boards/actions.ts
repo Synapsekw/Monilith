@@ -2,6 +2,7 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getUser } from "@/lib/auth/session";
 import { boardsTag, sharedBoardsTag } from "@/lib/cache/tags";
 import { midpoint } from "@/lib/boards/position";
@@ -84,11 +85,15 @@ export async function createBoardFromTemplate(input: {
   const payload = buildTemplatePayload(template);
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_board_from_template", {
-    p_workspace_id: parsed.data.workspaceId,
-    p_name: parsed.data.name,
-    p_template: payload as unknown as Json,
-  });
+  const { data, error } = await typedRpc(
+    supabase,
+    "create_board_from_template",
+    {
+      p_workspace_id: parsed.data.workspaceId,
+      p_name: parsed.data.name,
+      p_template: payload,
+    },
+  );
   if (error || !data) return fail(error?.message ?? "Could not create board.");
 
   await invalidateMyBoards();

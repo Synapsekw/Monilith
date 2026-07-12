@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getBoardStatusColumns, type StatusColumn } from "@/lib/goals/queries";
 import {
   createGoalSchema,
@@ -12,7 +13,7 @@ import {
   setGoalLinksSchema,
   updateGoalSchema,
 } from "@/lib/validations/goals";
-import type { Json, Tables, TablesUpdate } from "@/types/database.types";
+import type { Tables, TablesUpdate } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createGoal(
@@ -24,20 +25,20 @@ export async function createGoal(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_goal", {
+  const { data, error } = await typedRpc(supabase, "create_goal", {
     p_name: d.name,
     p_progress_mode: d.progressMode,
-    p_owner_id: (d.ownerId ?? null) as unknown as string,
-    p_parent_goal_id: (d.parentGoalId ?? null) as unknown as string,
-    p_workspace_id: (d.workspaceId ?? null) as unknown as string,
-    p_status: (d.status ?? null) as unknown as Tables<"goals">["status"],
-    p_start_value: (d.startValue ?? null) as unknown as number,
-    p_current_value: (d.currentValue ?? null) as unknown as number,
-    p_target_value: (d.targetValue ?? null) as unknown as number,
-    p_unit: (d.unit ?? null) as unknown as string,
-    p_percent: (d.percent ?? null) as unknown as number,
-    p_start_date: (d.startDate ?? null) as unknown as string,
-    p_due_date: (d.dueDate ?? null) as unknown as string,
+    p_owner_id: d.ownerId ?? null,
+    p_parent_goal_id: d.parentGoalId ?? null,
+    p_workspace_id: d.workspaceId ?? null,
+    p_status: d.status ?? null,
+    p_start_value: d.startValue ?? null,
+    p_current_value: d.currentValue ?? null,
+    p_target_value: d.targetValue ?? null,
+    p_unit: d.unit ?? null,
+    p_percent: d.percent ?? null,
+    p_start_date: d.startDate ?? null,
+    p_due_date: d.dueDate ?? null,
   });
   if (error || !data) return fail(error?.message ?? "Could not create goal.");
 
@@ -124,13 +125,13 @@ export async function setGoalLinks(
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("set_goal_links", {
+  const { error } = await typedRpc(supabase, "set_goal_links", {
     p_goal_id: parsed.data.goalId,
     p_links: parsed.data.links.map((l) => ({
       board_id: l.boardId,
       done_column_id: l.doneColumnId,
       done_option_ids: l.doneOptionIds,
-    })) as unknown as Json,
+    })),
   });
   if (error) return fail(error.message);
 
