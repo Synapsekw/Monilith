@@ -28,4 +28,16 @@ export interface ProviderAdapter {
     system: string;
     user: string;
   }): Promise<{ proposal: DashboardProposal; usage: AiUsageTokens }>;
+  /**
+   * Generic structured-output call: runs the provider against an arbitrary
+   * hand-written JSON schema and returns the raw (unvalidated) parsed object.
+   * The single structured-output primitive — generateProposal delegates to it.
+   * Callers re-validate/repair the result with the canonical Zod schemas.
+   */
+  generateStructured<T = unknown>(args: {
+    apiKey: string;
+    system: string;
+    user: string;
+    schema: object;
+  }): Promise<{ data: T; usage: AiUsageTokens }>;
 }

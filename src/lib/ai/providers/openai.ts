@@ -3,7 +3,8 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { type DashboardProposal } from "@/lib/ai/proposal-schema";
 import { PROVIDER_CATALOG } from "@/lib/ai/providers/catalog";
-import { withSchema } from "@/lib/ai/providers/prompt";
+import { withSchemaObject } from "@/lib/ai/providers/prompt";
+import { PROPOSAL_JSON_SCHEMA } from "@/lib/ai/proposal-schema";
 import {
   ProviderAuthError,
   type ProviderAdapter,
@@ -35,24 +36,31 @@ export const openaiAdapter: ProviderAdapter = {
       throw e;
     }
   },
-  async generateProposal({ apiKey, system, user }) {
+  async generateStructured({ apiKey, system, user, schema }) {
     const client = new OpenAI({ apiKey });
     const res = await client.chat.completions.create({
       model: MODEL,
       messages: [
         { role: "system", content: system },
-        { role: "user", content: withSchema(user) },
+        { role: "user", content: withSchemaObject(user, schema) },
       ],
       response_format: { type: "json_object" },
     });
     return {
-      proposal: JSON.parse(
-        res.choices[0]?.message.content ?? "{}",
-      ) as DashboardProposal,
+      data: JSON.parse(res.choices[0]?.message.content ?? "{}"),
       usage: {
         inputTokens: res.usage?.prompt_tokens ?? 0,
         outputTokens: res.usage?.completion_tokens ?? 0,
       },
     };
+  },
+  async generateProposal({ apiKey, system, user }) {
+    const { data, usage } = await this.generateStructured({
+      apiKey,
+      system,
+      user,
+      schema: PROPOSAL_JSON_SCHEMA,
+    });
+    return { proposal: data as DashboardProposal, usage };
   },
 };
