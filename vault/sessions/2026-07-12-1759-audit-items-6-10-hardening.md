@@ -36,6 +36,11 @@ related: ["[[2026-07-12-0938-usage-audit-process-hardening]]"]
 - Review pass found 2 should-fixes, applied pre-merge: `typed-rpc` Json conditional
   (`[Json] extends [A[K] | null]` — the `NonNullable` form never fired), oversized-transcript
   short-circuit in the Stop hook (fails toward "draft"), plus cwd/stderr/lock nits.
+- **Post-merge corrections on develop:** nightly-integration workflow dropped (`7ce8f4b`, owner:
+  no third DB — see Open threads); `/whats-next` colour-coded board template restored (`cac2d91`)
+  after the de-dup's "loosen to intent" produced unstructured reports — the emoji board was
+  user-commissioned (`966ed34`), so the no-emoji rule is now scoped to everything except the
+  board. Lesson saved to auto-memory (`output-templates-are-load-bearing`).
 
 ## Why
 
