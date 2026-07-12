@@ -45,13 +45,22 @@ export function shouldDraftSession({ changedFiles, toolCalls }) {
   return changedFiles >= FILE_THRESHOLD || toolCalls >= TOOL_CALL_THRESHOLD;
 }
 
-// Count tool_use blocks in assistant messages by streaming the session
-// transcript JSONL. Any unreadable file or malformed line counts as 0 —
-// the hook must never throw on a missing/odd transcript.
-export function countToolCallsFromTranscript(transcriptPath) {
+// Count tool_use blocks in assistant messages in the session transcript
+// JSONL. The whole file is read at once (not streamed) — acceptable because
+// any transcript too big to slurp is by definition a substantial session, so
+// past MAX_TRANSCRIPT_BYTES we skip the read and return the threshold
+// directly (fails toward "draft", not "quiet"). Any unreadable file or
+// malformed line otherwise counts as 0 — the hook must never throw.
+export const MAX_TRANSCRIPT_BYTES = 25 * 1024 * 1024;
+
+export function countToolCallsFromTranscript(
+  transcriptPath,
+  maxBytes = MAX_TRANSCRIPT_BYTES,
+) {
   if (!transcriptPath) return 0;
   let raw;
   try {
+    if (statSync(transcriptPath).size > maxBytes) return TOOL_CALL_THRESHOLD;
     raw = readFileSync(transcriptPath, "utf8");
   } catch {
     return 0;
@@ -97,6 +106,7 @@ function isInsideLinkedWorktree() {
   try {
     const gitDir = execSync("git rev-parse --git-dir", {
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"], // no stderr leak outside a repo
     }).trim();
     return isLinkedWorktreeGitDir(gitDir);
   } catch {
@@ -153,7 +163,10 @@ export function needsNorthStarBumpWarning(changedPaths) {
 
 function listChangedPaths() {
   try {
-    const out = execSync("git status --porcelain", { encoding: "utf8" });
+    const out = execSync("git status --porcelain", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"], // no stderr leak outside a repo
+    });
     return out
       .trim()
       .split("\n")
@@ -168,6 +181,7 @@ function getBranch() {
   try {
     return execSync("git rev-parse --abbrev-ref HEAD", {
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"], // no stderr leak outside a repo
     }).trim();
   } catch {
     return "unknown";
@@ -209,6 +223,15 @@ function finish(messages) {
 }
 
 function main() {
+  // Relative paths below (vault/sessions/…, git calls) must resolve against
+  // the project root, not wherever the CLI happened to be launched from — a
+  // subdirectory launch would otherwise sprout a stray <subdir>/vault/.
+  try {
+    if (process.env.CLAUDE_PROJECT_DIR)
+      process.chdir(process.env.CLAUDE_PROJECT_DIR);
+  } catch {
+    // unreadable dir — fall back to cwd
+  }
   const payload = readStdin();
   const toolCalls = countToolCallsFromTranscript(payload?.transcript_path);
   const changedPaths = filterRelevantPaths(listChangedPaths());

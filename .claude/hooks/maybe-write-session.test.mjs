@@ -84,6 +84,15 @@ describe("countToolCallsFromTranscript", () => {
       0,
     );
   });
+
+  it("short-circuits to the threshold for oversized transcripts (no read)", () => {
+    // A transcript too big to slurp is by definition a substantial session:
+    // past maxBytes the count fails toward "draft", never toward "quiet".
+    const path = writeTranscript("huge.jsonl", [
+      JSON.stringify({ type: "assistant", message: { content: [] } }),
+    ]);
+    assert.equal(countToolCallsFromTranscript(path, 1), 20);
+  });
 });
 
 describe("filterRelevantPaths", () => {

@@ -15,6 +15,9 @@
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$ROOT" 2>/dev/null || true
 
+# Never contend for the index lock with a live session's git operations.
+export GIT_OPTIONAL_LOCKS=0
+
 echo "=== Pulse session context (auto-injected at SessionStart) ==="
 
 if git rev-parse --git-dir >/dev/null 2>&1; then

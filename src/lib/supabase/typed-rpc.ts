@@ -25,7 +25,11 @@ import type { Database, Json } from "@/types/database.types";
 type PublicFunctions = Database["public"]["Functions"];
 
 type LooseArgs<A> = {
-  [K in keyof A]: [Json] extends [NonNullable<A[K]>] ? unknown : A[K] | null;
+  // `[Json] extends [A[K] | null]` is true exactly when the arg is Json (or
+  // wider). Comparing against NonNullable<A[K]> instead would be false for
+  // Json args — Json contains null, so stripping null breaks the mutual
+  // assignability — silently reviving the casts this helper exists to kill.
+  [K in keyof A]: [Json] extends [A[K] | null] ? unknown : A[K] | null;
 };
 
 export function typedRpc<Fn extends keyof PublicFunctions & string>(
