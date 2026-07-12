@@ -4,7 +4,18 @@
 
 import Image from "next/image";
 
-export function formatDateTime(iso: string | null): string {
+/**
+ * Format a creation timestamp for the board table / item panel.
+ *
+ * Deliberately NOT `formatDateTime` from `@/lib/datetime/format`: this one is
+ * null/invalid-tolerant (renders "" instead of throwing/"Invalid Date"), and
+ * these cells SSR inside client components, where swapping the formatter
+ * would change rendered output. Both formatters share the undefined-locale
+ * hazard of gotcha-50 (`toLocale*`/`Intl` default locale differs Node vs
+ * browser) — if a hydration mismatch ever surfaces here, pin "en-US" per the
+ * board convention rather than delegating to the lib helper.
+ */
+export function formatCreatedAt(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -66,7 +77,7 @@ export function CreatedByCell({
 }
 
 export function CreatedAtCell({ iso }: { iso: string | null }) {
-  const formatted = formatDateTime(iso);
+  const formatted = formatCreatedAt(iso);
   if (!formatted) return <span className="text-xs" />;
   return (
     <span className="font-mono text-xs tabular-nums opacity-60">
