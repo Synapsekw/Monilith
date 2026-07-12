@@ -80,7 +80,10 @@ describe("proposeLoop", () => {
       client: client as unknown as Anthropic,
     });
     expect(res.actions).toHaveLength(1);
-    expect(res.actions[0].name).toBe("Ship v2");
+    const first = res.actions[0];
+    expect(first.kind).toBe("create_item");
+    if (first.kind !== "create_item") throw new Error("expected create_item");
+    expect(first.name).toBe("Ship v2");
     expect(res.usage).toEqual({ inputTokens: 13, outputTokens: 7 });
     // Read tool executed for real.
     const { executeAskTool } = await import("@/lib/ai/ask/tools");
