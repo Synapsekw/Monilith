@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { MapStep } from "./MapStep";
@@ -10,6 +10,11 @@ import {
 } from "./import-wizard-state";
 import type { SheetPreview } from "@/lib/boards/spreadsheet/types";
 import type { BoardColumnRef } from "@/lib/boards/spreadsheet/match-columns";
+
+const suggestImportMapping = vi.fn();
+vi.mock("@/lib/ai/import-mapping-actions", () => ({
+  suggestImportMapping: (...args: unknown[]) => suggestImportMapping(...args),
+}));
 
 // Same fixture as import-wizard-state.test.ts: "Est" auto-detects as
 // "numbers" (detection samples skip the subtask row), and the subtask row's
@@ -305,5 +310,86 @@ describe("MapStep existing mode", () => {
       "title",
       "Type comes from the board column",
     );
+  });
+});
+
+describe("MapStep AI suggestions", () => {
+  beforeEach(() => {
+    suggestImportMapping.mockReset();
+  });
+
+  it("renders a 'Suggest with AI' button and an inline raw-sample disclosure", () => {
+    renderMapStep({});
+    expect(
+      screen.getByRole("button", { name: /suggest with ai/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/sample cell values are sent/i),
+    ).toBeInTheDocument();
+  });
+
+  it("builds a capped payload from the parsed grid and applies suggestions with a single onStateChange", async () => {
+    const user = userEvent.setup();
+    suggestImportMapping.mockResolvedValue({
+      ok: true,
+      data: {
+        suggestions: [{ sourceIndex: 2, kind: "text", role: "data" }],
+        warnings: [],
+      },
+    });
+    const { onStateChange } = renderMapStep({});
+
+    await user.click(screen.getByRole("button", { name: /suggest with ai/i }));
+
+    await waitFor(() => expect(suggestImportMapping).toHaveBeenCalledTimes(1));
+    const payload = suggestImportMapping.mock.calls[0][0];
+    // header + samples for each of the 3 source columns.
+    expect(payload.columns.map((c: { header: string }) => c.header)).toEqual([
+      "Group",
+      "Name",
+      "Est",
+    ]);
+    for (const c of payload.columns) {
+      expect(c.sampleValues.length).toBeLessThanOrEqual(5);
+    }
+
+    await waitFor(() => expect(onStateChange).toHaveBeenCalledTimes(1));
+    const nextState = onStateChange.mock.calls[0][0] as SheetState;
+    expect(nextState.columns.find((c) => c.sourceIndex === 2)?.kind).toBe(
+      "text",
+    );
+  });
+
+  it("passes the existing board columns through when in existing mode", async () => {
+    const user = userEvent.setup();
+    const cols: BoardColumnRef[] = [
+      { id: "col-est", name: "Est", kind: "numbers", options: [] },
+    ];
+    suggestImportMapping.mockResolvedValue({
+      ok: true,
+      data: { suggestions: [], warnings: [] },
+    });
+    renderMapStep({ mode: "existing", boardColumns: cols });
+
+    await user.click(screen.getByRole("button", { name: /suggest with ai/i }));
+
+    await waitFor(() => expect(suggestImportMapping).toHaveBeenCalledTimes(1));
+    const payload = suggestImportMapping.mock.calls[0][0];
+    expect(payload.boardColumns).toEqual([
+      { id: "col-est", name: "Est", kind: "numbers" },
+    ]);
+  });
+
+  it("shows an alert when the suggestion action fails", async () => {
+    const user = userEvent.setup();
+    suggestImportMapping.mockResolvedValue({ ok: false, error: "No credits" });
+    const { onStateChange } = renderMapStep({});
+
+    await user.click(screen.getByRole("button", { name: /suggest with ai/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("No credits"),
+    );
+    expect(onStateChange).not.toHaveBeenCalled();
   });
 });
