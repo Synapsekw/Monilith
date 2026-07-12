@@ -8,80 +8,42 @@ import {
   FilterBuilder,
   type FilterColumn,
 } from "@/components/dashboards/FilterBuilder";
-import { valueControlFor } from "@/lib/dashboards/filter-meta";
 import type { CacheColumn } from "@/lib/boards/cache";
-import type { ColumnOption } from "@/lib/validations/boards";
-import type { ListFilter, FilterCondition } from "@/lib/validations/dashboards";
+import type { ListFilter } from "@/lib/validations/dashboards";
 import type {
   AutomationAction,
   AutomationTrigger,
 } from "@/lib/validations/automations";
 import type { Draft } from "@/components/boards/automations/recipes";
+import {
+  ANY,
+  CONDITION_KINDS,
+  columnOptions,
+  isActionComplete,
+  isConditionComplete,
+  nextId,
+  selectClass,
+  stripId,
+  withIds,
+  type BuilderGroup,
+  type BuilderMember,
+  type DateDirection,
+  type DraftAction,
+  type TriggerType,
+} from "@/components/boards/automations/builder-utils";
+import {
+  MoveToGroupRow,
+  NotifyRow,
+  SetOptionRow,
+  SetPercentRow,
+  WebhookRow,
+} from "@/components/boards/automations/ActionRows";
 
-export type BuilderMember = {
-  userId: string;
-  fullName: string | null;
-  email: string | null;
-};
-
-export type BuilderGroup = { id: string; name: string };
-
-/** Read the option list off a column's JSON settings (status/dropdown only). */
-export function columnOptions(column: CacheColumn): ColumnOption[] {
-  const settings = column.settings as { options?: ColumnOption[] } | null;
-  return settings?.options ?? [];
-}
-
-const selectClass =
-  "bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm";
-
-const ANY = "__any__";
-const CONDITION_KINDS = ["status", "text", "numbers", "date"];
-type TriggerType = AutomationTrigger["type"];
-type DateDirection = "on" | "before" | "after";
-
-type DraftAction = AutomationAction & { _id: string };
-
-let idCounter = 0;
-function nextId() {
-  idCounter += 1;
-  return `a${idCounter}`;
-}
-function withIds(actions: AutomationAction[]): DraftAction[] {
-  return actions.map((a) => ({ ...a, _id: nextId() }));
-}
-function stripId(a: DraftAction): AutomationAction {
-  const { _id, ...rest } = a;
-  void _id;
-  return rest;
-}
-function isActionComplete(a: AutomationAction): boolean {
-  if (a.type === "notify") {
-    return a.recipient.kind === "owner"
-      ? !!a.recipient.peopleColumnId
-      : !!a.recipient.userId;
-  }
-  if (a.type === "call_webhook") {
-    return /^https:\/\/.+/.test(a.url);
-  }
-  if (a.type === "set_option") {
-    return !!a.columnId && !!a.optionId;
-  }
-  if (a.type === "move_to_group") {
-    return !!a.groupId;
-  }
-  if (a.type === "set_percent") {
-    return !!a.columnId && a.percent >= 0 && a.percent <= 100;
-  }
-  return false;
-}
-function memberLabel(m: BuilderMember): string {
-  return m.fullName ?? m.email ?? m.userId;
-}
-function isConditionComplete(c: FilterCondition, kind: string): boolean {
-  if (valueControlFor(kind, c.operator) === "none") return true;
-  return c.value !== undefined && c.value !== null && `${c.value}` !== "";
-}
+export {
+  columnOptions,
+  type BuilderGroup,
+  type BuilderMember,
+} from "@/components/boards/automations/builder-utils";
 
 export function AutomationBuilder({
   columns,
@@ -635,328 +597,5 @@ export function AutomationBuilder({
         </Button>
       </div>
     </div>
-  );
-}
-
-function NotifyRow({
-  action,
-  peopleColumns,
-  members,
-  onChange,
-}: {
-  action: Extract<AutomationAction, { type: "notify" }>;
-  peopleColumns: CacheColumn[];
-  members: BuilderMember[];
-  onChange: (next: AutomationAction) => void;
-}) {
-  const kind = action.recipient.kind;
-  return (
-    <>
-      <label className="text-sm">
-        <span className="text-muted-foreground">Notify</span>
-        <select
-          aria-label="Recipient type"
-          className={selectClass}
-          value={kind}
-          onChange={(e) => {
-            const k = e.target.value as "owner" | "member";
-            onChange({
-              type: "notify",
-              recipient:
-                k === "owner"
-                  ? {
-                      kind: "owner",
-                      peopleColumnId: peopleColumns[0]?.id ?? "",
-                    }
-                  : { kind: "member", userId: members[0]?.userId ?? "" },
-            });
-          }}
-        >
-          <option value="owner">The item owner</option>
-          <option value="member">A specific person</option>
-        </select>
-      </label>
-      {kind === "owner" ? (
-        <label className="text-sm">
-          <span className="text-muted-foreground">From column</span>
-          <select
-            aria-label="Owner people column"
-            className={selectClass}
-            value={action.recipient.peopleColumnId}
-            onChange={(e) =>
-              onChange({
-                type: "notify",
-                recipient: { kind: "owner", peopleColumnId: e.target.value },
-              })
-            }
-          >
-            <option value="">Select…</option>
-            {peopleColumns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
-        <label className="text-sm">
-          <span className="text-muted-foreground">Person</span>
-          <select
-            aria-label="Member"
-            className={selectClass}
-            value={action.recipient.userId}
-            onChange={(e) =>
-              onChange({
-                type: "notify",
-                recipient: { kind: "member", userId: e.target.value },
-              })
-            }
-          >
-            <option value="">Select…</option>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {memberLabel(m)}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-    </>
-  );
-}
-
-function SetOptionRow({
-  action,
-  statusColumns,
-  onChange,
-}: {
-  action: Extract<AutomationAction, { type: "set_option" }>;
-  statusColumns: CacheColumn[];
-  onChange: (next: AutomationAction) => void;
-}) {
-  const column = statusColumns.find((c) => c.id === action.columnId);
-  const opts = column ? columnOptions(column) : [];
-  return (
-    <>
-      <label className="text-sm">
-        <span className="text-muted-foreground">Set column</span>
-        <select
-          aria-label="Set column"
-          className={selectClass}
-          value={action.columnId}
-          onChange={(e) =>
-            onChange({
-              type: "set_option",
-              columnId: e.target.value,
-              optionId: "",
-            })
-          }
-        >
-          <option value="">Select…</option>
-          {statusColumns.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="text-sm">
-        <span className="text-muted-foreground">To</span>
-        <select
-          aria-label="Set value"
-          className={selectClass}
-          value={action.optionId}
-          disabled={!action.columnId}
-          onChange={(e) =>
-            onChange({
-              type: "set_option",
-              columnId: action.columnId,
-              optionId: e.target.value,
-            })
-          }
-        >
-          <option value="">Select…</option>
-          {opts.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    </>
-  );
-}
-
-function MoveToGroupRow({
-  action,
-  groups,
-  onChange,
-}: {
-  action: Extract<AutomationAction, { type: "move_to_group" }>;
-  groups: BuilderGroup[];
-  onChange: (next: AutomationAction) => void;
-}) {
-  return (
-    <label className="col-span-2 text-sm">
-      <span className="text-muted-foreground">Move to group</span>
-      <select
-        aria-label="Target group"
-        className={selectClass}
-        value={action.groupId}
-        onChange={(e) =>
-          onChange({ type: "move_to_group", groupId: e.target.value })
-        }
-      >
-        <option value="">Select…</option>
-        {groups.map((g) => (
-          <option key={g.id} value={g.id}>
-            {g.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function SetPercentRow({
-  action,
-  percentColumns,
-  onChange,
-}: {
-  action: Extract<AutomationAction, { type: "set_percent" }>;
-  percentColumns: CacheColumn[];
-  onChange: (next: AutomationAction) => void;
-}) {
-  return (
-    <>
-      <label className="text-sm">
-        <span className="text-muted-foreground">Set percent column</span>
-        <select
-          aria-label="Set percent column"
-          className={selectClass}
-          value={action.columnId}
-          onChange={(e) =>
-            onChange({
-              type: "set_percent",
-              columnId: e.target.value,
-              percent: action.percent,
-            })
-          }
-        >
-          <option value="">Select…</option>
-          {percentColumns.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="text-sm">
-        <span className="text-muted-foreground">To (%)</span>
-        <input
-          aria-label="Percent value"
-          type="number"
-          min={0}
-          max={100}
-          className={selectClass}
-          value={action.percent}
-          onChange={(e) =>
-            onChange({
-              type: "set_percent",
-              columnId: action.columnId,
-              percent: Math.min(
-                100,
-                Math.max(0, parseInt(e.target.value, 10) || 0),
-              ),
-            })
-          }
-        />
-      </label>
-    </>
-  );
-}
-
-function WebhookRow({
-  action,
-  onChange,
-}: {
-  action: Extract<AutomationAction, { type: "call_webhook" }>;
-  onChange: (next: AutomationAction) => void;
-}) {
-  const urlInvalid = action.url.length > 0 && !/^https:\/\/.+/.test(action.url);
-  const header = action.authHeader;
-  function patch(
-    next: Partial<Extract<AutomationAction, { type: "call_webhook" }>>,
-  ) {
-    const merged = {
-      type: "call_webhook" as const,
-      url: action.url,
-      authHeader: action.authHeader,
-      ...next,
-    };
-    if (merged.authHeader === undefined) {
-      const { authHeader: _ah, ...withoutHeader } = merged;
-      void _ah;
-      onChange(withoutHeader);
-    } else {
-      onChange(merged);
-    }
-  }
-  return (
-    <>
-      <label className="col-span-2 text-sm">
-        <span className="text-muted-foreground">Webhook URL</span>
-        <input
-          aria-label="Webhook URL"
-          type="url"
-          inputMode="url"
-          placeholder="https://hooks.example.com/…"
-          className={selectClass}
-          value={action.url}
-          onChange={(e) => patch({ url: e.target.value })}
-        />
-        {urlInvalid ? (
-          <span className="text-destructive mt-1 block text-xs">
-            Must start with https://
-          </span>
-        ) : null}
-      </label>
-      <label className="text-sm">
-        <span className="text-muted-foreground">Header name (optional)</span>
-        <input
-          aria-label="Auth header name"
-          className={selectClass}
-          placeholder="Authorization"
-          value={header?.name ?? ""}
-          onChange={(e) => {
-            const name = e.target.value;
-            patch({
-              authHeader:
-                name || header?.value
-                  ? { name, value: header?.value ?? "" }
-                  : undefined,
-            });
-          }}
-        />
-      </label>
-      <label className="text-sm">
-        <span className="text-muted-foreground">Header value (optional)</span>
-        <input
-          aria-label="Auth header value"
-          className={selectClass}
-          placeholder="Bearer …"
-          value={header?.value ?? ""}
-          onChange={(e) => {
-            const value = e.target.value;
-            patch({
-              authHeader:
-                value || header?.name
-                  ? { name: header?.name ?? "", value }
-                  : undefined,
-            });
-          }}
-        />
-      </label>
-    </>
   );
 }
