@@ -28,32 +28,50 @@ pnpm dev            # start the app
 
 ## Branching & promotion workflow
 
-Two long-lived branches, **no per-feature branches**:
+**The canonical statement of the rules is `AGENTS.md` → working agreement #1.** If this section
+and `AGENTS.md` ever disagree, `AGENTS.md` wins. What follows is the day-to-day operational
+detail.
 
-- **`develop`** — the integration branch. All day-to-day work (features, fixes, debugging, every
-  session) is committed and pushed here. CI (typecheck · lint · test · build) runs on every push.
-  `develop` never deploys to production.
-- **`main`** — production. Protected, **no direct pushes**. Only Vercel's production branch; every
-  merge to `main` deploys live.
+Two long-lived branches:
+
+- **`develop`** — the integration branch. Task branches merge here. CI
+  (typecheck · lint · test · build) runs on every push. `develop` never deploys to production.
+- **`main`** — production. Protected, **no direct pushes**. Vercel's production branch; it only
+  advances via the `develop → main` promotion PR, and every merge to `main` deploys live.
+
+**Every building session works in its own git worktree on a short-lived `task/<name>` branch.**
+The main checkout (`/Users/danijeljovanovic/Dev/Monolith`) stays parked on `develop` as the
+integration home — you do not build directly in it, and you never `git checkout` another branch
+or `git stash`-and-switch there (multiple parallel sessions share it; switching clobbers live
+work).
 
 Day-to-day:
 
-1. Stay on `develop` (`git switch develop`). Don't create `feat/…` or `fix/…` branches.
-2. Commit using **Conventional Commits** (enforced by a `commit-msg` hook) and push to `develop`.
-3. When `develop` is green and you're happy with it, **promote**: open a `develop → main` PR and
+1. **Start:** run `scripts/start-task.sh <name>` from the main checkout. It cuts `task/<name>`
+   from the latest `origin/develop` in a fresh worktree at `.claude/worktrees/<name>`, runs
+   `pnpm install` there, symlinks `.env.local`, and pins the commit identity
+   (`Danijel Jovanovic <info@synapse-solutions.ai>` — required for Vercel to deploy; do not
+   override it). `cd` into the worktree and build there.
+2. **Build:** commit in the worktree using **Conventional Commits** (enforced by a `commit-msg`
+   hook), staging explicitly by path (see "Commit hygiene" below).
+3. **Finish:** a task is **not done** until all four gates pass —
+   `pnpm typecheck && pnpm lint && pnpm test && pnpm build` — and the branch is merged and
+   cleaned up. Run `scripts/finish-task.sh` from inside the worktree: it rebases `task/<name>`
+   onto the latest `develop`, runs the gates against the merged state, merges into `develop`,
+   pushes, and removes the worktree + branch. A lingering `task/*` branch or worktree means the
+   task is not finished.
+4. **Promote:** when `develop` is green and you're happy with it, open a `develop → main` PR and
    merge once CI passes. That, and only that, ships production.
 
-> **One checkout = one branch.** A branch belongs to the working directory, not to a
-> terminal/agent — two sessions in the same folder share one branch and one set of files. Never
-> `git checkout` to another branch (or `git stash`-and-switch) in a shared checkout; it clobbers
-> other live sessions. For genuinely parallel, isolated work use a **git worktree** (a separate
-> folder per branch), not a branch switch.
+> **Trivial edits are exempt.** A typo, one-liner, or other obviously-trivial change can go
+> straight on `develop` in the main checkout — no worktree needed.
 
 ## Commit hygiene (stage your own work only)
 
-Because every session shares one `develop` checkout (above), the working tree at any moment may
-hold changes from **other concurrent sessions, the editor, or tooling** (e.g. `.obsidian/*`,
-generated files). A commit must contain **only the work this session actually did**.
+The working tree at any moment may hold changes you didn't make — in the shared main checkout
+(other concurrent sessions, the editor, tooling like `.obsidian/*`), and even in a private
+worktree (generated files, tooling artifacts). A commit must contain **only the work this
+session actually did**.
 
 - **Stage explicitly by path.** `git add <specific/paths>` for the files you created or changed.
   **Never** `git add -A`, `git add .`, `git add --all`, or `git commit -a` — they sweep in
