@@ -1,4 +1,11 @@
-export { AiNotConfiguredError } from "@/lib/ai/anthropic";
+/** Thrown when the platform ANTHROPIC_API_KEY is absent. Actions translate it
+ *  to a clean user-facing error rather than a 500. */
+export class AiNotConfiguredError extends Error {
+  constructor() {
+    super("AI generation isn't configured.");
+    this.name = "AiNotConfiguredError";
+  }
+}
 
 /** org_ai_settings.ai_mode = 'off'. */
 export class AiDisabledError extends Error {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser, getUserOrgs } from "@/lib/auth/session";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/anthropic";
+import { MODEL } from "@/lib/ai/providers/anthropic";
 import { askPulseLoop } from "@/lib/ai/ask/ask";
 import {
   AiDisabledError,

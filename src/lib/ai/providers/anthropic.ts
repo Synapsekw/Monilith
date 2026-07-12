@@ -2,7 +2,6 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import { z } from "zod";
-import { MODEL } from "@/lib/ai/anthropic";
 import {
   PROPOSAL_JSON_SCHEMA,
   type DashboardProposal,
@@ -12,6 +11,10 @@ import {
   ProviderAuthError,
   type ProviderAdapter,
 } from "@/lib/ai/providers/types";
+
+/** The Anthropic model powering AI dashboard generation and Ask Pulse.
+ *  Single source of truth (google/openai adapters keep their own). */
+export const MODEL = "claude-opus-4-8";
 
 export const anthropicAdapter: ProviderAdapter = {
   id: "anthropic",

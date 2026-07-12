@@ -17,7 +17,7 @@ const serverEnvSchema = z.object({
     .string()
     .min(1, "SUPABASE_SERVICE_ROLE_KEY is required"),
   // Optional feature (AI dashboard generation): absent → the app boots and
-  // getAnthropicClient() throws AiNotConfiguredError on use. Non-empty when set.
+  // credential resolution throws AiNotConfiguredError on use. Non-empty when set.
   ANTHROPIC_API_KEY: z
     .string()
     .min(1, "ANTHROPIC_API_KEY must be non-empty when set")

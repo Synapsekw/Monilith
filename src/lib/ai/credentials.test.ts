@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { AiNotConfiguredError } from "@/lib/ai/anthropic";
+import { AiNotConfiguredError } from "@/lib/ai/errors";
 
 const rpc = vi.fn();
 vi.mock("@/lib/supabase/service", () => ({
