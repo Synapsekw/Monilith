@@ -94,6 +94,58 @@ describe("askPulseLoop", () => {
     expect(res.boardsConsulted).toEqual(["board-1"]);
   });
 
+  it("bails to the final-answer fallback when a tool_use turn yields no tool_use blocks", async () => {
+    // Model says stop_reason "tool_use" but returns only a text block — no
+    // actual tool_use. The loop must NOT push an empty tool_result turn.
+    const { client, calls } = fakeClient([
+      {
+        stop_reason: "tool_use",
+        content: [{ type: "text", text: "thinking out loud" }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+      {
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "Final answer." }],
+        usage: { input_tokens: 30, output_tokens: 8 },
+      },
+    ]);
+
+    const { askPulseLoop } = await import("@/lib/ai/ask/ask");
+    const res = await askPulseLoop({
+      apiKey: "k",
+      workspaceId: WORKSPACE_ID,
+      question: "no tools?",
+      client: client as never,
+    });
+
+    // No tool was dispatched (there were no tool_use blocks).
+    expect(executeAskTool).not.toHaveBeenCalled();
+
+    // No create call ever received a message with an empty-array content —
+    // i.e. the loop never pushed `{ role: "user", content: [] }`.
+    for (const call of calls) {
+      for (const message of call.messages) {
+        expect(
+          Array.isArray(message.content) &&
+            (message.content as unknown[]).length === 0,
+        ).toBe(false);
+      }
+    }
+
+    // It resolved via the no-tools fallback: last call omits `tools` and ends
+    // with the forcing nudge.
+    const final = calls[calls.length - 1];
+    expect(final.tools).toBeUndefined();
+    const lastMessage = final.messages[final.messages.length - 1];
+    expect(lastMessage).toEqual({
+      role: "user",
+      content: "Answer now with what you have.",
+    });
+
+    expect(res.answer).toBe("Final answer.");
+    expect(res.boardsConsulted).toEqual([]);
+  });
+
   it("caps tool rounds at MAX_ROUNDS then forces a final no-tools answer", async () => {
     executeAskTool.mockResolvedValue({ content: "[]" });
 
