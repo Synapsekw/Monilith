@@ -5,13 +5,8 @@ import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { MODEL } from "@/lib/ai/providers/anthropic";
 import { askPulseLoop } from "@/lib/ai/ask/ask";
-import {
-  AiDisabledError,
-  AiQuotaExceededError,
-  ByoKeyMissingError,
-  AiNotConfiguredError,
-  ProviderNotCapableError,
-} from "@/lib/ai/errors";
+import { ProviderNotCapableError } from "@/lib/ai/errors";
+import { mapAiError } from "@/lib/ai/action-guard";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { fail, type ActionResult } from "@/lib/actions/result";
@@ -62,20 +57,13 @@ export async function askPulse(input: {
       data: { answer: result.answer, boardsConsulted: result.boardsConsulted },
     };
   } catch (e) {
-    if (e instanceof ProviderNotCapableError)
-      return fail(
-        "Ask Pulse needs an Anthropic key — dashboards work with any provider.",
-      );
-    if (e instanceof AiDisabledError)
-      return fail("AI is turned off for your organization.");
-    if (e instanceof AiQuotaExceededError)
-      return fail("You've used this month's AI allowance.");
-    if (e instanceof AiNotConfiguredError)
-      return fail("Add an AI provider key in Settings to use Ask Pulse.");
-    if (e instanceof ByoKeyMissingError)
-      return fail(
-        "Your organization's AI key is missing — ask an admin to update Settings.",
-      );
-    return fail("Ask Pulse hit a snag. Please try again.");
+    return fail(
+      mapAiError(e, {
+        fallback: "Ask Pulse hit a snag. Please try again.",
+        notConfigured: "Add an AI provider key in Settings to use Ask Pulse.",
+        providerNotCapable:
+          "Ask Pulse needs an Anthropic key — dashboards work with any provider.",
+      }),
+    );
   }
 }

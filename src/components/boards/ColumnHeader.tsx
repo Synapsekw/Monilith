@@ -56,6 +56,7 @@ export function ColumnHeader({
   onResizeEnd,
   onEditOptions,
   onEditCurrency,
+  onSmartFill,
   reorder,
 }: {
   column: CacheColumn;
@@ -66,6 +67,7 @@ export function ColumnHeader({
   onResizeEnd: (width: number) => void; // on release (persists via resizeColumn)
   onEditOptions?: () => void; // open the option editor (status/dropdown only)
   onEditCurrency?: () => void; // open the currency picker (currency kind only)
+  onSmartFill?: () => void; // open the Smart Fill dialog (text columns only)
   reorder?: ColumnReorder; // drag + move-left/right affordances (optional)
 }) {
   const [editing, setEditing] = useState(false);
@@ -164,6 +166,11 @@ export function ColumnHeader({
               {COLUMN_KIND_META[column.kind]?.hasOptions && onEditOptions && (
                 <DropdownMenuItem onSelect={() => onEditOptions()}>
                   Edit labels
+                </DropdownMenuItem>
+              )}
+              {column.kind === "text" && onSmartFill && (
+                <DropdownMenuItem onSelect={() => onSmartFill()}>
+                  Smart fill…
                 </DropdownMenuItem>
               )}
               {column.kind === "currency" && onEditCurrency && (
