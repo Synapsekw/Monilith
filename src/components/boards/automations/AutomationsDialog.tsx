@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Zap } from "lucide-react";
+import { Plus, Sparkles, Trash2, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,7 @@ import {
   getBoardAdminStatus,
   updateAutomation,
 } from "@/lib/boards/automation-actions";
+import { generateAutomationDraft } from "@/lib/ai/automation-gen-actions";
 import {
   AutomationBuilder,
   columnOptions,
@@ -189,6 +191,8 @@ export function AutomationsDialog({
   const [initialDraft, setInitialDraft] = useState<Draft | undefined>();
   const [builderKey, setBuilderKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiWarnings, setAiWarnings] = useState<string[]>([]);
 
   const { data: rules = [], isLoading } = useQuery({
     queryKey: automationsKey(boardId),
@@ -214,6 +218,22 @@ export function AutomationsDialog({
       qc.invalidateQueries({ queryKey: automationsKey(boardId) });
       setMode("list");
       setInitialDraft(undefined);
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  // NL → automation draft. Never persists: it seeds the builder (the recipe
+  // seam) so the human reviews and clicks Save (createAutomation) — the sole
+  // write path, unchanged.
+  const generate = useMutation({
+    mutationFn: async (prompt: string) => {
+      const res = await generateAutomationDraft({ boardId, prompt });
+      if (!res.ok) throw new Error(res.error);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      startBuild(data.draft);
+      setAiWarnings(data.warnings);
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -306,6 +326,8 @@ export function AutomationsDialog({
 
   function startBuild(draft?: Draft) {
     setError(null);
+    setAiWarnings([]);
+    setAiPrompt("");
     setInitialDraft(draft);
     setBuilderKey((k) => k + 1);
     setMode("build");
@@ -316,6 +338,8 @@ export function AutomationsDialog({
       setMode("list");
       setInitialDraft(undefined);
       setError(null);
+      setAiWarnings([]);
+      setAiPrompt("");
     }
     onOpenChange(next);
   }
@@ -335,6 +359,53 @@ export function AutomationsDialog({
 
         {mode === "build" ? (
           <div className="flex flex-col gap-4">
+            {/* Describe an automation (NL → draft; seeds the builder for review) */}
+            {!initialDraft ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+                  <Sparkles className="size-3.5" /> Describe an automation
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    maxLength={1000}
+                    aria-label="Describe an automation"
+                    placeholder="e.g. When status changes to Done, notify the owner"
+                    disabled={generate.isPending}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        aiPrompt.trim().length >= 3 &&
+                        !generate.isPending
+                      ) {
+                        e.preventDefault();
+                        generate.mutate(aiPrompt.trim());
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => generate.mutate(aiPrompt.trim())}
+                    disabled={aiPrompt.trim().length < 3 || generate.isPending}
+                  >
+                    {generate.isPending ? "Generating…" : "Generate"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {aiWarnings.length > 0 ? (
+              <div className="bg-surface-muted text-muted-foreground rounded-md border p-3 text-xs">
+                <p className="mb-1 font-medium">Adjusted a few things:</p>
+                <ul className="list-disc space-y-0.5 pl-4">
+                  {aiWarnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             {/* Recipe quick-starts */}
             {(canNotifyOwner ||
               canSetOption ||
@@ -522,6 +593,8 @@ export function AutomationsDialog({
                 setMode("list");
                 setInitialDraft(undefined);
                 setError(null);
+                setAiWarnings([]);
+                setAiPrompt("");
               }}
             />
           </div>

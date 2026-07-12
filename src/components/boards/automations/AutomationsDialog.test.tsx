@@ -18,6 +18,11 @@ vi.mock("@/lib/boards/automation-actions", () => ({
   getBoardAdminStatus: (...a: unknown[]) => getBoardAdminStatus(...a),
 }));
 
+const generateAutomationDraft = vi.fn();
+vi.mock("@/lib/ai/automation-gen-actions", () => ({
+  generateAutomationDraft: (...a: unknown[]) => generateAutomationDraft(...a),
+}));
+
 import { AutomationsDialog } from "./AutomationsDialog";
 import type { CacheColumn } from "@/lib/boards/cache";
 
@@ -99,6 +104,7 @@ describe("AutomationsDialog", () => {
     updateAutomation.mockReset();
     deleteAutomation.mockReset();
     getBoardAdminStatus.mockReset();
+    generateAutomationDraft.mockReset();
 
     // Default: no automations, successful mutations, non-admin.
     getAutomations.mockResolvedValue([]);
@@ -510,5 +516,130 @@ describe("percent-sync recipes + summarize", () => {
     expect(
       await screen.findByText(/set Progress to 100%/i),
     ).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F11: Describe-an-automation (NL → draft → seeds the builder; human Saves).
+// ---------------------------------------------------------------------------
+describe("describe-an-automation (AI)", () => {
+  beforeEach(() => {
+    getAutomations.mockReset().mockResolvedValue([]);
+    createAutomation
+      .mockReset()
+      .mockResolvedValue({ ok: true, data: { id: "auto-1" } });
+    updateAutomation.mockReset().mockResolvedValue({ ok: true });
+    deleteAutomation.mockReset().mockResolvedValue({ ok: true });
+    getBoardAdminStatus.mockReset().mockResolvedValue(false);
+    generateAutomationDraft.mockReset();
+  });
+
+  async function enterBuild() {
+    renderDialog();
+    await userEvent.click(
+      await screen.findByRole("button", { name: /new automation/i }),
+    );
+  }
+
+  it("renders a describe input + Generate button in build mode", async () => {
+    await enterBuild();
+    expect(screen.getByLabelText("Describe an automation")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^generate$/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("seeds the builder and surfaces warnings on a successful generate", async () => {
+    generateAutomationDraft.mockResolvedValue({
+      ok: true,
+      data: {
+        draft: {
+          trigger: { type: "item_created" },
+          actions: [
+            { type: "set_option", columnId: "c-status", optionId: "opt-done" },
+          ],
+          condition: null,
+        },
+        warnings: ["Dropped a webhook action — the AI can't create webhooks."],
+      },
+    });
+
+    await enterBuild();
+    await userEvent.type(
+      screen.getByLabelText("Describe an automation"),
+      "when an item is created set it to done",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^generate$/i }));
+
+    // Builder is seeded with the generated trigger/action.
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Trigger type") as HTMLSelectElement).value,
+      ).toBe("item_created");
+    });
+    expect(screen.getByLabelText("Set column")).toBeInTheDocument();
+    // Warnings render for the human to see what was adjusted.
+    expect(screen.getByText(/can't create webhooks/i)).toBeInTheDocument();
+    // The action was called with the board id + prompt (no persistence yet).
+    expect(generateAutomationDraft).toHaveBeenCalledWith({
+      boardId: "board-1",
+      prompt: "when an item is created set it to done",
+    });
+    expect(createAutomation).not.toHaveBeenCalled();
+  });
+
+  it("still routes the builder's Save through createAutomation (unchanged write path)", async () => {
+    generateAutomationDraft.mockResolvedValue({
+      ok: true,
+      data: {
+        draft: {
+          trigger: { type: "item_created" },
+          actions: [
+            { type: "set_option", columnId: "c-status", optionId: "opt-done" },
+          ],
+          condition: null,
+        },
+        warnings: [],
+      },
+    });
+
+    await enterBuild();
+    await userEvent.type(
+      screen.getByLabelText("Describe an automation"),
+      "set new items to done",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^generate$/i }));
+
+    const saveBtn = await screen.findByRole("button", { name: /^save$/i });
+    await userEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(createAutomation).toHaveBeenCalledOnce();
+    });
+    expect(createAutomation.mock.calls[0][0]).toMatchObject({
+      boardId: "board-1",
+      trigger: { type: "item_created" },
+      actions: [
+        { type: "set_option", columnId: "c-status", optionId: "opt-done" },
+      ],
+    });
+  });
+
+  it("shows an inline alert when generate fails", async () => {
+    generateAutomationDraft.mockResolvedValue({
+      ok: false,
+      error: "Couldn't turn that into an automation — try rephrasing.",
+    });
+
+    await enterBuild();
+    await userEvent.type(
+      screen.getByLabelText("Describe an automation"),
+      "do something impossible",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^generate$/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /try rephrasing/i,
+    );
   });
 });
