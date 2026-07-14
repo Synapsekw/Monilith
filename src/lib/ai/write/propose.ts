@@ -29,6 +29,7 @@ function systemPrompt(now: string, timezone: string): string {
     "Then call a propose_* tool with the resolved ids. NEVER assume ids you haven't read.",
     "The propose_* tools do NOT write — the user confirms before anything happens.",
     "If the target board/group is ambiguous or you can't find it, DO NOT propose — reply with a short question instead.",
+    "Ask exactly ONE focused question at a time; never batch multiple questions. The user will reply and you can ask the next one.",
   ].join("\n");
 }
 
@@ -44,6 +45,8 @@ export async function proposeLoop(args: {
   orgId: string;
   workspaceId: string;
   instruction: string;
+  /** Prior transcript to continue (from an earlier clarification turn). */
+  messages?: Anthropic.MessageParam[];
   now?: string;
   timezone?: string;
   client?: Anthropic;
@@ -51,6 +54,7 @@ export async function proposeLoop(args: {
   actions: ValidatedAction[];
   clarification?: string;
   usage: AiUsageTokens;
+  messages: Anthropic.MessageParam[];
 }> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
   const writer = createWriteToolExecutor({
@@ -58,7 +62,9 @@ export async function proposeLoop(args: {
     workspaceId: args.workspaceId,
   });
   const tools = [...ASK_TOOLS, LIST_MEMBERS_TOOL, ...WRITE_TOOLS];
+  // Continue a prior transcript when given, appending this turn's instruction.
   const messages: Anthropic.MessageParam[] = [
+    ...(args.messages ?? []),
     { role: "user", content: args.instruction },
   ];
   const usage: AiUsageTokens = { inputTokens: 0, outputTokens: 0 };
@@ -81,6 +87,9 @@ export async function proposeLoop(args: {
 
     if (res.stop_reason !== "tool_use") {
       finalText = textOf(res.content);
+      // Keep the final assistant turn in the transcript so a clarification can
+      // be threaded back into the next reply.
+      messages.push({ role: "assistant", content: res.content });
       break;
     }
 
@@ -110,5 +119,6 @@ export async function proposeLoop(args: {
     actions,
     clarification: actions.length === 0 ? finalText || undefined : undefined,
     usage,
+    messages,
   };
 }

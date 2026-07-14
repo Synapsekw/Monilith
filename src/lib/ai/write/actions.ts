@@ -8,8 +8,10 @@ import { proposeLoop } from "./propose";
 import { executeAction } from "./execute";
 import {
   validatedActionSchema,
+  aiConversationHistorySchema,
   type ValidatedAction,
   type ExecutionResult,
+  type AiConversationTurn,
 } from "./schema";
 import {
   AiDisabledError,
@@ -25,6 +27,9 @@ import { fail, type ActionResult } from "@/lib/actions/result";
 const instructionSchema = z.object({
   instruction: z.string().trim().min(3).max(1000),
 });
+
+/** Hard cap on threaded user replies — bounds cost/latency of a clarification. */
+const MAX_TURNS = 5;
 
 /** Map a typed AI error to friendly copy, or null if it's not one we recognize. */
 function mapAiError(e: unknown): string | null {
@@ -48,11 +53,27 @@ function mapAiError(e: unknown): string | null {
  */
 export async function proposeActions(input: {
   instruction: string;
+  history?: unknown;
 }): Promise<
-  ActionResult<{ actions: ValidatedAction[]; clarification?: string }>
+  ActionResult<{
+    actions: ValidatedAction[];
+    clarification?: string;
+    history: AiConversationTurn[];
+  }>
 > {
   const parsed = instructionSchema.safeParse(input);
   if (!parsed.success) return fail("Describe the action in 3–1000 characters.");
+
+  // Continue a prior clarification when the client threads a transcript back.
+  // Malformed history degrades to a fresh start — a dead-end is the UX we're
+  // removing — but a well-formed transcript past the turn cap is refused.
+  const histParsed = aiConversationHistorySchema.safeParse(input.history ?? []);
+  const history = (
+    histParsed.success ? histParsed.data : []
+  ) as AiConversationTurn[];
+  const userTurns = history.filter((m) => m.role === "user").length;
+  if (userTurns >= MAX_TURNS)
+    return fail("Let's start fresh — try a more specific command.");
 
   try {
     const user = await requireUser();
@@ -74,13 +95,18 @@ export async function proposeActions(input: {
           orgId: org.id,
           workspaceId,
           instruction: parsed.data.instruction,
+          messages: history.length ? history : undefined,
         });
         return { result: r, usage: r.usage, model: MODEL };
       },
     );
     return {
       ok: true,
-      data: { actions: result.actions, clarification: result.clarification },
+      data: {
+        actions: result.actions,
+        clarification: result.clarification,
+        history: result.messages,
+      },
     };
   } catch (e) {
     const msg = mapAiError(e);

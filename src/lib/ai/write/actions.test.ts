@@ -20,6 +20,10 @@ vi.mock("@/lib/ai/gateway", () => ({
       (await fn({ adapter: { supportsTools: true }, apiKey: "k" })).result,
   ),
 }));
+const GROWN_TRANSCRIPT = [
+  { role: "user", content: "make a Backlog group" },
+  { role: "assistant", content: [{ type: "text", text: "done" }] },
+];
 vi.mock("./propose", () => ({
   proposeLoop: vi.fn(async () => ({
     actions: [
@@ -32,6 +36,7 @@ vi.mock("./propose", () => ({
       },
     ],
     usage: { inputTokens: 1, outputTokens: 1 },
+    messages: GROWN_TRANSCRIPT,
   })),
 }));
 const { executeAction } = vi.hoisted(() => ({
@@ -56,6 +61,7 @@ describe("proposeActions", () => {
       data: {
         actions: [expect.objectContaining({ kind: "create_group" })],
         clarification: undefined,
+        history: GROWN_TRANSCRIPT,
       },
     });
   });
@@ -65,6 +71,43 @@ describe("proposeActions", () => {
     const res = await proposeActions({ instruction: "x" });
     expect(res.ok).toBe(false);
     expect(requireAiEntitlement).not.toHaveBeenCalled();
+  });
+
+  it("threads a prior transcript into proposeLoop and returns the grown one", async () => {
+    const { proposeLoop } = await import("./propose");
+    const history = [
+      { role: "user", content: "create task Ship v2" },
+      { role: "assistant", content: [{ type: "text", text: "Which board?" }] },
+    ];
+    const res = await proposeActions({
+      instruction: "the Roadmap board",
+      history,
+    });
+    expect(vi.mocked(proposeLoop).mock.calls[0][0].messages).toEqual(history);
+    expect(res.ok && res.data.history).toEqual(GROWN_TRANSCRIPT);
+  });
+
+  it("degrades malformed history to a fresh start (no seed messages)", async () => {
+    const { proposeLoop } = await import("./propose");
+    const res = await proposeActions({
+      instruction: "create task X",
+      history: [{ role: "system", content: "nope" }] as never,
+    });
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(proposeLoop).mock.calls[0][0].messages).toBeUndefined();
+  });
+
+  it("refuses past the 5-turn cap before any spend", async () => {
+    const { requireAiEntitlement } = await import("@/lib/ai/entitlement");
+    const { proposeLoop } = await import("./propose");
+    const history = Array.from({ length: 5 }, () => ({
+      role: "user" as const,
+      content: "reply",
+    }));
+    const res = await proposeActions({ instruction: "one more", history });
+    expect(res.ok).toBe(false);
+    expect(requireAiEntitlement).not.toHaveBeenCalled();
+    expect(proposeLoop).not.toHaveBeenCalled();
   });
 });
 
