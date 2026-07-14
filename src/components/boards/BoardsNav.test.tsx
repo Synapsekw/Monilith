@@ -12,6 +12,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/",
   useParams: () => mockUseParams(),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/lib/hooks/use-coarse-pointer", () => ({

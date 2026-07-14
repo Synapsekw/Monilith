@@ -3,7 +3,8 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { type DashboardProposal } from "@/lib/ai/proposal-schema";
 import { PROVIDER_CATALOG } from "@/lib/ai/providers/catalog";
-import { withSchema } from "@/lib/ai/providers/prompt";
+import { withSchemaObject } from "@/lib/ai/providers/prompt";
+import { PROPOSAL_JSON_SCHEMA } from "@/lib/ai/proposal-schema";
 import {
   ProviderAuthError,
   type ProviderAdapter,
@@ -31,22 +32,33 @@ export const googleAdapter: ProviderAdapter = {
       throw new ProviderAuthError("google");
     }
   },
-  async generateProposal({ apiKey, system, user }) {
+  async generateStructured({ apiKey, system, user, schema }) {
     const ai = new GoogleGenAI({ apiKey });
     const res = await ai.models.generateContent({
       model: MODEL,
-      contents: [{ role: "user", parts: [{ text: withSchema(user) }] }],
+      contents: [
+        { role: "user", parts: [{ text: withSchemaObject(user, schema) }] },
+      ],
       config: {
         systemInstruction: system,
         responseMimeType: "application/json",
       },
     });
     return {
-      proposal: JSON.parse(res.text ?? "{}") as DashboardProposal,
+      data: JSON.parse(res.text ?? "{}"),
       usage: {
         inputTokens: res.usageMetadata?.promptTokenCount ?? 0,
         outputTokens: res.usageMetadata?.candidatesTokenCount ?? 0,
       },
     };
+  },
+  async generateProposal({ apiKey, system, user }) {
+    const { data, usage } = await this.generateStructured({
+      apiKey,
+      system,
+      user,
+      schema: PROPOSAL_JSON_SCHEMA,
+    });
+    return { proposal: data as DashboardProposal, usage };
   },
 };

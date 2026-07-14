@@ -118,4 +118,5 @@ export type ColumnHeaderControls = {
   onAddColumn: (kind: ColumnKind) => void;
   onEditOptions: (col: Column) => void;
   onEditCurrency: (col: Column) => void;
+  onSmartFill: (col: Column) => void;
 };

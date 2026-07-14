@@ -14,12 +14,7 @@ import {
 import { generateProposal } from "@/lib/ai/generate";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import {
-  AiDisabledError,
-  AiQuotaExceededError,
-  ByoKeyMissingError,
-  AiNotConfiguredError,
-} from "@/lib/ai/errors";
+import { mapAiError } from "@/lib/ai/action-guard";
 import { requireUser, getUserOrgs } from "@/lib/auth/session";
 import {
   configSchemaForKind,
@@ -144,17 +139,7 @@ export async function generateDashboardProposal(input: {
       return fail("Couldn't generate a usable layout — try Regenerate.");
     return { ok: true, data: { proposal: validated } };
   } catch (e) {
-    if (e instanceof AiDisabledError)
-      return fail("AI is turned off for your organization.");
-    if (e instanceof AiQuotaExceededError)
-      return fail("You've used this month's AI allowance.");
-    if (e instanceof ByoKeyMissingError)
-      return fail(
-        "Your organization's AI key is missing — ask an admin to update Settings.",
-      );
-    if (e instanceof AiNotConfiguredError)
-      return fail("AI generation isn't configured.");
-    return fail("AI generation failed. Please try again.");
+    return fail(mapAiError(e));
   }
 }
 

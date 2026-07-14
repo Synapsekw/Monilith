@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import { MentionTextarea } from "@/components/boards/item-panel/MentionTextarea";
 import { DateTime } from "@/components/datetime/date-time";
+import { ThreadSummary } from "@/components/ai/summarize/ThreadSummary";
 import type { UpdatesCache } from "@/lib/collaboration/cache";
 import type { Member } from "@/lib/collaboration/activity";
 
@@ -59,12 +60,14 @@ function renderBody(text: string, names: string[]): ReactNode[] {
 }
 
 export function UpdatesTab({
+  itemId,
   cache,
   isError = false,
   members,
   onAdd,
   onDelete,
 }: {
+  itemId: string;
   cache: UpdatesCache | undefined;
   isError?: boolean;
   members: readonly Member[];
@@ -74,6 +77,7 @@ export function UpdatesTab({
   const [text, setText] = useState("");
   const [mentionIds, setMentionIds] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+  const threadIsEmpty = !cache || cache.updates.length === 0;
 
   function reset() {
     setText("");
@@ -126,11 +130,13 @@ export function UpdatesTab({
         </div>
       )}
 
+      <ThreadSummary itemId={itemId} disabled={threadIsEmpty} />
+
       {isError ? (
         <EmptyState variant="inline">
           Couldn&apos;t load updates. Reopen the item to try again.
         </EmptyState>
-      ) : !cache || cache.updates.length === 0 ? (
+      ) : threadIsEmpty ? (
         <EmptyState variant="inline">No updates yet for this item.</EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
