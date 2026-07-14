@@ -114,13 +114,13 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-3">
+    <div className="flex max-h-[80vh] flex-col gap-3 p-3">
       <Kicker>Run a command</Kicker>
 
       {turns.length > 0 ? (
         <div
           ref={scrollRef}
-          className="divide-border bg-surface-sunken flex max-h-[50vh] flex-col divide-y overflow-y-auto rounded-lg border"
+          className="divide-border bg-surface-sunken flex min-h-0 flex-1 flex-col divide-y overflow-y-auto rounded-lg border"
         >
           {turns.map((t, i) => (
             <div key={i} className="flex flex-col gap-1 p-2.5">

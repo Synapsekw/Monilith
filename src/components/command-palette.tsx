@@ -127,8 +127,10 @@ export function CommandPalette({
       onOpenChange={handleOpenChange}
       title="Command palette"
       description="Search and run actions"
-      // Give the multi-turn "Run a command" conversation more room to breathe.
-      className={actionMode ? "sm:max-w-2xl" : undefined}
+      // Multi-turn "Run a command": wider, anchored higher, and height-bounded
+      // so a long conversation scrolls inside the panel instead of growing the
+      // dialog off-screen. QuickAction itself owns the internal scroll region.
+      className={actionMode ? "top-[8vh] max-h-[84vh] sm:max-w-2xl" : undefined}
     >
       {actionMode ? (
         <QuickAction
