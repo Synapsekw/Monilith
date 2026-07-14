@@ -127,6 +127,8 @@ export function CommandPalette({
       onOpenChange={handleOpenChange}
       title="Command palette"
       description="Search and run actions"
+      // Give the multi-turn "Run a command" conversation more room to breathe.
+      className={actionMode ? "sm:max-w-2xl" : undefined}
     >
       {actionMode ? (
         <QuickAction
