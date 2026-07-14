@@ -49,12 +49,19 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Refocus the reply box whenever the model asks a follow-up.
   useEffect(() => {
     if (!thinking && !actions.length && turns.at(-1)?.role === "ai")
       boxRef.current?.focus();
   }, [thinking, actions.length, turns]);
+
+  // Keep the latest turn (and the "working" row) in view as the thread grows.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [turns, thinking]);
 
   function run() {
     const text = instruction.trim();
@@ -111,7 +118,10 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
       <Kicker>Run a command</Kicker>
 
       {turns.length > 0 ? (
-        <div className="divide-border bg-surface-sunken flex flex-col divide-y rounded-lg border">
+        <div
+          ref={scrollRef}
+          className="divide-border bg-surface-sunken flex max-h-[50vh] flex-col divide-y overflow-y-auto rounded-lg border"
+        >
           {turns.map((t, i) => (
             <div key={i} className="flex flex-col gap-1 p-2.5">
               <span className="text-kicker font-mono text-[11px] tracking-[0.12em] uppercase">
