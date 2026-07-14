@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { proposedActionSchema, validatedActionSchema } from "./schema";
+import {
+  proposedActionSchema,
+  validatedActionSchema,
+  aiConversationHistorySchema,
+} from "./schema";
 
 describe("proposedActionSchema", () => {
   it("accepts a create_item with fields", () => {
@@ -66,6 +70,30 @@ describe("validatedActionSchema", () => {
       name: "Backlog",
       warnings: [],
     });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("aiConversationHistorySchema", () => {
+  it("accepts a well-formed transcript (string + block content)", () => {
+    const r = aiConversationHistorySchema.safeParse([
+      { role: "user", content: "create task Ship v2" },
+      { role: "assistant", content: [{ type: "text", text: "Which board?" }] },
+    ]);
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects a turn with an unknown role", () => {
+    const r = aiConversationHistorySchema.safeParse([
+      { role: "system", content: "nope" },
+    ]);
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects content that is neither a string nor an array", () => {
+    const r = aiConversationHistorySchema.safeParse([
+      { role: "user", content: 42 },
+    ]);
     expect(r.success).toBe(false);
   });
 });

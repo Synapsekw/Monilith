@@ -94,6 +94,64 @@ describe("proposeLoop", () => {
     );
   });
 
+  it("threads a prior transcript and appends the new instruction as a user turn", async () => {
+    const client = fakeClient();
+    const seed: Anthropic.MessageParam[] = [
+      { role: "user", content: "create task Ship v2" },
+      { role: "assistant", content: [{ type: "text", text: "Which board?" }] },
+    ];
+    const res = await proposeLoop({
+      apiKey: "k",
+      orgId: "o",
+      workspaceId: "w",
+      instruction: "the Roadmap board",
+      messages: seed,
+      client: client as unknown as Anthropic,
+    });
+    // The first model call saw the seed with the reply appended as the last turn.
+    const [firstCall] = client.messages.create.mock.calls as unknown as [
+      [{ messages: Anthropic.MessageParam[] }],
+    ];
+    const sent = firstCall[0].messages;
+    expect(sent[0]).toEqual(seed[0]);
+    expect(sent[1]).toEqual(seed[1]);
+    expect(sent[2]).toEqual({ role: "user", content: "the Roadmap board" });
+    // A proposal was reached and the returned transcript grew past the seed.
+    expect(res.actions).toHaveLength(1);
+    expect(res.messages.length).toBeGreaterThan(seed.length + 1);
+    expect(res.messages[0]).toEqual(seed[0]);
+  });
+
+  it("returns the running transcript so a clarification can be continued", async () => {
+    const client = {
+      messages: {
+        create: vi.fn(async () => ({
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: "Which board?" }],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        })),
+      },
+    };
+    const { createWriteToolExecutor } = await import("./write-tools");
+    vi.mocked(createWriteToolExecutor).mockReturnValueOnce({
+      execute: vi.fn(),
+      collected: () => [],
+    });
+    const res = await proposeLoop({
+      apiKey: "k",
+      orgId: "o",
+      workspaceId: "w",
+      instruction: "do a thing",
+      client: client as unknown as Anthropic,
+    });
+    expect(res.clarification).toBe("Which board?");
+    expect(res.messages[0]).toEqual({ role: "user", content: "do a thing" });
+    expect(res.messages.at(-1)).toEqual({
+      role: "assistant",
+      content: [{ type: "text", text: "Which board?" }],
+    });
+  });
+
   it("returns a clarification when the model proposes nothing", async () => {
     const client = {
       messages: {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type Anthropic from "@anthropic-ai/sdk";
 
 // ISO calendar date (YYYY-MM-DD) — matches dateValueSchema's `date`.
 const isoDate = z
@@ -67,3 +68,16 @@ export type ValidatedAction = z.infer<typeof validatedActionSchema>;
 export type ExecutionResult =
   | { ok: true; itemId?: string }
   | { ok: false; error: string };
+
+/**
+ * A single turn in a threaded ⌘K action conversation — structurally an
+ * Anthropic `MessageParam`. We forward it back to the model verbatim, so this
+ * guard is a shape gate (role + content-is-string-or-array), not a deep
+ * validation of every content block. The client holds it opaquely between turns.
+ */
+export const aiConversationTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.union([z.string(), z.array(z.unknown())]),
+});
+export const aiConversationHistorySchema = z.array(aiConversationTurnSchema);
+export type AiConversationTurn = Anthropic.MessageParam;
