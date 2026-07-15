@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MonolithHero } from "./monolith-hero";
 
+// The hero composes the full marketing page; these tests cover the hero shell
+// only, so stub the sections (they add their own links, tested separately).
+vi.mock("./landing-sections", () => ({ LandingSections: () => null }));
+
 // next/link needs the app-router context in Next 16; render a plain anchor.
 vi.mock("next/link", () => ({
   default: ({

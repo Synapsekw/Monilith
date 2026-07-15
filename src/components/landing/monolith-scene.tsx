@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { motion, useReducedMotion } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import { nunito } from "@/lib/fonts";
+import { Kicker } from "@/components/ui/kicker";
 import styles from "./monolith-hero.module.css";
 
 // The WebGL backdrop pulls in the `ogl` renderer chunk. It's a decorative,
@@ -51,12 +52,12 @@ export function MonolithScene({ children }: { children: React.ReactNode }) {
       initial={reduce ? false : "hidden"}
       animate="show"
     >
-      <LightRays className={styles.rays} />
+      <LightRays className={styles.rays} raysColor="#8ea2eb" />
       <span className={styles.source} aria-hidden />
       <span className={styles.vignette} aria-hidden />
       <motion.span className={styles.badge} variants={item}>
         <span className={styles.badgeDot} aria-hidden />
-        In active development
+        <Kicker>In active development</Kicker>
       </motion.span>
       <motion.span
         className={`${styles.wordmark} ${nunito.className}`}
