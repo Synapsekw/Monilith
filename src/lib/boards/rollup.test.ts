@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { rollupCell, rollupTimeTracking } from "./rollup";
+import {
+  isTextualKind,
+  rollupCell,
+  rollupTimeTracking,
+  textualRollup,
+} from "./rollup";
 
 describe("rollupCell", () => {
   it("returns blank when no values are present", () => {
@@ -150,5 +155,37 @@ describe("priority rollup", () => {
   });
   it("blanks when no stored levels", () => {
     expect(rollupCell("priority", [null, {}])).toEqual({ kind: "blank" });
+  });
+});
+
+describe("isTextualKind", () => {
+  it("marks the free-text kinds that have no arithmetic rollup", () => {
+    for (const k of ["text", "link", "email", "phone"] as const) {
+      expect(isTextualKind(k)).toBe(true);
+    }
+  });
+  it("rejects aggregatable kinds", () => {
+    for (const k of ["numbers", "status", "date", "percent"] as const) {
+      expect(isTextualKind(k)).toBe(false);
+    }
+  });
+});
+
+describe("textualRollup", () => {
+  it("prefers the parent's own value over the subitems", () => {
+    expect(
+      textualRollup({ text: "Q3 landing" }, [{ text: "a" }, null]),
+    ).toEqual({ kind: "own" });
+  });
+  it("falls back to a count of filled subitems when the parent is empty", () => {
+    expect(
+      textualRollup(null, [{ text: "a" }, null, { text: "b" }, undefined]),
+    ).toEqual({ kind: "count", count: 2 });
+  });
+  it("is blank when neither the parent nor any subitem has a value", () => {
+    expect(textualRollup(null, [null, undefined])).toEqual({ kind: "blank" });
+  });
+  it("treats an empty subitem list as blank", () => {
+    expect(textualRollup(null, [])).toEqual({ kind: "blank" });
   });
 });

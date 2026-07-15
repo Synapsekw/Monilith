@@ -194,6 +194,7 @@ export function ItemRow({
               cellMap={cellMap}
               cache={controls.cache}
               nowMs={rollupNowMs}
+              ownValue={cellMap.get(cellKey(item.id, col.id)) ?? null}
             />
           );
         }
