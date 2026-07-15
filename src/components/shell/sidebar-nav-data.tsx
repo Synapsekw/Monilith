@@ -6,6 +6,7 @@ import {
 import { listDashboardsCached } from "@/lib/dashboards/queries-cached";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import type { ComponentProps } from "react";
 
@@ -16,10 +17,11 @@ export async function getSidebarNavData(): Promise<
 > {
   const [user, orgs] = await Promise.all([getUser(), getUserOrgs()]);
   const userId = user?.id ?? "";
-  const orgId = orgs[0]?.id ?? "";
+  const activeOrg = await resolveActiveOrg(); // cache-deduped with getUserOrgs above
+  const orgId = activeOrg?.id ?? "";
 
-  // Workspaces first: the active-workspace cookie is validated against this list,
-  // and the resolved id scopes the board + dashboard reads below.
+  // Workspaces first: the active-workspace cookie is validated against this list
+  // (and self-heals if it points at a workspace in a different org).
   const workspaces = await listWorkspacesCached(orgId);
   const activeWorkspaceId = await getActiveWorkspaceId(workspaces);
 
@@ -30,6 +32,8 @@ export async function getSidebarNavData(): Promise<
   ]);
 
   return {
+    orgs,
+    activeOrgId: orgId,
     boards,
     sharedBoards,
     workspaces,

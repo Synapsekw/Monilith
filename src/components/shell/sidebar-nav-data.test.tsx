@@ -12,10 +12,18 @@ vi.mock("@/lib/workspaces/actions", () => ({
   renameWorkspace: vi.fn(),
   deleteWorkspace: vi.fn(),
 }));
-// Identity reads (cookie-bound, uncached) are mocked to a user + one org.
+// Identity reads (cookie-bound, uncached) are mocked to a user + two orgs.
 vi.mock("@/lib/auth/session", () => ({
   getUser: vi.fn(async () => ({ id: "u1" })),
-  getUserOrgs: vi.fn(async () => [{ id: "org1", name: "Acme" }]),
+  getUserOrgs: vi.fn(async () => [
+    { id: "org1", name: "Acme" },
+    { id: "org2", name: "Globex" },
+  ]),
+}));
+// Active-org resolution reads a cookie (uncached, request-scoped); mocked here
+// since the RSC render happens outside a request context. Resolves to org2.
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: vi.fn(async () => ({ id: "org2", name: "Globex" })),
 }));
 // Cached shell reads (Phase 9.3) — the component now consumes these.
 vi.mock("@/lib/boards/queries-cached", () => ({
@@ -61,4 +69,14 @@ describe("SidebarNavData", () => {
       expect(screen.getByText("Eng")).toBeInTheDocument();
     },
   );
+
+  it("returns the org list and the resolved active org id", async () => {
+    const { getSidebarNavData } = await import("./sidebar-nav-data");
+    const data = await getSidebarNavData();
+    expect(data.orgs).toEqual([
+      { id: "org1", name: "Acme" },
+      { id: "org2", name: "Globex" },
+    ]);
+    expect(data.activeOrgId).toBe("org2");
+  });
 });

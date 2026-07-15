@@ -13,6 +13,7 @@ import {
 import type { ComponentType } from "react";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
+import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
 import { NavSection } from "@/components/shell/nav-section";
 import { Separator } from "@/components/ui/separator";
@@ -117,6 +118,8 @@ function CollapsedLink({
  * headers (NavSection). Platform admin now lives in the header, not here.
  */
 export function SidebarNav({
+  orgs = [],
+  activeOrgId = "",
   boards,
   sharedBoards,
   workspaces,
@@ -124,6 +127,8 @@ export function SidebarNav({
   dashboards,
   forceExpanded = false,
 }: {
+  orgs?: { id: string; name: string }[];
+  activeOrgId?: string;
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
   workspaces: { id: string; name: string }[];
@@ -139,6 +144,11 @@ export function SidebarNav({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <OrgSwitcher
+        orgs={orgs}
+        activeOrgId={activeOrgId}
+        collapsed={isCollapsed}
+      />
       <WorkspaceSwitcher
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
