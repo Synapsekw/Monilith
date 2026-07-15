@@ -65,7 +65,7 @@ interface Uniforms {
   distortion: { value: number };
 }
 
-const DEFAULT_COLOR = "#bcc4ff";
+const DEFAULT_COLOR = "#8ea2eb";
 
 function hexToRgb(hex: string): Vec3 {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
