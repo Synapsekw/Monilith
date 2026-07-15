@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { MagneticButton } from "./magnetic-button";
 import { MonolithScene } from "./monolith-scene";
+import { LandingSections } from "./landing-sections";
 import styles from "./monolith-hero.module.css";
 
-// Primary CTA: a white pill that stands clean against the always-dark hero
-// (the bespoke surface is theme-independent, so it uses fixed light values
-// rather than theme tokens — matching the wordmark's #f4f4f6). The secondary
-// keeps the monochrome outline, pill-matched for a cohesive pair.
+// Primary CTA: the ONE earned loud moment in Keystone — periwinkle fill +
+// near-black text + the sanctioned white glow (`shadow-glow-primary`). The
+// landing is the system's natural home for the glow CTA (it has no in-app host).
+// Secondary keeps the monochrome outline; its hairline BRIGHTENS (never
+// thickens) on hover, per the Keystone hairline rule.
 const PRIMARY_CTA =
-  "h-11 rounded-full px-7 bg-[#f4f4f6] text-[#0a0a0c] hover:bg-white hover:shadow-[0_0_36px_-6px_rgba(255,255,255,0.55)]";
+  "h-11 rounded-full px-7 bg-primary text-primary-foreground shadow-glow-primary hover:brightness-110";
 const SECONDARY_CTA =
-  "h-11 rounded-full px-7 hover:shadow-[0_0_28px_-8px_rgba(232,232,234,0.4)]";
+  "h-11 rounded-full px-7 border-border hover:border-border-hover hover:bg-accent/40";
 
 /**
  * Public landing hero. Server Component: derives the CTA labels/targets from
@@ -21,7 +23,10 @@ const SECONDARY_CTA =
  */
 export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
   return (
-    <div className={styles.page}>
+    // Dark-locked: the hero is always dark regardless of the visitor's theme
+    // (like /updates), so Keystone token-driven children (primary/border/kicker)
+    // resolve to their dark values even on the static, theme-agnostic `/` route.
+    <div className={`dark ${styles.page}`}>
       <MonolithScene>
         {signedIn ? (
           <MagneticButton href="/" className={PRIMARY_CTA}>
@@ -42,6 +47,7 @@ export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
           </>
         )}
       </MonolithScene>
+      <LandingSections signedIn={signedIn} />
       <footer className={styles.footer}>
         <span>Invitation only</span>
         <Link href="/updates" className={styles.footerLink}>
