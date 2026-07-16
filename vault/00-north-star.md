@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-16-1552
+last-updated: 2026-07-16-1556
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,11 +51,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Audit Batch A hardening + cross-org sharing shipped to prod** ([[2026-07-16-1552-audit-batch-a-scope-build-ship]], PR `#64`) — org switcher (cookie active-org resolver, 28 call-sites migrated), per-type notification preferences (gating trigger), auth rate limiting (per-IP / per-email, fail-open), and cross-org reciprocal board-sharing membership. Prod migration ledger verified to carry all three new migrations. Also in prod: Keystone landing (`#63`), Phase 10 Batch 2 (E2/E3/E4 + ⌘K, `#62`), E1 (`#59`), hardening (`#61`).
+- **Phase:** **Audit Batch A hardening + cross-org sharing shipped to prod** ([[2026-07-16-1552-audit-batch-a-scope-build-ship]], PR `#64`) — org switcher (cookie active-org resolver, 28 call-sites migrated), per-type notification preferences (gating trigger), auth rate limiting (per-IP / per-email, fail-open), and cross-org reciprocal board-sharing membership ([[2026-07-16-1556-cross-org-sharing-promote-sync]]). **Prod fully synced this session via `/sync-prod`** — the 3 new migrations were in fact **missing** from prod (schema-parity hard-stop), applied via `db push`, then data + storage full-replaced (dev==prod parity verified: orgs 14 / boards 15 / items 417 / users 14 / storage 11). Also in prod: Keystone landing (`#63`), Phase 10 Batch 2 (E2/E3/E4 + ⌘K, `#62`), E1 (`#59`), hardening (`#61`).
 - **Branch:** `develop` @ `394f3d9` == `origin/develop`; `main` @ `db8cb9c` == `origin/main` — **in sync** (Batch A promoted, squash divergence healed). One scoping worktree still parked: `task/e5-agentic-semantic` (E5 spec written, **uncommitted**, awaiting review/build).
 - **In flight:** none building.
 - **Next:** pick a roadmap build — **Ask Pulse full-page** (plan ready; build **before E5**, shared `src/lib/ai/ask/`), **E6** (Stripe billing — plan `docs/superpowers/plans/2026-07-12-e6-billing-platform.md`; F16 blocked on your Stripe creds), **PF — Polish & Fluidity** (plan ready; batch A first, A4 skippable), or **E5** (agentic automations + semantic search — spec written, fold this session's review risks in first). **Audit Batch B now cleared** — all four items shipped or already-existing (saved views was already implemented via `board_views`).
-- **Owed:** **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **E5 review risks** to fold into its plan before building: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (printed to terminal during the earlier `/sync-prod`).
+- **Owed:** **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **E5 review risks** to fold into its plan before building: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (printed to terminal during this session's `/sync-prod`).
 
 ### Last session
 
