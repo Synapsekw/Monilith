@@ -58,6 +58,92 @@ export type Database = {
           },
         ];
       };
+      ai_conversations: {
+        Row: {
+          created_at: string;
+          id: string;
+          org_id: string;
+          summarized_upto: string | null;
+          summary: string | null;
+          title: string;
+          updated_at: string;
+          user_id: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          summarized_upto?: string | null;
+          summary?: string | null;
+          title?: string;
+          updated_at?: string;
+          user_id: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          summarized_upto?: string | null;
+          summary?: string | null;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_messages: {
+        Row: {
+          content: string;
+          conversation_id: string;
+          created_at: string;
+          id: string;
+          role: string;
+          tool_trace: Json | null;
+        };
+        Insert: {
+          content: string;
+          conversation_id: string;
+          created_at?: string;
+          id?: string;
+          role: string;
+          tool_trace?: Json | null;
+        };
+        Update: {
+          content?: string;
+          conversation_id?: string;
+          created_at?: string;
+          id?: string;
+          role?: string;
+          tool_trace?: Json | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_usage: {
         Row: {
           cost_usd: number;
