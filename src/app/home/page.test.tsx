@@ -9,6 +9,8 @@ const {
   listSharedBoards,
   listWorkspacesCached,
   redirect,
+  cookieStore,
+  boardProbe,
 } = vi.hoisted(() => ({
   getUser: vi.fn(),
   getUserOrgs: vi.fn(),
@@ -19,6 +21,8 @@ const {
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
   }),
+  cookieStore: new Map<string, string>(),
+  boardProbe: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -50,9 +54,19 @@ vi.mock("@/lib/org/guard", () => ({
 vi.mock("@/lib/platform/guard", () => ({
   isPlatformAdmin: () => Promise.resolve(false),
 }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (n: string) =>
+      cookieStore.has(n) ? { name: n, value: cookieStore.get(n)! } : undefined,
+  }),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    from: () => ({ select: async () => ({ data: [] }) }),
+    from: () => ({
+      select: () => ({
+        eq: () => ({ is: () => ({ maybeSingle: () => boardProbe() }) }),
+      }),
+    }),
     rpc: async () => ({ data: false, error: null }),
   }),
 }));
@@ -68,7 +82,10 @@ import { HomeDispatch } from "./page";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cookieStore.clear();
 });
+
+const LAST = "0b9e2a51-6f5c-4d7a-9c3e-8f1d2b4a6c0e";
 
 describe("Home dispatcher (/home)", () => {
   it("redirects a logged-out visitor to /login", async () => {
@@ -89,6 +106,68 @@ describe("Home dispatcher (/home)", () => {
 
     await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/boards/b1");
     expect(redirect).toHaveBeenCalledWith("/boards/b1");
+  });
+
+  it("redirects straight to a valid last-board cookie with one probe and no list reads", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    cookieStore.set("pulse_last_board", LAST);
+    boardProbe.mockResolvedValue({ data: { id: LAST }, error: null });
+
+    await expect(HomeDispatch()).rejects.toThrow(`REDIRECT:/boards/${LAST}`);
+    expect(boardProbe).toHaveBeenCalledTimes(1);
+    expect(listMyBoards).not.toHaveBeenCalled();
+  });
+
+  it("falls through to the list dispatch when the cookie board is gone/RLS-hidden", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    cookieStore.set("pulse_last_board", LAST);
+    boardProbe.mockResolvedValue({ data: null, error: null });
+    getUserOrgs.mockResolvedValue([{ id: "o1", name: "Acme" }]);
+    listMyBoards.mockResolvedValue([{ id: "b1" }]);
+    listSharedBoards.mockResolvedValue([]);
+
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/boards/b1");
+  });
+
+  it("ignores a malformed cookie without querying", async () => {
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    cookieStore.set("pulse_last_board", "drop table boards");
+    getUserOrgs.mockResolvedValue([]);
+    listMyBoards.mockResolvedValue([]);
+    listSharedBoards.mockResolvedValue([]);
+
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/onboarding");
+    expect(boardProbe).not.toHaveBeenCalled();
+  });
+
+  it("fetches orgs, boards and shared boards in parallel (no serial gating)", async () => {
+    // Even the org-less user's board reads fire — the three lists are
+    // independent, so none may await another. Decision order is still checked
+    // sequentially after the single batch resolves.
+    getUser.mockResolvedValue({
+      id: "u1",
+      email: "a@b.com",
+      user_metadata: {},
+    });
+    getUserOrgs.mockResolvedValue([]);
+    listMyBoards.mockResolvedValue([]);
+    listSharedBoards.mockResolvedValue([]);
+
+    await expect(HomeDispatch()).rejects.toThrow("REDIRECT:/onboarding");
+    expect(listMyBoards).toHaveBeenCalledTimes(1);
+    expect(listSharedBoards).toHaveBeenCalledTimes(1);
   });
 
   it("redirects a logged-in user with no orgs to onboarding", async () => {
