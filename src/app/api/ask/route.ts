@@ -23,8 +23,8 @@ import { encodeEvent, type AskStreamEvent } from "@/lib/ai/ask/stream-protocol";
 import { MODEL } from "@/lib/ai/providers/anthropic";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 
-// Anthropic SDK + the service client need Node APIs — not the Edge runtime.
-export const runtime = "nodejs";
+// Runs on the default Node.js runtime (Cache Components forbids an explicit
+// `runtime` export). The Anthropic SDK + service client need Node APIs anyway.
 
 const SYSTEM = [
   "You are Ask Pulse, a helpful analyst answering questions about the user's boards.",
