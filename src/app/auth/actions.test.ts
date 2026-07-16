@@ -5,7 +5,9 @@ const {
   updateUser,
   updateUserById,
   signUp,
+  signInWithPassword,
   resetPasswordForEmail,
+  checkRateLimit,
   redirect,
   serverEnv,
   headerMap,
@@ -14,7 +16,9 @@ const {
   updateUser: vi.fn(),
   updateUserById: vi.fn(),
   signUp: vi.fn(),
+  signInWithPassword: vi.fn(),
   resetPasswordForEmail: vi.fn(),
+  checkRateLimit: vi.fn(),
   // Real next/navigation redirect() throws to halt execution — mirror that.
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
@@ -25,7 +29,13 @@ const {
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    auth: { getUser, updateUser, signUp, resetPasswordForEmail },
+    auth: {
+      getUser,
+      updateUser,
+      signUp,
+      signInWithPassword,
+      resetPasswordForEmail,
+    },
   }),
 }));
 vi.mock("@/lib/supabase/service", () => ({
@@ -33,6 +43,12 @@ vi.mock("@/lib/supabase/service", () => ({
 }));
 vi.mock("@/lib/env.server", () => ({
   getServerEnv: () => serverEnv.value,
+}));
+vi.mock("@/lib/rate-limit/auth-rate-limit", () => ({
+  checkRateLimit: (...a: unknown[]) => checkRateLimit(...a),
+  throttleResult: () => ({
+    error: "Too many attempts. Please try again in about 1 minute.",
+  }),
 }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => redirect(url),
@@ -42,6 +58,7 @@ vi.mock("next/headers", () => ({ headers: async () => headerMap }));
 import {
   changeOwnPassword,
   requestPasswordReset,
+  signIn as signInAction,
   signUp as signUpAction,
 } from "./actions";
 
@@ -54,7 +71,11 @@ beforeEach(() => {
   signUp
     .mockReset()
     .mockResolvedValue({ data: { session: null }, error: null });
+  signInWithPassword
+    .mockReset()
+    .mockResolvedValue({ data: { session: null }, error: null });
   resetPasswordForEmail.mockReset().mockResolvedValue({ error: null });
+  checkRateLimit.mockReset().mockResolvedValue({ allowed: true });
   redirect.mockClear();
   serverEnv.value = {};
   headerMap.clear();
@@ -225,5 +246,63 @@ describe("signUp — emailRedirectTo host trust", () => {
         }),
       }),
     );
+  });
+});
+
+const loginFd = (email = "u@example.com", password = "pw") => {
+  const f = new FormData();
+  f.set("email", email);
+  f.set("password", password);
+  return f;
+};
+
+describe("rate limiting — throttle short-circuits before Supabase", () => {
+  it("signIn returns the throttle error and never calls Supabase", async () => {
+    checkRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 90 });
+    const res = await signInAction({}, loginFd());
+    expect(res.error).toMatch(/too many attempts/i);
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("signUp returns the throttle error and never calls Supabase", async () => {
+    checkRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 90 });
+    const res = await signUpAction({}, signupFd());
+    expect(res.error).toMatch(/too many attempts/i);
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it("requestPasswordReset throttle error is identical for existent & nonexistent emails (anti-enumeration)", async () => {
+    checkRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 90 });
+    const a = await requestPasswordReset({}, resetFd("real@example.com"));
+    const b = await requestPasswordReset({}, resetFd("nobody@example.com"));
+    expect(a).toEqual(b);
+    expect(a.error).toMatch(/too many attempts/i);
+    expect(resetPasswordForEmail).not.toHaveBeenCalled();
+  });
+
+  it("changeOwnPassword returns the throttle error and never updates", async () => {
+    checkRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 90 });
+    const res = await changeOwnPassword({}, fd("longenough1"));
+    expect(res.error).toMatch(/too many attempts/i);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("rate limiting — allowed path preserves existing contracts", () => {
+  it("signUp still returns check-email when allowed (duplicate == fresh)", async () => {
+    signUp.mockResolvedValue({
+      data: { session: null },
+      error: {
+        code: "user_already_exists",
+        message: "User already registered",
+      },
+    });
+    const res = await signUpAction({}, signupFd());
+    expect(res).toEqual({ success: "check-email" });
+  });
+
+  it("requestPasswordReset still returns reset-email-sent when allowed", async () => {
+    const res = await requestPasswordReset({}, resetFd("user@example.com"));
+    expect(res).toEqual({ success: "reset-email-sent" });
   });
 });

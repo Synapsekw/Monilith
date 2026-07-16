@@ -40,6 +40,13 @@ const serverEnvSchema = z.object({
     .string()
     .email("DIGEST_FROM_EMAIL must be an email when set")
     .optional(),
+  // Optional ops lever for auth rate limits: multiplies every compiled default
+  // limit (e.g. "2" doubles all caps, "0.5" halves them). Absent → 1× defaults.
+  // Feature works fully without it, like the DIGEST_* optionals above.
+  AUTH_RATE_LIMIT_MULTIPLIER: z.coerce
+    .number()
+    .positive("AUTH_RATE_LIMIT_MULTIPLIER must be a positive number when set")
+    .optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -58,6 +65,7 @@ export function getServerEnv(): ServerEnv {
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     APP_BASE_URL: process.env.APP_BASE_URL,
     DIGEST_FROM_EMAIL: process.env.DIGEST_FROM_EMAIL,
+    AUTH_RATE_LIMIT_MULTIPLIER: process.env.AUTH_RATE_LIMIT_MULTIPLIER,
   });
   if (!parsed.success) {
     const issues = parsed.error.issues
