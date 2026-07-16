@@ -48,6 +48,14 @@ export type CellControls = {
   uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
   /** Open the Files lightbox over a cell's attachments at the given index. */
   openFilesLightbox: (files: readonly CacheAttachment[], index: number) => void;
+  /**
+   * Full-res + thumbnail signed URLs for the attachments of the cell whose
+   * lightbox was last opened (keyed by attachment id). Lazily minted on
+   * lightbox open (0 round-trips on first paint); Files-cell chips read these
+   * to upgrade from a kind icon to an image thumbnail, falling back to full-res.
+   */
+  filesPreviewUrls?: Record<string, string>;
+  filesThumbUrls?: Record<string, string>;
   // ─── Time-tracking callbacks ───────────────────────────────────────────────
   startTimer: (itemId: string, columnId: string) => void;
   stopTimer: (entryId: string) => void;

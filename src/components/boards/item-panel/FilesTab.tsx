@@ -17,6 +17,7 @@ type ViewMode = "gallery" | "list";
 export function FilesTab({
   cache,
   previewUrls,
+  thumbUrls,
   members,
   currentUserId,
   isUploading,
@@ -26,6 +27,8 @@ export function FilesTab({
 }: {
   cache: AttachmentsCache | undefined;
   previewUrls: Record<string, string>;
+  /** Optional thumbnail-transform URLs (image rows only); falls back to full-res. */
+  thumbUrls?: Record<string, string>;
   members: readonly Member[];
   currentUserId: string;
   isUploading: boolean;
@@ -132,6 +135,7 @@ export function FilesTab({
               key={a.id}
               attachment={a}
               previewUrl={previewUrls[a.id]}
+              thumbUrl={thumbUrls?.[a.id]}
               members={members}
               uploading={a.id.startsWith("optimistic-")}
               canDelete={a.uploaded_by === currentUserId}

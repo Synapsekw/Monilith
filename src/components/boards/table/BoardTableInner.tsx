@@ -158,6 +158,11 @@ export function BoardTableInner({
   const [filesPreviewUrls, setFilesPreviewUrls] = useState<
     Record<string, string>
   >({});
+  // Thumbnail-transform URLs for the same cell's images (chips upgrade from an
+  // icon to a small thumbnail on lightbox open; the lightbox keeps full-res).
+  const [filesThumbUrls, setFilesThumbUrls] = useState<Record<string, string>>(
+    {},
+  );
 
   // Stable (useCallback) so the memoized `controls` bundle below keeps its
   // identity across non-data re-renders (column resize, horizontal scroll,
@@ -167,10 +172,16 @@ export function BoardTableInner({
       const list = [...files];
       setFilesLightbox({ files: list, index });
       setFilesPreviewUrls({});
+      setFilesThumbUrls({});
+      // 96×96 = the size-6 chip (coarse size-11 = 44px) at ~2× DPR.
       void getAttachmentPreviewUrls({
         attachmentIds: list.map((a) => a.id),
+        thumb: { width: 96, height: 96 },
       }).then((res) => {
-        if (res.ok) setFilesPreviewUrls(res.data.urls);
+        if (res.ok) {
+          setFilesPreviewUrls(res.data.urls);
+          setFilesThumbUrls(res.data.thumbUrls);
+        }
       });
     },
     [],
@@ -455,6 +466,8 @@ export function BoardTableInner({
       dependentsByItem,
       uploadColumnFile: m.uploadColumnFile,
       openFilesLightbox,
+      filesPreviewUrls,
+      filesThumbUrls,
       startTimer: m.startTimer,
       stopTimer: m.stopTimer,
       addManualEntry: m.addManualEntry,
@@ -473,6 +486,8 @@ export function BoardTableInner({
       cache,
       dependentsByItem,
       openFilesLightbox,
+      filesPreviewUrls,
+      filesThumbUrls,
     ],
   );
 

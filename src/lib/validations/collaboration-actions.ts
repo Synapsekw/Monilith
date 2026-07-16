@@ -50,6 +50,14 @@ export const attachmentUrlSchema = z.object({
 
 export const attachmentUrlsSchema = z.object({
   attachmentIds: z.array(z.string().uuid()).max(60),
+  // When set, additionally mint width/height-constrained image-transform URLs
+  // (thumbnails) for the image rows — see getAttachmentPreviewUrls.
+  thumb: z
+    .object({
+      width: z.number().int().positive().max(2000),
+      height: z.number().int().positive().max(2000),
+    })
+    .optional(),
 });
 
 export const attachmentPdfUrlSchema = z.object({

@@ -167,9 +167,52 @@ describe("getAttachmentPreviewUrls", () => {
     });
     const res = await getAttachmentPreviewUrls({ attachmentIds: [PNG, SVG] });
     expect(createSignedUrls).toHaveBeenCalledWith(["p/x.png"], 300);
+    // No thumb requested → the per-file transform signer is never touched.
+    expect(createSignedUrl).not.toHaveBeenCalled();
     expect(res).toEqual({
       ok: true,
-      data: { urls: { [PNG]: "https://signed/p" } },
+      data: { urls: { [PNG]: "https://signed/p" }, thumbUrls: {} },
+    });
+  });
+
+  it("mints per-file width/height transform URLs for image rows when thumb is set", async () => {
+    const PNG = "55555555-5555-4555-8555-555555555555";
+    const SVG = "66666666-6666-4666-8666-666666666666";
+    from.mockImplementation(() => ({
+      select: () => ({
+        in: async () => ({
+          data: [
+            { id: PNG, storage_path: "p/x.png", mime_type: "image/png" },
+            { id: SVG, storage_path: "s/x.svg", mime_type: "image/svg+xml" },
+          ],
+          error: null,
+        }),
+      }),
+    }));
+    createSignedUrls.mockResolvedValue({
+      data: [{ path: "p/x.png", signedUrl: "https://signed/p" }],
+      error: null,
+    });
+    createSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://signed/thumb" },
+      error: null,
+    });
+    const res = await getAttachmentPreviewUrls({
+      attachmentIds: [PNG, SVG],
+      thumb: { width: 96, height: 96 },
+    });
+    // Only the previewable raster row (image/png) gets a transform URL — the
+    // svg (not previewable) never signs.
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    expect(createSignedUrl).toHaveBeenCalledWith("p/x.png", 300, {
+      transform: { width: 96, height: 96, resize: "cover" },
+    });
+    expect(res).toEqual({
+      ok: true,
+      data: {
+        urls: { [PNG]: "https://signed/p" },
+        thumbUrls: { [PNG]: "https://signed/thumb" },
+      },
     });
   });
 });

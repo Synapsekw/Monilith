@@ -73,7 +73,8 @@ export const EditableCell = memo(function EditableCell({
       <div className="flex h-full items-center border-l px-3">
         <FilesCell
           files={files}
-          previewUrls={{}}
+          previewUrls={controls.filesPreviewUrls ?? {}}
+          thumbUrls={controls.filesThumbUrls}
           onOpen={(i) => controls.openFilesLightbox(files, i)}
           onUpload={(f) => controls.uploadColumnFile(item.id, column.id, f)}
         />
