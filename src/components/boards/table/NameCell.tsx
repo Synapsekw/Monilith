@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { memo, useState, useTransition } from "react";
 import { Maximize2 } from "lucide-react";
 import type { Item } from "@/lib/boards/queries";
 import { NAME_FREEZE_EDGE } from "@/components/boards/SummaryRow";
@@ -24,7 +24,7 @@ function openItemPanel(itemId: string) {
  * The built-in primary "Name" cell. Supports optional leading (chevron/spacer),
  * trailing (add-subitem + row menu), indented layout, and auto-focus rename.
  */
-export function NameCell({
+export const NameCell = memo(function NameCell({
   item,
   controls,
   leading,
@@ -155,4 +155,4 @@ export function NameCell({
       {trailing}
     </div>
   );
-}
+});

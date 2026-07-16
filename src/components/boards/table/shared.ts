@@ -37,6 +37,13 @@ export type CellControls = {
   moveItemToGroup: (itemId: string, groupId: string, position?: number) => void;
   /** Live board cache — read by Files cells to resolve their attachments. */
   cache: BoardCache;
+  /**
+   * Direct-dependent counts for priority cells: one O(edges) pass over the
+   * board's dependency set, computed once in {@link BoardTable} and threaded
+   * down (same pattern as cellMap) instead of recomputed inside every visible
+   * row. Priority cells read `dependentsByItem.get(item.id) ?? 0`.
+   */
+  dependentsByItem: Map<string, number>;
   /** Upload a file into a Files-column cell. */
   uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
   /** Open the Files lightbox over a cell's attachments at the given index. */
