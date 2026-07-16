@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BoardToolbar } from "@/components/boards/BoardToolbar";
 import type { CacheColumn } from "@/lib/boards/cache";
@@ -57,7 +57,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("BoardToolbar", () => {
-  it("mirrors the quick search into the URL via replaceState (0 round-trips)", async () => {
+  it("mirrors the quick search into the URL via a debounced replaceState (0 round-trips)", async () => {
     const replaceState = vi.spyOn(window.history, "replaceState");
     render(
       <BoardToolbar
@@ -66,8 +66,14 @@ describe("BoardToolbar", () => {
         currentUserId="me"
       />,
     );
-    await userEvent.type(screen.getByLabelText("Search items"), "x");
-    expect(lastHistoryUrl(replaceState).get("q")).toBe("x");
+    const field = screen.getByLabelText("Search items") as HTMLInputElement;
+    await userEvent.type(field, "x");
+    // The field reflects the keystroke immediately (local draft — never lags)…
+    expect(field.value).toBe("x");
+    // …while the URL write is debounced ~200ms (still History API, 0 round-trips).
+    await waitFor(() =>
+      expect(lastHistoryUrl(replaceState).get("q")).toBe("x"),
+    );
   });
 
   it("preserves the existing view param when writing filter state", async () => {
