@@ -1402,6 +1402,30 @@ export type Database = {
           },
         ];
       };
+      notification_preferences: {
+        Row: {
+          channel: Database["public"]["Enums"]["notification_channel"];
+          created_at: string;
+          enabled: boolean;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          user_id: string;
+        };
+        Insert: {
+          channel: Database["public"]["Enums"]["notification_channel"];
+          created_at?: string;
+          enabled?: boolean;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          user_id: string;
+        };
+        Update: {
+          channel?: Database["public"]["Enums"]["notification_channel"];
+          created_at?: string;
+          enabled?: boolean;
+          kind?: Database["public"]["Enums"]["notification_kind"];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       notifications: {
         Row: {
           actor_id: string | null;
@@ -2955,6 +2979,7 @@ export type Database = {
         | "auto_subgoals"
         | "auto_boards";
       goal_status: "on_track" | "at_risk" | "off_track" | "done";
+      notification_channel: "in_app" | "email";
       notification_kind:
         | "mention"
         | "assigned"
@@ -3140,6 +3165,7 @@ export const Constants = {
         "auto_boards",
       ],
       goal_status: ["on_track", "at_risk", "off_track", "done"],
+      notification_channel: ["in_app", "email"],
       notification_kind: [
         "mention",
         "assigned",
