@@ -7,11 +7,11 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard,
   LayoutGrid,
+  MessageCircleQuestion,
   Monitor,
   Moon,
   Plus,
   Rows3,
-  Sparkles,
   Sun,
   Wand2,
 } from "lucide-react";
@@ -181,7 +181,7 @@ export function CommandPalette({
             )}
             <CommandGroup heading={<Kicker>Ask</Kicker>}>
               <CommandItem onSelect={() => run(() => router.push("/ask"))}>
-                <Sparkles className="size-4" /> Ask AI…
+                <MessageCircleQuestion className="size-4" /> Ask AI…
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading={<Kicker>Actions</Kicker>}>
