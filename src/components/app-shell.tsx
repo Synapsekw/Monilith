@@ -2,8 +2,6 @@ import type { ReactNode } from "react";
 import { Brand } from "@/components/brand/brand";
 import { Sidebar } from "@/components/sidebar";
 import { CommandTrigger } from "@/components/command-trigger";
-import { AskPulseTrigger } from "@/components/ai/ask/AskPulseTrigger";
-import { AskPulseHost } from "@/components/ai/ask/AskPulseHost";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type AppShellProps = {
@@ -44,7 +42,6 @@ export function AppShell({
             <Brand />
           </div>
           <div className="flex flex-1 items-center justify-end gap-2">
-            <AskPulseTrigger />
             <CommandTrigger />
             <ThemeToggle />
             {headerUser}
@@ -53,7 +50,6 @@ export function AppShell({
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>
       {commandPalette}
-      <AskPulseHost />
     </div>
   );
 }
