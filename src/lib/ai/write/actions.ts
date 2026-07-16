@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement, getAiEntitlement } from "@/lib/ai/entitlement";
 import { MODEL } from "@/lib/ai/providers/anthropic";
@@ -77,7 +78,7 @@ export async function proposeActions(input: {
 
   try {
     const user = await requireUser();
-    const org = (await getUserOrgs())[0];
+    const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "conversational_action");
     const workspaceId = await getActiveWorkspaceId(
@@ -132,7 +133,7 @@ export async function executeActions(input: {
   if (!parsed.success) return fail("Nothing valid to apply.");
 
   try {
-    const org = (await getUserOrgs())[0];
+    const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");
     // Re-check the org can still use AI (a disabled org shouldn't execute a stale proposal).
     const ent = await getAiEntitlement(org.id);

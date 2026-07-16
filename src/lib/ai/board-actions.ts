@@ -17,7 +17,8 @@ import {
   ByoKeyMissingError,
   AiNotConfiguredError,
 } from "@/lib/ai/errors";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import {
   columnKindSchema,
   columnSettingsSchema,
@@ -52,8 +53,7 @@ export async function generateBoardProposal(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid input.");
 
   try {
-    const orgs = await getUserOrgs();
-    const org = orgs[0];
+    const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "board_gen");
     const user = await requireUser();

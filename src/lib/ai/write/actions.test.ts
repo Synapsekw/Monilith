@@ -2,7 +2,9 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "u1" })),
-  getUserOrgs: vi.fn(async () => [{ id: "org1" }]),
+}));
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: vi.fn(async () => ({ id: "org1" })),
 }));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: vi.fn(async () => [{ id: "ws1" }]),
