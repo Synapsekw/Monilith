@@ -153,17 +153,13 @@ export const getBoardPayload = cache(
   async (boardId: string): Promise<BoardPayload | null> => {
     const supabase = await createClient();
 
-    const { data: board, error: boardErr } = await supabase
-      .from("boards")
-      .select("*")
-      .eq("id", boardId)
-      .maybeSingle();
-    // A DB failure is not a 404: throw so the boards error boundary renders
-    // (spec F5 / decision D6). Missing/RLS-hidden row stays null → notFound().
-    if (boardErr) throw new Error(`Failed to load board: ${boardErr.message}`);
-    if (!board) return null;
-
+    // The head row and the 9 satellite reads all key on boardId alone — nothing
+    // downstream of the head row is needed to ISSUE them, so they share one
+    // Promise.all (1 RTT instead of 2). The head result is still checked FIRST
+    // after settle: a missing/RLS-hidden board returns null before any
+    // satellite error can throw, preserving the previous error contract.
     const [
+      boardRes,
       groupsRes,
       columnsRes,
       itemsRes,
@@ -174,6 +170,7 @@ export const getBoardPayload = cache(
       timeEntriesRes,
       relationLinksRes,
     ] = await Promise.all([
+      supabase.from("boards").select("*").eq("id", boardId).maybeSingle(),
       supabase
         .from("groups")
         .select("*")
@@ -245,6 +242,13 @@ export const getBoardPayload = cache(
         .order("position", { ascending: true })
         .limit(2000),
     ]);
+
+    // A DB failure is not a 404: throw so the boards error boundary renders
+    // (spec F5 / decision D6). Missing/RLS-hidden row stays null → notFound().
+    // Checked FIRST so a missing board wins over any satellite error.
+    const { data: board, error: boardErr } = boardRes;
+    if (boardErr) throw new Error(`Failed to load board: ${boardErr.message}`);
+    if (!board) return null;
 
     // A silently-empty board (every `.data ?? []` below) is indistinguishable
     // from deleted data. Fail loudly; the segment error boundary offers retry.
