@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+  useMemo,
+} from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { CalendarDays, GanttChartSquare } from "lucide-react";
 
@@ -49,6 +57,11 @@ import { UnscheduledSection } from "@/components/boards/gantt/UnscheduledSection
 // ---------------------------------------------------------------------------
 // GanttBoard (main export)
 // ---------------------------------------------------------------------------
+
+// useLayoutEffect warns during SSR; this client component still pre-renders on
+// the server, so fall back to useEffect there (same guard as GroupSection).
+const useIsoLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function GanttBoard({
   payload,
@@ -239,6 +252,42 @@ export function GanttBoard({
     [scheduledRows],
   );
 
+  // ── Row virtualization (B3) ────────────────────────────────────────────────
+  // The timeline can hold hundreds of scheduled rows; mounting every GanttRowItem
+  // (each with a draggable bar, a dependency menu, presence wiring) is a slow
+  // first paint and janky scroll. Window the rows with react-virtual keyed to the
+  // vertical scroll container, mirroring the Table view's config. Row geometry is
+  // unchanged (ROW_H per row); only the mounted node count drops.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowsAreaRef = useRef<HTMLDivElement>(null);
+  // Offset of the rows area within the scroll content (the sticky header sits
+  // above it) — the virtualizer needs it to map scroll position → row index.
+  const [rowScrollMargin, setRowScrollMargin] = useState(0);
+  useIsoLayoutEffect(() => {
+    const area = rowsAreaRef.current;
+    const scroller = scrollRef.current;
+    if (!area || !scroller) return;
+    const top =
+      area.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop;
+    setRowScrollMargin((prev) => (prev === top ? prev : top));
+  });
+  // React Compiler safely skips memoizing this component because useVirtualizer
+  // returns non-memoizable functions; that fallback is correct here.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: scheduledRows.length,
+    getScrollElement: () => scrollRef.current,
+    scrollMargin: rowScrollMargin,
+    estimateSize: () => ROW_H,
+    overscan: 6,
+    // getBoundingClientRect().height returns 0 in jsdom — fall back to ROW_H so
+    // tests don't collapse every virtual row to 0px.
+    measureElement: (el) => el.getBoundingClientRect().height || ROW_H,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+
   // Build dependency arrow geometry data.
   const arrowLines = useMemo(
     () =>
@@ -270,6 +319,20 @@ export function GanttBoard({
         succRow: GanttRow;
       }[],
     [cache.dependencies, rowIndexMap, scheduledRows],
+  );
+
+  // B3b — clamp the arrow overlay to arrows with an endpoint inside the rendered
+  // window (virtualRows already includes the overscan band). Endpoint→coordinate
+  // math still uses the absolute whole-set index (predIdx * ROW_H), so positions
+  // stay correct regardless of what's mounted; this just skips drawing arrows
+  // that are entirely off-window.
+  const visibleFirst = virtualRows[0]?.index ?? 0;
+  const visibleLast =
+    virtualRows[virtualRows.length - 1]?.index ?? scheduledRows.length - 1;
+  const clampedArrows = arrowLines.filter(
+    ({ predIdx, succIdx }) =>
+      (predIdx >= visibleFirst && predIdx <= visibleLast) ||
+      (succIdx >= visibleFirst && succIdx <= visibleLast),
   );
 
   const today = todayISO();
@@ -508,7 +571,7 @@ export function GanttBoard({
         sensors={sensors}
         onDragEnd={handleDragEnd}
       >
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           <div className="inline-block min-w-full">
             {/* Sticky header row */}
             <div className="bg-background sticky top-0 z-20 flex border-b">
@@ -542,47 +605,68 @@ export function GanttBoard({
               </div>
             </div>
 
-            {/* Scheduled rows with SVG arrow overlay */}
-            <div className="relative">
-              {scheduledRows.map((row, rowIdx) => (
-                <GanttRowItem
-                  key={row.itemId}
-                  row={row}
-                  criticalLabel={effectiveCriticalLabel(
-                    priorityColumn
-                      ? (cellMap.get(cellKey(row.itemId, priorityColumn.id)) ??
-                          null)
-                      : null,
-                    dependentsByItem.get(row.itemId) ?? 0,
-                  )}
-                  rowIdx={rowIdx}
-                  totalW={totalW}
-                  todayOffset={todayOffset}
-                  dayCount={dayCount}
-                  startColumnId={resolvedDateColumn.id}
-                  endColumnId={endColId}
-                  color={rowColors.get(row.itemId) ?? null}
-                  allRows={scheduledRows}
-                  dependencies={cache.dependencies}
-                  violations={violations}
-                  onBarResized={(itemId, newEndISO, range) =>
-                    onBarResized(
-                      itemId,
-                      newEndISO,
-                      range,
-                      resolvedDateColumn.id,
-                      endColId,
-                      mutations.setCell as Parameters<typeof onBarResized>[5],
-                    )
-                  }
-                  addDependency={mutations.addDependency}
-                  removeDependency={mutations.removeDependency}
-                  onItemTap={handleItemTap}
-                />
-              ))}
+            {/* Scheduled rows (windowed) with SVG arrow overlay. The spacer div
+                holds the full timeline height so scroll geometry is unchanged;
+                each row is absolutely positioned at its virtual offset. */}
+            <div
+              ref={rowsAreaRef}
+              className="relative"
+              style={{ height: scheduledRows.length * ROW_H }}
+            >
+              {virtualRows.map((vr) => {
+                const row = scheduledRows[vr.index];
+                return (
+                  <div
+                    key={row.itemId}
+                    data-index={vr.index}
+                    ref={rowVirtualizer.measureElement}
+                    className="absolute top-0 left-0 w-full"
+                    style={{
+                      transform: `translateY(${vr.start - rowScrollMargin}px)`,
+                    }}
+                  >
+                    <GanttRowItem
+                      row={row}
+                      criticalLabel={effectiveCriticalLabel(
+                        priorityColumn
+                          ? (cellMap.get(
+                              cellKey(row.itemId, priorityColumn.id),
+                            ) ?? null)
+                          : null,
+                        dependentsByItem.get(row.itemId) ?? 0,
+                      )}
+                      rowIdx={vr.index}
+                      totalW={totalW}
+                      todayOffset={todayOffset}
+                      dayCount={dayCount}
+                      startColumnId={resolvedDateColumn.id}
+                      endColumnId={endColId}
+                      color={rowColors.get(row.itemId) ?? null}
+                      allRows={scheduledRows}
+                      dependencies={cache.dependencies}
+                      violations={violations}
+                      onBarResized={(itemId, newEndISO, range) =>
+                        onBarResized(
+                          itemId,
+                          newEndISO,
+                          range,
+                          resolvedDateColumn.id,
+                          endColId,
+                          mutations.setCell as Parameters<
+                            typeof onBarResized
+                          >[5],
+                        )
+                      }
+                      addDependency={mutations.addDependency}
+                      removeDependency={mutations.removeDependency}
+                      onItemTap={handleItemTap}
+                    />
+                  </div>
+                );
+              })}
 
-              {/* SVG dependency arrow overlay */}
-              {arrowLines.length > 0 && (
+              {/* SVG dependency arrow overlay (clamped to the rendered window) */}
+              {clampedArrows.length > 0 && (
                 <svg
                   className="pointer-events-none absolute inset-0"
                   style={{
@@ -591,7 +675,7 @@ export function GanttBoard({
                   }}
                   aria-hidden
                 >
-                  {arrowLines.map(
+                  {clampedArrows.map(
                     ({ dep, predIdx, succIdx, predRow, succRow }) => {
                       const isViolation = violations.has(dep.id);
                       const predEndX =

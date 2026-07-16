@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  beforeAll,
+  afterEach,
+} from "vitest";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -13,6 +21,24 @@ import type { RosterOccupant } from "@/lib/boards/presence-types";
 vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/dnd/sensors")>();
   return { useTouchAwareSensors: vi.fn(actual.useTouchAwareSensors) };
+});
+
+// @tanstack/react-virtual reads the scroll container's offsetHeight to compute
+// which rows are in-viewport; jsdom returns 0, which would render no rows. Stub
+// it to a realistic viewport so a window of scheduled rows mounts.
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get() {
+      return 600;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+    configurable: true,
+    get() {
+      return 1200;
+    },
+  });
 });
 
 const setCell = vi.fn();
@@ -609,5 +635,46 @@ describe("GanttBoard — effective-critical name-rail dot", () => {
   it("does not mark items below the threshold", () => {
     renderGantt(); // base fixture: i1 has exactly 1 dependent
     expect(screen.queryByTitle(/Critical/)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Row virtualization (B3a) — only a window of scheduled rows mounts
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — timeline row virtualization", () => {
+  function manyScheduledPayload(count: number) {
+    const base = payloadFixture() as unknown as {
+      items: Array<Record<string, unknown>>;
+      cellValues: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+    };
+    const items = Array.from({ length: count }, (_, i) => ({
+      id: `m${i}`,
+      name: `Row ${i}`,
+      group_id: "g1",
+      position: i,
+    }));
+    const cellValues = items.map((it, i) => ({
+      item_id: it.id,
+      column_id: DATE_COL_ID,
+      // Spread across June so every row is scheduled (has a valid start date).
+      value: { date: `2026-06-${String((i % 27) + 1).padStart(2, "0")}` },
+      board_id: "b1",
+      org_id: "o1",
+      updated_at: "2026-06-01T00:00:00Z",
+    }));
+    base.items = items;
+    base.cellValues = cellValues;
+    base.dependencies = [];
+    return base as never;
+  }
+
+  it("mounts only a window of scheduled rows on a large board", () => {
+    renderGantt(manyScheduledPayload(200));
+    const rows = screen.getAllByTestId("gantt-row");
+    // Windowed: a viewport's worth (+overscan), never all 200.
+    expect(rows.length).toBeLessThan(60);
+    expect(rows.length).toBeGreaterThan(0);
   });
 });
