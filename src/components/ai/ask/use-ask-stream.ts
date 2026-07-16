@@ -49,7 +49,7 @@ export function useAskStream() {
         }
         await readAskStream(res, onEvent);
       } catch {
-        onEvent({ type: "error", message: "Ask Pulse lost its connection." });
+        onEvent({ type: "error", message: "Ask AI lost its connection." });
       } finally {
         setStreaming(false);
       }

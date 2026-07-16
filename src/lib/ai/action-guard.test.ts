@@ -71,9 +71,9 @@ describe("mapAiError", () => {
     it("uses opts.notConfigured when provided", () => {
       expect(
         mapAiError(new AiNotConfiguredError(), {
-          notConfigured: "Add an AI provider key in Settings to use Ask Pulse.",
+          notConfigured: "Add an AI provider key in Settings to use Ask AI.",
         }),
-      ).toBe("Add an AI provider key in Settings to use Ask Pulse.");
+      ).toBe("Add an AI provider key in Settings to use Ask AI.");
     });
   });
 
@@ -88,10 +88,10 @@ describe("mapAiError", () => {
       expect(
         mapAiError(new ProviderNotCapableError("ask_pulse"), {
           providerNotCapable:
-            "Ask Pulse needs an Anthropic key — dashboards work with any provider.",
+            "Ask AI needs an Anthropic key — dashboards work with any provider.",
         }),
       ).toBe(
-        "Ask Pulse needs an Anthropic key — dashboards work with any provider.",
+        "Ask AI needs an Anthropic key — dashboards work with any provider.",
       );
     });
   });
@@ -112,9 +112,9 @@ describe("mapAiError", () => {
     it("uses opts.fallback when provided", () => {
       expect(
         mapAiError(new Error("boom"), {
-          fallback: "Ask Pulse hit a snag. Please try again.",
+          fallback: "The AI assistant hit a snag. Please try again.",
         }),
-      ).toBe("Ask Pulse hit a snag. Please try again.");
+      ).toBe("The AI assistant hit a snag. Please try again.");
     });
   });
 });
