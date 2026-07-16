@@ -53,7 +53,6 @@ export function CommandPalette({
   const toggle = useUIStore((s) => s.toggleCommand);
   const setNewBoardOpen = useUIStore((s) => s.setNewBoardOpen);
   const setNewDashboardOpen = useUIStore((s) => s.setNewDashboardOpen);
-  const setAskPulseOpen = useUIStore((s) => s.setAskPulseOpen);
   const router = useRouter();
   const { setTheme } = useTheme();
   const canCreate = Boolean(workspaces[0]?.id);
@@ -181,7 +180,7 @@ export function CommandPalette({
               </CommandGroup>
             )}
             <CommandGroup heading={<Kicker>Ask</Kicker>}>
-              <CommandItem onSelect={() => run(() => setAskPulseOpen(true))}>
+              <CommandItem onSelect={() => run(() => router.push("/ask"))}>
                 <Sparkles className="size-4" /> Ask Pulse…
               </CommandItem>
             </CommandGroup>

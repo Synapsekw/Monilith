@@ -57,23 +57,6 @@ describe("useUIStore create-dialog flags", () => {
   });
 });
 
-describe("useUIStore ask-pulse flag", () => {
-  beforeEach(() => {
-    useUIStore.setState({ askPulseOpen: false });
-  });
-
-  it("defaults askPulseOpen to closed", () => {
-    expect(useUIStore.getState().askPulseOpen).toBe(false);
-  });
-
-  it("setAskPulseOpen toggles askPulseOpen", () => {
-    useUIStore.getState().setAskPulseOpen(true);
-    expect(useUIStore.getState().askPulseOpen).toBe(true);
-    useUIStore.getState().setAskPulseOpen(false);
-    expect(useUIStore.getState().askPulseOpen).toBe(false);
-  });
-});
-
 describe("collapsedSections", () => {
   beforeEach(() => {
     useUIStore.setState({ collapsedSections: {} });
