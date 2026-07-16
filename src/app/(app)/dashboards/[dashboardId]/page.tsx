@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { DashboardCanvas } from "@/components/dashboards/DashboardCanvas";
+import { DashboardCanvasLazy } from "@/components/dashboards/DashboardCanvasLazy";
 import { AiReviewBanner } from "@/components/dashboards/ai/AiReviewBanner";
 import type { BoardOption } from "@/components/dashboards/WidgetConfigForm";
 import { requireUser } from "@/lib/auth/session";
@@ -84,7 +84,7 @@ export default async function DashboardPage({
           <AiReviewBanner dashboardId={dashboardId} />
         </div>
       )}
-      <DashboardCanvas initialData={payload} boards={boards} />
+      <DashboardCanvasLazy initialData={payload} boards={boards} />
     </>
   );
 }
