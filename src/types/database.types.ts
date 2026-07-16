@@ -2026,6 +2026,54 @@ export type Database = {
           },
         ];
       };
+      reports: {
+        Row: {
+          board_id: string;
+          config: Json;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          config?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          config?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reports_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reports_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       time_allocations: {
         Row: {
           board_id: string | null;
