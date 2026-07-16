@@ -32,6 +32,10 @@ export function InvitationsSection({
                 as {i.role}
               </span>
             </p>
+            <p className="text-muted-foreground text-xs">
+              Accepting also lets the person who invited you collaborate on
+              boards you share from your own workspace.
+            </p>
             <div className="flex gap-2">
               <Button
                 size="sm"
