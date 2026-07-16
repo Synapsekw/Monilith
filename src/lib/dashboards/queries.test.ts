@@ -71,4 +71,22 @@ describe("getDashboardPayload", () => {
       /widgets read failed/,
     );
   });
+
+  it("fetches the dashboard row and its widgets concurrently", async () => {
+    const issued: string[] = [];
+    createClient.mockResolvedValueOnce({
+      from: (table: string) => {
+        issued.push(table);
+        return makeChain(
+          { data: { id: "d2", name: "Dash" }, error: null },
+          { data: [{ id: "w1", dashboard_id: "d2" }], error: null },
+        );
+      },
+    } as never);
+
+    const payload = await getDashboardPayload("d2");
+    expect(payload?.dashboard.id).toBe("d2");
+    expect(payload?.widgets).toHaveLength(1);
+    expect(issued).toEqual(["dashboards", "dashboard_widgets"]);
+  });
 });
