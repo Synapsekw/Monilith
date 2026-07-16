@@ -3,7 +3,8 @@ import { cache } from "react";
 import { cacheLife, cacheTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getUser, getUserOrgs } from "@/lib/auth/session";
+import { getUser } from "@/lib/auth/session";
+import { getActiveOrgId } from "@/lib/org/active";
 import { orgAdminTag } from "@/lib/cache/tags";
 
 /**
@@ -11,8 +12,7 @@ import { orgAdminTag } from "@/lib/cache/tags";
  * Fails closed. Mirrors `isPlatformAdmin()` and the role check in settings.
  */
 export const isOrgAdmin = cache(async (): Promise<boolean> => {
-  const [user, orgs] = await Promise.all([getUser(), getUserOrgs()]);
-  const orgId = orgs[0]?.id;
+  const [user, orgId] = await Promise.all([getUser(), getActiveOrgId()]);
   if (!user || !orgId) return false;
 
   const supabase = await createClient();

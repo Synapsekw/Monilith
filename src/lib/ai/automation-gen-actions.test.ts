@@ -49,6 +49,9 @@ vi.mock("@/lib/ai/entitlement", () => ({
 }));
 
 const getUserOrgs = vi.fn();
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: async () => (await getUserOrgs())[0] ?? null,
+}));
 const requireUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({
   getUserOrgs: (...args: unknown[]) => getUserOrgs(...args),

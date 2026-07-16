@@ -8,7 +8,9 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/auth/session", () => ({
   getUser: vi.fn(async () => ({ id: "u1" })),
-  getUserOrgs: vi.fn(async () => [{ id: "org1", name: "Acme" }]),
+}));
+vi.mock("@/lib/org/active", () => ({
+  getActiveOrgId: vi.fn(async () => "org1"),
 }));
 vi.mock("@/lib/boards/queries-cached", () => ({
   listMyBoardsCached: vi.fn(async () => [

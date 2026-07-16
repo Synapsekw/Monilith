@@ -2,11 +2,8 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
 import { FirstBoardEmptyState } from "@/components/boards/FirstBoardEmptyState";
-import {
-  getUser,
-  getUserOrgs,
-  enforcePasswordChange,
-} from "@/lib/auth/session";
+import { getUser, enforcePasswordChange } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 
@@ -23,10 +20,8 @@ export async function HomeDispatch() {
 
   enforcePasswordChange(user);
 
-  const orgs = await getUserOrgs();
-  if (orgs.length === 0) redirect("/onboarding");
-
-  const org = orgs[0];
+  const org = await resolveActiveOrg();
+  if (!org) redirect("/onboarding");
 
   const boards = await listMyBoards();
   if (boards.length > 0) redirect(`/boards/${boards[0].id}`);

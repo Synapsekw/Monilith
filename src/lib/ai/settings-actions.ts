@@ -1,7 +1,8 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { getAdapter } from "@/lib/ai/providers/registry";
@@ -25,8 +26,7 @@ async function requireOrgAdmin(): Promise<{
   orgId: string;
 } | null> {
   const user = await requireUser();
-  const orgs = await getUserOrgs();
-  const org = orgs[0];
+  const org = await resolveActiveOrg();
   if (!org) return null;
   const supabase = await createClient();
   const { data: allowed } = await supabase.rpc("has_org_role", {
@@ -48,8 +48,7 @@ export async function getOrgAiSettings(): Promise<
   }>
 > {
   await requireUser();
-  const orgs = await getUserOrgs();
-  const org = orgs[0];
+  const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
 
   const supabase = await createClient();

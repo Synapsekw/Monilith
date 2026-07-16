@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -29,15 +30,14 @@ export default async function SettingsPage() {
   const user = await requireUser();
   // Timezone + orgs + AI credential are independent reads — resolve them in
   // parallel (the members RPC below is the only read that depends on org.id).
-  const [myTimeZone, orgs, aiCredential, orgAi] = await Promise.all([
+  const [myTimeZone, aiCredential, orgAi] = await Promise.all([
     getUserTimeZoneCached(user.id),
-    getUserOrgs(),
     getMyAiCredential(),
     getOrgAiSettings(),
   ]);
   const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
-  const org = orgs[0];
+  const org = await resolveActiveOrg();
   if (!org) redirect("/onboarding");
 
   const workspaces = await listWorkspacesCached(org.id);

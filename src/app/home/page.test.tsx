@@ -28,9 +28,13 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/auth/session", () => ({
   getUser: () => getUser(),
-  getUserOrgs: () => getUserOrgs(),
   // No-op for these cases: the test users carry no must_change_password flag.
   enforcePasswordChange: () => {},
+}));
+// The page resolves the active org (cookie-scoped) rather than orgs[0]; derive
+// it from the same getUserOrgs mock so each case's org list still drives it.
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: async () => (await getUserOrgs())[0] ?? null,
 }));
 vi.mock("@/lib/boards/queries", () => ({
   listMyBoards: () => listMyBoards(),

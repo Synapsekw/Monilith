@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const getUser = vi.fn();
-const getUserOrgs = vi.fn();
+const getActiveOrgId = vi.fn();
 const removeAttachmentObjects = vi.fn<(paths: string[]) => Promise<void>>(
   async () => {},
 );
 
 vi.mock("@/lib/auth/session", () => ({
   getUser: () => getUser(),
-  getUserOrgs: () => getUserOrgs(),
+}));
+vi.mock("@/lib/org/active", () => ({
+  getActiveOrgId: () => getActiveOrgId(),
 }));
 vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
   removeAttachmentObjects: (paths: string[]) => removeAttachmentObjects(paths),
@@ -77,7 +79,7 @@ function makeClient(
 
 beforeEach(() => {
   getUser.mockReset().mockResolvedValue({ id: "user-1" });
-  getUserOrgs.mockReset().mockResolvedValue([{ id: "org-1", name: "Acme" }]);
+  getActiveOrgId.mockReset().mockResolvedValue("org-1");
   removeAttachmentObjects.mockClear();
   updateTag.mockReset();
 });
