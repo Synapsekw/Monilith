@@ -26,7 +26,10 @@ Copied from AGENTS.md / the north-star — every task's requirements implicitly 
 
 ## Execution DAG
 
-Four batches, each a worktree; the four are **mutually independent** and can run as concurrent worktrees (they touch disjoint file sets — the only shared-ish file is `src/lib/boards/queries.ts`, edited by A1/A4-adjacent reads and C4, in non-overlapping functions; sequence A before C at merge, or accept a trivial rebase).
+Four batches, each a worktree; the four are **mutually independent** and can run as concurrent worktrees, with **two** cross-batch file overlaps that must be sequenced (or rebased) at merge — see the 2026-07-16 refresh audit below:
+
+1. `src/lib/boards/queries.ts` — edited by **A1** (`getBoardPayload`) and **C4** (`listMyBoards`/`listSharedBoards`), non-overlapping functions. Sequence A before C at merge, or accept a trivial rebase.
+2. `src/components/boards/table/BoardTableInner.tsx` **and** `src/components/boards/table/EditableCell.tsx` — edited by **Batch B** (B1 predicate memo + B2 hoist/memo, EditableCell memo) and **Batch D4** (the `getAttachmentPreviewUrls` caller lives in `BoardTableInner.tsx`; `FilesCell` is rendered in `EditableCell.tsx`). This overlap did **not** exist when the plan was written (the 2,800-line `BoardTable.tsx` has since been split into `src/components/boards/table/*`). Sequence **Batch B before D4** at merge, or accept a rebase of D4.
 
 - **Batch A — Server latency** (`task/perf-server-latency`): A1, A2, A4, A5, A6 have no unmet deps and run as one wave; **A3 depends on A2** (both edit `src/app/home/page.tsx`). Critical path A2 → A3. Dispatch A6 (migration + DEV apply + `db:types`) first — it is the longest single task.
 - **Batch B — Board interaction** (`task/perf-board-interaction`): B1, B3, B4 independent; **B2 lands after B1** (both edit `BoardTable.tsx`). Critical path B1 → B2.
@@ -34,6 +37,24 @@ Four batches, each a worktree; the four are **mutually independent** and can run
 - **Batch D — Interaction polish** (`task/perf-polish`): D1–D5 mutually independent (disjoint file sets) — one wave. Critical path = the longest single task (D1).
 
 **Recommended order if run serially:** A (biggest felt win: fewer round-trips + instant skeletons) → C (lighter shell everywhere) → B (board typing/scroll) → D (polish). If run in parallel, all four worktrees at once; each finishes independently.
+
+---
+
+## Refresh audit (2026-07-16) — reconciliation against current `develop`
+
+The plan was written 2026-07-09; this audit re-verified every file path against the worktree snapshot. **Plan is build-ready** with the deltas below applied. Rationale intact; anchors drifted.
+
+- **A4 — ALREADY LANDED (skip this task).** Both `src/app/(app)/my-work/loading.tsx` and `src/app/(app)/boards/loading.tsx` exist and render accessible busy regions via extracted `MyWorkSkeleton` / `BoardsIndexSkeleton` components (both have `role="status" aria-busy="true"` + `aria-label="Loading my work"` / `"Loading boards"` — exactly what A4's test asserts). The delivered implementation uses extracted skeleton components instead of the plan's inline markup, but the deliverable (instant, accessible route fallbacks for both routes) is fully in place. **Do not re-implement.** Batch A wave 1 is now A1, A2, A5, A6 (A4 dropped).
+- **A6 migration versioning — MUST mint via `scripts/new-migration.sh`.** The plan hard-codes `supabase/migrations/20260709120000_my_work_rpc.sql`. That stamp is (a) hand-invented (forbidden by AGENTS.md) and (b) **out of order** — current HEAD migration is `20260716100326_…`, so `20260709120000` would sort behind eight shipped migrations. Run `scripts/new-migration.sh my_work_rpc` to mint a **current** stamp, put the SQL from A6-Step-3 in that file, and apply to DEV via the `supabase-dev` MCP with the **same version + name**. No existing `get_my_work_items` RPC in `database.types.ts` — A6 is otherwise still valid (the 4-phase serial chain is intact in `src/lib/my-work/queries.ts:69-196`).
+- **Batch B file split — anchors moved.** `BoardTable.tsx` is now a 9-line `memo(BoardTableInner)` wrapper; the implementation lives in `src/components/boards/table/*`. Remap:
+  - **B1:** `BoardToolbar.tsx:182-188` (quick-search) ✓ unchanged; `use-board-filter-sort.ts:60-63` (`setSearch`) ✓ unchanged; the `visibleItemsByGroup` memo + false "per keystroke" comment + `predicate`/`comparator` are now in **`table/BoardTableInner.tsx:227-236`** (not `BoardTable.tsx:502-523`).
+  - **B2:** the per-row `buildDependentsCountMap` `useMemo` is now in **`table/ItemRow.tsx:72`** _and_ **`table/SortableSubitemRow.tsx:44`** (hoist for both). Leaf components to `React.memo` are now separate files: `table/ItemRow.tsx`, `table/EditableCell.tsx`, `table/NameCell.tsx`, `table/SubitemBlock.tsx`, plus `KanbanBoard.tsx` (`KanbanCard`). Note the outer `BoardTable` is already `memo`-wrapped. **React Compiler is NOT enabled** (no `experimental.reactCompiler` in `next.config.ts`, no `babel-plugin-react-compiler` installed) — the "React Compiler safely skips memoizing" comments in `GroupSection.tsx`/`KanbanBoard.tsx` are aspirational, so the leaf components are genuinely un-memoized plain functions and B2's manual `React.memo` premise holds.
+  - **B3:** Gantt is still un-virtualized ✓. Anchors: `scheduledRows.map` is at **`GanttBoard.tsx:547`** (not 641), inside the `overflow-auto` container at **:511** (not 605); `rowIndexMap` at :237-239.
+  - **B4:** `CalendarAgenda.tsx` `group.items.map` at **:90** ✓ (plan said 91). No `CalendarBoard.tsx` — correct as the plan already noted.
+- **Batch D anchors — verified.** D1 `GoalDetailDrawer.tsx` `router.refresh()` at **94/114/190/450** ✓; `goals/actions.ts` `updateGoal` at :49 with `revalidatePath("/goals")` at 45/80/98/116/138 ✓. D2 `time/actions.ts` `revalidatePath("/time")+("/workload")` at 57-58/98-99 ✓; `TimeCard.tsx` `useOptimistic` at :60, `router.refresh()` at **117/129** (plan said 116/128), week-nav `router.push` at **:73** (plan said 72). D3 `TimeZoneBoundary` at `authenticated-shell.tsx:62`, sole `useTimeZone` consumer is `date-time.tsx:14` ✓. D5 `(app)/layout.tsx` docblock claims `{ prefetch: 'static' }` at :14 with `unstable_instant = false` at :22 ✓.
+- **D4 caller remap.** `getAttachmentPreviewUrls` is called from **`table/BoardTableInner.tsx:158`** (not `BoardTable.tsx`) and `use-item-attachments.ts:49`; `FilesCell` is rendered in **`table/EditableCell.tsx:73`**. Action shape (`createSignedUrls` plural at :275, per-file `createSignedUrl` at :315) ✓. Update D4's Files list to `table/BoardTableInner.tsx` + `table/EditableCell.tsx`.
+
+**Perf-budget (#5) & Execution-DAG (#6):** both present and correct — Global Constraints restate the gotcha-09 0-refetch + bounded-reads rules, per-task Interfaces account round-trips (A3 has an explicit "Perf budget" line), and the Execution DAG names batches/waves/critical paths. Only the DAG's overlap list was stale (fixed above to include the B↔D4 `table/*` overlap).
 
 ---
 
@@ -428,6 +449,8 @@ git commit -m "perf(home): last-board cookie fast path for the login dispatch" -
 
 ### Task A4: Route skeletons for /my-work and /boards
 
+> **⚠️ ALREADY LANDED (2026-07-16 audit) — SKIP.** Both `src/app/(app)/my-work/loading.tsx` and `src/app/(app)/boards/loading.tsx` exist and render accessible busy regions (`role="status" aria-busy="true"`, `aria-label` "Loading my work" / "Loading boards") via extracted `MyWorkSkeleton` / `BoardsIndexSkeleton` components. The deliverable is complete; do not re-implement. The steps below are retained for provenance only.
+
 **Files:**
 
 - Create: `src/app/(app)/my-work/loading.tsx`
@@ -646,7 +669,7 @@ git commit -m "perf(dashboards): fetch dashboard row and widgets concurrently" -
 
 **Files:**
 
-- Create: `supabase/migrations/20260709120000_my_work_rpc.sql`
+- Create: the migration file — **mint it via `scripts/new-migration.sh my_work_rpc`** (do NOT hand-stamp `20260709120000`; that stamp sorts behind eight already-shipped migrations and violates the AGENTS.md "no hand-invented version stamp" rule). Put the SQL from Step 3 into whatever current-timestamped file the script creates, and apply it to DEV with the **same version + name**.
 - Modify: `src/lib/my-work/queries.ts:69-196` (`getMyWorkItems` — consumers in `src/app/(app)/my-work/` untouched; the `MyWorkItem[]` return type is preserved exactly)
 - Modify: `src/types/database.types.ts` (regenerated — **never hand-edit**)
 - Test: `src/lib/my-work/queries.test.ts` (create)
@@ -746,7 +769,7 @@ describe("getMyWorkItems (RPC)", () => {
 
 - [ ] **Step 2: Run — expect FAIL** (`rpc` never called — the current impl issues `.from()` reads this mock doesn't provide): `pnpm vitest run src/lib/my-work/queries.test.ts`
 
-- [ ] **Step 3: Write the migration** — `supabase/migrations/20260709120000_my_work_rpc.sql`:
+- [ ] **Step 3: Write the migration** — first run `scripts/new-migration.sh my_work_rpc` to mint the current-timestamped file (do **not** hand-write `20260709120000_my_work_rpc.sql`), then paste this SQL into it:
 
 ```sql
 -- My Work in one round-trip. Fuses getMyWorkItems' four serial phases
@@ -900,13 +923,13 @@ Expected: only rows for boards that user can read; spot-check one against /my-wo
 - [ ] **Step 9: Commit**
 
 ```bash
-git add supabase/migrations/20260709120000_my_work_rpc.sql src/lib/my-work/queries.ts src/lib/my-work/queries.test.ts src/types/database.types.ts
+git add supabase/migrations/<minted-stamp>_my_work_rpc.sql src/lib/my-work/queries.ts src/lib/my-work/queries.test.ts src/types/database.types.ts
 git commit -m "perf(my-work): collapse 4-phase serial read chain into one rpc" -m "getMyWorkItems ran 4 data-dependent serial phases (4+ RTTs, uncached, per visit). public.get_my_work_items fuses them into one SECURITY INVOKER statement — every table still RLS-filtered under the caller, identity from auth.uid() only — returning the joined rows in 1 RTT. Return type and the Zod status-option boundary are unchanged. Migration applied to DEV via supabase-dev MCP; types regenerated." -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
 ---
 
-**Batch A intra-batch dependencies:** A3 depends on A2 (both rewrite `src/app/home/page.tsx`; A3 inserts above A2's `Promise.all` and extends A2's suite). A1, A4, A5, A6 are edge-free. Wave 1: A1, A2, A4, A5, A6 (dispatch A6 first — longest). Wave 2: A3. Critical path: A2 → A3.
+**Batch A intra-batch dependencies:** A3 depends on A2 (both rewrite `src/app/home/page.tsx`; A3 inserts above A2's `Promise.all` and extends A2's suite). A1, A5, A6 are edge-free. **A4 is already landed (skip).** Wave 1: A1, A2, A5, A6 (dispatch A6 first — longest). Wave 2: A3. Critical path: A2 → A3.
 
 ---
 
