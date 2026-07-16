@@ -46,6 +46,11 @@ export type SharedBoardEntry = {
   access_level: "viewer" | "editor";
 };
 
+// Defensive cap on the sidebar board lists (hot path — runs on ~every nav via
+// the shell/home dispatch). Per-user board counts are naturally small; this
+// bounds a pathological org, matching the repo's other hot-path .limit() bounds.
+const MY_BOARDS_LIMIT = 500;
+
 /** Boards the current user owns (created_by = me), with a shared-out flag. */
 export async function listMyBoards(): Promise<BoardListEntry[]> {
   const user = await getUser();
@@ -56,6 +61,7 @@ export async function listMyBoards(): Promise<BoardListEntry[]> {
     .select("id, name, workspace_id, position, board_members(user_id)")
     .eq("created_by", user.id)
     .is("archived_at", null)
+    .limit(MY_BOARDS_LIMIT)
     .order("position", { ascending: true });
   // A DB failure is not "no boards": throw so the error boundary renders
   // (silent [] sent users with boards to the first-run empty state — or, via
@@ -80,6 +86,7 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
     .select("access_level, boards!inner(id, name, position, created_by)")
     .eq("user_id", user.id)
     .is("boards.archived_at", null)
+    .limit(MY_BOARDS_LIMIT)
     .order("created_at", { ascending: true });
   // Same fail-loud policy as listMyBoards: an error is not an empty list.
   if (error) throw new Error(`Failed to load shared boards: ${error.message}`);
