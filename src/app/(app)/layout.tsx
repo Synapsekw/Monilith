@@ -10,10 +10,20 @@ import { Toaster } from "@/components/ui/sonner";
  * palette mount once and stream their per-user data once per page load, not on
  * every section click.
  *
- * Hoisted from the former per-section layouts: cookie-bound page-load entry is
- * dynamic; sibling client-nav is validated via `{ prefetch: 'static' }` on the
- * page segments. The static AppShell frame still prerenders; per-user data
- * streams behind Suspense.
+ * Cookie-bound page-load entry is dynamic; the static AppShell frame still
+ * prerenders and per-user data streams behind Suspense.
+ *
+ * Instant navigation is OFF (`unstable_instant = false`). An earlier version of
+ * this docblock claimed the page segments validated instant nav via
+ * `{ prefetch: 'static' }` — no such export exists anywhere and it was never
+ * validated. The real blocker is architectural: the shell reads
+ * `useSearchParams()` pervasively (that's how gotcha-09's 0-refetch view/tab
+ * switching works — History API updates that Next.js syncs into
+ * `useSearchParams()` with no RSC re-run), and pervasive `useSearchParams()`
+ * fails instant-nav validation. So route-level `loading.tsx` skeletons are the
+ * instant-feel mechanism instead. Do NOT flip this flag without first landing
+ * the `useSearchParams`-decoupling spec — see
+ * `vault/decisions/2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams.md`.
  *
  * `admin` and `home` deliberately stay OUTSIDE this group: admin runs its
  * platform-admin guard before any Suspense boundary, and home is a one-shot
