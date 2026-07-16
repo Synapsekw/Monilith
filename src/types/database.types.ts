@@ -2736,6 +2736,19 @@ export type Database = {
         };
       };
       escape_like: { Args: { p_text: string }; Returns: string };
+      get_my_work_items: {
+        Args: { p_limit?: number };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_option_id: string;
+          status_settings: Json;
+        }[];
+      };
       get_org_members: {
         Args: { p_limit?: number; p_offset?: number; p_org_id: string };
         Returns: {

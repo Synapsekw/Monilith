@@ -480,7 +480,7 @@ function KanbanColumnView({
   );
 }
 
-function KanbanCard({
+const KanbanCard = memo(function KanbanCard({
   item,
   fromColId,
   cellMap,
@@ -588,7 +588,7 @@ function KanbanCard({
       )}
     </article>
   );
-}
+});
 
 function AddCardInput({
   groupId,

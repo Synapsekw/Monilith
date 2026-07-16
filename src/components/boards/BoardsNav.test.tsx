@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { BoardsNav } from "./BoardsNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -322,20 +322,32 @@ describe("BoardsNav drag-reorder", () => {
     },
   ];
 
-  it("renders a reorder handle for each owned board when expanded", () => {
+  it("renders a plain, navigable board list with no synchronous DnD context", () => {
     render(<BoardsNav boards={owned} sharedBoards={[]} />);
+    // Board links paint immediately on first render…
+    expect(screen.getByRole("link", { name: "Alpha" })).toBeInTheDocument();
+    // …but @dnd-kit is a lazy next/dynamic(ssr:false) chunk, so the sortable
+    // wrapper (and its reorder handles) are absent until a pointer/focus
+    // interaction mounts it — keeping the DnD stack off the shell bundle.
+    expect(screen.queryByTestId("boards-nav-sortable")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reorder Alpha" }),
+      screen.queryByRole("button", { name: "Reorder Alpha" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lazily mounts the sortable variant (handles + shared sensors) on first pointer interaction", async () => {
+    render(<BoardsNav boards={owned} sharedBoards={[]} />);
+    // Pointer enters the board list → the drag-enabled variant is dynamically
+    // imported and mounted, so the first reorder still works.
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-owned"));
+
+    expect(
+      await screen.findByRole("button", { name: "Reorder Alpha" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Reorder Beta" }),
     ).toBeInTheDocument();
-  });
-
-  it("wires the expanded reorder DndContext via the shared touch-aware sensors", () => {
-    render(<BoardsNav boards={owned} sharedBoards={[]} />);
-    // The bespoke inline PointerSensor config is gone — reorder now uses the
-    // shared long-press-on-touch sensors (TODO(touch-batch-2) cleared).
+    // Reorder uses the shared long-press-on-touch sensors, not a bespoke config.
     expect(useTouchAwareSensors).toHaveBeenCalled();
   });
 

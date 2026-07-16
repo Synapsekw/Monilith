@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -15,7 +16,7 @@ import { SortableSubitemRow } from "./SortableSubitemRow";
 import type { CellControls } from "./shared";
 
 /** An indented block of subitems rendered below their expanded parent. */
-export function SubitemBlock({
+export const SubitemBlock = memo(function SubitemBlock({
   parentId,
   subitems,
   columns,
@@ -78,4 +79,4 @@ export function SubitemBlock({
       <AddSubitemRow parentId={parentId} controls={controls} />
     </div>
   );
-}
+});

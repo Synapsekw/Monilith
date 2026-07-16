@@ -11,10 +11,12 @@ import {
 } from "@/lib/collaboration/attachments-format";
 import type { Attachment } from "@/lib/collaboration/attachments-cache";
 import type { Member } from "@/lib/collaboration/activity";
+import { ThumbImg } from "@/components/boards/ThumbImg";
 
 export function AttachmentCard({
   attachment,
   previewUrl,
+  thumbUrl,
   members,
   uploading,
   canDelete,
@@ -24,6 +26,8 @@ export function AttachmentCard({
 }: {
   attachment: Attachment;
   previewUrl?: string;
+  /** Optional thumbnail-transform URL (image rows only); falls back to full-res. */
+  thumbUrl?: string;
   members: readonly Member[];
   uploading?: boolean;
   canDelete: boolean;
@@ -41,10 +45,10 @@ export function AttachmentCard({
   return (
     <div className="group bg-surface-muted card-lift border-border hover:border-border-bright relative flex flex-col overflow-hidden rounded-lg border">
       <div className="bg-background relative flex aspect-video items-center justify-center">
-        {previewable && kind === "image" && previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={previewUrl}
+        {previewable && kind === "image" && (thumbUrl || previewUrl) ? (
+          <ThumbImg
+            thumbUrl={thumbUrl}
+            fullUrl={previewUrl}
             alt={attachment.file_name}
             className="h-full w-full object-cover"
           />

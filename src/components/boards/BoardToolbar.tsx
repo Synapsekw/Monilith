@@ -126,6 +126,17 @@ export function BoardToolbar({
   } = useBoardFilterSort();
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  // Immediate local mirror of the search box; the store write is debounced in
+  // useBoardFilterSort, so bind the field to local state and re-sync when the
+  // URL-derived value changes from elsewhere (X button, restored link). Uses the
+  // "adjust state during render" pattern (track the previous URL value) rather
+  // than an effect, so there's no cascading-render setState-in-effect.
+  const [searchDraft, setSearchDraft] = useState(state.q);
+  const [prevQ, setPrevQ] = useState(state.q);
+  if (state.q !== prevQ) {
+    setPrevQ(state.q);
+    setSearchDraft(state.q);
+  }
 
   const peopleColumns = columns.filter((c) => c.kind === "people");
   const statusColumns = columns.filter((c) => c.kind === "status");
@@ -182,15 +193,21 @@ export function BoardToolbar({
         <InputGroupInput
           aria-label="Search items"
           placeholder="Search…"
-          value={state.q}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchDraft}
+          onChange={(e) => {
+            setSearchDraft(e.target.value);
+            setSearch(e.target.value);
+          }}
         />
-        {state.q ? (
+        {searchDraft ? (
           <InputGroupAddon align="inline-end">
             <InputGroupButton
               size="icon-xs"
               aria-label="Clear search"
-              onClick={() => setSearch("")}
+              onClick={() => {
+                setSearchDraft("");
+                setSearch("");
+              }}
             >
               <X />
             </InputGroupButton>

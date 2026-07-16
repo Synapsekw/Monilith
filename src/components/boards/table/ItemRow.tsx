@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useState } from "react";
 import { ChevronDown, ChevronRight, GripVertical, Plus } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -10,7 +10,6 @@ import {
 } from "@/components/boards/cells/created";
 import type { Column, Item } from "@/lib/boards/queries";
 import { isItemComplete, isOverdue, localTodayISO } from "@/lib/boards/overdue";
-import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { RollupValueCell } from "@/components/boards/RollupValueCell";
 import { cn } from "@/lib/utils";
@@ -22,7 +21,7 @@ import { RowSelectCheckbox } from "./RowSelectCheckbox";
 import { ROW_HEIGHT, type CellControls } from "./shared";
 
 /** A single top-level item row: optional expand chevron, name, value cells. */
-export function ItemRow({
+export const ItemRow = memo(function ItemRow({
   item,
   columns,
   cellMap,
@@ -32,7 +31,7 @@ export function ItemRow({
   subitems,
   childCount,
   isExpanded,
-  onToggle,
+  onToggleExpand,
   autoFocusRename,
   onRenameSettled,
   onSubitemAdded,
@@ -47,7 +46,9 @@ export function ItemRow({
   subitems: Item[];
   childCount: number;
   isExpanded: boolean;
-  onToggle: () => void;
+  /** Stable toggle keyed by item id (callable as onToggleExpand(item.id)) — a
+   * stable identity so this memoized row skips re-render when siblings change. */
+  onToggleExpand: (id: string) => void;
   autoFocusRename: boolean;
   onRenameSettled: () => void;
   onSubitemAdded?: (id: string) => void;
@@ -65,13 +66,10 @@ export function ItemRow({
   // to just this row's boolean membership, so toggling one row re-renders only the
   // affected (visible) rows — not the whole cache tree. Selection is top-level only.
   const selected = useBoardSelection((s) => s.selectedIds.has(item.id));
-  // Priority cells only: direct-dependent counts derived from the cached
-  // dependency edges (one O(E) pass — see @/lib/boards/priority; overdue-tint
-  // precedent: render-time signal, nothing persisted, 0 extra round-trips).
-  const dependentsByItem = useMemo(
-    () => buildDependentsCountMap(controls.cache.dependencies),
-    [controls.cache.dependencies],
-  );
+  // Priority cells only: direct-dependent counts. Computed once for the whole
+  // board in BoardTableInner and threaded via `controls` (see priority.ts) —
+  // not recomputed per visible row.
+  const dependentsByItem = controls.dependentsByItem;
   const {
     setNodeRef,
     attributes,
@@ -103,7 +101,7 @@ export function ItemRow({
           type="button"
           aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.name}`}
           aria-expanded={isExpanded}
-          onClick={onToggle}
+          onClick={() => onToggleExpand(item.id)}
           className="text-muted-foreground hover:text-foreground grid size-6 shrink-0 place-items-center rounded"
         >
           {isExpanded ? (
@@ -132,7 +130,7 @@ export function ItemRow({
               onSuccess: (id) => {
                 // Expand the parent so the new subitem is visible, then
                 // enter rename mode on it.
-                if (!isExpanded) onToggle();
+                if (!isExpanded) onToggleExpand(item.id);
                 onSubitemAdded?.(id);
               },
             })
@@ -244,4 +242,4 @@ export function ItemRow({
       <div aria-hidden /> {/* add-column track spacer */}
     </div>
   );
-}
+});

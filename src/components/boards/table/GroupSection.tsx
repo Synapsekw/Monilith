@@ -298,7 +298,7 @@ export function GroupSection({
                           subitems={children}
                           childCount={children.length}
                           isExpanded={isExpanded}
-                          onToggle={() => onToggleExpand(item.id)}
+                          onToggleExpand={onToggleExpand}
                           autoFocusRename={item.id === renamingItemId}
                           onRenameSettled={onRenameItemSettled}
                           onSubitemAdded={onSetRenamingItemId}

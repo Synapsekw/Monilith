@@ -1,15 +1,18 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, use, useContext, type ReactNode } from "react";
 
-/** Resolved user timezone: an explicit IANA id, or null = Automatic. */
-const TimeZoneContext = createContext<string | null>(null);
+/** The user's zone as an IANA id, or null = Automatic. It may still be an
+ * unresolved promise streamed from the shell (the timezone read is not awaited
+ * before content paints). */
+type TimeZoneValue = string | null | Promise<string | null>;
+const TimeZoneContext = createContext<TimeZoneValue>(null);
 
 export function TimeZoneProvider({
   timeZone,
   children,
 }: {
-  timeZone: string | null;
+  timeZone: TimeZoneValue;
   children: ReactNode;
 }) {
   return (
@@ -19,7 +22,10 @@ export function TimeZoneProvider({
   );
 }
 
-/** The signed-in user's preferred zone, or null when Automatic/unset. */
+/** The user's zone, or null (Automatic). While the shell's promise is
+ * unresolved this suspends the CALLING component only. Wrap consumers in a
+ * local <Suspense> with no date text so a wrong-timezone value can't flash. */
 export function useTimeZone(): string | null {
-  return useContext(TimeZoneContext);
+  const v = useContext(TimeZoneContext);
+  return v !== null && typeof v === "object" && "then" in v ? use(v) : v;
 }

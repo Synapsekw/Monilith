@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Film, FileText, Paperclip, Plus } from "lucide-react";
 import type { Tables } from "@/types/database.types";
 import { fileKind } from "@/lib/collaboration/attachments-format";
+import { ThumbImg } from "@/components/boards/ThumbImg";
 
 type A = Tables<"attachments">;
 const MAX = 3;
@@ -16,11 +17,14 @@ const MAX = 3;
 export function FilesCell({
   files,
   previewUrls,
+  thumbUrls,
   onOpen,
   onUpload,
 }: {
   files: readonly A[];
   previewUrls: Record<string, string>;
+  /** Optional thumbnail-transform URLs (image rows only); falls back to full-res. */
+  thumbUrls?: Record<string, string>;
   onOpen: (index: number) => void;
   onUpload: (file: File) => void;
 }) {
@@ -34,6 +38,7 @@ export function FilesCell({
     >
       {shown.map((a, i) => {
         const url = previewUrls[a.id];
+        const thumb = thumbUrls?.[a.id];
         const k = fileKind(a.mime_type, a.file_name);
         return (
           <button
@@ -46,9 +51,13 @@ export function FilesCell({
             }}
             className="border-border flex size-6 items-center justify-center overflow-hidden rounded border pointer-coarse:size-11"
           >
-            {k === "image" && url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt="" className="size-full object-cover" />
+            {k === "image" && (thumb || url) ? (
+              <ThumbImg
+                thumbUrl={thumb}
+                fullUrl={url}
+                alt=""
+                className="size-full object-cover"
+              />
             ) : k === "video" ? (
               <Film className="size-3.5" />
             ) : (

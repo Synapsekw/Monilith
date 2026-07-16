@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
 import { X } from "lucide-react";
 import {
@@ -51,6 +58,7 @@ import type {
   CacheColumn,
 } from "@/lib/boards/cache";
 import { buildCellMap } from "@/lib/boards/cache";
+import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { countOptionUsage } from "@/lib/boards/option-edit";
 import { ColumnOptionsDialog } from "@/components/boards/ColumnOptionsDialog";
 import { CurrencyDialog } from "@/components/boards/CurrencyDialog";
@@ -150,58 +158,106 @@ export function BoardTableInner({
   const [filesPreviewUrls, setFilesPreviewUrls] = useState<
     Record<string, string>
   >({});
+  // Thumbnail-transform URLs for the same cell's images (chips upgrade from an
+  // icon to a small thumbnail on lightbox open; the lightbox keeps full-res).
+  const [filesThumbUrls, setFilesThumbUrls] = useState<Record<string, string>>(
+    {},
+  );
 
-  function openFilesLightbox(files: readonly CacheAttachment[], index: number) {
-    const list = [...files];
-    setFilesLightbox({ files: list, index });
-    setFilesPreviewUrls({});
-    void getAttachmentPreviewUrls({
-      attachmentIds: list.map((a) => a.id),
-    }).then((res) => {
-      if (res.ok) setFilesPreviewUrls(res.data.urls);
-    });
-  }
+  // Stable (useCallback) so the memoized `controls` bundle below keeps its
+  // identity across non-data re-renders (column resize, horizontal scroll,
+  // dialog open/close) — that's what lets the row/cell React.memo actually skip.
+  const openFilesLightbox = useCallback(
+    (files: readonly CacheAttachment[], index: number) => {
+      const list = [...files];
+      setFilesLightbox({ files: list, index });
+      setFilesPreviewUrls({});
+      setFilesThumbUrls({});
+      // 96×96 = the size-6 chip (coarse size-11 = 44px) at ~2× DPR.
+      void getAttachmentPreviewUrls({
+        attachmentIds: list.map((a) => a.id),
+        thumb: { width: 96, height: 96 },
+      }).then((res) => {
+        if (res.ok) {
+          setFilesPreviewUrls(res.data.urls);
+          setFilesThumbUrls(res.data.thumbUrls);
+        }
+      });
+    },
+    [],
+  );
 
   async function downloadColumnFile(attachmentId: string) {
     const res = await getAttachmentDownloadUrl({ attachmentId });
     if (res.ok) window.open(res.data.url, "_blank", "noopener");
   }
 
-  const toggleExpand = (id: string) =>
-    setExpanded((prev) => {
-      const n = new Set(prev);
-      if (n.has(id)) {
-        n.delete(id);
-      } else {
-        n.add(id);
-      }
-      return n;
-    });
+  const toggleExpand = useCallback(
+    (id: string) =>
+      setExpanded((prev) => {
+        const n = new Set(prev);
+        if (n.has(id)) {
+          n.delete(id);
+        } else {
+          n.add(id);
+        }
+        return n;
+      }),
+    [],
+  );
+  // Stable so the memoized ItemRow/SubitemBlock skip re-render on unrelated
+  // parent updates (this is threaded down as onRenameSettled).
+  const handleRenameItemSettled = useCallback(
+    () => setRenamingItemId(null),
+    [],
+  );
 
   const mutations = useBoardMutations(payload.board.id);
+  // useBoardMutations returns a fresh object of fresh closures every render,
+  // which would change `controls`' identity each render and defeat the row/cell
+  // React.memo. Forward through a ref so the exposed methods keep a STABLE
+  // identity (fixed for the component's life) while always invoking the latest
+  // mutation. Used to build the memoized `controls` bundle below.
+  const mutationsRef = useRef(mutations);
+  useEffect(() => {
+    mutationsRef.current = mutations;
+  });
+  const m = useMemo(() => {
+    const proxy = {} as typeof mutations;
+    // Keys come from the render-scoped `mutations` (stable shape); each wrapper
+    // reads `mutationsRef.current` only when INVOKED (event handler), never
+    // during render — so the exposed identities stay stable for the memo.
+    for (const key of Object.keys(mutations) as (keyof typeof mutations)[]) {
+      proxy[key] = ((...args: unknown[]) =>
+        (mutationsRef.current[key] as (...a: unknown[]) => unknown)(
+          ...args,
+        )) as never;
+    }
+    return proxy;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Board-level error surface for column-add failures. The Add-column menu is a
   // header dropdown with no inline spot, so failures (which were previously
   // swallowed silently) surface as a dismissible banner. Mirrors AddItemRow's
   // inline role="alert" pattern; the project has no toast primitive yet.
   const [columnError, setColumnError] = useState<string | null>(null);
-  const {
-    setCell,
-    clearCellValue,
-    addItem,
-    renameItem: renameItemMutation,
-    renameGroup,
-    addGroup,
-    setGroupColor,
-    deleteGroup,
-    reorderGroup,
-    addSubitem,
-    deleteItem,
-    reorderItem,
-    moveItemToGroup,
-  } = mutations;
+  // Group-level mutations are used directly in the render body (not threaded
+  // through the memoized `controls`), so plain destructure is fine here. The
+  // cell/item mutations that DO go into `controls` come from the stable `m`
+  // proxy above so the bundle stays referentially stable.
+  const { renameGroup, addGroup, setGroupColor, deleteGroup, reorderGroup } =
+    mutations;
 
   // Cell lookup keyed by `${item_id}:${column_id}` → raw JSON value.
   const cellMap = useMemo(() => buildCellMap(cellValues), [cellValues]);
+
+  // Direct-dependent counts for priority cells: one O(edges) pass for the whole
+  // board, threaded down via `controls` (same pattern as cellMap) instead of
+  // recomputed inside every visible ItemRow/SortableSubitemRow.
+  const dependentsByItem = useMemo(
+    () => buildDependentsCountMap(cache.dependencies),
+    [cache.dependencies],
+  );
 
   const { topLevel, childrenByParent } = useMemo(
     () => bucketItems(items),
@@ -224,16 +280,28 @@ export function BoardTableInner({
   // already-loaded cache in memory (0 server round-trips; see AGENTS.md
   // invariants / gotcha-09). Filtering narrows TOP-LEVEL rows only; subitems
   // still show under an expanded parent. Sorting reorders WITHIN each group so
-  // group order (position) is preserved. Memoized so 5k rows aren't re-scanned
-  // on unrelated re-renders (presence heartbeats) or per keystroke.
+  // group order (position) is preserved. Typing stays smooth on large boards:
+  // the URL write is debounced upstream (one write per pause, not per keystroke
+  // — see useBoardFilterSort) and the search term is deferred here so the heavy
+  // filter/sort scan yields to input paint. Memoized so 5k rows aren't
+  // re-scanned on unrelated re-renders (presence heartbeats).
   const filter = useBoardFilterSort();
+  // Defer the *search* term so a fast typist never blocks on the row scan; the
+  // heavy filter memo recomputes against the trailing value while the input
+  // stays responsive. Non-search filter changes (discrete toggles) aren't
+  // deferred — they apply on the next commit.
+  const deferredQ = useDeferredValue(filter.state.q);
+  const effectiveFilterState = useMemo(
+    () => ({ ...filter.state, q: deferredQ }),
+    [filter.state, deferredQ],
+  );
   const predicate = useMemo(
-    () => buildItemPredicate(filter.state, { columns, cellMap }),
-    [filter.state, columns, cellMap],
+    () => buildItemPredicate(effectiveFilterState, { columns, cellMap }),
+    [effectiveFilterState, columns, cellMap],
   );
   const comparator = useMemo(
-    () => buildItemComparator(filter.state, { columns, cellMap }),
-    [filter.state, columns, cellMap],
+    () => buildItemComparator(effectiveFilterState, { columns, cellMap }),
+    [effectiveFilterState, columns, cellMap],
   );
   const { visibleItemsByGroup, visibleCount } = useMemo(() => {
     const out = new Map<string, Item[]>();
@@ -358,35 +426,70 @@ export function BoardTableInner({
     onSmartFill: (c) => setSmartFillFor(c),
   };
 
-  const controls: CellControls = {
-    editing,
-    setEditing,
-    setCell,
-    clearCellValue,
-    members,
-    boardId: payload.board.id,
-    currentUserId,
-    addItem,
-    renameItemInCache: renameItemMutation,
-    addSubitem: (parentId, name, cbs) =>
-      addSubitem(parentId, name, {
+  // Stable subitem-add wrapper (adapts the mutation's onSuccess(item) → id).
+  const addSubitemControl = useCallback(
+    (
+      parentId: string,
+      name: string,
+      cbs?: {
+        onSuccess?: (id: string) => void;
+        onError?: (err: Error) => void;
+      },
+    ) =>
+      m.addSubitem(parentId, name, {
         onSuccess: (item) => cbs?.onSuccess?.(item.id),
         onError: cbs?.onError,
       }),
-    deleteItem,
-    reorderItem,
-    moveItemToGroup,
-    cache,
-    uploadColumnFile: mutations.uploadColumnFile,
-    openFilesLightbox,
-    startTimer: mutations.startTimer,
-    stopTimer: mutations.stopTimer,
-    addManualEntry: mutations.addManualEntry,
-    editEntry: mutations.editEntry,
-    deleteEntry: mutations.deleteEntry,
-    setEstimate: mutations.setEstimate,
-    setRelationLinks: mutations.setRelationLinks,
-  };
+    [m],
+  );
+
+  // Memoized so the bundle only changes when its real data deps do (edit mode,
+  // cache, members, dependents map) — NOT on every re-render. All mutation
+  // methods come from the stable `m` proxy, so a column resize / scroll / dialog
+  // toggle no longer re-creates `controls` and the row/cell React.memo can skip.
+  const controls: CellControls = useMemo(
+    () => ({
+      editing,
+      setEditing,
+      setCell: m.setCell,
+      clearCellValue: m.clearCellValue,
+      members,
+      boardId: payload.board.id,
+      currentUserId,
+      addItem: m.addItem,
+      renameItemInCache: m.renameItem,
+      addSubitem: addSubitemControl,
+      deleteItem: m.deleteItem,
+      reorderItem: m.reorderItem,
+      moveItemToGroup: m.moveItemToGroup,
+      cache,
+      dependentsByItem,
+      uploadColumnFile: m.uploadColumnFile,
+      openFilesLightbox,
+      filesPreviewUrls,
+      filesThumbUrls,
+      startTimer: m.startTimer,
+      stopTimer: m.stopTimer,
+      addManualEntry: m.addManualEntry,
+      editEntry: m.editEntry,
+      deleteEntry: m.deleteEntry,
+      setEstimate: m.setEstimate,
+      setRelationLinks: m.setRelationLinks,
+    }),
+    [
+      editing,
+      m,
+      members,
+      payload.board.id,
+      currentUserId,
+      addSubitemControl,
+      cache,
+      dependentsByItem,
+      openFilesLightbox,
+      filesPreviewUrls,
+      filesThumbUrls,
+    ],
+  );
 
   const sensors = useTouchAwareSensors();
 
@@ -601,7 +704,7 @@ export function BoardTableInner({
                     expanded={expanded}
                     onToggleExpand={toggleExpand}
                     renamingItemId={renamingItemId}
-                    onRenameItemSettled={() => setRenamingItemId(null)}
+                    onRenameItemSettled={handleRenameItemSettled}
                     onSetRenamingItemId={setRenamingItemId}
                     scrollContainerRef={scrollContainerRef}
                     contentRef={contentRef}
