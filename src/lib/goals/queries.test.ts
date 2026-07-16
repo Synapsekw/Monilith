@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/org/queries-cached", () => ({
   listOrgMembersCached: vi.fn(async () => []),
 }));
-vi.mock("@/lib/auth/session", () => ({ getUserOrgs: vi.fn(async () => []) }));
+vi.mock("@/lib/org/active", () => ({ getActiveOrgId: vi.fn(async () => "") }));
 
 import {
   getGoalLinks,

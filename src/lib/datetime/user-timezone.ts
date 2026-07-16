@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
-import { getUserOrgs } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 
 /**
  * The effective IANA timezone used to bucket a user's time entries into local
@@ -17,9 +17,9 @@ import { getUserOrgs } from "@/lib/auth/session";
  * as Monday for the same user.
  */
 export async function resolveUserTimeZone(userId: string): Promise<string> {
-  const [profileTz, orgs] = await Promise.all([
+  const [profileTz, activeOrg] = await Promise.all([
     getUserTimeZoneCached(userId),
-    getUserOrgs(),
+    resolveActiveOrg(),
   ]);
-  return profileTz ?? orgs[0]?.timezone ?? "UTC";
+  return profileTz ?? activeOrg?.timezone ?? "UTC";
 }
