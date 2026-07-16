@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:analyze": "next experimental-analyze",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
