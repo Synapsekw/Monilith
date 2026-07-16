@@ -57,6 +57,21 @@ describe("InvitationsSection", () => {
     expect(label.className).toContain("uppercase");
   });
 
+  it("shows the reciprocity notice on a pending invite", () => {
+    render(
+      <InvitationsSection
+        invites={[invite]}
+        onAccept={vi.fn()}
+        onDecline={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        /collaborate on boards you share from your own workspace/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("renders an error message when provided", () => {
     render(
       <InvitationsSection
