@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-14-2127
+last-updated: 2026-07-15-1326
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,11 +51,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Phase 10 Batch 2 (E2/E3/E4) + ⌘K multi-turn shipped to prod** ([[2026-07-14-2127-whats-next-triage-promote-batch2]], PR `#62`) — E2 item assist + Smart fill + catch-me-up summary, E3 ⌘K NL actions (propose→confirm→execute), E4 generation ×3 (board-gen, NL→automation, import-mapping), plus the ⌘K multi-turn clarification fix. Already in prod: E1 gateway+metering+Ask Pulse (`#59`), process hardening + group-1 carryover (`#61`).
-- **Branch:** `develop` @ `ce45108` == `origin/develop`; `main` @ `3c3bf1f` == `origin/main` — **in sync** (Batch 2 promoted, squash divergence healed). Two scoping worktrees live: `task/e5-agentic-semantic`, `task/landing-keystone` (specs written, **uncommitted**, awaiting review).
-- **In flight:** none building. Two specs awaiting review (E5, Landing).
-- **Next:** review the two scoping specs and build one — or start a ready plan (**Ask Pulse full-page** first on the AI track: spec + Phase-1 plan at `docs/superpowers/plans/2026-07-12-ask-pulse-full-page-conversational.md`; build **before E5**, shared `src/lib/ai/ask/`). Other ready builds: **E6** (Stripe billing — spec+plan `docs/superpowers/plans/2026-07-12-e6-billing-platform.md`; F16 blocked on your Stripe creds), **PF — Polish & Fluidity** (plan written → build; batch A first, A4 skippable). Scope-then-build: **E5** (agentic automations + semantic search — spec written this session), **Landing** Keystone (spec written this session, Option S single-hero restyle). Audit Batch B (org switcher, auth rate limiting, notification prefs, saved views) still open.
-- **Owed:** **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **North-star fix:** the automations "no pg_cron scheduler" belief is wrong — `pg_cron`/`pg_net` + `_automation_run` substrate exists (found scoping E5); E5's agentic track reuses it.
+- **Phase:** **Keystone marketing landing page shipped to prod** ([[2026-07-15-1326-keystone-landing-build-promote-sync]], PR `#63`) — full invite-only landing built on top of the existing hero (product showcase, varied feature section w/ bento grid, client view-switcher, capability grid, vision, waitlist CTA, periwinkle gradient). Also in prod: Phase 10 Batch 2 (E2/E3/E4 + ⌘K, `#62`), E1 (`#59`), hardening (`#61`). **Prod DB + storage synced to dev** via `/sync-prod` (had to apply the missing `20260712153317` migration to prod first).
+- **Branch:** `develop` @ `31b2b2b` == `origin/develop`; `main` @ `6027f38` == `origin/main` — **in sync** (landing promoted, squash divergence healed). One scoping worktree still parked: `task/e5-agentic-semantic` (E5 spec written, **uncommitted**, awaiting review/build).
+- **In flight:** none building.
+- **Next:** pick a roadmap build — **Ask Pulse full-page** (plan ready; build **before E5**, shared `src/lib/ai/ask/`), **E6** (Stripe billing — plan `docs/superpowers/plans/2026-07-12-e6-billing-platform.md`; F16 blocked on your Stripe creds), **PF — Polish & Fluidity** (plan ready; batch A first, A4 skippable), or **E5** (agentic automations + semantic search — spec written, fold this session's review risks in first). Audit Batch B (org switcher, auth rate limiting, notification prefs, saved views) still open.
+- **Owed:** **Wordmark mark** in prod — one-line revert in `brand.tsx` if the lockup reads busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **E5 review risks** to fold into its plan before building: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (printed to terminal during the sync). Corrected stale vault claim: `20260712153317` was not actually on prod until this session.
 
 ### Last session
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -13,6 +14,8 @@ import { TimezoneForm } from "@/components/settings/timezone-form";
 import { PersonalTimezoneForm } from "@/components/settings/personal-timezone-form";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { DigestPreferenceForm } from "@/components/settings/DigestPreferenceForm";
+import { NotificationPreferencesForm } from "@/components/settings/NotificationPreferencesForm";
+import { getDisabledInAppKinds } from "@/lib/settings/notification-prefs.queries";
 import { OrgAdminConsole } from "@/components/settings/org-admin-console";
 import { AiProviderForm } from "@/components/settings/AiProviderForm";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
@@ -29,15 +32,15 @@ export default async function SettingsPage() {
   const user = await requireUser();
   // Timezone + orgs + AI credential are independent reads — resolve them in
   // parallel (the members RPC below is the only read that depends on org.id).
-  const [myTimeZone, orgs, aiCredential, orgAi] = await Promise.all([
+  const [myTimeZone, aiCredential, orgAi, disabledInApp] = await Promise.all([
     getUserTimeZoneCached(user.id),
-    getUserOrgs(),
     getMyAiCredential(),
     getOrgAiSettings(),
+    getDisabledInAppKinds(user.id),
   ]);
   const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
-  const org = orgs[0];
+  const org = await resolveActiveOrg();
   if (!org) redirect("/onboarding");
 
   const workspaces = await listWorkspacesCached(org.id);
@@ -123,13 +126,17 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Notifications</CardTitle>
             <CardDescription>
-              In-app notifications are unaffected.
+              Choose which notifications you receive.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <DigestPreferenceForm
-              initialOptOut={myProfile?.email_digest_opt_out ?? false}
-            />
+          <CardContent className="space-y-4">
+            <NotificationPreferencesForm disabledKinds={[...disabledInApp]} />
+            <div className="space-y-1">
+              <p className="text-muted-foreground text-xs font-medium">Email</p>
+              <DigestPreferenceForm
+                initialOptOut={myProfile?.email_digest_opt_out ?? false}
+              />
+            </div>
           </CardContent>
         </Card>
 

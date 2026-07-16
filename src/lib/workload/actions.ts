@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { getUserOrgs } from "@/lib/auth/session";
+import { getActiveOrgId } from "@/lib/org/active";
 import {
   setWorkloadDefaultsSchema,
   upsertMemberCapacitySchema,
@@ -19,8 +19,7 @@ export async function upsertMemberCapacity(
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const d = parsed.data;
 
-  const orgs = await getUserOrgs();
-  const orgId = orgs[0]?.id;
+  const orgId = await getActiveOrgId();
   if (!orgId) return fail("No organization.");
 
   const supabase = await createClient();
@@ -54,8 +53,7 @@ export async function setWorkloadDefaults(
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const d = parsed.data;
 
-  const orgs = await getUserOrgs();
-  const orgId = orgs[0]?.id;
+  const orgId = await getActiveOrgId();
   if (!orgId) return fail("No organization.");
 
   const supabase = await createClient();

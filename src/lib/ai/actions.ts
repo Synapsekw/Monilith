@@ -15,7 +15,8 @@ import { generateProposal } from "@/lib/ai/generate";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { mapAiError } from "@/lib/ai/action-guard";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import {
   configSchemaForKind,
   widgetKindSchema,
@@ -118,8 +119,7 @@ export async function generateDashboardProposal(input: {
     return fail("This board has no data to build a dashboard from yet.");
 
   try {
-    const orgs = await getUserOrgs();
-    const org = orgs[0];
+    const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "dashboard_gen");
     const user = await requireUser();

@@ -11,6 +11,10 @@ import {
   changePasswordSchema,
   forgotPasswordSchema,
 } from "@/lib/validations/auth";
+import {
+  checkRateLimit,
+  throttleResult,
+} from "@/lib/rate-limit/auth-rate-limit";
 
 export type AuthState = {
   error?: string;
@@ -56,6 +60,12 @@ export async function signIn(
     return { error: parsed.error.issues[0]?.message ?? "Invalid credentials" };
   }
 
+  const gate = await checkRateLimit({
+    endpoint: "signIn",
+    email: parsed.data.email,
+  });
+  if (!gate.allowed) return throttleResult("signIn", gate.retryAfterSeconds);
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
@@ -83,6 +93,12 @@ export async function signUp(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid details" };
   }
+
+  const gate = await checkRateLimit({
+    endpoint: "signUp",
+    email: parsed.data.email,
+  });
+  if (!gate.allowed) return throttleResult("signUp", gate.retryAfterSeconds);
 
   const origin = await getOrigin();
   const supabase = await createClient();
@@ -139,6 +155,13 @@ export async function requestPasswordReset(
     return { error: parsed.error.issues[0]?.message ?? "Invalid email" };
   }
 
+  const gate = await checkRateLimit({
+    endpoint: "requestPasswordReset",
+    email: parsed.data.email,
+  });
+  if (!gate.allowed)
+    return throttleResult("requestPasswordReset", gate.retryAfterSeconds);
+
   const origin = await getOrigin();
   const supabase = await createClient();
   // `recovery=1` makes /change-password show self-serve copy (not the
@@ -169,6 +192,13 @@ export async function changeOwnPassword(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const gate = await checkRateLimit({
+    endpoint: "changeOwnPassword",
+    userId: user.id,
+  });
+  if (!gate.allowed)
+    return throttleResult("changeOwnPassword", gate.retryAfterSeconds);
 
   const { error } = await supabase.auth.updateUser({
     password: parsed.data.password,

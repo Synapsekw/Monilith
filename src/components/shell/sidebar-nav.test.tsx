@@ -35,6 +35,10 @@ vi.mock("@/lib/workspaces/active-actions", () => ({
   setActiveWorkspace: vi.fn(),
 }));
 
+vi.mock("@/lib/org/active-actions", () => ({
+  setActiveOrg: vi.fn(),
+}));
+
 beforeEach(() => {
   useUIStore.setState({
     sidebarCollapsed: false,
@@ -123,6 +127,42 @@ describe("SidebarNav", () => {
     );
     const trash = screen.getByRole("link", { name: /trash/i });
     expect(trash).toHaveAttribute("href", "/boards#archived");
+  });
+
+  it("shows the org switcher for a multi-org user", () => {
+    renderNav(
+      <SidebarNav
+        orgs={[
+          { id: "o1", name: "Acme" },
+          { id: "o2", name: "Globex" },
+        ]}
+        activeOrgId="o2"
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /switch organization/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Globex")).toBeInTheDocument();
+  });
+
+  it("hides the org switcher for a single-org user", () => {
+    renderNav(
+      <SidebarNav
+        orgs={[{ id: "o1", name: "Acme" }]}
+        activeOrgId="o1"
+        boards={[]}
+        sharedBoards={[]}
+        workspaces={[]}
+        dashboards={[]}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /switch organization/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the active workspace in the switcher", () => {

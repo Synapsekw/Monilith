@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserOrgs } from "@/lib/auth/session";
+import { getUser } from "@/lib/auth/session";
+import { getActiveOrgId } from "@/lib/org/active";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
 import { buildWorkloadGrid, serverToday } from "@/lib/workload/rollup";
@@ -86,8 +87,7 @@ export async function getWorkloadGrid(
   capacities: MemberCapacity[];
   defaults: OrgWorkloadDefaults;
 }> {
-  const orgs = await getUserOrgs();
-  const orgId = orgs[0]?.id ?? "";
+  const orgId = await getActiveOrgId();
   const supabase = await createClient();
   const [{ data: raw }, members, caps, defaults] = await Promise.all([
     supabase.rpc("workload_rollup", { p_from: from, p_to: to }),
@@ -165,9 +165,8 @@ export async function getWorkloadPageData(override?: {
 
   // Identity reads OUTSIDE the cache scopes (9.3 rule): userId keys the cached
   // readable-boards entry, orgId keys the cached members entry.
-  const [user, orgs] = await Promise.all([getUser(), getUserOrgs()]);
+  const [user, orgId] = await Promise.all([getUser(), getActiveOrgId()]);
   const userId = user?.id ?? "";
-  const orgId = orgs[0]?.id ?? "";
   const supabase = await createClient();
 
   const [

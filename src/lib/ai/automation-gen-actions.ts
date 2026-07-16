@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { getBoardPayload } from "@/lib/boards/queries";
@@ -42,7 +43,7 @@ export async function generateAutomationDraft(input: {
   const { boardId, prompt } = parsed.data;
 
   try {
-    const org = (await getUserOrgs())[0];
+    const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "automation_gen");
 

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { getUserOrgs } from "@/lib/auth/session";
+import { getActiveOrgId } from "@/lib/org/active";
 import {
   searchAllocatableItems as searchAllocatableItemsQuery,
   type AllocatableItem,
@@ -26,8 +26,7 @@ export async function upsertTimeAllocation(
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const d = parsed.data;
 
-  const orgs = await getUserOrgs();
-  const orgId = orgs[0]?.id;
+  const orgId = await getActiveOrgId();
   if (!orgId) return fail("No organization.");
 
   const supabase = await createClient();

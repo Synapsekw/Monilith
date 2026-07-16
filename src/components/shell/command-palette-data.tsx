@@ -1,4 +1,5 @@
-import { getUser, getUserOrgs } from "@/lib/auth/session";
+import { getUser } from "@/lib/auth/session";
+import { getActiveOrgId } from "@/lib/org/active";
 import { listMyBoardsCached } from "@/lib/boards/queries-cached";
 import { listDashboardsCached } from "@/lib/dashboards/queries-cached";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
@@ -11,9 +12,8 @@ import { CommandPalette } from "@/components/command-palette";
  * read OUTSIDE any cache, then passed into the `use cache` reads (Phase 9.3).
  */
 export async function CommandPaletteData() {
-  const [user, orgs] = await Promise.all([getUser(), getUserOrgs()]);
+  const [user, orgId] = await Promise.all([getUser(), getActiveOrgId()]);
   const userId = user?.id ?? "";
-  const orgId = orgs[0]?.id ?? "";
   const [boards, dashboards, workspaces] = await Promise.all([
     listMyBoardsCached(userId),
     listDashboardsCached(orgId),

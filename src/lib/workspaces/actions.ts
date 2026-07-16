@@ -2,7 +2,8 @@
 
 import { updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getUserOrgs } from "@/lib/auth/session";
+import { getUser } from "@/lib/auth/session";
+import { getActiveOrgId } from "@/lib/org/active";
 import { workspacesTag } from "@/lib/cache/tags";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 import {
@@ -20,8 +21,7 @@ export async function createWorkspace(input: {
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   // Org + creator are derived server-side; never trusted from the client.
-  const [user, orgs] = await Promise.all([getUser(), getUserOrgs()]);
-  const orgId = orgs[0]?.id;
+  const [user, orgId] = await Promise.all([getUser(), getActiveOrgId()]);
   if (!user || !orgId) return fail("No organization found.");
 
   const supabase = await createClient();
@@ -44,9 +44,9 @@ export async function renameWorkspace(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  // Org is derived server-side for the cache tag (single-org scoping, matching
-  // the shell's `orgs[0]`); never trusted from the client.
-  const orgId = (await getUserOrgs())[0]?.id;
+  // Org is derived server-side for the cache tag (the active org); never trusted
+  // from the client.
+  const orgId = await getActiveOrgId();
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -66,7 +66,7 @@ export async function deleteWorkspace(input: {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const orgId = (await getUserOrgs())[0]?.id;
+  const orgId = await getActiveOrgId();
 
   const supabase = await createClient();
 

@@ -34,9 +34,13 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "user-1" })),
-  getUserOrgs: vi.fn(async () => [
-    { id: "org-1", name: "Org", timezone: "UTC" },
-  ]),
+}));
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: vi.fn(async () => ({
+    id: "org-1",
+    name: "Org",
+    timezone: "UTC",
+  })),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 

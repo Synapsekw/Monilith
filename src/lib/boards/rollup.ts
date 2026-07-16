@@ -19,6 +19,39 @@ export type RollupResult =
 
 type Options = readonly ColumnOption[] | undefined;
 
+const TEXTUAL_KINDS = new Set<ColumnKind>(["text", "link", "email", "phone"]);
+
+/**
+ * The free-text column kinds (text/link/email/phone) that have no arithmetic
+ * rollup — {@link rollupCell} returns blank for them. A collapsed parent surfaces
+ * its own value (or a subitem count) via {@link textualRollup} instead.
+ */
+export function isTextualKind(kind: ColumnKind): boolean {
+  return TEXTUAL_KINDS.has(kind);
+}
+
+export type TextualRollup =
+  | { kind: "own" }
+  | { kind: "count"; count: number }
+  | { kind: "blank" };
+
+/**
+ * Collapsed-parent cell for a free-text column. These kinds can't be summed or
+ * averaged, so rather than hide the cell entirely we surface what the collapse
+ * would otherwise obscure: the parent item's own value wins ("own"); when the
+ * parent's cell is empty, fall back to a count of subitems that carry a value
+ * ("count"); blank only when nothing exists anywhere. Pure. The caller renders
+ * the parent's own value (it holds the shaped cell value + renderer).
+ */
+export function textualRollup(
+  ownValue: unknown,
+  subValues: readonly unknown[],
+): TextualRollup {
+  if (ownValue != null) return { kind: "own" };
+  const count = subValues.filter((v) => v != null).length;
+  return count > 0 ? { kind: "count", count } : { kind: "blank" };
+}
+
 /**
  * Aggregate a parent's subitem cell values for one column into a renderable
  * rollup. `values` are raw JSON cell values across the subitems (nulls allowed

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
-import { getUserOrgs } from "@/lib/auth/session";
+import { getActiveOrgId } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
 import { buildGoalTree, serverToday } from "@/lib/goals/progress";
 import type { BoardAgg, GoalNode, GoalRow, RowOwner } from "@/lib/goals/types";
@@ -89,8 +89,7 @@ export async function getGoalLinks(): Promise<Map<string, GoalLink[]>> {
 
 /** The current user's owner map (keyed by userId), for the New Goal owner picker. */
 export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
-  const orgs = await getUserOrgs();
-  const orgId = orgs[0]?.id;
+  const orgId = await getActiveOrgId();
   if (!orgId) return new Map();
   const members = await listOrgMembersCached(orgId);
   return new Map(members.map((m) => [m.userId, m]));
