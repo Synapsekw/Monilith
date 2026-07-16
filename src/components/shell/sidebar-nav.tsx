@@ -35,7 +35,7 @@ type NavLink = {
 };
 
 const HOME: NavLink = { label: "My Work", href: "/my-work", icon: ListTodo };
-const ASK: NavLink = { label: "Ask Pulse", href: "/ask", icon: Sparkles };
+const ASK: NavLink = { label: "Ask AI", href: "/ask", icon: Sparkles };
 const PLANNING: NavLink[] = [
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },

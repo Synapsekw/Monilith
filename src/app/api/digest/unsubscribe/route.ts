@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 const page = (msg: string) => `<!doctype html>
 <html><body style="font-family:Helvetica,Arial,sans-serif;padding:48px;color:#111;">
-  <h1 style="font-size:18px;">Pulse</h1><p style="font-size:14px;">${msg}</p>
+  <h1 style="font-size:18px;">Monolith</h1><p style="font-size:14px;">${msg}</p>
 </body></html>`;
 
 /**

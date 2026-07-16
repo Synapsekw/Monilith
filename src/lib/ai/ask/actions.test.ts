@@ -110,7 +110,7 @@ describe("askPulse", () => {
     expect(res.ok).toBe(false);
     if (!res.ok)
       expect(res.error).toBe(
-        "Ask Pulse needs an Anthropic key — dashboards work with any provider.",
+        "Ask AI needs an Anthropic key — dashboards work with any provider.",
       );
     expect(askPulseLoop).not.toHaveBeenCalled();
   });

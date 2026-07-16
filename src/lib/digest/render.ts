@@ -71,7 +71,7 @@ export function renderDigestHtml(input: DigestEmailInput): string {
           <a href="${input.appBaseUrl}/dashboards" style="font-size:13px;color:#111;">Open your dashboards &rarr;</a>
         </p>
         <p style="margin:20px 0 0;font-size:11px;color:#999;">
-          You receive this weekly digest as a member of ${escapeHtml(input.orgName)} on Pulse.
+          You receive this weekly digest as a member of ${escapeHtml(input.orgName)} on Monolith.
           <a href="${input.unsubscribeUrl}" style="color:#999;">Unsubscribe</a>
         </p>
       </td></tr>

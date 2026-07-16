@@ -198,7 +198,7 @@ function FlowConnector() {
 
 function AskPulseVisual() {
   return (
-    <WindowFrame title="Ask Pulse" chip="⌘K">
+    <WindowFrame title="Ask AI" chip="⌘K">
       <div className="p-5">
         <div className="mb-4">
           <div className="text-kicker mb-2 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] uppercase">
@@ -211,7 +211,7 @@ function AskPulseVisual() {
         <div>
           <div className="text-kicker mb-2 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] uppercase">
             <Sparkles className="text-primary size-3" />
-            Pulse
+            AI
           </div>
           <div className="bg-primary/[0.06] border-primary/20 rounded-lg border px-4 py-3.5 text-[14.5px] leading-relaxed">
             Two items need attention.{" "}
@@ -693,7 +693,7 @@ export function LandingSections({ signedIn = false }: { signedIn?: boolean }) {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
                 <BentoTile
                   className="md:col-span-4 md:row-span-2"
-                  kicker="AI · Ask Pulse"
+                  kicker="Ask AI"
                   title="Ask your workspace anything."
                   body="Natural-language answers from every board, doc, and update, with live numbers instead of stale exports. Inside any item, AI drafts, rewrites, summarizes, and catches you up on long threads."
                 >

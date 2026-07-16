@@ -27,7 +27,7 @@ import type { AiUsageTokens } from "@/lib/ai/pricing";
 // `runtime` export). The Anthropic SDK + service client need Node APIs anyway.
 
 const SYSTEM = [
-  "You are Ask Pulse, a helpful analyst answering questions about the user's boards.",
+  "You are the AI assistant for Monolith, a helpful analyst answering questions about the user's boards.",
   "Use the read tools to ground every claim in real data. Never fabricate.",
   "Start broad (list_boards, get_board_overview) and query_items only for the rows a question needs.",
   "Cell values reference option/user ids — decode labels via get_board_overview before answering.",
@@ -189,7 +189,7 @@ export async function POST(req: Request) {
       } catch (e) {
         emit({
           type: "error",
-          message: (e as Error).message || "Ask Pulse hit a snag.",
+          message: (e as Error).message || "The AI assistant hit a snag.",
         });
       } finally {
         controller.close();

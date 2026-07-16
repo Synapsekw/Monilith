@@ -70,7 +70,7 @@ export function MessageList({
             <span className="bg-surface text-brand flex size-11 items-center justify-center rounded-lg border">
               <Sparkles className="size-5" />
             </span>
-            <Kicker>Ask Pulse</Kicker>
+            <Kicker>Ask AI</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
               Ask a question about your boards — what&apos;s overdue, who&apos;s
               overloaded, what shipped this week. Answers are grounded in your
