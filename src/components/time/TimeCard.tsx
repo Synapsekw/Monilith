@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useOptimistic, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -14,11 +14,10 @@ import { TimeCell } from "./TimeCell";
 import { AddRowPicker, type PickedRow } from "./AddRowPicker";
 
 const DAY = 86_400_000;
-/** Stable empty base for the optimistic edit overlay. Because `useOptimistic`
- * reverts to its passthrough (base) value once each transition settles, keeping
- * the base a constant empty Map means the overlay auto-clears exactly when the
- * refreshed server `data.rows` land — i.e. it reconciles for free. */
-const EMPTY_EDITS = new Map<string, number>();
+/** Trailing-debounce window: one router.refresh() this long after the last cell
+ * edit in a burst reconciles /time (timer merges, server totals) once. */
+const REFRESH_DEBOUNCE_MS = 2000;
+const editKey = (rowKey: string, day: string) => `${rowKey}::${day}`;
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const toMs = (d: string) => Date.parse(d + "T00:00:00Z");
 
@@ -39,7 +38,8 @@ function weekLabel(start: string): string {
 
 /** Weekly time card. Week navigation is a genuine RSC nav (each week is a
  * distinct server window; the loaded horizon is one week — bounded read).
- * Cell edits are Server Actions with an optimistic local overlay. */
+ * Cell edits are Server Actions reconciled into a durable local overlay; one
+ * trailing-debounced router.refresh() reconciles /time per edit burst. */
 export function TimeCard({
   data,
   categories,
@@ -52,21 +52,46 @@ export function TimeCard({
   // Locally-added empty rows (from the picker) not yet persisted.
   const [extraRows, setExtraRows] = useState<TimeCardRow[]>([]);
 
-  // Optimistic overlay of in-flight cell edits, keyed by `${rowKey}::${day}` →
-  // manual seconds. Applied synchronously on commit so the per-row Total,
-  // daily totals, and week total move in step with the edited cell — then it
-  // reverts to EMPTY_EDITS when the transition settles (server value has landed
-  // in data.rows via router.refresh(), so display stays consistent).
-  const [pendingEdits, addPendingEdit] = useOptimistic<
-    Map<string, number>,
-    { key: string; day: string; manualSecs: number }
-  >(EMPTY_EDITS, (map, e) =>
-    new Map(map).set(`${e.key}::${e.day}`, e.manualSecs),
+  // Durable overlay of cell edits, keyed `${rowKey}::${day}` → manual seconds.
+  // Set optimistically on commit (so per-row Total, daily totals, and week total
+  // move in step), reverted on failure, and reconciled from the action's written
+  // seconds on success. Unlike useOptimistic it does NOT auto-clear when the
+  // transition settles — it must hold the acknowledged value until the coalesced
+  // router.refresh() lands fresh data.rows, so a committed cell never flickers.
+  const [localEdits, setLocalEdits] = useState<Map<string, number>>(
+    () => new Map(),
   );
-  // A cell's effective manual seconds: the pending optimistic value if one is
-  // in flight for this (row, day), else the server value.
+  // The server week window is authoritative: when it changes (week nav landed),
+  // drop the overlay. Adjust-during-render keeps it in step with no effect churn.
+  const [lastWeekStart, setLastWeekStart] = useState(data.weekStart);
+  if (data.weekStart !== lastWeekStart) {
+    setLastWeekStart(data.weekStart);
+    setLocalEdits(new Map());
+  }
+
+  const setEdit = (rowKey: string, day: string, secs: number) =>
+    setLocalEdits((prev) => new Map(prev).set(editKey(rowKey, day), secs));
+
+  // Trailing-debounced single refresh per edit burst; cleared on unmount.
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    },
+    [],
+  );
+  function scheduleRefresh() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null;
+      router.refresh();
+    }, REFRESH_DEBOUNCE_MS);
+  }
+
+  // A cell's effective manual seconds: the overlay value if one exists for this
+  // (row, day), else the server value.
   const effManual = (rowKey: string, cell: TimeCardCell) =>
-    pendingEdits.get(`${rowKey}::${cell.day}`) ?? cell.manualSecs;
+    localEdits.get(editKey(rowKey, cell.day)) ?? cell.manualSecs;
 
   function gotoWeek(deltaWeeks: number) {
     const next = iso(toMs(data.weekStart) + deltaWeeks * 7 * DAY);
@@ -100,34 +125,48 @@ export function TimeCard({
     ]);
   }
 
+  // Restore the overlay entry for a cell to what it was before an edit (used to
+  // revert a failed mutation). `undefined` prior value means "no overlay" → the
+  // cell falls back to the server value.
+  function revertEdit(rowKey: string, day: string, prev: number | undefined) {
+    setLocalEdits((map) => {
+      const next = new Map(map);
+      if (prev === undefined) next.delete(editKey(rowKey, day));
+      else next.set(editKey(rowKey, day), prev);
+      return next;
+    });
+  }
+
   function commitCell(row: TimeCardRow, day: string, hours: number) {
-    startNav(async () => {
-      addPendingEdit({
-        key: row.key,
-        day,
-        manualSecs: Math.round(hours * 3600),
-      });
-      await upsertTimeAllocation({
+    const prev = localEdits.get(editKey(row.key, day));
+    setEdit(row.key, day, Math.round(hours * 3600)); // optimistic
+    void (async () => {
+      const res = await upsertTimeAllocation({
         workDate: day,
         itemId: row.itemId ?? undefined,
         boardId: row.boardId ?? undefined,
         category: row.category ?? undefined,
         hours,
       });
-      router.refresh();
-    });
+      if (res.ok)
+        setEdit(row.key, day, res.data.durationSecs); // reconcile
+      else revertEdit(row.key, day, prev);
+      scheduleRefresh();
+    })();
   }
 
   function clearCell(row: TimeCardRow, day: string) {
-    startNav(async () => {
-      addPendingEdit({ key: row.key, day, manualSecs: 0 });
-      await deleteTimeAllocation({
+    const prev = localEdits.get(editKey(row.key, day));
+    setEdit(row.key, day, 0); // optimistic
+    void (async () => {
+      const res = await deleteTimeAllocation({
         workDate: day,
         itemId: row.itemId ?? undefined,
         category: row.category ?? undefined,
       });
-      router.refresh();
-    });
+      if (!res.ok) revertEdit(row.key, day, prev);
+      scheduleRefresh();
+    })();
   }
 
   const dayTotals = data.days.map((day) =>
@@ -196,8 +235,8 @@ export function TimeCard({
           <tbody>
             {rows.map((row) => {
               // Overlay-aware per-row total so the Total column moves in step
-              // with an in-flight cell edit (server row.totalSecs lags until
-              // router.refresh() lands).
+              // with an edited cell (server row.totalSecs lags until the
+              // coalesced router.refresh() lands fresh data.rows).
               const rowTotal = row.cells.reduce(
                 (s, c) => s + effManual(row.key, c) + c.timerSecs,
                 0,

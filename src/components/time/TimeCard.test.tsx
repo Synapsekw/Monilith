@@ -6,15 +6,20 @@ import { formatHours } from "@/lib/time/hours";
 import type { TimeCardData } from "@/lib/time/types";
 import { upsertTimeAllocation, deleteTimeAllocation } from "@/lib/time/actions";
 
-// The server actions never resolve so the useTransition stays pending and the
-// optimistic overlay remains applied — that's exactly the window we assert in.
+// Resolve the actions so commit paths reach reconcile + scheduleRefresh. The
+// upsert echoes the written seconds (server writes exactly what we sent), so the
+// durable overlay reconciles to the same value it optimistically showed.
 vi.mock("@/lib/time/actions", () => ({
-  upsertTimeAllocation: vi.fn(() => new Promise(() => {})),
-  deleteTimeAllocation: vi.fn(() => new Promise(() => {})),
+  upsertTimeAllocation: vi.fn(async (input: { hours: number }) => ({
+    ok: true,
+    data: { durationSecs: Math.round(input.hours * 3600) },
+  })),
+  deleteTimeAllocation: vi.fn(async () => ({ ok: true, data: null })),
 }));
 
+const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh }),
 }));
 
 const DAYS = ["2026-06-29", "2026-06-30", "2026-07-01"]; // Mon..Wed
@@ -45,6 +50,16 @@ function makeData(day1Secs: number): TimeCardData {
       },
     ],
   };
+}
+
+/** Set the cell input at `index` to `value` and commit it on blur, flushing the
+ * awaited action + reconcile via an async act(). */
+async function commitCellValue(index: number, value: string) {
+  const input = screen.getAllByRole("textbox")[index];
+  await act(async () => {
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+  });
 }
 
 describe("TimeCard optimistic totals", () => {
@@ -82,8 +97,8 @@ describe("TimeCard optimistic totals", () => {
       fireEvent.blur(day1);
     });
 
-    // Optimistic overlay is applied while the (never-resolving) action is
-    // pending. day1 now 3h (10800), day2 1h → row/week total 4h (14400).
+    // Overlay is applied synchronously on commit. day1 now 3h (10800), day2 1h
+    // → row/week total 4h (14400).
     expect(screen.getAllByText(label(14400))).toHaveLength(2); // row + week = 4h
     expect(screen.getByText(label(10800))).toBeInTheDocument(); // day1 3h
     expect(screen.getByText(label(3600))).toBeInTheDocument(); // day2 unchanged 1h
@@ -115,5 +130,36 @@ describe("TimeCard optimistic totals", () => {
     expect(vi.mocked(deleteTimeAllocation)).toHaveBeenCalledWith(
       expect.objectContaining({ workDate: DAYS[0], category: "Design" }),
     );
+  });
+});
+
+describe("coalesced refresh", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("does not refresh per cell edit; one refresh ~2s after the last commit", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<TimeCard data={makeData(0)} categories={[]} />);
+      await commitCellValue(0, "2");
+      await commitCellValue(1, "1.5");
+      // Two commits, still no refresh — the debounce keeps rescheduling.
+      expect(refresh).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2100);
+      });
+      expect(refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the committed value visible after the transition settles (durable overlay)", async () => {
+    render(<TimeCard data={makeData(0)} categories={[]} />);
+    await commitCellValue(0, "2");
+    // 2h reconciled from the action's durationSecs is still shown (day total).
+    expect(screen.getByText(/2h/)).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });

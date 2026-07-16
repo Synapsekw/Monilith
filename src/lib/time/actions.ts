@@ -20,7 +20,7 @@ import { fail, type ActionResult } from "@/lib/actions/result";
  * RLS guarantees user_id = auth.uid(); we set it explicitly from the session. */
 export async function upsertTimeAllocation(
   input: z.input<typeof upsertTimeAllocationSchema>,
-): Promise<ActionResult<null>> {
+): Promise<ActionResult<{ durationSecs: number }>> {
   const parsed = upsertTimeAllocationSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -54,9 +54,11 @@ export async function upsertTimeAllocation(
   );
   if (error) return fail(error.message);
 
-  revalidatePath("/time");
+  // NO revalidatePath("/time"): the card reconciles the written seconds into a
+  // durable local overlay and coalesces one trailing router.refresh() per edit
+  // burst. /workload is server-derived and has no such overlay, so keep it.
   revalidatePath("/workload");
-  return { ok: true, data: null };
+  return { ok: true, data: { durationSecs: d.durationSecs } };
 }
 
 /** Server-action wrapper around the server-only item search so the client
@@ -95,7 +97,8 @@ export async function deleteTimeAllocation(
   const { error } = await query;
   if (error) return fail(error.message);
 
-  revalidatePath("/time");
+  // See upsertTimeAllocation: the card owns /time reconciliation via its overlay
+  // + coalesced refresh; keep the /workload revalidate only.
   revalidatePath("/workload");
   return { ok: true, data: null };
 }
