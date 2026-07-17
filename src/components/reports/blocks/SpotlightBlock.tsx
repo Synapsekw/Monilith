@@ -2,6 +2,7 @@
 import { Fragment } from "react";
 import type { ReportBlock } from "@/lib/reports/config";
 import type { ReportModel } from "@/lib/reports/shape";
+import { CellContent } from "./CellContent";
 export function SpotlightBlock({
   model,
   options,
@@ -26,7 +27,9 @@ export function SpotlightBlock({
             {model.columns.map((c) => (
               <Fragment key={c.id}>
                 <div className="k">{c.name}</div>
-                <div>{r.cells.get(c.id) ?? ""}</div>
+                <div>
+                  <CellContent cell={r.cells.get(c.id)} />
+                </div>
               </Fragment>
             ))}
           </div>

@@ -3,6 +3,7 @@ import type { Kpis } from "@/lib/reports/shape";
 export function KpisBlock({ kpis }: { kpis: Kpis }) {
   return (
     <section className="r-section">
+      <div className="r-kicker">Key metrics</div>
       <div className="r-kpis">
         <div className="r-kpi">
           <div className="n">{kpis.itemCount}</div>

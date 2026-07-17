@@ -19,9 +19,9 @@ export function AppendixBlock({ model }: { model: ReportModel }) {
             g.rows.map((r) => (
               <tr key={r.item.id}>
                 <td>{g.group.name}</td>
-                <td>{r.item.name}</td>
+                <td className="r-cell-name">{r.item.name}</td>
                 {model.columns.map((c) => (
-                  <td key={c.id}>{r.cells.get(c.id) ?? ""}</td>
+                  <td key={c.id}>{r.cells.get(c.id)?.text ?? ""}</td>
                 ))}
               </tr>
             )),
