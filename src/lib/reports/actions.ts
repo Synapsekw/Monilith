@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
-import { getActiveOrgId } from "@/lib/org/active";
+import { getActiveOrgId, resolveActiveOrg } from "@/lib/org/active";
 import { type ActionResult, fail } from "@/lib/actions/result";
 import { reportConfigSchema, defaultReportConfig } from "@/lib/reports/config";
 import { reportBoardAccess, canEditReports } from "@/lib/reports/access";
@@ -137,13 +137,14 @@ export async function exportReportPdf(input: {
     return fail("Report not found.");
 
   const names = await resolvePeopleNames(payload);
+  const orgName = (await resolveActiveOrg())?.name ?? payload.board.name;
   const html = await buildReportHtml({
     config: report.config,
     model: shapeReport(payload, names),
     kpis: computeKpis(payload, names),
     groupSummaries: computeGroupSummaries(payload),
     boardName: payload.board.name,
-    orgName: payload.board.org_id,
+    orgName,
   });
 
   const tableBlock = report.config.blocks.find(

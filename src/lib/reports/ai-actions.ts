@@ -6,7 +6,7 @@ import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { buildBoardSnapshot } from "@/lib/ai/board-snapshot";
 import { getBoardPayload } from "@/lib/boards/queries";
-import { reportBoardAccess } from "@/lib/reports/access";
+import { reportBoardAccess, canEditReports } from "@/lib/reports/access";
 import { type ActionResult, fail } from "@/lib/actions/result";
 import { draftReportNarrative } from "@/lib/reports/ai-draft";
 import type { ReportNarrative } from "@/lib/reports/ai-draft-schema";
@@ -18,7 +18,8 @@ export async function draftReportNarrativeAction(input: {
   const parsed = z.object({ boardId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return fail("Invalid");
   const access = await reportBoardAccess(parsed.data.boardId);
-  if (!access) return fail("You don't have access to this board.");
+  if (!canEditReports(access))
+    return fail("You can't draft narratives on this board.");
   try {
     const org = await resolveActiveOrg();
     if (!org) return fail("No organization.");

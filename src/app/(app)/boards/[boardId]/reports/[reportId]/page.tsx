@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { resolvePeopleNames } from "@/lib/boards/people-names";
-import { getActiveOrgId } from "@/lib/org/active";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { getReport } from "@/lib/reports/queries";
 import { ReportBuilder } from "@/components/reports/ReportBuilder";
 
@@ -19,8 +19,8 @@ export default async function ReportBuilderPage({
   ]);
   if (!payload || !report || report.boardId !== boardId) notFound();
   const peopleNames = Object.fromEntries(await resolvePeopleNames(payload));
-  // Org display name: reuse existing org query if available; fall back to id.
-  const orgName = await getActiveOrgId();
+  // Org display name for the cover — the human-readable name, never the id.
+  const orgName = (await resolveActiveOrg())?.name ?? "";
   return (
     <div style={{ height: "100dvh" }}>
       <ReportBuilder
