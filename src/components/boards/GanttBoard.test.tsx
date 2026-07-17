@@ -613,6 +613,14 @@ describe("GanttBoard — zoom levels", () => {
     expect(screen.getAllByText("Item Alpha").length).toBeGreaterThan(0);
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it("renders header tick labels on a single line (no wrapping)", () => {
+    const { container } = renderGantt();
+    // Each month/quarter tick label carries whitespace-nowrap so "Jan 26" never
+    // breaks onto two lines near the right edge of the grid.
+    const ticks = container.querySelectorAll(".border-l.whitespace-nowrap");
+    expect(ticks.length).toBeGreaterThan(0);
+  });
 });
 
 describe("GanttBoard — effective-critical name-rail dot", () => {

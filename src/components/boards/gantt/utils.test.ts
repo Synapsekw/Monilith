@@ -3,7 +3,32 @@ import {
   PX_PER_DAY,
   buildQuarterTicks,
   buildMonthTicks,
+  fittedDayW,
 } from "@/components/boards/gantt/utils";
+
+describe("fittedDayW", () => {
+  it("stretches px/day so a short range fills the available track width", () => {
+    // 30 days over a 1200px track → 40px/day, well above the base scale.
+    expect(fittedDayW(10, 1200, 30)).toBe(40);
+  });
+
+  it("keeps the zoom's base scale when the range already overflows the track", () => {
+    // 365 days at 28px/day = 10220px ≫ 1200px track → no stretch, scrolls.
+    expect(fittedDayW(28, 1200, 365)).toBe(28);
+  });
+
+  it("never returns below the base scale (base is a floor)", () => {
+    expect(fittedDayW(4, 100, 365)).toBe(4);
+  });
+
+  it("falls back to the base scale before the track is measured", () => {
+    expect(fittedDayW(1.5, 0, 365)).toBe(1.5);
+  });
+
+  it("guards against a zero day count", () => {
+    expect(fittedDayW(10, 1200, 0)).toBe(10);
+  });
+});
 
 describe("PX_PER_DAY", () => {
   it("defines a px/day scale for every zoom level", () => {

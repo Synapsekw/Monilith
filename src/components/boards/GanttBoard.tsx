@@ -45,6 +45,7 @@ import {
   ROW_H,
   PX_PER_DAY,
   ZOOM_DAY_COUNT,
+  fittedDayW,
   buildMonthTicks,
   buildQuarterTicks,
   effectiveCriticalLabel,
@@ -250,8 +251,13 @@ export function GanttBoard({
   }, [rangeStartISO, dayCount, zoom]);
 
   // Pixels per day at the active zoom. Row day-offsets are scale-independent;
-  // this multiplier is the only thing that turns them into on-screen width.
-  const dayW = PX_PER_DAY[zoom];
+  // this multiplier is the only thing that turns them into on-screen width. The
+  // zoom scale is a floor: when the date range is shorter than the visible
+  // track, px/day stretches to fill the width (no dead space to the right);
+  // when it overflows, the base scale wins and the grid scrolls. trackWidth is
+  // the measured width available to the timeline (scroller minus the name rail).
+  const [trackWidth, setTrackWidth] = useState(0);
+  const dayW = fittedDayW(PX_PER_DAY[zoom], trackWidth, dayCount);
   const totalW = dayCount * dayW;
 
   // Row index lookup for SVG arrow geometry.
@@ -280,7 +286,25 @@ export function GanttBoard({
       scroller.getBoundingClientRect().top +
       scroller.scrollTop;
     setRowScrollMargin((prev) => (prev === top ? prev : top));
+    // Track width available to the timeline (scroller minus the sticky name
+    // rail) — drives the fill-to-width day scale (see fittedDayW / dayW).
+    const width = scroller.clientWidth - LABEL_W;
+    setTrackWidth((prev) => (prev === width ? prev : width));
   });
+
+  // Re-fit the day scale when the viewport resizes (sidebar toggle, window
+  // resize) — the layout effect above only reruns on React renders, so observe
+  // the scroller directly to keep the grid filling the available width.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const width = scroller.clientWidth - LABEL_W;
+      setTrackWidth((prev) => (prev === width ? prev : width));
+    });
+    ro.observe(scroller);
+    return () => ro.disconnect();
+  }, []);
   // React Compiler safely skips memoizing this component because useVirtualizer
   // returns non-memoizable functions; that fallback is correct here.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -596,7 +620,7 @@ export function GanttBoard({
                 {headerTicks.map((tick) => (
                   <div
                     key={tick.dayOffset}
-                    className="text-muted-foreground absolute top-0 h-full border-l pt-2 pl-1.5 text-[11px]"
+                    className="text-muted-foreground absolute top-0 h-full border-l pt-2 pl-1.5 text-[11px] whitespace-nowrap"
                     style={{ left: tick.dayOffset * dayW }}
                   >
                     {tick.label}

@@ -35,6 +35,22 @@ export const ZOOM_DAY_COUNT: Record<TimelineZoom, number> = {
   year: 365,
 };
 
+/**
+ * Pixels-per-day for the grid, stretched so a short date range fills the
+ * available track width instead of leaving dead space to the right. The zoom's
+ * base scale is a *floor*: when the range already overflows the track, the base
+ * wins and the grid scrolls; when it's shorter, px/day grows to fill exactly.
+ * Returns the base untouched before the track has been measured (trackWidth 0).
+ */
+export function fittedDayW(
+  baseDayW: number,
+  trackWidth: number,
+  dayCount: number,
+): number {
+  if (trackWidth <= 0 || dayCount <= 0) return baseDayW;
+  return Math.max(baseDayW, trackWidth / dayCount);
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
