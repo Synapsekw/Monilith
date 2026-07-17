@@ -8,20 +8,33 @@ export function PreviewPane(props: ReportDocumentProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const rootRef = useRef<Root | null>(null);
 
+  // Create the iframe document + a dedicated React root once per mount.
   useEffect(() => {
     const doc = iframeRef.current?.contentDocument;
     if (!doc) return;
-    if (!doc.getElementById("r-css")) {
-      doc.head.innerHTML = `<style id="r-css">${REPORT_CSS}</style>`;
-      const mount = doc.createElement("div");
-      mount.id = "r-root";
-      doc.body.appendChild(mount);
-      rootRef.current = createRoot(mount);
-    }
+    doc.open();
+    doc.write(
+      `<!doctype html><html><head><meta charset="utf-8"><style>${REPORT_CSS}</style></head><body><div id="r-root"></div></body></html>`,
+    );
+    doc.close();
+    const mount = doc.getElementById("r-root");
+    if (!mount) return;
+    const root = createRoot(mount);
+    rootRef.current = root;
+    return () => {
+      // Null the ref first so the render effect below can't touch a dead root,
+      // and defer unmount out of the commit phase (React 19 errors if a root is
+      // unmounted synchronously while another render is in progress).
+      rootRef.current = null;
+      queueMicrotask(() => root.unmount());
+    };
+  }, []);
+
+  // Re-render the document from local props on every commit — no server
+  // round-trip. Guarded on rootRef so a torn-down root is never updated.
+  useEffect(() => {
     rootRef.current?.render(<ReportDocument {...props} />);
   });
-
-  useEffect(() => () => rootRef.current?.unmount(), []);
 
   return (
     <iframe
