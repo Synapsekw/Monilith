@@ -28,7 +28,7 @@ export const timelineConfigSchema = z.object({
   date_column_id: z.string().uuid().nullable().optional(),
   end_column_id: z.string().uuid().nullable().optional(),
   color_column_id: z.string().uuid().nullable().optional(),
-  zoom: z.enum(["week", "month"]).optional(),
+  zoom: z.enum(["week", "month", "quarter", "year"]).optional(),
 });
 
 /** Return the Zod schema for the per-kind config object. */

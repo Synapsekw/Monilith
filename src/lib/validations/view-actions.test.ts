@@ -26,4 +26,17 @@ describe("timelineConfigSchema", () => {
     const parsed = timelineConfigSchema.safeParse({ color_column_id: "nope" });
     expect(parsed.success).toBe(false);
   });
+
+  it.each(["week", "month", "quarter", "year"])(
+    "accepts zoom level %s",
+    (zoom) => {
+      expect(timelineConfigSchema.safeParse({ zoom }).success).toBe(true);
+    },
+  );
+
+  it("rejects an unknown zoom level", () => {
+    expect(timelineConfigSchema.safeParse({ zoom: "decade" }).success).toBe(
+      false,
+    );
+  });
 });

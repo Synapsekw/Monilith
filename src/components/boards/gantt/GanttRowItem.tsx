@@ -22,9 +22,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   BAR_H,
-  DAY_W,
   LABEL_W,
   MILESTONE,
+  MIN_BAR_W,
   ROW_H,
   formatISO,
   parseISO,
@@ -36,6 +36,7 @@ export function GanttRowItem({
   criticalLabel,
   rowIdx,
   totalW,
+  dayW,
   todayOffset,
   dayCount,
   startColumnId,
@@ -54,6 +55,8 @@ export function GanttRowItem({
   criticalLabel: string | null;
   rowIdx: number;
   totalW: number;
+  /** Pixels per day at the active zoom (see PX_PER_DAY). */
+  dayW: number;
   todayOffset: number;
   dayCount: number;
   startColumnId: string;
@@ -105,10 +108,10 @@ export function GanttRowItem({
     ? { transform: `translate3d(${transform.x}px, 0, 0)` }
     : undefined;
 
-  const barLeft = (row.startCol ?? 0) * DAY_W;
+  const barLeft = (row.startCol ?? 0) * dayW;
   const barWidth = row.isMilestone
     ? BAR_H // diamond
-    : Math.max(DAY_W, (row.spanCols ?? 1) * DAY_W);
+    : Math.max(MIN_BAR_W, (row.spanCols ?? 1) * dayW);
 
   // Keystone soft-pill treatment for an arbitrary option color: a 15% tint of
   // the hue over the surface with per-theme AA-clamped text (mirrors ColorChip /
@@ -140,7 +143,7 @@ export function GanttRowItem({
 
   function handleResizeMove(e: React.PointerEvent) {
     if (resizeStartXRef.current === null || !resizeStartEndRef.current) return;
-    const deltaDays = Math.round((e.clientX - resizeStartXRef.current) / DAY_W);
+    const deltaDays = Math.round((e.clientX - resizeStartXRef.current) / dayW);
     if (deltaDays === 0) return;
     // Compute new end from original end + delta
     const origEndMs = parseISO(resizeStartEndRef.current);
@@ -259,7 +262,7 @@ export function GanttRowItem({
         {todayOffset >= 0 && todayOffset <= dayCount && (
           <div
             className="bg-destructive/30 absolute top-0 h-full w-px"
-            style={{ left: todayOffset * DAY_W }}
+            style={{ left: todayOffset * dayW }}
             aria-hidden
           />
         )}
@@ -274,7 +277,7 @@ export function GanttRowItem({
               isDragging && "opacity-50",
             )}
             style={{
-              left: barLeft + DAY_W / 2 - MILESTONE / 2,
+              left: barLeft + dayW / 2 - MILESTONE / 2,
               top: ROW_H / 2 - MILESTONE / 2,
               width: MILESTONE,
               height: MILESTONE,

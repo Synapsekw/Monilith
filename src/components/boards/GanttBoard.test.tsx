@@ -548,9 +548,9 @@ describe("GanttBoard — touch ergonomics (Batch 2)", () => {
     expect(useTouchAwareSensors).toHaveBeenCalled();
   });
 
-  it("gives the Week/Month zoom buttons a coarse-pointer touch target (>=44px)", () => {
+  it("gives the zoom buttons a coarse-pointer touch target (>=44px)", () => {
     renderGantt();
-    for (const label of ["week", "month"]) {
+    for (const label of ["week", "month", "quarter", "year"]) {
       const btn = screen.getByRole("button", {
         name: new RegExp(`^${label}$`, "i"),
       });
@@ -587,6 +587,31 @@ describe("GanttBoard — touch ergonomics (Batch 2)", () => {
         "pointer-coarse:min-h-11",
       );
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zoom levels (week / month / quarter / year)
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — zoom levels", () => {
+  beforeEach(() => refresh.mockReset());
+
+  it("offers Week, Month, Quarter, and Year zoom levels", () => {
+    renderGantt();
+    for (const label of ["Week", "Month", "Quarter", "Year"]) {
+      expect(
+        screen.getByRole("button", { name: new RegExp(`^${label}$`, "i") }),
+      ).toBeInTheDocument();
+    }
+  });
+
+  it("keeps bars rendered after zooming out to Year (no refetch/nav)", () => {
+    renderGantt();
+    fireEvent.click(screen.getByRole("button", { name: /^year$/i }));
+    // Re-renders at the coarser scale from in-memory data — bars stay mounted.
+    expect(screen.getAllByText("Item Alpha").length).toBeGreaterThan(0);
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
 

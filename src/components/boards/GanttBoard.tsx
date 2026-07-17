@@ -41,15 +41,17 @@ import {
   type QuickEditTarget,
 } from "@/components/boards/quick-edit/ItemQuickEdit";
 import {
-  DAY_W,
   LABEL_W,
   ROW_H,
+  PX_PER_DAY,
   ZOOM_DAY_COUNT,
   buildMonthTicks,
+  buildQuarterTicks,
   effectiveCriticalLabel,
   parseISO,
   todayISO,
   type BarDragData,
+  type TimelineZoom,
 } from "@/components/boards/gantt/utils";
 import { GanttRowItem } from "@/components/boards/gantt/GanttRowItem";
 import { UnscheduledSection } from "@/components/boards/gantt/UnscheduledSection";
@@ -90,7 +92,7 @@ export function GanttBoard({
     date_column_id?: string | null;
     end_column_id?: string | null;
     color_column_id?: string | null;
-    zoom?: "week" | "month";
+    zoom?: TimelineZoom;
   } | null;
 
   const dateColumns = cache.columns.filter((c) => c.kind === "date");
@@ -103,7 +105,7 @@ export function GanttBoard({
     dateColumns.map((c) => ({ id: c.id, name: c.name })),
   );
 
-  const [zoom, setZoom] = useState<"week" | "month">(config?.zoom ?? "month");
+  const [zoom, setZoom] = useState<TimelineZoom>(config?.zoom ?? "month");
   const [startColId, setStartColId] = useState<string | null>(
     config?.date_column_id ?? seeded.startColumnId,
   );
@@ -238,13 +240,19 @@ export function GanttBoard({
   // The tapped bar/milestone/row the quick-edit peek is anchored to.
   const [quickEdit, setQuickEdit] = useState<QuickEditTarget | null>(null);
 
-  // Month tick labels for the timeline header.
-  const monthTicks = useMemo(
-    () => (rangeStartISO ? buildMonthTicks(rangeStartISO, dayCount) : []),
-    [rangeStartISO, dayCount],
-  );
+  // Header tick labels. Year zoom uses coarser quarter ticks (monthly ticks
+  // would cram together at ~1.5px/day); every other level keeps month ticks.
+  const headerTicks = useMemo(() => {
+    if (!rangeStartISO) return [];
+    return zoom === "year"
+      ? buildQuarterTicks(rangeStartISO, dayCount)
+      : buildMonthTicks(rangeStartISO, dayCount);
+  }, [rangeStartISO, dayCount, zoom]);
 
-  const totalW = dayCount * DAY_W;
+  // Pixels per day at the active zoom. Row day-offsets are scale-independent;
+  // this multiplier is the only thing that turns them into on-screen width.
+  const dayW = PX_PER_DAY[zoom];
+  const totalW = dayCount * dayW;
 
   // Row index lookup for SVG arrow geometry.
   const rowIndexMap = useMemo(
@@ -397,7 +405,7 @@ export function GanttBoard({
     date_column_id?: string | null;
     end_column_id?: string | null;
     color_column_id?: string | null;
-    zoom?: "week" | "month";
+    zoom?: TimelineZoom;
   }) {
     const merged = {
       date_column_id: startColId,
@@ -423,7 +431,7 @@ export function GanttBoard({
     });
   }
 
-  function handleZoomChange(newZoom: "week" | "month") {
+  function handleZoomChange(newZoom: TimelineZoom) {
     setZoom(newZoom);
     persistConfig({ zoom: newZoom });
   }
@@ -446,7 +454,7 @@ export function GanttBoard({
     const { active, delta } = event;
     const data = active.data.current as BarDragData | undefined;
     if (!data || data.kind !== "bar") return;
-    const deltaDays = Math.round(delta.x / DAY_W);
+    const deltaDays = Math.round(delta.x / dayW);
     if (deltaDays === 0) return;
     const range = itemDateRange(
       data.itemId,
@@ -482,7 +490,7 @@ export function GanttBoard({
       <div className="flex items-center gap-3 border-b px-6 py-2">
         {/* Zoom toggle */}
         <div className="flex items-center gap-1 rounded-md border p-0.5">
-          {(["week", "month"] as const).map((z) => (
+          {(["week", "month", "quarter", "year"] as const).map((z) => (
             <button
               key={z}
               type="button"
@@ -584,12 +592,12 @@ export function GanttBoard({
               </div>
               {/* Timeline header */}
               <div className="relative" style={{ width: totalW, height: 38 }}>
-                {/* Month tick labels */}
-                {monthTicks.map((tick) => (
+                {/* Header tick labels (month, or quarter at Year zoom) */}
+                {headerTicks.map((tick) => (
                   <div
                     key={tick.dayOffset}
                     className="text-muted-foreground absolute top-0 h-full border-l pt-2 pl-1.5 text-[11px]"
-                    style={{ left: tick.dayOffset * DAY_W }}
+                    style={{ left: tick.dayOffset * dayW }}
                   >
                     {tick.label}
                   </div>
@@ -598,7 +606,7 @@ export function GanttBoard({
                 {todayOffset >= 0 && todayOffset <= dayCount && (
                   <div
                     className="bg-destructive/70 absolute top-0 z-10 h-full w-px"
-                    style={{ left: todayOffset * DAY_W }}
+                    style={{ left: todayOffset * dayW }}
                     aria-label="Today"
                   />
                 )}
@@ -637,6 +645,7 @@ export function GanttBoard({
                       )}
                       rowIdx={vr.index}
                       totalW={totalW}
+                      dayW={dayW}
                       todayOffset={todayOffset}
                       dayCount={dayCount}
                       startColumnId={resolvedDateColumn.id}
@@ -681,10 +690,10 @@ export function GanttBoard({
                       const predEndX =
                         LABEL_W +
                         ((predRow.startCol ?? 0) + (predRow.spanCols ?? 1)) *
-                          DAY_W;
+                          dayW;
                       const predMidY = predIdx * ROW_H + ROW_H / 2;
                       const succStartX =
-                        LABEL_W + (succRow.startCol ?? 0) * DAY_W;
+                        LABEL_W + (succRow.startCol ?? 0) * dayW;
                       const succMidY = succIdx * ROW_H + ROW_H / 2;
                       const mx = (predEndX + succStartX) / 2;
                       const d = `M${predEndX},${predMidY} C${mx},${predMidY} ${mx},${succMidY} ${succStartX},${succMidY}`;
