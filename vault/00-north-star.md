@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-17-1647
+last-updated: 2026-07-17-2044
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,11 +51,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Report Builder validated + follow-up fixes & timestamp streaming on `develop`** ([[2026-07-17-1647-report-fixes-timestamp-streaming]]). A `/whats-next` Batch A shipped two disjoint worktrees: report cover now shows the org **name** (not the UUID) on both preview + PDF paths and `draftReportNarrativeAction` is edit-gated so a viewer can't spend AI credits (`1631555`); and `<DateTime>` now paints device-zone-first via a `pulse_tz` cookie, killing the blank-then-fill (`6c0f460`, gotcha-48-safe). **PDF export validated by the owner** — the last unproven Report Builder path is cleared. Prod baseline unchanged since the 2026-07-17 promotions (`4235d96`): Report Builder, Ask AI full-page, PF perf, Monolith rename, 3 `/updates` entries; prior prod cross-org sharing (`#64`), Keystone landing (`#63`), Phase 10 Batch 2 (`#62`), E1 (`#59`).
-- **Branch:** `develop` @ `6c0f460` == `origin/develop` (2 features ahead of prod; ready to promote). **`main` @ `4235d96`**. All `task/*` worktrees merged + cleaned (9 stale/orphaned dirs swept). E5 spec still lives only in the Mac checkout's `task/e5-agentic-semantic`, uncommitted.
+- **Phase:** **Timeline upgrades + finish-task unblocked on `develop`** ([[2026-07-17-2044-timeline-upgrades-hook-test-fix]]). Four merges: Timeline **zoom levels** (Week/Month/Quarter/Year, px/day varies + fills the width, quarter header ticks) (`4179a71`, `6b756a7`); **sub-item nesting** (parent→children, collapsed by default; unscheduled parents shown as collapsible header rows so scheduled sub-items aren't stranded — the QCC empty-timeline bug) + **timestamp date sources** (Created/Updated at as read-only layout dates) (`a503fe7`); and a **Vitest shebang plugin** (`0316b43` → `41a1dd5`) that clears the `maybe-write-session.test.mjs` parse failure so `finish-task.sh` runs its full gate again (dogfooded — it self-merged). Also on `develop` from the prior session: report cover org-name fix + timestamp streaming (`6c0f460`). Prod baseline unchanged since the 2026-07-17 promotions (`4235d96`): Report Builder, Ask AI full-page, PF perf, Monolith rename; prior prod cross-org sharing (`#64`), Keystone landing (`#63`), Phase 10 Batch 2 (`#62`), E1 (`#59`).
+- **Branch:** `develop` @ `41a1dd5` == `origin/develop` (Timeline upgrades + datetime streaming + report-cover fix ahead of prod). **`main` @ `4235d96`**. All `task/*` worktrees merged + cleaned. E5 spec still lives only in the Mac checkout's `task/e5-agentic-semantic`, uncommitted.
 - **In flight:** none building.
-- **Next:** **promote `develop → main`** to carry the report-cover fix + timestamp streaming to prod (prod PDF cover still shows the org id until then). Or a roadmap build — **Report Builder v2** (charts + wide-board table), **E5** (semantic search greenfield; fold review risks in first), or **E6** (Stripe billing; F16 blocked on your creds).
-- **Owed:** **Report Builder v2** = charts + wide-board table continuation. **Wordmark mark** in prod — one-line revert in `brand.tsx` if busy. **E5 review risks** to fold into its plan: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (still owed from an earlier `/sync-prod`). Pre-existing red on `develop`: the `maybe-write-session.test.mjs` shebang parse blocks `finish-task`'s full-test gate ([[finish-task-blocked-by-hook-shebang-test]]).
+- **Next:** **promote `develop → main`** (deferred to the owner) to carry the Timeline upgrades + timestamp streaming + report-cover fix to prod. Or a roadmap build — **Report Builder v2** (charts + wide-board table), **E5** (semantic search greenfield; fold review risks in first), or **E6** (Stripe billing; F16 blocked on your creds).
+- **Owed:** **Report Builder v2** = charts + wide-board table continuation. **Wordmark mark** in prod — one-line revert in `brand.tsx` if busy. **E5 review risks** to fold into its plan: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (still owed from an earlier `/sync-prod`).
 
 ### Last session
 
