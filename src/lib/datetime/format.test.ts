@@ -21,4 +21,11 @@ describe("formatDateTime", () => {
       "2026",
     );
   });
+
+  it("formats with a pinned locale (deterministic order, not runtime-default)", () => {
+    // en-US medium date renders "Mon DD, YYYY" — assert the month-first shape so a
+    // runtime whose default locale is day-first can't drift the string.
+    const out = formatDateTime("2026-06-21T15:45:00Z", { timeZone: "UTC" });
+    expect(out).toMatch(/^Jun 21, 2026/);
+  });
 });
