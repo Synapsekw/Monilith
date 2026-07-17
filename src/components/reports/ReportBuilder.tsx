@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
+import { FileDown, Save, Sparkles } from "lucide-react";
 import type { BoardPayload } from "@/lib/boards/queries";
 import { type ReportConfig } from "@/lib/reports/config";
 import {
@@ -11,6 +12,10 @@ import { saveReport } from "@/lib/reports/actions";
 import { exportReportPdf } from "@/lib/reports/actions";
 import { draftReportNarrativeAction } from "@/lib/reports/ai-actions";
 import type { ReportNarrative } from "@/lib/reports/ai-draft-schema";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Kicker } from "@/components/ui/kicker";
 import { SectionRail } from "./SectionRail";
 import { PreviewPane } from "./PreviewPane";
 
@@ -106,99 +111,89 @@ export function ReportBuilder({
   const summaries = useMemo(() => computeGroupSummaries(payload), [payload]);
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "320px 1fr",
-        height: "100%",
-      }}
-    >
-      <div
-        style={{
-          padding: 16,
-          overflow: "auto",
-          borderRight: "1px solid var(--border, #333)",
-        }}
-      >
-        <SectionRail config={config} onChange={setConfig} />
+    <div className="grid h-full grid-cols-[320px_1fr]">
+      <div className="flex flex-col gap-4 overflow-auto border-r p-4">
+        <section className="bg-surface rounded-lg border p-3">
+          <Kicker className="mb-2 block">Sections</Kicker>
+          <SectionRail config={config} onChange={setConfig} />
+        </section>
         {/* Per-block option editors (summary/notes text, table orientation, spotlight picker)
             are added here; keep each a small controlled input writing into `config`. */}
-        <div style={{ marginTop: 16 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 4,
-            }}
-          >
-            <label htmlFor="report-summary" style={{ fontWeight: 600 }}>
-              Executive summary
-            </label>
-            <button type="button" disabled={pending} onClick={draftWithAi}>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="report-summary">Executive summary</Label>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={pending}
+              onClick={draftWithAi}
+            >
+              <Sparkles data-icon="inline-start" />
               Draft with AI
-            </button>
+            </Button>
           </div>
-          <textarea
+          <Textarea
             id="report-summary"
             value={summaryText}
             onChange={(e) => setSummaryText(e.target.value, false)}
             rows={8}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              resize: "vertical",
-            }}
+            className="resize-y"
             placeholder="Write an executive summary, or draft one with AI…"
           />
           {aiError ? (
-            <p role="alert" style={{ color: "#e5484d", marginTop: 4 }}>
+            <p role="alert" className="text-destructive text-xs">
               {aiError}
             </p>
           ) : null}
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                setError(null);
-                const res = await saveReport({
-                  reportId,
-                  boardId,
-                  name,
-                  config,
-                });
-                if (!res.ok) setError(res.error);
-              })
-            }
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                setError(null);
-                const res = await exportReportPdf({ reportId, boardId });
-                if (res.ok)
-                  download(res.data.base64, res.data.mime, res.data.fileName);
-                else setError(res.error);
-              })
-            }
-          >
-            Export PDF
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  setError(null);
+                  const res = await saveReport({
+                    reportId,
+                    boardId,
+                    name,
+                    config,
+                  });
+                  if (!res.ok) setError(res.error);
+                })
+              }
+            >
+              <Save data-icon="inline-start" />
+              Save
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  setError(null);
+                  const res = await exportReportPdf({ reportId, boardId });
+                  if (res.ok)
+                    download(res.data.base64, res.data.mime, res.data.fileName);
+                  else setError(res.error);
+                })
+              }
+            >
+              <FileDown data-icon="inline-start" />
+              Export PDF
+            </Button>
+          </div>
+          {error ? (
+            <p role="alert" className="text-destructive text-xs">
+              {error}
+            </p>
+          ) : null}
         </div>
-        {error ? (
-          <p role="alert" style={{ color: "#e5484d" }}>
-            {error}
-          </p>
-        ) : null}
       </div>
-      <div style={{ height: "100%" }}>
+      <div className="h-full">
         <PreviewPane
           config={config}
           model={model}
