@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { Kicker } from "@/components/ui/kicker";
 import type { StatusColor } from "@/components/ui/status-pill";
 import { statusToneClasses } from "@/components/ui/status-pill";
@@ -210,7 +211,7 @@ function AskPulseVisual() {
         </div>
         <div>
           <div className="text-kicker mb-2 flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] uppercase">
-            <Sparkles className="text-primary size-3" />
+            <AskAiMark className="text-primary size-3" />
             AI
           </div>
           <div className="bg-primary/[0.06] border-primary/20 rounded-lg border px-4 py-3.5 text-[14.5px] leading-relaxed">

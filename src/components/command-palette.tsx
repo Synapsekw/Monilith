@@ -7,7 +7,6 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard,
   LayoutGrid,
-  MessageCircleQuestion,
   Monitor,
   Moon,
   Plus,
@@ -15,6 +14,7 @@ import {
   Sun,
   Wand2,
 } from "lucide-react";
+import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import {
   CommandDialog,
   CommandEmpty,
@@ -181,7 +181,7 @@ export function CommandPalette({
             )}
             <CommandGroup heading={<Kicker>Ask</Kicker>}>
               <CommandItem onSelect={() => run(() => router.push("/ask"))}>
-                <MessageCircleQuestion className="size-4" /> Ask AI…
+                <AskAiMark className="size-4" /> Ask AI…
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading={<Kicker>Actions</Kicker>}>

@@ -7,11 +7,11 @@ import {
   Clock,
   Gauge,
   ListTodo,
-  MessageCircleQuestion,
   Target,
   Trash2,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
@@ -38,7 +38,7 @@ const HOME: NavLink = { label: "My Work", href: "/my-work", icon: ListTodo };
 const ASK: NavLink = {
   label: "Ask AI",
   href: "/ask",
-  icon: MessageCircleQuestion,
+  icon: AskAiMark,
 };
 const PLANNING: NavLink[] = [
   { label: "Goals", href: "/goals", icon: Target },

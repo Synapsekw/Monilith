@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { Kicker } from "@/components/ui/kicker";
 
 export type UIMessage = {
@@ -32,7 +32,7 @@ function Bubble({
   return (
     <div className="flex items-start gap-3">
       <span className="bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
-        <Sparkles className="size-3.5" />
+        <AskAiMark className="size-3.5" />
       </span>
       <div className="min-w-0 flex-1 pt-0.5 text-sm leading-relaxed whitespace-pre-wrap">
         {content}
@@ -68,7 +68,7 @@ export function MessageList({
         {empty ? (
           <div className="mt-[12vh] flex flex-col items-center gap-3 text-center">
             <span className="bg-surface text-brand flex size-11 items-center justify-center rounded-lg border">
-              <Sparkles className="size-5" />
+              <AskAiMark className="size-5" />
             </span>
             <Kicker>Ask AI</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
