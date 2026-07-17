@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import {
   Eye,
+  FileText,
   MoreHorizontal,
   Trash2,
   Upload,
@@ -193,6 +195,13 @@ export function BoardHeader({
         <BoardPresenceBar />
         {/* Export is a read — allowed for viewers. Icon-only to stay compact. */}
         <ExportMenu boardId={boardId} iconOnly />
+        {/* Reports — a read surface (list + builder). Navigates to a real page,
+            so a plain Link (not in-page state) is correct here. */}
+        <Button type="button" variant="ghost" size="sm" asChild>
+          <Link href={`/boards/${boardId}/reports`}>
+            <FileText className="size-3.5" /> Report
+          </Link>
+        </Button>
         {isOwner ? (
           <Button
             type="button"
