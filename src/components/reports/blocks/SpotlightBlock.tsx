@@ -1,8 +1,15 @@
 // src/components/reports/blocks/SpotlightBlock.tsx
 import { Fragment } from "react";
 import type { ReportBlock } from "@/lib/reports/config";
-import type { ReportModel } from "@/lib/reports/shape";
+import type { ReportModel, ReportRow } from "@/lib/reports/shape";
 import { CellContent } from "./CellContent";
+
+/** All rows in the model, recursing into subitems, so a spotlight item id can
+ *  resolve to a subitem as well as a top-level item. */
+function allRows(rows: ReportRow[]): ReportRow[] {
+  return rows.flatMap((r) => [r, ...allRows(r.subitems)]);
+}
+
 export function SpotlightBlock({
   model,
   options,
@@ -11,7 +18,7 @@ export function SpotlightBlock({
   options: Extract<ReportBlock, { type: "spotlight" }>["options"];
 }) {
   const byId = new Map(
-    model.groups.flatMap((g) => g.rows).map((r) => [r.item.id, r]),
+    allRows(model.groups.flatMap((g) => g.rows)).map((r) => [r.item.id, r]),
   );
   const rows = options.itemIds
     .map((id) => byId.get(id))

@@ -112,20 +112,37 @@ export function shapeReport(
   return { columns, groups };
 }
 
+/** Ids of items that have at least one child (header/parent rows). */
+function parentIdSet(payload: BoardPayload): Set<string> {
+  const s = new Set<string>();
+  for (const i of payload.items) if (i.parent_id) s.add(i.parent_id);
+  return s;
+}
+
+/** Leaf items — those with no subitems. KPIs and progress count leaves (the
+ *  trackable work units) so header/parent rows, which often carry no status,
+ *  don't dilute completion. On a flat board every item is a leaf, so behavior
+ *  is unchanged; on a board where work lives in subitems, the subitems drive
+ *  the numbers. */
+function leafItems(payload: BoardPayload): Item[] {
+  const parents = parentIdSet(payload);
+  return payload.items.filter((i) => !parents.has(i.id));
+}
+
 export function computeKpis(
   payload: BoardPayload,
   peopleNames: Map<string, string>,
 ): Kpis {
-  const topLevel = payload.items.filter((i) => i.parent_id === null);
+  const leaves = leafItems(payload);
   const statusCol = firstStatusColumn(payload.columns);
-  const doneCount = topLevel.filter((i) =>
+  const doneCount = leaves.filter((i) =>
     isDone(payload, i.id, statusCol),
   ).length;
 
   const tally = new Map<string, number>();
   if (statusCol) {
     const lookup = cellLookup(payload);
-    for (const i of topLevel) {
+    for (const i of leaves) {
       const label =
         cellToText(
           statusCol.kind as ColumnKind,
@@ -142,7 +159,7 @@ export function computeKpis(
   if (dateCol) {
     const lookup = cellLookup(payload);
     const today = new Date().toISOString().slice(0, 10);
-    for (const i of topLevel) {
+    for (const i of leaves) {
       const v = lookup.get(`${i.id}:${dateCol.id}`);
       const iso = typeof v === "string" ? v.slice(0, 10) : "";
       if (iso && iso < today && !isDone(payload, i.id, statusCol)) overdue += 1;
@@ -150,9 +167,9 @@ export function computeKpis(
   }
 
   return {
-    itemCount: topLevel.length,
-    percentComplete: topLevel.length
-      ? Math.round((doneCount / topLevel.length) * 100)
+    itemCount: leaves.length,
+    percentComplete: leaves.length
+      ? Math.round((doneCount / leaves.length) * 100)
       : 0,
     overdueCount: overdue,
     statusTally: [...tally.entries()].map(([label, count]) => ({
@@ -170,18 +187,23 @@ export type GroupSummary = {
 
 export function computeGroupSummaries(payload: BoardPayload): GroupSummary[] {
   const statusCol = firstStatusColumn(payload.columns);
+  const parents = parentIdSet(payload);
   return [...payload.groups]
     .sort((a, b) => a.position - b.position)
     .map((group) => {
-      const rows = payload.items.filter(
-        (i) => i.group_id === group.id && i.parent_id === null,
+      // Leaf items in this group (subitems carry a group_id too), so progress
+      // reflects the actual work, not just the header rows.
+      const leaves = payload.items.filter(
+        (i) => i.group_id === group.id && !parents.has(i.id),
       );
-      const done = rows.filter((i) => isDone(payload, i.id, statusCol)).length;
+      const done = leaves.filter((i) =>
+        isDone(payload, i.id, statusCol),
+      ).length;
       return {
         group,
-        count: rows.length,
-        percentComplete: rows.length
-          ? Math.round((done / rows.length) * 100)
+        count: leaves.length,
+        percentComplete: leaves.length
+          ? Math.round((done / leaves.length) * 100)
           : 0,
       };
     });
