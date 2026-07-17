@@ -1,42 +1,63 @@
-import { Suspense } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { TimeZoneProvider, useTimeZone } from "./timezone-context";
+import { TimeZoneProvider, useResolvedTimeZone } from "./timezone-context";
 
-function Zone() {
-  return <span>zone:{useTimeZone() ?? "auto"}</span>;
+function Resolved({ device }: { device: string | null }) {
+  return <span>tz:{useResolvedTimeZone(device) ?? "none"}</span>;
 }
 
-describe("TimeZoneProvider with a promise value", () => {
-  it("renders siblings while pending, then resolves consumers", async () => {
+describe("useResolvedTimeZone (non-suspending)", () => {
+  it("returns the device zone when the context is null (Automatic)", () => {
+    render(
+      <TimeZoneProvider timeZone={null}>
+        <Resolved device="Asia/Kuwait" />
+      </TimeZoneProvider>,
+    );
+    expect(screen.getByText("tz:Asia/Kuwait")).toBeInTheDocument();
+  });
+
+  it("returns an explicit resolved string over the device zone", () => {
+    render(
+      <TimeZoneProvider timeZone="Europe/Belgrade">
+        <Resolved device="Asia/Kuwait" />
+      </TimeZoneProvider>,
+    );
+    expect(screen.getByText("tz:Europe/Belgrade")).toBeInTheDocument();
+  });
+
+  it("returns the device zone while a promise is pending, then the explicit zone", async () => {
     let resolve!: (v: string | null) => void;
     const pending = new Promise<string | null>((r) => (resolve = r));
-    // Wrap the suspending initial render in an awaited act so React registers
-    // the pending thenable (concurrent root) before we resolve it.
     await act(async () => {
       render(
         <TimeZoneProvider timeZone={pending}>
-          <p>content paints now</p>
-          <Suspense fallback={<span>tz-pending</span>}>
-            <Zone />
-          </Suspense>
+          <Resolved device="Asia/Kuwait" />
         </TimeZoneProvider>,
       );
     });
-    expect(screen.getByText("content paints now")).toBeInTheDocument();
-    expect(screen.getByText("tz-pending")).toBeInTheDocument();
+    // No suspense, no blank: the device zone shows immediately.
+    expect(screen.getByText("tz:Asia/Kuwait")).toBeInTheDocument();
     await act(async () => {
-      resolve("Asia/Kuwait");
-      await pending; // flush React's suspense retry inside the act scope
+      resolve("America/New_York");
+      await pending;
     });
-    expect(screen.getByText("zone:Asia/Kuwait")).toBeInTheDocument();
+    expect(screen.getByText("tz:America/New_York")).toBeInTheDocument();
   });
-  it("still accepts a plain resolved value", () => {
-    render(
-      <TimeZoneProvider timeZone="Europe/Belgrade">
-        <Zone />
-      </TimeZoneProvider>,
-    );
-    expect(screen.getByText("zone:Europe/Belgrade")).toBeInTheDocument();
+
+  it("keeps the device zone when a promise resolves to null (Automatic)", async () => {
+    let resolve!: (v: string | null) => void;
+    const pending = new Promise<string | null>((r) => (resolve = r));
+    await act(async () => {
+      render(
+        <TimeZoneProvider timeZone={pending}>
+          <Resolved device="Asia/Kuwait" />
+        </TimeZoneProvider>,
+      );
+    });
+    await act(async () => {
+      resolve(null);
+      await pending;
+    });
+    expect(screen.getByText("tz:Asia/Kuwait")).toBeInTheDocument();
   });
 });
