@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-17-1441
+last-updated: 2026-07-17-1639
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -117,6 +117,7 @@ LIMIT 10
 
 ## 6. Entry points
 
+- **Mission-control board (visual):** https://claude.ai/code/artifact/eb984761-bee4-4d1a-b6ba-30c6bc05119c — derived view of this doc + worktrees + sessions; refreshed by `/board` (see `.claude/commands/board.md`) and at every `/wrapup`
 - [[product]] — what we're building and for whom
 - [[architecture]] — system + code structure, data model
 - [[platform-roadmap]] — phase 0–9 detail
