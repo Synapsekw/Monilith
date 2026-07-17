@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-17-0852
+last-updated: 2026-07-17-0950
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,8 +51,8 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Board PDF Report Builder shipped to `develop`** ([[2026-07-17-0852-pdf-report-builder-ship]]) — a per-board, saved, configurable Report Builder that exports a polished PDF. **One render surface** (same pure React tree → client iframe live-preview + server `renderToStaticMarkup` → headless-Chromium PDF) styled by a self-contained CSS string; 8 blocks (cover/summary/KPIs/table/group-summaries/spotlight/notes/appendix, no charts); AI narrative via the existing gateway (entitlement-gated + manual fallback); new `reports` table (org-scoped RLS, **DEV only**). Reuses `getBoardPayload`. Built subagent-driven, gated (typecheck/lint/test 3047/build), merged. **Not yet prod.** Prior prod state unchanged: Audit Batch A + cross-org sharing (`#64`), Keystone landing (`#63`), Phase 10 Batch 2 (`#62`), E1 (`#59`).
-- **Branch:** `develop` @ `f582967` == `origin/develop` — now **ahead of** `main` @ `db8cb9c` by the Report Builder (awaiting promotion + a prod `reports` migration). One scoping worktree still parked: `task/e5-agentic-semantic` (E5 spec written, **uncommitted**).
+- **Phase:** **Board PDF Report Builder shipped to `develop`** ([[2026-07-17-0852-pdf-report-builder-ship]]) — a per-board, saved, configurable Report Builder that exports a polished PDF. **One render surface** (same pure React tree → client iframe live-preview + server `renderToStaticMarkup` → headless-Chromium PDF) styled by a self-contained CSS string; 8 blocks (cover/summary/KPIs/table/group-summaries/spotlight/notes/appendix, no charts); AI narrative via the existing gateway (entitlement-gated + manual fallback); new `reports` table (org-scoped RLS, **DEV only**). Reuses `getBoardPayload`. Built subagent-driven, gated (typecheck/lint/test 3047/build), merged. **Report surface then polished** (editorial cover, section kickers, KPI figures, contrast-safe status pills via `softPillText`, group-progress bars, zebra table) + a `serverExternalPackages` fix for `@sparticuz/chromium`/`playwright-core` (was a latent Turbopack-resolve bug). **Not yet prod.** Prior prod state unchanged: Audit Batch A + cross-org sharing (`#64`), Keystone landing (`#63`), Phase 10 Batch 2 (`#62`), E1 (`#59`).
+- **Branch:** `develop` @ `8d22008` == `origin/develop` — now **ahead of** `main` @ `db8cb9c` by the Report Builder (awaiting promotion + a prod `reports` migration). One scoping worktree still parked: `task/e5-agentic-semantic` (E5 spec written, **uncommitted**).
 - **In flight:** none building.
 - **Next:** **validate PDF export on a Vercel preview** (the one unproven path — `@sparticuz/chromium` only validates on deploy; else flip to the documented `window.print()` fallback), then **promote `develop → main`** — the `reports` migration must reach prod via the promotion / `/sync-prod`. Or pick a roadmap build — **Ask Pulse full-page** (plan ready), **E6** (Stripe billing; F16 blocked on your creds), **PF — Polish & Fluidity** (plan ready), or **E5** (fold its review risks in first).
 - **Owed:** **Report Builder follow-ups** — validate PDF-on-Vercel (or `window.print()` fallback); cover shows org **id** not name (display-name lookup); edit-gate `draftReportNarrativeAction` (a viewer can currently spend AI credits, can't save); v2 = charts + wide-board table continuation. **Wordmark mark** in prod — one-line revert in `brand.tsx` if busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **E5 review risks** to fold into its plan: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (printed during the last `/sync-prod`).
