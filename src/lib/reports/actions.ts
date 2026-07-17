@@ -7,6 +7,15 @@ import { type ActionResult, fail } from "@/lib/actions/result";
 import { reportConfigSchema, defaultReportConfig } from "@/lib/reports/config";
 import { reportBoardAccess, canEditReports } from "@/lib/reports/access";
 import { getReport } from "@/lib/reports/queries";
+import { getBoardPayload } from "@/lib/boards/queries";
+import { resolvePeopleNames } from "@/lib/boards/people-names";
+import {
+  computeGroupSummaries,
+  computeKpis,
+  shapeReport,
+} from "@/lib/reports/shape";
+import { buildReportHtml } from "@/lib/reports/export-html";
+import { renderHtmlToPdf } from "@/lib/reports/pdf";
 
 const createSchema = z.object({
   boardId: z.string().uuid(),
@@ -102,4 +111,56 @@ export async function deleteReport(input: {
     .eq("id", parsed.data.reportId);
   if (error) return fail("Could not delete the report.");
   return { ok: true, data: undefined };
+}
+
+function sanitizeFileName(name: string): string {
+  return name.replace(/[^\w.-]+/g, "_").slice(0, 80) || "report";
+}
+
+export async function exportReportPdf(input: {
+  reportId: string;
+  boardId: string;
+}): Promise<ActionResult<{ fileName: string; base64: string; mime: string }>> {
+  const parsed = z
+    .object({ reportId: z.string().uuid(), boardId: z.string().uuid() })
+    .safeParse(input);
+  if (!parsed.success) return fail("Invalid");
+
+  const access = await reportBoardAccess(parsed.data.boardId);
+  if (!access) return fail("You don't have access to this board.");
+
+  const [payload, report] = await Promise.all([
+    getBoardPayload(parsed.data.boardId),
+    getReport(parsed.data.reportId),
+  ]);
+  if (!payload || !report || report.boardId !== parsed.data.boardId)
+    return fail("Report not found.");
+
+  const names = await resolvePeopleNames(payload);
+  const html = buildReportHtml({
+    config: report.config,
+    model: shapeReport(payload, names),
+    kpis: computeKpis(payload, names),
+    groupSummaries: computeGroupSummaries(payload),
+    boardName: payload.board.name,
+    orgName: payload.board.org_id,
+  });
+
+  const tableBlock = report.config.blocks.find(
+    (b) => b.type === "table" && b.enabled,
+  );
+  const landscape =
+    !tableBlock ||
+    (tableBlock.type === "table" &&
+      tableBlock.options.orientation === "landscape");
+
+  const bytes = await renderHtmlToPdf(html, { landscape });
+  return {
+    ok: true,
+    data: {
+      fileName: `${sanitizeFileName(report.name)}.pdf`,
+      base64: bytes.toString("base64"),
+      mime: "application/pdf",
+    },
+  };
 }
