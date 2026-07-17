@@ -1,32 +1,18 @@
 "use client";
 
-import { Suspense } from "react";
-import { useTimeZone } from "@/lib/datetime/timezone-context";
+import { useResolvedTimeZone } from "@/lib/datetime/timezone-context";
+import { useDeviceTimeZone } from "@/lib/datetime/device-timezone";
 import { formatDateTime } from "@/lib/datetime/format";
 
-/** Formats the timestamp once the streamed timezone resolves. Reading
- * useTimeZone() here suspends only this subtree (never page content) while the
- * shell's timezone promise is pending. */
-function ResolvedDateTime({
-  date,
-  iso,
-  className,
-}: {
-  date: Date;
-  iso: string;
-  className?: string;
-}) {
-  const tz = useTimeZone();
-  return (
-    <time dateTime={iso} className={className} suppressHydrationWarning>
-      {formatDateTime(date, { timeZone: tz ?? undefined })}
-    </time>
-  );
-}
-
-/** The single app-wide primitive for rendering an absolute timestamp. The local
- * <Suspense> fallback is an empty <time> (machine-readable, no visible text) so
- * a wrong-timezone value can never flash before the user's zone streams in. */
+/**
+ * The single app-wide primitive for rendering an absolute timestamp. It paints
+ * a correct, human-readable value on FIRST paint — the device zone (Automatic,
+ * the majority) or the explicit personal zone once the streamed promise
+ * resolves — instead of blanking. `suppressHydrationWarning` because the seeded
+ * cookie zone and the client-detected zone can differ by a text swap (never a
+ * layout jump); the `dateTime` attr is always the stable machine-readable ISO.
+ * The only blank is a first-ever visit with no cookie, filled at hydration.
+ */
 export function DateTime({
   value,
   className,
@@ -36,9 +22,11 @@ export function DateTime({
 }) {
   const date = value instanceof Date ? value : new Date(value);
   const iso = date.toISOString();
+  const deviceZone = useDeviceTimeZone();
+  const zone = useResolvedTimeZone(deviceZone);
   return (
-    <Suspense fallback={<time dateTime={iso} className={className} />}>
-      <ResolvedDateTime date={date} iso={iso} className={className} />
-    </Suspense>
+    <time dateTime={iso} className={className} suppressHydrationWarning>
+      {zone ? formatDateTime(date, { timeZone: zone }) : ""}
+    </time>
   );
 }

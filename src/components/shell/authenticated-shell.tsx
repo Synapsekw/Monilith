@@ -1,4 +1,5 @@
 import { Suspense, type ReactNode } from "react";
+import { cookies } from "next/headers";
 import { Menu } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { SidebarNavData } from "@/components/shell/sidebar-nav-data";
@@ -10,6 +11,10 @@ import { HeaderUserSkeleton } from "@/components/shell/header-user-skeleton";
 import { getUser } from "@/lib/auth/session";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { TimeZoneProvider } from "@/lib/datetime/timezone-context";
+import {
+  DEVICE_TZ_COOKIE,
+  DeviceTimeZoneProvider,
+} from "@/lib/datetime/device-timezone";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -52,7 +57,12 @@ function MobileNavFallback() {
  * an unawaited promise so it never blocks the content area — see
  * resolveUserTimeZone above.
  */
-export function AuthenticatedShell({ children }: { children: ReactNode }) {
+export async function AuthenticatedShell({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const deviceZone = (await cookies()).get(DEVICE_TZ_COOKIE)?.value ?? null;
   return (
     <AppShell
       sidebarNav={
@@ -76,9 +86,11 @@ export function AuthenticatedShell({ children }: { children: ReactNode }) {
         </Suspense>
       }
     >
-      <TimeZoneProvider timeZone={resolveUserTimeZone()}>
-        {children}
-      </TimeZoneProvider>
+      <DeviceTimeZoneProvider initial={deviceZone}>
+        <TimeZoneProvider timeZone={resolveUserTimeZone()}>
+          {children}
+        </TimeZoneProvider>
+      </DeviceTimeZoneProvider>
     </AppShell>
   );
 }
