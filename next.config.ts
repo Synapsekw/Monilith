@@ -15,6 +15,13 @@ const withBundleAnalyzer = bundleAnalyzer({
 });
 
 const nextConfig: NextConfig = {
+  // Native/binary server-only deps for PDF report generation. Both ship strict
+  // `exports` maps + a bundled Chromium binary that must NOT be bundled by
+  // Turbopack — mark them external so Next requires them at runtime (server
+  // only). Without this, importing @sparticuz/chromium from the server-action
+  // graph fails to resolve under Turbopack. This is also the correct behavior
+  // for the Vercel Functions runtime. See src/lib/reports/pdf.ts.
+  serverExternalPackages: ["@sparticuz/chromium", "playwright-core"],
   // Cache Components / PPR by default (Next 16): the static app shell (sidebar +
   // header chrome) is prerendered, while per-user data streams into the Suspense
   // boundaries declared in the authenticated layouts (Phase 9.2).
