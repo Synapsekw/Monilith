@@ -6,6 +6,7 @@ import { getActiveOrgId } from "@/lib/org/active";
 import { type ActionResult, fail } from "@/lib/actions/result";
 import { reportConfigSchema, defaultReportConfig } from "@/lib/reports/config";
 import { reportBoardAccess, canEditReports } from "@/lib/reports/access";
+import { getReport } from "@/lib/reports/queries";
 
 const createSchema = z.object({
   boardId: z.string().uuid(),
@@ -54,7 +55,13 @@ export async function saveReport(input: unknown): Promise<ActionResult<void>> {
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
-  const access = await reportBoardAccess(parsed.data.boardId);
+  // Bind the mutation to the report's REAL board — never trust the client's
+  // boardId. Prevents editing a report on another board within the same org.
+  const report = await getReport(parsed.data.reportId);
+  if (!report || report.boardId !== parsed.data.boardId)
+    return fail("Report not found.");
+
+  const access = await reportBoardAccess(report.boardId);
   if (!canEditReports(access)) return fail("You can't edit this report.");
 
   const supabase = await createClient();
@@ -79,7 +86,13 @@ export async function deleteReport(input: {
     .safeParse(input);
   if (!parsed.success) return fail("Invalid");
 
-  const access = await reportBoardAccess(parsed.data.boardId);
+  // Bind the mutation to the report's REAL board — never trust the client's
+  // boardId. Prevents deleting a report on another board within the same org.
+  const report = await getReport(parsed.data.reportId);
+  if (!report || report.boardId !== parsed.data.boardId)
+    return fail("Report not found.");
+
+  const access = await reportBoardAccess(report.boardId);
   if (!canEditReports(access)) return fail("You can't delete this report.");
 
   const supabase = await createClient();
