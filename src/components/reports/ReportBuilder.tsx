@@ -9,8 +9,28 @@ import {
 } from "@/lib/reports/shape";
 import { saveReport } from "@/lib/reports/actions";
 import { exportReportPdf } from "@/lib/reports/actions";
+import { draftReportNarrativeAction } from "@/lib/reports/ai-actions";
+import type { ReportNarrative } from "@/lib/reports/ai-draft-schema";
 import { SectionRail } from "./SectionRail";
 import { PreviewPane } from "./PreviewPane";
+
+/**
+ * Fold the AI narrative into a single editable summary string: the summary, then
+ * (when non-empty) "Highlights:" / "Risks:" as bulleted lines. v1 does NOT
+ * auto-populate the spotlight block's itemIds — fuzzy name→id matching is
+ * unreliable, so highlights/risks are surfaced as editable text instead.
+ */
+function composeSummaryText(data: ReportNarrative): string {
+  let text = data.summary;
+  if (data.highlights.length > 0) {
+    text +=
+      "\n\nHighlights:\n" + data.highlights.map((h) => `- ${h}`).join("\n");
+  }
+  if (data.risks.length > 0) {
+    text += "\n\nRisks:\n" + data.risks.map((r) => `- ${r}`).join("\n");
+  }
+  return text;
+}
 
 function download(base64: string, mime: string, fileName: string) {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -42,7 +62,39 @@ export function ReportBuilder({
   const [config, setConfig] = useState(initialConfig);
   const [name] = useState(initialName);
   const [error, setError] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  const summaryBlock = config.blocks.find((b) => b.type === "summary");
+  const summaryText =
+    summaryBlock && summaryBlock.type === "summary"
+      ? summaryBlock.options.text
+      : "";
+
+  // Writes back into the summary block's options.text, leaving other blocks
+  // unchanged. Manual editing works with no AI — the textarea is always usable.
+  function setSummaryText(text: string, aiGenerated: boolean) {
+    setConfig((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((b) =>
+        b.type === "summary"
+          ? { ...b, options: { ...b.options, text, aiGenerated } }
+          : b,
+      ),
+    }));
+  }
+
+  function draftWithAi() {
+    start(async () => {
+      setAiError(null);
+      const res = await draftReportNarrativeAction({ boardId });
+      if (!res.ok) {
+        setAiError(res.error);
+        return;
+      }
+      setSummaryText(composeSummaryText(res.data), true);
+    });
+  }
 
   // Shaped client-side once; preview re-renders from local state (0 round-trips).
   const names = useMemo(
@@ -71,6 +123,40 @@ export function ReportBuilder({
         <SectionRail config={config} onChange={setConfig} />
         {/* Per-block option editors (summary/notes text, table orientation, spotlight picker)
             are added here; keep each a small controlled input writing into `config`. */}
+        <div style={{ marginTop: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 4,
+            }}
+          >
+            <label htmlFor="report-summary" style={{ fontWeight: 600 }}>
+              Executive summary
+            </label>
+            <button type="button" disabled={pending} onClick={draftWithAi}>
+              Draft with AI
+            </button>
+          </div>
+          <textarea
+            id="report-summary"
+            value={summaryText}
+            onChange={(e) => setSummaryText(e.target.value, false)}
+            rows={8}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              resize: "vertical",
+            }}
+            placeholder="Write an executive summary, or draft one with AI…"
+          />
+          {aiError ? (
+            <p role="alert" style={{ color: "#e5484d", marginTop: 4 }}>
+              {aiError}
+            </p>
+          ) : null}
+        </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button
             type="button"
