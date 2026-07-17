@@ -96,7 +96,14 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    Keep it light — a quick rot check, not a full audit. This is a `pulse` main-thread tool only;
    subagents in headless worktree builds can't reach the running desktop app.
 
-7. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
+7. **Refresh the plan board (best-effort) — follow `.claude/commands/board.md`.** Update the
+   `#board-data` JSON island in `vault/board.html` from the just-bumped north-star + worktrees +
+   this session's note, validate it parses, and redeploy to the permanent Artifact URL recorded in
+   `board.md`. This runs **before** the vault commit so the refreshed board rides it. If the
+   Artifact tool is unavailable, update the JSON anyway and note the skip — **never block or fail
+   a wrapup on the board.**
+
+8. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
    commits its own output:
 
    ```bash
@@ -109,8 +116,9 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    - If there are also source changes in the working tree, leave them staged-out and untouched.
    - Don't push unless the user asks.
 
-8. **Report back** to the user with the session file path, the commit hash, and a one-line
-   summary, and note what you changed in the north-star.
+9. **Report back** to the user with the session file path, the commit hash, a one-line
+   summary, and a note of what you changed in the north-star — plus the plan-board URL
+   (from `.claude/commands/board.md`) with a one-liner on whether it was refreshed or skipped.
 
 ## Discipline
 
@@ -123,7 +131,7 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
 - **The north-star is a snapshot, not a log.** §3 "Now" is overwritten each wrapup, never appended to; §2 stays at status + one-liner per phase. History is carried by the session notes + the §3 dataview blocks — if you feel the urge to add a dated "Latest" entry to the north-star, that's the session note's job.
 - **Commit vault paths only.** The standing "never commit unless asked" preference protects
   _source code_ from surprise commits/deploys — it does **not** apply to the vault, whose whole
-  point is durable dev-memory. So `/wrapup` commits `vault/` (and only `vault/`) per step 6. Never
+  point is durable dev-memory. So `/wrapup` commits `vault/` (and only `vault/`) per step 8. Never
   stage or commit source changes during a wrapup.
 - **No emoji** in the file body unless the user asked for them.
 - **Cross-link** any decisions worth surfacing — if a real architectural decision or a non-obvious gotcha came up, also create an ADR in `vault/decisions/` using the `decision.md` template (tag gotchas with `gotcha`).

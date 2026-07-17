@@ -1,0 +1,256 @@
+<title>Pulse — Mission Control</title>
+<!--
+  Pulse mission-control board. DERIVED view — sources of truth: vault/00-north-star.md,
+  git worktree list, vault/sessions/. Refreshed by .claude/commands/board.md.
+  RULE: refreshes edit ONLY the #board-data JSON island below. Markup/CSS/JS change
+  only on explicit user request (bump "schema" when they do).
+-->
+<script type="application/json" id="board-data">
+{
+  "schema": 1,
+  "updated": "2026-07-17 16:39",
+  "kicker": "PULSE / NORTH STAR",
+  "headline": "Report Builder + Ask AI + Perf shipped to prod",
+  "chips": [
+    { "label": "develop", "value": "0282058", "note": "== origin", "tone": "ok" },
+    { "label": "main", "value": "4235d96", "note": "in sync", "tone": "ok" },
+    { "label": "prod", "value": "", "note": "parity ✓", "tone": "ok" }
+  ],
+  "progress": { "done": 13, "total": 15 },
+  "gates": [
+    { "led": "red", "text": "Validate PDF export on prod — the one unproven path live (else window.print() fallback)", "tag": "CRITICAL" },
+    { "led": "amber", "text": "E5 spec written but uncommitted in parked worktree", "tag": "PARKED" },
+    { "led": "hollow", "text": "E6 Stripe billing — F16 blocked on owner creds", "tag": "NEXT?" },
+    { "led": "hollow", "text": "PF residual (A4) or E5 (fold review risks in first)", "tag": "NEXT?" },
+    { "led": "hollow", "text": "Report cover shows org id, not display name", "tag": "OWED" },
+    { "led": "hollow", "text": "Edit-gate draftReportNarrativeAction — viewer can spend AI credits", "tag": "OWED" },
+    { "led": "hollow", "text": "Wordmark mark revert in brand.tsx", "tag": "OWED" },
+    { "led": "hollow", "text": "Perf tier-3 Task A (unstable_instant) needs its own spec", "tag": "OWED" },
+    { "led": "hollow", "text": "Rotate the prod DB password", "tag": "OWED" }
+  ],
+  "worktrees": [
+    { "led": "amber", "branch": "task/e5-agentic-semantic", "head": "1e2b815", "note": "scoping, parked" }
+  ],
+  "session": {
+    "id": "2026-07-17-1639-mission-control-board-setup",
+    "when": "07-17 16:39",
+    "bullets": [
+      "Built this mission-control board (Keystone Console) at a permanent Artifact URL",
+      "/board command owns the refresh (JSON island only); wired into /wrapup step 7",
+      "Refresh loop proven end-to-end; spec in decision-28"
+    ]
+  },
+  "roadmap": [
+    { "label": "0 Setup", "state": "done" },
+    { "label": "1 Auth", "state": "done" },
+    { "label": "2 Boards", "state": "done" },
+    { "label": "3 Views", "state": "done" },
+    { "label": "4 Collab", "state": "done" },
+    { "label": "5 Autom", "state": "done" },
+    { "label": "6 Depth", "state": "prog" },
+    { "label": "7 Asana", "state": "done" },
+    { "label": "8 Dash", "state": "done" },
+    { "label": "9 Perf", "state": "done" },
+    { "label": "RS", "state": "done" },
+    { "label": "MVP-F", "state": "done" },
+    { "label": "Touch", "state": "done" },
+    { "label": "PF", "state": "done" },
+    { "label": "10 AI", "state": "prog" }
+  ]
+}
+</script>
+
+<style>
+  /* Keystone Console — committed dark world (matches the app's dark-first identity). */
+  body {
+    background: #0e0e10; color: #f4f4f6; min-height: 100vh;
+    font-family: "Nunito Sans", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  .kicker {
+    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+    color: #6b6b72; font-weight: 500;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 48px; }
+  .panel {
+    background: #161619; border: 1px solid rgba(255,255,255,.10); border-radius: 14px;
+    transition: border-color .3s cubic-bezier(.16,1,.3,1);
+  }
+  .panel:hover { border-color: rgba(255,255,255,.16); }
+
+  /* Header strip */
+  .strip { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding: 16px 20px; }
+  .strip .headline { font-weight: 800; font-size: 1.05rem; letter-spacing: -.01em; margin-right: auto; text-wrap: balance; }
+  .strip .headline .kicker { display: block; margin-bottom: 3px; }
+  .chip { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: .04em; color: #9a9aa2; white-space: nowrap; }
+  .chip b { color: #f4f4f6; font-weight: 600; }
+  .chip .ok { color: #86efac; }
+  .chip .warn { color: #fbbf24; }
+  .chip .bad { color: #f87171; }
+  .frac { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 13px; color: #8ea2eb; font-weight: 600; }
+  .frac span { color: #6b6b72; }
+  .bar { width: 90px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.09); position: relative; overflow: hidden; }
+  .bar i { position: absolute; top: 0; bottom: 0; left: 0; background: #8ea2eb; border-radius: 2px; }
+
+  /* Panels grid */
+  .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .panel-pad { padding: 16px 18px; }
+  h3.ph { font-size: .8rem; font-weight: 700; margin: 2px 0 10px; display: flex; align-items: baseline; gap: 10px; }
+  ul.gates { display: flex; flex-direction: column; list-style: none; }
+  ul.gates li { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-top: 1px solid rgba(255,255,255,.06); font-size: .84rem; }
+  ul.gates li:first-child { border-top: 0; }
+  ul.gates .tail { margin-left: auto; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; color: #6b6b72; letter-spacing: .05em; white-space: nowrap; padding-left: 12px; }
+  .led { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .led.red { background: #f87171; box-shadow: 0 0 8px rgba(248,113,113,.8); animation: pulse 1.6s ease-in-out infinite; }
+  .led.amber { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,.55); }
+  .led.green { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,.45); }
+  .led.hollow { background: transparent; border: 1.5px solid #6b6b72; }
+  .led.brand { background: #8ea2eb; box-shadow: 0 0 6px rgba(142,162,235,.55); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+  .wt { display: flex; align-items: center; gap: 10px; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; color: #c8c8cf; padding: 8px 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: #1c1c20; margin-bottom: 6px; }
+  .wt em { color: #6b6b72; font-style: normal; margin-left: auto; font-size: 10px; padding-left: 10px; white-space: nowrap; }
+  .wt-none { font-size: .8rem; color: #6b6b72; padding: 4px 0 2px; }
+  ul.sess { list-style: none; }
+  ul.sess li { font-size: .82rem; color: #c8c8cf; padding: 5px 0 5px 14px; position: relative; }
+  ul.sess li::before { content: ""; position: absolute; left: 0; top: 12px; width: 5px; height: 5px; border-radius: 50%; background: #8ea2eb; }
+  .sess-id { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 10px; color: #6b6b72; margin-top: 8px; word-break: break-all; }
+
+  /* Roadmap rail */
+  .rail { display: flex; align-items: flex-start; margin-top: 14px; padding: 18px 20px 14px; overflow-x: auto; }
+  .stop { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 56px; flex: 1; position: relative; }
+  .stop::before { content: ""; position: absolute; top: 5px; left: -50%; width: 100%; height: 2px; background: rgba(255,255,255,.12); }
+  .stop:first-child::before { display: none; }
+  .stop.done::before { background: rgba(142,162,235,.55); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; z-index: 1; background: transparent; border: 2px solid #4a4a52; }
+  .stop.done .dot { background: #8ea2eb; border: 0; width: 11px; height: 11px; }
+  .stop.prog .dot { background: #0e0e10; border: 2.5px solid #fbbf24; box-shadow: 0 0 7px rgba(251,191,36,.5); }
+  .stop span { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: .06em; color: #9a9aa2; text-transform: uppercase; text-align: center; }
+  .stop.prog span { color: #fbbf24; }
+  .stop.future span { color: #55555c; }
+
+  footer { margin-top: 20px; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 10px; color: #55555c; letter-spacing: .05em; }
+  .err { margin: 40px auto; max-width: 600px; padding: 20px; border: 1px solid rgba(248,113,113,.4); border-radius: 14px; color: #f87171; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .led.red { animation: none; } }
+</style>
+
+<div class="wrap" id="app"></div>
+
+<script>
+  (function () {
+    var app = document.getElementById("app");
+    var data;
+    try {
+      data = JSON.parse(document.getElementById("board-data").textContent);
+    } catch (e) {
+      var err = document.createElement("div");
+      err.className = "err";
+      err.textContent = "board-data JSON failed to parse: " + e.message +
+        " — re-run /board; the JSON island has a syntax error.";
+      app.appendChild(err);
+      return;
+    }
+
+    function el(tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text != null) n.textContent = text;
+      return n;
+    }
+
+    /* Header strip */
+    var strip = el("div", "panel strip");
+    var head = el("div", "headline");
+    head.appendChild(el("span", "kicker", data.kicker || "PULSE"));
+    head.appendChild(document.createTextNode(data.headline || ""));
+    strip.appendChild(head);
+    (data.chips || []).forEach(function (c) {
+      var chip = el("span", "chip");
+      chip.appendChild(document.createTextNode(c.label + " "));
+      if (c.value) { chip.appendChild(el("b", null, c.value)); chip.appendChild(document.createTextNode(" ")); }
+      if (c.note) chip.appendChild(el("span", c.tone || "ok", c.note));
+      strip.appendChild(chip);
+    });
+    if (data.progress) {
+      var frac = el("span", "frac", String(data.progress.done));
+      frac.appendChild(el("span", null, "/" + data.progress.total));
+      strip.appendChild(frac);
+      var bar = el("div", "bar");
+      var fill = el("i");
+      fill.style.width = Math.round(100 * data.progress.done / data.progress.total) + "%";
+      bar.appendChild(fill);
+      strip.appendChild(bar);
+    }
+    var upd = el("span", "chip");
+    upd.appendChild(document.createTextNode("upd "));
+    upd.appendChild(el("b", null, data.updated || "?"));
+    strip.appendChild(upd);
+    app.appendChild(strip);
+
+    /* Grid: gates + in-flight/session */
+    var grid = el("div", "grid");
+
+    var gatesPanel = el("div", "panel panel-pad");
+    var h1 = el("h3", "ph");
+    h1.appendChild(el("span", "kicker", "01"));
+    h1.appendChild(document.createTextNode("Now / Owed"));
+    gatesPanel.appendChild(h1);
+    var ul = el("ul", "gates");
+    (data.gates || []).forEach(function (g) {
+      var li = el("li");
+      li.appendChild(el("span", "led " + (g.led || "hollow")));
+      li.appendChild(document.createTextNode(g.text));
+      if (g.tag) li.appendChild(el("span", "tail", g.tag));
+      ul.appendChild(li);
+    });
+    gatesPanel.appendChild(ul);
+    grid.appendChild(gatesPanel);
+
+    var side = el("div", "panel panel-pad");
+    var h2 = el("h3", "ph");
+    h2.appendChild(el("span", "kicker", "02"));
+    h2.appendChild(document.createTextNode("In flight"));
+    side.appendChild(h2);
+    if ((data.worktrees || []).length === 0) {
+      side.appendChild(el("div", "wt-none", "none building"));
+    } else {
+      data.worktrees.forEach(function (w) {
+        var wt = el("div", "wt");
+        wt.appendChild(el("span", "led " + (w.led || "amber")));
+        wt.appendChild(document.createTextNode(w.branch));
+        wt.appendChild(el("em", null, w.head + (w.note ? " · " + w.note : "")));
+        side.appendChild(wt);
+      });
+    }
+    if (data.session) {
+      var h3 = el("h3", "ph");
+      h3.style.marginTop = "14px";
+      h3.appendChild(el("span", "kicker", "03"));
+      h3.appendChild(document.createTextNode("Last session · " + (data.session.when || "")));
+      side.appendChild(h3);
+      var sl = el("ul", "sess");
+      (data.session.bullets || []).forEach(function (b) { sl.appendChild(el("li", null, b)); });
+      side.appendChild(sl);
+      if (data.session.id) side.appendChild(el("div", "sess-id", "vault/sessions/" + data.session.id + ".md"));
+    }
+    grid.appendChild(side);
+    app.appendChild(grid);
+
+    /* Roadmap rail */
+    var rail = el("div", "panel rail");
+    (data.roadmap || []).forEach(function (s) {
+      var stop = el("div", "stop " + (s.state || "future"));
+      stop.appendChild(el("i", "dot"));
+      stop.appendChild(el("span", null, s.label));
+      rail.appendChild(stop);
+    });
+    app.appendChild(rail);
+
+    var foot = el("footer", null,
+      "derived view · sources: vault/00-north-star.md · git worktree list · vault/sessions/ · refreshed by /board (schema " + data.schema + ")");
+    app.appendChild(foot);
+  })();
+</script>
