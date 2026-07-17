@@ -2,9 +2,13 @@ import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { cellToText } from "@/lib/boards/spreadsheet/cell-codec";
 
+/** A shaped cell: display text plus, for option-bearing kinds
+ *  (status/dropdown/priority), the selected option's raw hex so blocks can
+ *  render a colored pill. `color` is undefined for plain cells. */
+export type ReportCell = { text: string; color?: string };
 export type ReportRow = {
   item: Item;
-  cells: Map<string, string>;
+  cells: Map<string, ReportCell>;
   subitems: ReportRow[];
 };
 export type ReportGroup = { group: Group; rows: ReportRow[] };
@@ -28,6 +32,28 @@ function cellLookup(payload: BoardPayload): Map<string, unknown> {
 
 function firstStatusColumn(columns: Column[]): Column | undefined {
   return columns.find((c) => c.kind === "status");
+}
+
+/** The selected option's hex for a colored-option cell (status/dropdown/
+ *  priority), or undefined. Tolerates the `{optionId}` / `{optionIds:[]}` /
+ *  bare-string value shapes the board stores. */
+function optionColor(
+  kind: ColumnKind,
+  raw: unknown,
+  settings: unknown,
+): string | undefined {
+  if (kind !== "status" && kind !== "dropdown" && kind !== "priority") return;
+  const options = (settings as { options?: { id: string; color?: string }[] })
+    ?.options;
+  if (!options?.length) return;
+  let id: string | undefined;
+  if (typeof raw === "string") id = raw;
+  else if (raw && typeof raw === "object") {
+    const o = raw as { optionId?: string; optionIds?: string[] };
+    id = o.optionId ?? o.optionIds?.[0];
+  }
+  if (!id) return;
+  return options.find((op) => op.id === id)?.color ?? undefined;
 }
 
 function isDone(
@@ -57,13 +83,14 @@ export function shapeReport(
   const resolvePerson = (id: string) => peopleNames.get(id) ?? null;
 
   const buildRow = (item: Item): ReportRow => {
-    const cells = new Map<string, string>();
+    const cells = new Map<string, ReportCell>();
     for (const col of columns) {
       const raw = lookup.get(`${item.id}:${col.id}`);
-      cells.set(
-        col.id,
-        cellToText(col.kind as ColumnKind, raw, col.settings, resolvePerson),
-      );
+      const kind = col.kind as ColumnKind;
+      cells.set(col.id, {
+        text: cellToText(kind, raw, col.settings, resolvePerson),
+        color: optionColor(kind, raw, col.settings),
+      });
     }
     const subitems = payload.items
       .filter((c) => c.parent_id === item.id)

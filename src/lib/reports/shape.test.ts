@@ -60,11 +60,13 @@ function fixture(): BoardPayload {
 }
 
 describe("shapeReport", () => {
-  it("groups items and resolves a status cell to display text", () => {
+  it("groups items and resolves a status cell to display text + option color", () => {
     const model = shapeReport(fixture(), new Map());
     expect(model.groups).toHaveLength(1);
     expect(model.groups[0].rows).toHaveLength(2);
-    expect(model.groups[0].rows[0].cells.get("c1")).toBe("Done");
+    const cell = model.groups[0].rows[0].cells.get("c1");
+    expect(cell?.text).toBe("Done");
+    expect(cell?.color).toBe("#22c55e");
   });
 
   it("computeKpis counts items and % complete off the status column", () => {

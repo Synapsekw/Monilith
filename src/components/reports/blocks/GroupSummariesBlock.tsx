@@ -7,25 +7,19 @@ export function GroupSummariesBlock({
 }) {
   return (
     <section className="r-section">
-      <div className="r-kicker">Group summaries</div>
-      <table className="r-table">
-        <thead>
-          <tr>
-            <th>Group</th>
-            <th>Items</th>
-            <th>Complete</th>
-          </tr>
-        </thead>
-        <tbody>
-          {summaries.map((s) => (
-            <tr key={s.group.id}>
-              <td>{s.group.name}</td>
-              <td>{s.count}</td>
-              <td>{s.percentComplete}%</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="r-kicker">Group progress</div>
+      {summaries.map((s) => (
+        <div className="r-gs-row" key={s.group.id}>
+          <span className="r-gs-name">{s.group.name}</span>
+          <span className="r-gs-track">
+            <span
+              className="r-gs-fill"
+              style={{ width: `${s.percentComplete}%` }}
+            />
+          </span>
+          <span className="r-gs-pct">{s.percentComplete}%</span>
+        </div>
+      ))}
     </section>
   );
 }
