@@ -4,6 +4,27 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-07-17",
+    kind: "new",
+    title: "Board reports",
+    description:
+      "Build a shareable report from any board — choose the sections you want, preview it live, and add an AI-written summary or write your own.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "improved",
+    title: "Ask AI gets its own page",
+    description:
+      "Ask AI moved out of the popup into a full page, with saved conversations you can return to and answers that stream in as they're written.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "improved",
+    title: "Faster, smoother everywhere",
+    description:
+      "Boards, your home, dashboards, and the calendar and timeline views all load quicker and respond more fluidly.",
+  },
+  {
     date: "2026-07-10",
     kind: "improved",
     title: "A refreshed look for Monolith",
