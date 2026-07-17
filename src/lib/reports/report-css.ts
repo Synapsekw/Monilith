@@ -61,6 +61,8 @@ export const REPORT_CSS = `
   table.r-table tbody tr:nth-child(even) { background:var(--zebra); }
   table.r-table th.r-num, table.r-table td.r-num { text-align:right; font-variant-numeric:tabular-nums; }
   .r-cell-name { font-weight:600; }
+  .r-subrow .r-cell-name { font-weight:500; color:#3a3f4b; }
+  .r-sub-caret { color:var(--muted); }
   .r-pill { display:inline-block; font-size:10.5px; font-weight:600; padding:2px 9px; border-radius:20px; line-height:1.5; white-space:nowrap; }
 
   /* ---- group summaries: progress bars ---- */
