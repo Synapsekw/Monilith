@@ -39,4 +39,18 @@ describe("timelineConfigSchema", () => {
       false,
     );
   });
+
+  it("accepts the created/updated-at sentinels as start/end sources", () => {
+    const parsed = timelineConfigSchema.safeParse({
+      date_column_id: "__created_at__",
+      end_column_id: "__updated_at__",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("still rejects an arbitrary non-uuid, non-sentinel source", () => {
+    expect(
+      timelineConfigSchema.safeParse({ date_column_id: "nope" }).success,
+    ).toBe(false);
+  });
 });

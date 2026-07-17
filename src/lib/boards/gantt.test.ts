@@ -5,6 +5,8 @@ import {
   onBarMoved,
   onBarResized,
   timelineDayCount,
+  visibleRows,
+  type GanttRow,
 } from "@/lib/boards/gantt";
 
 const items = [
@@ -68,6 +70,96 @@ describe("buildGanttRows", () => {
       isMilestone: false,
       scheduled: true,
     });
+  });
+});
+
+describe("buildGanttRows — sub-item nesting", () => {
+  const nestedItems = [
+    { id: "p1", name: "Parent", parent_id: null, position: 0 },
+    { id: "c2", name: "Child B", parent_id: "p1", position: 1 },
+    { id: "c1", name: "Child A", parent_id: "p1", position: 0 },
+    { id: "t2", name: "Top 2", parent_id: null, position: 1 },
+  ] as never;
+  const nestedCells = [
+    { item_id: "p1", column_id: "d1", value: { date: "2026-06-01" } },
+    { item_id: "c1", column_id: "d1", value: { date: "2026-06-02" } },
+    { item_id: "c2", column_id: "d1", value: { date: "2026-06-03" } },
+    { item_id: "t2", column_id: "d1", value: { date: "2026-06-05" } },
+  ] as never;
+
+  it("orders rows parent → children (by position) → next parent, with depths", () => {
+    const { rows } = buildGanttRows(
+      nestedItems,
+      nestedCells,
+      "d1",
+      null,
+      "2026-06-01",
+      30,
+      "month",
+    );
+    expect(rows.map((r) => r.itemId)).toEqual(["p1", "c1", "c2", "t2"]);
+    expect(rows.map((r) => r.depth)).toEqual([0, 1, 1, 0]);
+  });
+
+  it("annotates a parent with its scheduled child count and children with parentId", () => {
+    const { rows } = buildGanttRows(
+      nestedItems,
+      nestedCells,
+      "d1",
+      null,
+      "2026-06-01",
+      30,
+      "month",
+    );
+    const parent = rows.find((r) => r.itemId === "p1")!;
+    expect(parent.hasChildren).toBe(true);
+    expect(parent.childCount).toBe(2);
+    expect(rows.find((r) => r.itemId === "c1")!.parentId).toBe("p1");
+    expect(rows.find((r) => r.itemId === "t2")!.hasChildren).toBe(false);
+  });
+
+  it("counts only scheduled children in childCount", () => {
+    const cellsChildUnscheduled = [
+      { item_id: "p1", column_id: "d1", value: { date: "2026-06-01" } },
+      { item_id: "c1", column_id: "d1", value: { date: "2026-06-02" } },
+      // c2 has no date → unscheduled
+    ] as never;
+    const { rows } = buildGanttRows(
+      nestedItems,
+      cellsChildUnscheduled,
+      "d1",
+      null,
+      "2026-06-01",
+      30,
+      "month",
+    );
+    expect(rows.find((r) => r.itemId === "p1")!.childCount).toBe(1);
+    const c2 = rows.find((r) => r.itemId === "c2")!;
+    expect(c2.scheduled).toBe(false);
+    expect(c2.depth).toBe(1);
+  });
+});
+
+describe("visibleRows", () => {
+  const rows = [
+    { itemId: "p1", name: "P", scheduled: true, depth: 0, parentId: null },
+    { itemId: "c1", name: "C", scheduled: true, depth: 1, parentId: "p1" },
+    { itemId: "t2", name: "T", scheduled: true, depth: 0, parentId: null },
+  ] as GanttRow[];
+
+  it("hides children when their parent is collapsed", () => {
+    expect(visibleRows(rows, new Set()).map((r) => r.itemId)).toEqual([
+      "p1",
+      "t2",
+    ]);
+  });
+
+  it("shows children when their parent is expanded", () => {
+    expect(visibleRows(rows, new Set(["p1"])).map((r) => r.itemId)).toEqual([
+      "p1",
+      "c1",
+      "t2",
+    ]);
   });
 });
 

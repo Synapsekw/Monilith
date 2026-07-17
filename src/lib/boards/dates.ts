@@ -1,4 +1,57 @@
-import type { CacheCellValue, CacheColumn } from "@/lib/boards/cache";
+import type {
+  CacheCellValue,
+  CacheColumn,
+  CacheItem,
+} from "@/lib/boards/cache";
+
+// ---------------------------------------------------------------------------
+// Synthetic date sources (item timestamps offered in the timeline pickers)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sentinel "column" ids for the item's own `created_at` / `updated_at`
+ * timestamps. These aren't real board columns — the timeline offers them in the
+ * Start/End pickers so a plan can be laid out by creation/update date. Chosen to
+ * never collide with a real uuid column id.
+ */
+export const CREATED_AT_SOURCE = "__created_at__";
+export const UPDATED_AT_SOURCE = "__updated_at__";
+
+/** True when a start/end source id refers to an item timestamp, not a column. */
+export function isSyntheticDateSource(id: string | null | undefined): boolean {
+  return id === CREATED_AT_SOURCE || id === UPDATED_AT_SOURCE;
+}
+
+/**
+ * Build synthetic date cell values from item timestamps so the rest of the
+ * timeline (resolveTimelineSpan, range anchoring, buildGanttRows) can read them
+ * exactly like a real date cell. The timestamp is sliced to a date-only
+ * `YYYY-MM-DD` so it compares/diffs correctly against real date-column values
+ * (which are date-only). Bars sourced this way are read-only — there's no cell
+ * to write back to. Pure.
+ */
+export function syntheticDateCellValues(
+  items: readonly CacheItem[],
+  sources: readonly string[],
+): CacheCellValue[] {
+  const out: CacheCellValue[] = [];
+  for (const item of items) {
+    for (const source of sources) {
+      const ts =
+        source === CREATED_AT_SOURCE ? item.created_at : item.updated_at;
+      if (!ts) continue;
+      out.push({
+        item_id: item.id,
+        column_id: source,
+        board_id: item.board_id,
+        org_id: item.org_id,
+        updated_at: item.updated_at,
+        value: { date: ts.slice(0, 10) },
+      });
+    }
+  }
+  return out;
+}
 
 export function resolveDateColumn(
   columns: CacheColumn[],

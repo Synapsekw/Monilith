@@ -1,6 +1,7 @@
 import { resolveTimelineSpan } from "@/lib/boards/dates";
+import { bucketItems } from "@/lib/boards/item-tree";
 import { addDaysISO, diffDaysISO } from "@/lib/boards/calendar";
-import type { CacheCellValue } from "@/lib/boards/cache";
+import type { CacheCellValue, CacheItem } from "@/lib/boards/cache";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -10,6 +11,14 @@ export type GanttRow = {
   itemId: string;
   name: string;
   scheduled: boolean;
+  /** null for a top-level item, the parent's id for a sub-item. */
+  parentId?: string | null;
+  /** 0 for a top-level row, 1 for a sub-item row (boards nest one level). */
+  depth?: number;
+  /** True on a parent that has at least one scheduled sub-item to reveal. */
+  hasChildren?: boolean;
+  /** Number of scheduled sub-items nested under this parent. */
+  childCount?: number;
   startCol?: number;
   spanCols?: number;
   isMilestone?: boolean;
@@ -53,17 +62,22 @@ export function timelineDayCount(
 
 /**
  * Build one GanttRow per item using a start (and optional end) date column.
+ * Rows come out in nested order — each top-level item immediately followed by
+ * its sub-items (both sorted by position, via {@link bucketItems}) — and carry
+ * `depth`/`parentId` so the name rail can indent, plus `hasChildren`/`childCount`
+ * (scheduled sub-items only) so a parent can render an expand/collapse toggle.
  *
- * @param items          Board items (must have id + name)
- * @param cellValues     All cell values for this board
- * @param startColumnId  The date column that supplies the start (and end when endColumnId is null)
- * @param endColumnId    When non-null, a separate column supplying the end date
+ * @param items          Board items (id, name, parent_id, position)
+ * @param cellValues     All cell values for this board (may include synthetic
+ *                       created/updated-at cells — see syntheticDateCellValues)
+ * @param startColumnId  The date source supplying the start (and end when endColumnId is null)
+ * @param endColumnId    When non-null, a separate source supplying the end date
  * @param rangeStartISO  The first day displayed in the Gantt (YYYY-MM-DD)
  * @param dayCount       Total visible days (accepted for signature compat)
  * @param zoom           Zoom level (accepted for signature compat)
  */
 export function buildGanttRows(
-  items: { id: string; name: string }[],
+  items: readonly CacheItem[],
   cellValues: CacheCellValue[],
   startColumnId: string,
   endColumnId: string | null,
@@ -74,34 +88,58 @@ export function buildGanttRows(
   void dayCount;
   void zoom;
 
-  const rows: GanttRow[] = items.map((item) => {
+  const makeRow = (item: CacheItem, depth: number): GanttRow => {
     const span = resolveTimelineSpan(
       item.id,
       cellValues,
       startColumnId,
       endColumnId,
     );
-
-    if (!span) {
-      return { itemId: item.id, name: item.name, scheduled: false };
-    }
-
-    const startCol = diffDaysISO(rangeStartISO, span.start);
-    const spanCols = diffDaysISO(span.start, span.end) + 1;
-
-    return {
+    const base: GanttRow = {
       itemId: item.id,
       name: item.name,
-      scheduled: true,
-      startCol,
-      spanCols,
+      parentId: item.parent_id ?? null,
+      depth,
+      scheduled: !!span,
+    };
+    if (!span) return base;
+    return {
+      ...base,
+      startCol: diffDaysISO(rangeStartISO, span.start),
+      spanCols: diffDaysISO(span.start, span.end) + 1,
       isMilestone: span.isMilestone,
       startISO: span.start,
       endISO: span.end,
     };
-  });
+  };
+
+  const { topLevel, childrenByParent } = bucketItems(items);
+  const rows: GanttRow[] = [];
+  for (const top of topLevel) {
+    const childRows = (childrenByParent.get(top.id) ?? []).map((c) =>
+      makeRow(c, 1),
+    );
+    const scheduledChildCount = childRows.filter((r) => r.scheduled).length;
+    const topRow = makeRow(top, 0);
+    topRow.hasChildren = scheduledChildCount > 0;
+    topRow.childCount = scheduledChildCount;
+    rows.push(topRow, ...childRows);
+  }
 
   return { rows };
+}
+
+/**
+ * Filter nested rows to those currently visible: every top-level row, plus a
+ * sub-item row only when its parent id is in `expanded`. Pure — the single
+ * source of truth for collapse in the timeline (used for virtualization, the
+ * rows-area height, and dependency-arrow indexing).
+ */
+export function visibleRows(
+  rows: readonly GanttRow[],
+  expanded: ReadonlySet<string>,
+): GanttRow[] {
+  return rows.filter((r) => !r.parentId || expanded.has(r.parentId));
 }
 
 // ---------------------------------------------------------------------------

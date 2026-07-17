@@ -8,7 +8,7 @@ import {
   afterEach,
 } from "vitest";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GanttBoard } from "@/components/boards/GanttBoard";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
@@ -620,6 +620,149 @@ describe("GanttBoard — zoom levels", () => {
     // breaks onto two lines near the right edge of the grid.
     const ticks = container.querySelectorAll(".border-l.whitespace-nowrap");
     expect(ticks.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sub-item nesting (collapse/expand)
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — sub-item nesting", () => {
+  function nestedPayload() {
+    const base = payloadFixture() as unknown as {
+      items: Array<Record<string, unknown>>;
+      cellValues: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+    };
+    base.items = [
+      {
+        id: "p1",
+        name: "Parent",
+        group_id: "g1",
+        position: 0,
+        parent_id: null,
+      },
+      { id: "c1", name: "Child", group_id: "g1", position: 0, parent_id: "p1" },
+      {
+        id: "t2",
+        name: "TopTwo",
+        group_id: "g1",
+        position: 1,
+        parent_id: null,
+      },
+    ];
+    base.cellValues = ["p1", "c1", "t2"].map((id, i) => ({
+      item_id: id,
+      column_id: DATE_COL_ID,
+      value: { date: `2026-06-0${i + 2}` },
+      board_id: "b1",
+      org_id: "o1",
+      updated_at: "2026-06-01T00:00:00Z",
+    }));
+    base.dependencies = [];
+    return base as never;
+  }
+
+  it("collapses sub-items by default (child bar hidden, parent shows a toggle)", () => {
+    renderGantt(nestedPayload());
+    expect(
+      screen.getByRole("button", { name: /expand sub-items of Parent/i }),
+    ).toBeInTheDocument();
+    // The child's bar (aria-label = its name) is not mounted while collapsed.
+    expect(screen.queryByLabelText("Child")).not.toBeInTheDocument();
+    // Top-level rows are still shown.
+    expect(screen.getByLabelText("Parent")).toBeInTheDocument();
+    expect(screen.getByLabelText("TopTwo")).toBeInTheDocument();
+  });
+
+  it("reveals the sub-item when its parent is expanded", () => {
+    renderGantt(nestedPayload());
+    fireEvent.click(
+      screen.getByRole("button", { name: /expand sub-items of Parent/i }),
+    );
+    expect(screen.getByLabelText("Child")).toBeInTheDocument();
+    // The toggle flips to a collapse affordance.
+    expect(
+      screen.getByRole("button", { name: /collapse sub-items of Parent/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an UNSCHEDULED parent as a collapsible header so its scheduled sub-items are reachable (QCC shape)", () => {
+    const base = payloadFixture() as unknown as {
+      items: Array<Record<string, unknown>>;
+      cellValues: Array<Record<string, unknown>>;
+      dependencies: Array<Record<string, unknown>>;
+    };
+    base.items = [
+      // Parent has NO date cell → unscheduled, but has a scheduled child.
+      { id: "p1", name: "Epic", group_id: "g1", position: 0, parent_id: null },
+      { id: "c1", name: "Task", group_id: "g1", position: 0, parent_id: "p1" },
+    ];
+    base.cellValues = [
+      {
+        item_id: "c1",
+        column_id: DATE_COL_ID,
+        value: { date: "2026-06-04" },
+        board_id: "b1",
+        org_id: "o1",
+        updated_at: "2026-06-01T00:00:00Z",
+      },
+    ];
+    base.dependencies = [];
+    renderGantt(base as never);
+    // The parent appears on the timeline as a header with an expand toggle…
+    expect(
+      screen.getByRole("button", { name: /expand sub-items of Epic/i }),
+    ).toBeInTheDocument();
+    // …its scheduled child is hidden until expanded (not stranded/unreachable).
+    expect(screen.queryByLabelText("Task")).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /expand sub-items of Epic/i }),
+    );
+    expect(screen.getByLabelText("Task")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Date sources — Created at / Updated at in the Start/End pickers
+// ---------------------------------------------------------------------------
+
+describe("GanttBoard — timestamp date sources", () => {
+  function datedPayload() {
+    const base = payloadFixture() as unknown as {
+      items: Array<Record<string, unknown>>;
+    };
+    base.items = base.items.map((it, i) => ({
+      ...it,
+      parent_id: null,
+      board_id: "b1",
+      org_id: "o1",
+      created_at: `2026-05-0${i + 1}T10:00:00.000Z`,
+      updated_at: `2026-05-1${i + 1}T10:00:00.000Z`,
+    }));
+    return base as never;
+  }
+
+  it("offers Created at and Updated at in the Start picker", () => {
+    renderGantt(datedPayload());
+    const start = screen.getByLabelText("Start date column");
+    expect(
+      within(start).getByRole("option", { name: "Created at" }),
+    ).toBeInTheDocument();
+    expect(
+      within(start).getByRole("option", { name: "Updated at" }),
+    ).toBeInTheDocument();
+  });
+
+  it("makes bars read-only (no resize handle) when start is a timestamp source", () => {
+    renderGantt(datedPayload());
+    // A real date column → bars are resizable.
+    expect(screen.getAllByLabelText(/^resize /i).length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText("Start date column"), {
+      target: { value: "__created_at__" },
+    });
+    // Timestamp-sourced bars can't be resized — the handle is gone.
+    expect(screen.queryByLabelText(/^resize /i)).not.toBeInTheDocument();
   });
 });
 

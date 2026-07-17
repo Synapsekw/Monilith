@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -27,9 +28,17 @@ import {
   onBarMoved,
   onBarResized,
   timelineDayCount,
+  visibleRows,
   type GanttRow,
 } from "@/lib/boards/gantt";
-import { itemDateRange, defaultTimelineColumns } from "@/lib/boards/dates";
+import {
+  itemDateRange,
+  defaultTimelineColumns,
+  isSyntheticDateSource,
+  syntheticDateCellValues,
+  CREATED_AT_SOURCE,
+  UPDATED_AT_SOURCE,
+} from "@/lib/boards/dates";
 import { colorForItem } from "@/lib/boards/timeline-color";
 import { updateBoardView } from "@/lib/boards/view-actions";
 import { BoardHeader } from "@/components/boards/BoardHeader";
@@ -121,20 +130,52 @@ export function GanttBoard({
     dateColumns.find((c) => c.id === startColId) ?? dateColumns[0] ?? null;
   const colorColumn = colorColumns.find((c) => c.id === colorColId) ?? null;
 
+  // Start/End picker options: real date columns plus the item's own timestamps
+  // (Created at / Updated at) as synthetic, read-only sources.
+  const dateSourceOptions = useMemo(
+    () => [
+      ...dateColumns.map((c) => ({ id: c.id, name: c.name })),
+      { id: CREATED_AT_SOURCE, name: "Created at" },
+      { id: UPDATED_AT_SOURCE, name: "Updated at" },
+    ],
+    [dateColumns],
+  );
+
+  // The ids actually used to resolve dates. A synthetic pick keeps its sentinel;
+  // a real/absent start falls back to the resolved date column.
+  const startSourceId = isSyntheticDateSource(startColId)
+    ? startColId
+    : (dateColumn?.id ?? null);
+  const endSourceId = endColId;
+  // A timestamp-sourced bar can't be dragged/resized — there's no cell to write.
+  const readOnly =
+    isSyntheticDateSource(startSourceId) || isSyntheticDateSource(endSourceId);
+
+  // Cell values augmented with synthetic created/updated-at cells when a
+  // timestamp source is selected, so date resolution reads them like any cell.
+  const effectiveCellValues = useMemo(() => {
+    const needed = [startSourceId, endSourceId].filter((id): id is string =>
+      isSyntheticDateSource(id),
+    );
+    if (needed.length === 0) return cache.cellValues;
+    return [
+      ...cache.cellValues,
+      ...syntheticDateCellValues(cache.items, needed),
+    ];
+  }, [cache.cellValues, cache.items, startSourceId, endSourceId]);
+
   // dnd-kit sensors — shared touch-aware setup (PointerSensor 6px + TouchSensor
   // long-press lift) so a finger can move bars on iPad while a quick swipe scrolls.
   const sensors = useTouchAwareSensors();
 
   // Earliest scheduled item start date for range anchoring.
   // Guard: returns "" when no dateColumn (we'll be in the early-return path).
-  // Use startColId (stable state) rather than the derived dateColumn object as dep.
   const rangeStartISO = useMemo(() => {
-    if (!dateColumn) return "";
-    const colId = dateColumn.id;
-    const sorted = cache.cellValues
+    if (!dateColumn || !startSourceId) return "";
+    const sorted = effectiveCellValues
       .filter(
         (cv) =>
-          cv.column_id === colId &&
+          cv.column_id === startSourceId &&
           typeof (cv.value as Record<string, unknown>)?.date === "string",
       )
       .map((cv) => (cv.value as { date: string }).date)
@@ -142,19 +183,19 @@ export function GanttBoard({
     if (sorted.length > 0) return sorted[0];
     const t = new Date();
     return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startColId, cache.cellValues]);
+  }, [startSourceId, effectiveCellValues, dateColumn]);
 
-  // Latest date across the start and end columns — how far the last bar reaches.
+  // Latest date across the start and end sources — how far the last bar reaches.
   const rangeEndISO = useMemo(() => {
     let max = "";
-    for (const cv of cache.cellValues) {
-      if (cv.column_id !== startColId && cv.column_id !== endColId) continue;
+    for (const cv of effectiveCellValues) {
+      if (cv.column_id !== startSourceId && cv.column_id !== endSourceId)
+        continue;
       const d = (cv.value as { date?: string } | null)?.date;
       if (typeof d === "string" && d > max) max = d;
     }
     return max;
-  }, [startColId, endColId, cache.cellValues]);
+  }, [startSourceId, endSourceId, effectiveCellValues]);
 
   // Grid width in days: the zoom window, extended to fit the full data range so
   // bars beyond the window aren't clipped off-screen.
@@ -166,23 +207,23 @@ export function GanttBoard({
 
   // Build Gantt row layout (positions all items on the timeline).
   const ganttResult = useMemo(() => {
-    if (!dateColumn || !rangeStartISO) return null;
+    if (!dateColumn || !rangeStartISO || !startSourceId) return null;
     return buildGanttRows(
       cache.items,
-      cache.cellValues,
-      dateColumn.id,
-      endColId,
+      effectiveCellValues,
+      startSourceId,
+      endSourceId,
       rangeStartISO,
       dayCount,
       zoom,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    startColId,
-    endColId,
+    startSourceId,
+    endSourceId,
     rangeStartISO,
     cache.items,
-    cache.cellValues,
+    effectiveCellValues,
     dayCount,
     zoom,
   ]);
@@ -195,10 +236,44 @@ export function GanttBoard({
     [rows, cache.dependencies],
   );
 
+  // Rows with an actual bar (a valid date range) — the dependency picker offers
+  // these as endpoints.
   const scheduledRows = useMemo(() => rows.filter((r) => r.scheduled), [rows]);
-  const unscheduledRows = useMemo(
-    () => rows.filter((r) => !r.scheduled),
+  // Rows that belong on the timeline: scheduled items PLUS parent "header" rows
+  // that have at least one scheduled sub-item — even when the parent itself has
+  // no dates. This keeps a scheduled sub-item reachable (it always nests under a
+  // present, collapsible parent) instead of being stranded when its parent is
+  // unscheduled. A parent with a scheduled child always has hasChildren set, so
+  // no scheduled child is ever orphaned.
+  const timelineRows = useMemo(
+    () => rows.filter((r) => r.scheduled || r.hasChildren),
     [rows],
+  );
+  // Truly unscheduled leaves (no bar and no scheduled children) drop to the
+  // Unscheduled section; parent headers stay on the timeline.
+  const unscheduledRows = useMemo(
+    () => rows.filter((r) => !r.scheduled && !r.hasChildren),
+    [rows],
+  );
+
+  // Sub-item nesting: parents collapsed by default so the timeline opens as a
+  // compact top-level overview; expand a parent to reveal its scheduled
+  // sub-items. Local state (not persisted), mirroring the Table view.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpand = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  // The rows actually drawn on the timeline: every top-level row (incl. parent
+  // headers), plus the sub-items of expanded parents. Virtualization, the
+  // rows-area height, and dependency-arrow indexing all key off this list.
+  const visibleTimelineRows = useMemo(
+    () => visibleRows(timelineRows, expanded),
+    [timelineRows, expanded],
   );
 
   const rowColors = useMemo(() => {
@@ -260,10 +335,11 @@ export function GanttBoard({
   const dayW = fittedDayW(PX_PER_DAY[zoom], trackWidth, dayCount);
   const totalW = dayCount * dayW;
 
-  // Row index lookup for SVG arrow geometry.
+  // Row index lookup for SVG arrow geometry (over the visible, collapse-aware
+  // row list — arrows to a hidden sub-item simply don't draw until expanded).
   const rowIndexMap = useMemo(
-    () => new Map(scheduledRows.map((r, i) => [r.itemId, i])),
-    [scheduledRows],
+    () => new Map(visibleTimelineRows.map((r, i) => [r.itemId, i])),
+    [visibleTimelineRows],
   );
 
   // ── Row virtualization (B3) ────────────────────────────────────────────────
@@ -309,7 +385,7 @@ export function GanttBoard({
   // returns non-memoizable functions; that fallback is correct here.
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
-    count: scheduledRows.length,
+    count: visibleTimelineRows.length,
     getScrollElement: () => scrollRef.current,
     scrollMargin: rowScrollMargin,
     estimateSize: () => ROW_H,
@@ -327,8 +403,8 @@ export function GanttBoard({
         .map((dep) => {
           const predIdx = rowIndexMap.get(dep.predecessor_id);
           const succIdx = rowIndexMap.get(dep.successor_id);
-          const predRow = scheduledRows[predIdx ?? -1];
-          const succRow = scheduledRows[succIdx ?? -1];
+          const predRow = visibleTimelineRows[predIdx ?? -1];
+          const succRow = visibleTimelineRows[succIdx ?? -1];
           if (
             predIdx === undefined ||
             succIdx === undefined ||
@@ -350,7 +426,7 @@ export function GanttBoard({
         predRow: GanttRow;
         succRow: GanttRow;
       }[],
-    [cache.dependencies, rowIndexMap, scheduledRows],
+    [cache.dependencies, rowIndexMap, visibleTimelineRows],
   );
 
   // B3b — clamp the arrow overlay to arrows with an endpoint inside the rendered
@@ -360,7 +436,8 @@ export function GanttBoard({
   // that are entirely off-window.
   const visibleFirst = virtualRows[0]?.index ?? 0;
   const visibleLast =
-    virtualRows[virtualRows.length - 1]?.index ?? scheduledRows.length - 1;
+    virtualRows[virtualRows.length - 1]?.index ??
+    visibleTimelineRows.length - 1;
   const clampedArrows = arrowLines.filter(
     ({ predIdx, succIdx }) =>
       (predIdx >= visibleFirst && predIdx <= visibleLast) ||
@@ -475,6 +552,7 @@ export function GanttBoard({
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    if (readOnly) return; // timestamp-sourced bars can't be moved
     const { active, delta } = event;
     const data = active.data.current as BarDragData | undefined;
     if (!data || data.kind !== "bar") return;
@@ -542,11 +620,11 @@ export function GanttBoard({
           <select
             id="gantt-start-column"
             aria-label="Start date column"
-            value={dateColumn?.id ?? ""}
+            value={startColId ?? dateColumn?.id ?? ""}
             onChange={(e) => handleStartColumnChange(e.target.value)}
             className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3"
           >
-            {dateColumns.map((c) => (
+            {dateSourceOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -567,7 +645,7 @@ export function GanttBoard({
             className="bg-surface focus-visible:ring-ring rounded-md border px-2 py-1 text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11 pointer-coarse:px-3"
           >
             <option value="">None</option>
-            {dateColumns.map((c) => (
+            {dateSourceOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -643,10 +721,10 @@ export function GanttBoard({
             <div
               ref={rowsAreaRef}
               className="relative"
-              style={{ height: scheduledRows.length * ROW_H }}
+              style={{ height: visibleTimelineRows.length * ROW_H }}
             >
               {virtualRows.map((vr) => {
-                const row = scheduledRows[vr.index];
+                const row = visibleTimelineRows[vr.index];
                 return (
                   <div
                     key={row.itemId}
@@ -672,8 +750,11 @@ export function GanttBoard({
                       dayW={dayW}
                       todayOffset={todayOffset}
                       dayCount={dayCount}
-                      startColumnId={resolvedDateColumn.id}
-                      endColumnId={endColId}
+                      startColumnId={startSourceId ?? resolvedDateColumn.id}
+                      endColumnId={endSourceId}
+                      readOnly={readOnly}
+                      isExpanded={expanded.has(row.itemId)}
+                      onToggleExpand={toggleExpand}
                       color={rowColors.get(row.itemId) ?? null}
                       allRows={scheduledRows}
                       dependencies={cache.dependencies}
@@ -683,8 +764,8 @@ export function GanttBoard({
                           itemId,
                           newEndISO,
                           range,
-                          resolvedDateColumn.id,
-                          endColId,
+                          startSourceId ?? resolvedDateColumn.id,
+                          endSourceId,
                           mutations.setCell as Parameters<
                             typeof onBarResized
                           >[5],
@@ -704,7 +785,7 @@ export function GanttBoard({
                   className="pointer-events-none absolute inset-0"
                   style={{
                     width: LABEL_W + totalW,
-                    height: scheduledRows.length * ROW_H,
+                    height: visibleTimelineRows.length * ROW_H,
                   }}
                   aria-hidden
                 >

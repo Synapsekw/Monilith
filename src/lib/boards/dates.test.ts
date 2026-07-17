@@ -4,8 +4,12 @@ import {
   itemDateRange,
   resolveTimelineSpan,
   defaultTimelineColumns,
+  isSyntheticDateSource,
+  syntheticDateCellValues,
+  CREATED_AT_SOURCE,
+  UPDATED_AT_SOURCE,
 } from "@/lib/boards/dates";
-import type { CacheCellValue } from "@/lib/boards/cache";
+import type { CacheCellValue, CacheItem } from "@/lib/boards/cache";
 
 const cols = [
   { id: "c1", kind: "text" },
@@ -111,6 +115,60 @@ describe("resolveTimelineSpan", () => {
       end: "2026-06-04",
       isMilestone: false,
     });
+  });
+});
+
+describe("isSyntheticDateSource", () => {
+  it("recognises the created/updated sentinels", () => {
+    expect(isSyntheticDateSource(CREATED_AT_SOURCE)).toBe(true);
+    expect(isSyntheticDateSource(UPDATED_AT_SOURCE)).toBe(true);
+  });
+  it("rejects real column ids and nullish input", () => {
+    expect(isSyntheticDateSource("d1")).toBe(false);
+    expect(isSyntheticDateSource(null)).toBe(false);
+    expect(isSyntheticDateSource(undefined)).toBe(false);
+  });
+});
+
+describe("syntheticDateCellValues", () => {
+  const items = [
+    {
+      id: "i1",
+      board_id: "b1",
+      org_id: "o1",
+      created_at: "2026-06-10T14:32:00.123Z",
+      updated_at: "2026-07-01T09:00:00.000Z",
+    },
+    {
+      id: "i2",
+      board_id: "b1",
+      org_id: "o1",
+      created_at: "2026-06-15T00:00:00.000Z",
+      updated_at: "2026-07-02T00:00:00.000Z",
+    },
+  ] as unknown as CacheItem[];
+
+  it("emits a date-only cell per item for the created-at source", () => {
+    const cells = syntheticDateCellValues(items, [CREATED_AT_SOURCE]);
+    expect(cells).toHaveLength(2);
+    expect(cells[0]).toMatchObject({
+      item_id: "i1",
+      column_id: CREATED_AT_SOURCE,
+      value: { date: "2026-06-10" },
+    });
+  });
+
+  it("slices the timestamp to YYYY-MM-DD so day math still works", () => {
+    const [cell] = syntheticDateCellValues(items, [UPDATED_AT_SOURCE]);
+    expect((cell.value as { date: string }).date).toBe("2026-07-01");
+  });
+
+  it("emits one cell per item per requested source", () => {
+    const cells = syntheticDateCellValues(items, [
+      CREATED_AT_SOURCE,
+      UPDATED_AT_SOURCE,
+    ]);
+    expect(cells).toHaveLength(4);
   });
 });
 
