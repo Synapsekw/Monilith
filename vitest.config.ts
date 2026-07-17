@@ -1,11 +1,30 @@
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { defineConfig, type Plugin } from "vitest/config";
 
 const sharedExclude = ["e2e/**", "node_modules/**", ".next/**"];
 
+/**
+ * Strip a leading `#!/usr/bin/env node` shebang from `.mjs` modules before the
+ * SSR transform parses them. The `.claude/hooks/*.mjs` scripts keep their
+ * conventional shebang (they're also runnable as `node <file>`), but Rolldown's
+ * SSR script parser rejects the `!` and fails the whole `pnpm test` gate when a
+ * hook test imports one. Replace the line with a blank comment so byte/line
+ * offsets — and the shebang's documentation intent — are preserved.
+ */
+const stripShebang: Plugin = {
+  name: "strip-mjs-shebang",
+  enforce: "pre",
+  transform(code, id) {
+    if (id.endsWith(".mjs") && code.startsWith("#!")) {
+      return { code: code.replace(/^#![^\n]*/, "//"), map: null };
+    }
+    return null;
+  },
+};
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [stripShebang, react()],
   test: {
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
