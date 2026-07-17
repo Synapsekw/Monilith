@@ -137,7 +137,7 @@ export async function exportReportPdf(input: {
     return fail("Report not found.");
 
   const names = await resolvePeopleNames(payload);
-  const html = buildReportHtml({
+  const html = await buildReportHtml({
     config: report.config,
     model: shapeReport(payload, names),
     kpis: computeKpis(payload, names),

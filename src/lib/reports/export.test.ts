@@ -3,8 +3,8 @@ import { buildReportHtml } from "@/lib/reports/export-html";
 import { defaultReportConfig } from "@/lib/reports/config";
 
 describe("buildReportHtml", () => {
-  it("wraps the document in a full HTML doc with the report CSS", () => {
-    const html = buildReportHtml({
+  it("wraps the document in a full HTML doc with the report CSS", async () => {
+    const html = await buildReportHtml({
       config: { ...defaultReportConfig(), title: "Q3" },
       model: { columns: [], groups: [] },
       kpis: {
