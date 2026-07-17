@@ -46,6 +46,11 @@ export type SharedBoardEntry = {
   access_level: "viewer" | "editor";
 };
 
+// Defensive cap on the sidebar board lists (hot path — runs on ~every nav via
+// the shell/home dispatch). Per-user board counts are naturally small; this
+// bounds a pathological org, matching the repo's other hot-path .limit() bounds.
+const MY_BOARDS_LIMIT = 500;
+
 /** Boards the current user owns (created_by = me), with a shared-out flag. */
 export async function listMyBoards(): Promise<BoardListEntry[]> {
   const user = await getUser();
@@ -56,6 +61,7 @@ export async function listMyBoards(): Promise<BoardListEntry[]> {
     .select("id, name, workspace_id, position, board_members(user_id)")
     .eq("created_by", user.id)
     .is("archived_at", null)
+    .limit(MY_BOARDS_LIMIT)
     .order("position", { ascending: true });
   // A DB failure is not "no boards": throw so the error boundary renders
   // (silent [] sent users with boards to the first-run empty state — or, via
@@ -80,6 +86,7 @@ export async function listSharedBoards(): Promise<SharedBoardEntry[]> {
     .select("access_level, boards!inner(id, name, position, created_by)")
     .eq("user_id", user.id)
     .is("boards.archived_at", null)
+    .limit(MY_BOARDS_LIMIT)
     .order("created_at", { ascending: true });
   // Same fail-loud policy as listMyBoards: an error is not an empty list.
   if (error) throw new Error(`Failed to load shared boards: ${error.message}`);
@@ -153,17 +160,13 @@ export const getBoardPayload = cache(
   async (boardId: string): Promise<BoardPayload | null> => {
     const supabase = await createClient();
 
-    const { data: board, error: boardErr } = await supabase
-      .from("boards")
-      .select("*")
-      .eq("id", boardId)
-      .maybeSingle();
-    // A DB failure is not a 404: throw so the boards error boundary renders
-    // (spec F5 / decision D6). Missing/RLS-hidden row stays null → notFound().
-    if (boardErr) throw new Error(`Failed to load board: ${boardErr.message}`);
-    if (!board) return null;
-
+    // The head row and the 9 satellite reads all key on boardId alone — nothing
+    // downstream of the head row is needed to ISSUE them, so they share one
+    // Promise.all (1 RTT instead of 2). The head result is still checked FIRST
+    // after settle: a missing/RLS-hidden board returns null before any
+    // satellite error can throw, preserving the previous error contract.
     const [
+      boardRes,
       groupsRes,
       columnsRes,
       itemsRes,
@@ -174,6 +177,7 @@ export const getBoardPayload = cache(
       timeEntriesRes,
       relationLinksRes,
     ] = await Promise.all([
+      supabase.from("boards").select("*").eq("id", boardId).maybeSingle(),
       supabase
         .from("groups")
         .select("*")
@@ -245,6 +249,13 @@ export const getBoardPayload = cache(
         .order("position", { ascending: true })
         .limit(2000),
     ]);
+
+    // A DB failure is not a 404: throw so the boards error boundary renders
+    // (spec F5 / decision D6). Missing/RLS-hidden row stays null → notFound().
+    // Checked FIRST so a missing board wins over any satellite error.
+    const { data: board, error: boardErr } = boardRes;
+    if (boardErr) throw new Error(`Failed to load board: ${boardErr.message}`);
+    if (!board) return null;
 
     // A silently-empty board (every `.data ?? []` below) is indistinguishable
     // from deleted data. Fail loudly; the segment error boundary offers retry.

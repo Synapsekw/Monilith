@@ -82,6 +82,13 @@ export function resetServerEnvForTests(): void {
   cached = null;
 }
 
+/** True when running on a serverless platform (Vercel / AWS Lambda). Used to
+ *  pick the bundled @sparticuz/chromium binary vs. a local Chrome. Not part of
+ *  the validated schema — it's optional runtime detection, absent = local. */
+export function isServerlessRuntime(): boolean {
+  return Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL);
+}
+
 /** One presence-only boot line: which Supabase project is active (the
  *  last-wins .env.local tripwire) and which server secrets are set. Never
  *  prints values. Throws (via getServerEnv) when the env is invalid. */

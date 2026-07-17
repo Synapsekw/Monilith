@@ -78,10 +78,11 @@ export function ItemPanel({
   // Files query is lazy — enabled only once the Files tab has been opened, so
   // opening the panel itself stays 0 round-trips (gotcha-09).
   const filesOpened = tab === "files";
-  const { list: attachments, previewUrls } = useItemAttachments(
-    itemId,
-    filesOpened,
-  );
+  const {
+    list: attachments,
+    previewUrls,
+    thumbUrls,
+  } = useItemAttachments(itemId, filesOpened);
   const attachmentMutations = useAttachmentMutations(
     itemId ?? "none",
     currentUserId,
@@ -222,6 +223,7 @@ export function ItemPanel({
               <FilesTab
                 cache={attachments.data}
                 previewUrls={previewUrls}
+                thumbUrls={thumbUrls}
                 members={members}
                 currentUserId={currentUserId}
                 isUploading={attachmentMutations.isUploading}

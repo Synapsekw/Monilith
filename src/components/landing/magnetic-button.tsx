@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useRef } from "react";
+// PERF: eager framer-motion — this is an above-the-fold hero CTA; deferring the
+// motion runtime would drop the magnetic hover on first paint. Barrel-trimmed
+// via optimizePackageImports("framer-motion") in next.config.ts.
 import {
   motion,
   useMotionValue,

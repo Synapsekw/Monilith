@@ -53,16 +53,27 @@
 
 Since Tasks 3/5 and the early UI scaffolding share no files, a subagent-driven run can batch {3, 5} and later {6, 9} where dependencies allow. Serialize anything touching `src/stores/ui.ts` and `app-shell.tsx` (Task 11 only).
 
+## Performance & data-fetching budget (working agreement #5)
+
+Restates spec §7 as the build-time contract:
+
+- **First paint** (`/ask` layout + page RSC): the conversation list — bounded to `CONVERSATIONS_LIMIT=100`, indexed on `(user_id, updated_at desc)` (Task 1) — plus, on `[conversationId]`, that thread's messages, bounded to `MESSAGES_LIMIT=200`, indexed on `(conversation_id, created_at)` (Task 3). Nothing else. No `select *` — both queries select explicit columns.
+- **Interactions with 0 server round-trips:** in-conversation streaming appends `token` events to client state only; **starting a new chat** rewrites the URL via `window.history.pushState('/ask/[id]')` (Task 9) — no `<Link>`/router navigation, so no RSC re-run.
+- **Interactions that legitimately hit the server (each loads _different_ data or mutates):** send / rename / delete are Server Actions with targeted `revalidatePath('/ask')`; the streaming completion is the one Route-Handler exception. **Switching to an existing conversation IS an RSC navigation** (`<Link href="/ask/[id]">`, Task 9) — this is allowed under #5 because it loads a _different_ conversation's server data, not a re-toggle over the same data (contrast the gotcha-09 anti-pattern). **NOTE — spec/plan divergence:** spec §1 says conversation switching is "client state + History API, NOT a router navigation"; the plan deliberately narrows that to _new chat + streaming_ and treats switching-to-another-thread as a correct RSC load. Reviewer should ratify this reading (it matches gotcha-09's actual rule).
+- **Bounded model context:** the rolling summary (Task 5) caps per-turn token cost as threads grow; metering flows through the existing `runAi` chokepoint (Task 7).
+
 ---
 
 ## Task 1: Migration — `ai_conversations` + `ai_messages`
 
 **Files:**
 
-- Create: `supabase/migrations/<timestamp>_ai_conversations.sql` (author on DEV via `supabase-dev` MCP `apply_migration`; then reconcile the local filename to the DEV ledger version — see memory `finish-task-cachelife` / MCP-stamps-own-version gotcha)
+- Create: the migration file by **minting it via `scripts/new-migration.sh ai_conversations`** (AGENTS.md invariant — never hand-invent a `<timestamp>` stamp). The script prints the created path `supabase/migrations/<version>_ai_conversations.sql`; paste the SQL below into that file.
 - Modify: `src/types/database.types.ts` (regenerate)
 
-- [ ] **Step 1: Write the migration SQL**
+- [ ] **Step 1: Mint the migration file, then write the SQL**
+
+Run `scripts/new-migration.sh ai_conversations` to mint the versioned file (do NOT hand-stamp a version). Then paste this SQL into the created file:
 
 ```sql
 -- ai_conversations: one per chat thread, owned by a user, scoped to an org.
@@ -129,9 +140,9 @@ create policy "ai_messages_delete_own" on public.ai_messages
   ));
 ```
 
-- [ ] **Step 2: Apply on DEV and reconcile filename**
+- [ ] **Step 2: Apply on DEV with the SAME version + name, then reconcile any drift**
 
-Apply via `supabase-dev` MCP `apply_migration` (name `ai_conversations`). Then `list_migrations` and rename the local file to match the stamped version. Confirm with `list_tables` that both tables + policies exist.
+Apply via `supabase-dev` MCP `apply_migration` using the **same version + name** as the file minted in Step 1 (name `ai_conversations`). Then `list_migrations` to verify the ledger matches the committed filename; if the MCP stamped its own version (known gotcha), run `scripts/reconcile-migration-version.sh` to realign. Confirm with `list_tables` that both tables + policies exist.
 
 - [ ] **Step 3: Regenerate types**
 
@@ -266,13 +277,11 @@ beforeEach(() => from.mockReset());
 
 describe("listConversations", () => {
   it("returns the user's conversations newest-first, bounded", async () => {
-    const order = vi
-      .fn()
-      .mockReturnValue({
-        limit: vi
-          .fn()
-          .mockResolvedValue({ data: [{ id: "c1", title: "A" }], error: null }),
-      });
+    const order = vi.fn().mockReturnValue({
+      limit: vi
+        .fn()
+        .mockResolvedValue({ data: [{ id: "c1", title: "A" }], error: null }),
+    });
     const eq = vi.fn().mockReturnValue({ order });
     from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
 
@@ -367,7 +376,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const rpcUser = { id: "u1" };
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => rpcUser),
-  getUserOrgs: vi.fn(async () => [{ id: "org1", name: "O", timezone: "UTC" }]),
+}));
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: vi.fn(async () => ({
+    id: "org1",
+    name: "O",
+    timezone: "UTC",
+  })),
 }));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: vi.fn(async () => [{ id: "ws1" }]),
@@ -395,17 +410,11 @@ beforeEach(() => {
 
 it("createConversation inserts a conversation + first user message", async () => {
   insertConv.mockReturnValue({
-    insert: vi
-      .fn()
-      .mockReturnValue({
-        select: vi
-          .fn()
-          .mockReturnValue({
-            single: vi
-              .fn()
-              .mockResolvedValue({ data: { id: "c9" }, error: null }),
-          }),
+    insert: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "c9" }, error: null }),
       }),
+    }),
   });
   insertMsg.mockReturnValue({
     insert: vi.fn().mockResolvedValue({ error: null }),
@@ -428,12 +437,12 @@ Expected: FAIL (module missing).
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
-
-type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
-const fail = (error: string): ActionResult<never> => ({ ok: false, error });
+// Canonical shared result type — never re-declare locally (AGENTS.md invariant).
+import { type ActionResult, fail } from "@/lib/actions/result";
 
 const messageSchema = z.string().trim().min(1).max(4000);
 const titleSchema = z.string().trim().min(1).max(120);
@@ -444,7 +453,10 @@ export async function createConversation(input: {
   const parsed = messageSchema.safeParse(input.firstMessage);
   if (!parsed.success) return fail("Message must be 1–4000 characters.");
   const user = await requireUser();
-  const org = (await getUserOrgs())[0];
+  // resolveActiveOrg() honors the org switcher — mirrors src/lib/ai/ask/actions.ts.
+  // Do NOT use getUserOrgs()[0]: that picks an arbitrary first org and would
+  // scope conversations/workspaces to the wrong tenant for multi-org users.
+  const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
   const workspaceId = await getActiveWorkspaceId(
     await listWorkspacesCached(org.id),
@@ -463,13 +475,11 @@ export async function createConversation(input: {
     .single();
   if (conv.error || !conv.data) return fail("Couldn't start the conversation.");
 
-  const msg = await supabase
-    .from("ai_messages")
-    .insert({
-      conversation_id: conv.data.id,
-      role: "user",
-      content: parsed.data,
-    });
+  const msg = await supabase.from("ai_messages").insert({
+    conversation_id: conv.data.id,
+    role: "user",
+    content: parsed.data,
+  });
   if (msg.error) return fail("Couldn't save your message.");
 
   revalidatePath("/ask");
@@ -819,7 +829,7 @@ Expected: FAIL (module missing).
 ```ts
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/anthropic";
+import { MODEL } from "@/lib/ai/providers/anthropic";
 import { ASK_TOOLS, executeAskTool } from "./tools";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { AskStreamEvent } from "./stream-protocol";
@@ -946,7 +956,9 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "u1" })),
-  getUserOrgs: vi.fn(async () => [{ id: "org1" }]),
+}));
+vi.mock("@/lib/org/active", () => ({
+  resolveActiveOrg: vi.fn(async () => ({ id: "org1" })),
 }));
 vi.mock("@/lib/workspaces/queries-cached", () => ({
   listWorkspacesCached: vi.fn(async () => [{ id: "ws1" }]),
@@ -1048,7 +1060,8 @@ Expected: FAIL (module missing).
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { requireUser, getUserOrgs } from "@/lib/auth/session";
+import { requireUser } from "@/lib/auth/session";
+import { resolveActiveOrg } from "@/lib/org/active";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
@@ -1066,7 +1079,7 @@ import {
   KEEP_RECENT,
 } from "@/lib/ai/ask/context";
 import { encodeEvent, type AskStreamEvent } from "@/lib/ai/ask/stream-protocol";
-import { MODEL } from "@/lib/ai/anthropic";
+import { MODEL } from "@/lib/ai/providers/anthropic";
 
 export const runtime = "nodejs";
 
@@ -1080,7 +1093,8 @@ const bodySchema = z.object({ conversationId: z.string().uuid() });
 
 export async function POST(req: Request) {
   const user = await requireUser();
-  const org = (await getUserOrgs())[0];
+  // Active org (org switcher), mirroring src/lib/ai/ask/actions.ts — NOT getUserOrgs()[0].
+  const org = await resolveActiveOrg();
   if (!org)
     return NextResponse.json({ error: "No organization." }, { status: 400 });
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));

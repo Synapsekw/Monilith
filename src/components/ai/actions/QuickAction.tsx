@@ -125,7 +125,7 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
           {turns.map((t, i) => (
             <div key={i} className="flex flex-col gap-1 p-2.5">
               <span className="text-kicker font-mono text-[11px] tracking-[0.12em] uppercase">
-                {t.role === "you" ? "You" : "Pulse"}
+                {t.role === "you" ? "You" : "AI"}
               </span>
               <p className="text-foreground text-sm whitespace-pre-wrap">
                 {t.text}
@@ -140,7 +140,7 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
             >
               <WorkingDots />
               <span className="text-muted-foreground text-sm">
-                Pulse is working…
+                AI is working…
               </span>
             </div>
           ) : null}

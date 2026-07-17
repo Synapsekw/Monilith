@@ -60,10 +60,10 @@ export async function askPulse(input: {
   } catch (e) {
     return fail(
       mapAiError(e, {
-        fallback: "Ask Pulse hit a snag. Please try again.",
-        notConfigured: "Add an AI provider key in Settings to use Ask Pulse.",
+        fallback: "The AI assistant hit a snag. Please try again.",
+        notConfigured: "Add an AI provider key in Settings to use Ask AI.",
         providerNotCapable:
-          "Ask Pulse needs an Anthropic key — dashboards work with any provider.",
+          "Ask AI needs an Anthropic key — dashboards work with any provider.",
       }),
     );
   }

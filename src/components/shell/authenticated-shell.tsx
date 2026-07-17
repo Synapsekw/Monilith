@@ -5,10 +5,26 @@ import { SidebarNavData } from "@/components/shell/sidebar-nav-data";
 import { MobileNavData } from "@/components/shell/mobile-nav-data";
 import { HeaderUserData } from "@/components/shell/header-user-data";
 import { CommandPaletteData } from "@/components/shell/command-palette-data";
-import { TimeZoneBoundary } from "@/components/shell/timezone-boundary";
 import { SidebarNavSkeleton } from "@/components/shell/sidebar-nav-skeleton";
 import { HeaderUserSkeleton } from "@/components/shell/header-user-skeleton";
+import { getUser } from "@/lib/auth/session";
+import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
+import { TimeZoneProvider } from "@/lib/datetime/timezone-context";
 import { Button } from "@/components/ui/button";
+
+/**
+ * Resolve the user's timezone as a promise passed UNAWAITED into the client
+ * provider so page content paints immediately — only the `DateTime` primitive
+ * suspends on it (behind its own empty <time> fallback). Identity is read
+ * OUTSIDE the cache (cookie-bound `getUser`) and threaded into the `use cache`
+ * read, so the value is shared across routes and invalidated by
+ * `updateTag(profileTag(userId))` on save (Phase 9.3 rule).
+ */
+function resolveUserTimeZone(): Promise<string | null> {
+  return getUser().then((user) =>
+    user ? getUserTimeZoneCached(user.id) : null,
+  );
+}
 
 /**
  * Static fallback for the mobile hamburger while its nav data streams in: a
@@ -32,7 +48,9 @@ function MobileNavFallback() {
 /**
  * The single composition every authenticated section layout shares. The frame
  * and skeleton fallbacks are static (prerendered into the Cache Components
- * shell); the three per-user data slots and the timezone boundary stream in.
+ * shell); the three per-user data slots stream in. The timezone is streamed as
+ * an unawaited promise so it never blocks the content area — see
+ * resolveUserTimeZone above.
  */
 export function AuthenticatedShell({ children }: { children: ReactNode }) {
   return (
@@ -58,9 +76,9 @@ export function AuthenticatedShell({ children }: { children: ReactNode }) {
         </Suspense>
       }
     >
-      <Suspense fallback={null}>
-        <TimeZoneBoundary>{children}</TimeZoneBoundary>
-      </Suspense>
+      <TimeZoneProvider timeZone={resolveUserTimeZone()}>
+        {children}
+      </TimeZoneProvider>
     </AppShell>
   );
 }

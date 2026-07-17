@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { BoardsNav } from "@/components/boards/BoardsNav";
 import { DashboardsNav } from "@/components/dashboards/DashboardsNav";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
@@ -34,6 +35,11 @@ type NavLink = {
 };
 
 const HOME: NavLink = { label: "My Work", href: "/my-work", icon: ListTodo };
+const ASK: NavLink = {
+  label: "Ask AI",
+  href: "/ask",
+  icon: AskAiMark,
+};
 const PLANNING: NavLink[] = [
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },
@@ -45,7 +51,7 @@ const TRASH: NavLink = {
   href: "/boards#archived",
   icon: Trash2,
 };
-const ALL_LINKS: NavLink[] = [HOME, ...PLANNING, ...PERSONAL, TRASH];
+const ALL_LINKS: NavLink[] = [HOME, ASK, ...PLANNING, ...PERSONAL, TRASH];
 
 function CoarseCaption({ label }: { label: string }) {
   return (
@@ -173,6 +179,7 @@ export function SidebarNav({
       ) : (
         <nav className="flex flex-col gap-0.5 px-2 pt-2">
           <ExpandedLink item={HOME} active={isActive(HOME.href)} />
+          <ExpandedLink item={ASK} active={isActive(ASK.href)} />
         </nav>
       )}
 

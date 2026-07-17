@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, Trash2, X } from "lucide-react";
 
 import {
@@ -13,6 +13,7 @@ import {
 import type { GoalLink } from "@/lib/goals/queries";
 import type { StatusColumn } from "@/lib/portfolios/queries";
 import type { GoalNode, GoalStatus, RowOwner } from "@/lib/goals/types";
+import type { Tables } from "@/types/database.types";
 import {
   DoneMappingFields,
   defaultDoneOptionIds,
@@ -47,14 +48,15 @@ function GoalEditor({
   boards,
   links,
   onClose,
+  onGoalPatched,
 }: {
   goal: GoalNode;
   members: RowOwner[];
   boards: { id: string; name: string }[];
   links: GoalLink[];
   onClose: () => void;
+  onGoalPatched?: (goal: Tables<"goals">) => void;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(goal.name);
   const [percent, setPercent] = useState(goal.percent?.toString() ?? "");
@@ -74,10 +76,11 @@ function GoalEditor({
   const num = (s: string): number | null =>
     s.trim() === "" ? null : Number(s);
 
-  // Revert the controlled fields to the server truth (the goal prop is unchanged
-  // until a successful patch triggers router.refresh()). Selects/date inputs read
-  // straight from `goal`, so resetting the text inputs is enough to undo a failed
-  // edit.
+  // Revert the controlled fields to the server truth. The `goal` prop tracks the
+  // client tree, which onGoalPatched updates on success — so on a failed patch,
+  // resetting the text inputs back to `goal` undoes the optimistic edit.
+  // Selects/date inputs read straight from `goal`, so the text inputs are all we
+  // reset.
   function resetFields() {
     setName(goal.name);
     setPercent(goal.percent?.toString() ?? "");
@@ -91,7 +94,7 @@ function GoalEditor({
     startTransition(async () => {
       const res = await updateGoal(input);
       if (res.ok) {
-        router.refresh();
+        onGoalPatched?.(res.data.goal); // reconcile locally — no page refetch
       } else {
         // Undo the optimistic field edit and tell the user it didn't save.
         resetFields();
@@ -111,8 +114,9 @@ function GoalEditor({
           doneOptionIds: l.doneOptionIds,
         })),
       });
-      if (res.ok) router.refresh();
-      else setLinkError(res.error);
+      // setGoalLinks revalidates "/goals" itself (auto_boards rollups are
+      // server-derived) — that single re-render is the reconcile.
+      if (!res.ok) setLinkError(res.error);
     });
   }
 
@@ -187,7 +191,8 @@ function GoalEditor({
           doneOptionIds: l.doneOptionIds,
         })),
       });
-      if (saved.ok) router.refresh();
+      // setGoalLinks' own revalidate is the single refetch.
+      if (!saved.ok) setLinkError(saved.error);
     });
   }
 
@@ -444,11 +449,10 @@ function GoalEditor({
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
+              // deleteGoal keeps its own revalidatePath("/goals") — no extra
+              // client refresh needed.
               const res = await deleteGoal({ goalId: goal.id });
-              if (res.ok) {
-                onClose();
-                router.refresh();
-              }
+              if (res.ok) onClose();
             })
           }
           className="text-destructive hover:text-destructive"
@@ -466,11 +470,13 @@ export function GoalDetailDrawer({
   members,
   boards,
   links,
+  onGoalPatched,
 }: {
   tree: GoalNode[];
   members: RowOwner[];
   boards: { id: string; name: string }[];
   links: Record<string, GoalLink[]>;
+  onGoalPatched?: (goal: Tables<"goals">) => void;
 }) {
   const params = useSearchParams();
   const goalId = params.get("goal");
@@ -503,6 +509,7 @@ export function GoalDetailDrawer({
                 boards={boards}
                 links={links[goal.id] ?? []}
                 onClose={close}
+                onGoalPatched={onGoalPatched}
               />
             </div>
           </>

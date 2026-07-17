@@ -251,12 +251,18 @@ export async function getAttachmentDownloadUrl(input: {
 
 export async function getAttachmentPreviewUrls(input: {
   attachmentIds: string[];
-}): Promise<ActionResult<{ urls: Record<string, string> }>> {
+  thumb?: { width: number; height: number };
+}): Promise<
+  ActionResult<{
+    urls: Record<string, string>;
+    thumbUrls: Record<string, string>;
+  }>
+> {
   const parsed = attachmentUrlsSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
   if (parsed.data.attachmentIds.length === 0)
-    return { ok: true, data: { urls: {} } };
+    return { ok: true, data: { urls: {}, thumbUrls: {} } };
 
   const supabase = await createClient();
   const { data: rows, error } = await supabase
@@ -267,7 +273,8 @@ export async function getAttachmentPreviewUrls(input: {
 
   // Inline preview only for the safe raster/video allow-list (no `download`).
   const previewable = rows.filter((r) => isPreviewable(r.mime_type));
-  if (previewable.length === 0) return { ok: true, data: { urls: {} } };
+  if (previewable.length === 0)
+    return { ok: true, data: { urls: {}, thumbUrls: {} } };
 
   const paths = previewable.map((r) => r.storage_path);
   const { data: signed, error: signErr } = await supabase.storage
@@ -285,7 +292,35 @@ export async function getAttachmentPreviewUrls(input: {
     const u = byPath.get(r.storage_path);
     if (u) urls[r.id] = u;
   }
-  return { ok: true, data: { urls } };
+
+  // Thumbnails: `createSignedUrls` (plural) has no `transform` option, so mint
+  // width/height-constrained URLs per-file via `createSignedUrl` — image rows
+  // only (video has no server-side transform). Best-effort: any that fail to
+  // sign are simply omitted and the component falls back to full-res.
+  const thumbUrls: Record<string, string> = {};
+  const thumb = parsed.data.thumb;
+  if (thumb) {
+    const imageRows = previewable.filter((r) =>
+      r.mime_type.startsWith("image/"),
+    );
+    const signedThumbs = await Promise.all(
+      imageRows.map((r) =>
+        supabase.storage
+          .from("attachments")
+          .createSignedUrl(r.storage_path, PREVIEW_TTL, {
+            transform: {
+              width: thumb.width,
+              height: thumb.height,
+              resize: "cover",
+            },
+          })
+          .then((res) => ({ id: r.id, url: res.data?.signedUrl ?? null })),
+      ),
+    );
+    for (const t of signedThumbs) if (t.url) thumbUrls[t.id] = t.url;
+  }
+
+  return { ok: true, data: { urls, thumbUrls } };
 }
 
 export async function getAttachmentPdfUrl(input: {

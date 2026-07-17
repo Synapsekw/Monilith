@@ -11,9 +11,11 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(join(process.cwd(), "next.config.ts"), "utf8");
 
 describe("next.config.ts (Task D)", () => {
-  it("barrel-optimizes radix-ui via experimental.optimizePackageImports", () => {
+  it("barrel-optimizes radix-ui + framer-motion via experimental.optimizePackageImports", () => {
     expect(source).toContain("optimizePackageImports");
-    expect(source).toMatch(/optimizePackageImports:\s*\[\s*"radix-ui"\s*\]/);
+    expect(source).toMatch(
+      /optimizePackageImports:\s*\[\s*"radix-ui"\s*,\s*"framer-motion"\s*\]/,
+    );
   });
 
   it("does NOT list packages that Next already optimizes by default", () => {

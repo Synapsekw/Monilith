@@ -37,9 +37,10 @@ export async function updateProfileTimezone(input: {
   if (error) return fail("Could not update timezone.");
 
   // Read-your-own-writes: immediately expire this user's cached timezone so the
-  // shell TimeZoneBoundary and the settings page reflect the new value on the
-  // next render of ANY route (not just /settings, which the old path revalidate
-  // was scoped to). Both consumers read `getUserTimeZoneCached(user.id)`.
+  // shell's streamed TimeZoneProvider and the settings page reflect the new
+  // value on the next render of ANY route (not just /settings, which the old
+  // path revalidate was scoped to). Both consumers read
+  // `getUserTimeZoneCached(user.id)`.
   updateTag(profileTag(user.id));
   return { ok: true, data: undefined };
 }

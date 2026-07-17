@@ -5,9 +5,14 @@ import { GoalDetailDrawer } from "@/components/goals/GoalDetailDrawer";
 import type { GoalNode, RowOwner } from "@/lib/goals/types";
 import type { GoalLink } from "@/lib/goals/queries";
 
+// The patched row updateGoal returns on success (only fields the drawer reads
+// back via onGoalPatched matter here).
+const PATCHED_ROW = { id: "g1", name: "Ship v2" };
 const setGoalLinks = vi.fn().mockResolvedValue({ ok: true, data: null });
 const getStatusColumnsForBoard = vi.fn();
-const updateGoal = vi.fn().mockResolvedValue({ ok: true, data: null });
+const updateGoal = vi
+  .fn()
+  .mockResolvedValue({ ok: true, data: { goal: PATCHED_ROW } });
 
 vi.mock("@/lib/goals/actions", () => ({
   setGoalLinks: (...a: unknown[]) => setGoalLinks(...a),
@@ -16,8 +21,10 @@ vi.mock("@/lib/goals/actions", () => ({
   deleteGoal: vi.fn().mockResolvedValue({ ok: true, data: null }),
 }));
 
+// The drawer no longer navigates on save — assert it never refreshes the route.
+const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh }),
   useSearchParams: () => new URLSearchParams("goal=g1"),
 }));
 
@@ -64,7 +71,10 @@ const links: Record<string, GoalLink[]> = {
 
 beforeEach(() => {
   setGoalLinks.mockClear();
-  updateGoal.mockClear().mockResolvedValue({ ok: true, data: null });
+  refresh.mockClear();
+  updateGoal
+    .mockClear()
+    .mockResolvedValue({ ok: true, data: { goal: PATCHED_ROW } });
   getStatusColumnsForBoard.mockClear();
   getStatusColumnsForBoard.mockResolvedValue({
     ok: true,
@@ -84,13 +94,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.clearAllMocks());
 
-function renderDrawer() {
+function renderDrawer(onGoalPatched?: (g: unknown) => void) {
   return render(
     <GoalDetailDrawer
       tree={[goal]}
       members={members}
       boards={boards}
       links={links}
+      onGoalPatched={onGoalPatched}
     />,
   );
 }
@@ -150,6 +161,36 @@ describe("GoalDetailDrawer done-mapping", () => {
     // Name reverts to the server truth and the failure is surfaced.
     expect(await screen.findByRole("alert")).toHaveTextContent("Save failed");
     expect(screen.getByDisplayValue("Ship v1")).toBeInTheDocument();
+  });
+
+  it("reconciles a field blur via onGoalPatched and never refreshes the route", async () => {
+    const onGoalPatched = vi.fn();
+    renderDrawer(onGoalPatched);
+    const nameInput = screen.getByDisplayValue("Ship v1");
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Ship v2");
+    await userEvent.tab(); // blur → patch()
+    await waitFor(() => expect(updateGoal).toHaveBeenCalled());
+    // The returned row is handed to the client owner for local reconciliation…
+    await waitFor(() =>
+      expect(onGoalPatched).toHaveBeenCalledWith(PATCHED_ROW),
+    );
+    // …and no second full-page refetch is triggered.
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("relies on setGoalLinks' own revalidate — no client refresh on link edits", async () => {
+    renderDrawer();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: /edit done mapping for engineering/i,
+      }),
+    );
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /working/i }),
+    );
+    await waitFor(() => expect(setGoalLinks).toHaveBeenCalled());
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("does not refetch columns when re-expanding the same board", async () => {

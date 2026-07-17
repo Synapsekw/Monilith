@@ -286,14 +286,27 @@ export function LightRays({
       uniforms.rayDir.value = dir;
     }
 
+    // Coalesce resize to one place() per frame: place() resizes the GL renderer
+    // and recomputes uniforms, so running it synchronously per resize event
+    // thrashed the context during a window drag. One rAF per frame is enough.
+    let resizeRaf = 0;
+    const onResize = () => {
+      if (resizeRaf) return;
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = 0;
+        place();
+      });
+    };
+
     place();
-    window.addEventListener("resize", place);
+    window.addEventListener("resize", onResize);
 
     // Reduced motion: one static frame, no loop, no pointer tracking.
     if (reduce) {
       renderer.render({ scene: mesh });
       return () => {
-        window.removeEventListener("resize", place);
+        window.removeEventListener("resize", onResize);
+        if (resizeRaf) cancelAnimationFrame(resizeRaf);
         teardown(renderer, container);
       };
     }
@@ -353,7 +366,8 @@ export function LightRays({
 
     return () => {
       stopLoop();
-      window.removeEventListener("resize", place);
+      window.removeEventListener("resize", onResize);
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
       window.removeEventListener("pointermove", onMove);
       observer?.disconnect();
       teardown(renderer, container);

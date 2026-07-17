@@ -5,8 +5,7 @@ import {
   getGoalsTree,
   listReadableBoardsCached,
 } from "@/lib/goals/queries";
-import { GoalTree } from "@/components/goals/GoalTree";
-import { GoalDetailDrawer } from "@/components/goals/GoalDetailDrawer";
+import { GoalsView } from "@/components/goals/GoalsView";
 import { NewGoalDialog } from "@/components/goals/NewGoalDialog";
 import { Kicker } from "@/components/ui/kicker";
 
@@ -36,10 +35,7 @@ export default async function GoalsIndex() {
         </div>
         <NewGoalDialog members={members} />
       </div>
-      <div className="min-h-0 flex-1">
-        <GoalTree tree={tree} />
-      </div>
-      <GoalDetailDrawer
+      <GoalsView
         tree={tree}
         members={members}
         boards={boardOptions}

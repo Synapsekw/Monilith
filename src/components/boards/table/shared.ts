@@ -37,10 +37,25 @@ export type CellControls = {
   moveItemToGroup: (itemId: string, groupId: string, position?: number) => void;
   /** Live board cache — read by Files cells to resolve their attachments. */
   cache: BoardCache;
+  /**
+   * Direct-dependent counts for priority cells: one O(edges) pass over the
+   * board's dependency set, computed once in {@link BoardTable} and threaded
+   * down (same pattern as cellMap) instead of recomputed inside every visible
+   * row. Priority cells read `dependentsByItem.get(item.id) ?? 0`.
+   */
+  dependentsByItem: Map<string, number>;
   /** Upload a file into a Files-column cell. */
   uploadColumnFile: (itemId: string, columnId: string, file: File) => void;
   /** Open the Files lightbox over a cell's attachments at the given index. */
   openFilesLightbox: (files: readonly CacheAttachment[], index: number) => void;
+  /**
+   * Full-res + thumbnail signed URLs for the attachments of the cell whose
+   * lightbox was last opened (keyed by attachment id). Lazily minted on
+   * lightbox open (0 round-trips on first paint); Files-cell chips read these
+   * to upgrade from a kind icon to an image thumbnail, falling back to full-res.
+   */
+  filesPreviewUrls?: Record<string, string>;
+  filesThumbUrls?: Record<string, string>;
   // ─── Time-tracking callbacks ───────────────────────────────────────────────
   startTimer: (itemId: string, columnId: string) => void;
   stopTimer: (entryId: string) => void;

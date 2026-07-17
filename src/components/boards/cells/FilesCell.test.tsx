@@ -73,6 +73,39 @@ describe("FilesCell", () => {
     expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
 
+  // ── D4: thumbnail-size images with full-res fallback ──────────────────
+  it("renders the thumb URL for an image chip and falls back to full-res on error", () => {
+    render(
+      <FilesCell
+        files={[att("1")]}
+        previewUrls={{ "1": "https://signed/full" }}
+        thumbUrls={{ "1": "https://signed/thumb" }}
+        onOpen={vi.fn()}
+        onUpload={vi.fn()}
+      />,
+    );
+    const img = screen.getByTitle("report.png").querySelector("img")!;
+    expect(img).toBeInTheDocument();
+    // The thumbnail transform URL is preferred over the full-res URL.
+    expect(img.getAttribute("src")).toBe("https://signed/thumb");
+    // A failed /render/image fetch (transforms off) falls back to full-res once.
+    fireEvent.error(img);
+    expect(img.getAttribute("src")).toBe("https://signed/full");
+  });
+
+  it("uses the full-res URL directly when no thumb is provided", () => {
+    render(
+      <FilesCell
+        files={[att("1")]}
+        previewUrls={{ "1": "https://signed/full" }}
+        onOpen={vi.fn()}
+        onUpload={vi.fn()}
+      />,
+    );
+    const img = screen.getByTitle("report.png").querySelector("img")!;
+    expect(img.getAttribute("src")).toBe("https://signed/full");
+  });
+
   // ── TOUCH Batch-2 (iPad) ──────────────────────────────────────────────
   it("gives the file chip and the upload affordance ≥44px coarse targets", () => {
     render(

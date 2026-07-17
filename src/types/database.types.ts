@@ -58,6 +58,92 @@ export type Database = {
           },
         ];
       };
+      ai_conversations: {
+        Row: {
+          created_at: string;
+          id: string;
+          org_id: string;
+          summarized_upto: string | null;
+          summary: string | null;
+          title: string;
+          updated_at: string;
+          user_id: string;
+          workspace_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          summarized_upto?: string | null;
+          summary?: string | null;
+          title?: string;
+          updated_at?: string;
+          user_id: string;
+          workspace_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          summarized_upto?: string | null;
+          summary?: string | null;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+          workspace_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_messages: {
+        Row: {
+          content: string;
+          conversation_id: string;
+          created_at: string;
+          id: string;
+          role: string;
+          tool_trace: Json | null;
+        };
+        Insert: {
+          content: string;
+          conversation_id: string;
+          created_at?: string;
+          id?: string;
+          role: string;
+          tool_trace?: Json | null;
+        };
+        Update: {
+          content?: string;
+          conversation_id?: string;
+          created_at?: string;
+          id?: string;
+          role?: string;
+          tool_trace?: Json | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "ai_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_usage: {
         Row: {
           cost_usd: number;
@@ -1940,6 +2026,54 @@ export type Database = {
           },
         ];
       };
+      reports: {
+        Row: {
+          board_id: string;
+          config: Json;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string;
+          org_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          config?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+          org_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          config?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+          org_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reports_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reports_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       time_allocations: {
         Row: {
           board_id: string | null;
@@ -2650,6 +2784,19 @@ export type Database = {
         };
       };
       escape_like: { Args: { p_text: string }; Returns: string };
+      get_my_work_items: {
+        Args: { p_limit?: number };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          due_date: string;
+          group_name: string;
+          item_id: string;
+          item_name: string;
+          status_option_id: string;
+          status_settings: Json;
+        }[];
+      };
       get_org_members: {
         Args: { p_limit?: number; p_offset?: number; p_org_id: string };
         Returns: {

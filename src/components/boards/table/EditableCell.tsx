@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { Column, Item } from "@/lib/boards/queries";
 import type { ColumnKind, ColumnOption } from "@/lib/validations/boards";
 import { CellRenderer } from "@/components/boards/cells";
@@ -35,7 +36,7 @@ type Settings = Record<string, unknown> & { options?: ColumnOption[] };
  * (optimistically); an explicit clear (Status "Clear", emptied number/date,
  * empty multi-select) routes through `clearCellValue`, which deletes the row.
  */
-export function EditableCell({
+export const EditableCell = memo(function EditableCell({
   item,
   column,
   value,
@@ -72,7 +73,8 @@ export function EditableCell({
       <div className="flex h-full items-center border-l px-3">
         <FilesCell
           files={files}
-          previewUrls={{}}
+          previewUrls={controls.filesPreviewUrls ?? {}}
+          thumbUrls={controls.filesThumbUrls}
           onOpen={(i) => controls.openFilesLightbox(files, i)}
           onUpload={(f) => controls.uploadColumnFile(item.id, column.id, f)}
         />
@@ -217,4 +219,4 @@ export function EditableCell({
       <FlashHighlight target={target} />
     </div>
   );
-}
+});

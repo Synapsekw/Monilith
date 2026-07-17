@@ -3,6 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import { boardIdFromPath, LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
 import type { Database } from "@/types/database.types";
 
 // Auth-flow routes an unauthenticated visitor must reach. `/forgot-password`
@@ -76,6 +77,23 @@ export async function proxy(request: NextRequest) {
 
   if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Remember the last board the user actually navigated to, so /home can skip
+  // its list reads next login. Prefetches are excluded — a hovered board link
+  // must not hijack the fast path. Set on the FINAL response object (the
+  // supabase adapter above may have rebuilt `response`).
+  const lastBoardId = isAuthenticated ? boardIdFromPath(pathname) : null;
+  const isPrefetch =
+    request.headers.get("next-router-prefetch") !== null ||
+    request.headers.get("purpose") === "prefetch";
+  if (lastBoardId && !isPrefetch) {
+    response.cookies.set(LAST_BOARD_COOKIE, lastBoardId, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
   }
 
   return response;

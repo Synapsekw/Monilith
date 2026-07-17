@@ -94,4 +94,25 @@ describe("getBoardPayload error contract", () => {
     // Only the board-scoped cell_values read fires (no mirror columns).
     expect(limits["cell_values"]).toEqual([20000]);
   });
+
+  it("issues the head read and the 9 satellite reads concurrently (one batch)", async () => {
+    // With the head read parallelized, a missing board no longer gates the
+    // satellites: all 10 table reads fire even when boards resolves empty.
+    from.mockImplementation(() => tableMock({ data: null, error: null }));
+    expect(await getBoardPayload("b6")).toBeNull();
+    const tables = from.mock.calls.map((c) => c[0]);
+    expect(tables).toContain("boards");
+    expect(tables).toContain("items");
+    expect(tables).toContain("cell_values");
+    expect(tables).toHaveLength(10);
+  });
+
+  it("a missing board wins over a satellite error (null, not throw)", async () => {
+    from.mockImplementation((table: string) =>
+      table === "boards"
+        ? tableMock({ data: null, error: null })
+        : tableMock({ data: null, error: { message: "satellite broke" } }),
+    );
+    expect(await getBoardPayload("b7")).toBeNull();
+  });
 });

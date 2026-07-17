@@ -3,16 +3,25 @@ import bundleAnalyzer from "@next/bundle-analyzer";
 import type { NextConfig } from "next";
 
 // Opt-in bundle report (dev tool). Fully inert in normal builds — with
-// ANALYZE unset the wrapper returns the config untouched. NOTE: this is the
-// webpack analyzer, which our default Turbopack `next build` does NOT run: under
-// Turbopack `ANALYZE=true pnpm build` only warns and emits no report. To use it,
-// build with `--webpack`; the Turbopack-native alternative is
-// `next experimental-analyze`. See package-bundling.md.
+// ANALYZE unset the wrapper returns the config untouched. NOTE: this webpack
+// analyzer does NOT run under our default Turbopack `next build` (ANALYZE=true
+// pnpm build only warns and emits no report). The working command for the
+// default Turbopack path is `pnpm build:analyze` (→ `next experimental-analyze`,
+// the Turbopack-native analyzer, v16.1+; writes to .next/diagnostics/analyze).
+// This wrapper is kept only for the `next build --webpack` fallback.
+// See package-bundling.md.
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
 });
 
 const nextConfig: NextConfig = {
+  // Native/binary server-only deps for PDF report generation. Both ship strict
+  // `exports` maps + a bundled Chromium binary that must NOT be bundled by
+  // Turbopack — mark them external so Next requires them at runtime (server
+  // only). Without this, importing @sparticuz/chromium from the server-action
+  // graph fails to resolve under Turbopack. This is also the correct behavior
+  // for the Vercel Functions runtime. See src/lib/reports/pdf.ts.
+  serverExternalPackages: ["@sparticuz/chromium", "playwright-core"],
   // Cache Components / PPR by default (Next 16): the static app shell (sidebar +
   // header chrome) is prerendered, while per-user data streams into the Suspense
   // boundaries declared in the authenticated layouts (Phase 9.2).
@@ -55,11 +64,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "8mb",
     },
-    // Barrel-optimize the `radix-ui` single-package dep so a shadcn primitive
-    // that pulls one named export doesn't drag the whole barrel into the chunk.
-    // Only list packages NOT already optimized by default — `lucide-react` /
-    // `recharts` are default-optimized (see optimizePackageImports.md).
-    optimizePackageImports: ["radix-ui"],
+    // Barrel-optimize single-package deps whose named imports would otherwise
+    // drag their whole barrel into a chunk: `radix-ui` (shadcn primitives) +
+    // `framer-motion` (landing hero animation). Only list packages NOT already
+    // optimized by default — `lucide-react` / `recharts` are default-optimized,
+    // and `cmdk` / `react-day-picker` are single-component (no heavy barrel), so
+    // they gain nothing here (see optimizePackageImports.md).
+    optimizePackageImports: ["radix-ui", "framer-motion"],
   },
   // Baseline security response headers applied to every route. These are the
   // low-risk, high-value defaults:

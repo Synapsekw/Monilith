@@ -169,9 +169,9 @@ describe("CommandPalette", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps the existing Ask Pulse entry alongside the new Actions entry", () => {
+  it("keeps the existing Ask AI entry alongside the new Actions entry", () => {
     renderOpen();
-    expect(screen.getByText("Ask Pulse…")).toBeInTheDocument();
+    expect(screen.getByText("Ask AI…")).toBeInTheDocument();
     expect(screen.getByText("Run a command…")).toBeInTheDocument();
   });
 

@@ -31,6 +31,7 @@ export function useItemAttachments(itemId: string | null, active: boolean) {
   });
 
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
 
   // Batch-mint inline preview URLs for the previewable rows. Keyed on the set
   // of previewable ids so it re-mints when the list grows but not on every
@@ -46,11 +47,16 @@ export function useItemAttachments(itemId: string | null, active: boolean) {
     // attachments that no longer render, so they're harmless and need no clear.
     if (!enabled || previewableIds.length === 0) return;
     let cancelled = false;
-    void getAttachmentPreviewUrls({ attachmentIds: previewableIds }).then(
-      (res) => {
-        if (!cancelled && res.ok) setPreviewUrls(res.data.urls);
-      },
-    );
+    // 640×360 = the aspect-video gallery card at ~2× DPR.
+    void getAttachmentPreviewUrls({
+      attachmentIds: previewableIds,
+      thumb: { width: 640, height: 360 },
+    }).then((res) => {
+      if (!cancelled && res.ok) {
+        setPreviewUrls(res.data.urls);
+        setThumbUrls(res.data.thumbUrls);
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -58,5 +64,10 @@ export function useItemAttachments(itemId: string | null, active: boolean) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, previewKey]);
 
-  return { list, previewUrls, key: itemAttachmentsKey(itemId ?? "none") };
+  return {
+    list,
+    previewUrls,
+    thumbUrls,
+    key: itemAttachmentsKey(itemId ?? "none"),
+  };
 }

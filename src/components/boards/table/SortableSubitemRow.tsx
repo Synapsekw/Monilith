@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { GripVertical } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -10,7 +10,6 @@ import {
 } from "@/components/boards/cells/created";
 import type { Column, Item } from "@/lib/boards/queries";
 import { isItemComplete, isOverdue, localTodayISO } from "@/lib/boards/overdue";
-import { buildDependentsCountMap } from "@/lib/boards/priority";
 import { cellKey, type CacheCellValue } from "@/lib/boards/cache";
 import { cn } from "@/lib/utils";
 import { EditableCell } from "./EditableCell";
@@ -39,11 +38,9 @@ export function SortableSubitemRow({
   // Viewer-local "today" for the overdue tint, snapshotted at row mount (same
   // purity idiom as ItemRow's rollupNowMs).
   const [todayISO] = useState(() => localTodayISO());
-  // Priority cells only: direct-dependent counts (see ItemRow's map).
-  const dependentsByItem = useMemo(
-    () => buildDependentsCountMap(controls.cache.dependencies),
-    [controls.cache.dependencies],
-  );
+  // Priority cells only: direct-dependent counts, computed once for the whole
+  // board in BoardTableInner and threaded via `controls` (see priority.ts).
+  const dependentsByItem = controls.dependentsByItem;
   const {
     setNodeRef,
     attributes,

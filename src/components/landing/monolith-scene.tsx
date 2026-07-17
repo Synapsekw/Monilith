@@ -1,6 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+// PERF: framer-motion stays eager here — it drives the above-the-fold hero
+// reveal (wordmark/subcopy/CTA start at opacity:0 and animate in), so a lazy
+// boundary would leave the LCP text invisible until the chunk resolves. Kept
+// off the shipped barrel via optimizePackageImports("framer-motion") instead.
 import { motion, useReducedMotion } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import { nunito } from "@/lib/fonts";

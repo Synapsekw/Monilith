@@ -48,7 +48,7 @@ export async function createGoal(
 
 export async function updateGoal(
   input: z.input<typeof updateGoalSchema>,
-): Promise<ActionResult<null>> {
+): Promise<ActionResult<{ goal: Tables<"goals"> }>> {
   const parsed = updateGoalSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -71,14 +71,19 @@ export async function updateGoal(
   if ("dueDate" in input) patch.due_date = d.dueDate;
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("goals")
     .update(patch)
-    .eq("id", d.goalId);
-  if (error) return fail(error.message);
+    .eq("id", d.goalId)
+    .select()
+    .single();
+  if (error || !data) return fail(error?.message ?? "Could not update goal.");
 
-  revalidatePath("/goals");
-  return { ok: true, data: null };
+  // NO revalidatePath("/goals"): a field blur reconciles the returned row into
+  // the client tree (GoalsView.applyGoalPatch) for 0 refetches. Structural
+  // edits (links/delete/reorder) still revalidate — auto_boards rollups and
+  // tree shape can't be patched client-side.
+  return { ok: true, data: { goal: data as Tables<"goals"> } };
 }
 
 export async function reorderGoal(
