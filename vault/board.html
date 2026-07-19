@@ -8,36 +8,34 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-17 16:39",
+  "updated": "2026-07-17 16:47",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "Report Builder + Ask AI + Perf shipped to prod",
+  "headline": "Report fixes + timestamp streaming on develop · PDF validated",
   "chips": [
-    { "label": "develop", "value": "0282058", "note": "== origin", "tone": "ok" },
+    { "label": "develop", "value": "6c0f460", "note": "== origin · 2 ahead of prod", "tone": "ok" },
     { "label": "main", "value": "4235d96", "note": "in sync", "tone": "ok" },
     { "label": "prod", "value": "", "note": "parity ✓", "tone": "ok" }
   ],
   "progress": { "done": 13, "total": 15 },
   "gates": [
-    { "led": "red", "text": "Validate PDF export on prod — the one unproven path live (else window.print() fallback)", "tag": "CRITICAL" },
-    { "led": "amber", "text": "E5 spec written but uncommitted in parked worktree", "tag": "PARKED" },
+    { "led": "amber", "text": "Promote develop → main to carry report-cover fix + timestamp streaming to prod", "tag": "NEXT?" },
+    { "led": "hollow", "text": "Report Builder v2 — charts + wide-board table continuation", "tag": "OWED" },
+    { "led": "hollow", "text": "E5 — semantic search greenfield; fold 3 review risks in first", "tag": "NEXT?" },
     { "led": "hollow", "text": "E6 Stripe billing — F16 blocked on owner creds", "tag": "NEXT?" },
-    { "led": "hollow", "text": "PF residual (A4) or E5 (fold review risks in first)", "tag": "NEXT?" },
-    { "led": "hollow", "text": "Report cover shows org id, not display name", "tag": "OWED" },
-    { "led": "hollow", "text": "Edit-gate draftReportNarrativeAction — viewer can spend AI credits", "tag": "OWED" },
     { "led": "hollow", "text": "Wordmark mark revert in brand.tsx", "tag": "OWED" },
-    { "led": "hollow", "text": "Perf tier-3 Task A (unstable_instant) needs its own spec", "tag": "OWED" },
-    { "led": "hollow", "text": "Rotate the prod DB password", "tag": "OWED" }
+    { "led": "hollow", "text": "Rotate the prod DB password", "tag": "OWED" },
+    { "led": "green", "text": "PDF export validated — last unproven Report Builder path cleared", "tag": "DONE" },
+    { "led": "green", "text": "Report cover org name + viewer edit-gate shipped (1631555)", "tag": "DONE" },
+    { "led": "green", "text": "Timestamp blank-then-fill killed via device-zone-first render (6c0f460)", "tag": "DONE" }
   ],
-  "worktrees": [
-    { "led": "amber", "branch": "task/e5-agentic-semantic", "head": "1e2b815", "note": "scoping, parked" }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-07-17-1639-mission-control-board-setup",
-    "when": "07-17 16:39",
+    "id": "2026-07-17-1647-report-fixes-timestamp-streaming",
+    "when": "07-17 16:47",
     "bullets": [
-      "Built this mission-control board (Keystone Console) at a permanent Artifact URL",
-      "/board command owns the refresh (JSON island only); wired into /wrapup step 7",
-      "Refresh loop proven end-to-end; spec in decision-28"
+      "whats-next Batch A: report follow-up fixes + timestamp streaming, two parallel worktrees merged",
+      "PDF export validated by owner; 9 stale/orphaned worktree dirs swept",
+      "develop 2 features ahead of prod — ready to promote"
     ]
   },
   "roadmap": [

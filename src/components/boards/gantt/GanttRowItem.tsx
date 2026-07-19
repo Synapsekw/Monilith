@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, type CSSProperties } from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { MoreHorizontal } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { CacheDependency } from "@/lib/boards/cache";
@@ -22,9 +22,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   BAR_H,
-  DAY_W,
   LABEL_W,
   MILESTONE,
+  MIN_BAR_W,
   ROW_H,
   formatISO,
   parseISO,
@@ -36,10 +36,14 @@ export function GanttRowItem({
   criticalLabel,
   rowIdx,
   totalW,
+  dayW,
   todayOffset,
   dayCount,
   startColumnId,
   endColumnId,
+  readOnly = false,
+  isExpanded = false,
+  onToggleExpand,
   color,
   allRows,
   dependencies,
@@ -54,10 +58,17 @@ export function GanttRowItem({
   criticalLabel: string | null;
   rowIdx: number;
   totalW: number;
+  /** Pixels per day at the active zoom (see PX_PER_DAY). */
+  dayW: number;
   todayOffset: number;
   dayCount: number;
   startColumnId: string;
   endColumnId: string | null;
+  /** When true the bar can't be dragged/resized (timestamp-sourced dates). */
+  readOnly?: boolean;
+  /** For a parent row (row.hasChildren): whether its sub-items are revealed. */
+  isExpanded?: boolean;
+  onToggleExpand?: (itemId: string) => void;
   color: string | null;
   allRows: GanttRow[];
   dependencies: CacheDependency[];
@@ -105,10 +116,15 @@ export function GanttRowItem({
     ? { transform: `translate3d(${transform.x}px, 0, 0)` }
     : undefined;
 
-  const barLeft = (row.startCol ?? 0) * DAY_W;
+  // Drag is off for read-only (timestamp-sourced) bars — no cell to write back.
+  const dragHandlers = readOnly ? {} : { ...listeners, ...attributes };
+  const grabCursor = readOnly ? "cursor-default" : "cursor-grab";
+  const depth = row.depth ?? 0;
+
+  const barLeft = (row.startCol ?? 0) * dayW;
   const barWidth = row.isMilestone
     ? BAR_H // diamond
-    : Math.max(DAY_W, (row.spanCols ?? 1) * DAY_W);
+    : Math.max(MIN_BAR_W, (row.spanCols ?? 1) * dayW);
 
   // Keystone soft-pill treatment for an arbitrary option color: a 15% tint of
   // the hue over the surface with per-theme AA-clamped text (mirrors ColorChip /
@@ -140,7 +156,7 @@ export function GanttRowItem({
 
   function handleResizeMove(e: React.PointerEvent) {
     if (resizeStartXRef.current === null || !resizeStartEndRef.current) return;
-    const deltaDays = Math.round((e.clientX - resizeStartXRef.current) / DAY_W);
+    const deltaDays = Math.round((e.clientX - resizeStartXRef.current) / dayW);
     if (deltaDays === 0) return;
     // Compute new end from original end + delta
     const origEndMs = parseISO(resizeStartEndRef.current);
@@ -180,9 +196,38 @@ export function GanttRowItem({
     >
       {/* Sticky name label */}
       <div
-        className="bg-background sticky left-0 z-10 flex shrink-0 items-center border-r px-4"
-        style={{ width: LABEL_W }}
+        className={cn(
+          "bg-background sticky left-0 z-10 flex shrink-0 items-center border-r pr-2",
+          depth > 0 && "bg-surface-sunken",
+        )}
+        style={{ width: LABEL_W, paddingLeft: 16 + depth * 16 }}
       >
+        {/* Expand/collapse toggle for a parent with scheduled sub-items; a
+            same-size spacer otherwise so names stay vertically aligned. */}
+        {row.hasChildren ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand?.(row.itemId);
+            }}
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? `Collapse sub-items of ${row.name}`
+                : `Expand sub-items of ${row.name}`
+            }
+            className="text-muted-foreground hover:text-foreground mr-1 flex size-4 shrink-0 items-center justify-center rounded pointer-coarse:size-8"
+          >
+            {isExpanded ? (
+              <ChevronDown className="size-3.5" aria-hidden />
+            ) : (
+              <ChevronRight className="size-3.5" aria-hidden />
+            )}
+          </button>
+        ) : (
+          <span className="mr-1 size-4 shrink-0" aria-hidden />
+        )}
         {/* Effective-critical dot — minimal marker where dependencies are
             actually drawn (a dot, not a badge; the tooltip + sr text carry
             the meaning, never color alone). */}
@@ -197,6 +242,11 @@ export function GanttRowItem({
         <span className="text-foreground min-w-0 flex-1 truncate text-[12.5px]">
           {row.name}
         </span>
+        {row.hasChildren && row.childCount ? (
+          <span className="text-muted-foreground ml-1 shrink-0 text-[11px] tabular-nums">
+            {row.childCount}
+          </span>
+        ) : null}
         {/* ⋯ menu for dependency management */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -259,30 +309,32 @@ export function GanttRowItem({
         {todayOffset >= 0 && todayOffset <= dayCount && (
           <div
             className="bg-destructive/30 absolute top-0 h-full w-px"
-            style={{ left: todayOffset * DAY_W }}
+            style={{ left: todayOffset * dayW }}
             aria-hidden
           />
         )}
 
-        {/* Bar or milestone diamond */}
-        {row.isMilestone ? (
+        {/* Bar or milestone diamond. A parent "header" row (unscheduled, but
+            hosting scheduled sub-items) has no bar — just the name rail + an
+            empty track, so its children can nest and collapse under it. */}
+        {!row.scheduled ? null : row.isMilestone ? (
           <div
             ref={setNodeRef}
             className={cn(
-              "absolute rotate-45 cursor-grab rounded-sm",
+              "absolute rotate-45 rounded-sm",
+              grabCursor,
               color ? "" : "bg-primary",
               isDragging && "opacity-50",
             )}
             style={{
-              left: barLeft + DAY_W / 2 - MILESTONE / 2,
+              left: barLeft + dayW / 2 - MILESTONE / 2,
               top: ROW_H / 2 - MILESTONE / 2,
               width: MILESTONE,
               height: MILESTONE,
               ...(color ? { backgroundColor: color } : {}),
               ...barStyle,
             }}
-            {...listeners}
-            {...attributes}
+            {...dragHandlers}
             role="button"
             tabIndex={0}
             title={row.name}
@@ -296,7 +348,8 @@ export function GanttRowItem({
           <div
             ref={setNodeRef}
             className={cn(
-              "shadow-card absolute flex cursor-grab items-center rounded-sm transition-[filter] duration-200 hover:brightness-110",
+              "shadow-card absolute flex items-center rounded-sm transition-[filter] duration-200 hover:brightness-110",
+              grabCursor,
               color
                 ? "bg-[color-mix(in_oklab,var(--pill)_15%,transparent)]"
                 : "bg-primary",
@@ -321,8 +374,7 @@ export function GanttRowItem({
             {/* Drag handle covering most of the bar; a plain click (no drag
                 activated) opens the quick-edit peek. */}
             <div
-              {...listeners}
-              {...attributes}
+              {...dragHandlers}
               role="button"
               tabIndex={0}
               aria-label={row.name}
@@ -341,15 +393,17 @@ export function GanttRowItem({
                 {row.name}
               </span>
             </div>
-            {/* Right-edge resize handle */}
-            <div
-              onPointerDown={handleResizeStart}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeEnd}
-              onPointerLeave={handleResizeEnd}
-              className="hover:bg-primary-foreground/20 h-full w-2 cursor-ew-resize touch-none rounded-r-sm pointer-coarse:w-11"
-              aria-label={`Resize ${row.name}`}
-            />
+            {/* Right-edge resize handle (hidden for read-only bars) */}
+            {!readOnly && (
+              <div
+                onPointerDown={handleResizeStart}
+                onPointerMove={handleResizeMove}
+                onPointerUp={handleResizeEnd}
+                onPointerLeave={handleResizeEnd}
+                className="hover:bg-primary-foreground/20 h-full w-2 cursor-ew-resize touch-none rounded-r-sm pointer-coarse:w-11"
+                aria-label={`Resize ${row.name}`}
+              />
+            )}
           </div>
         )}
       </div>

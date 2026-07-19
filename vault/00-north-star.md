@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-07-17-1639
+last-updated: 2026-07-17-2044
 tags: [project/pulse, north-star]
 related:
   - "[[README]]"
@@ -51,11 +51,11 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
-- **Phase:** **Report Builder + Ask AI full-page + Polish & Fluidity shipped to prod** ([[2026-07-17-1441-promote-report-builder-sync-prod]]). Two `develop → main` promotions (`2c95d86` then `4235d96`), each Vercel-deployed + squash-heal'd; `/sync-prod` carried 3 migrations (`ai_conversations`, `my_work_rpc`, `reports`) + data + storage to prod, dev/prod **verified at parity**. Board PDF Report Builder ([[2026-07-17-0852-pdf-report-builder-ship]], polished + subitems fix [[2026-07-17-1119-report-builder-polish-subitems-fix]]) now live — **but its PDF export path is still unvalidated** (shipped on the owner's call; the public changelog copy deliberately avoids the PDF claim). Ask Pulse promoted to a full-page `/ask` surface, renamed **Ask AI** (user-visible "Pulse" → "Monolith" scrub). 3 public `/updates` changelog entries live. Prior prod state: cross-org sharing (`#64`), Keystone landing (`#63`), Phase 10 Batch 2 (`#62`), E1 (`#59`).
-- **Branch:** `develop` @ `0282058` == `origin/develop`, and **`main` @ `4235d96`** is in sync (squash divergence healed post-promotion). One scoping worktree still parked: `task/e5-agentic-semantic` (E5 spec written, **uncommitted**).
+- **Phase:** **Timeline upgrades + finish-task unblocked on `develop`** ([[2026-07-17-2044-timeline-upgrades-hook-test-fix]]). Four merges: Timeline **zoom levels** (Week/Month/Quarter/Year, px/day varies + fills the width, quarter header ticks) (`4179a71`, `6b756a7`); **sub-item nesting** (parent→children, collapsed by default; unscheduled parents shown as collapsible header rows so scheduled sub-items aren't stranded — the QCC empty-timeline bug) + **timestamp date sources** (Created/Updated at as read-only layout dates) (`a503fe7`); and a **Vitest shebang plugin** (`0316b43` → `41a1dd5`) that clears the `maybe-write-session.test.mjs` parse failure so `finish-task.sh` runs its full gate again (dogfooded — it self-merged). Also on `develop` from the prior session: report cover org-name fix + timestamp streaming (`6c0f460`). Prod baseline unchanged since the 2026-07-17 promotions (`4235d96`): Report Builder, Ask AI full-page, PF perf, Monolith rename; prior prod cross-org sharing (`#64`), Keystone landing (`#63`), Phase 10 Batch 2 (`#62`), E1 (`#59`).
+- **Branch:** `develop` @ `41a1dd5` == `origin/develop` (Timeline upgrades + datetime streaming + report-cover fix ahead of prod). **`main` @ `4235d96`**. All `task/*` worktrees merged + cleaned. E5 spec still lives only in the Mac checkout's `task/e5-agentic-semantic`, uncommitted.
 - **In flight:** none building.
-- **Next:** **validate the PDF export against the live prod deploy** (the one unproven path now in prod — else flip to the documented `window.print()` fallback), then clear the report follow-ups. Or pick a roadmap build — **E6** (Stripe billing; F16 blocked on your creds), **PF residual** (A4 skipped), or **E5** (fold its review risks in first). Ask AI full-page is now live.
-- **Owed:** **Report Builder follow-ups** — validate PDF-on-prod (or `window.print()` fallback); cover shows org **id** not name (display-name lookup); edit-gate `draftReportNarrativeAction` (a viewer can currently spend AI credits, can't save); v2 = charts + wide-board table continuation. **Wordmark mark** in prod — one-line revert in `brand.tsx` if busy. Perf tier-3 **Task A** (`unstable_instant`) needs its own spec ([[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]]). **E5 review risks** to fold into its plan: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (still owed from an earlier `/sync-prod`).
+- **Next:** **promote `develop → main`** (deferred to the owner) to carry the Timeline upgrades + timestamp streaming + report-cover fix to prod. Or a roadmap build — **Report Builder v2** (charts + wide-board table), **E5** (semantic search greenfield; fold review risks in first), or **E6** (Stripe billing; F16 blocked on your creds).
+- **Owed:** **Report Builder v2** = charts + wide-board table continuation. **Wordmark mark** in prod — one-line revert in `brand.tsx` if busy. **E5 review risks** to fold into its plan: ANN-then-RLS recall in `match_items`, defer the platform-bot `auth.users` seed / Autopilot, embedding-cost-for-BYO decision. **Rotate the prod DB password** (still owed from an earlier `/sync-prod`).
 
 ### Last session
 

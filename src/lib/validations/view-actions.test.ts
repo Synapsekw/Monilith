@@ -26,4 +26,31 @@ describe("timelineConfigSchema", () => {
     const parsed = timelineConfigSchema.safeParse({ color_column_id: "nope" });
     expect(parsed.success).toBe(false);
   });
+
+  it.each(["week", "month", "quarter", "year"])(
+    "accepts zoom level %s",
+    (zoom) => {
+      expect(timelineConfigSchema.safeParse({ zoom }).success).toBe(true);
+    },
+  );
+
+  it("rejects an unknown zoom level", () => {
+    expect(timelineConfigSchema.safeParse({ zoom: "decade" }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts the created/updated-at sentinels as start/end sources", () => {
+    const parsed = timelineConfigSchema.safeParse({
+      date_column_id: "__created_at__",
+      end_column_id: "__updated_at__",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("still rejects an arbitrary non-uuid, non-sentinel source", () => {
+    expect(
+      timelineConfigSchema.safeParse({ date_column_id: "nope" }).success,
+    ).toBe(false);
+  });
 });

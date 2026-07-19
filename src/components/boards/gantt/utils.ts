@@ -4,17 +4,52 @@ import { effectivePriority } from "@/lib/boards/priority";
 // Constants
 // ---------------------------------------------------------------------------
 
-export const DAY_W = 28; // px per day column
+export const DAY_W = 28; // px per day column (Week zoom / geometry default)
 export const LABEL_W = 200; // px for the left name rail
 export const ROW_H = 40; // px per row
 export const BAR_H = 24; // px bar height
 export const MILESTONE = 13; // px milestone diamond (pre-rotation); centered in its day column
+export const MIN_BAR_W = 6; // px floor so a bar stays visible/clickable at coarse zoom
 
-// Week → ~28 days, Month → ~90 days
-export const ZOOM_DAY_COUNT: Record<"week" | "month", number> = {
+export type TimelineZoom = "week" | "month" | "quarter" | "year";
+
+// Pixels per day column, per zoom level. Week keeps the original detailed
+// 28px/day; the coarser levels shrink the scale so a whole month / quarter /
+// year fits on screen instead of requiring endless horizontal scrolling. Row
+// geometry is day-offset × this value, so nothing downstream changes when it
+// varies — only this multiplier does.
+export const PX_PER_DAY: Record<TimelineZoom, number> = {
+  week: 28,
+  month: 10,
+  quarter: 4,
+  year: 1.5,
+};
+
+// Minimum grid width in days per zoom — the floor `timelineDayCount` extends to
+// fit the real data range. Keeps a sparse board from collapsing to a sliver and
+// gives each level a sensible default span (a month, a quarter, a year).
+export const ZOOM_DAY_COUNT: Record<TimelineZoom, number> = {
   week: 28,
   month: 90,
+  quarter: 180,
+  year: 365,
 };
+
+/**
+ * Pixels-per-day for the grid, stretched so a short date range fills the
+ * available track width instead of leaving dead space to the right. The zoom's
+ * base scale is a *floor*: when the range already overflows the track, the base
+ * wins and the grid scrolls; when it's shorter, px/day grows to fill exactly.
+ * Returns the base untouched before the track has been measured (trackWidth 0).
+ */
+export function fittedDayW(
+  baseDayW: number,
+  trackWidth: number,
+  dayCount: number,
+): number {
+  if (trackWidth <= 0 || dayCount <= 0) return baseDayW;
+  return Math.max(baseDayW, trackWidth / dayCount);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,6 +98,38 @@ export function buildMonthTicks(
     });
     ticks.push({ label, dayOffset });
     cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1));
+  }
+
+  return ticks;
+}
+
+/**
+ * Generate quarter tick labels ("Q1 '26") for the header. Used at Year zoom
+ * where monthly ticks would cram together — one tick per quarter boundary
+ * (Jan/Apr/Jul/Oct) instead of one per month. Same shape as buildMonthTicks.
+ */
+export function buildQuarterTicks(
+  rangeStartISO: string,
+  dayCount: number,
+): { label: string; dayOffset: number }[] {
+  const ticks: { label: string; dayOffset: number }[] = [];
+  const startMs = parseISO(rangeStartISO);
+  const endMs = startMs + dayCount * 86_400_000;
+
+  // First day of the quarter on/after range start.
+  const start = new Date(startMs);
+  const qMonth = Math.floor(start.getUTCMonth() / 3) * 3;
+  let cur = new Date(Date.UTC(start.getUTCFullYear(), qMonth, 1));
+  if (cur.getTime() < startMs) {
+    cur = new Date(Date.UTC(start.getUTCFullYear(), qMonth + 3, 1));
+  }
+
+  while (cur.getTime() < endMs) {
+    const dayOffset = Math.round((cur.getTime() - startMs) / 86_400_000);
+    const quarter = Math.floor(cur.getUTCMonth() / 3) + 1;
+    const yy = String(cur.getUTCFullYear()).slice(2);
+    ticks.push({ label: `Q${quarter} '${yy}`, dayOffset });
+    cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 3, 1));
   }
 
   return ticks;
