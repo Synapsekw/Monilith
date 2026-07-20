@@ -588,6 +588,7 @@ export function AutomationsDialog({
               groups={groups}
               initial={initialDraft}
               canWebhook={isAdmin}
+              boardId={boardId}
               onSubmit={(draft) => create.mutate(draft)}
               onCancel={() => {
                 setMode("list");

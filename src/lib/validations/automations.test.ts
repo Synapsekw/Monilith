@@ -242,3 +242,59 @@ describe("move_to_group action", () => {
     expect(r.success).toBe(false);
   });
 });
+
+describe("ai_step action", () => {
+  it("accepts an ai_step with a bounded allowed set", () => {
+    const r = automationActionSchema.safeParse({
+      type: "ai_step",
+      instruction: "Pick the right status",
+      allow: ["set_option"],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts an ai_step with the full reversible allow set", () => {
+    const r = automationActionSchema.safeParse({
+      type: "ai_step",
+      instruction: "Triage this item",
+      allow: ["set_option", "set_percent", "move_to_group", "notify"],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects an ai_step that allows call_webhook", () => {
+    const r = automationActionSchema.safeParse({
+      type: "ai_step",
+      instruction: "x post to a webhook",
+      allow: ["call_webhook"],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects an ai_step with an unknown allowed action", () => {
+    const r = automationActionSchema.safeParse({
+      type: "ai_step",
+      instruction: "delete the item",
+      allow: ["delete_item"],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects an ai_step with an empty allow set", () => {
+    const r = automationActionSchema.safeParse({
+      type: "ai_step",
+      instruction: "do something",
+      allow: [],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects an ai_step with a too-short instruction", () => {
+    const r = automationActionSchema.safeParse({
+      type: "ai_step",
+      instruction: "x",
+      allow: ["notify"],
+    });
+    expect(r.success).toBe(false);
+  });
+});

@@ -62,6 +62,9 @@ export function isActionComplete(a: AutomationAction): boolean {
   if (a.type === "set_percent") {
     return !!a.columnId && a.percent >= 0 && a.percent <= 100;
   }
+  if (a.type === "ai_step") {
+    return a.instruction.trim().length >= 3 && a.allow.length > 0;
+  }
   return false;
 }
 export function memberLabel(m: BuilderMember): string {

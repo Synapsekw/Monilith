@@ -1,7 +1,17 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { Sparkles, Loader2 } from "lucide-react";
 import type { CacheColumn } from "@/lib/boards/cache";
-import type { AutomationAction } from "@/lib/validations/automations";
+import {
+  AI_STEP_ALLOWED_ACTIONS,
+  type AutomationAction,
+  type AiStepAllowedAction,
+} from "@/lib/validations/automations";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { previewAiStep, type AiStepPreview } from "@/lib/ai/agentic/actions";
 import {
   columnOptions,
   memberLabel,
@@ -9,6 +19,182 @@ import {
   type BuilderGroup,
   type BuilderMember,
 } from "@/components/boards/automations/builder-utils";
+
+/** Human labels for the bounded, reversible actions an AI step may choose. */
+const AI_ALLOW_LABELS: Record<AiStepAllowedAction, string> = {
+  set_option: "Set a status",
+  set_percent: "Set percent",
+  move_to_group: "Move to group",
+  notify: "Notify",
+};
+
+/** One-line summary of the action the dry-run chose, for the preview panel. */
+function describeChosen(action: AutomationAction): string {
+  switch (action.type) {
+    case "set_option":
+      return "Set a status option";
+    case "set_percent":
+      return `Set percent to ${action.percent}%`;
+    case "move_to_group":
+      return "Move the item to a group";
+    case "notify":
+      return action.recipient.kind === "owner"
+        ? "Notify the item owner"
+        : "Notify a specific member";
+    default:
+      return action.type;
+  }
+}
+
+export function AiStepRow({
+  action,
+  boardId,
+  onChange,
+}: {
+  action: Extract<AutomationAction, { type: "ai_step" }>;
+  boardId?: string;
+  onChange: (next: AutomationAction) => void;
+}) {
+  const [preview, setPreview] = useState<AiStepPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [pending, startTest] = useTransition();
+
+  function toggleAllow(kind: AiStepAllowedAction) {
+    const has = action.allow.includes(kind);
+    const next = has
+      ? action.allow.filter((k) => k !== kind)
+      : [...action.allow, kind];
+    // Keep at least one allowed action (the schema requires min 1).
+    if (next.length === 0) return;
+    onChange({ ...action, allow: next });
+  }
+
+  const canTest =
+    !!boardId &&
+    action.instruction.trim().length >= 3 &&
+    action.allow.length > 0;
+
+  function runTest() {
+    if (!boardId) return;
+    setPreviewError(null);
+    setPreview(null);
+    startTest(async () => {
+      const res = await previewAiStep({
+        boardId,
+        instruction: action.instruction,
+        allow: action.allow,
+      });
+      if (res.ok) setPreview(res.data);
+      else setPreviewError(res.error);
+    });
+  }
+
+  return (
+    <div className="col-span-2 flex flex-col gap-3">
+      <label className="text-sm">
+        <span className="text-muted-foreground">AI instruction</span>
+        <Textarea
+          aria-label="AI instruction"
+          className="mt-1 min-h-16"
+          placeholder="e.g. Pick the most fitting status for this item"
+          value={action.instruction}
+          maxLength={500}
+          onChange={(e) => onChange({ ...action, instruction: e.target.value })}
+        />
+      </label>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-muted-foreground text-sm">The AI may only</span>
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-label="Allowed actions"
+        >
+          {AI_STEP_ALLOWED_ACTIONS.map((kind) => {
+            const active = action.allow.includes(kind);
+            return (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleAllow(kind)}
+                className={cn(
+                  "rounded-sm border px-2.5 py-0.5 text-xs font-medium transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground border-transparent"
+                    : "text-muted-foreground hover:border-border-hover hover:text-foreground",
+                )}
+              >
+                {AI_ALLOW_LABELS[kind]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {boardId ? (
+        <div className="flex flex-col gap-2">
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canTest || pending}
+              onClick={runTest}
+            >
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              Test this step
+            </Button>
+          </div>
+
+          {previewError ? (
+            <p role="alert" className="text-destructive text-xs">
+              {previewError}
+            </p>
+          ) : null}
+
+          {preview ? (
+            <div className="bg-surface-muted rounded-md border p-2.5 text-xs">
+              {preview.sampleItem ? (
+                <p className="text-muted-foreground mb-1">
+                  Tested against{" "}
+                  <span className="text-foreground font-medium">
+                    {preview.sampleItem.name}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  No items on this board yet to test against.
+                </p>
+              )}
+              {preview.action ? (
+                <p className="text-foreground font-medium">
+                  Would {describeChosen(preview.action).toLowerCase()} (not
+                  applied)
+                </p>
+              ) : preview.sampleItem ? (
+                <p className="text-muted-foreground">
+                  The AI chose to take no action.
+                </p>
+              ) : null}
+              {preview.warnings.length > 0 ? (
+                <ul className="text-muted-foreground mt-1 list-inside list-disc">
+                  {preview.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function NotifyRow({
   action,
