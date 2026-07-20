@@ -577,6 +577,169 @@ export type Database = {
           },
         ];
       };
+      board_agent_fires: {
+        Row: {
+          board_agent_id: string;
+          fire_date: string;
+          fire_hour: number;
+          fired_at: string;
+          org_id: string;
+        };
+        Insert: {
+          board_agent_id: string;
+          fire_date: string;
+          fire_hour?: number;
+          fired_at?: string;
+          org_id: string;
+        };
+        Update: {
+          board_agent_id?: string;
+          fire_date?: string;
+          fire_hour?: number;
+          fired_at?: string;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_agent_fires_board_agent_id_fkey";
+            columns: ["board_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "board_agents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_agent_fires_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      board_agent_runs: {
+        Row: {
+          actions: Json;
+          board_agent_id: string;
+          board_id: string;
+          created_at: string;
+          error: string | null;
+          fire_date: string;
+          fire_hour: number;
+          id: string;
+          input_tokens: number | null;
+          org_id: string;
+          output_tokens: number | null;
+          status: string;
+          warnings: Json;
+        };
+        Insert: {
+          actions?: Json;
+          board_agent_id: string;
+          board_id: string;
+          created_at?: string;
+          error?: string | null;
+          fire_date: string;
+          fire_hour?: number;
+          id?: string;
+          input_tokens?: number | null;
+          org_id: string;
+          output_tokens?: number | null;
+          status: string;
+          warnings?: Json;
+        };
+        Update: {
+          actions?: Json;
+          board_agent_id?: string;
+          board_id?: string;
+          created_at?: string;
+          error?: string | null;
+          fire_date?: string;
+          fire_hour?: number;
+          id?: string;
+          input_tokens?: number | null;
+          org_id?: string;
+          output_tokens?: number | null;
+          status?: string;
+          warnings?: Json;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_agent_runs_board_agent_id_fkey";
+            columns: ["board_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "board_agents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_agent_runs_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_agent_runs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      board_agents: {
+        Row: {
+          board_id: string;
+          cadence: string;
+          config: Json;
+          created_at: string;
+          created_by: string | null;
+          enabled: boolean;
+          id: string;
+          org_id: string;
+          run_at_local_hour: number;
+          updated_at: string;
+        };
+        Insert: {
+          board_id: string;
+          cadence?: string;
+          config?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          id?: string;
+          org_id: string;
+          run_at_local_hour?: number;
+          updated_at?: string;
+        };
+        Update: {
+          board_id?: string;
+          cadence?: string;
+          config?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          enabled?: boolean;
+          id?: string;
+          org_id?: string;
+          run_at_local_hour?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_agents_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: true;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_agents_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_members: {
         Row: {
           access_level: Database["public"]["Enums"]["board_access"];
@@ -2095,6 +2258,7 @@ export type Database = {
           email_digest_opt_out: boolean;
           full_name: string | null;
           id: string;
+          is_agent: boolean;
           timezone: string | null;
           updated_at: string;
         };
@@ -2105,6 +2269,7 @@ export type Database = {
           email_digest_opt_out?: boolean;
           full_name?: string | null;
           id: string;
+          is_agent?: boolean;
           timezone?: string | null;
           updated_at?: string;
         };
@@ -2115,6 +2280,7 @@ export type Database = {
           email_digest_opt_out?: boolean;
           full_name?: string | null;
           id?: string;
+          is_agent?: boolean;
           timezone?: string | null;
           updated_at?: string;
         };
@@ -2473,6 +2639,7 @@ export type Database = {
       };
       _automation_runs_prune: { Args: never; Returns: undefined };
       _automation_webhook_reconcile: { Args: never; Returns: undefined };
+      _autopilot_sweep: { Args: { p_now?: string }; Returns: undefined };
       _board_health_counts: {
         Args: { p_board_id: string; p_since: string };
         Returns: {
@@ -2576,6 +2743,10 @@ export type Database = {
       automation_ai_apply: {
         Args: { p_action: Json; p_job: string };
         Returns: undefined;
+      };
+      board_agent_apply: {
+        Args: { p_action: Json; p_agent: string; p_item: string };
+        Returns: string;
       };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
@@ -3062,6 +3233,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      platform_agent_user_id: { Args: never; Returns: string };
       platform_search_users: {
         Args: { p_limit?: number; p_offset?: number; p_query?: string };
         Returns: {

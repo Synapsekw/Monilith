@@ -7,6 +7,7 @@ import {
   type AiStepAllowedAction,
 } from "@/lib/validations/automations";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
+import type { AutomationContext } from "@/lib/ai/automation-context";
 import type { AgenticContext } from "./context";
 
 /** Hard cap on tool-use rounds — bounds worst-case token spend + latency
@@ -108,16 +109,22 @@ function systemPrompt(context: AgenticContext, instruction: string): string {
   ].join("\n");
 }
 
-type Candidate = { action: AutomationAction } | { error: string };
+export type Candidate = { action: AutomationAction } | { error: string };
 
 /**
  * Referentially re-validate the model's chosen tool call against the context and
  * the `allow` set. This is the guardrail (spec §4.1 #2/#3): the model only
  * *chooses*; a choice with a foreign column/option/group/member id, or a type
  * outside `allow`, is dropped here and never reaches the confined executor.
+ *
+ * Exported so the F14 Autopilot loop (`autopilot.ts`) reuses the SAME confinement
+ * validator — a chosen action with a foreign column/group/member id, or a type
+ * outside the agent's `allow` set, is dropped there too (spec §4.3, DRY guardrail).
  */
-function validateChoice(
-  context: AgenticContext,
+export function validateChoice(
+  // Only the columns/groups/members vocabulary is read here, so the base
+  // AutomationContext is enough — the F14 loop passes its own multi-item context.
+  context: AutomationContext,
   allow: readonly AiStepAllowedAction[],
   name: string,
   input: Record<string, unknown>,
