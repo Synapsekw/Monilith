@@ -31,12 +31,13 @@ const serverEnvSchema = z.object({
     .string()
     .min(1, "OPENAI_EMBEDDING_API_KEY must be non-empty when set")
     .optional(),
-  // Optional feature (E5 · F13/F14 agentic automations): the shared secret that
-  // signs the `pg_net → service endpoint` hop. The DB reads the same value from
-  // Vault (`ai_pgnet_hmac_secret`), HMAC-signs the `{job_id}` body, and the
-  // route handler re-verifies with this env var (verifyBody). Absent → the
-  // agentic endpoints 503 (no verification key); the app still boots and CI
-  // stays green. Shared by /api/ai/automation-step and /api/ai/autopilot (B2).
+  // Optional feature (E5 agentic + semantic): the single shared secret that signs
+  // every in-DB `pg_net → service endpoint` hop. The DB reads the same value from
+  // Vault (`ai_pgnet_hmac_secret`) and HMAC-signs the body; each route handler
+  // re-verifies with this env var (verifyBody). Shared by /api/ai/automation-step
+  // + /api/ai/autopilot (F13/F14) and /api/ai/embed (F15 sweep + backfill). Absent
+  // → those endpoints 503 (no verification key); the app still boots and CI stays
+  // green.
   AI_PGNET_HMAC_SECRET: z
     .string()
     .min(32, "AI_PGNET_HMAC_SECRET must be at least 32 chars when set")
