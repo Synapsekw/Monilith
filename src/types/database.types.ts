@@ -293,6 +293,74 @@ export type Database = {
         };
         Relationships: [];
       };
+      automation_ai_jobs: {
+        Row: {
+          automation_id: string;
+          board_id: string;
+          config: Json;
+          created_at: string;
+          error: string | null;
+          id: string;
+          item_id: string | null;
+          org_id: string;
+          resolved_at: string | null;
+          status: string;
+        };
+        Insert: {
+          automation_id: string;
+          board_id: string;
+          config?: Json;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          item_id?: string | null;
+          org_id: string;
+          resolved_at?: string | null;
+          status?: string;
+        };
+        Update: {
+          automation_id?: string;
+          board_id?: string;
+          config?: Json;
+          created_at?: string;
+          error?: string | null;
+          id?: string;
+          item_id?: string | null;
+          org_id?: string;
+          resolved_at?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "automation_ai_jobs_automation_id_fkey";
+            columns: ["automation_id"];
+            isOneToOne: false;
+            referencedRelation: "automations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_ai_jobs_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_ai_jobs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "automation_ai_jobs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       automation_date_fires: {
         Row: {
           automation_id: string;
@@ -1312,6 +1380,58 @@ export type Database = {
           },
         ];
       };
+      item_embeddings: {
+        Row: {
+          board_id: string;
+          content_hash: string;
+          embedded_at: string;
+          embedding: string;
+          item_id: string;
+          model: string;
+          org_id: string;
+        };
+        Insert: {
+          board_id: string;
+          content_hash: string;
+          embedded_at?: string;
+          embedding: string;
+          item_id: string;
+          model: string;
+          org_id: string;
+        };
+        Update: {
+          board_id?: string;
+          content_hash?: string;
+          embedded_at?: string;
+          embedding?: string;
+          item_id?: string;
+          model?: string;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_embeddings_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embeddings_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: true;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embeddings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       item_updates: {
         Row: {
           author_id: string;
@@ -2285,6 +2405,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      _automation_ai_reconcile: { Args: never; Returns: undefined };
       _automation_condition_predicate: {
         Args: { p_col: string; p_item_id: string; p_op: string; p_val: string };
         Returns: string;
@@ -2850,6 +2971,21 @@ export type Database = {
       item_in_org: {
         Args: { p_item_id: string; p_org_id: string };
         Returns: boolean;
+      };
+      match_items: {
+        Args: {
+          p_board_id?: string;
+          p_exclude_item_id?: string;
+          p_limit?: number;
+          p_query_embedding: string;
+        };
+        Returns: {
+          board_id: string;
+          board_name: string;
+          distance: number;
+          item_id: string;
+          name: string;
+        }[];
       };
       my_pending_invitations: {
         Args: never;
