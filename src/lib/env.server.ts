@@ -22,6 +22,15 @@ const serverEnvSchema = z.object({
     .string()
     .min(1, "ANTHROPIC_API_KEY must be non-empty when set")
     .optional(),
+  // Optional feature (E5 · F15 semantic search): the FIXED platform embedding
+  // key. Semantic search needs one model for the whole corpus, so embeddings do
+  // NOT use org/user BYO keys — they use this platform key, independent of any
+  // org's ai_mode. Absent → the embedding client throws AiNotConfiguredError on
+  // use (semantic surfaces degrade); the app still boots and CI stays green.
+  OPENAI_EMBEDDING_API_KEY: z
+    .string()
+    .min(1, "OPENAI_EMBEDDING_API_KEY must be non-empty when set")
+    .optional(),
   // Optional feature (weekly health digest): all absent → the digest
   // self-disables (route 503s; no email). CI/boot stays green without them.
   DIGEST_SECRET: z
@@ -61,6 +70,7 @@ export function getServerEnv(): ServerEnv {
   const parsed = serverEnvSchema.safeParse({
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    OPENAI_EMBEDDING_API_KEY: process.env.OPENAI_EMBEDDING_API_KEY,
     DIGEST_SECRET: process.env.DIGEST_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     APP_BASE_URL: process.env.APP_BASE_URL,

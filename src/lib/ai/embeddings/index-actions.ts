@@ -1,0 +1,62 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
+import { runEmbedding } from "@/lib/ai/gateway";
+import type { Database } from "@/types/database.types";
+import type { EmbeddingClient } from "./client";
+
+/** The two metered embedding features (spec §5). */
+export type EmbeddingFeature = "semantic_index" | "semantic_query";
+
+/**
+ * A row ready to upsert into public.item_embeddings. `embedding` is the pgvector
+ * text literal (e.g. "[0.1,0.2,…]") — see toVectorLiteral.
+ */
+export type ItemEmbeddingUpsert =
+  Database["public"]["Tables"]["item_embeddings"]["Insert"];
+
+/**
+ * Serialize a numeric vector to pgvector's text input form. PostgREST passes RPC
+ * args / row values as JSON, and pgvector accepts a text literal it casts to
+ * `vector` — so both match_items(p_query_embedding) and item_embeddings inserts
+ * take this string form.
+ */
+export function toVectorLiteral(vector: number[]): string {
+  return `[${vector.join(",")}]`;
+}
+
+/**
+ * Meter one embedding call through the gateway (input-only) and return the raw
+ * vectors + model. Wraps runEmbedding so entitlement gating + ai_usage metering
+ * are never bypassed; the fixed platform key lives inside the EmbeddingClient.
+ */
+export async function embedTexts(
+  args: { orgId: string; userId: string; feature: EmbeddingFeature },
+  client: EmbeddingClient,
+  texts: string[],
+): Promise<{ vectors: number[][]; model: string }> {
+  return runEmbedding(args, async () => {
+    const { vectors, inputTokens, model } = await client.embed(texts);
+    return {
+      result: { vectors, model },
+      usage: { inputTokens, outputTokens: 0 },
+      model,
+    };
+  });
+}
+
+/**
+ * Batch upsert embeddings (keyed by item_id). Writes with the service role — the
+ * table is default-deny for clients (writes only through the service embed
+ * endpoint). No-op on an empty batch.
+ */
+export async function upsertItemEmbeddings(
+  rows: ItemEmbeddingUpsert[],
+  svc: SupabaseClient<Database> = createServiceClient(),
+): Promise<void> {
+  if (rows.length === 0) return;
+  const { error } = await svc
+    .from("item_embeddings")
+    .upsert(rows, { onConflict: "item_id" });
+  if (error) throw error;
+}

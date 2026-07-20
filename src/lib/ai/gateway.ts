@@ -7,6 +7,7 @@ import {
   ByoKeyMissingError,
 } from "@/lib/ai/errors";
 import { resolveUserAdapter } from "@/lib/ai/credentials";
+import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { getAdapter } from "@/lib/ai/providers/registry";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
@@ -100,6 +101,50 @@ export async function runAi<T>(
   });
   if (error)
     console.error("[ai] record_ai_usage failed:", {
+      org: args.orgId,
+      feature: args.feature,
+      model,
+      credits,
+      cause: error.message,
+    });
+  return result;
+}
+
+/**
+ * Embedding sibling of runAi (E5 · F15). Semantic search needs one FIXED model
+ * for the whole corpus, so embeddings use a platform key (NOT the org's adapter)
+ * — resolveAiAdapter is bypassed. The org's ai_mode still gates via
+ * requireAiEntitlement (`off` ⇒ no indexing; `managed` at-quota ⇒ blocked, so
+ * embedding + query spend counts against the monthly ceiling), and the
+ * input-only call is metered into ai_usage exactly like a chat call, with
+ * output_tokens = 0 (computeCostUsd handles the zero-rate arithmetic). Provider
+ * is fixed to "openai" (the platform embedding provider).
+ *
+ * A ledger-write failure is logged, never surfaced — telemetry loss must not
+ * break the pipeline (parity with runAi).
+ */
+export async function runEmbedding<T>(
+  args: { orgId: string; userId: string; feature: string },
+  fn: () => Promise<{ result: T; usage: AiUsageTokens; model: string }>,
+): Promise<T> {
+  await requireAiEntitlement(args.orgId, args.feature);
+  const { result, usage, model } = await fn();
+  const costUsd = computeCostUsd(model, usage);
+  const credits = costToCredits(costUsd);
+  const svc = createServiceClient();
+  const { error } = await svc.rpc("record_ai_usage", {
+    p_org: args.orgId,
+    p_user: args.userId,
+    p_feature: args.feature,
+    p_provider: "openai",
+    p_model: model,
+    p_input_tokens: usage.inputTokens,
+    p_output_tokens: usage.outputTokens,
+    p_cost_usd: costUsd,
+    p_credits: credits,
+  });
+  if (error)
+    console.error("[ai] record_ai_usage failed (embedding):", {
       org: args.orgId,
       feature: args.feature,
       model,
