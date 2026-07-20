@@ -41,6 +41,17 @@ const ItemAssistPanel = dynamic(
   { ssr: false },
 );
 
+// Lazy like the assist panel — the "find similar" section (and its action/SDK
+// imports) load only when the fields tab is first opened, so opening the panel
+// or switching tabs stays 0 extra bundle/round-trip (gotcha-09).
+const FindSimilar = dynamic(
+  () =>
+    import("@/components/boards/item-panel/FindSimilar").then(
+      (m) => m.FindSimilar,
+    ),
+  { ssr: false },
+);
+
 type Tab = "fields" | "updates" | "activity" | "files";
 
 export function ItemPanel({
@@ -171,6 +182,7 @@ export function ItemPanel({
                     columns={columns}
                   />
                 )}
+                {itemId && <FindSimilar itemId={itemId} />}
                 <dl className="space-y-2 border-t pt-4">
                   <div className="flex items-center justify-between gap-4">
                     <dt className="text-muted-foreground text-sm">
