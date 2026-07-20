@@ -9,14 +9,12 @@ import type {
 } from "./autopilot-config";
 
 /**
- * Migration-gate seam for the F14 `board_agents` family. This task's migration
- * (`<stamp>_board_agents.sql`) adds `board_agents`, `board_agent_runs`, the
- * `board_agent_apply` confined applier, and `platform_agent_user_id()` — but the
- * regenerated `database.types.ts` only lands AFTER the USER applies the migration
- * to DEV. Until then these tables/RPCs are not in the typed client union, so every
- * access to them is narrowed HERE (and only here) — the one documented cast, kept
- * out of the endpoint/action code so those stay readable. Client-safe config
- * (schemas, cadences, task vocabulary) lives in `autopilot-config.ts`.
+ * Access seam for the F14 `board_agents` family (`board_agents`,
+ * `board_agent_runs`, `board_agent_fires`, the `board_agent_apply` confined
+ * applier, `platform_agent_user_id()`). Every access is narrowed HERE (and only
+ * here) behind small typed helpers so the endpoint/action code stays readable and
+ * the domain row/insert shapes live in one place. Client-safe config (schemas,
+ * cadences, task vocabulary) lives in `autopilot-config.ts`.
  */
 
 export type BoardAgentRow = {
