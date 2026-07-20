@@ -4,6 +4,7 @@ const listMyBoards = vi.fn();
 const listSharedBoards = vi.fn();
 const getBoardPayload = vi.fn();
 const buildBoardSnapshot = vi.fn();
+const semanticSearchItems = vi.fn();
 
 vi.mock("@/lib/boards/queries", () => ({
   listMyBoards: (...args: unknown[]) => listMyBoards(...args),
@@ -15,6 +16,10 @@ vi.mock("@/lib/ai/board-snapshot", () => ({
   buildBoardSnapshot: (...args: unknown[]) => buildBoardSnapshot(...args),
 }));
 
+vi.mock("@/lib/ai/embeddings/search", () => ({
+  semanticSearchItems: (...args: unknown[]) => semanticSearchItems(...args),
+}));
+
 import { executeAskTool, ASK_TOOLS, QUERY_ITEMS_MAX } from "@/lib/ai/ask/tools";
 
 const ctx = { workspaceId: "ws-1" };
@@ -24,13 +29,47 @@ beforeEach(() => {
 });
 
 describe("ASK_TOOLS", () => {
-  it("declares the three read tools with strict object schemas", () => {
+  it("declares the read tools with strict object schemas", () => {
     const names = ASK_TOOLS.map((t) => t.name);
-    expect(names).toEqual(["list_boards", "get_board_overview", "query_items"]);
+    expect(names).toEqual([
+      "list_boards",
+      "get_board_overview",
+      "query_items",
+      "semantic_search_items",
+    ]);
     for (const tool of ASK_TOOLS) {
       expect(tool.input_schema.type).toBe("object");
       expect(tool.input_schema.additionalProperties).toBe(false);
     }
+  });
+});
+
+describe("executeAskTool: semantic_search_items", () => {
+  it("dispatches to semanticSearchItems and returns the mapped hits as JSON", async () => {
+    semanticSearchItems.mockResolvedValue([
+      { id: "i1", name: "New-hire checklist", boardId: "b1", boardName: "HR" },
+    ]);
+
+    const result = await executeAskTool(
+      "semantic_search_items",
+      { query: "onboarding" },
+      ctx,
+    );
+
+    expect(semanticSearchItems).toHaveBeenCalledWith("onboarding");
+    expect(JSON.parse(result.content)).toEqual([
+      { id: "i1", name: "New-hire checklist", boardId: "b1", boardName: "HR" },
+    ]);
+  });
+
+  it("returns invalid tool input (without dispatching) for a too-short query", async () => {
+    const result = await executeAskTool(
+      "semantic_search_items",
+      { query: "a" },
+      ctx,
+    );
+    expect(JSON.parse(result.content)).toEqual({ error: "invalid tool input" });
+    expect(semanticSearchItems).not.toHaveBeenCalled();
   });
 });
 

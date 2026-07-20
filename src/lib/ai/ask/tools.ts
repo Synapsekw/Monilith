@@ -7,6 +7,7 @@ import {
   listSharedBoards,
 } from "@/lib/boards/queries";
 import { buildBoardSnapshot } from "@/lib/ai/board-snapshot";
+import { semanticSearchItems } from "@/lib/ai/embeddings/search";
 
 /** Hard cap on rows `query_items` may return, regardless of requested limit —
  *  keeps tool output (and downstream model context) bounded. */
@@ -19,6 +20,10 @@ const getBoardOverviewSchema = z.object({
 const queryItemsSchema = z.object({
   board_id: z.string().uuid(),
   limit: z.number().int().positive().optional(),
+});
+
+const semanticSearchSchema = z.object({
+  query: z.string().trim().min(2).max(100),
 });
 
 /** Read-only tool declarations for the Ask Pulse Anthropic tool-use loop.
@@ -63,6 +68,22 @@ export const ASK_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["board_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "semantic_search_items",
+    description:
+      "Find items by MEANING, not keywords: given a natural-language query, returns up to 20 items ranked by semantic (conceptual) similarity across every board the user can read. Prefer this over query_items when the user asks about a topic, theme, or intent (e.g. 'anything about onboarding') rather than an exact item name or a specific board. Returns id, name, boardId, boardName per hit.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Natural-language query (2–100 characters).",
+        },
+      },
+      required: ["query"],
       additionalProperties: false,
     },
   },
@@ -145,6 +166,17 @@ async function runQueryItems(
   return { content: JSON.stringify(rows), boardId: parsed.data.board_id };
 }
 
+/** Meaning-based item retrieval. Delegates to `semanticSearchItems`, which
+ *  resolves the caller server-side, meters one embed call (feature
+ *  `semantic_query`), and ranks via the RLS-scoped `match_items` RPC — so, like
+ *  every other Ask tool, cross-org access is impossible and it never throws. */
+async function runSemanticSearch(input: unknown): Promise<{ content: string }> {
+  const parsed = semanticSearchSchema.safeParse(input);
+  if (!parsed.success) return errorResult("invalid tool input");
+  const results = await semanticSearchItems(parsed.data.query);
+  return { content: JSON.stringify(results) };
+}
+
 /** Dispatch + execute an Ask Pulse tool call. Never throws — invalid input, an
  *  unknown tool name, or an underlying error (e.g. a DB failure inside
  *  `getBoardPayload`/`listMyBoards`/`listSharedBoards`) all resolve to an
@@ -163,6 +195,8 @@ export async function executeAskTool(
         return await runGetBoardOverview(input);
       case "query_items":
         return await runQueryItems(input);
+      case "semantic_search_items":
+        return await runSemanticSearch(input);
       default:
         return errorResult("unknown tool");
     }
