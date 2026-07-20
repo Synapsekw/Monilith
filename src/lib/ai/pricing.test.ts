@@ -17,6 +17,22 @@ describe("pricing", () => {
     ).toBeCloseTo(0.0225, 6);
   });
 
+  it("prices the embedding model input-only ($0.02/MTok, output ignored)", () => {
+    expect(
+      computeCostUsd("text-embedding-3-small", {
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+      }),
+    ).toBeCloseTo(0.02, 6);
+    // output tokens carry a 0 rate — they never add cost even if present.
+    expect(
+      computeCostUsd("text-embedding-3-small", {
+        inputTokens: 500_000,
+        outputTokens: 999,
+      }),
+    ).toBeCloseTo(0.01, 6);
+  });
+
   it("returns 0 for an unknown model (tokens still recorded upstream)", () => {
     expect(
       computeCostUsd("some-future-model", {
