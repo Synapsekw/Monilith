@@ -17,17 +17,8 @@ const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PASSWORD = "Test-Password-123!";
 
-// item_embeddings + match_items are not yet in the generated Database types
-// (migration applied centrally, then `pnpm db:types`). Type the vector rows/RPC
-// locally and reach the table via an untyped client view until types regenerate.
-type MatchRow = {
-  item_id: string;
-  name: string;
-  board_id: string;
-  board_name: string;
-  distance: number;
-};
-const untyped = (c: SupabaseClient<Database>) => c as unknown as SupabaseClient;
+type MatchRow =
+  Database["public"]["Functions"]["match_items"]["Returns"][number];
 
 // A deterministic unit vector of the model dimension — value is irrelevant to
 // the RLS assertions (we only care WHICH rows are visible, not their ranking).
@@ -122,24 +113,19 @@ describe.skipIf(!integrationTargetReady())(
       itemAId = (item as { id: string }).id;
 
       // Insert org-A's embedding via the service role (clients cannot write it).
-      const { error: embErr } = await untyped(admin)
-        .from("item_embeddings")
-        .insert({
-          item_id: itemAId,
-          org_id: a.orgId,
-          board_id: boardAId,
-          embedding: VECTOR,
-          content_hash: `hash-${tag}`,
-          model: EMBEDDING_MODEL,
-        });
+      const { error: embErr } = await admin.from("item_embeddings").insert({
+        item_id: itemAId,
+        org_id: a.orgId,
+        board_id: boardAId,
+        embedding: VECTOR,
+        content_hash: `hash-${tag}`,
+        model: EMBEDDING_MODEL,
+      });
       expect(embErr, "seed item_embedding").toBeNull();
     });
 
     afterAll(async () => {
-      await untyped(admin)
-        .from("item_embeddings")
-        .delete()
-        .eq("item_id", itemAId);
+      await admin.from("item_embeddings").delete().eq("item_id", itemAId);
       await admin.from("items").delete().ilike("name", `%${tag}%`);
       for (const id of createdOrgIds) {
         await admin.from("organizations").delete().eq("id", id);
@@ -150,18 +136,16 @@ describe.skipIf(!integrationTargetReady())(
     });
 
     it("org A can read its own embedding row", async () => {
-      const { data, error } = await untyped(userA)
+      const { data, error } = await userA
         .from("item_embeddings")
         .select("item_id")
         .eq("item_id", itemAId);
       expect(error).toBeNull();
-      expect((data as { item_id: string }[]).map((r) => r.item_id)).toContain(
-        itemAId,
-      );
+      expect((data ?? []).map((r) => r.item_id)).toContain(itemAId);
     });
 
     it("org B sees NONE of org A's embedding rows (RLS default-deny)", async () => {
-      const { data, error } = await untyped(userB)
+      const { data, error } = await userB
         .from("item_embeddings")
         .select("item_id")
         .eq("item_id", itemAId);
@@ -170,22 +154,23 @@ describe.skipIf(!integrationTargetReady())(
     });
 
     it("match_items returns org A's item to org A (SECURITY INVOKER over its own RLS)", async () => {
-      const { data, error } = await untyped(userA).rpc("match_items", {
+      const { data, error } = await userA.rpc("match_items", {
         p_query_embedding: VECTOR,
         p_limit: 20,
       });
       expect(error).toBeNull();
-      expect((data as MatchRow[]).map((r) => r.item_id)).toContain(itemAId);
+      const rows: MatchRow[] = data ?? [];
+      expect(rows.map((r) => r.item_id)).toContain(itemAId);
     });
 
     it("match_items returns NONE of org A's items to org B (no cross-tenant leak)", async () => {
-      const { data, error } = await untyped(userB).rpc("match_items", {
+      const { data, error } = await userB.rpc("match_items", {
         p_query_embedding: VECTOR,
         p_limit: 20,
       });
       expect(error).toBeNull();
-      const leaked = (data as MatchRow[]).filter((r) => r.item_id === itemAId);
-      expect(leaked).toEqual([]);
+      const rows: MatchRow[] = data ?? [];
+      expect(rows.filter((r) => r.item_id === itemAId)).toEqual([]);
     });
   },
 );
