@@ -31,6 +31,16 @@ const serverEnvSchema = z.object({
     .string()
     .min(1, "OPENAI_EMBEDDING_API_KEY must be non-empty when set")
     .optional(),
+  // Optional feature (E5 · F13/F14 agentic automations): the shared secret that
+  // signs the `pg_net → service endpoint` hop. The DB reads the same value from
+  // Vault (`ai_pgnet_hmac_secret`), HMAC-signs the `{job_id}` body, and the
+  // route handler re-verifies with this env var (verifyBody). Absent → the
+  // agentic endpoints 503 (no verification key); the app still boots and CI
+  // stays green. Shared by /api/ai/automation-step and /api/ai/autopilot (B2).
+  AI_PGNET_HMAC_SECRET: z
+    .string()
+    .min(32, "AI_PGNET_HMAC_SECRET must be at least 32 chars when set")
+    .optional(),
   // Optional feature (weekly health digest): all absent → the digest
   // self-disables (route 503s; no email). CI/boot stays green without them.
   DIGEST_SECRET: z
@@ -71,6 +81,7 @@ export function getServerEnv(): ServerEnv {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     OPENAI_EMBEDDING_API_KEY: process.env.OPENAI_EMBEDDING_API_KEY,
+    AI_PGNET_HMAC_SECRET: process.env.AI_PGNET_HMAC_SECRET,
     DIGEST_SECRET: process.env.DIGEST_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     APP_BASE_URL: process.env.APP_BASE_URL,

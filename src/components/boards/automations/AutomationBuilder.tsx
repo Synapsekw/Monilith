@@ -32,6 +32,7 @@ import {
   type TriggerType,
 } from "@/components/boards/automations/builder-utils";
 import {
+  AiStepRow,
   MoveToGroupRow,
   NotifyRow,
   SetOptionRow,
@@ -51,6 +52,7 @@ export function AutomationBuilder({
   groups = [],
   initial,
   canWebhook = false,
+  boardId,
   onSubmit,
   onCancel,
 }: {
@@ -59,6 +61,8 @@ export function AutomationBuilder({
   groups?: BuilderGroup[];
   initial?: Draft;
   canWebhook?: boolean;
+  /** Enables the AI-step "Test this step" dry-run (needs a board to sample). */
+  boardId?: string;
   onSubmit: (draft: Draft) => void;
   onCancel: () => void;
 }) {
@@ -217,6 +221,17 @@ export function AutomationBuilder({
         type: "set_percent",
         columnId: percentColumns[0]?.id ?? "",
         percent: 100,
+      },
+    ]);
+  }
+  function addAiStep() {
+    setActions((prev) => [
+      ...prev,
+      {
+        _id: nextId(),
+        type: "ai_step",
+        instruction: "",
+        allow: ["set_option"],
       },
     ]);
   }
@@ -530,6 +545,12 @@ export function AutomationBuilder({
                     percentColumns={percentColumns}
                     onChange={(next) => updateAction(action._id, next)}
                   />
+                ) : action.type === "ai_step" ? (
+                  <AiStepRow
+                    action={action}
+                    boardId={boardId}
+                    onChange={(next) => updateAction(action._id, next)}
+                  />
                 ) : null}
               </div>
               <Button
@@ -564,6 +585,9 @@ export function AutomationBuilder({
             onClick={addMoveToGroup}
           >
             <Plus className="size-3.5" /> Move to group
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={addAiStep}>
+            <Plus className="size-3.5" /> AI step
           </Button>
           {percentColumns.length > 0 ? (
             <Button

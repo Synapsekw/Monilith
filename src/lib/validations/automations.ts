@@ -32,7 +32,31 @@ const notifyRecipientSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("member"), userId: z.string().uuid() }),
 ]);
 
+/**
+ * The bounded, REVERSIBLE action vocabulary an `ai_step` may choose from (E5 ·
+ * F13 guardrail #2). Deliberately a subset of the manual action union — it
+ * EXCLUDES `call_webhook` (irreversible egress) and any destructive shape, so
+ * the AI can never invent an action outside this box. The rule author caps it
+ * further via `allow` (a non-empty subset of these).
+ */
+export const AI_STEP_ALLOWED_ACTIONS = [
+  "set_option",
+  "set_percent",
+  "move_to_group",
+  "notify",
+] as const;
+export type AiStepAllowedAction = (typeof AI_STEP_ALLOWED_ACTIONS)[number];
+
 export const automationActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("ai_step"),
+    // Bounded free text — flows verbatim into the model prompt at fire time, so
+    // an unbounded string is a token/cost-abuse vector.
+    instruction: z.string().trim().min(3).max(500),
+    // At least one allowed action; each MUST be in the reversible vocabulary.
+    // A `call_webhook`/unknown entry fails here (asserted in the schema test).
+    allow: z.array(z.enum(AI_STEP_ALLOWED_ACTIONS)).min(1),
+  }),
   z.object({ type: z.literal("notify"), recipient: notifyRecipientSchema }),
   z.object({
     type: z.literal("set_option"),
