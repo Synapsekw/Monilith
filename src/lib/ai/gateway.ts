@@ -124,7 +124,10 @@ export async function runAi<T>(
  * break the pipeline (parity with runAi).
  */
 export async function runEmbedding<T>(
-  args: { orgId: string; userId: string; feature: string },
+  // userId is nullable: the F15 sweep/backfill runs from cron with no user
+  // session, so system-attributed embedding usage logs user_id = null
+  // (ai_usage.user_id is nullable). The interactive query path passes a real id.
+  args: { orgId: string; userId: string | null; feature: string },
   fn: () => Promise<{ result: T; usage: AiUsageTokens; model: string }>,
 ): Promise<T> {
   await requireAiEntitlement(args.orgId, args.feature);
@@ -134,7 +137,9 @@ export async function runEmbedding<T>(
   const svc = createServiceClient();
   const { error } = await svc.rpc("record_ai_usage", {
     p_org: args.orgId,
-    p_user: args.userId,
+    // p_user is `string` in generated types but the column is nullable; a system
+    // (cron) embedding legitimately has no user, so null is the honest value.
+    p_user: args.userId as unknown as string,
     p_feature: args.feature,
     p_provider: "openai",
     p_model: model,
