@@ -1380,6 +1380,49 @@ export type Database = {
           },
         ];
       };
+      item_embed_queue: {
+        Row: {
+          board_id: string;
+          enqueued_at: string;
+          item_id: string;
+          org_id: string;
+        };
+        Insert: {
+          board_id: string;
+          enqueued_at?: string;
+          item_id: string;
+          org_id: string;
+        };
+        Update: {
+          board_id?: string;
+          enqueued_at?: string;
+          item_id?: string;
+          org_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_embed_queue_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embed_queue_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: true;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_embed_queue_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       item_embeddings: {
         Row: {
           board_id: string;
@@ -2455,6 +2498,7 @@ export type Database = {
         Args: { p_col: string; p_op: string; p_val: string };
         Returns: string;
       };
+      _embed_sweep_ping: { Args: never; Returns: undefined };
       _health_digest_ping: { Args: never; Returns: undefined };
       _org_health_digest: {
         Args: { p_org_id: string; p_since: string };
@@ -2529,6 +2573,10 @@ export type Database = {
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };
       auth_user_orgs: { Args: never; Returns: string[] };
+      automation_ai_apply: {
+        Args: { p_action: Json; p_job: string };
+        Returns: undefined;
+      };
       board_in_org: {
         Args: { p_board_id: string; p_org_id: string };
         Returns: boolean;
