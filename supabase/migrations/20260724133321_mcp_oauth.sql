@@ -97,5 +97,7 @@ create trigger oauth_tokens_before_delete
 
 revoke all on function public.oauth_bridge_rotate_secret(uuid, text, text) from public, anon, authenticated;
 revoke all on function public.oauth_bridge_get_secret(uuid) from public, anon, authenticated;
+revoke all on function public.oauth_tokens_vault_cleanup() from public, anon, authenticated;
 grant execute on function public.oauth_bridge_rotate_secret(uuid, text, text) to service_role;
 grant execute on function public.oauth_bridge_get_secret(uuid) to service_role;
+grant execute on function public.oauth_tokens_vault_cleanup() to service_role;
