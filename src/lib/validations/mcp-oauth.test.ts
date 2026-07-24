@@ -103,6 +103,17 @@ describe("tokenExchangeSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("rejects redirect_uri with javascript: scheme in authorization_code grant", () => {
+    const result = tokenExchangeSchema.safeParse({
+      grant_type: "authorization_code",
+      code: "abc",
+      client_id: "def",
+      code_verifier: "x".repeat(43),
+      redirect_uri: "javascript:alert('xss')",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("accepts a refresh_token grant", () => {
     const result = tokenExchangeSchema.safeParse({
       grant_type: "refresh_token",
