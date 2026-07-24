@@ -8,34 +8,35 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-17 16:47",
+  "updated": "2026-07-24 19:50",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "Report fixes + timestamp streaming on develop · PDF validated",
+  "headline": "MCP server (agent connectivity) shipped to develop — OAuth 2.1 + 6 read/write tools",
   "chips": [
-    { "label": "develop", "value": "6c0f460", "note": "== origin · 2 ahead of prod", "tone": "ok" },
-    { "label": "main", "value": "4235d96", "note": "in sync", "tone": "ok" },
-    { "label": "prod", "value": "", "note": "parity ✓", "tone": "ok" }
+    { "label": "develop", "value": "86f34fd", "note": "== origin · MCP server + E5 ahead of prod", "tone": "ok" },
+    { "label": "main", "value": "8b4d648", "note": "#69 Timeline/report shipped", "tone": "ok" },
+    { "label": "prod", "value": "", "note": "MCP+E5 not yet promoted", "tone": "warn" }
   ],
   "progress": { "done": 13, "total": 15 },
   "gates": [
-    { "led": "amber", "text": "Promote develop → main to carry report-cover fix + timestamp streaming to prod", "tag": "NEXT?" },
+    { "led": "amber", "text": "Live end-to-end test: connect Claude Desktop/claude.ai to a deployed develop before calling MCP server done", "tag": "NEXT?" },
+    { "led": "amber", "text": "Set E5 env vars + backfill embeddings, then promote develop → main (MCP server + E5 + Timeline upgrades)", "tag": "NEXT?" },
+    { "led": "hollow", "text": "/login ignores ?next= — OAuth connect flow can't resume post-login", "tag": "OWED" },
     { "led": "hollow", "text": "Report Builder v2 — charts + wide-board table continuation", "tag": "OWED" },
-    { "led": "hollow", "text": "E5 — semantic search greenfield; fold 3 review risks in first", "tag": "NEXT?" },
     { "led": "hollow", "text": "E6 Stripe billing — F16 blocked on owner creds", "tag": "NEXT?" },
     { "led": "hollow", "text": "Wordmark mark revert in brand.tsx", "tag": "OWED" },
     { "led": "hollow", "text": "Rotate the prod DB password", "tag": "OWED" },
-    { "led": "green", "text": "PDF export validated — last unproven Report Builder path cleared", "tag": "DONE" },
-    { "led": "green", "text": "Report cover org name + viewer edit-gate shipped (1631555)", "tag": "DONE" },
-    { "led": "green", "text": "Timestamp blank-then-fill killed via device-zone-first render (6c0f460)", "tag": "DONE" }
+    { "led": "green", "text": "MCP server + OAuth 2.1 AS merged (86f34fd) — session-refresh race fixed before merge", "tag": "DONE" },
+    { "led": "green", "text": "E5 F13/F14/F15 — AI action step, Autopilot agent, pgvector semantic search — merged, not yet promoted", "tag": "DONE" },
+    { "led": "green", "text": "PDF export validated — last unproven Report Builder path cleared", "tag": "DONE" }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-07-17-1647-report-fixes-timestamp-streaming",
-    "when": "07-17 16:47",
+    "id": "2026-07-24-1950-mcp-server-oauth",
+    "when": "07-24 19:50",
     "bullets": [
-      "whats-next Batch A: report follow-up fixes + timestamp streaming, two parallel worktrees merged",
-      "PDF export validated by owner; 9 stale/orphaned worktree dirs swept",
-      "develop 2 features ahead of prod — ready to promote"
+      "Hosted MCP server + from-scratch OAuth 2.1 AS — agents connect as a real Pulse user, genuinely RLS-scoped (no service-role bypass)",
+      "Built subagent-driven: 14-task plan, implementer+reviewer per task, final whole-branch review on opus",
+      "Final review caught + fixed a real concurrency bug (session refresh racing under concurrent tool calls) before merge"
     ]
   },
   "roadmap": [
