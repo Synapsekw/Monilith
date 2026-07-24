@@ -29,6 +29,15 @@ async function writeCellValue(
     .maybeSingle();
   if (colErr || !column) return `Column ${field.columnId} not found.`;
 
+  const { data: item, error: itemErr } = await supabase
+    .from("items")
+    .select("board_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (itemErr || !item) return "Item not found.";
+  if (item.board_id !== column.board_id)
+    return "Item and column belong to different boards.";
+
   const valueParsed = cellValueSchema(column.kind).safeParse(field.value);
   if (!valueParsed.success)
     return valueParsed.error.issues[0]?.message ?? "Invalid value.";
