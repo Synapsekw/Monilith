@@ -37,4 +37,10 @@ describe("checkMcpRateLimit", () => {
     const decision = await checkMcpRateLimit("some-token");
     expect(decision).toEqual({ allowed: true });
   });
+
+  it("fails open on an RPC rejection/throw", async () => {
+    vi.mocked(typedRpc).mockRejectedValueOnce(new Error("network timeout"));
+    const decision = await checkMcpRateLimit("some-token");
+    expect(decision).toEqual({ allowed: true });
+  });
 });
