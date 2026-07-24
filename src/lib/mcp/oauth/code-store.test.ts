@@ -16,11 +16,21 @@ vi.mock("@/lib/supabase/service", () => ({
         }),
       }),
       update: (patch: Record<string, unknown>) => ({
-        eq: (_col: string, code: string) => {
-          const row = rows.get(code);
-          if (row) rows.set(code, { ...row, ...patch });
-          return Promise.resolve({ error: null });
-        },
+        eq: (_col: string, code: string) => ({
+          is: (_consumedCol: string, _consumedVal: null) => ({
+            select: () => ({
+              maybeSingle: () => {
+                const row = rows.get(code);
+                if (!row || row.consumed_at) {
+                  return Promise.resolve({ data: null, error: null });
+                }
+                const updated = { ...row, ...patch };
+                rows.set(code, updated);
+                return Promise.resolve({ data: updated, error: null });
+              },
+            }),
+          }),
+        }),
       }),
     }),
   }),
@@ -47,5 +57,34 @@ describe("createAuthorizationCode / consumeAuthorizationCode", () => {
   it("returns null for an unknown code", async () => {
     const row = await consumeAuthorizationCode("does-not-exist");
     expect(row).toBeNull();
+  });
+
+  it("returns null when the same code is consumed twice (single-use)", async () => {
+    const code = await createAuthorizationCode({
+      clientId: "client-1",
+      userId: "user-1",
+      redirectUri: "https://claude.ai/callback",
+      codeChallenge: "x".repeat(43),
+    });
+    const first = await consumeAuthorizationCode(code);
+    expect(first).not.toBeNull();
+    const second = await consumeAuthorizationCode(code);
+    expect(second).toBeNull();
+  });
+
+  it("returns null for an expired code", async () => {
+    const code = await createAuthorizationCode({
+      clientId: "client-1",
+      userId: "user-1",
+      redirectUri: "https://claude.ai/callback",
+      codeChallenge: "x".repeat(43),
+    });
+    const row = rows.get(code);
+    rows.set(code, {
+      ...row,
+      expires_at: new Date(Date.now() - 1000).toISOString(),
+    });
+    const result = await consumeAuthorizationCode(code);
+    expect(result).toBeNull();
   });
 });

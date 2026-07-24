@@ -31,15 +31,12 @@ export async function consumeAuthorizationCode(
   const supabase = createServiceClient();
   const { data: row } = await supabase
     .from("oauth_codes")
-    .select("*")
+    .update({ consumed_at: new Date().toISOString() })
     .eq("code", code)
+    .is("consumed_at", null)
+    .select("*")
     .maybeSingle();
   if (!row) return null;
-  if (row.consumed_at) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) return null;
-  await supabase
-    .from("oauth_codes")
-    .update({ consumed_at: new Date().toISOString() })
-    .eq("code", code);
   return row;
 }
