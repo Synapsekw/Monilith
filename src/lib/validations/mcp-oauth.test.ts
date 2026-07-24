@@ -21,6 +21,33 @@ describe("registerClientSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects a redirect_uri with javascript: scheme", () => {
+    const result = registerClientSchema.safeParse({
+      client_name: "Claude Desktop",
+      redirect_uris: ["javascript:alert('xss')"],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects redirect_uris array containing a javascript: URL", () => {
+    const result = registerClientSchema.safeParse({
+      client_name: "Claude Desktop",
+      redirect_uris: [
+        "https://claude.ai/api/mcp/oauth/callback",
+        "javascript:alert('xss')",
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts http:// URLs in addition to https://", () => {
+    const result = registerClientSchema.safeParse({
+      client_name: "Local Dev",
+      redirect_uris: ["http://localhost:3000/callback"],
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("authorizeRequestSchema", () => {
@@ -39,6 +66,28 @@ describe("authorizeRequestSchema", () => {
         code_challenge_method: "S256",
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects redirect_uri with javascript: scheme", () => {
+    const result = authorizeRequestSchema.safeParse({
+      client_id: "abc",
+      redirect_uri: "javascript:alert('xss')",
+      response_type: "code",
+      code_challenge: "x".repeat(43),
+      code_challenge_method: "S256",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts http:// redirect_uri", () => {
+    const result = authorizeRequestSchema.safeParse({
+      client_id: "abc",
+      redirect_uri: "http://localhost:3000/callback",
+      response_type: "code",
+      code_challenge: "x".repeat(43),
+      code_challenge_method: "S256",
+    });
+    expect(result.success).toBe(true);
   });
 });
 
