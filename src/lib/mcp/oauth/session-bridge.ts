@@ -1,5 +1,9 @@
 import "server-only";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  type Session,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import { env } from "@/lib/env";
 import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -12,6 +16,34 @@ function anonClient(): SupabaseClient<Database> {
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
+}
+
+/**
+ * What's actually stored in the Vault secret behind bridge_secret_id: not
+ * just the refresh token, but the *current* access token + its expiry, so
+ * getBridgedClient() can serve most requests as a pure Vault read (no GoTrue
+ * call, no secret rotation). Only refreshed once the cached access token is
+ * actually near expiry — see getBridgedClient() below.
+ */
+type BridgeSecretPayload = {
+  refreshToken: string;
+  accessToken: string;
+  /** Epoch ms. */
+  accessExpiresAt: number;
+};
+
+/** A small buffer so we refresh slightly before GoTrue would reject the token. */
+const ACCESS_TOKEN_REFRESH_BUFFER_MS = 60_000;
+
+function payloadFromSession(session: Session): BridgeSecretPayload {
+  const accessExpiresAt = session.expires_at
+    ? session.expires_at * 1000
+    : Date.now() + session.expires_in * 1000;
+  return {
+    refreshToken: session.refresh_token,
+    accessToken: session.access_token,
+    accessExpiresAt,
+  };
 }
 
 /**
@@ -55,7 +87,7 @@ export async function mintBridgeSecret(userId: string): Promise<string> {
     "oauth_bridge_rotate_secret",
     {
       p_old_secret_id: null,
-      p_secret: sessionData.session.refresh_token,
+      p_secret: JSON.stringify(payloadFromSession(sessionData.session)),
       p_name: `mcp_bridge:${userId}`,
     },
   );
@@ -64,31 +96,65 @@ export async function mintBridgeSecret(userId: string): Promise<string> {
   return secretId;
 }
 
+function clientFromAccessToken(accessToken: string): SupabaseClient<Database> {
+  return createClient<Database>(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    },
+  );
+}
+
 /**
- * Refreshes the Supabase session stored behind `bridgeSecretId` and returns
- * a request-scoped client authenticated as that session's user. GoTrue
- * rotates refresh tokens on use, so the old Vault secret is replaced with
- * the new refresh token — callers MUST persist `newBridgeSecretId` back onto
- * the oauth_tokens row or the next request will fail.
+ * Resolves the Supabase session stored behind `bridgeSecretId` to a
+ * request-scoped client authenticated as that session's user.
+ *
+ * The Vault secret caches the last-minted access token alongside its
+ * expiry, so the common case (access token still valid) is a pure Vault
+ * read — no GoTrue call, no secret rotation, no DB write. This matters
+ * because MCP clients routinely dispatch multiple tool calls concurrently
+ * on one connection: if every call refreshed the session, two concurrent
+ * calls would race to consume the same single-use refresh token, and
+ * GoTrue's reuse-detection can revoke the whole session family and brick
+ * the bridge. Only refresh when the cached access token is actually
+ * expired (or within `ACCESS_TOKEN_REFRESH_BUFFER_MS` of expiring) — that
+ * still rotates the refresh token (GoTrue does this unconditionally on
+ * use) and the old Vault secret, so callers MUST persist
+ * `newBridgeSecretId` back onto the oauth_tokens row; when nothing
+ * rotated, `newBridgeSecretId` is the same id and that persist becomes a
+ * harmless no-op write.
  */
 export async function getBridgedClient(
   bridgeSecretId: string,
 ): Promise<{ client: SupabaseClient<Database>; newBridgeSecretId: string }> {
   const svc = createServiceClient();
-  const { data: refreshToken, error: getErr } = await typedRpc(
+  const { data: secretJson, error: getErr } = await typedRpc(
     svc,
     "oauth_bridge_get_secret",
     {
       p_secret_id: bridgeSecretId,
     },
   );
-  if (getErr || !refreshToken)
+  if (getErr || !secretJson)
     throw new Error(getErr?.message ?? "Bridge secret not found.");
+
+  const cached = JSON.parse(secretJson) as BridgeSecretPayload;
+
+  if (Date.now() < cached.accessExpiresAt - ACCESS_TOKEN_REFRESH_BUFFER_MS) {
+    return {
+      client: clientFromAccessToken(cached.accessToken),
+      newBridgeSecretId: bridgeSecretId,
+    };
+  }
 
   const anon = anonClient();
   const { data: refreshed, error: refreshErr } = await anon.auth.refreshSession(
     {
-      refresh_token: refreshToken,
+      refresh_token: cached.refreshToken,
     },
   );
   if (refreshErr || !refreshed.session)
@@ -99,22 +165,15 @@ export async function getBridgedClient(
     "oauth_bridge_rotate_secret",
     {
       p_old_secret_id: bridgeSecretId,
-      p_secret: refreshed.session.refresh_token,
+      p_secret: JSON.stringify(payloadFromSession(refreshed.session)),
       p_name: `mcp_bridge:${refreshed.session.user.id}`,
     },
   );
   if (rotErr || !newSecretId)
     throw new Error(rotErr?.message ?? "Vault rotate failed.");
 
-  const client = createClient<Database>(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: {
-        headers: { Authorization: `Bearer ${refreshed.session.access_token}` },
-      },
-    },
-  );
-  return { client, newBridgeSecretId: newSecretId };
+  return {
+    client: clientFromAccessToken(refreshed.session.access_token),
+    newBridgeSecretId: newSecretId,
+  };
 }

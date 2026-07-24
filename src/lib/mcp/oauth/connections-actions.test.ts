@@ -7,7 +7,7 @@ vi.mock("@/lib/auth/session", () => ({
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
     from: () => ({
-      update: () => ({
+      delete: () => ({
         eq: () => ({ eq: () => Promise.resolve({ error: null }) }),
       }),
     }),
@@ -17,7 +17,7 @@ vi.mock("@/lib/supabase/service", () => ({
 import { revokeConnectionAction } from "./connections-actions";
 
 describe("revokeConnectionAction", () => {
-  it("marks a token revoked and returns ok", async () => {
+  it("hard-deletes the token row (frees the Vault secret via the before-delete trigger) and returns ok", async () => {
     const result = await revokeConnectionAction("t1");
     expect(result.ok).toBe(true);
   });
