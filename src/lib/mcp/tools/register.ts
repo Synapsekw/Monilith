@@ -5,6 +5,8 @@ import { registerListBoardsTool } from "./list-boards";
 import { registerGetBoardTool } from "./get-board";
 import { registerSearchItemsTool } from "./search-items";
 import { registerGetItemTool } from "./get-item";
+import { registerCreateItemTool } from "./create-item";
+import { registerUpdateItemTool } from "./update-item";
 
 /** Registers every MCP tool onto the server instance, closing over the request's auth. */
 export function registerTools(server: McpServer, auth: AuthInfo): void {
@@ -13,4 +15,6 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
   registerGetBoardTool(server, getClient);
   registerSearchItemsTool(server, getClient);
   registerGetItemTool(server, getClient);
+  registerCreateItemTool(server, getClient);
+  registerUpdateItemTool(server, getClient);
 }
