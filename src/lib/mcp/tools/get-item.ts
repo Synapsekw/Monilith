@@ -23,10 +23,21 @@ export async function getItemHandler(
       isError: true,
     };
   }
-  const { data: cells } = await supabase
+  const { data: cells, error: cellErr } = await supabase
     .from("cell_values")
     .select("column_id, value")
     .eq("item_id", input.itemId);
+  if (cellErr) {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Failed to fetch cell values: ${cellErr.message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
   const cellValues = (cells ?? []).map((c) => ({
     columnId: c.column_id,
     value: c.value,

@@ -33,4 +33,33 @@ describe("getItemHandler", () => {
       { columnId: "c1", value: { text: "In progress" } },
     ]);
   });
+
+  it("returns isError when cell_values query fails", async () => {
+    const client = {
+      from: (table: string) => ({
+        select: () => ({
+          eq: (col: string) => {
+            if (table === "items") {
+              return {
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data: { id: "i1", name: "Fix login bug", group_id: "g1" },
+                    error: null,
+                  }),
+              };
+            }
+            return Promise.resolve({
+              data: null,
+              error: { message: "Permission denied" },
+            });
+          },
+        }),
+      }),
+    };
+    const result = await getItemHandler(async () => client as never, {
+      itemId: "i1",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Permission denied");
+  });
 });
