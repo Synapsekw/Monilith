@@ -1929,6 +1929,118 @@ export type Database = {
           },
         ];
       };
+      oauth_clients: {
+        Row: {
+          client_id: string;
+          client_name: string;
+          created_at: string;
+          id: string;
+          redirect_uris: string[];
+        };
+        Insert: {
+          client_id: string;
+          client_name: string;
+          created_at?: string;
+          id?: string;
+          redirect_uris: string[];
+        };
+        Update: {
+          client_id?: string;
+          client_name?: string;
+          created_at?: string;
+          id?: string;
+          redirect_uris?: string[];
+        };
+        Relationships: [];
+      };
+      oauth_codes: {
+        Row: {
+          client_id: string;
+          code: string;
+          code_challenge: string;
+          consumed_at: string | null;
+          created_at: string;
+          expires_at: string;
+          redirect_uri: string;
+          user_id: string;
+        };
+        Insert: {
+          client_id: string;
+          code: string;
+          code_challenge: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at: string;
+          redirect_uri: string;
+          user_id: string;
+        };
+        Update: {
+          client_id?: string;
+          code?: string;
+          code_challenge?: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          redirect_uri?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "oauth_codes_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "oauth_clients";
+            referencedColumns: ["client_id"];
+          },
+        ];
+      };
+      oauth_tokens: {
+        Row: {
+          access_token_expires_at: string;
+          access_token_hash: string;
+          bridge_secret_id: string | null;
+          client_id: string;
+          created_at: string;
+          id: string;
+          refresh_token_expires_at: string;
+          refresh_token_hash: string;
+          revoked_at: string | null;
+          user_id: string;
+        };
+        Insert: {
+          access_token_expires_at: string;
+          access_token_hash: string;
+          bridge_secret_id?: string | null;
+          client_id: string;
+          created_at?: string;
+          id?: string;
+          refresh_token_expires_at: string;
+          refresh_token_hash: string;
+          revoked_at?: string | null;
+          user_id: string;
+        };
+        Update: {
+          access_token_expires_at?: string;
+          access_token_hash?: string;
+          bridge_secret_id?: string | null;
+          client_id?: string;
+          created_at?: string;
+          id?: string;
+          refresh_token_expires_at?: string;
+          refresh_token_hash?: string;
+          revoked_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "oauth_tokens_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "oauth_clients";
+            referencedColumns: ["client_id"];
+          },
+        ];
+      };
       org_ai_settings: {
         Row: {
           ai_mode: Database["public"]["Enums"]["ai_mode"];
@@ -3215,6 +3327,14 @@ export type Database = {
           org_name: string;
           role: Database["public"]["Enums"]["org_role"];
         }[];
+      };
+      oauth_bridge_get_secret: {
+        Args: { p_secret_id: string };
+        Returns: string;
+      };
+      oauth_bridge_rotate_secret: {
+        Args: { p_name: string; p_old_secret_id: string; p_secret: string };
+        Returns: string;
       };
       org_ai_secret_clear: { Args: { p_org: string }; Returns: undefined };
       org_ai_secret_get: {
