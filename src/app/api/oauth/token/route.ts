@@ -3,11 +3,7 @@ import { tokenExchangeSchema } from "@/lib/validations/mcp-oauth";
 import { consumeAuthorizationCode } from "@/lib/mcp/oauth/code-store";
 import { verifyPkce } from "@/lib/mcp/oauth/crypto";
 import { mintBridgeSecret } from "@/lib/mcp/oauth/session-bridge";
-import {
-  issueTokenPair,
-  lookupTokenByRefreshToken,
-  rotateTokenPair,
-} from "@/lib/mcp/oauth/token-store";
+import { issueTokenPair, rotateTokenPair } from "@/lib/mcp/oauth/token-store";
 
 export async function POST(req: Request) {
   const form = await req.formData().catch(() => null);
@@ -32,6 +28,9 @@ export async function POST(req: Request) {
     if (!codeRow || codeRow.client_id !== parsed.data.client_id) {
       return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
     }
+    if (codeRow.redirect_uri !== parsed.data.redirect_uri) {
+      return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
+    }
     if (!verifyPkce(parsed.data.code_verifier, codeRow.code_challenge)) {
       return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
     }
@@ -50,11 +49,13 @@ export async function POST(req: Request) {
   }
 
   // refresh_token grant
-  const existing = await lookupTokenByRefreshToken(parsed.data.refresh_token);
-  if (!existing || existing.client_id !== parsed.data.client_id) {
+  const tokens = await rotateTokenPair(
+    parsed.data.refresh_token,
+    parsed.data.client_id,
+  );
+  if (!tokens) {
     return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
   }
-  const tokens = await rotateTokenPair(existing);
   return NextResponse.json({
     access_token: tokens.accessToken,
     refresh_token: tokens.refreshToken,
