@@ -1,15 +1,17 @@
+import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/session";
 import { authorizeRequestSchema } from "@/lib/validations/mcp-oauth";
 import { getOauthClient } from "@/lib/mcp/oauth/client-store";
 import { approveConsent } from "./actions";
 
-export default async function ConsentPage({
+// Both dynamic reads resolve inside the Suspense boundary (Cache Components) —
+// same pattern as src/app/(auth)/change-password/page.tsx.
+async function ConsentGate({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const user = await requireUser();
-  const params = await searchParams;
+  const [params, user] = await Promise.all([searchParams, requireUser()]);
   const parsed = authorizeRequestSchema.safeParse(params);
   if (!parsed.success) {
     return (
@@ -42,5 +44,17 @@ export default async function ConsentPage({
         </button>
       </form>
     </main>
+  );
+}
+
+export default function ConsentPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return (
+    <Suspense>
+      <ConsentGate searchParams={searchParams} />
+    </Suspense>
   );
 }
