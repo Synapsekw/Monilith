@@ -21,6 +21,8 @@ import { AiProviderForm } from "@/components/settings/AiProviderForm";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
 import { getMyAiCredential } from "@/lib/ai/credentials";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
+import { listMyConnections } from "@/lib/mcp/oauth/connections";
+import { ConnectedAppsSection } from "@/components/settings/ConnectedAppsSection";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { WorkspaceNavItem } from "@/components/workspaces/WorkspaceNavItem";
 import { NewWorkspaceDialog } from "@/components/workspaces/NewWorkspaceDialog";
@@ -30,14 +32,17 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  // Timezone + orgs + AI credential are independent reads — resolve them in
-  // parallel (the members RPC below is the only read that depends on org.id).
-  const [myTimeZone, aiCredential, orgAi, disabledInApp] = await Promise.all([
-    getUserTimeZoneCached(user.id),
-    getMyAiCredential(),
-    getOrgAiSettings(),
-    getDisabledInAppKinds(user.id),
-  ]);
+  // Timezone + orgs + AI credential + MCP connections are independent reads —
+  // resolve them in parallel (the members RPC below is the only read that
+  // depends on org.id).
+  const [myTimeZone, aiCredential, orgAi, disabledInApp, connections] =
+    await Promise.all([
+      getUserTimeZoneCached(user.id),
+      getMyAiCredential(),
+      getOrgAiSettings(),
+      getDisabledInAppKinds(user.id),
+      listMyConnections(),
+    ]);
   const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
   const org = await resolveActiveOrg();
@@ -173,6 +178,18 @@ export default async function SettingsPage() {
             ) : (
               <AiProviderForm initial={aiCredential} />
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Connected apps</CardTitle>
+            <CardDescription>
+              Apps and clients with MCP access to your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ConnectedAppsSection connections={connections} />
           </CardContent>
         </Card>
 
