@@ -35,6 +35,12 @@ export function NotificationsBell({ userId }: { userId: string }) {
       window.location.assign("/dashboards");
       return;
     }
+    if (n.kind === "account_deleted") {
+      // Also no board/item FK. The matching `account.self_deleted` audit row is
+      // already rendered by the org activity list on the members page.
+      window.location.assign("/settings/members");
+      return;
+    }
     if (n.board_id) {
       const u = new URL(window.location.origin + `/boards/${n.board_id}`);
       if (n.item_id) u.searchParams.set("item", n.item_id);

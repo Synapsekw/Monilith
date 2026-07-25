@@ -29,3 +29,18 @@ export const reassignmentSummarySchema = z.object({
 });
 
 export type ReassignmentSummary = z.infer<typeof reassignmentSummarySchema>;
+
+/**
+ * Payload of the `account_deleted` notification (decision D4) — what the receiving
+ * owner is told. Parsed at render time rather than joined, the same way
+ * `digestNotificationPayloadSchema` works, because the actor is gone and there is
+ * nothing left to join to.
+ */
+export const accountDeletedNotificationPayloadSchema = z.object({
+  deletedEmail: z.string().nullable(),
+  counts: z.record(z.string(), z.number()).default({}),
+});
+
+export type AccountDeletedNotificationPayload = z.infer<
+  typeof accountDeletedNotificationPayloadSchema
+>;
