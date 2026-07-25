@@ -33,7 +33,7 @@
  * precedent for testing non-src tooling is .claude/hooks/*.test.mjs.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -449,10 +449,19 @@ function main(argv) {
 
 // Only exit the process when run as a script. The test file IMPORTS this module,
 // so an unguarded `process.exit(main(...))` at module scope would kill the vitest
-// worker. Same idiom as .claude/hooks/maybe-write-session.mjs:313-321.
+// worker. Same idiom as .claude/hooks/maybe-write-session.mjs:313-321, but
+// realpath'd on BOTH sides: node resolves symlinks in the entry point it reports
+// through import.meta.url, while process.argv[1] is the literal string the caller
+// typed. finish-task.sh invokes us as `node "$WT/scripts/check-migration-ledger.mjs"`
+// where $WT comes from `git rev-parse --show-toplevel`, so one symlinked path
+// component would make a raw string compare false — and this file's failure mode
+// for that is the worst one available: main() never runs, nothing is printed, and
+// the process exits 0, silently reporting "no drift" for a security gate.
 const isMain = (() => {
   try {
-    return fileURLToPath(import.meta.url) === process.argv[1];
+    const self = realpathSync(fileURLToPath(import.meta.url));
+    const invoked = process.argv[1] ? realpathSync(process.argv[1]) : "";
+    return self === invoked;
   } catch {
     return false;
   }
