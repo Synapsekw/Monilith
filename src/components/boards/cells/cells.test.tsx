@@ -369,7 +369,10 @@ describe("BoardTable inline edit (optimistic + rollback)", () => {
       expect(screen.queryByText("Done")).not.toBeInTheDocument();
       expect(screen.getByText("Stuck")).toBeInTheDocument();
     });
-  });
+    // Explicit budget: renders a whole BoardTable behind React Query and drives
+    // two real user interactions, so it costs seconds even passing. See the note
+    // in settings/timezone-form.test.tsx — same wall-clock flake under load.
+  }, 30_000);
 });
 
 describe("CurrencyCell", () => {
