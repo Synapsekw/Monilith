@@ -8,26 +8,26 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-25 10:56",
+  "updated": "2026-07-25 16:20",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "Settings redesigned — nine nested routes on one alignment grid, and the MCP server finally has an in-app front door",
+  "headline": "Group 1 closeout — the carryover bucket was hiding live security holes and features that had never worked",
   "chips": [
     {
       "label": "develop",
-      "value": "1555dc1",
-      "note": "== origin · MCP + E5 + ACL migration + settings redesign ahead of prod",
+      "value": "c72bc02",
+      "note": "== origin · 4 migrations ahead of prod",
       "tone": "ok"
     },
     {
       "label": "main",
-      "value": "8b4d648",
-      "note": "#69 Timeline/report shipped",
+      "value": "186782d",
+      "note": "#72 shipped MCP server + E5 + settings redesign",
       "tone": "ok"
     },
     {
       "label": "prod",
       "value": "",
-      "note": "MCP+E5+settings not yet promoted",
+      "note": "8 anon-executable definer fns still live · Vault unprovisioned",
       "tone": "warn"
     }
   ],
@@ -37,79 +37,89 @@
   },
   "gates": [
     {
+      "led": "red",
+      "text": "PROD STILL EXPOSED — 8 anon-executable SECURITY DEFINER fns live, 2 of them delete vault.secrets. Fixed on DEV only; promotion does not apply migrations, /sync-prod must run",
+      "tag": "CRITICAL"
+    },
+    {
+      "led": "red",
+      "text": "Prod Vault empty (no app_url / ai_pgnet_hmac_secret / digest_secret) — the health digest has NEVER fired in prod since 2026-07-03 (digest_runs = 0) and E5 semantic search returns nothing (item_embeddings = 0 vs 380 live items). Crons report succeeded while skipping, so nothing alerts",
+      "tag": "CRITICAL"
+    },
+    {
       "led": "amber",
-      "text": "Set E5 env vars + backfill embeddings, then promote develop → main (MCP server + E5 + ACL migration + settings redesign)",
+      "text": "/sync-prod FIRST, then promote develop → main — the order is load-bearing: promoting first ships a Delete Account button with no reassignment RPC behind it",
       "tag": "NEXT?"
     },
     {
       "led": "amber",
-      "text": "Live end-to-end test: connect Claude Desktop/claude.ai to a deployed develop — now also validates the new per-client guide steps",
+      "text": "Two vercel env add commands blocked by the permission classifier — owner runs them, then Vault mirror + embeddings backfill",
+      "tag": "NEXT?"
+    },
+    {
+      "led": "amber",
+      "text": "Live end-to-end MCP connection test — finally possible now the proxy no longer login-walls /api/mcp and /api/oauth/*",
       "tag": "NEXT?"
     },
     {
       "led": "hollow",
-      "text": "Carry 20260724134101_mcp_oauth_vault_cleanup_acl to prod on the next /sync-prod — else prod ships a definer trigger publicly executable",
+      "text": "Finding F1 — MCP assigns people without ever notifying them; one-line swap once upsertCellCore is hoisted (gotcha-60)",
       "tag": "OWED"
     },
     {
       "led": "hollow",
-      "text": "Delete account deferred to its own spec — 28 auth.users FKs lack on delete cascade, so deletion raises an FK violation",
+      "text": "Provisioning digest_secret starts emailing real users with three weeks of backlog — needs an explicit decision",
       "tag": "OWED"
     },
     {
       "led": "hollow",
-      "text": "Nothing diffs list_migrations against supabase/migrations — teach finish-task.sh or a /sync-prod pre-check (gotcha-57)",
+      "text": "Integration suites still skip (no .env.test) — a skip is not a pass",
       "tag": "OWED"
     },
     {
       "led": "hollow",
-      "text": "/login ignores ?next= — OAuth connect flow cant resume post-login",
-      "tag": "OWED"
+      "text": "Ask Pulse Phase 2 — wire the already-built write engine + ActionConfirmCard into /ask (S–M, no migration)",
+      "tag": "NEXT?"
     },
     {
       "led": "hollow",
       "text": "Report Builder v2 — charts + wide-board table continuation",
-      "tag": "OWED"
-    },
-    {
-      "led": "hollow",
-      "text": "E6 Stripe billing — F16 blocked on owner creds",
       "tag": "NEXT?"
     },
     {
       "led": "hollow",
-      "text": "Wordmark mark revert in brand.tsx",
-      "tag": "OWED"
-    },
-    {
-      "led": "hollow",
-      "text": "Rotate the prod DB password",
-      "tag": "OWED"
+      "text": "E6 Stripe billing — F16 blocked on owner creds; the only genuinely open Phase-10 epic",
+      "tag": "NEXT?"
     },
     {
       "led": "green",
-      "text": "Settings redesign merged (1555dc1) — 9 routes, SettingRow grid, Connect-via-MCP guide, revoke errors now surfaced",
+      "text": "Definer ACL lockdown merged — DEV now 114 definers, 0 anon-executable, guarded by an in-migration assertion; gotcha-59 explains why alter default privileges never worked",
       "tag": "DONE"
     },
     {
       "led": "green",
-      "text": "DEV-only ACL migration found + backfilled at the ledger version (b4efe5f) — all 3 MCP definer fns now service_role only",
+      "text": "Live open redirect closed (control chars reached evil.com) + cookieless MCP/OAuth endpoints un-login-walled — the MCP OAuth flow had been unreachable end-to-end",
       "tag": "DONE"
     },
     {
       "led": "green",
-      "text": "MCP server + OAuth 2.1 AS merged (86f34fd) — session-refresh race fixed before merge",
+      "text": "Account deletion possible for the first time (org FK blocked everyone) and the admin Delete permanently button fixed — it had never worked",
+      "tag": "DONE"
+    },
+    {
+      "led": "green",
+      "text": "oauth-register rate limited · MCP tool dedupe (22 mutations, 0 survivors) · pnpm db:ledger-check wired into finish-task / sync-prod / promote",
       "tag": "DONE"
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-07-25-1056-settings-redesign-mcp-guide",
-    "when": "07-25 10:56",
+    "id": "2026-07-25-1620-group-1-closeout-security-and-deletion",
+    "when": "07-25 16:20",
     "bullets": [
-      "/settings: 8-card masonry → left sub-nav over 9 nested routes; SettingsSection/SettingRow put every control on one grid",
-      "New Connect via MCP page — server URL, per-client steps, tool/permission table, safety notes, troubleshooting",
-      "Fixed silently-swallowed revoke errors; added org rename, leave-org, appearance, security. /settings/profile: ~10 queries → 1"
+      "Six worktrees scoped to plans, built and merged serially → develop c72bc02; ledger clean at 115 files = 115 DEV rows",
+      "Two items were live-exploitable or live-broken in prod, two were shipped features that had never worked, one has been silently inert for three weeks",
+      "Wordmark mark reverted; prod-DB-password rotation dropped from Owed; two load-sensitive tests given explicit budgets so merges stopped being a coin flip"
     ]
   },
   "roadmap": [
