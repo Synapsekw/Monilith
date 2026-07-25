@@ -53,22 +53,21 @@ export default async function AiSettingsPage() {
             : "Your provider key powers dashboard generation and other AI features."
         }
       >
-        <SettingRow
-          label="Provider key"
-          description={
-            personalKeyManaged
-              ? "Managed by your organization — no personal key needed."
-              : aiCredential
-                ? "A key is configured for your account."
-                : "Not configured yet. Add a key to enable AI features."
-          }
-        >
-          {personalKeyManaged ? (
+        {personalKeyManaged ? (
+          <SettingRow
+            label="Provider key"
+            description="Managed by your organization — no personal key needed."
+          >
             <p className="text-muted-foreground text-sm">Nothing to do here.</p>
-          ) : (
+          </SettingRow>
+        ) : (
+          // Full width, not a SettingRow: this is a multi-field form (provider
+          // chips + key + validate), and a 280px control column wraps it into
+          // an unreadable stack.
+          <div className="pt-4">
             <AiProviderForm initial={aiCredential} />
-          )}
-        </SettingRow>
+          </div>
+        )}
       </SettingsSection>
     </>
   );

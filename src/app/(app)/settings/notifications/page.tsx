@@ -21,19 +21,27 @@ export default async function NotificationSettingsPage() {
   ]);
 
   return (
-    <SettingsSection
-      title="Notifications"
-      description="Choose which notifications you receive."
-    >
-      <NotificationPreferencesForm disabledKinds={[...disabledInApp]} />
-      <SettingRow
-        label="Email"
-        description="A weekly summary of plan health, sent to your account address."
+    <>
+      <SettingsSection
+        title="In-app"
+        description="Which events create a notification inside Pulse."
       >
-        <DigestPreferenceForm
-          initialOptOut={profile?.email_digest_opt_out ?? false}
-        />
-      </SettingRow>
-    </SettingsSection>
+        <NotificationPreferencesForm disabledKinds={[...disabledInApp]} />
+      </SettingsSection>
+
+      <SettingsSection
+        title="Email"
+        description="What Pulse sends to your account address."
+      >
+        <SettingRow
+          label="Weekly digest"
+          description="A summary of plan health, sent once a week."
+        >
+          <DigestPreferenceForm
+            initialOptOut={profile?.email_digest_opt_out ?? false}
+          />
+        </SettingRow>
+      </SettingsSection>
+    </>
   );
 }

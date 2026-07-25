@@ -7,11 +7,16 @@ import {
   IN_APP_KIND_LABELS,
   type AppNotificationPrefKind,
 } from "@/lib/settings/notification-prefs";
+import { SettingRow } from "@/components/settings/setting-row";
+import { Switch } from "@/components/ui/switch";
 
 /**
  * Per-type in-app notification toggles. Opt-out: a kind in `disabledKinds` is
- * OFF. Each checkbox is optimistic and reverts on failure (mirrors
- * DigestPreferenceForm). "Enabled" = checkbox checked = no disabled row.
+ * OFF. Each switch is optimistic and reverts on failure (mirrors
+ * DigestPreferenceForm). "Enabled" = switch on = no disabled row.
+ *
+ * Emits one SettingRow per kind so the toggles align with every other control
+ * in the section rather than forming a separate checkbox list.
  */
 export function NotificationPreferencesForm({
   disabledKinds,
@@ -48,36 +53,27 @@ export function NotificationPreferencesForm({
   }
 
   return (
-    <fieldset className="space-y-3">
-      <legend className="text-muted-foreground mb-1 text-xs font-medium">
-        In-app
-      </legend>
+    <>
       {CONTROLLABLE_IN_APP_KINDS.map((kind) => {
         const enabled = !disabled.has(kind);
         const copy = IN_APP_KIND_LABELS[kind];
         return (
-          <label
+          <SettingRow
             key={kind}
-            className="flex items-start gap-2 text-sm"
-            title={copy.description}
+            label={copy.label}
+            description={copy.description}
           >
-            <input
-              type="checkbox"
-              aria-label={copy.label}
-              className="accent-primary mt-0.5 size-4"
-              checked={enabled}
-              disabled={pending}
-              onChange={(e) => toggle(kind, e.target.checked)}
-            />
-            <span>
-              <span className="block">{copy.label}</span>
-              <span className="text-muted-foreground block text-xs">
-                {copy.description}
-              </span>
-            </span>
-          </label>
+            <div className="md:flex md:justify-end">
+              <Switch
+                aria-label={copy.label}
+                checked={enabled}
+                disabled={pending}
+                onCheckedChange={(next) => toggle(kind, next)}
+              />
+            </div>
+          </SettingRow>
         );
       })}
-    </fieldset>
+    </>
   );
 }
