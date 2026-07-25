@@ -9,6 +9,7 @@ import {
   reassignmentSummarySchema,
   type ReassignmentSummary,
 } from "@/lib/validations/account";
+import type { Json } from "@/types/database.types";
 
 /** Avatar object keys are `{user_id}/{uuid}.{ext}` (20260707130000_avatars_bucket). */
 const AVATAR_BUCKET = "avatars";
@@ -97,7 +98,11 @@ export async function deleteOwnAccount(input: unknown): Promise<ActionResult> {
     // this is the only identifier that survives — deliberately, for anti-abuse
     // and "was this account deleted?" support questions.
     target_email: user.email,
-    metadata: summary as unknown as Record<string, unknown>,
+    // The generated `Json` is a recursive union that a concrete object type never
+    // satisfies structurally (no index signature) — the same codegen mismatch
+    // `src/lib/supabase/typed-rpc.ts` documents for jsonb RPC args. The value is
+    // Zod-validated above and provably serializable, so one cast is honest here.
+    metadata: summary as unknown as Json,
   };
   const { error: auditErr } = await svc.from("admin_audit_log").insert([
     { ...auditBase, org_id: null, actor_kind: "platform" },
