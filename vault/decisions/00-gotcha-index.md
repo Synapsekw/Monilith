@@ -50,6 +50,7 @@ One line per gotcha, grouped by theme. **Numbering rules for future ADRs:**
 - **52** [[2026-07-07-gotcha-52-managed-postgres-set-param-denied-use-set-config]] — managed Postgres denies `SET <param>` in function headers; use `set_config`
 - **53** [[2026-07-07-gotcha-53-getuserorgs-filters-deactivated-but-roster-cache-doesnt]] — `getUserOrgs()` filters deactivated memberships but the roster cache doesn't
 - **55** [[2026-07-11-gotcha-55-mcp-apply-migration-version-drifts-from-committed-file]] — MCP `apply_migration` version drifts from the committed file; reconcile before `/sync-prod`
+- **57** [[2026-07-25-gotcha-57-dev-applied-migration-with-no-committed-file]] — a DEV-applied migration with no committed file is invisible to every gate; `pnpm db:ledger-check` now diffs the ledger against `supabase/migrations/`
 
 ## Next.js / framework
 

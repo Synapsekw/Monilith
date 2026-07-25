@@ -55,6 +55,13 @@ out, report "still running after N min" + the link · `3` → usage/prereq error
 - Verify `gh auth status` succeeds and the network is reachable. If not → **stop** ("`gh`
   unauthenticated / offline").
 - `git fetch origin develop main`.
+- **Migration ledger drift (hard stop).** Run `pnpm db:ledger-check` (DEV). Promotion ships **code**,
+  but PROD's schema comes only from **committed files** — so code that depends on DDL applied to DEV
+  and never committed works in dev and breaks in production (gotcha-57). Exit `2` (drift) or `1`
+  (duplicate/malformed filename) → **stop**, naming the versions; the fix is to backfill the file at
+  the ledger's version, not to promote. Exit `3` (could not check) → **note it in the report and
+  continue** — `/promote` runs from the main checkout where `.env.prod.local` is present, so a `3`
+  here means a genuinely unreachable DB, and blocking a code promotion on it is disproportionate.
 - Compute the delta: `git log --oneline origin/main..origin/develop`. **Empty → friendly stop**
   ("`main` is already up to date with `develop` — nothing to promote.").
 - Collect **branch-hygiene notes** (reported, never auto-fixed): stale local `task/*` branches
