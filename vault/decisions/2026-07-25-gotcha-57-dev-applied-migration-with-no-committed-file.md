@@ -73,10 +73,20 @@ or `/sync-prod`.
 
 - Positive: the ACL rides the next `/sync-prod` instead of being lost; a repeatable recovery path
   (read statements from the ledger → backfill at that version) for any future DEV-only migration.
-- Negative: still a manual check — nothing automated compares the two lists yet.
-- Open follow-up: teach `finish-task.sh` (or a `/sync-prod` pre-check) to diff
-  `list_migrations` against `supabase/migrations/` and fail loudly on a DEV version with no file.
-  Also worth auditing the other definer functions added around the same date for the same missed ACL.
+- **Automated 2026-07-25** — `scripts/check-migration-ledger.mjs` (`pnpm db:ledger-check`) diffs the
+  live ledger against `supabase/migrations/` in both directions. A ledger row with no committed file
+  exits 2; a committed-but-unapplied file is a warning at exit 0. `finish-task.sh` **blocks** on
+  drift (and warns-but-continues when the DB is unreachable — exit 3 — so the gate can never wedge a
+  merge); `/sync-prod` step 1b checks DEV **and** PROD and stops on any non-zero, including
+  unavailable; `/promote` preflight stops on DEV drift. The gotcha-43 duplicate-version guard moved
+  out of `finish-task.sh` into the same script, so migration hygiene has one implementation.
+  Design: `docs/superpowers/specs/2026-07-25-migration-ledger-drift-check-design.md`.
+- Known limit: a ledger-only version whose file exists in a **sibling worktree** is reported as
+  unmerged parallel work, not drift — necessary to stop the shared-DEV false positive from disabling
+  the gate, and safe because that DDL is in git.
+- Not automated in CI: `.env.prod.local` is gitignored, so a workflow needs `DEV_SUPABASE_DB_URL` as
+  a repository secret. Deliberately deferred.
+- Open follow-up: audit the other definer functions added around 2026-07-24 for the same missed ACL.
 
 ## Related
 
