@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getServerEnv } from "@/lib/env.server";
+import { safeNextPath } from "@/lib/auth/next-path";
 import {
   signInSchema,
   signUpSchema,
@@ -47,6 +48,19 @@ async function getOrigin(): Promise<string> {
   return `${protocol}://${host}`;
 }
 
+/**
+ * Read the post-sign-in destination off the submitted form.
+ *
+ * The field is FULLY CLIENT-CONTROLLED — the browser can forge it independently
+ * of the `?next=` the page rendered — so this is the security-critical sanitize,
+ * not the one in the page. `safeNextPath` is total: a hostile value degrades to
+ * "/" rather than failing an otherwise valid sign-in.
+ */
+function nextFrom(formData: FormData): string {
+  const raw = formData.get("next");
+  return safeNextPath(typeof raw === "string" ? raw : null);
+}
+
 export async function signIn(
   _prevState: AuthState,
   formData: FormData,
@@ -77,7 +91,7 @@ export async function signIn(
   }
 
   // redirect() throws — must be called outside the try/catch above.
-  redirect("/");
+  redirect(nextFrom(formData));
 }
 
 export async function signUp(
@@ -101,12 +115,19 @@ export async function signUp(
   if (!gate.allowed) return throttleResult("signUp", gate.retryAfterSeconds);
 
   const origin = await getOrigin();
+  const next = nextFrom(formData);
+  // Sanitize BEFORE embedding: an unvalidated value here would mint an off-site
+  // redirect inside an email we send. Same shape as requestPasswordReset below.
+  const emailRedirectTo =
+    next === "/"
+      ? `${origin}/auth/callback`
+      : `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo,
       data: { org_name: parsed.data.orgName },
     },
   });
@@ -128,7 +149,7 @@ export async function signUp(
 
   // When email confirmation is disabled, Supabase returns an active session.
   if (data.session) {
-    redirect("/");
+    redirect(next);
   }
 
   return { success: "check-email" };
