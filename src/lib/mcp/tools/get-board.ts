@@ -1,9 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database.types";
-
-type GetClient = () => Promise<SupabaseClient<Database>>;
+import type { GetClient } from "./shared";
 
 const getBoardInput = { boardId: z.string().uuid() };
 
