@@ -1,5 +1,21 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+// Bare vi.fn() + mockResolvedValue in beforeEach — the same idiom as
+// src/app/auth/actions.test.ts. The resolved value BECOMES the useActionState
+// state, so it must be an object: returning undefined would make the component
+// read `state.error` off undefined and crash the render.
+const { signIn, signUp } = vi.hoisted(() => ({
+  signIn: vi.fn(),
+  signUp: vi.fn(),
+}));
+
+vi.mock("@/app/auth/actions", () => ({
+  signIn: (prev: unknown, fd: FormData) => signIn(prev, fd),
+  signUp: (prev: unknown, fd: FormData) => signUp(prev, fd),
+}));
+
 import { AuthForm } from "./auth-form";
 
 describe("AuthForm", () => {
@@ -57,5 +73,49 @@ describe("AuthForm", () => {
     render(<AuthForm mode="signup" />);
 
     expect(screen.getByText("GET STARTED")).toBeInTheDocument();
+  });
+});
+
+describe("AuthForm — next carrying", () => {
+  beforeEach(() => {
+    signIn.mockReset().mockResolvedValue({});
+    signUp.mockReset().mockResolvedValue({});
+  });
+
+  async function submitLogin(props: { next?: string }) {
+    render(<AuthForm mode="login" {...props} />);
+    await userEvent.type(screen.getByLabelText(/email/i), "u@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenough1");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() => expect(signIn).toHaveBeenCalled());
+    const fd: FormData = signIn.mock.calls[0][1];
+    return fd;
+  }
+
+  it("includes next in the dispatched FormData when provided", async () => {
+    const fd = await submitLogin({ next: "/boards/b1" });
+
+    expect(fd.get("next")).toBe("/boards/b1");
+    expect(fd.get("email")).toBe("u@example.com");
+  });
+
+  it("omits next entirely when not provided (not an empty string)", async () => {
+    const fd = await submitLogin({});
+
+    expect(fd.get("next")).toBeNull();
+  });
+
+  it("carries next in signup mode too", async () => {
+    render(<AuthForm mode="signup" next="/boards/b1" />);
+    await userEvent.type(screen.getByLabelText(/organization name/i), "Acme");
+    await userEvent.type(screen.getByLabelText(/email/i), "new@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenough1");
+    await userEvent.click(
+      screen.getByRole("button", { name: /create account/i }),
+    );
+    await waitFor(() => expect(signUp).toHaveBeenCalled());
+
+    const fd: FormData = signUp.mock.calls[0][1];
+    expect(fd.get("next")).toBe("/boards/b1");
   });
 });
