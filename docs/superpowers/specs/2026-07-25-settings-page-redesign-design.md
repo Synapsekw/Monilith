@@ -122,9 +122,13 @@ schema change reaching every tenant table and belongs in its own spec.
 
 Required by AGENTS.md working agreement #5.
 
-**First paint.** The shared layout resolves `requireUser()`, `resolveActiveOrg()` and
-`isOrgAdmin()` (all `cache()`-wrapped). Each section route then fetches only its own
-data:
+**First paint.** The shared layout resolves `requireUser()`, `resolveActiveOrg()`
+(`cache()`-wrapped) and `isOrgAdminCached(userId, orgId)`. It must use
+`isOrgAdminCached`, **not** `isOrgAdmin()` — the latter derives the role from the
+`get_org_members` RPC, which would drag the heavy members query onto every settings
+page and undo the win below. `isOrgAdminCached` is a narrow `org_members` role
+lookup behind `"use cache"` + `orgAdminTag`. Each section route then fetches only its
+own data:
 
 | Route           | Reads                                                     |
 | --------------- | --------------------------------------------------------- |
