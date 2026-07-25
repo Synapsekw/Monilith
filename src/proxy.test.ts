@@ -62,22 +62,36 @@ describe("proxy()", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("redirects an anonymous visitor on a protected route to /login", async () => {
+  it("redirects an anonymous visitor on a protected route to /login?next=", async () => {
     getClaims.mockResolvedValue({ data: null, error: null });
 
     const res = await proxy(req("/boards/b1"));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost/login");
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/login?next=%2Fboards%2Fb1",
+    );
   });
 
-  it("treats a getClaims error as unauthenticated (redirect to /login)", async () => {
+  it("preserves the query string in next", async () => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    const res = await proxy(req("/oauth/consent?client_id=a&state=b"));
+
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/login?next=%2Foauth%2Fconsent%3Fclient_id%3Da%26state%3Db",
+    );
+  });
+
+  it("treats a getClaims error as unauthenticated (redirect to /login?next=)", async () => {
     getClaims.mockResolvedValue({ data: null, error: { message: "bad jwt" } });
 
     const res = await proxy(req("/boards/b1"));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe("http://localhost/login");
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/login?next=%2Fboards%2Fb1",
+    );
   });
 
   it("lets an authenticated visitor through on a protected route", async () => {
@@ -121,6 +135,50 @@ describe("proxy()", () => {
   });
 });
 
+describe("proxy() — x-pulse-path request header", () => {
+  it("stamps the resolved path on the FORWARDED REQUEST for an authenticated visitor", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: "u1" } },
+      error: null,
+    });
+
+    const res = await proxy(req("/boards/b1?tab=x"));
+
+    // NextResponse.next({ request: { headers } }) encodes upstream request
+    // headers as x-middleware-request-* (verified against next@16.2.9).
+    expect(res.headers.get("x-middleware-request-x-pulse-path")).toBe(
+      "/boards/b1?tab=x",
+    );
+    // It must NOT be a client-visible response header.
+    expect(res.headers.get("x-pulse-path")).toBeNull();
+  });
+
+  it("forwards the REFRESHED cookie upstream, not a stale snapshot", async () => {
+    // Same idiom as the existing "propagates refreshed cookies" test: the
+    // adapter writes during getClaims. This is the regression guard for cloning
+    // request.headers too early — a snapshot taken before setAll() would forward
+    // the OLD Cookie header to the app and silently log the user out.
+    getClaims.mockImplementation(async () => {
+      capturedCookieAdapter.current?.setAll([
+        { name: "sb-access-token", value: "refreshed", options: { path: "/" } },
+      ]);
+      return { data: { claims: { sub: "u1" } }, error: null };
+    });
+
+    const res = await proxy(req("/boards/b1"));
+
+    expect(res.headers.get("set-cookie") ?? "").toContain(
+      "sb-access-token=refreshed",
+    );
+    expect(res.headers.get("x-middleware-request-cookie") ?? "").toContain(
+      "sb-access-token=refreshed",
+    );
+    expect(res.headers.get("x-middleware-request-x-pulse-path")).toBe(
+      "/boards/b1",
+    );
+  });
+});
+
 describe("proxy() — cookieless OAuth/MCP endpoints are not login-walled", () => {
   beforeEach(() => {
     getClaims.mockResolvedValue({ data: null, error: null });
@@ -147,7 +205,7 @@ describe("proxy() — cookieless OAuth/MCP endpoints are not login-walled", () =
       const res = await proxy(req(path));
 
       expect(res.status).toBe(307);
-      expect(res.headers.get("location")).toContain("/login");
+      expect(res.headers.get("location")).toContain("/login?next=");
     },
   );
 });

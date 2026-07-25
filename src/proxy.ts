@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import { boardIdFromPath, LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
+import { loginPath, NEXT_PATH_HEADER } from "@/lib/auth/next-path";
 import type { Database } from "@/types/database.types";
 
 // Auth-flow routes an unauthenticated visitor must reach. `/forgot-password`
@@ -30,8 +31,28 @@ const PUBLIC_ROUTES = ["/", "/landing", "/updates"];
 const PUBLIC_PREFIXES = ["/.well-known/oauth-", "/api/oauth/", "/api/mcp"];
 
 export async function proxy(request: NextRequest) {
+  // Stamp the resolved path on the FORWARDED REQUEST (never on the
+  // client-visible response) so server-side gates — requireUser(),
+  // requirePlatformAdmin(), /home, /change-password — can rebuild the `?next=`
+  // target without a parameter at each of their ~48 call sites. RSC has no
+  // usePathname() equivalent; a proxy-set request header is the documented way
+  // to pass information from proxy to app.
+  //
+  // Built fresh at EVERY construction site rather than cloned once up front: the
+  // Supabase cookie adapter below calls request.cookies.set(...) on a session
+  // refresh, which writes through to this request's `Cookie` header. A snapshot
+  // taken before that would forward a STALE cookie upstream — a silent logout.
+  const forwardedResponse = () => {
+    const forwardedHeaders = new Headers(request.headers);
+    forwardedHeaders.set(
+      NEXT_PATH_HEADER,
+      request.nextUrl.pathname + request.nextUrl.search,
+    );
+    return NextResponse.next({ request: { headers: forwardedHeaders } });
+  };
+
   // Standard @supabase/ssr session-refresh pattern adapted to proxy.
-  let response = NextResponse.next({ request });
+  let response = forwardedResponse();
 
   const supabase = createServerClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
@@ -47,7 +68,7 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          response = NextResponse.next({ request });
+          response = forwardedResponse();
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
@@ -89,7 +110,13 @@ export async function proxy(request: NextRequest) {
   );
 
   if (!isAuthenticated && !isAuthRoute && !isPublicRoute && !isPublicPrefix) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // Carry where they were going so /login can send them back after sign-in.
+    return NextResponse.redirect(
+      new URL(
+        loginPath(request.nextUrl.pathname + request.nextUrl.search),
+        request.url,
+      ),
+    );
   }
 
   // Remember the last board the user actually navigated to, so /home can skip
