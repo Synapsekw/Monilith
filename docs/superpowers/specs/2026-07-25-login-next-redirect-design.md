@@ -225,7 +225,8 @@ must not be able to fail sign-in validation.)
 ### 4.4 Decision D3 — the sanitizer: one hardened module, moved out of the route file
 
 `safeNextPath` moves from `src/app/auth/callback/route.ts` to **`src/lib/auth/next-path.ts`**
-(re-exported from the route so nothing else breaks and its own tests keep passing). Reasons: a
+(the route imports it instead of declaring it; its sanitizer tests move with it, and `route.test.ts`
+is rewritten to cover the handler's own redirect behaviour). Reasons: a
 security primitive used by the proxy cannot live in a route file (the proxy must not import a route
 module, and `next-path.ts` must stay free of `next/*` imports so both runtimes can use it); and
 `src/lib/auth/` is where the other auth primitives already live.
@@ -241,8 +242,12 @@ Hardened rules, in order:
    next unknown parser quirk fails closed.
 5. Resolves to an auth-flow path (`/login`, `/signup`, `/auth/*`, `/forgot-password`) → `"/"`, so a
    crafted `next` can't build a redirect loop or a "sign in twice" phishing surface.
-6. Otherwise return the **canonicalized** same-origin form `pathname + search + hash` from step 4 —
-   already-safe values such as `/boards/123?tab=x` round-trip unchanged.
+6. Build the **canonicalized** same-origin form `pathname + search + hash` from step 4 — already-safe
+   values such as `/boards/123?tab=x#c` round-trip unchanged.
+7. **Re-check the canonical form**: if it starts with `//` → `"/"`. Non-obvious and mandatory —
+   `new URL("/..//evil.com", probe).pathname` is `"//evil.com"` (verified), so canonicalization can
+   _manufacture_ a protocol-relative value that step 3 never saw. Returning it would hand
+   `redirect()` an off-site target.
 
 Length is capped at 2048 chars (→ `"/"`) so a hostile `next` can't push the `Location` header toward
 a 431.
@@ -316,7 +321,7 @@ unless stated).
 | 12  | `null`, `undefined`, `""`                                   | Missing value → default `"/"`.                           |
 | 13  | `/%2f%2fevil.com` → **unchanged**                           | Must NOT over-block: stays same-origin (probe-verified). |
 | 14  | `/boards/123?tab=x#c`, `/` → **unchanged**                  | Must NOT over-block the legitimate case.                 |
-| 15  | `/..//evil.com` → same-origin result                        | `..` normalization must not escape the origin.           |
+| 15  | `/..//evil.com`                                             | `..` canonicalizes to `//evil.com` — see rule 7 (D3).    |
 
 Plus, at the other five boundaries:
 
