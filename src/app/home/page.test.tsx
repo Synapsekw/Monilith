@@ -34,6 +34,10 @@ vi.mock("@/lib/auth/session", () => ({
   getUser: () => getUser(),
   // No-op for these cases: the test users carry no must_change_password flag.
   enforcePasswordChange: () => {},
+  // The real helper reads the proxy-stamped x-pulse-path header; with no header
+  // (and none in a unit test) it returns a bare "/login", which is what the
+  // logged-out case below asserts.
+  loginRedirectPath: async () => "/login",
 }));
 // The page resolves the active org (cookie-scoped) rather than orgs[0]; derive
 // it from the same getUserOrgs mock so each case's org list still drives it.

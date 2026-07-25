@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { getUser } from "@/lib/auth/session";
+import { getUser, loginRedirectPath } from "@/lib/auth/session";
 import { ChangePasswordForm } from "@/components/auth/change-password-form";
 
 export const metadata = { title: "Change your password" };
@@ -15,7 +15,7 @@ async function ChangePasswordGate({
 }) {
   // Both dynamic reads resolve inside the Suspense boundary (Cache Components).
   const [{ recovery }, user] = await Promise.all([searchParams, getUser()]);
-  if (!user) redirect("/login");
+  if (!user) redirect(await loginRedirectPath());
   return (
     <ChangePasswordForm variant={recovery === "1" ? "recovery" : "forced"} />
   );

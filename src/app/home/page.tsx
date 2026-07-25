@@ -4,7 +4,11 @@ import { cookies } from "next/headers";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
 import { FirstBoardEmptyState } from "@/components/boards/FirstBoardEmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getUser, enforcePasswordChange } from "@/lib/auth/session";
+import {
+  getUser,
+  enforcePasswordChange,
+  loginRedirectPath,
+} from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
 import { listMyBoards, listSharedBoards } from "@/lib/boards/queries";
@@ -20,7 +24,7 @@ import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
  */
 export async function HomeDispatch() {
   const user = await getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(await loginRedirectPath());
 
   enforcePasswordChange(user);
 
