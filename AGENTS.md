@@ -35,8 +35,10 @@ Pulse is a Next.js 16 (App Router) + Supabase multi-tenant "Work OS". Orientatio
   PR — stale types are the main source of `any` creep.
 - **Migrations are minted only via `scripts/new-migration.sh <slug>`** — never hand-invent a
   version stamp (hand-stamped hour-24/25 versions have shipped). Apply to DEV via the
-  `supabase-dev` MCP with the **same version + name** as the committed file, verify the ledger
-  (`list_migrations`), and run `scripts/reconcile-migration-version.sh` on any drift.
+  `supabase-dev` MCP with the **same version + name** as the committed file, then verify with
+  **`pnpm db:ledger-check`** (diffs the live ledger against `supabase/migrations/` both ways;
+  `finish-task.sh` blocks on a ledger row that has no committed file — gotcha-57). A _version label_
+  that drifted while the file exists is the other repair: `scripts/reconcile-migration-version.sh`.
 - **Reuse canonical modules — grep before writing a helper.** Server actions use `ActionResult` /
   `fail` imported from `src/lib/actions/result.ts`; typed RPC calls go through the helper in
   `src/lib/supabase/typed-rpc.ts`. Never re-declare these shapes locally — and in general, before

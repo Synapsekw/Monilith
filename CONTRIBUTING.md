@@ -125,6 +125,20 @@ Pre-convention history lives in `src/lib/changelog/seed.ts`.
 - After a migration: regenerate `src/types/database.types.ts` with `pnpm db:types` (or the
   Supabase MCP `generate_typescript_types` tool) and review advisors. Commit the regenerated
   types in the same PR as the migration — stale types are the main source of `any` creep.
+- **Verify the ledger against the files, in both directions**, with `pnpm db:ledger-check` (DEV;
+  `--env prod` for production). The two directions are not equivalent:
+  - a **committed file that is not applied** is the ordinary mid-task state — a warning, exit 0;
+  - a **ledger row with no committed file** is drift, exit 2, and always a defect. `supabase db push`
+    reads files, so that change can never reach production; it is lost. A `revoke`/`grant` on a
+    `SECURITY DEFINER` function nearly shipped that way — see
+    `vault/decisions/2026-07-25-gotcha-57-dev-applied-migration-with-no-committed-file.md`.
+
+  `finish-task.sh` runs this automatically (blocking on drift, warning if the DB is unreachable), and
+  `/sync-prod` + `/promote` run it before any production step. Fix drift by **backfilling the file at
+  the ledger's version** — the one sanctioned exception to "never hand-write a version stamp",
+  because the stamp is copied from the ledger, not invented. `reconcile-migration-version.sh` is the
+  _other_ repair (a version label that drifted while the file exists — gotcha-55).
+
 - **RLS is the security boundary**: default-deny, org-scoped, no cross-tenant access. Never trust the client.
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach the browser.
 
