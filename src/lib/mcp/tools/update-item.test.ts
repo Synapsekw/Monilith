@@ -6,6 +6,7 @@ vi.mock("@/lib/validations/boards", () => ({
   }),
 }));
 
+import { makeFakeClient } from "@/test/mcp-fake-client";
 import { updateItemHandler } from "./update-item";
 
 describe("updateItemHandler", () => {
@@ -78,5 +79,150 @@ describe("updateItemHandler", () => {
     const text = result.content[0]?.text as string;
     expect(text).toContain("Item and column belong to different boards.");
     expect(result.isError).toBe(true);
+  });
+
+  it("writes the cell row with org_id/board_id from the column and item_id from the input", async () => {
+    const { getClient, calls } = makeFakeClient({
+      column: {
+        data: { org_id: "o1", board_id: "b1", kind: "text" },
+        error: null,
+      },
+      item: { data: { board_id: "b1" }, error: null },
+    });
+    const result = await updateItemHandler(getClient, {
+      itemId: "i9",
+      fields: [{ columnId: "c1", value: { text: "hello" } }],
+    });
+    expect(calls.upserts).toHaveLength(1);
+    expect(calls.upserts[0]?.row).toEqual({
+      org_id: "o1",
+      board_id: "b1",
+      item_id: "i9",
+      column_id: "c1",
+      value: { text: "hello" },
+    });
+    expect(calls.upserts[0]?.options).toEqual({
+      onConflict: "item_id,column_id",
+    });
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("resolves the request client exactly once, even across multiple field writes", async () => {
+    // Each getClient() charges the MCP rate limit and rotates the bridge secret
+    // (src/lib/mcp/context.ts:39,50-51) — it must never move into the field loop.
+    const { getClient, calls } = makeFakeClient();
+    await updateItemHandler(getClient, {
+      itemId: "i1",
+      name: "Renamed",
+      fields: [
+        { columnId: "c1", value: { text: "a" } },
+        { columnId: "c2", value: { text: "b" } },
+      ],
+    });
+    expect(calls.getClient).toBe(1);
+    expect(calls.upserts).toHaveLength(2);
+  });
+
+  it("returns isError and writes no fields when the rename fails", async () => {
+    const { getClient, calls } = makeFakeClient({
+      rename: { data: null, error: { message: "row not found" } },
+    });
+    const result = await updateItemHandler(getClient, {
+      itemId: "i1",
+      name: "Renamed",
+      fields: [{ columnId: "c1", value: { text: "a" } }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toBe("row not found");
+    expect(calls.upserts).toHaveLength(0);
+  });
+
+  it("returns isError with a generic message when the rename returns no row", async () => {
+    const { getClient } = makeFakeClient({
+      rename: { data: null, error: null },
+    });
+    const result = await updateItemHandler(getClient, {
+      itemId: "i1",
+      name: "Renamed",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toBe("Item not found.");
+  });
+
+  it("reports a missing column without writing, prefixed with the column id", async () => {
+    const { getClient, calls } = makeFakeClient({
+      column: { data: null, error: null },
+    });
+    const result = await updateItemHandler(getClient, {
+      itemId: "i1",
+      fields: [{ columnId: "c1", value: { text: "a" } }],
+    });
+    expect(calls.upserts).toHaveLength(0);
+    const parsed = JSON.parse(result.content[0]?.text as string);
+    expect(parsed.fieldErrors).toEqual(["c1: Column c1 not found."]);
+    expect(result.isError).toBe(true);
+  });
+
+  it("reports a missing item without writing", async () => {
+    const { getClient, calls } = makeFakeClient({
+      item: { data: null, error: null },
+    });
+    const result = await updateItemHandler(getClient, {
+      itemId: "i1",
+      fields: [{ columnId: "c1", value: { text: "a" } }],
+    });
+    expect(calls.upserts).toHaveLength(0);
+    const parsed = JSON.parse(result.content[0]?.text as string);
+    expect(parsed.fieldErrors).toEqual(["c1: Item not found."]);
+    expect(result.isError).toBe(true);
+  });
+
+  it("propagates an upsert error into fieldErrors", async () => {
+    const { getClient } = makeFakeClient({
+      upsert: { error: { message: "value too long" } },
+    });
+    const result = await updateItemHandler(getClient, {
+      itemId: "i1",
+      fields: [{ columnId: "c1", value: { text: "a" } }],
+    });
+    const parsed = JSON.parse(result.content[0]?.text as string);
+    expect(parsed.fieldErrors).toEqual(["c1: value too long"]);
+    expect(result.isError).toBe(true);
+  });
+
+  it("leaves isError unset when only SOME field writes fail", async () => {
+    const { getClient, calls } = makeFakeClient({
+      item: [
+        { data: { board_id: "b1" }, error: null },
+        { data: { board_id: "b2" }, error: null },
+      ],
+    });
+    const result = await updateItemHandler(getClient, {
+      itemId: "i1",
+      fields: [
+        { columnId: "c1", value: { text: "a" } },
+        { columnId: "c2", value: { text: "b" } },
+      ],
+    });
+    expect(calls.upserts).toHaveLength(1);
+    const parsed = JSON.parse(result.content[0]?.text as string);
+    expect(parsed.fieldErrors).toEqual([
+      "c2: Item and column belong to different boards.",
+    ]);
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("reports success for a no-op update (documented current behavior — spec finding F2)", async () => {
+    // With neither `name` nor `fields`, the handler never verifies the item
+    // exists and reports success. Pinned deliberately so the behavior is
+    // intentional, not accidental. Do NOT "fix" this here — see spec §4 F2.
+    const { getClient, calls } = makeFakeClient();
+    const result = await updateItemHandler(getClient, {
+      itemId: "does-not-exist",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(calls.upserts).toHaveLength(0);
+    const parsed = JSON.parse(result.content[0]?.text as string);
+    expect(parsed).toEqual({ itemId: "does-not-exist", fieldErrors: [] });
   });
 });
