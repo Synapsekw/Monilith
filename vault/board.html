@@ -8,35 +8,37 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-24 19:50",
+  "updated": "2026-07-25 08:21",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "MCP server (agent connectivity) shipped to develop — OAuth 2.1 + 6 read/write tools",
+  "headline": "develop synced — a DEV-only MCP OAuth ACL migration caught and brought under version control",
   "chips": [
-    { "label": "develop", "value": "86f34fd", "note": "== origin · MCP server + E5 ahead of prod", "tone": "ok" },
+    { "label": "develop", "value": "db2be59", "note": "== origin · MCP + E5 + ACL migration ahead of prod", "tone": "ok" },
     { "label": "main", "value": "8b4d648", "note": "#69 Timeline/report shipped", "tone": "ok" },
     { "label": "prod", "value": "", "note": "MCP+E5 not yet promoted", "tone": "warn" }
   ],
   "progress": { "done": 13, "total": 15 },
   "gates": [
+    { "led": "amber", "text": "Set E5 env vars + backfill embeddings, then promote develop → main (MCP server + E5 + the ACL migration)", "tag": "NEXT?" },
     { "led": "amber", "text": "Live end-to-end test: connect Claude Desktop/claude.ai to a deployed develop before calling MCP server done", "tag": "NEXT?" },
-    { "led": "amber", "text": "Set E5 env vars + backfill embeddings, then promote develop → main (MCP server + E5 + Timeline upgrades)", "tag": "NEXT?" },
+    { "led": "hollow", "text": "Carry 20260724134101_mcp_oauth_vault_cleanup_acl to prod on the next /sync-prod — else prod ships a definer trigger publicly executable", "tag": "OWED" },
+    { "led": "hollow", "text": "Nothing diffs list_migrations against supabase/migrations — teach finish-task.sh or a /sync-prod pre-check (gotcha-57)", "tag": "OWED" },
     { "led": "hollow", "text": "/login ignores ?next= — OAuth connect flow can't resume post-login", "tag": "OWED" },
     { "led": "hollow", "text": "Report Builder v2 — charts + wide-board table continuation", "tag": "OWED" },
     { "led": "hollow", "text": "E6 Stripe billing — F16 blocked on owner creds", "tag": "NEXT?" },
     { "led": "hollow", "text": "Wordmark mark revert in brand.tsx", "tag": "OWED" },
     { "led": "hollow", "text": "Rotate the prod DB password", "tag": "OWED" },
+    { "led": "green", "text": "DEV-only ACL migration found + backfilled at the ledger version (b4efe5f) — all 3 MCP definer fns now service_role only", "tag": "DONE" },
     { "led": "green", "text": "MCP server + OAuth 2.1 AS merged (86f34fd) — session-refresh race fixed before merge", "tag": "DONE" },
-    { "led": "green", "text": "E5 F13/F14/F15 — AI action step, Autopilot agent, pgvector semantic search — merged, not yet promoted", "tag": "DONE" },
-    { "led": "green", "text": "PDF export validated — last unproven Report Builder path cleared", "tag": "DONE" }
+    { "led": "green", "text": "E5 F13/F14/F15 — AI action step, Autopilot agent, pgvector semantic search — merged, not yet promoted", "tag": "DONE" }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-07-24-1950-mcp-server-oauth",
-    "when": "07-24 19:50",
+    "id": "2026-07-25-0821-develop-sync-acl-migration-backfill",
+    "when": "07-25 08:21",
     "bullets": [
-      "Hosted MCP server + from-scratch OAuth 2.1 AS — agents connect as a real Pulse user, genuinely RLS-scoped (no service-role bypass)",
-      "Built subagent-driven: 14-task plan, implementer+reviewer per task, final whole-branch review on opus",
-      "Final review caught + fixed a real concurrency bug (session refresh racing under concurrent tool calls) before merge"
+      "Pulled 28 commits onto develop; rebase conflict in the vault resolved to upstream, E5 session note landed",
+      "Ledger hygiene caught 20260724134101_mcp_oauth_vault_cleanup_acl applied to DEV with no committed file — backfilled at the ledger version",
+      "Wrote gotcha-57: no gate catches a DEV-only migration; corrected the north-star's false 'E5 note never committed' claim"
     ]
   },
   "roadmap": [

@@ -5,7 +5,12 @@ branch: develop
 trigger: wrapup
 status: complete
 tags: [session]
-related: ["[[2026-07-24-gotcha-56-per-request-session-refresh-race]]"]
+related:
+  [
+    "[[2026-07-24-gotcha-56-per-request-session-refresh-race]]",
+    "[[2026-07-25-gotcha-57-dev-applied-migration-with-no-committed-file]]",
+    "[[2026-07-25-0821-develop-sync-acl-migration-backfill]]",
+  ]
 ---
 
 # MCP Server — OAuth 2.1 authorization server + read/write tools
