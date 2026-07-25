@@ -8,55 +8,174 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-17 16:47",
+  "updated": "2026-07-25 10:56",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "Report fixes + timestamp streaming on develop · PDF validated",
+  "headline": "Settings redesigned — nine nested routes on one alignment grid, and the MCP server finally has an in-app front door",
   "chips": [
-    { "label": "develop", "value": "6c0f460", "note": "== origin · 2 ahead of prod", "tone": "ok" },
-    { "label": "main", "value": "4235d96", "note": "in sync", "tone": "ok" },
-    { "label": "prod", "value": "", "note": "parity ✓", "tone": "ok" }
+    {
+      "label": "develop",
+      "value": "1555dc1",
+      "note": "== origin · MCP + E5 + ACL migration + settings redesign ahead of prod",
+      "tone": "ok"
+    },
+    {
+      "label": "main",
+      "value": "8b4d648",
+      "note": "#69 Timeline/report shipped",
+      "tone": "ok"
+    },
+    {
+      "label": "prod",
+      "value": "",
+      "note": "MCP+E5+settings not yet promoted",
+      "tone": "warn"
+    }
   ],
-  "progress": { "done": 13, "total": 15 },
+  "progress": {
+    "done": 13,
+    "total": 15
+  },
   "gates": [
-    { "led": "amber", "text": "Promote develop → main to carry report-cover fix + timestamp streaming to prod", "tag": "NEXT?" },
-    { "led": "hollow", "text": "Report Builder v2 — charts + wide-board table continuation", "tag": "OWED" },
-    { "led": "hollow", "text": "E5 — semantic search greenfield; fold 3 review risks in first", "tag": "NEXT?" },
-    { "led": "hollow", "text": "E6 Stripe billing — F16 blocked on owner creds", "tag": "NEXT?" },
-    { "led": "hollow", "text": "Wordmark mark revert in brand.tsx", "tag": "OWED" },
-    { "led": "hollow", "text": "Rotate the prod DB password", "tag": "OWED" },
-    { "led": "green", "text": "PDF export validated — last unproven Report Builder path cleared", "tag": "DONE" },
-    { "led": "green", "text": "Report cover org name + viewer edit-gate shipped (1631555)", "tag": "DONE" },
-    { "led": "green", "text": "Timestamp blank-then-fill killed via device-zone-first render (6c0f460)", "tag": "DONE" }
+    {
+      "led": "amber",
+      "text": "Set E5 env vars + backfill embeddings, then promote develop → main (MCP server + E5 + ACL migration + settings redesign)",
+      "tag": "NEXT?"
+    },
+    {
+      "led": "amber",
+      "text": "Live end-to-end test: connect Claude Desktop/claude.ai to a deployed develop — now also validates the new per-client guide steps",
+      "tag": "NEXT?"
+    },
+    {
+      "led": "hollow",
+      "text": "Carry 20260724134101_mcp_oauth_vault_cleanup_acl to prod on the next /sync-prod — else prod ships a definer trigger publicly executable",
+      "tag": "OWED"
+    },
+    {
+      "led": "hollow",
+      "text": "Delete account deferred to its own spec — 28 auth.users FKs lack on delete cascade, so deletion raises an FK violation",
+      "tag": "OWED"
+    },
+    {
+      "led": "hollow",
+      "text": "Nothing diffs list_migrations against supabase/migrations — teach finish-task.sh or a /sync-prod pre-check (gotcha-57)",
+      "tag": "OWED"
+    },
+    {
+      "led": "hollow",
+      "text": "/login ignores ?next= — OAuth connect flow cant resume post-login",
+      "tag": "OWED"
+    },
+    {
+      "led": "hollow",
+      "text": "Report Builder v2 — charts + wide-board table continuation",
+      "tag": "OWED"
+    },
+    {
+      "led": "hollow",
+      "text": "E6 Stripe billing — F16 blocked on owner creds",
+      "tag": "NEXT?"
+    },
+    {
+      "led": "hollow",
+      "text": "Wordmark mark revert in brand.tsx",
+      "tag": "OWED"
+    },
+    {
+      "led": "hollow",
+      "text": "Rotate the prod DB password",
+      "tag": "OWED"
+    },
+    {
+      "led": "green",
+      "text": "Settings redesign merged (1555dc1) — 9 routes, SettingRow grid, Connect-via-MCP guide, revoke errors now surfaced",
+      "tag": "DONE"
+    },
+    {
+      "led": "green",
+      "text": "DEV-only ACL migration found + backfilled at the ledger version (b4efe5f) — all 3 MCP definer fns now service_role only",
+      "tag": "DONE"
+    },
+    {
+      "led": "green",
+      "text": "MCP server + OAuth 2.1 AS merged (86f34fd) — session-refresh race fixed before merge",
+      "tag": "DONE"
+    }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-07-17-1647-report-fixes-timestamp-streaming",
-    "when": "07-17 16:47",
+    "id": "2026-07-25-1056-settings-redesign-mcp-guide",
+    "when": "07-25 10:56",
     "bullets": [
-      "whats-next Batch A: report follow-up fixes + timestamp streaming, two parallel worktrees merged",
-      "PDF export validated by owner; 9 stale/orphaned worktree dirs swept",
-      "develop 2 features ahead of prod — ready to promote"
+      "/settings: 8-card masonry → left sub-nav over 9 nested routes; SettingsSection/SettingRow put every control on one grid",
+      "New Connect via MCP page — server URL, per-client steps, tool/permission table, safety notes, troubleshooting",
+      "Fixed silently-swallowed revoke errors; added org rename, leave-org, appearance, security. /settings/profile: ~10 queries → 1"
     ]
   },
   "roadmap": [
-    { "label": "0 Setup", "state": "done" },
-    { "label": "1 Auth", "state": "done" },
-    { "label": "2 Boards", "state": "done" },
-    { "label": "3 Views", "state": "done" },
-    { "label": "4 Collab", "state": "done" },
-    { "label": "5 Autom", "state": "done" },
-    { "label": "6 Depth", "state": "prog" },
-    { "label": "7 Asana", "state": "done" },
-    { "label": "8 Dash", "state": "done" },
-    { "label": "9 Perf", "state": "done" },
-    { "label": "RS", "state": "done" },
-    { "label": "MVP-F", "state": "done" },
-    { "label": "Touch", "state": "done" },
-    { "label": "PF", "state": "done" },
-    { "label": "10 AI", "state": "prog" }
+    {
+      "label": "0 Setup",
+      "state": "done"
+    },
+    {
+      "label": "1 Auth",
+      "state": "done"
+    },
+    {
+      "label": "2 Boards",
+      "state": "done"
+    },
+    {
+      "label": "3 Views",
+      "state": "done"
+    },
+    {
+      "label": "4 Collab",
+      "state": "done"
+    },
+    {
+      "label": "5 Autom",
+      "state": "done"
+    },
+    {
+      "label": "6 Depth",
+      "state": "prog"
+    },
+    {
+      "label": "7 Asana",
+      "state": "done"
+    },
+    {
+      "label": "8 Dash",
+      "state": "done"
+    },
+    {
+      "label": "9 Perf",
+      "state": "done"
+    },
+    {
+      "label": "RS",
+      "state": "done"
+    },
+    {
+      "label": "MVP-F",
+      "state": "done"
+    },
+    {
+      "label": "Touch",
+      "state": "done"
+    },
+    {
+      "label": "PF",
+      "state": "done"
+    },
+    {
+      "label": "10 AI",
+      "state": "prog"
+    }
   ]
 }
-</script>
+  </script>
 
 <style>
   /* Keystone Console — committed dark world (matches the app's dark-first identity). */

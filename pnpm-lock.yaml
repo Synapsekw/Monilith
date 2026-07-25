@@ -29,6 +29,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.79.0(react@19.2.7))
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
       '@sparticuz/chromium':
         specifier: ^149.0.0
         version: 149.0.0
@@ -62,6 +65,9 @@ importers:
       lucide-react:
         specifier: ^1.18.0
         version: 1.18.0(react@19.2.7)
+      mcp-handler:
+        specifier: ^1.1.0
+        version: 1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(next@16.2.9(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
       next:
         specifier: 16.2.9
         version: 16.2.9(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -1889,6 +1895,35 @@ packages:
   '@radix-ui/rect@1.1.2':
     resolution: {integrity: sha512-xnXE7wG13PI+cxieVssYXlQJuYVRhH9NBoxt3KNwzghDIA69GMm7d4wXRouHIYjE+KvS6U/MsMO73NdS2MH9ZA==}
 
+  '@redis/bloom@1.2.0':
+    resolution: {integrity: sha512-HG2DFjYKbpNmVXsa0keLHp/3leGJz1mjh09f2RLGGLQZzSHpkmZWuwJbAvo3QcRY8p80m5+ZdXZdYOSBLlp7Cg==}
+    peerDependencies:
+      '@redis/client': ^1.0.0
+
+  '@redis/client@1.6.1':
+    resolution: {integrity: sha512-/KCsg3xSlR+nCK8/8ZYSknYxvXHwubJrU82F3Lm1Fp6789VQ0/3RJKfsmRXjqfaTA++23CvC3hqmqe/2GEt6Kw==}
+    engines: {node: '>=14'}
+
+  '@redis/graph@1.1.1':
+    resolution: {integrity: sha512-FEMTcTHZozZciLRl6GiiIB4zGm5z5F3F6a6FZCyrfxdKOhFlGkiAqlexWMBzCi4DcRoyiOsuLfW+cjlGWyExOw==}
+    peerDependencies:
+      '@redis/client': ^1.0.0
+
+  '@redis/json@1.0.7':
+    resolution: {integrity: sha512-6UyXfjVaTBTJtKNG4/9Z8PSpKE6XgSyEb8iwaqDcy+uKrd/DGYHTWkUdnQDyzm727V7p21WUMhsqz5oy65kPcQ==}
+    peerDependencies:
+      '@redis/client': ^1.0.0
+
+  '@redis/search@1.2.0':
+    resolution: {integrity: sha512-tYoDBbtqOVigEDMAcTGsRlMycIIjwMCgD8eR2t0NANeQmgK/lvxNAvYyb6bZDD4frHRhIHkJu2TBRvB0ERkOmw==}
+    peerDependencies:
+      '@redis/client': ^1.0.0
+
+  '@redis/time-series@1.1.0':
+    resolution: {integrity: sha512-c1Q99M5ljsIuc4YdaCwfUEXsofakb9c8+Zse2qxTadu8TalLXuAESzLvFAvNVbkmSlvlzIQOLpBCmWI9wTOt+g==}
+    peerDependencies:
+      '@redis/client': ^1.0.0
+
   '@reduxjs/toolkit@2.12.0':
     resolution: {integrity: sha512-KiT+RzZbp6mQET+Mg+h2c97+9j1sNflUxQkIHI7Yuzf6Peu+OYpmkn6nbHWmLLWj+1ZODUJFwGZ7gx3L9R9EOw==}
     peerDependencies:
@@ -2969,6 +3004,10 @@ packages:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
 
+  cluster-key-slot@1.1.2:
+    resolution: {integrity: sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA==}
+    engines: {node: '>=0.10.0'}
+
   cmdk@1.1.1:
     resolution: {integrity: sha512-Vsv7kFaXm+ptHDMZ7izaRsP70GgrW9NBNGswt9OZaVBLlE0SNpDq8eu/VGXyF9r7M0azK3Wy7OlYXsuyYLFzHg==}
     peerDependencies:
@@ -3824,6 +3863,10 @@ packages:
     resolution: {integrity: sha512-SFdFmIJi+ybC0vjlHN0ZGVGHc3lgE0DxPAT0djjVg+kjOnSqclqmj0KQ7ykTOLP6YxoqOvuAODGdcHJn+43q3g==}
     engines: {node: '>= 0.4'}
 
+  generic-pool@3.9.0:
+    resolution: {integrity: sha512-hymDOu5B53XvN4QT9dBmZxPX4CWhBPPLguTZ9MMFeFa/Kg0xWVfylOVNlJji/E7yTZWFd/q9GO5TxDLq156D7g==}
+    engines: {node: '>= 4'}
+
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
@@ -4642,6 +4685,16 @@ packages:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
 
+  mcp-handler@1.1.0:
+    resolution: {integrity: sha512-MVCES7g18gcoZy+R/3v5nadkUMzMAWdos8jRl6DyljOKvd2/ZKDmwlCjL6zp4vo+7FeCXOYL1uWinHWlkKAAUg==}
+    hasBin: true
+    peerDependencies:
+      '@modelcontextprotocol/sdk': 1.26.0
+      next: '>=13.0.0'
+    peerDependenciesMeta:
+      next:
+        optional: true
+
   mdn-data@2.27.1:
     resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
 
@@ -5376,6 +5429,9 @@ packages:
   redent@3.0.0:
     resolution: {integrity: sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==}
     engines: {node: '>=8'}
+
+  redis@4.7.1:
+    resolution: {integrity: sha512-S1bJDnqLftzHXHP8JsT5II/CtHWQrASX5K96REjWjlmWKrviSOLWmM7QnRLstAWsu1VBBV1ffV6DzCvxNP0UJQ==}
 
   redux-thunk@3.1.0:
     resolution: {integrity: sha512-NW2r5T6ksUKXCabzhL9z+h206HQw/NJkcLm1GPImRQ8IzfXwRGqjVhKJGauHirT0DAuyy6hjdnMZaRoAcy0Klw==}
@@ -6309,6 +6365,9 @@ packages:
 
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
+
+  yallist@4.0.0:
+    resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}
 
   yaml@2.9.0:
     resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
@@ -7265,7 +7324,6 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.4.3)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   '@napi-rs/canvas-android-arm64@1.0.0':
     optional: true
@@ -8173,6 +8231,32 @@ snapshots:
       '@types/react-dom': 19.2.3(@types/react@19.2.17)
 
   '@radix-ui/rect@1.1.2': {}
+
+  '@redis/bloom@1.2.0(@redis/client@1.6.1)':
+    dependencies:
+      '@redis/client': 1.6.1
+
+  '@redis/client@1.6.1':
+    dependencies:
+      cluster-key-slot: 1.1.2
+      generic-pool: 3.9.0
+      yallist: 4.0.0
+
+  '@redis/graph@1.1.1(@redis/client@1.6.1)':
+    dependencies:
+      '@redis/client': 1.6.1
+
+  '@redis/json@1.0.7(@redis/client@1.6.1)':
+    dependencies:
+      '@redis/client': 1.6.1
+
+  '@redis/search@1.2.0(@redis/client@1.6.1)':
+    dependencies:
+      '@redis/client': 1.6.1
+
+  '@redis/time-series@1.1.0(@redis/client@1.6.1)':
+    dependencies:
+      '@redis/client': 1.6.1
 
   '@reduxjs/toolkit@2.12.0(react-redux@9.3.0(@types/react@19.2.17)(react@19.2.7)(redux@5.0.1))(react@19.2.7)':
     dependencies:
@@ -9230,6 +9314,8 @@ snapshots:
       wrap-ansi: 9.0.2
 
   clsx@2.1.1: {}
+
+  cluster-key-slot@1.1.2: {}
 
   cmdk@1.1.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
@@ -10303,6 +10389,8 @@ snapshots:
 
   generator-function@2.0.1: {}
 
+  generic-pool@3.9.0: {}
+
   gensync@1.0.0-beta.2: {}
 
   get-caller-file@2.0.5: {}
@@ -11115,6 +11203,15 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
+  mcp-handler@1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(next@16.2.9(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)):
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      chalk: 5.6.2
+      commander: 11.1.0
+      redis: 4.7.1
+    optionalDependencies:
+      next: 16.2.9(@babel/core@7.29.7)(@playwright/test@1.60.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+
   mdn-data@2.27.1: {}
 
   media-typer@0.3.0: {}
@@ -11837,6 +11934,15 @@ snapshots:
     dependencies:
       indent-string: 4.0.0
       strip-indent: 3.0.0
+
+  redis@4.7.1:
+    dependencies:
+      '@redis/bloom': 1.2.0(@redis/client@1.6.1)
+      '@redis/client': 1.6.1
+      '@redis/graph': 1.1.1(@redis/client@1.6.1)
+      '@redis/json': 1.0.7(@redis/client@1.6.1)
+      '@redis/search': 1.2.0(@redis/client@1.6.1)
+      '@redis/time-series': 1.1.0(@redis/client@1.6.1)
 
   redux-thunk@3.1.0(redux@5.0.1):
     dependencies:
@@ -12954,6 +13060,8 @@ snapshots:
 
   yallist@3.1.1: {}
 
+  yallist@4.0.0: {}
+
   yaml@2.9.0:
     optional: true
 
@@ -13030,7 +13138,6 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@4.4.3):
     dependencies:
       zod: 4.4.3
-    optional: true
 
   zod-validation-error@4.0.2(zod@4.4.3):
     dependencies:

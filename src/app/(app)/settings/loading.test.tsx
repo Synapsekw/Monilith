@@ -10,15 +10,18 @@ describe("SettingsLoading", () => {
     expect(status.getAttribute("aria-label")).toMatch(/^Loading/);
   });
 
-  it("mirrors the centered settings column (max-w-3xl)", () => {
+  it("renders skeleton rows matching the section layout", () => {
     render(<SettingsLoading />);
-    const status = screen.getByRole("status");
-    expect(status.className).toContain("max-w-3xl");
-    expect(status.className).toContain("mx-auto");
+    expect(
+      screen.getAllByTestId("settings-row-skeleton").length,
+    ).toBeGreaterThanOrEqual(3);
   });
 
-  it("renders three card placeholders", () => {
+  it("does not re-render the shell — the layout owns the header and nav", () => {
     render(<SettingsLoading />);
-    expect(screen.getAllByTestId("settings-card-skeleton").length).toBe(3);
+    // The fallback covers only the content column; a heading or nav here would
+    // mean the nav blanks out on every section switch.
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 });

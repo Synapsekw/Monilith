@@ -39,6 +39,7 @@ import {
   type BuilderMember,
 } from "@/components/boards/automations/AutomationBuilder";
 import { RecentRuns } from "./RecentRuns";
+import { AutopilotCard } from "./AutopilotCard";
 import {
   recipeNotifyOwner,
   recipeSetOption,
@@ -588,6 +589,7 @@ export function AutomationsDialog({
               groups={groups}
               initial={initialDraft}
               canWebhook={isAdmin}
+              boardId={boardId}
               onSubmit={(draft) => create.mutate(draft)}
               onCancel={() => {
                 setMode("list");
@@ -600,7 +602,9 @@ export function AutomationsDialog({
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <div className="flex max-h-[50vh] flex-col gap-2 overflow-auto">
+            <div className="flex max-h-[50vh] flex-col gap-3 overflow-auto">
+              {/* F14 — the scheduled board agent, above the manual rules list. */}
+              <AutopilotCard boardId={boardId} />
               {isLoading ? (
                 <p className="text-muted-foreground text-sm">Loading…</p>
               ) : rules.length === 0 ? (

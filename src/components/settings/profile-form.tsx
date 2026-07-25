@@ -6,13 +6,17 @@ import { MAX_FULL_NAME_LENGTH } from "@/lib/validations/profile";
 import { AvatarUploader } from "@/components/settings/avatar-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { SettingRow } from "@/components/settings/setting-row";
 import { cn } from "@/lib/utils";
 
 /**
  * Set or clear the signed-in user's display name and avatar. Mirrors the inline
- * message pattern of the timezone forms (the app has no toast primitive yet).
+ * message pattern of the timezone forms.
  * Trimming/empty→null normalization matches `updateProfileFullNameSchema`.
+ *
+ * Emits SettingRows rather than its own layout so the photo and name land on
+ * the same label/control grid as every other row in the section — otherwise
+ * Profile is the one page where nothing lines up.
  */
 export function ProfileForm({
   userId,
@@ -51,15 +55,24 @@ export function ProfileForm({
   }
 
   return (
-    <div className="space-y-5">
-      <AvatarUploader
-        userId={userId}
-        name={(currentFullName ?? "").trim() || "?"}
-        currentAvatarUrl={currentAvatarUrl}
-      />
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="display-name">Display name</Label>
+    <>
+      <SettingRow
+        label="Photo"
+        description="PNG, JPEG, or WebP. Squared and resized automatically."
+      >
+        <AvatarUploader
+          userId={userId}
+          name={(currentFullName ?? "").trim() || "?"}
+          currentAvatarUrl={currentAvatarUrl}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="Display name"
+        htmlFor="display-name"
+        description="Shown across boards, comments, and presence. Leave blank to fall back to your email."
+      >
+        <div className="space-y-3">
           <Input
             id="display-name"
             value={name}
@@ -73,32 +86,27 @@ export function ProfileForm({
               setMsg(null);
             }}
           />
-          <p className="text-muted-foreground text-xs">
-            Shown across boards, comments, and presence. Leave blank to fall
-            back to your email.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={save}
-            disabled={pending || isUnchanged || tooLong}
-            size="sm"
-          >
-            {pending ? "Saving…" : "Save"}
-          </Button>
-          {msg && (
-            <span
-              className={cn(
-                "text-xs",
-                isError ? "text-destructive" : "text-muted-foreground",
-              )}
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={save}
+              disabled={pending || isUnchanged || tooLong}
+              size="sm"
             >
-              {msg}
-            </span>
-          )}
+              {pending ? "Saving…" : "Save"}
+            </Button>
+            {msg && (
+              <span
+                className={cn(
+                  "text-xs",
+                  isError ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {msg}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </SettingRow>
+    </>
   );
 }
