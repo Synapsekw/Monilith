@@ -221,3 +221,16 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+/**
+ * Revoke every session for this user on every device, not just this browser.
+ * `scope: "global"` invalidates all refresh tokens server-side — the escape
+ * hatch for "I signed in on a machine I no longer control". Plain signOut()
+ * above only clears the local session, which would leave that machine logged
+ * in until its refresh token expired.
+ */
+export async function signOutEverywhere(): Promise<void> {
+  const supabase = await createClient();
+  await supabase.auth.signOut({ scope: "global" });
+  redirect("/login");
+}

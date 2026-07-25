@@ -11,26 +11,35 @@ vi.mock("@/lib/settings/digest-actions", () => ({
 
 import { DigestPreferenceForm } from "@/components/settings/DigestPreferenceForm";
 
-describe("DigestPreferenceForm", () => {
-  it("renders checked when subscribed and calls the action on toggle", async () => {
-    render(<DigestPreferenceForm initialOptOut={false} />);
-    const box = screen.getByRole("checkbox", {
-      name: /email me the weekly plan health digest/i,
-    }) as HTMLInputElement;
-    expect(box.checked).toBe(true);
+const NAME = /email me the weekly plan health digest/i;
 
-    fireEvent.click(box);
+describe("DigestPreferenceForm", () => {
+  it("renders on when subscribed and calls the action on toggle", async () => {
+    render(<DigestPreferenceForm initialOptOut={false} />);
+    const toggle = screen.getByRole("switch", { name: NAME });
+    expect(toggle).toBeChecked();
+
+    fireEvent.click(toggle);
     await waitFor(() =>
       expect(setEmailDigestOptOut).toHaveBeenCalledWith({ optOut: true }),
     );
-    expect(box.checked).toBe(false);
+    expect(toggle).not.toBeChecked();
   });
 
-  it("renders unchecked when opted out", () => {
+  it("renders off when opted out", () => {
     render(<DigestPreferenceForm initialOptOut={true} />);
-    const box = screen.getByRole("checkbox", {
-      name: /email me the weekly plan health digest/i,
-    }) as HTMLInputElement;
-    expect(box.checked).toBe(false);
+    expect(screen.getByRole("switch", { name: NAME })).not.toBeChecked();
+  });
+
+  it("reverts when the action fails", async () => {
+    setEmailDigestOptOut.mockResolvedValueOnce({
+      ok: false,
+      error: "nope",
+    } as never);
+    render(<DigestPreferenceForm initialOptOut={false} />);
+    const toggle = screen.getByRole("switch", { name: NAME });
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
   });
 });

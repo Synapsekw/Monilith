@@ -160,6 +160,9 @@ export function AvatarUploader({
             </Button>
           )}
         </div>
+        {/* Only transient messages live here — the static format hint is the
+            enclosing SettingRow's description, so it sits with the label like
+            every other row in the section. */}
         {msg ? (
           <span
             className={cn(
@@ -169,11 +172,7 @@ export function AvatarUploader({
           >
             {msg}
           </span>
-        ) : (
-          <p className="text-muted-foreground text-xs">
-            PNG, JPEG, or WebP. Squared and resized automatically.
-          </p>
-        )}
+        ) : null}
       </div>
     </div>
   );

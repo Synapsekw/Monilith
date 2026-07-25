@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { updateOrgTimezone } from "@/lib/org/actions";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { TimezonePicker } from "@/components/ui/timezone-picker";
 import { cn } from "@/lib/utils";
 
@@ -36,21 +35,18 @@ export function TimezoneForm({ orgId, currentTimezone }: TimezoneFormProps) {
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Label>Timezone</Label>
-        <TimezonePicker
-          value={tz}
-          onChange={(v) => {
-            // Org timezone is never "Automatic"; ignore a null selection.
-            if (v) setTz(v);
-            setMsg(null);
-          }}
-          disabled={pending}
-        />
-        <p className="text-muted-foreground text-xs">
-          Date automations fire at 8:00 AM in this timezone.
-        </p>
-      </div>
+      {/* The label and helper copy live on the enclosing SettingRow so every
+          control in the section shares one alignment grid — see
+          src/components/settings/setting-row.tsx. */}
+      <TimezonePicker
+        value={tz}
+        onChange={(v) => {
+          // Org timezone is never "Automatic"; ignore a null selection.
+          if (v) setTz(v);
+          setMsg(null);
+        }}
+        disabled={pending}
+      />
 
       <div className="flex items-center gap-3">
         <Button onClick={save} disabled={pending || isUnchanged} size="sm">

@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { updateProfileTimezone } from "@/lib/profile/actions";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { TimezonePicker } from "@/components/ui/timezone-picker";
 import { cn } from "@/lib/utils";
 
@@ -35,21 +34,18 @@ export function PersonalTimezoneForm({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Label>Your timezone</Label>
-        <TimezonePicker
-          value={tz}
-          onChange={(v) => {
-            setTz(v);
-            setMsg(null);
-          }}
-          allowAutomatic
-          disabled={pending}
-        />
-        <p className="text-muted-foreground text-xs">
-          Controls how dates and times are shown to you across the app.
-        </p>
-      </div>
+      {/* The label and helper copy live on the enclosing SettingRow so every
+          control in the section shares one alignment grid — see
+          src/components/settings/setting-row.tsx. */}
+      <TimezonePicker
+        value={tz}
+        onChange={(v) => {
+          setTz(v);
+          setMsg(null);
+        }}
+        allowAutomatic
+        disabled={pending}
+      />
 
       <div className="flex items-center gap-3">
         <Button onClick={save} disabled={pending || isUnchanged} size="sm">
