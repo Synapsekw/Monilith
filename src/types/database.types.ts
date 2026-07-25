@@ -17,7 +17,7 @@ export type Database = {
       admin_audit_log: {
         Row: {
           action: string;
-          actor_id: string;
+          actor_id: string | null;
           actor_kind: string;
           created_at: string;
           id: string;
@@ -28,7 +28,7 @@ export type Database = {
         };
         Insert: {
           action: string;
-          actor_id: string;
+          actor_id?: string | null;
           actor_kind: string;
           created_at?: string;
           id?: string;
@@ -39,7 +39,7 @@ export type Database = {
         };
         Update: {
           action?: string;
-          actor_id?: string;
+          actor_id?: string | null;
           actor_kind?: string;
           created_at?: string;
           id?: string;
@@ -1170,7 +1170,7 @@ export type Database = {
           responded_at: string | null;
           responded_by: string | null;
           status: string;
-          submitted_by: string;
+          submitted_by: string | null;
           title: string;
           updated_at: string;
         };
@@ -1184,7 +1184,7 @@ export type Database = {
           responded_at?: string | null;
           responded_by?: string | null;
           status?: string;
-          submitted_by: string;
+          submitted_by?: string | null;
           title: string;
           updated_at?: string;
         };
@@ -1198,7 +1198,7 @@ export type Database = {
           responded_at?: string | null;
           responded_by?: string | null;
           status?: string;
-          submitted_by?: string;
+          submitted_by?: string | null;
           title?: string;
           updated_at?: string;
         };
@@ -2793,12 +2793,28 @@ export type Database = {
           total_items: number;
         }[];
       };
+      _reassign_authorship_target: {
+        Args: { p_leaving: string; p_org_id: string };
+        Returns: string;
+      };
       _webhook_outcome: {
         Args: { p_error_msg: string; p_status_code: number };
         Returns: string;
       };
       _webhook_url_safe: { Args: { p_url: string }; Returns: boolean };
       accept_invitation: { Args: { p_invite_id: string }; Returns: string };
+      account_deletion_blocking_fks: {
+        Args: never;
+        Returns: {
+          qualified_column: string;
+        }[];
+      };
+      account_deletion_reattribution_frozen_columns: {
+        Args: never;
+        Returns: {
+          qualified_column: string;
+        }[];
+      };
       add_portfolio_board: {
         Args: {
           p_board_id: string;
@@ -3545,6 +3561,10 @@ export type Database = {
         Args: { p_board_id: string; p_user_id: string };
         Returns: undefined;
       };
+      user_delete_reassign_authorship: {
+        Args: { p_user_id: string };
+        Returns: Json;
+      };
       workload_actuals_rollup: {
         Args: { p_from: string; p_to: string };
         Returns: {
@@ -3609,7 +3629,8 @@ export type Database = {
         | "update_on_item"
         | "automation"
         | "feedback_response"
-        | "health_digest";
+        | "health_digest"
+        | "account_deleted";
       org_role: "owner" | "admin" | "member" | "guest";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
@@ -3796,6 +3817,7 @@ export const Constants = {
         "automation",
         "feedback_response",
         "health_digest",
+        "account_deleted",
       ],
       org_role: ["owner", "admin", "member", "guest"],
       portfolio_health: ["on_track", "at_risk", "off_track"],

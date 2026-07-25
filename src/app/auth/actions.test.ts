@@ -306,3 +306,104 @@ describe("rate limiting — allowed path preserves existing contracts", () => {
     expect(res).toEqual({ success: "reset-email-sent" });
   });
 });
+
+const LF = "\n";
+
+const loginFdWithNext = (next: string) => {
+  const f = loginFd();
+  f.set("next", next);
+  return f;
+};
+
+describe("signIn — next handling", () => {
+  it("redirects to a safe next", async () => {
+    await expect(
+      signInAction({}, loginFdWithNext("/boards/b1")),
+    ).rejects.toThrow("REDIRECT:/boards/b1");
+  });
+
+  it("resumes an OAuth authorize request with its query string", async () => {
+    const target = "/api/oauth/authorize?client_id=a&state=b";
+    await expect(signInAction({}, loginFdWithNext(target))).rejects.toThrow(
+      `REDIRECT:${target}`,
+    );
+  });
+
+  it("redirects to / when there is no next (unchanged contract)", async () => {
+    await expect(signInAction({}, loginFd())).rejects.toThrow("REDIRECT:/");
+  });
+
+  it.each([
+    ["absolute URL", "https://evil.com"],
+    ["protocol-relative", "//evil.com"],
+    ["backslash trick", "/\\evil.com"],
+    ["control character", "/" + LF + "/evil.com"],
+    ["login loop", "/login"],
+  ])("refuses a forged next (%s) and falls back to /", async (_label, next) => {
+    // The field is client-controlled — the page-level sanitize cannot protect
+    // this call path.
+    await expect(signInAction({}, loginFdWithNext(next))).rejects.toThrow(
+      "REDIRECT:/",
+    );
+  });
+
+  it("does not redirect at all when the credentials are wrong", async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: { message: "Invalid login credentials" },
+    });
+
+    const res = await signInAction({}, loginFdWithNext("/boards/b1"));
+
+    expect(res.error).toBe("Invalid login credentials");
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("signUp — next handling", () => {
+  const signupFdWithNext = (next: string) => {
+    const f = signupFd();
+    f.set("next", next);
+    return f;
+  };
+
+  it("threads a safe next into emailRedirectTo", async () => {
+    serverEnv.value = { APP_BASE_URL: "https://app.example.com" };
+
+    await signUpAction({}, signupFdWithNext("/boards/b1"));
+
+    expect(signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          emailRedirectTo:
+            "https://app.example.com/auth/callback?next=%2Fboards%2Fb1",
+        }),
+      }),
+    );
+  });
+
+  it("omits next from emailRedirectTo when it is unsafe", async () => {
+    serverEnv.value = { APP_BASE_URL: "https://app.example.com" };
+
+    await signUpAction({}, signupFdWithNext("https://evil.com"));
+
+    expect(signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          emailRedirectTo: "https://app.example.com/auth/callback",
+        }),
+      }),
+    );
+  });
+
+  it("honours next when Supabase returns an immediate session", async () => {
+    signUp.mockResolvedValue({
+      data: { session: { access_token: "t" } },
+      error: null,
+    });
+
+    await expect(
+      signUpAction({}, signupFdWithNext("/boards/b1")),
+    ).rejects.toThrow("REDIRECT:/boards/b1");
+  });
+});

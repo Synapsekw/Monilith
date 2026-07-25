@@ -29,6 +29,13 @@ type AuthFormProps = {
   footer?: ReactNode;
   /** Seed an error banner on first render (e.g. from a `?error=` redirect). */
   initialError?: string;
+  /**
+   * Already-sanitized post-sign-in destination (from the page's `?next=`). It
+   * rides along as a FormData field because this form is submitted through
+   * `useActionState`, which has no access to the page URL. The server action
+   * sanitizes it AGAIN — a client can forge this field freely.
+   */
+  next?: string;
 };
 
 const copy = {
@@ -46,7 +53,7 @@ const copy = {
   },
 } as const;
 
-export function AuthForm({ mode, footer, initialError }: AuthFormProps) {
+export function AuthForm({ mode, footer, initialError, next }: AuthFormProps) {
   const isSignup = mode === "signup";
   const text = copy[mode];
 
@@ -96,6 +103,9 @@ export function AuthForm({ mode, footer, initialError }: AuthFormProps) {
             if (isSignup && "orgName" in values && values.orgName) {
               formData.set("orgName", values.orgName);
             }
+            // NOTE: this form does not submit the DOM, so a hidden <input> would
+            // never be read — the field has to be set here.
+            if (next) formData.set("next", next);
             startTransition(() => {
               formAction(formData);
             });

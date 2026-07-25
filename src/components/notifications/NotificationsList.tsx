@@ -2,6 +2,7 @@
 
 import { EmptyState } from "@/components/ui/empty-state";
 import type { AppNotification } from "@/lib/collaboration/notifications-cache";
+import { accountDeletedNotificationPayloadSchema } from "@/lib/validations/account";
 import { digestNotificationPayloadSchema } from "@/lib/validations/digest";
 
 function label(n: AppNotification): string {
@@ -14,6 +15,17 @@ function label(n: AppNotification): string {
       return "an automation ran on an item";
     case "feedback_response":
       return "updated your feedback request";
+    case "account_deleted": {
+      // System notification (actor_id null — the actor no longer exists, so there
+      // is nobody to join to). Decision D4: the owner who inherited the work is
+      // told, rather than having to notice an audit row.
+      const parsed = accountDeletedNotificationPayloadSchema.safeParse(
+        n.payload,
+      );
+      if (!parsed.success) return "a teammate deleted their account";
+      const who = parsed.data.deletedEmail ?? "A teammate";
+      return `${who} deleted their account — you now own their work`;
+    }
     case "health_digest": {
       // System notification (actor_id null): the digest numbers ride in
       // payload so no join is needed at render time.

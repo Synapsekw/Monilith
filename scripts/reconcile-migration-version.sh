@@ -15,6 +15,11 @@
 # supabase-dev MCP `execute_sql`, including the identity check the ADR
 # requires BEFORE relabelling and a verification query for after.
 #
+# Scope: this repairs a version LABEL drift (gotcha-55) — the file exists, the
+# ledger row exists, they disagree. It is NOT the tool for a ledger row with no
+# file at all (gotcha-57): use scripts/check-migration-ledger.mjs, which detects
+# that case and prints the DDL to backfill.
+#
 # Usage:
 #   scripts/reconcile-migration-version.sh 20260709174837 20260709090000
 #   scripts/reconcile-migration-version.sh 20260709174837 20260709090000_write_confinement_cross_org_guards.sql
@@ -31,6 +36,19 @@ fi
 WT="$(git rev-parse --show-toplevel)"
 MIG_DIR="$WT/supabase/migrations"
 
+# Printed by every "there is no committed file for that version" exit: those are
+# gotcha-57, not gotcha-55, and this script is the wrong tool for them.
+gotcha_57_routing() {
+  echo "" >&2
+  echo "       If the ledger has a version with NO committed file AT ALL, that is gotcha-57," >&2
+  echo "       not gotcha-55 — there is no label to reconcile, the DDL is simply missing from" >&2
+  echo "       git. This script cannot help. Instead:" >&2
+  echo "         1. node scripts/check-migration-ledger.mjs --env dev --show-ddl" >&2
+  echo "         2. write supabase/migrations/<ledger-version>_<slug>.sql with those statements" >&2
+  echo "            — backfill AT THE LEDGER'S VERSION; do NOT mint a new stamp." >&2
+  echo "         3. pnpm db:ledger-check   # expect ✓ in sync" >&2
+}
+
 if ! printf '%s' "$APPLIED" | grep -Eq '^[0-9]{14}$'; then
   echo "error: <applied-version> must be a 14-digit version (YYYYMMDDHHMMSS). got: '$APPLIED'" >&2
   exit 1
@@ -42,6 +60,7 @@ if printf '%s' "$FILEBASE" | grep -Eq '^[0-9]{14}$'; then
   MATCHES="$(ls "$MIG_DIR" | grep "^${FILEBASE}_" || true)"
   if [ -z "$MATCHES" ]; then
     echo "error: no file in supabase/migrations/ has version prefix $FILEBASE." >&2
+    gotcha_57_routing
     exit 1
   fi
   if [ "$(printf '%s\n' "$MATCHES" | wc -l | tr -d ' ')" != "1" ]; then
@@ -53,6 +72,7 @@ if printf '%s' "$FILEBASE" | grep -Eq '^[0-9]{14}$'; then
 fi
 if [ ! -f "$MIG_DIR/$FILEBASE" ]; then
   echo "error: supabase/migrations/$FILEBASE does not exist — the committed file is the source of truth." >&2
+  gotcha_57_routing
   exit 1
 fi
 if ! printf '%s' "$FILEBASE" | grep -Eq '^[0-9]{14}_[a-z0-9_-]+\.sql$'; then

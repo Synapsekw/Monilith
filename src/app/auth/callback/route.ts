@@ -2,24 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { provisionAccountForUser } from "@/lib/auth/provision";
 import { redeemInvitationsForUser } from "@/lib/auth/redeem";
-
-/**
- * Sanitize the `next` redirect target. Only same-origin, absolute-path
- * destinations are allowed — everything else falls back to "/". This closes an
- * open-redirect: `?next=//evil.com`, `?next=/\evil.com`, and any absolute URL
- * (`https://evil.com`) would otherwise resolve off-site through
- * `new URL(next, origin)`.
- */
-export function safeNextPath(next: string | null): string {
-  if (!next) return "/";
-  // Must start with a single "/" — reject "//host" (protocol-relative) and
-  // "/\host" (browsers normalize backslashes to slashes). Reject anything that
-  // isn't rooted at "/" (e.g. "https://evil.com", "evil.com").
-  if (!next.startsWith("/")) return "/";
-  if (next.startsWith("//")) return "/";
-  if (next.startsWith("/\\")) return "/";
-  return next;
-}
+import { safeNextPath } from "@/lib/auth/next-path";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
@@ -40,10 +23,13 @@ export async function GET(request: NextRequest) {
         // A failed provision leaves the user with zero orgs. Don't drop them
         // into a broken empty app shell — send them to a login page that
         // renders an actionable error instead of silently redirecting to `next`.
+        // Carry `next` through so re-signing in still resumes the original
+        // destination (e.g. an in-flight OAuth authorize request).
         if (provisionError) {
-          return NextResponse.redirect(
-            new URL("/login?error=provisioning", origin),
-          );
+          const bounce = new URL("/login", origin);
+          bounce.searchParams.set("error", "provisioning");
+          if (next !== "/") bounce.searchParams.set("next", next);
+          return NextResponse.redirect(bounce);
         }
       }
     }

@@ -1,7 +1,9 @@
 import { cache } from "react";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { loginPath, NEXT_PATH_HEADER } from "@/lib/auth/next-path";
 import type { Tables } from "@/types/database.types";
 
 export type Organization = Tables<"organizations">;
@@ -61,11 +63,30 @@ export function enforcePasswordChange(user: SessionUser): void {
   }
 }
 
+/**
+ * The `/login` URL for THIS request, carrying `?next=` so the visitor resumes
+ * where they were headed after signing in.
+ *
+ * The path comes from the `x-pulse-path` request header that `src/proxy.ts`
+ * stamps on the forwarded request: RSC has no `usePathname()` equivalent, and
+ * threading a parameter through `requireUser()`'s 48 call sites would be 48
+ * chances to forget (and wrong for dynamic segments). When the header is absent
+ * — a route outside the proxy matcher, or a unit test — this degrades to a bare
+ * "/login", i.e. the pre-existing behaviour.
+ *
+ * Adds no round trip: `headers()` is an in-process read of the current request,
+ * in call paths that already read cookies (so no new dynamic-rendering opt-in).
+ */
+export async function loginRedirectPath(): Promise<string> {
+  const store = await headers();
+  return loginPath(store.get(NEXT_PATH_HEADER));
+}
+
 /** Returns the authenticated user, redirecting to /login when absent. */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getUser();
   // redirect() throws — keep it outside any try/catch.
-  if (!user) redirect("/login");
+  if (!user) redirect(await loginRedirectPath());
   enforcePasswordChange(user);
   return user;
 }

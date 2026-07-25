@@ -16,6 +16,11 @@ describe("TimezoneForm", () => {
     ).toBeInTheDocument();
   });
 
+  // Explicit budget: opening the combobox and typing re-filters the full IANA
+  // timezone list on every keystroke, so this test costs seconds of real work
+  // even when it passes. At vitest's 5s default it fails on wall-clock alone
+  // whenever the suite runs under CPU pressure (parallel agents, CI), which has
+  // aborted finish-task runs. Slow test, not a broken one — so give it room.
   it("saves the chosen timezone via the action", async () => {
     render(<TimezoneForm orgId="o1" currentTimezone="UTC" />);
     await userEvent.click(screen.getByRole("combobox"));
@@ -31,5 +36,5 @@ describe("TimezoneForm", () => {
       orgId: "o1",
       timezone: "America/New_York",
     });
-  });
+  }, 30_000);
 });

@@ -88,6 +88,53 @@ describe("NotificationsList", () => {
     expect(screen.getByText("Weekly plan health digest")).toBeInTheDocument();
   });
 
+  it("names who deleted their account and what it means for you (decision D4)", () => {
+    render(
+      <NotificationsList
+        notifications={[
+          notif({
+            id: "ad-1",
+            kind: "account_deleted",
+            actor_id: null, // system-authored: the actor no longer exists
+            board_id: null,
+            item_id: null,
+            payload: {
+              deletedEmail: "gone@example.com",
+              counts: { boards: 3, items: 12 },
+            },
+          }),
+        ]}
+        onOpen={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "gone@example.com deleted their account — you now own their work",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to generic copy when the account_deleted payload is malformed", () => {
+    render(
+      <NotificationsList
+        notifications={[
+          notif({
+            id: "ad-2",
+            kind: "account_deleted",
+            actor_id: null,
+            board_id: null,
+            item_id: null,
+            payload: null,
+          }),
+        ]}
+        onOpen={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText("a teammate deleted their account"),
+    ).toBeInTheDocument();
+  });
+
   it("empty state uses the standardized EmptyState", () => {
     render(<NotificationsList notifications={[]} onOpen={() => {}} />);
     const empty = screen.getByText(/no notifications/i);

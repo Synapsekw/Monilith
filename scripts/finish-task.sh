@@ -111,17 +111,38 @@ fi
 echo "→ refreshing dependencies after rebase (pnpm install --prefer-offline)…"
 pnpm install --prefer-offline
 
-# gotcha-43: parallel branches mint the same migration version; two files sharing
-# a version prefix corrupt the supabase ledger — hard-fail before it can land.
-DUP_VERSIONS="$(ls "$WT/supabase/migrations" 2>/dev/null | sed -n 's/^\([0-9]\{14\}\)_.*\.sql$/\1/p' | sort | uniq -d || true)"
-if [ -n "$DUP_VERSIONS" ]; then
-  echo "error: duplicate migration version prefix(es) in supabase/migrations after rebase:" >&2
-  for V in $DUP_VERSIONS; do
-    ls "$WT/supabase/migrations" | grep "^${V}_" | sed 's/^/         /' >&2
-  done
-  echo "       re-mint yours with scripts/new-migration.sh <slug> (real UTC stamp), then re-run." >&2
-  exit 1
-fi
+# Migration hygiene, one check, two gotchas (scripts/check-migration-ledger.mjs):
+#   - gotcha-43 (offline): two committed files sharing one version prefix corrupt
+#     the ledger. This guard used to be inlined here; it moved into the script so
+#     there is one implementation, and it still runs with no network.
+#   - gotcha-57 (needs DEV): a ledger row with NO committed file. `db push` reads
+#     files, so such a change can never reach PROD — it is lost, and a revoke/grant
+#     on a SECURITY DEFINER function can vanish silently. Run AFTER the rebase so
+#     already-merged siblings' files are present, and BEFORE the heavy gates so a
+#     hit costs ~1.5s instead of a full build.
+# Exit codes: 0 ok · 1 local failure · 2 drift · 3 could-not-check · 4 usage.
+# 3 must NEVER block: gating a merge on a network call is how a gate wedges every
+# future task. It warns loudly and continues.
+echo "→ checking migration hygiene (files ↔ DEV ledger)…"
+LEDGER_RC=0
+node "$WT/scripts/check-migration-ledger.mjs" --env dev || LEDGER_RC=$?
+case "$LEDGER_RC" in
+  0) : ;;
+  3)
+    echo "" >&2
+    echo "!! WARNING: could not verify the DEV migration ledger (reason above)." >&2
+    echo "   Files-vs-ledger drift was NOT checked (gotcha-57). Re-run manually" >&2
+    echo "   when you have connectivity:  pnpm db:ledger-check" >&2
+    echo "" >&2
+    ;;
+  *)
+    echo "" >&2
+    echo "error: migration hygiene check failed (exit $LEDGER_RC) — see above." >&2
+    echo "       not merging. fix it, commit, then re-run finish-task.sh." >&2
+    echo "       (last resort, audited: PULSE_SKIP_LEDGER_CHECK=1 scripts/finish-task.sh)" >&2
+    exit 1
+    ;;
+esac
 
 # 3. Keep the generated changelog in sync with `Changelog:` commit trailers.
 #    CI has a develop-only drift gate (`git diff --exit-code src/lib/changelog/generated.ts`

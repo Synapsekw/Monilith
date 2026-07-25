@@ -46,13 +46,15 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          // `.claude/hooks/**` covers the Claude Code hook scripts (plain
-          // node .mjs with exported pure functions) so they run in the same
-          // `pnpm test` gate as src. Anchored at the repo root on purpose —
-          // it does not reach into `.claude/worktrees/*` copies.
+          // `.claude/hooks/**` covers the Claude Code hook scripts and
+          // `scripts/**` the repo tooling scripts (both plain node .mjs with
+          // exported pure functions) so they run in the same `pnpm test` gate
+          // as src. Anchored at the repo root on purpose — it does not reach
+          // into `.claude/worktrees/*` copies.
           include: [
             "src/**/*.{test,spec}.{ts,tsx}",
             ".claude/hooks/**/*.test.mjs",
+            "scripts/**/*.test.mjs",
           ],
           exclude: [...sharedExclude, "src/**/*.integration.test.{ts,tsx}"],
         },

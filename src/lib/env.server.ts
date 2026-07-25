@@ -60,9 +60,13 @@ const serverEnvSchema = z.object({
     .string()
     .email("DIGEST_FROM_EMAIL must be an email when set")
     .optional(),
-  // Optional ops lever for auth rate limits: multiplies every compiled default
-  // limit (e.g. "2" doubles all caps, "0.5" halves them). Absent → 1× defaults.
-  // Feature works fully without it, like the DIGEST_* optionals above.
+  // Optional ops lever for ALL app-level rate limits in
+  // src/lib/rate-limit/auth-rate-limit.ts — the four auth server actions AND
+  // the public OAuth dynamic-registration endpoint (/api/oauth/register).
+  // Multiplies every compiled default limit (e.g. "2" doubles all caps, "0.5"
+  // halves them). Absent → 1× defaults. Feature works fully without it, like
+  // the DIGEST_* optionals above. Name kept AUTH_-prefixed for continuity —
+  // renaming it would break already-provisioned Vercel envs.
   AUTH_RATE_LIMIT_MULTIPLIER: z.coerce
     .number()
     .positive("AUTH_RATE_LIMIT_MULTIPLIER must be a positive number when set")

@@ -26,6 +26,7 @@ One line per gotcha, grouped by theme. **Numbering rules for future ADRs:**
 - **28** [[2026-06-21-gotcha-28-subagents-cant-write-outside-primary-dir]] — subagents can't write outside the primary working dir; nest worktrees inside it
 - **31** [[2026-06-21-gotcha-31-worktree-needs-real-install]] — a nested worktree needs a real `pnpm install`, not inherited `node_modules`
 - **39** [[2026-06-22-gotcha-39-stale-worktree-deps-after-sibling-dependency-add]] — rebasing onto a develop with a new dependency leaves worktree deps stale
+- **58** [[2026-07-25-gotcha-58-playwright-reuses-port-3000-server]] — visual verification from a worktree hit the main checkout's `:3000` dev server and tested the wrong code
 
 ## Shared DB, migrations & Supabase
 
@@ -50,6 +51,8 @@ One line per gotcha, grouped by theme. **Numbering rules for future ADRs:**
 - **52** [[2026-07-07-gotcha-52-managed-postgres-set-param-denied-use-set-config]] — managed Postgres denies `SET <param>` in function headers; use `set_config`
 - **53** [[2026-07-07-gotcha-53-getuserorgs-filters-deactivated-but-roster-cache-doesnt]] — `getUserOrgs()` filters deactivated memberships but the roster cache doesn't
 - **55** [[2026-07-11-gotcha-55-mcp-apply-migration-version-drifts-from-committed-file]] — MCP `apply_migration` version drifts from the committed file; reconcile before `/sync-prod`
+- **57** [[2026-07-25-gotcha-57-dev-applied-migration-with-no-committed-file]] — a DEV-applied migration with no committed file is invisible to every gate; `pnpm db:ledger-check` now diffs the ledger against `supabase/migrations/`
+- **59** [[2026-07-25-gotcha-59-definer-acl-default-privileges-not-load-bearing]] — `alter default privileges … revoke execute` does NOT stop new functions getting a PUBLIC grant; only a per-function `revoke` does
 
 ## Next.js / framework
 
@@ -66,6 +69,7 @@ One line per gotcha, grouped by theme. **Numbering rules for future ADRs:**
 - **44** [[2026-06-24-gotcha-44-sibling-section-layouts-remount-shell]] — per-section sibling layouts re-mount the shared shell on cross-section nav
 - **48** [[2026-07-04-gotcha-48-unstable-instant-blocked-by-shell-searchparams]] — `unstable_instant` can't validate `(app)` routes while the shell reads `useSearchParams()`
 - **50** [[2026-07-05-gotcha-50-tolocaledatestring-undefined-locale-hydration-mismatch]] — `toLocaleDateString(undefined, …)` in SSR'd client components causes hydration mismatch
+- **60** [[2026-07-25-gotcha-60-server-action-side-effects-invisible-to-mcp]] — side effects inside a `"use server"` action are invisible to non-cookie callers (MCP, cron, webhooks); put them in the DB or a client-injected core
 
 ## UI & libraries
 

@@ -102,7 +102,10 @@ export async function listOrgsPage(
 export type PlatformAuditRow = {
   id: string;
   org_id: string | null;
-  actor_id: string;
+  // Nullable since account deletion SET NULLs it: the audit fact outlives the
+  // person, and reassigning it would attribute one admin's action to another.
+  // `target_email` is what remains identifiable (spec §7, decision D1).
+  actor_id: string | null;
   actor_kind: string;
   action: string;
   target_email: string | null;

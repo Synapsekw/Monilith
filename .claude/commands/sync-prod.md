@@ -62,13 +62,45 @@ a tool failure.
 
 Compute the set of versions present in DEV but absent in PROD.
 
-- **Non-empty set** (including bootstrap where PROD has zero migrations) → **hard stop**: tell the
-  user to apply the missing migrations first:
+- **Non-empty set, and every version in it has a committed file in `supabase/migrations/`**
+  → **hard stop**: tell the user to apply the missing migrations first:
   ```bash
   pnpm exec supabase db push --db-url "$PROD_SUPABASE_DB_URL"
   ```
   Then retry `/sync-prod`. Do not proceed past this stop.
+- **Non-empty set, and any version in it has NO committed file** → a **different** hard stop.
+  `db push` reads **files**, so it cannot carry that change to PROD — the instruction above would
+  appear to succeed while silently dropping it (gotcha-57). Stop and tell the user to backfill the
+  file at the ledger's version (step 1b prints the exact recovery), then retry `/sync-prod`.
+  **Never** hand over `db push` for this case.
 - **Parity confirmed (sets are equal):** continue.
+
+### 1b. Files ↔ ledger drift, both environments (agent, read-only)
+
+Version parity between DEV and PROD answers "is prod behind?" — never "is this change in git at
+all?". A ledger row with no committed file is invisible to step 1 and to `db push`. Run the
+automated check on **both** ledgers:
+
+```bash
+pnpm db:ledger-check                                        # DEV
+node scripts/check-migration-ledger.mjs --env prod          # PROD
+```
+
+Act on the exit code:
+
+- `0` — in sync (notes about not-yet-applied files are expected and fine). Continue.
+- `1` — duplicate or malformed migration filename. **Hard stop**: that must be fixed on `develop`
+  before any prod write.
+- `2` — **ledger drift.** **Hard stop.** For DEV: recover and backfill the file at the ledger's
+  version (`--show-ddl` prints the statements), commit it, then retry `/sync-prod`. For PROD this is
+  worse, not better — production is running DDL that exists in no checkout; report the versions and
+  stop. Never `db push` past this.
+- `3` — could not check. **Stop and ask.** Unlike `finish-task.sh` (where an unverifiable ledger is a
+  warning), a prod write must not proceed on an unverified schema. Report the reason (missing
+  `.env.prod.local`, missing `psql`, unreachable DB) and let the user decide.
+
+Run this **before** the independent-prod-data guard: it is cheaper and its failure invalidates the
+whole sync.
 
 ### 2. Independent-prod-data guard (agent, read-only)
 
@@ -247,7 +279,8 @@ Stop (any hard stop above):
 
 - **Missing `.env.prod.local`** — stop at precondition; do not reach any step.
 - **PROD schema behind or bootstrap (zero migrations)** — hard stop at step 1 with the `db push`
-  instruction; re-run `/sync-prod` after schema is applied.
+  instruction, **unless** a missing version has no committed file, in which case step 1b's backfill
+  stop applies instead (`db push` cannot carry it); re-run `/sync-prod` after schema is applied.
 - **PROD has independent data (guard fires)** — loud stop at step 2 naming offending IDs;
   re-run with `--force` only after explicit user acceptance.
 - **`--force` with independent prod data** — log the named IDs as acknowledged and overwritten;
