@@ -1,6 +1,6 @@
 ---
 type: spec
-status: draft
+status: built
 date: 2026-07-25
 tags: [project/pulse, spec, settings, auth, gdpr, migrations, rls]
 related:
@@ -140,15 +140,19 @@ guard (§4.2) already refuses the one case where no other owner exists.
 
 ## 3. Decision: per-column hybrid — reassign ownership, null attribution, cascade personal records
 
-Three treatments, assigned by what the column _means_ rather than by its nullability:
+Four treatments, assigned by what the column _means_ rather than by its nullability. (The
+fourth — the bot principal for `item_updates.author_id` — is decision **D2**, resolved in
+favour of the recommendation in §9; the table below reflects what was **built**.)
 
-| Treatment                                                                   | Columns                                                                                                                                                                                                                                                                                                                                | Why                                                                                                                                                                                                                                                                             |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Reassign to a surviving org owner** (stays `NOT NULL`, stays `NO ACTION`) | `boards.created_by`, `goals.created_by`, `goals.owner_id`, `portfolios.created_by`, `organizations.created_by`, `workspaces.created_by`, `dashboards.created_by`, `items.created_by`, `board_members.granted_by`, `org_invitations.invited_by`, `member_capacity.created_by`, `attachments.uploaded_by`, `item_updates.author_id` (13) | These bear authority (`readable_board_ids`, `can_edit_board`, `can_edit_goal`, `can_edit_portfolio`) or are org work product. A live human must resolve to "owner".                                                                                                             |
-| **Cascade** (`NOT NULL` → `ON DELETE CASCADE`)                              | `time_entries.user_id` (1)                                                                                                                                                                                                                                                                                                             | This is a _fact about the person_, not authorship. Reassigning would falsify who did the work. Its two siblings `time_allocations.user_id` and `member_capacity.user_id` are **already** `cascade` — this is consistency, not a new idea.                                       |
-| **Nullable + `SET NULL`**                                                   | `admin_audit_log.actor_id`, `feedback.submitted_by` (2 newly nullable) + the **10** already-nullable attributive columns (12)                                                                                                                                                                                                          | Audit integrity forbids reassigning `actor_id` (it would attribute one admin's action to another). `feedback` is personal input to Pulse, erasable — `feedback_select` already falls back to `is_platform_admin()`. The 10 attributive columns need only the FK action changed. |
+| Treatment                                                                                | Columns                                                                                                                                                                                                                                                                                                      | Why                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reassign to a surviving org owner** (stays `NOT NULL`, stays `NO ACTION`)              | `boards.created_by`, `goals.created_by`, `goals.owner_id`, `portfolios.created_by`, `organizations.created_by`, `workspaces.created_by`, `dashboards.created_by`, `items.created_by`, `board_members.granted_by`, `org_invitations.invited_by`, `member_capacity.created_by`, `attachments.uploaded_by` (12) | These bear authority (`readable_board_ids`, `can_edit_board`, `can_edit_goal`, `can_edit_portfolio`) or are org work product. A live human must resolve to "owner".                                                                                                                                                                                                                                                                |
+| **Reassign to the platform bot** (stays `NOT NULL`, stays `NO ACTION`) — **decision D2** | `item_updates.author_id` (1)                                                                                                                                                                                                                                                                                 | The only column where the bot is right rather than disqualified. It is the truthful attribution ("no longer attributable to a person") and it hands nobody edit authority over another person's words. Safe **because** `item_updates` is gated by `author_id = auth.uid() OR can_edit_board(board_id)`, so board editors keep control regardless — unlike `boards.created_by`, this column is not visibility-load-bearing (§2.2). |
+| **Cascade** (`NOT NULL` → `ON DELETE CASCADE`)                                           | `time_entries.user_id` (1)                                                                                                                                                                                                                                                                                   | This is a _fact about the person_, not authorship. Reassigning would falsify who did the work. Its two siblings `time_allocations.user_id` and `member_capacity.user_id` are **already** `cascade` — this is consistency, not a new idea.                                                                                                                                                                                          |
+| **Nullable + `SET NULL`**                                                                | `admin_audit_log.actor_id`, `feedback.submitted_by` (2 newly nullable) + the **10** already-nullable attributive columns (12)                                                                                                                                                                                | Audit integrity forbids reassigning `actor_id` (it would attribute one admin's action to another). `feedback` is personal input to Pulse, erasable — `feedback_select` already falls back to `is_platform_admin()`. The 10 attributive columns need only the FK action changed.                                                                                                                                                    |
 
-13 + 1 + 12 = 26. ✓
+12 + 1 + 1 + 12 = 26. ✓ (13 of them reassigned by the RPC, so 13 stay
+`NOT NULL`/`NO ACTION` — verified live: `no action` went 26 → 13.)
 
 Ordering inside one transaction: **reassign → cascade-eligible rows are removed by the
 delete itself → the `SET NULL` FKs fire on delete.** The `NOT NULL` reassign columns keep
@@ -202,7 +206,53 @@ authorship column and nobody updates the RPC, deletion fails **loudly** with a n
 constraint, instead of silently orphaning data. That is the better failure mode, and §8.2
 turns it into an automated, schema-driven test rather than a hope.
 
-### 3.3 The nullable-`created_by` precedent
+It paid for itself immediately — see §3.3.
+
+### 3.3 Found during the build: two freeze triggers make the reassignment a silent no-op
+
+**This is the one thing neither this spec nor the plan predicted**, and it would have
+shipped the feature broken. Two `BEFORE UPDATE` triggers exist precisely to make
+attribution immutable:
+
+| Trigger function                          | Migration                                   | Effect                             |
+| ----------------------------------------- | ------------------------------------------- | ---------------------------------- |
+| `public.items_protect_creation_metadata`  | `20260625120000_item_created_by`            | `new.created_by := old.created_by` |
+| `public.item_updates_protect_attribution` | `20260704111000_item_updates_freeze_author` | `new.author_id := old.author_id`   |
+
+They rewrite the NEW row back to OLD, so `update public.items set created_by = <owner>`
+reports `row_count = 1` **and changes nothing**. The delete then dies on
+`items_created_by_fkey` / `item_updates_author_id_fkey` — i.e. §3.2's tripwire is what
+caught it, exactly as designed.
+
+They are genuine hardening (they stop a board editor re-attributing someone else's comment
+through the raw REST/RLS surface), so they are **not** relaxed. Migration
+`20260725103609_account_deletion_reattribution_triggers` gives each one branch that opens
+only when **three** things hold at once:
+
+1. `pulse.reassigning_authorship` is `'on'` — a **transaction-local** GUC
+   (`set_config(…, is_local => true)`) set by exactly one function,
+   `user_delete_reassign_authorship`, and cleared before it returns. A client cannot set
+   it: PostgREST only calls functions in the exposed schema, and `set_config` lives in
+   `pg_catalog`, so there is no reachable entrypoint; being transaction-local it also
+   cannot leak onto a pooled connection.
+2. The column is actually changing.
+3. The NEW value is a legal target **for that row** — an active `owner` of the row's own
+   org for `items`, and the platform bot and nothing else for `item_updates`.
+
+Condition 3 is the real protection: even a forged flag can only reproduce the exact
+transition account deletion performs, never "re-attribute Bob's comment to me". Every other
+frozen column (`items.created_at`, `item_updates.org_id`/`board_id`/`item_id`) stays frozen
+on the sanctioned path too, so the hole is authorship-only and cannot move a row between
+boards or orgs.
+
+The same migration also skips the two embed-enqueue triggers during reassignment: a pure
+re-attribution changes no embeddable text, so re-embedding a departing member's whole
+back-catalogue would spend tokens producing identical vectors.
+
+`account_deletion_reattribution_frozen_columns()` turns this into a schema assertion too, so
+the _next_ freeze trigger someone adds cannot silently re-break deletion (§8.2).
+
+### 3.4 The nullable-`created_by` precedent
 
 `src/lib/ai/agentic/board-agents-db.ts:28` already declares `created_by: string | null`,
 selects it, and **never reads it for authorization** — authority comes from RLS, and the
@@ -302,15 +352,32 @@ Content stays; the "created by" name becomes the receiving owner's. That must no
 invisible, so the RPC's caller writes **one `admin_audit_log` row per affected org**:
 
 ```
-org_id = <org>, actor_id = null, actor_kind = 'user',
-action = 'account.self_deleted', target_user_id = null,
-target_email = <the deleted email>, metadata = <per-table reassignment counts + target>
+org_id = <org>, actor_id = <the user>, actor_kind = 'org',
+action = 'account.self_deleted', target_user_id = <the user>,
+target_email = <the deleted email>, metadata = <per-table reassignment counts + targets>
 ```
+
+The row is written **before** the delete, with both user pointers populated; the new
+`SET NULL` FKs blank them as the `auth.users` row goes. Written afterwards it would fail its
+own FK. `target_email` is what survives (decision D1).
+
+**Correction found during the build:** `actor_kind` carries a CHECK constraint
+`actor_kind = any (array['org','platform'])`, so this spec's original `'user'` would have
+failed at runtime on every deletion. Per-org rows use `'org'`; the platform-level row
+(`org_id = null`) uses `'platform'`, matching `platformDeleteUser`.
 
 `admin_audit_log`'s `SELECT` policy is
 `(org_id is not null and has_org_role(org_id, owner|admin)) or is_platform_admin()`, so org
-owners and admins see it in their existing audit view with **zero new UI**. A platform-level
-row (`org_id = null`) is written too, matching `platformDeleteUser:241-249`.
+owners and admins see it in their existing audit view (`/settings/members` → activity) with
+**zero new UI**. A platform-level row (`org_id = null`) is written too, matching
+`platformDeleteUser:241-249`.
+
+**Decision D4 (built):** the audit row is passive, so each receiving owner also gets a
+`notifications` row — `kind = 'account_deleted'`, `actor_id = null` (system-authored, legal
+because the column is nullable), `payload = { deletedEmail, counts }`. It reuses the existing
+bell UI and lands the reader on `/settings/members`, where the matching audit row already
+renders. Written **after** the delete, best-effort: the recipient is a surviving user, so
+nothing here references the erased row.
 
 ## 5. UI
 
@@ -442,6 +509,20 @@ and asserts each one is covered by `user_delete_reassign_authorship`'s statement
 future migration that adds an authorship column fails this test instead of silently breaking
 deletion in production. This is the highest-value test in the spec.
 
+**Built in two halves, because a skipped test is not a passing test.** Integration suites
+skip without `.env.test` (the repo default that keeps DEV clean), which would have left the
+most important assertion in this spec unexecuted on most machines and in CI:
+
+| Test                                          | Needs a DB? | Asks                                                                               |
+| --------------------------------------------- | ----------- | ---------------------------------------------------------------------------------- |
+| `account-deletion-schema.integration.test.ts` | yes         | Are these still the columns that exist? (live `pg_constraint`)                     |
+| `account-deletion-rpc-coverage.test.ts`       | **no**      | Does the RPC handle the columns we believe exist? (parses the committed migration) |
+
+The second runs in every `pnpm test`, covers the other direction of drift, and also pins
+decision D2's principal and the §3.3 GUC handshake. Both were verified live against DEV via
+the `supabase-dev` MCP: `account_deletion_blocking_fks()` returns exactly the 13 expected
+columns, and `account_deletion_reattribution_frozen_columns()` exactly the 2 handled freezes.
+
 ### 8.3 Integration (`*.integration.test.ts`, skips without `.env.test`)
 
 Model on `src/lib/org/admin.rls.integration.test.ts:50,76` (`createUser` + `provisionOrg`
@@ -465,10 +546,28 @@ are the most complete factories in the repo; there is no shared factory to reuse
    existing coverage of it (`src/lib/platform/platform.integration.test.ts` covers the gate
    and search RPCs, not delete), which is why the bug shipped.
 
-## 9. Decision points for the owner
+## 9. Decision points for the owner — ALL RESOLVED
 
-Real product/legal judgments, not implementation gaps. Each has a recommendation and a
-default so the build is not blocked.
+Real product/legal judgments, not implementation gaps. The owner delegated all four; the
+resolutions below are what was **built**:
+
+| #      | Resolved as                                                                               | Where                                                                                   |
+| ------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **D1** | (a/b) retain `target_email`; purge window is a **documented follow-up, not built**        | `src/lib/account/actions.ts` audit block                                                |
+| **D2** | **(b) the platform bot inherits the words** — the recommendation, not the simpler default | migration `…103609` Part G; §3 table; pinned by `account-deletion-rpc-coverage.test.ts` |
+| **D3** | (a) `time_entries` cascades                                                               | migration `…102934` Part C                                                              |
+| **D4** | **(b) the receiving owner is notified**                                                   | `account_deleted` notification kind + `NotificationsList`/`NotificationsBell` (§4.5)    |
+
+### 9.0 Follow-ups deliberately NOT built
+
+- **D1's purge window** for `admin_audit_log.target_email` (e.g. 90 days). Retained
+  indefinitely today.
+- Unifying `leaveOrg`'s hand-rolled sole-owner refusal (`src/lib/org/actions.ts`) onto
+  `platform_user_sole_owned_orgs` (§4.2).
+- Grace period / soft-delete-and-restore, data export, email-confirmation link, and a
+  reason-for-leaving survey (§5) — all separable, none of them what the FK blocker blocked.
+
+The original analysis of each decision is kept below for the record.
 
 **D1 — `admin_audit_log.target_email` after erasure.** The audit row survives with both user
 pointers nulled but the email in plaintext.
@@ -478,6 +577,8 @@ answerable without keeping the address.
 **Recommendation: (b)** — retain now, ship the purge as a follow-up. Anti-abuse and
 "was this account deleted?" support questions both need the address, and (c) breaks the
 existing admin audit view which renders `target_email` directly. **Default if no answer: (b).**
+**→ BUILT AS (b):** retained in plaintext. The purge window is a documented follow-up (§9.0)
+and was deliberately **not** implemented.
 
 **D2 — `item_updates.author_id`: who inherits the words?** Currently specified as reassign to
 a surviving org owner, which also hands them the `author_id = auth.uid()` edit/delete gate
@@ -492,6 +593,8 @@ authority over another person's words, and reuses the principal
 `20260720120517_board_agents.sql` already ships. It is also the one place the scout's
 bot suggestion genuinely fits. This differs from §3's table and is the change I would
 make first. **Default if no answer: (a)**, as specified, since it is strictly simpler.
+**→ BUILT AS (b), the bot.** §3's table and migration `…103609` Part G now agree; the
+principal is pinned by a unit test so it cannot silently regress to the owner.
 
 **D3 — `time_entries` cascade deletes the org's time data.** Specified as cascade, matching
 `time_allocations`/`member_capacity`. If Pulse ever bills or reports on historical time,
@@ -500,7 +603,7 @@ _Options:_ (a) cascade (specified); (b) keep the rows and null `user_id`, losing
 attribution but keeping totals — costs one nullable column and one guard.
 **Recommendation: (a)** — time entries are personal records, no billing feature exists today,
 and reporting on an anonymous bucket is misleading. Revisit if time-based billing ships.
-**Default: (a).**
+**Default: (a).** **→ BUILT AS (a), cascade.**
 
 **D4 — should the receiving org owner be notified?** The audit row (§4.5) is passive; owners
 see it only if they open the audit view.
@@ -509,6 +612,9 @@ affected org owner, reusing the existing table and bell UI.
 **Recommendation: (b)** — inheriting ownership of someone else's boards is exactly the kind
 of thing that should surface, the plumbing already exists, and `notifications.actor_id` is
 nullable so a system-authored row is legal. **Default: (a)**, to keep the first cut small.
+**→ BUILT AS (b).** New `notification_kind` value `account_deleted`, one row per affected org
+addressed to the receiving owner, with copy in `NotificationsList` and a click-through to
+`/settings/members` where the matching audit row already renders.
 
 ## 10. Independent units (for the execution DAG)
 
