@@ -115,13 +115,18 @@ export async function adminUpdateFeedback(
   // Notify the submitter via the service client: the platform admin is not a
   // member of the submitter's org, so the notifications-insert RLS policy would
   // block a normal insert. Skip self-notification.
-  if (row.submitted_by !== user.id) {
+  //
+  // `submitted_by` is nullable since account deletion nulls it (the feedback row
+  // is the org's record, the submitter's identity is erased — spec §3/§7). A row
+  // whose submitter is gone has nobody to notify, so skip rather than guess.
+  const recipientId = row.submitted_by;
+  if (recipientId !== null && recipientId !== user.id) {
     const service = createServiceClient();
     // Best-effort notify: the feedback update already succeeded, so a failed
     // insert must not fail the action — but log it instead of dropping it.
     const { error: notifyErr } = await service.from("notifications").insert({
       org_id: row.org_id,
-      recipient_id: row.submitted_by,
+      recipient_id: recipientId,
       actor_id: user.id,
       kind: "feedback_response",
       feedback_id: row.id,
@@ -129,7 +134,7 @@ export async function adminUpdateFeedback(
     if (notifyErr)
       console.error("[adminUpdateFeedback] notification insert failed", {
         feedbackId: row.id,
-        recipientId: row.submitted_by,
+        recipientId,
         error: notifyErr.message,
       });
   }

@@ -6,6 +6,7 @@ import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingRow } from "@/components/settings/setting-row";
 import { SignOutEverywhereButton } from "@/components/settings/security-actions";
 import { DangerZone } from "@/components/settings/danger-zone";
+import { DeleteAccount } from "@/components/settings/delete-account";
 import { Button } from "@/components/ui/button";
 
 export const metadata = { title: "Security · Settings" };
@@ -51,6 +52,14 @@ export default async function SecuritySettingsPage() {
           description={`Remove yourself from ${org.name}. You'll need a new invite to return.`}
         >
           <DangerZone orgId={org.id} orgName={org.name} />
+        </SettingRow>
+        <SettingRow
+          label="Delete account"
+          description="Permanently delete your Pulse account and personal data. Boards, items and updates you created stay with your organization."
+        >
+          {/* `user.email` is already loaded by requireUser() above, so this row
+              adds no first-paint cost and the dialog is 0 server round-trips. */}
+          <DeleteAccount email={user.email ?? ""} />
         </SettingRow>
       </SettingsSection>
     </>
