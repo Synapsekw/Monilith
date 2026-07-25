@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { enforcePasswordChange } from "@/lib/auth/session";
+import { enforcePasswordChange, loginRedirectPath } from "@/lib/auth/session";
 import { platformAdminTag } from "@/lib/cache/tags";
 
 /** True if the current authenticated user is a platform super-admin. Fails closed. */
@@ -44,7 +44,7 @@ export async function requirePlatformAdmin(): Promise<User> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(await loginRedirectPath());
   enforcePasswordChange(user);
   if (!(await isPlatformAdmin())) redirect("/");
   return user;

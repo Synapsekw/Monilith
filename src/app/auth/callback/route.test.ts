@@ -1,35 +1,87 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { safeNextPath } from "./route";
+const {
+  exchangeCodeForSession,
+  redeemInvitationsForUser,
+  provisionAccountForUser,
+} = vi.hoisted(() => ({
+  exchangeCodeForSession: vi.fn(),
+  redeemInvitationsForUser: vi.fn(),
+  provisionAccountForUser: vi.fn(),
+}));
 
-describe("safeNextPath (open-redirect guard)", () => {
-  it("allows a rooted same-origin path", () => {
-    expect(safeNextPath("/valid/path")).toBe("/valid/path");
-    expect(safeNextPath("/")).toBe("/");
-    expect(safeNextPath("/boards/123?tab=x")).toBe("/boards/123?tab=x");
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({ auth: { exchangeCodeForSession } }),
+}));
+vi.mock("@/lib/auth/provision", () => ({
+  provisionAccountForUser: (...a: unknown[]) => provisionAccountForUser(...a),
+}));
+vi.mock("@/lib/auth/redeem", () => ({
+  redeemInvitationsForUser: (...a: unknown[]) => redeemInvitationsForUser(...a),
+}));
+
+import { NextRequest } from "next/server";
+import { GET } from "./route";
+
+const LF = "\n";
+
+function call(url: string) {
+  return GET(new NextRequest(new URL(url, "http://localhost")));
+}
+
+beforeEach(() => {
+  exchangeCodeForSession.mockReset().mockResolvedValue({
+    data: { user: { id: "u1" } },
+    error: null,
+  });
+  redeemInvitationsForUser.mockReset().mockResolvedValue(1);
+  provisionAccountForUser.mockReset().mockResolvedValue({ error: null });
+});
+
+describe("GET /auth/callback — next handling", () => {
+  it("redirects to a safe next", async () => {
+    const res = await call("/auth/callback?next=%2Fboards%2Fb1");
+    expect(res.headers.get("location")).toBe("http://localhost/boards/b1");
   });
 
-  it("rejects protocol-relative //host", () => {
-    expect(safeNextPath("//evil.com")).toBe("/");
-    expect(safeNextPath("//evil.com/path")).toBe("/");
+  it("falls back to / with no next", async () => {
+    const res = await call("/auth/callback");
+    expect(res.headers.get("location")).toBe("http://localhost/");
   });
 
-  it("rejects backslash-tricked /\\host", () => {
-    expect(safeNextPath("/\\evil.com")).toBe("/");
+  it("refuses the control-character open redirect", async () => {
+    // Encoded form of "/" + LF + "/evil.com" — resolves off-site unsanitized.
+    const res = await call("/auth/callback?next=%2F%0A%2Fevil.com");
+    expect(res.headers.get("location")).toBe("http://localhost/");
+    expect(encodeURIComponent("/" + LF + "/evil.com")).toBe(
+      "%2F%0A%2Fevil.com",
+    );
   });
 
-  it("rejects absolute URLs", () => {
-    expect(safeNextPath("https://evil.com")).toBe("/");
-    expect(safeNextPath("http://evil.com/x")).toBe("/");
+  it("refuses an absolute next", async () => {
+    const res = await call("/auth/callback?next=https%3A%2F%2Fevil.com");
+    expect(res.headers.get("location")).toBe("http://localhost/");
   });
 
-  it("rejects non-rooted / relative targets", () => {
-    expect(safeNextPath("evil.com")).toBe("/");
-    expect(safeNextPath("javascript:alert(1)")).toBe("/");
+  it("keeps next on the provisioning-failure bounce so the user can resume", async () => {
+    redeemInvitationsForUser.mockResolvedValue(0);
+    provisionAccountForUser.mockResolvedValue({ error: new Error("boom") });
+
+    const res = await call("/auth/callback?code=abc&next=%2Fboards%2Fb1");
+
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/login?error=provisioning&next=%2Fboards%2Fb1",
+    );
   });
 
-  it("falls back to / for null/empty", () => {
-    expect(safeNextPath(null)).toBe("/");
-    expect(safeNextPath("")).toBe("/");
+  it("drops an unsafe next from the provisioning-failure bounce", async () => {
+    redeemInvitationsForUser.mockResolvedValue(0);
+    provisionAccountForUser.mockResolvedValue({ error: new Error("boom") });
+
+    const res = await call("/auth/callback?code=abc&next=%2F%2Fevil.com");
+
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/login?error=provisioning",
+    );
   });
 });
