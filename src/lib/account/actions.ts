@@ -98,18 +98,29 @@ export async function deleteOwnAccount(input: unknown): Promise<ActionResult> {
     // this is the only identifier that survives — deliberately, for anti-abuse
     // and "was this account deleted?" support questions.
     target_email: user.email,
-    // The generated `Json` is a recursive union that a concrete object type never
-    // satisfies structurally (no index signature) — the same codegen mismatch
-    // `src/lib/supabase/typed-rpc.ts` documents for jsonb RPC args. The value is
-    // Zod-validated above and provably serializable, so one cast is honest here.
-    metadata: summary as unknown as Json,
   };
+  // The generated `Json` is a recursive union that a concrete object type never
+  // satisfies structurally (no index signature) — the same codegen mismatch
+  // `src/lib/supabase/typed-rpc.ts` documents for jsonb RPC args. The values are
+  // Zod-validated above and provably serializable, so the casts are honest here.
   const { error: auditErr } = await svc.from("admin_audit_log").insert([
-    { ...auditBase, org_id: null, actor_kind: "platform" },
-    ...Object.keys(summary.targets).map((orgId) => ({
+    {
+      ...auditBase,
+      org_id: null,
+      actor_kind: "platform",
+      // Only the platform row carries the full cross-org picture — its SELECT
+      // policy is `is_platform_admin()`.
+      metadata: summary as unknown as Json,
+    },
+    ...Object.entries(summary.targets).map(([orgId, ownerId]) => ({
       ...auditBase,
       org_id: orgId,
       actor_kind: "org",
+      // Scoped to THIS org. Org rows are readable by that org's owners/admins, so
+      // embedding the whole `targets` map would tell org A which other orgs the
+      // user belonged to and who owns them — a cross-tenant leak through an audit
+      // payload rather than through RLS.
+      metadata: { counts: summary.counts, target: ownerId } as unknown as Json,
     })),
   ]);
   if (auditErr)

@@ -210,6 +210,35 @@ describe("deleteOwnAccount", () => {
     );
   });
 
+  it("does not leak other orgs into an org-scoped audit row", async () => {
+    const ORG2 = "44444444-4444-4444-8444-444444444444";
+    const OWNER2 = "55555555-5555-4555-8555-555555555555";
+    userRpc.mockImplementation((fn: string) =>
+      fn === "platform_user_sole_owned_orgs"
+        ? Promise.resolve({ data: [], error: null })
+        : Promise.resolve({
+            data: {
+              counts: { boards: 2 },
+              targets: { [ORG]: OWNER, [ORG2]: OWNER2 },
+            },
+            error: null,
+          }),
+    );
+    await runExpectingRedirect();
+
+    const rows = auditInsert.mock.calls[0][0] as Array<Record<string, unknown>>;
+    const orgRow = rows.find((r) => r.org_id === ORG)!;
+    // Org rows are readable by that org's owners/admins, so the full `targets`
+    // map would tell org 1 that the user also belonged to org 2 and who owns it.
+    expect(orgRow.metadata).toEqual({ counts: { boards: 2 }, target: OWNER });
+    expect(JSON.stringify(orgRow.metadata)).not.toContain(ORG2);
+    expect(JSON.stringify(orgRow.metadata)).not.toContain(OWNER2);
+
+    // The platform row keeps the whole picture — it is is_platform_admin()-only.
+    const platformRow = rows.find((r) => r.org_id === null)!;
+    expect(JSON.stringify(platformRow.metadata)).toContain(ORG2);
+  });
+
   it("deletes the orphaned avatar, which no FK would clean up", async () => {
     await runExpectingRedirect();
     expect(storageList).toHaveBeenCalledWith(USER.id);
