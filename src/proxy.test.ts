@@ -121,6 +121,37 @@ describe("proxy()", () => {
   });
 });
 
+describe("proxy() — cookieless OAuth/MCP endpoints are not login-walled", () => {
+  beforeEach(() => {
+    getClaims.mockResolvedValue({ data: null, error: null });
+  });
+
+  it.each([
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource",
+    "/api/oauth/register",
+    "/api/oauth/token",
+    "/api/oauth/authorize?client_id=a&response_type=code",
+    "/api/mcp",
+  ])("lets an anonymous request through on %s", async (path) => {
+    const res = await proxy(req(path));
+
+    // No redirect: the endpoint authenticates itself (Bearer / PKCE / public
+    // metadata) and must be free to answer 200 / 400 / 401 WWW-Authenticate.
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it.each(["/boards/b1", "/settings", "/oauth/consent", "/admin"])(
+    "still gates %s behind /login",
+    async (path) => {
+      const res = await proxy(req(path));
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/login");
+    },
+  );
+});
+
 describe("proxy matcher", () => {
   const matcher = new RegExp(config.matcher[0]);
 
@@ -141,5 +172,14 @@ describe("proxy matcher", () => {
     expect(matcher.test("/")).toBe(true);
     expect(matcher.test("/auth/callback")).toBe(true);
     expect(matcher.test("/boards/b1")).toBe(true);
+  });
+
+  it("still MATCHES the OAuth/MCP endpoints — they are allowlisted in proxy(), not excluded here", () => {
+    // The matcher must keep running on /api/* so authenticated app API routes
+    // still get session refresh; the cookieless endpoints are exempted inside
+    // proxy() by PUBLIC_PREFIXES instead.
+    expect(matcher.test("/api/mcp")).toBe(true);
+    expect(matcher.test("/api/oauth/token")).toBe(true);
+    expect(matcher.test("/.well-known/oauth-protected-resource")).toBe(true);
   });
 });

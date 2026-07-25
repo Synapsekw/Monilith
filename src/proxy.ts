@@ -18,6 +18,16 @@ const AUTH_ROUTES = ["/login", "/signup", "/auth", "/forgot-password"];
 // the nav logo points to; `/updates` is the public changelog linked from the
 // landing footer.
 const PUBLIC_ROUTES = ["/", "/landing", "/updates"];
+// Prefix-matched routes that are NEVER authenticated by a session cookie, so a
+// cookie-based gate can only break them. `/.well-known/oauth-*` is public
+// metadata by RFC 8414 / RFC 9728; `/api/oauth/*` is the OAuth 2.1 authorization
+// server, authenticated by PKCE + client_id (and `authorize` must reach its own
+// handler so it can validate client_id/redirect_uri before bouncing to login);
+// `/api/mcp` is Bearer-authenticated and must be free to answer 401 with the
+// WWW-Authenticate challenge that starts MCP discovery. Without these, an MCP
+// client gets an HTML login redirect where it expects JSON, and the connect flow
+// cannot complete. Each endpoint authenticates itself — nothing new is exposed.
+const PUBLIC_PREFIXES = ["/.well-known/oauth-", "/api/oauth/", "/api/mcp"];
 
 export async function proxy(request: NextRequest) {
   // Standard @supabase/ssr session-refresh pattern adapted to proxy.
@@ -74,8 +84,11 @@ export async function proxy(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname);
+  const isPublicPrefix = PUBLIC_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix),
+  );
 
-  if (!isAuthenticated && !isAuthRoute && !isPublicRoute) {
+  if (!isAuthenticated && !isAuthRoute && !isPublicRoute && !isPublicPrefix) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
