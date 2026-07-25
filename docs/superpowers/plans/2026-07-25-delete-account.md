@@ -1,5 +1,26 @@
 # Delete Account Implementation Plan
 
+> **STATUS: BUILT (2026-07-25).** This plan is kept as the execution record. Four things below
+> are **stale** — the spec (`docs/superpowers/specs/2026-07-25-delete-account-design.md`) and the
+> committed migrations are authoritative:
+>
+> 1. **All four decision points were resolved by the owner**, not left on their defaults:
+>    D1 retain (purge = follow-up, not built) · **D2 → the platform BOT**, not the org owner ·
+>    D3 cascade · **D4 → notify** the receiving owner.
+> 2. **A third migration was required.** Two `BEFORE UPDATE` freeze triggers
+>    (`items_protect_creation_metadata`, `item_updates_protect_attribution`) silently revert
+>    attribution, making Task 1's reassignment a **no-op** for `items.created_by` and
+>    `item_updates.author_id`. `20260725103609_account_deletion_reattribution_triggers` opens one
+>    narrowly-guarded branch in each. See spec §3.3.
+> 3. **`actor_kind = 'user'` is invalid** — a CHECK constraint permits only `'org'` and
+>    `'platform'`, so Task 4's audit insert as written would have failed on every deletion.
+> 4. **Task 2 Step 5's `feedback/actions.ts` edit was wrong**: that block is
+>    `adminUpdateFeedback`'s notify path, not an ownership check. Returning `fail()` there would
+>    have broken the platform admin's ability to respond to feedback at all. Built as a null
+>    guard around the notification instead.
+>
+> Task 9 Step 4 (`finish-task.sh`) was deliberately **not** run — the main thread serializes merges.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a user permanently delete their own Pulse account from Settings → Security → Danger zone, transferring authorship of org work product to a surviving org owner instead of orphaning it.
