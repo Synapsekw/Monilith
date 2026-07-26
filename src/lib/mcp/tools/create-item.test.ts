@@ -233,4 +233,35 @@ describe("createItemHandler", () => {
     expect(parsed.fieldErrors).toHaveLength(2);
     expect(result.isError).toBe(true);
   });
+  it("fans out an assigned notification for an initial people field", async () => {
+    const { getClient, calls } = makeFakeClient({
+      column: {
+        data: { org_id: "o1", board_id: "b1", kind: "people" },
+        error: null,
+      },
+    });
+    await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [{ columnId: "c1", value: { userIds: ["u-new"] } }],
+      },
+      ACTOR,
+    );
+
+    expect(calls.getClient).toBe(1);
+    expect(calls.notifications).toEqual([
+      [
+        {
+          org_id: "o1",
+          recipient_id: "u-new",
+          actor_id: ACTOR,
+          kind: "assigned",
+          board_id: "b1",
+          item_id: "i1",
+        },
+      ],
+    ]);
+  });
 });

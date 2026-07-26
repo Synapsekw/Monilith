@@ -271,4 +271,93 @@ describe("updateItemHandler", () => {
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed).toEqual({ itemId: "does-not-exist", fieldErrors: [] });
   });
+  it("fans out an assigned notification for a newly-added person", async () => {
+    const { getClient, calls } = makeFakeClient({
+      column: {
+        data: { org_id: "o1", board_id: "b1", kind: "people" },
+        error: null,
+      },
+      priorCell: { data: { value: { userIds: ["u-old"] } }, error: null },
+    });
+    await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { userIds: ["u-old", "u-new"] } }],
+      },
+      ACTOR,
+    );
+
+    expect(calls.getClient).toBe(1);
+    expect(calls.notifications).toEqual([
+      [
+        {
+          org_id: "o1",
+          recipient_id: "u-new",
+          actor_id: ACTOR,
+          kind: "assigned",
+          board_id: "b1",
+          item_id: "i1",
+        },
+      ],
+    ]);
+  });
+
+  it("does not notify the actor for assigning themselves", async () => {
+    const { getClient, calls } = makeFakeClient({
+      column: {
+        data: { org_id: "o1", board_id: "b1", kind: "people" },
+        error: null,
+      },
+    });
+    await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { userIds: [ACTOR] } }],
+      },
+      ACTOR,
+    );
+
+    expect(calls.notifications).toEqual([]);
+  });
+
+  it("writes a non-people cell without touching notifications", async () => {
+    const { getClient, calls } = makeFakeClient();
+    await updateItemHandler(
+      getClient,
+      { itemId: "i1", fields: [{ columnId: "c1", value: { text: "hi" } }] },
+      ACTOR,
+    );
+
+    expect(calls.upserts).toHaveLength(1);
+    expect(calls.notifications).toEqual([]);
+  });
+
+  it("still reports success when the notification insert is rejected", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { getClient } = makeFakeClient({
+      column: {
+        data: { org_id: "o1", board_id: "b1", kind: "people" },
+        error: null,
+      },
+      notify: { error: { message: "new row violates row-level security" } },
+    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { userIds: ["u-new"] } }],
+      },
+      ACTOR,
+    );
+
+    const parsed = JSON.parse(result.content[0]?.text as string);
+    expect(parsed.fieldErrors).toEqual([]);
+    expect(spy).toHaveBeenCalledWith(
+      "[notifications] assigned fan-out failed",
+      expect.objectContaining({ recipients: 1 }),
+    );
+    spy.mockRestore();
+  });
 });
