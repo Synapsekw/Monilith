@@ -4,11 +4,19 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { Kicker } from "@/components/ui/kicker";
+import { ActionConfirmCard } from "@/components/ai/actions/ActionConfirmCard";
+import {
+  resolveProposalStates,
+  type AskToolTrace,
+} from "@/lib/ai/ask/tool-trace";
 
 export type UIMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** Parsed `ai_messages.tool_trace`. Carries a turn's proposed actions, or —
+   *  on an outcome turn — which proposal it resolved. */
+  trace?: AskToolTrace | null;
 };
 
 /** A single chat turn. User turns sit right in a muted bubble; assistant turns
@@ -50,10 +58,16 @@ export function MessageList({
   messages,
   streamingText,
   status,
+  onApprove,
+  onCancel,
+  busyMessageId,
 }: {
   messages: UIMessage[];
   streamingText: string | null;
   status: string | null;
+  onApprove: (messageId: string) => void;
+  onCancel: (messageId: string) => void;
+  busyMessageId?: string | null;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -61,6 +75,9 @@ export function MessageList({
   }, [messages, streamingText, status]);
 
   const empty = messages.length === 0 && streamingText === null;
+  // Pure derivation over the thread — a proposal is resolved by a LATER message
+  // naming it, so reload and live-update render identically.
+  const proposalStates = resolveProposalStates(messages);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -79,9 +96,36 @@ export function MessageList({
           </div>
         ) : null}
 
-        {messages.map((m) => (
-          <Bubble key={m.id} role={m.role} content={m.content} />
-        ))}
+        {messages.map((m) => {
+          const actions = m.trace?.proposedActions ?? [];
+          // NOT named `status` — that is the streaming status-line prop.
+          const proposalStatus = proposalStates.get(m.id);
+          return (
+            <div key={m.id} className="flex flex-col gap-3">
+              <Bubble role={m.role} content={m.content} />
+              {actions.length > 0 && proposalStatus ? (
+                // Indented to the assistant gutter (size-7 mark + gap-3), so the
+                // card hangs off the turn it belongs to.
+                <div className="flex flex-col gap-2 pl-10">
+                  {actions.map((action, i) => (
+                    <ActionConfirmCard
+                      key={i}
+                      action={action}
+                      state={
+                        busyMessageId === m.id
+                          ? "running"
+                          : proposalStatus.state
+                      }
+                      resultNote={proposalStatus.note}
+                      onApprove={() => onApprove(m.id)}
+                      onCancel={() => onCancel(m.id)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
 
         {streamingText !== null ? (
           <Bubble

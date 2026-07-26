@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMessages } from "@/lib/ai/ask/conversations";
+import { parseToolTrace } from "@/lib/ai/ask/tool-trace";
 import { AskChat } from "@/components/ai/ask/AskChat";
 
 /**
@@ -25,6 +26,9 @@ export default async function AskConversationPage({
         // DB stores role as text (CHECK-constrained to these two values).
         role: r.role as "user" | "assistant",
         content: r.content,
+        // An unconfirmed proposal survives a reload: it lives in tool_trace,
+        // not client state, and Approve re-reads it server-side.
+        trace: parseToolTrace(r.tool_trace),
       }))}
     />
   );

@@ -65,9 +65,14 @@ export const validatedActionSchema = z.discriminatedUnion("kind", [
 ]);
 export type ValidatedAction = z.infer<typeof validatedActionSchema>;
 
-export type ExecutionResult =
-  | { ok: true; itemId?: string }
-  | { ok: false; error: string };
+/** Result of running ONE approved action. A Zod schema (not just a type)
+ *  because it is persisted into `ai_messages.tool_trace` and read back from
+ *  untyped jsonb. */
+export const executionResultSchema = z.union([
+  z.object({ ok: z.literal(true), itemId: z.string().optional() }),
+  z.object({ ok: z.literal(false), error: z.string() }),
+]);
+export type ExecutionResult = z.infer<typeof executionResultSchema>;
 
 /**
  * A single turn in a threaded ⌘K action conversation — structurally an
