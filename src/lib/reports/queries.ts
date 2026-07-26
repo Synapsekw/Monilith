@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { reportConfigSchema, type ReportConfig } from "@/lib/reports/config";
+import { parseReportConfig, type ReportConfig } from "@/lib/reports/config";
 
 export type ReportRow = {
   id: string;
@@ -25,7 +25,7 @@ function rowToReport(row: {
     orgId: row.org_id,
     boardId: row.board_id,
     name: row.name,
-    config: reportConfigSchema.parse(row.config ?? {}),
+    config: parseReportConfig(row.config),
     updatedAt: row.updated_at,
   };
 }
