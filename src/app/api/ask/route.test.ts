@@ -35,17 +35,37 @@ vi.mock("@/lib/ai/gateway", () => ({
     ) => (await fn({ apiKey: "k", adapter: { supportsTools: true } })).result,
   ),
 }));
+// Explicit return type so `mockImplementationOnce` can widen the arrays (a bare
+// `[]` in the default impl would infer `never[]` and reject the proposal case).
+type StreamResult = {
+  answer: string;
+  boardsConsulted: string[];
+  proposedActions: unknown[];
+  usage: { inputTokens: number; outputTokens: number };
+};
+const askPulseStreamMock = vi.fn(
+  async ({
+    emit,
+  }: {
+    emit: (e: { type: string; text: string }) => void;
+  }): Promise<StreamResult> => {
+    emit({ type: "token", text: "Hi" });
+    return {
+      answer: "Hi",
+      boardsConsulted: [],
+      proposedActions: [],
+      usage: { inputTokens: 1, outputTokens: 1 },
+    };
+  },
+);
 vi.mock("@/lib/ai/ask/ask-stream", () => ({
-  askPulseStream: vi.fn(
-    async ({ emit }: { emit: (e: { type: string; text: string }) => void }) => {
-      emit({ type: "token", text: "Hi" });
-      return {
-        answer: "Hi",
-        boardsConsulted: [],
-        usage: { inputTokens: 1, outputTokens: 1 },
-      };
-    },
-  ),
+  askPulseStream: (a: unknown) =>
+    askPulseStreamMock(
+      a as { emit: (e: { type: string; text: string }) => void },
+    ),
+}));
+vi.mock("@/lib/profile/queries-cached", () => ({
+  getUserTimeZoneCached: vi.fn(async () => "Europe/Berlin"),
 }));
 vi.mock("@/lib/ai/ask/conversations", () => ({
   getMessages: vi.fn(async () => [
@@ -71,6 +91,7 @@ vi.mock("@/lib/ai/ask/context", async (importActual) => {
 
 // conversation fetch + assistant insert + title update via a chained mock client
 const single = vi.fn(async () => ({ data: { id: "a1" }, error: null }));
+const insertSpy = vi.fn(() => ({ select: () => ({ single }) }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     from: () => ({
@@ -82,7 +103,7 @@ vi.mock("@/lib/supabase/server", () => ({
           })),
         }),
       }),
-      insert: () => ({ select: () => ({ single }) }),
+      insert: insertSpy,
       update: () => ({ eq: vi.fn(async () => ({ error: null })) }),
     }),
   })),
@@ -113,6 +134,48 @@ describe("POST /api/ask", () => {
     const text = await res.text();
     expect(text).toMatch(/"type":"done"/);
     expect(text).toContain('"title":"Overdue items"');
+  });
+
+  // The persistence work lives in the ReadableStream's `start()`, which only
+  // runs once the body is consumed — so every insert assertion drains it first.
+  const post = async () => {
+    await (await POST(makeReq())).text();
+  };
+
+  it("persists boardsConsulted with no proposals on a read-only turn", async () => {
+    await post();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        tool_trace: { boardsConsulted: [] },
+      }),
+    );
+  });
+
+  it("persists proposedActions into tool_trace on a proposal turn", async () => {
+    const action = {
+      kind: "create_item",
+      boardId: "b1",
+      groupId: "g1",
+      name: "Ship v2",
+      summary: 'Create task "Ship v2" in Backlog',
+      warnings: [],
+    };
+    askPulseStreamMock.mockImplementationOnce(async ({ emit }) => {
+      emit({ type: "token", text: "I'll create that — " });
+      return {
+        answer: "I'll create that — ",
+        boardsConsulted: ["b1"],
+        proposedActions: [action],
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
+    });
+    await post();
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool_trace: { boardsConsulted: ["b1"], proposedActions: [action] },
+      }),
+    );
   });
 
   it("returns 402 when entitlement throws", async () => {
