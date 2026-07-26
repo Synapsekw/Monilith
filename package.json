@@ -19,6 +19,7 @@
     "changelog:gen": "tsx scripts/generate-changelog.ts && prettier --write src/lib/changelog/generated.ts",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
+    "test:conformance": "vitest run --project conformance",
     "test:watch": "vitest",
     "lhci": "lhci autorun",
     "e2e": "playwright test",
