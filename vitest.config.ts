@@ -33,14 +33,19 @@ export default defineConfig({
     // src/test/global-teardown.ts (exports a named `teardown`).
     globalSetup: ["./src/test/global-teardown.ts"],
     globals: true,
-    // Two projects (both inherit the options above via `extends: true`):
-    //   - unit: fast, parallel, everything except the integration suites.
+    // Three projects (all inherit the options above via `extends: true`):
+    //   - unit: fast, parallel, everything except the integration + conformance
+    //     suites.
     //   - integration: the *.integration.test.ts suites, which hit the live
     //     cloud Supabase project. Run serially — concurrent files collectively
     //     trip GoTrue's auth rate limit (429 over_request_rate_limit), which
     //     surfaces either loudly or silently as a null org from
     //     create_organization. Pairs with signInWithRetry() in
     //     src/test/integration-auth.ts.
+    //   - conformance: the *.conformance.test.ts suites. Read-only probes that
+    //     prove `anon` can reach nothing on a LIVE project. Unlike integration
+    //     they provision NOTHING and hold no privileged key, so they are safe
+    //     against DEV (the default) and against PROD on demand.
     projects: [
       {
         extends: true,
@@ -56,7 +61,11 @@ export default defineConfig({
             ".claude/hooks/**/*.test.mjs",
             "scripts/**/*.test.mjs",
           ],
-          exclude: [...sharedExclude, "src/**/*.integration.test.{ts,tsx}"],
+          exclude: [
+            ...sharedExclude,
+            "src/**/*.integration.test.{ts,tsx}",
+            "src/**/*.conformance.test.ts",
+          ],
         },
       },
       {
@@ -81,6 +90,27 @@ export default defineConfig({
           // genuine one-off cloud/network blip.
           testTimeout: 30_000,
           hookTimeout: 60_000,
+          retry: 1,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "conformance",
+          include: ["src/**/*.conformance.test.ts"],
+          exclude: sharedExclude,
+          // Inherits jsdom + vitest.setup.ts. A `node` environment would suit
+          // these fetch-only suites better, but `setupFiles: []` does not
+          // override through `extends: true` and the DOM shims then throw. The
+          // placeholder NEXT_PUBLIC_* values that setup seeds are handled where
+          // it counts: resolveConformanceTarget() rejects them, so a run
+          // without real credentials SKIPS instead of probing localhost.
+          fileParallelism: false,
+          // ~180 live round-trips at concurrency 6, in one beforeAll.
+          testTimeout: 120_000,
+          hookTimeout: 180_000,
+          // Absorbs a one-off network blip. A genuine finding is deterministic
+          // and survives the retry.
           retry: 1,
         },
       },
