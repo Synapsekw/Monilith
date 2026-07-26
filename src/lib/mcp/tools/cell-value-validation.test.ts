@@ -3,6 +3,8 @@ import { makeFakeClient } from "@/test/mcp-fake-client";
 import { createItemHandler } from "./create-item";
 import { updateItemHandler } from "./update-item";
 
+const ACTOR = "99999999-9999-4999-8999-999999999999";
+
 /**
  * This file deliberately does NOT `vi.mock("@/lib/validations/boards")`.
  *
@@ -22,11 +24,17 @@ describe("MCP field writes run the real cellValueSchema", () => {
         error: null,
       },
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [{ columnId: "c1", value: { text: "hello", bogus: "dropped" } }],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [
+          { columnId: "c1", value: { text: "hello", bogus: "dropped" } },
+        ],
+      },
+      ACTOR,
+    );
     expect(result.isError).toBeUndefined();
     expect(calls.upserts).toHaveLength(1);
     expect(calls.upserts[0]?.row).toEqual({
@@ -45,10 +53,14 @@ describe("MCP field writes run the real cellValueSchema", () => {
         error: null,
       },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      fields: [{ columnId: "c1", value: { n: "not a number" } }],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { n: "not a number" } }],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(0);
     const parsed = JSON.parse(result.content[0]?.text as string);
     // Verified against the pinned zod 4.4.3. If a zod upgrade changes this
@@ -66,10 +78,14 @@ describe("MCP field writes run the real cellValueSchema", () => {
         error: null,
       },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      fields: [{ columnId: "c1", value: { checked: true } }],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { checked: true } }],
+      },
+      ACTOR,
+    );
     expect(result.isError).toBeUndefined();
     expect(calls.upserts[0]?.row).toMatchObject({ value: { checked: true } });
   });

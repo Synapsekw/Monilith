@@ -22,7 +22,7 @@ vi.mock("@/lib/collaboration/attachment-cleanup", () => ({
 }));
 
 import { revalidatePath } from "next/cache";
-import { upsertCell } from "@/lib/boards/actions";
+import { clearCell, upsertCell } from "@/lib/boards/actions";
 import { removeAttachmentObjects } from "@/lib/collaboration/attachment-cleanup";
 
 const ITEM = "11111111-1111-4111-8111-111111111111";
@@ -47,6 +47,7 @@ beforeEach(() => {
 
 describe("upsertCell people-cell assignment fan-out", () => {
   it("notifies only the newly-added member, excluding the actor", async () => {
+    sessionGetUser.mockResolvedValue({ id: USER });
     const notifInsert = vi.fn().mockResolvedValue({ error: null });
     const upsert = vi.fn().mockResolvedValue({ error: null });
     from.mockImplementation((table: string) => {
@@ -119,6 +120,7 @@ describe("upsertCell people-cell assignment fan-out", () => {
   });
 
   it("returns ok but logs when the notification insert fails", async () => {
+    sessionGetUser.mockResolvedValue({ id: USER });
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const notifInsert = vi
       .fn()
@@ -178,6 +180,36 @@ describe("upsertCell people-cell assignment fan-out", () => {
       }),
     );
     spy.mockRestore();
+  });
+
+  it("clearCell on a people column never notifies (removal is not an 'assigned' event)", async () => {
+    const notifInsert = vi.fn().mockResolvedValue({ error: null });
+    const del = vi.fn().mockResolvedValue({ error: null });
+    from.mockImplementation((table: string) => {
+      if (table === "columns")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { board_id: "board" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "cell_values")
+        return {
+          delete: () => ({ eq: () => ({ eq: del }) }),
+        } as never;
+      if (table === "notifications") return { insert: notifInsert } as never;
+      return {} as never;
+    });
+
+    const res = await clearCell({ itemId: ITEM, columnId: COL });
+
+    expect(res).toEqual({ ok: true, data: undefined });
+    expect(del).toHaveBeenCalledTimes(1);
+    expect(notifInsert).not.toHaveBeenCalled();
   });
 });
 
