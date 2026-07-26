@@ -28,6 +28,24 @@ export async function resolveMcpAuth(
 }
 
 /**
+ * The authenticated MCP user's id — the `actor_id` for any side effect a tool
+ * performs on their behalf (e.g. the `assigned` notification fan-out in
+ * `upsertCellCore`). `resolveMcpAuth` always stamps it, so absence is a
+ * programming error, not a runtime condition: throw, exactly as
+ * `getRequestClient` does for its sibling `extra` fields.
+ *
+ * It must match the subject of the bridged access token, otherwise the
+ * `notifications` insert policy (`actor_id = auth.uid()`) rejects the row —
+ * a fail-closed outcome, never a cross-tenant write.
+ */
+export function mcpActorId(auth: AuthInfo): string {
+  const userId = auth.extra?.userId;
+  if (typeof userId !== "string" || !userId)
+    throw new Error("Malformed auth context.");
+  return userId;
+}
+
+/**
  * Per-tool-call: enforces the rate limit, then resolves the RLS-respecting
  * bridged client for the authenticated MCP connection. Every tool handler
  * calls this first and runs its Supabase calls through the returned client
