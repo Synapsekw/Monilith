@@ -53,4 +53,12 @@ describe("report print chart palette", () => {
     }
     expect(REPORT_CSS).toContain("page-break-inside:avoid");
   });
+
+  it("blockifies the bar fill (a nested inline span would paint zero-width bars)", () => {
+    // .r-bar-fill is a <span> INSIDE .r-bar-track, so it is not a grid item and
+    // is not blockified for us. Without display:block, width:<pct> is ignored
+    // and every bar renders invisible in Chromium — a failure no DOM-level
+    // assertion can see. Caught once; fenced here.
+    expect(REPORT_CSS).toMatch(/\.r-bar-fill \{[^}]*display:block/);
+  });
 });

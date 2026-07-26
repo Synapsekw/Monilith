@@ -93,7 +93,11 @@ export const REPORT_CSS = `
   .r-bar-row { display:grid; grid-template-columns:150px 1fr auto auto; align-items:center; gap:12px; padding:3px 0; }
   .r-bar-name { font-size:12px; font-weight:600; overflow-wrap:anywhere; }
   .r-bar-track { height:14px; background:#f2f3f7; border-radius:3px; overflow:hidden; }
-  .r-bar-fill { height:100%; border-radius:0 4px 4px 0; }
+  /* display:block is load-bearing: .r-bar-fill is a <span> nested INSIDE the
+     track, so unlike the track (a grid item, blockified) it would stay inline
+     and silently ignore width/height — invisible bars in both the preview and
+     the PDF. Verified in headless Chromium, not just in the DOM. */
+  .r-bar-fill { display:block; height:100%; border-radius:0 4px 4px 0; }
   .r-bar-n { font-size:12px; font-variant-numeric:tabular-nums; font-weight:600; }
   .r-bar-p { font-size:11px; font-variant-numeric:tabular-nums; color:var(--muted); min-width:38px; text-align:right; }
   .r-chart-empty { font-size:12px; color:var(--muted); }
