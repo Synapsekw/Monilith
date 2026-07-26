@@ -9,6 +9,8 @@ vi.mock("@/lib/validations/boards", () => ({
 import { makeFakeClient } from "@/test/mcp-fake-client";
 import { createItemHandler } from "./create-item";
 
+const ACTOR = "99999999-9999-4999-8999-999999999999";
+
 describe("createItemHandler", () => {
   it("creates an item via RPC, then writes any provided field values", async () => {
     const upserted: unknown[] = [];
@@ -37,11 +39,15 @@ describe("createItemHandler", () => {
         },
       }),
     };
-    const result = await createItemHandler(async () => client as never, {
-      groupId: "g1",
-      name: "New task",
-      fields: [{ columnId: "c1", value: { text: "hello" } }],
-    });
+    const result = await createItemHandler(
+      async () => client as never,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [{ columnId: "c1", value: { text: "hello" } }],
+      },
+      ACTOR,
+    );
     const parsed = JSON.parse(result.content[0].text as string);
     expect(parsed.item.id).toBe("i1");
     expect(upserted).toHaveLength(1);
@@ -59,11 +65,15 @@ describe("createItemHandler", () => {
       },
       item: { data: { board_id: "b1" }, error: null },
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [{ columnId: "c1", value: { text: "hello" } }],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [{ columnId: "c1", value: { text: "hello" } }],
+      },
+      ACTOR,
+    );
     // org_id/board_id MUST come from the column (the RLS-relevant derivation),
     // item_id from the RPC-created item — never from caller input.
     expect(calls.upserts).toHaveLength(1);
@@ -84,14 +94,18 @@ describe("createItemHandler", () => {
     // Each getClient() charges the MCP rate limit and rotates the bridge secret
     // (src/lib/mcp/context.ts:39,50-51) — it must never move into the field loop.
     const { getClient, calls } = makeFakeClient();
-    await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [
-        { columnId: "c1", value: { text: "a" } },
-        { columnId: "c2", value: { text: "b" } },
-      ],
-    });
+    await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [
+          { columnId: "c1", value: { text: "a" } },
+          { columnId: "c2", value: { text: "b" } },
+        ],
+      },
+      ACTOR,
+    );
     expect(calls.getClient).toBe(1);
     expect(calls.upserts).toHaveLength(2);
   });
@@ -100,11 +114,15 @@ describe("createItemHandler", () => {
     const { getClient, calls } = makeFakeClient({
       rpc: { data: null, error: { message: "group not found" } },
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toBe("group not found");
     expect(calls.upserts).toHaveLength(0);
@@ -114,14 +132,18 @@ describe("createItemHandler", () => {
     const { getClient, calls } = makeFakeClient({
       column: { data: null, error: null },
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(0);
     const parsed = JSON.parse(result.content[0]?.text as string);
-    expect(parsed.fieldErrors).toEqual(["c1: Column c1 not found."]);
+    expect(parsed.fieldErrors).toEqual(["c1: Column not found."]);
     expect(result.isError).toBe(true);
   });
 
@@ -129,11 +151,15 @@ describe("createItemHandler", () => {
     const { getClient, calls } = makeFakeClient({
       item: { data: null, error: null },
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(0);
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed.fieldErrors).toEqual(["c1: Item not found."]);
@@ -144,11 +170,15 @@ describe("createItemHandler", () => {
     const { getClient } = makeFakeClient({
       upsert: { error: { message: "duplicate key value" } },
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed.fieldErrors).toEqual(["c1: duplicate key value"]);
     expect(result.isError).toBe(true);
@@ -162,14 +192,18 @@ describe("createItemHandler", () => {
         { data: { board_id: "b2" }, error: null },
       ],
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [
-        { columnId: "c1", value: { text: "a" } },
-        { columnId: "c2", value: { text: "b" } },
-      ],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [
+          { columnId: "c1", value: { text: "a" } },
+          { columnId: "c2", value: { text: "b" } },
+        ],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(1);
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed.fieldErrors).toEqual([
@@ -182,14 +216,18 @@ describe("createItemHandler", () => {
     const { getClient, calls } = makeFakeClient({
       item: { data: { board_id: "b2" }, error: null },
     });
-    const result = await createItemHandler(getClient, {
-      groupId: "g1",
-      name: "New task",
-      fields: [
-        { columnId: "c1", value: { text: "a" } },
-        { columnId: "c2", value: { text: "b" } },
-      ],
-    });
+    const result = await createItemHandler(
+      getClient,
+      {
+        groupId: "g1",
+        name: "New task",
+        fields: [
+          { columnId: "c1", value: { text: "a" } },
+          { columnId: "c2", value: { text: "b" } },
+        ],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(0);
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed.fieldErrors).toHaveLength(2);

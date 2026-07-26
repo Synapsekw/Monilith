@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Json } from "@/types/database.types";
-import { cellValueSchema } from "@/lib/validations/boards";
+import type { Database } from "@/types/database.types";
+import { upsertCellCore } from "@/lib/boards/actions/cell-core";
 
 /**
  * Resolves the per-request, RLS-respecting Supabase client for the authenticated
@@ -23,56 +23,33 @@ export const fieldInput = z.object({
 export type FieldInput = z.infer<typeof fieldInput>;
 
 /**
- * Writes one cell value, mirroring the guard logic in
- * `src/lib/boards/actions/cell.ts`'s `upsertCell`. Returns `null` on success, or
- * a human-readable message the caller surfaces to the agent in `fieldErrors`.
+ * Writes one cell value on behalf of the authenticated MCP user. Returns `null`
+ * on success, or a human-readable message the caller surfaces to the agent in
+ * `fieldErrors`.
  *
- * Deliberately NOT `upsertCell` itself: that is a cookie-bound `"use server"`
- * action (it calls `createClient()`, which reads `next/headers` cookies), and an
+ * Delegates to `upsertCellCore` — the same function the `upsertCell` Server
+ * Action calls — so the `people` assignment fan-out happens on this path by
+ * construction. (Before 2026-07-26 this re-implemented the guards and silently
+ * dropped the fan-out: gotcha-60.) `upsertCell` itself still cannot be called
+ * here: it is a `"use server"` action bound to `next/headers` cookies, and an
  * MCP request carries only an OAuth bearer token resolved to a bridged client.
- * Calling it here would silently build an unauthenticated client and fail under
- * RLS. See `docs/superpowers/plans/2026-07-24-mcp-server.md` Global Constraints.
  *
- * KNOWN GAP (do not fix here): unlike `upsertCell`, this does not fan out
- * `assigned` notifications when writing a `people` column, so assigning someone
- * via MCP never notifies them. Tracked as finding F1 in
- * `docs/superpowers/specs/2026-07-25-mcp-tools-dedupe-design.md`; the fix is to
- * hoist a client-injected core out of `upsertCell` so both callers share it.
+ * `actorId` is injected rather than read from `supabase.auth`: it is already
+ * known (`mcpActorId(auth)`), and an auth lookup on a bridged client would cost
+ * a GoTrue round-trip per write while depending on supabase-js's
+ * custom-Authorization-header internals. See spec §3.1
+ * (`docs/superpowers/specs/2026-07-26-mcp-assigned-notification-design.md`).
  */
 export async function writeCellValue(
   supabase: SupabaseClient<Database>,
   itemId: string,
   field: FieldInput,
+  actorId: string,
 ): Promise<string | null> {
-  const { data: column, error: colErr } = await supabase
-    .from("columns")
-    .select("org_id, board_id, kind")
-    .eq("id", field.columnId)
-    .maybeSingle();
-  if (colErr || !column) return `Column ${field.columnId} not found.`;
-
-  const { data: item, error: itemErr } = await supabase
-    .from("items")
-    .select("board_id")
-    .eq("id", itemId)
-    .maybeSingle();
-  if (itemErr || !item) return "Item not found.";
-  if (item.board_id !== column.board_id)
-    return "Item and column belong to different boards.";
-
-  const valueParsed = cellValueSchema(column.kind).safeParse(field.value);
-  if (!valueParsed.success)
-    return valueParsed.error.issues[0]?.message ?? "Invalid value.";
-
-  const { error } = await supabase.from("cell_values").upsert(
-    {
-      org_id: column.org_id,
-      board_id: column.board_id,
-      item_id: itemId,
-      column_id: field.columnId,
-      value: valueParsed.data as Json,
-    },
-    { onConflict: "item_id,column_id" },
+  const res = await upsertCellCore(
+    supabase,
+    { itemId, columnId: field.columnId, value: field.value },
+    actorId,
   );
-  return error?.message ?? null;
+  return res.ok ? null : res.error;
 }

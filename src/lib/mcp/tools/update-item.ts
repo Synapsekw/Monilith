@@ -20,6 +20,7 @@ export async function updateItemHandler(
     name?: string;
     fields?: FieldInput[];
   },
+  actorId: string,
 ) {
   const supabase = await getClient();
 
@@ -42,7 +43,7 @@ export async function updateItemHandler(
 
   const fieldErrors: string[] = [];
   for (const field of input.fields ?? []) {
-    const err = await writeCellValue(supabase, input.itemId, field);
+    const err = await writeCellValue(supabase, input.itemId, field, actorId);
     if (err) fieldErrors.push(`${field.columnId}: ${err}`);
   }
   return {
@@ -63,6 +64,7 @@ export async function updateItemHandler(
 export function registerUpdateItemTool(
   server: McpServer,
   getClient: GetClient,
+  actorId: string,
 ): void {
   server.registerTool(
     "update_item",
@@ -72,6 +74,6 @@ export function registerUpdateItemTool(
         "Rename an item and/or update its field values. No delete/archive/move.",
       inputSchema: updateItemInput,
     },
-    async (input) => updateItemHandler(getClient, input),
+    async (input) => updateItemHandler(getClient, input, actorId),
   );
 }

@@ -9,6 +9,8 @@ vi.mock("@/lib/validations/boards", () => ({
 import { makeFakeClient } from "@/test/mcp-fake-client";
 import { updateItemHandler } from "./update-item";
 
+const ACTOR = "99999999-9999-4999-8999-999999999999";
+
 describe("updateItemHandler", () => {
   it("renames the item and writes provided field values", async () => {
     const upserted: unknown[] = [];
@@ -40,11 +42,15 @@ describe("updateItemHandler", () => {
         },
       }),
     };
-    const result = await updateItemHandler(async () => client as never, {
-      itemId: "i1",
-      name: "Renamed",
-      fields: [{ columnId: "c1", value: { text: "hello" } }],
-    });
+    const result = await updateItemHandler(
+      async () => client as never,
+      {
+        itemId: "i1",
+        name: "Renamed",
+        fields: [{ columnId: "c1", value: { text: "hello" } }],
+      },
+      ACTOR,
+    );
     expect(result.isError).toBeUndefined();
     expect(upserted).toHaveLength(1);
   });
@@ -71,10 +77,14 @@ describe("updateItemHandler", () => {
         },
       }),
     };
-    const result = await updateItemHandler(async () => client as never, {
-      itemId: "i1",
-      fields: [{ columnId: "c1", value: { text: "hello" } }],
-    });
+    const result = await updateItemHandler(
+      async () => client as never,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { text: "hello" } }],
+      },
+      ACTOR,
+    );
     expect(upserted).toHaveLength(0);
     const text = result.content[0]?.text as string;
     expect(text).toContain("Item and column belong to different boards.");
@@ -89,10 +99,14 @@ describe("updateItemHandler", () => {
       },
       item: { data: { board_id: "b1" }, error: null },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i9",
-      fields: [{ columnId: "c1", value: { text: "hello" } }],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i9",
+        fields: [{ columnId: "c1", value: { text: "hello" } }],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(1);
     expect(calls.upserts[0]?.row).toEqual({
       org_id: "o1",
@@ -111,14 +125,18 @@ describe("updateItemHandler", () => {
     // Each getClient() charges the MCP rate limit and rotates the bridge secret
     // (src/lib/mcp/context.ts:39,50-51) — it must never move into the field loop.
     const { getClient, calls } = makeFakeClient();
-    await updateItemHandler(getClient, {
-      itemId: "i1",
-      name: "Renamed",
-      fields: [
-        { columnId: "c1", value: { text: "a" } },
-        { columnId: "c2", value: { text: "b" } },
-      ],
-    });
+    await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        name: "Renamed",
+        fields: [
+          { columnId: "c1", value: { text: "a" } },
+          { columnId: "c2", value: { text: "b" } },
+        ],
+      },
+      ACTOR,
+    );
     expect(calls.getClient).toBe(1);
     expect(calls.upserts).toHaveLength(2);
   });
@@ -127,11 +145,15 @@ describe("updateItemHandler", () => {
     const { getClient, calls } = makeFakeClient({
       rename: { data: null, error: { message: "row not found" } },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      name: "Renamed",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        name: "Renamed",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toBe("row not found");
     expect(calls.upserts).toHaveLength(0);
@@ -141,10 +163,14 @@ describe("updateItemHandler", () => {
     const { getClient } = makeFakeClient({
       rename: { data: null, error: null },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      name: "Renamed",
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        name: "Renamed",
+      },
+      ACTOR,
+    );
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toBe("Item not found.");
   });
@@ -153,13 +179,17 @@ describe("updateItemHandler", () => {
     const { getClient, calls } = makeFakeClient({
       column: { data: null, error: null },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(0);
     const parsed = JSON.parse(result.content[0]?.text as string);
-    expect(parsed.fieldErrors).toEqual(["c1: Column c1 not found."]);
+    expect(parsed.fieldErrors).toEqual(["c1: Column not found."]);
     expect(result.isError).toBe(true);
   });
 
@@ -167,10 +197,14 @@ describe("updateItemHandler", () => {
     const { getClient, calls } = makeFakeClient({
       item: { data: null, error: null },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(0);
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed.fieldErrors).toEqual(["c1: Item not found."]);
@@ -181,10 +215,14 @@ describe("updateItemHandler", () => {
     const { getClient } = makeFakeClient({
       upsert: { error: { message: "value too long" } },
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      fields: [{ columnId: "c1", value: { text: "a" } }],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [{ columnId: "c1", value: { text: "a" } }],
+      },
+      ACTOR,
+    );
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed.fieldErrors).toEqual(["c1: value too long"]);
     expect(result.isError).toBe(true);
@@ -197,13 +235,17 @@ describe("updateItemHandler", () => {
         { data: { board_id: "b2" }, error: null },
       ],
     });
-    const result = await updateItemHandler(getClient, {
-      itemId: "i1",
-      fields: [
-        { columnId: "c1", value: { text: "a" } },
-        { columnId: "c2", value: { text: "b" } },
-      ],
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "i1",
+        fields: [
+          { columnId: "c1", value: { text: "a" } },
+          { columnId: "c2", value: { text: "b" } },
+        ],
+      },
+      ACTOR,
+    );
     expect(calls.upserts).toHaveLength(1);
     const parsed = JSON.parse(result.content[0]?.text as string);
     expect(parsed.fieldErrors).toEqual([
@@ -217,9 +259,13 @@ describe("updateItemHandler", () => {
     // exists and reports success. Pinned deliberately so the behavior is
     // intentional, not accidental. Do NOT "fix" this here — see spec §4 F2.
     const { getClient, calls } = makeFakeClient();
-    const result = await updateItemHandler(getClient, {
-      itemId: "does-not-exist",
-    });
+    const result = await updateItemHandler(
+      getClient,
+      {
+        itemId: "does-not-exist",
+      },
+      ACTOR,
+    );
     expect(result.isError).toBeUndefined();
     expect(calls.upserts).toHaveLength(0);
     const parsed = JSON.parse(result.content[0]?.text as string);
