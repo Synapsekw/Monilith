@@ -1,6 +1,8 @@
 // src/components/reports/ReportDocument.tsx
 import type { ReportConfig } from "@/lib/reports/config";
 import type { GroupSummary, Kpis, ReportModel } from "@/lib/reports/shape";
+import type { ChartSeries } from "@/lib/reports/chart-data";
+import { ChartBlock } from "./blocks/ChartBlock";
 import { CoverBlock } from "./blocks/CoverBlock";
 import { SummaryBlock } from "./blocks/SummaryBlock";
 import { KpisBlock } from "./blocks/KpisBlock";
@@ -15,12 +17,26 @@ export type ReportDocumentProps = {
   model: ReportModel;
   kpis: Kpis;
   groupSummaries: GroupSummary[];
+  /**
+   * REQUIRED, and `null` when the board has nothing chartable. Not optional on
+   * purpose: both render paths (PreviewPane and exportReportPdf) must supply it
+   * explicitly, or the preview and the PDF silently drift.
+   */
+  chartSeries: ChartSeries | null;
   boardName: string;
   orgName: string;
 };
 
 export function ReportDocument(props: ReportDocumentProps) {
-  const { config, model, kpis, groupSummaries, boardName, orgName } = props;
+  const {
+    config,
+    model,
+    kpis,
+    groupSummaries,
+    chartSeries,
+    boardName,
+    orgName,
+  } = props;
   return (
     <div className="r-doc">
       {config.blocks
@@ -41,6 +57,21 @@ export function ReportDocument(props: ReportDocumentProps) {
               return <SummaryBlock key={i} options={block.options} />;
             case "kpis":
               return <KpisBlock key={i} kpis={kpis} />;
+            case "chart":
+              return (
+                <ChartBlock
+                  key={i}
+                  series={
+                    chartSeries ?? {
+                      categories: [],
+                      total: 0,
+                      categoryName: "",
+                      empty: true,
+                    }
+                  }
+                  options={block.options}
+                />
+              );
             case "table":
               return (
                 <TableBlock key={i} model={model} options={block.options} />
