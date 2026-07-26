@@ -27,6 +27,7 @@ export type CreatedItem = {
   name: string;
   group_id: string;
 } | null;
+export type CellValueRow = { value: unknown } | null;
 
 /** A single response, or a queue consumed in call order (the last entry repeats). */
 export type Queued<T> = T | T[];
@@ -42,6 +43,10 @@ export type FakeClientSpec = {
   rename?: FakeResult<ItemRow>;
   /** The `cell_values` upsert, per field. */
   upsert?: Queued<{ error: FakeError }>;
+  /** The `cell_values` prior-assignee read the core issues for `people` columns. */
+  priorCell?: Queued<FakeResult<CellValueRow>>;
+  /** The `notifications` insert result. */
+  notify?: { error: FakeError };
 };
 
 export type FakeCalls = {
@@ -51,6 +56,8 @@ export type FakeCalls = {
   rpc: { fn: string; args: unknown }[];
   /** How many times the handler resolved the request client. Must be 1. */
   getClient: number;
+  /** Every notifications insert, in order — the array of rows passed to `.insert()`. */
+  notifications: unknown[];
 };
 
 const OK_COLUMN: FakeResult<ColumnRow> = {
@@ -58,6 +65,7 @@ const OK_COLUMN: FakeResult<ColumnRow> = {
   error: null,
 };
 const OK_ITEM: FakeResult<ItemRow> = { data: { board_id: "b1" }, error: null };
+const EMPTY_CELL: FakeResult<CellValueRow> = { data: null, error: null };
 const OK_RPC: FakeResult<CreatedItem> = {
   data: { id: "i1", name: "New task", group_id: "g1" },
   error: null,
@@ -73,10 +81,16 @@ export function makeFakeClient(spec: FakeClientSpec = {}): {
   getClient: () => Promise<never>;
   calls: FakeCalls;
 } {
-  const calls: FakeCalls = { upserts: [], rpc: [], getClient: 0 };
+  const calls: FakeCalls = {
+    upserts: [],
+    rpc: [],
+    getClient: 0,
+    notifications: [],
+  };
   let columnReads = 0;
   let itemReads = 0;
   let upsertWrites = 0;
+  let priorReads = 0;
 
   const client = {
     rpc: (fn: string, args: unknown) => {
@@ -84,14 +98,24 @@ export function makeFakeClient(spec: FakeClientSpec = {}): {
       return Promise.resolve(spec.rpc ?? OK_RPC);
     },
     from: (table: string) => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: () =>
-            table === "columns"
-              ? Promise.resolve(dequeue(spec.column, OK_COLUMN, columnReads++))
-              : Promise.resolve(dequeue(spec.item, OK_ITEM, itemReads++)),
-        }),
-      }),
+      select: () => {
+        const read = () =>
+          table === "columns"
+            ? Promise.resolve(dequeue(spec.column, OK_COLUMN, columnReads++))
+            : table === "cell_values"
+              ? Promise.resolve(
+                  dequeue(spec.priorCell, EMPTY_CELL, priorReads++),
+                )
+              : Promise.resolve(dequeue(spec.item, OK_ITEM, itemReads++));
+        type Chain = {
+          eq: () => Chain;
+          maybeSingle: () => Promise<
+            FakeResult<ColumnRow | ItemRow | CellValueRow>
+          >;
+        };
+        const chain: Chain = { eq: () => chain, maybeSingle: () => read() };
+        return chain;
+      },
       update: () => ({
         eq: () => ({
           select: () => ({
@@ -104,6 +128,10 @@ export function makeFakeClient(spec: FakeClientSpec = {}): {
         return Promise.resolve(
           dequeue(spec.upsert, { error: null }, upsertWrites++),
         );
+      },
+      insert: (rows: unknown) => {
+        calls.notifications.push(rows);
+        return Promise.resolve(spec.notify ?? { error: null });
       },
     }),
   };
