@@ -79,5 +79,30 @@ export const REPORT_CSS = `
   .r-kv { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:12px; }
   .r-kv .k { color:var(--muted); text-transform:uppercase; font-size:8.5px; letter-spacing:.06em; align-self:center; }
 
+  /* ---- charts: static SVG / CSS only, no client JS ---- */
+  .r-chart { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:20px; page-break-inside:avoid; }
+  .r-chart.r-chart-bars { display:block; }
+  .r-chart-ring { flex:0 0 auto; }
+  .r-chart-total { font-size:22px; font-weight:700; letter-spacing:-.02em; fill:var(--ink); }
+  .r-chart-total-l { font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; fill:var(--muted); }
+  .r-chart-legend { display:flex; flex-direction:column; gap:5px; }
+  .r-lg-row { display:grid; grid-template-columns:9px 1fr auto auto; align-items:center; gap:9px; font-size:11.5px; }
+  .r-lg-sw { width:9px; height:9px; border-radius:2px; }
+  .r-lg-n { font-variant-numeric:tabular-nums; font-weight:600; }
+  .r-lg-p { font-variant-numeric:tabular-nums; color:var(--muted); min-width:38px; text-align:right; }
+  .r-bar-row { display:grid; grid-template-columns:150px 1fr auto auto; align-items:center; gap:12px; padding:3px 0; }
+  .r-bar-name { font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+  .r-bar-track { height:14px; background:#f2f3f7; border-radius:3px; overflow:hidden; }
+  /* display:block is load-bearing: .r-bar-fill is a <span> nested INSIDE the
+     track, so unlike the track (a grid item, blockified) it would stay inline
+     and silently ignore width/height — invisible bars in both the preview and
+     the PDF. Verified in headless Chromium, not just in the DOM. */
+  .r-bar-fill { display:block; height:100%; border-radius:0 4px 4px 0; }
+  .r-bar-n { font-size:12px; font-variant-numeric:tabular-nums; font-weight:600; }
+  .r-bar-p { font-size:11px; font-variant-numeric:tabular-nums; color:var(--muted); min-width:38px; text-align:right; }
+  .r-chart-empty { font-size:12px; color:var(--muted); }
+  .r-chart-stat { font-size:15px; }
+  .r-chart-stat b { font-size:22px; font-weight:700; letter-spacing:-.02em; }
+
   @page { size: A4 landscape; margin:14mm 12mm; }
 `;

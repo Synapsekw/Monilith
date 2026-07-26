@@ -124,7 +124,7 @@ function parentIdSet(payload: BoardPayload): Set<string> {
  *  don't dilute completion. On a flat board every item is a leaf, so behavior
  *  is unchanged; on a board where work lives in subitems, the subitems drive
  *  the numbers. */
-function leafItems(payload: BoardPayload): Item[] {
+export function leafItems(payload: BoardPayload): Item[] {
   const parents = parentIdSet(payload);
   return payload.items.filter((i) => !parents.has(i.id));
 }

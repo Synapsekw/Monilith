@@ -15,6 +15,7 @@ import {
   shapeReport,
 } from "@/lib/reports/shape";
 import { buildReportHtml } from "@/lib/reports/export-html";
+import { computeChartSeries } from "@/lib/reports/chart-data";
 import { renderHtmlToPdf } from "@/lib/reports/pdf";
 
 const createSchema = z.object({
@@ -138,11 +139,23 @@ export async function exportReportPdf(input: {
 
   const names = await resolvePeopleNames(payload);
   const orgName = (await resolveActiveOrg())?.name ?? payload.board.name;
+
+  // Compute the chart from the SAME payload the rest of the document uses, so
+  // the PDF cannot disagree with the preview.
+  const chartBlock = report.config.blocks.find(
+    (b) => b.type === "chart" && b.enabled,
+  );
+  const chartSeries =
+    chartBlock && chartBlock.type === "chart"
+      ? computeChartSeries(payload, names, chartBlock.options)
+      : null;
+
   const html = await buildReportHtml({
     config: report.config,
     model: shapeReport(payload, names),
     kpis: computeKpis(payload, names),
     groupSummaries: computeGroupSummaries(payload),
+    chartSeries,
     boardName: payload.board.name,
     orgName,
   });
