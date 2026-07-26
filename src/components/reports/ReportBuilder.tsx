@@ -2,12 +2,16 @@
 import { useMemo, useState, useTransition } from "react";
 import { FileDown, Save, Sparkles } from "lucide-react";
 import type { BoardPayload } from "@/lib/boards/queries";
-import { type ReportConfig } from "@/lib/reports/config";
+import {
+  type ChartBlockOptions,
+  type ReportConfig,
+} from "@/lib/reports/config";
 import {
   computeGroupSummaries,
   computeKpis,
   shapeReport,
 } from "@/lib/reports/shape";
+import { computeChartSeries } from "@/lib/reports/chart-data";
 import { saveReport } from "@/lib/reports/actions";
 import { exportReportPdf } from "@/lib/reports/actions";
 import { draftReportNarrativeAction } from "@/lib/reports/ai-actions";
@@ -18,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Kicker } from "@/components/ui/kicker";
 import { SectionRail } from "./SectionRail";
 import { PreviewPane } from "./PreviewPane";
+import { ChartBlockOptionsEditor } from "./ChartBlockOptions";
 
 /**
  * Fold the AI narrative into a single editable summary string: the summary, then
@@ -76,6 +81,19 @@ export function ReportBuilder({
       ? summaryBlock.options.text
       : "";
 
+  const chartBlock = config.blocks.find((b) => b.type === "chart");
+  const chartOptions =
+    chartBlock && chartBlock.type === "chart" ? chartBlock.options : null;
+
+  function setChartOptions(next: ChartBlockOptions) {
+    setConfig((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((b) =>
+        b.type === "chart" ? { ...b, options: next } : b,
+      ),
+    }));
+  }
+
   // Writes back into the summary block's options.text, leaving other blocks
   // unchanged. Manual editing works with no AI — the textarea is always usable.
   function setSummaryText(text: string, aiGenerated: boolean) {
@@ -109,6 +127,13 @@ export function ReportBuilder({
   const model = useMemo(() => shapeReport(payload, names), [payload, names]);
   const kpis = useMemo(() => computeKpis(payload, names), [payload, names]);
   const summaries = useMemo(() => computeGroupSummaries(payload), [payload]);
+  // Derived from the SAME in-memory payload — 0 server round-trips on every
+  // chart option change (working agreement #5).
+  const chartSeries = useMemo(
+    () =>
+      chartOptions ? computeChartSeries(payload, names, chartOptions) : null,
+    [payload, names, chartOptions],
+  );
 
   return (
     <div className="grid h-full grid-cols-[320px_1fr]">
@@ -117,6 +142,16 @@ export function ReportBuilder({
           <Kicker className="mb-2 block">Sections</Kicker>
           <SectionRail config={config} onChange={setConfig} />
         </section>
+        {chartOptions ? (
+          <section className="bg-surface rounded-lg border p-3">
+            <Kicker className="mb-2 block">Chart</Kicker>
+            <ChartBlockOptionsEditor
+              options={chartOptions}
+              columns={payload.columns}
+              onChange={setChartOptions}
+            />
+          </section>
+        ) : null}
         {/* Per-block option editors (summary/notes text, table orientation, spotlight picker)
             are added here; keep each a small controlled input writing into `config`. */}
         <div className="flex flex-col gap-2">
@@ -199,6 +234,7 @@ export function ReportBuilder({
           model={model}
           kpis={kpis}
           groupSummaries={summaries}
+          chartSeries={chartSeries}
           boardName={payload.board.name}
           orgName={orgName}
         />
