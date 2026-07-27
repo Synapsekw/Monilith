@@ -1119,7 +1119,7 @@ export type Database = {
           email_sent_count: number | null;
           error: string | null;
           id: string;
-          org_id: string;
+          org_id: string | null;
           period_end: string;
           period_start: string;
           stats: Json | null;
@@ -1131,7 +1131,7 @@ export type Database = {
           email_sent_count?: number | null;
           error?: string | null;
           id?: string;
-          org_id: string;
+          org_id?: string | null;
           period_end: string;
           period_start: string;
           stats?: Json | null;
@@ -1143,7 +1143,7 @@ export type Database = {
           email_sent_count?: number | null;
           error?: string | null;
           id?: string;
-          org_id?: string;
+          org_id?: string | null;
           period_end?: string;
           period_start?: string;
           stats?: Json | null;
@@ -2771,6 +2771,7 @@ export type Database = {
           item_created_at: string;
           item_id: string;
           item_name: string;
+          overdue_since: string;
         }[];
       };
       _dashboard_list_predicate: {
