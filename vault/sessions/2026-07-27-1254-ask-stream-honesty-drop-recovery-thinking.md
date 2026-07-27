@@ -54,22 +54,35 @@ connection, so both were fixed rather than explained away.
    with Check again.
 6. **Reduced motion:** dots hold still; labels still read and update.
 
+## Resolved before the session closed — everything shipped to production
+
+GitHub verification came back and the whole backlog cleared in one pass:
+
+- `git push origin develop` succeeded (`cc36e81..22facb2`); both retained worktrees and `task/*`
+  branches removed.
+- **Promotion #74 merged** — `main` @ `105bb57`. It went through with a **plain `--squash`, no
+  `--admin`**, which retroactively proves the account's unverified email was the _sole_ blocker; the
+  earlier `BLOCKED` state and the `mergePullRequest` refusal were the same root cause wearing two
+  faces, and nothing was wrong with branch protection.
+- Squash divergence healed on `develop` @ `14f4d9e` (`-s ours`, tree byte-identical, `main` confirmed
+  an ancestor) — gotcha-32 pre-empted for the next promotion.
+- ✅ main CI green · ✅ **Vercel production deploy live**. No migration in the bundle, so prod schema
+  and code stayed in step and `/sync-prod` was not required.
+
 ## Open threads
 
-- **GitHub refuses ALL pushes** — `remote: You must verify your email address … 403`. Local `develop`
-  is **4 commits ahead of `origin/develop` and exists only on this machine.** `task/ask-stream-drop-recovery`
-  and `task/ask-thinking-indicator` plus both worktrees are deliberately **retained**; clean them up
-  only after a successful push.
-- **Promotion PR #74 is open and fully green** (verify passed, 0 required reviews, no unresolved
-  threads, `main` an ancestor of `develop`). It stops at the same email verification. Merging it once
-  verified needs no re-validation. Owner cannot receive email right now.
 - **A disconnect still destroys the turn** — persistence lives inside the response body's lifetime.
-  Decoupling it is the real fix (gotcha-62), unbuilt.
+  Decoupling it is the real fix (gotcha-62), unbuilt, and now live in production.
+- **Ask Pulse writes are reachable by real users for the first time.** The confirm-card flow has been
+  exercised on DEV only; a prod pass is worth doing deliberately rather than discovering.
+- Worth a cheap confirmation: run the conformance probes against prod
+  (`CONFORMANCE_TARGET_URL` + `CONFORMANCE_TARGET_ANON_KEY`).
 - Unchanged: prod `digest_secret` (digest has never fired), E5 embeddings backfill + Vercel env var,
   MCP end-to-end test, Tier 2 fixtures / authenticated-half gate, the 69 skipping suites, E6 Stripe.
 
 ## Next session entry point
 
-**Verify the GitHub email**, then `git push origin develop`, merge PR #74, and remove the two retained
-worktrees/branches. Until then all work is local-only — consider a second git remote as a backup if
-the outage persists.
+Board is clear — nothing is blocked and nothing is half-done. Pick from: **decoupling turn
+persistence** from the response body (gotcha-62), **Tier 2 test fixtures** for the authenticated half
+of the security boundary, or **Report Builder v2 roll-ups + org templates** (one shared migration,
+both blocked by `reports.board_id NOT NULL`).
