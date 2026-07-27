@@ -3,7 +3,15 @@ type: adr
 status: accepted
 date: 2026-07-25
 tags:
-  [project/pulse, adr, gotcha, mcp, server-actions, notifications, architecture]
+  [
+    project/monolith,
+    adr,
+    gotcha,
+    mcp,
+    server-actions,
+    notifications,
+    architecture,
+  ]
 related:
   - "[[2026-07-25-1620-group-1-closeout-security-and-deletion]]"
   - "[[2026-07-24-1950-mcp-server-oauth]]"

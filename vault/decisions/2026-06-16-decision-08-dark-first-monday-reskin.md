@@ -48,20 +48,20 @@ no **reskin** workstream to apply the look to already-shipped surfaces.
 
 ## Prototype palette (translate into `globals.css` `@theme` / `.dark`)
 
-| Role            | Prototype hex | Notes                                  |
-| --------------- | ------------- | -------------------------------------- |
-| background/base | `#0d0d0f`     | near-black body                        |
-| surface         | `#16161a`     | primary panel                          |
-| surface2        | `#1f1f24`     | elevated                               |
-| surface3        | `#26262c`     | interactive hover                      |
-| border          | `#2a2a30`     | standard                               |
-| border-light    | `#34343c`     | emphasized/hover                       |
+| Role            | Prototype hex | Notes                                     |
+| --------------- | ------------- | ----------------------------------------- |
+| background/base | `#0d0d0f`     | near-black body                           |
+| surface         | `#16161a`     | primary panel                             |
+| surface2        | `#1f1f24`     | elevated                                  |
+| surface3        | `#26262c`     | interactive hover                         |
+| border          | `#2a2a30`     | standard                                  |
+| border-light    | `#34343c`     | emphasized/hover                          |
 | accent          | `#6366f1`     | ≈ `oklch(0.62 0.19 263)` (Monolith brand) |
-| accent-hover    | `#7c7ff5`     |                                        |
-| accent-dim      | `#2d2e54`     | accent background tint                 |
-| txt             | `#e7e7ea`     | primary text                           |
-| txt-dim         | `#a1a1aa`     | secondary                              |
-| txt-faint       | `#6b6b73`     | tertiary/disabled                      |
+| accent-hover    | `#7c7ff5`     |                                           |
+| accent-dim      | `#2d2e54`     | accent background tint                    |
+| txt             | `#e7e7ea`     | primary text                              |
+| txt-dim         | `#a1a1aa`     | secondary                                 |
+| txt-faint       | `#6b6b73`     | tertiary/disabled                         |
 
 Shadows: panel `0 8px 30px rgba(0,0,0,.5)`, card `0 1px 3px rgba(0,0,0,.4)`. Font Inter. Custom
 animations `fadein` (.15s), `slidein` (.2s), `shimmer` (skeleton); dark custom scrollbar.

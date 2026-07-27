@@ -3,7 +3,7 @@ type: spec
 status: draft
 date: 2026-07-06
 topic: avatar-upload
-tags: [project/pulse, spec, storage, profile]
+tags: [project/monolith, spec, storage, profile]
 related:
   - "[[00-north-star]]"
   - "docs/superpowers/specs/2026-06-16-phase-4-collaboration-design.md"

@@ -16,7 +16,7 @@ This feature adds **one new action type**, `move_to_group`, to the three layers 
 a clear per-action pattern: the Zod validation union, the Postgres action runner, and the builder
 UI. No new tables, enums, or generated types.
 
-**Out of scope (deferred):** moving an item to a *different board*. That requires a column/cell
+**Out of scope (deferred):** moving an item to a _different board_. That requires a column/cell
 remapping policy (target board has different columns and status options) and is explicitly a later
 phase. This spec is **same-board, group-to-group only**.
 
@@ -37,7 +37,7 @@ phase. This spec is **same-board, group-to-group only**.
 Add a case to the `automationActionSchema` discriminated union:
 
 ```ts
-z.object({ type: z.literal("move_to_group"), groupId: z.string().uuid() })
+z.object({ type: z.literal("move_to_group"), groupId: z.string().uuid() });
 ```
 
 `AutomationAction` (the inferred type) gains the new variant automatically. `automationActionsSchema`
@@ -122,13 +122,13 @@ where the board cache (which already holds `groups`) is in scope.
 
 ## Error handling / edge cases
 
-| Case                          | Behavior                                                       |
-| ----------------------------- | ------------------------------------------------------------- |
-| Item already in target group  | No-op (guard) — no Realtime churn                             |
-| Target group deleted / stale  | No-op (`exists` guard) — no error                            |
-| Target group on another board | No-op (`exists` checks `board_id = p_board_id`)              |
-| Subitem (`parent_id` set)     | Ignored (guard)                                              |
-| Condition gate fails          | Whole run returns early (existing `_automation_conditions_pass`) |
+| Case                          | Behavior                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| Item already in target group  | No-op (guard) — no Realtime churn                                         |
+| Target group deleted / stale  | No-op (`exists` guard) — no error                                         |
+| Target group on another board | No-op (`exists` checks `board_id = p_board_id`)                           |
+| Subitem (`parent_id` set)     | Ignored (guard)                                                           |
+| Condition gate fails          | Whole run returns early (existing `_automation_conditions_pass`)          |
 | Cascade risk                  | None — `items` UPDATE fires no automation triggers; depth guard backstops |
 
 ## Performance & data-fetching budget
@@ -175,7 +175,7 @@ the main checkout): `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
 
 1. Pull `develop`, open a board with a Status column and at least two groups.
 2. Open the board's **Automations** dialog → **Add automation**.
-3. Set trigger: *When a status changes* → pick the Status column → *Changes to* → **Done**.
+3. Set trigger: _When a status changes_ → pick the Status column → _Changes to_ → **Done**.
 4. Add action: **Move to group** → pick the target group (e.g. "Done"). Save.
 5. On the board, change an item's status to **Done**.
 6. **Expected:** the item moves into the target group (bottom), live, and appears for other open

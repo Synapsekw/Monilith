@@ -4,7 +4,7 @@ status: approved
 date: 2026-06-18
 phase: 5a
 title: Automations + Rules — engine + lean When/Then (Phase 5a)
-tags: [project/pulse, spec, phase-5, automations]
+tags: [project/monolith, spec, phase-5, automations]
 related:
   - "[[2026-06-14-pulse-design]]"
   - "[[00-north-star]]"

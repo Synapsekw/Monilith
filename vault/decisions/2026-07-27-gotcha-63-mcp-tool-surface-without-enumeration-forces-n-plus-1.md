@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-27
-tags: [project/pulse, adr, gotcha, mcp, performance, api-design]
+tags: [project/monolith, adr, gotcha, mcp, performance, api-design]
 related:
   - "[[2026-07-27-1734-group-1-closeout-monolith-rename-promote]]"
   - "[[2026-07-24-1950-mcp-server-oauth]]"

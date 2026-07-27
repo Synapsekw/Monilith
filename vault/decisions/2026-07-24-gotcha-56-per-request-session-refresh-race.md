@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-24
-tags: [project/pulse, adr, gotcha, supabase, auth, mcp]
+tags: [project/monolith, adr, gotcha, supabase, auth, mcp]
 related:
   - "[[2026-07-24-1950-mcp-server-oauth]]"
 ---

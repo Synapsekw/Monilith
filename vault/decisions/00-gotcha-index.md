@@ -2,7 +2,7 @@
 type: index
 status: active
 last-updated: 2026-07-12
-tags: [project/pulse, adr, index]
+tags: [project/monolith, adr, index]
 ---
 
 # Gotcha index

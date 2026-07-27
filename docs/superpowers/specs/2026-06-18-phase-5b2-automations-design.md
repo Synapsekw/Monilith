@@ -4,7 +4,7 @@ status: approved
 date: 2026-06-18
 phase: 5b-2
 title: Automations — date-based (scheduled) triggers (Phase 5b-2)
-tags: [project/pulse, spec, phase-5, automations, scheduler]
+tags: [project/monolith, spec, phase-5, automations, scheduler]
 related:
   - "[[2026-06-18-phase-5b1-automations-design]]"
   - "[[2026-06-18-phase-5a-automations-design]]"
