@@ -48,6 +48,34 @@ Neither makes a turn survive a genuine disconnect. Doing that requires decouplin
 the response — running the turn independently of the request and having the stream _observe_ it, so a
 dropped client costs a render rather than the work.
 
+### Resolution (2026-07-27) — the turn now outlives the reader
+
+`/api/ask` no longer runs the turn inside `ReadableStream.start()`. The turn is a **detached
+promise** started before the `Response` is returned, and the body is a pure **observer**:
+
+- The stream's only job is to hand its controller to a `sink` variable; `cancel()` sets it to
+  `null`. `emit` is a no-op once the sink is gone, and its `enqueue` is wrapped so a cancel racing
+  the write cannot throw into the turn. Nothing in the turn's control flow can be interrupted by a
+  disconnected client any more.
+- The promise is handed to **`after()` from `next/server`** — on Vercel that is `waitUntil`, which
+  extends the invocation until the promise settles. That is the piece that makes "the response
+  ended" and "the work ended" genuinely independent on serverless. (`after` throws outside a request
+  scope, which is exactly the unit-test case where there is no invocation to hold, so the call is
+  guarded.)
+- **No new table.** A run ledger was considered and rejected: the answer, the confirm card and the
+  bill all already have durable homes (`ai_messages.tool_trace`, `ai_usage`), and the drop-recovery
+  path in `use-ask-stream.ts` → `toThreadMessages` already renders a turn that completed without a
+  reader. The persisted row after a disconnect is byte-identical to a completed one, so recovery on
+  reload needed no client change.
+
+The cookie-bound Supabase client is created **before** the turn starts; `cookies()` is never called
+inside the detached work (Next forbids that in the `after` phase), and reads off the already-captured
+store are plain in-memory reads.
+
+Covered by `src/app/api/ask/route.test.ts` → "POST /api/ask · client disconnect": the reader is
+severed while the engine is mid-flight, and the assistant row, the `tool_trace` confirm card, the
+auto-title and the usage metering all still land.
+
 ## Consequences
 
 - **An orphaned user message with no assistant reply and no `ai_usage` row is diagnostic**: it means

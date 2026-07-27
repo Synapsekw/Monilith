@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
@@ -114,136 +114,175 @@ export async function POST(req: Request) {
       { status: 404 },
     );
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const enc = new TextEncoder();
-      const emit = (e: AskStreamEvent) =>
-        controller.enqueue(enc.encode(encodeEvent(e)));
-      // The turn's first byte, before ANY model work: compaction and the first
-      // tool round together account for most of the opening wait, and the
-      // engine's statuses cannot fire until a round has finished (gotcha-62).
-      emit({ type: "status", text: OPENING_STATUS });
-      try {
-        const allRows = await getMessages(conversationId);
-        let summary = conv.data.summary;
-        const isFirstExchange =
-          allRows.length === 1 && allRows[0].role === "user";
-
-        // Rolling-summary compaction of older turns (keeps per-turn cost bounded).
-        const { toFold, recent } = splitForCompaction(allRows, KEEP_RECENT);
-
-        const result = await runAi(
-          { orgId: org.id, userId: user.id, feature: "ask_pulse" },
-          async ({ apiKey, adapter }) => {
-            if (!adapter.supportsTools)
-              throw new ProviderNotCapableError("ask_pulse");
-            const client = new Anthropic({ apiKey });
-            const usage: AiUsageTokens = { inputTokens: 0, outputTokens: 0 };
-
-            if (toFold.length > 0) {
-              const s = await summarize(
-                client.messages,
-                MODEL,
-                summary,
-                toFold,
-              );
-              summary = s.summary;
-              usage.inputTokens += s.usage.inputTokens;
-              usage.outputTokens += s.usage.outputTokens;
-              await supabase
-                .from("ai_conversations")
-                .update({
-                  summary,
-                  summarized_upto: toFold[toFold.length - 1].created_at,
-                })
-                .eq("id", conversationId);
-            }
-
-            const r = await askPulseStream({
-              apiKey,
-              orgId: org.id,
-              workspaceId,
-              client,
-              messages: buildAskMessages(recent),
-              system: composeSystem(system, summary),
-              emit,
-            });
-            usage.inputTokens += r.usage.inputTokens;
-            usage.outputTokens += r.usage.outputTokens;
-
-            // Auto-title on the first exchange — reuses the resolved key (works
-            // for managed/BYO/per-user) and meters its tokens. Best-effort.
-            let title: string | undefined;
-            if (isFirstExchange) {
-              try {
-                const t = await generateTitle(
-                  client.messages,
-                  MODEL,
-                  allRows[0].content,
-                );
-                title = t.title;
-                usage.inputTokens += t.usage.inputTokens;
-                usage.outputTokens += t.usage.outputTokens;
-              } catch {
-                /* title is best-effort */
-              }
-            }
-
-            return {
-              result: {
-                answer: r.answer,
-                boardsConsulted: r.boardsConsulted,
-                proposedActions: r.proposedActions,
-                title,
-              },
-              usage,
-              model: MODEL,
-            };
-          },
-        );
-
-        // One column, two shapes (see lib/ai/ask/tool-trace.ts): a read-only
-        // turn stores only boardsConsulted; a proposal turn also stores the
-        // actions, which is what makes an unconfirmed card survive a reload.
-        const trace: AskToolTrace = { boardsConsulted: result.boardsConsulted };
-        if (result.proposedActions.length)
-          trace.proposedActions = result.proposedActions;
-
-        const ins = await supabase
-          .from("ai_messages")
-          .insert({
-            conversation_id: conversationId,
-            role: "assistant",
-            content: result.answer,
-            tool_trace: trace as unknown as Json,
-          })
-          .select("id")
-          .single();
-
-        if (result.title) {
-          await supabase
-            .from("ai_conversations")
-            .update({ title: result.title })
-            .eq("id", conversationId);
-        }
-
-        emit({
-          type: "done",
-          conversationId,
-          assistantMessageId: ins.data?.id ?? "",
-          boardsConsulted: result.boardsConsulted,
-          title: result.title,
-        });
-      } catch (e) {
-        emit({
-          type: "error",
-          message: (e as Error).message || "The AI assistant hit a snag.",
-        });
-      } finally {
-        controller.close();
-      }
+  // The response body is a pure OBSERVER of the turn, never its host
+  // (gotcha-62). It owns a controller that `emit` writes to while a reader is
+  // attached; when the client disconnects the controller is dropped and the
+  // turn — which is a detached promise, not stream work — carries on to
+  // persistence and metering. A drop now costs a render, not the answer.
+  const enc = new TextEncoder();
+  let sink: ReadableStreamDefaultController<Uint8Array> | null = null;
+  const stream = new ReadableStream<Uint8Array>({
+    // `start` runs synchronously inside the constructor, so `sink` is live
+    // before the turn below emits its opening byte.
+    start(controller) {
+      sink = controller;
+    },
+    cancel() {
+      sink = null;
     },
   });
+  const emit = (e: AskStreamEvent) => {
+    const s = sink;
+    if (!s) return;
+    try {
+      s.enqueue(enc.encode(encodeEvent(e)));
+    } catch {
+      // Cancelled between the check and the write — same outcome: stop writing.
+      sink = null;
+    }
+  };
+  const closeSink = () => {
+    try {
+      sink?.close();
+    } catch {
+      /* already cancelled */
+    }
+    sink = null;
+  };
+
+  const turn = (async () => {
+    // The turn's first byte, before ANY model work: compaction and the first
+    // tool round together account for most of the opening wait, and the
+    // engine's statuses cannot fire until a round has finished (gotcha-62).
+    emit({ type: "status", text: OPENING_STATUS });
+    try {
+      const allRows = await getMessages(conversationId);
+      let summary = conv.data.summary;
+      const isFirstExchange =
+        allRows.length === 1 && allRows[0].role === "user";
+
+      // Rolling-summary compaction of older turns (keeps per-turn cost bounded).
+      const { toFold, recent } = splitForCompaction(allRows, KEEP_RECENT);
+
+      const result = await runAi(
+        { orgId: org.id, userId: user.id, feature: "ask_pulse" },
+        async ({ apiKey, adapter }) => {
+          if (!adapter.supportsTools)
+            throw new ProviderNotCapableError("ask_pulse");
+          const client = new Anthropic({ apiKey });
+          const usage: AiUsageTokens = { inputTokens: 0, outputTokens: 0 };
+
+          if (toFold.length > 0) {
+            const s = await summarize(client.messages, MODEL, summary, toFold);
+            summary = s.summary;
+            usage.inputTokens += s.usage.inputTokens;
+            usage.outputTokens += s.usage.outputTokens;
+            await supabase
+              .from("ai_conversations")
+              .update({
+                summary,
+                summarized_upto: toFold[toFold.length - 1].created_at,
+              })
+              .eq("id", conversationId);
+          }
+
+          const r = await askPulseStream({
+            apiKey,
+            orgId: org.id,
+            workspaceId,
+            client,
+            messages: buildAskMessages(recent),
+            system: composeSystem(system, summary),
+            emit,
+          });
+          usage.inputTokens += r.usage.inputTokens;
+          usage.outputTokens += r.usage.outputTokens;
+
+          // Auto-title on the first exchange — reuses the resolved key (works
+          // for managed/BYO/per-user) and meters its tokens. Best-effort.
+          let title: string | undefined;
+          if (isFirstExchange) {
+            try {
+              const t = await generateTitle(
+                client.messages,
+                MODEL,
+                allRows[0].content,
+              );
+              title = t.title;
+              usage.inputTokens += t.usage.inputTokens;
+              usage.outputTokens += t.usage.outputTokens;
+            } catch {
+              /* title is best-effort */
+            }
+          }
+
+          return {
+            result: {
+              answer: r.answer,
+              boardsConsulted: r.boardsConsulted,
+              proposedActions: r.proposedActions,
+              title,
+            },
+            usage,
+            model: MODEL,
+          };
+        },
+      );
+
+      // One column, two shapes (see lib/ai/ask/tool-trace.ts): a read-only
+      // turn stores only boardsConsulted; a proposal turn also stores the
+      // actions, which is what makes an unconfirmed card survive a reload.
+      const trace: AskToolTrace = { boardsConsulted: result.boardsConsulted };
+      if (result.proposedActions.length)
+        trace.proposedActions = result.proposedActions;
+
+      const ins = await supabase
+        .from("ai_messages")
+        .insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: result.answer,
+          tool_trace: trace as unknown as Json,
+        })
+        .select("id")
+        .single();
+
+      if (result.title) {
+        await supabase
+          .from("ai_conversations")
+          .update({ title: result.title })
+          .eq("id", conversationId);
+      }
+
+      emit({
+        type: "done",
+        conversationId,
+        assistantMessageId: ins.data?.id ?? "",
+        boardsConsulted: result.boardsConsulted,
+        title: result.title,
+      });
+    } catch (e) {
+      emit({
+        type: "error",
+        message: (e as Error).message || "The AI assistant hit a snag.",
+      });
+      // A detached turn may have no reader left to show the error event to, so
+      // the server log is the only remaining trace.
+      console.error("[ask] turn failed:", e);
+    } finally {
+      closeSink();
+    }
+  })();
+
+  // Hold the platform's invocation open until the turn settles — on Vercel this
+  // is `waitUntil`, which is what makes "the response ended" and "the work
+  // ended" independent. `after` throws outside a request scope (a direct POST()
+  // in a unit test), and there is no invocation to hold in that case anyway.
+  try {
+    after(() => turn);
+  } catch {
+    /* no request scope — the detached promise still runs to completion */
+  }
 
   return new Response(stream, {
     headers: {
