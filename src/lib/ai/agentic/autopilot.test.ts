@@ -188,6 +188,23 @@ describe("autopilotRun", () => {
     expect(AUTOPILOT_ACTIONS).not.toContain("set_option");
   });
 
+  it("introduces itself to the model as Monolith Autopilot", async () => {
+    const { client, calls } = fakeClient([
+      { stop_reason: "end_turn", content: [] },
+    ]);
+    await autopilotRun({
+      apiKey: "k",
+      agentContext: CTX,
+      tasks: ["triage"],
+      client,
+    });
+    // The bot's name is user-visible (it authors board updates), so the prompt
+    // must agree with the product name and with the seeded profiles row.
+    const system = String(calls[0]!.system);
+    expect(system).toContain("You are Monolith Autopilot");
+    expect(system).not.toContain("Pulse Autopilot");
+  });
+
   it("returns no actions when the model does nothing", async () => {
     const { client } = fakeClient([{ stop_reason: "end_turn", content: [] }]);
     const res = await autopilotRun({

@@ -83,6 +83,15 @@ describe("AutopilotCard", () => {
     );
   });
 
+  it("names the posting identity Monolith Autopilot", async () => {
+    getBoardAutopilot.mockResolvedValue(state());
+    wrap(<AutopilotCard boardId="b1" />);
+
+    // Must match the seeded profiles.full_name the bot's updates are stamped with.
+    expect(await screen.findByText("Monolith Autopilot")).toBeInTheDocument();
+    expect(screen.queryByText(/Pulse Autopilot/)).not.toBeInTheDocument();
+  });
+
   it("locks the controls and hides Save for a non-admin", async () => {
     getBoardAutopilot.mockResolvedValue(
       state({
