@@ -146,7 +146,7 @@ function systemPrompt(
   allow: readonly AutopilotAction[],
 ): string {
   return [
-    "You are Pulse Autopilot, a scheduled housekeeping agent for ONE board.",
+    "You are Monolith Autopilot, a scheduled housekeeping agent for ONE board.",
     "Take a SMALL, reversible set of housekeeping actions by calling the provided tools — one tool call per item you want to change. Do nothing to items that are already fine.",
     "You may reference ONLY the item ids, column ids, option ids, group ids, and member ids present in the CONTEXT below — never invent an id, and never act on an item that is not in context.items.",
     `You may take at most ${MAX_ACTIONS} actions in total. When there is nothing worth doing, reply with a short plain-text note and call no tools.`,
