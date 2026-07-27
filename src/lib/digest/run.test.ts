@@ -363,4 +363,24 @@ describe("runWeeklyDigest", () => {
     expect(reclaim).toBeTruthy();
     expect(reclaim?.filters).toContainEqual(["id", "run-1"]);
   });
+
+  it("bounds the FIRST EVER run to the current period, not to everything since the feature shipped", async () => {
+    // Regression guard for the prod incident: digest_runs was empty for three
+    // weeks because digest_secret was never provisioned. When it is finally
+    // provisioned, the first pass must ask for ONE period of activity — never a
+    // window that widens with the age of the feature or of the org.
+    const now = new Date("2026-07-27T07:00:00Z");
+    const { client, calls } = makeClient(
+      baseResponder({ existing: null, digestRows: [] }),
+    );
+    currentClient = client;
+
+    await runWeeklyDigest(now);
+
+    const rpc = calls.find((c) => c.table === "rpc:_org_health_digest");
+    expect(rpc?.values).toEqual({
+      p_org_id: "org-1",
+      p_since: "2026-07-20T07:00:00.000Z",
+    });
+  });
 });
