@@ -4,7 +4,7 @@ date: 2026-06-19-1316
 branch: develop
 trigger: wrapup
 status: complete
-tags: [session, project/pulse, phase-5, automations, webhooks, pg_net]
+tags: [session, project/monolith, phase-5, automations, webhooks, pg_net]
 related:
   - "[[2026-06-19-phase-5c2-automations-design]]"
   - "[[2026-06-19-0957-phase5c1-run-history]]"

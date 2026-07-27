@@ -4,7 +4,7 @@ status: approved
 date: 2026-06-18
 phase: RS
 title: Light-mode reskin
-tags: [project/pulse, spec, reskin, theming, a11y]
+tags: [project/monolith, spec, reskin, theming, a11y]
 related:
   - "[[2026-06-16-decision-08-dark-first-monday-reskin]]"
   - "[[00-north-star]]"

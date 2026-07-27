@@ -2,7 +2,7 @@
 type: north-star
 status: active
 last-updated: 2026-07-27-1734
-tags: [project/pulse, north-star]
+tags: [project/monolith, north-star]
 related:
   - "[[README]]"
   - "[[product]]"

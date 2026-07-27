@@ -2,7 +2,7 @@
 type: product-context
 status: active
 last-updated: 2026-06-15
-tags: [project/pulse, product, design-context]
+tags: [project/monolith, product, design-context]
 related:
   - "[[00-north-star]]"
 ---

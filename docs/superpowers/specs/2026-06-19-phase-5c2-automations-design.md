@@ -4,7 +4,7 @@ status: approved
 date: 2026-06-19
 phase: 5c-2
 title: Automations — external/webhook actions (Phase 5c-2)
-tags: [project/pulse, spec, phase-5, automations, webhooks, pg_net]
+tags: [project/monolith, spec, phase-5, automations, webhooks, pg_net]
 related:
   - "[[2026-06-19-phase-5c1-automations-design]]"
   - "[[2026-06-18-phase-5b2-automations-design]]"

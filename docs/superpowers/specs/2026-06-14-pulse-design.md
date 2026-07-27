@@ -2,7 +2,7 @@
 type: spec
 status: approved
 date: 2026-06-14
-tags: [project/pulse, spec]
+tags: [project/monolith, spec]
 related: ["[[00-north-star]]"]
 ---
 

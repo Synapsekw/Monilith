@@ -2,7 +2,7 @@
 type: spec
 status: built
 date: 2026-07-25
-tags: [project/pulse, spec, settings, auth, gdpr, migrations, rls]
+tags: [project/monolith, spec, settings, auth, gdpr, migrations, rls]
 related:
   - "[[2026-07-25-1056-settings-redesign-mcp-guide]]"
   - "[[2026-07-25-gotcha-57-dev-applied-migration-with-no-committed-file]]"

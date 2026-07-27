@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-25
-tags: [project/pulse, adr, gotcha, supabase, migrations, security, rls, definer]
+tags: [project/monolith, adr, gotcha, supabase, migrations, security, rls, definer]
 related:
   - "[[2026-07-25-gotcha-57-dev-applied-migration-with-no-committed-file]]"
   - "[[2026-07-11-gotcha-55-mcp-apply-migration-version-drifts-from-committed-file]]"

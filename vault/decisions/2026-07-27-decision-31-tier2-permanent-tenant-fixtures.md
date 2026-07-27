@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-27
-tags: [project/pulse, adr, decision, testing, security, rls, tenancy]
+tags: [project/monolith, adr, decision, testing, security, rls, tenancy]
 related:
   - "[[2026-07-27-decision-30-conformance-probes-third-test-tier]]"
   - "[[2026-07-02-decision-25-no-isolated-test-db-integration-opt-in]]"

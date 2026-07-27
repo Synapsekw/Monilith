@@ -2,7 +2,7 @@
 type: spec
 status: proposed
 date: 2026-06-16
-tags: [project/pulse, spec, phase/4, collaboration]
+tags: [project/monolith, spec, phase/4, collaboration]
 related:
   ["[[00-north-star]]", "[[2026-06-14-pulse-design]]", "[[platform-roadmap]]"]
 ---

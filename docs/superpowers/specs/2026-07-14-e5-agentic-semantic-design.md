@@ -7,7 +7,7 @@ phase: 10
 epic: E5
 tags:
   [
-    project/pulse,
+    project/monolith,
     spec,
     ai,
     automations,
