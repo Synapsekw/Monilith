@@ -8,21 +8,21 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-27 06:59",
+  "updated": "2026-07-27 12:54",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "Batch A built and merged — plus a conformance test tier that gates the anon boundary with no infrastructure",
+  "headline": "Ask Pulse tells the truth about what it is doing — and GitHub locked us out of the remote",
   "chips": [
     {
       "label": "develop",
-      "value": "c58e890",
-      "note": "== origin · 4 merges ahead of main · no migration",
-      "tone": "ok"
+      "value": "cb3362a",
+      "note": "4 commits AHEAD of origin — unpushed, local only",
+      "tone": "warn"
     },
     {
       "label": "main",
       "value": "ff2bbaa",
-      "note": "#73 · promotion ready, no /sync-prod needed first",
-      "tone": "ok"
+      "note": "PR #74 open + green, blocked on email verification",
+      "tone": "warn"
     },
     {
       "label": "prod",
@@ -37,14 +37,19 @@
   },
   "gates": [
     {
+      "led": "red",
+      "text": "GITHUB REFUSES ALL PUSHES — 'You must verify your email address' 403 on the Synapsekw account. Local develop is 4 commits ahead and exists ONLY on this machine; two task worktrees deliberately retained until a push succeeds",
+      "tag": "BLOCKED"
+    },
+    {
       "led": "amber",
-      "text": "Promote develop → main — 4 merges, NO migration, so /sync-prod is not required first (the inverse of last session's constraint)",
+      "text": "Promotion PR #74 open and fully green (verify passed, 0 required reviews, no unresolved threads, main is an ancestor) — blocked solely by the same email verification. Merging needs no re-validation",
       "tag": "NEXT?"
     },
     {
-      "led": "red",
-      "text": "A dropped /ask stream renders as TOTAL SILENCE — no error, no 'reload to see the reply', even though the turn succeeded and persisted. Will hit real users on flaky mobile connections (gotcha-61)",
-      "tag": "BUG"
+      "led": "amber",
+      "text": "A client disconnect still DESTROYS an in-flight turn — no answer, no bill, just an orphaned user message. Persistence lives inside the response body's lifetime; decoupling it is the real fix (gotcha-62)",
+      "tag": "NEXT?"
     },
     {
       "led": "red",
@@ -107,14 +112,23 @@
       "tag": "DONE"
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "name": "task/ask-stream-drop-recovery",
+      "note": "merged into LOCAL develop — retained until a push succeeds"
+    },
+    {
+      "name": "task/ask-thinking-indicator",
+      "note": "merged into LOCAL develop — retained until a push succeeds"
+    }
+  ],
   "session": {
-    "id": "2026-07-27-0659-batch-a-builds-conformance-probes",
-    "when": "07-27 06:59",
+    "id": "2026-07-27-1254-ask-stream-honesty-drop-recovery-thinking",
+    "when": "07-27 12:54",
     "bullets": [
-      "Four worktrees scoped, built and merged → develop c58e890, none touching the schema; ledger stays 115 = 115 = 115",
-      "The security boundary finally has a gate: conformance probes ask a live project, as a logged-out visitor, what it can reach — 0 on both DEV and PROD",
-      "'AI is not replying' turned out to be self-inflicted — git pull in the main checkout rebuilds Next under the user's dev server and severs in-flight streams (gotcha-61)"
+      "'AI is not replying' was THREE problems in one costume: a rebuild severing the stream, a completed answer rendering as nothing, and 25–42s of motionless silence during tool rounds",
+      "A dropped stream now auto-recovers the persisted answer; the static '…' is replaced by an animated indicator that starts at submit, with an opening status as the first byte",
+      "GitHub began refusing all pushes mid-session — four commits and a green promotion PR now wait on one email verification"
     ]
   },
   "roadmap": [
