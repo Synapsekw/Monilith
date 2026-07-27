@@ -5,17 +5,17 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-07-27",
-    kind: "new",
-    title: "Read a whole board over MCP in one call",
-    description:
-      "Connected AI clients can now list a board's items and their values in a single request, instead of fetching items one at a time — and a truncated search now says so.",
-  },
-  {
-    date: "2026-07-27",
     kind: "fixed",
     title: 'Autopilot now posts as "Monolith Autopilot"',
     description:
       "The scheduled board agent still signed its updates with the old product name.",
+  },
+  {
+    date: "2026-07-27",
+    kind: "new",
+    title: "Read a whole board over MCP in one call",
+    description:
+      "Connected AI clients can now list a board's items and their values in a single request, instead of fetching items one at a time — and a truncated search now says so.",
   },
   {
     date: "2026-07-27",
