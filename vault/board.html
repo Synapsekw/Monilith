@@ -8,26 +8,26 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-27 14:05",
-  "kicker": "PULSE / NORTH STAR",
-  "headline": "Ask Pulse tells the truth about what it is doing — and promotion #74 put all of it in production",
+  "updated": "2026-07-27 17:34",
+  "kicker": "MONOLITH / NORTH STAR",
+  "headline": "The carryover board is closed — seven merges, promotion #78, and prod schema back in step",
   "chips": [
     {
       "label": "develop",
-      "value": "14f4d9e",
+      "value": "4c09f7b",
       "note": "== origin · squash divergence healed",
       "tone": "ok"
     },
     {
       "label": "main",
-      "value": "105bb57",
-      "note": "#74 LIVE · main CI green · Vercel deploy success",
+      "value": "1121796",
+      "note": "#78 LIVE · main CI green · deploy verified by curl",
       "tone": "ok"
     },
     {
       "label": "prod",
       "value": "",
-      "note": "114 definers, 0 anon-executable · ledger 115 = 115",
+      "note": "ledger 118 files = 118 DEV = 118 PROD",
       "tone": "ok"
     }
   ],
@@ -38,88 +38,53 @@
   "gates": [
     {
       "led": "green",
-      "text": "Promotion #74 SHIPPED — main @ 105bb57, main CI green, Vercel production deploy live. No migration, so prod schema and code stayed in step. Squash divergence healed on develop (gotcha-32 pre-empted)",
-      "tag": "DONE"
+      "tag": "DONE",
+      "text": "Promotion #78 SHIPPED — main @ 1121796, CI green, Vercel deploy verified serving new code (CORS headers confirmed live by curl, not just a green status). Squash divergence healed."
     },
     {
-      "led": "amber",
-      "text": "AI writes are reachable by real users for the FIRST time — the Ask Pulse confirm-card flow has only been exercised on DEV. Worth a deliberate prod pass, plus the conformance probes against production",
-      "tag": "NEXT?"
+      "led": "green",
+      "tag": "DONE",
+      "text": "Prod schema synced: 3 migrations applied via db push (115 → 118). The tier-2 seed correctly no-op-ed on prod — 0 fixture users leaked. Autopilot full_name verified as Monolith Autopilot."
     },
     {
-      "led": "amber",
-      "text": "A client disconnect still DESTROYS an in-flight turn — no answer, no bill, just an orphaned user message. Persistence lives inside the response body's lifetime; decoupling it is the real fix (gotcha-62)",
-      "tag": "NEXT?"
+      "led": "green",
+      "tag": "DONE",
+      "text": "Both halves of the security boundary now gated: anon conformance re-run against PROD (0 of 129 fns reachable, 0 of 53 tables readable) and Tier 2 fixtures covering the authenticated half — proven to bite on 3 broken policies."
     },
     {
       "led": "red",
-      "text": "Prod Vault still missing digest_secret — the health digest has NEVER fired in prod since 2026-07-03 (digest_runs = 0). Crons report succeeded while skipping, so nothing alerts. Turning it on emails real users three weeks of backlog",
-      "tag": "CRITICAL"
+      "tag": "CRITICAL",
+      "text": "Prod Vault still missing digest_secret — digest has NEVER fired (digest_runs = 0). But the schema half is now LIVE, so provisioning is finally safe: ping _health_digest_ping(), confirm a blocked row appears, then add it. No RESEND_API_KEY in prod, so the first runs send no email regardless."
     },
     {
-      "led": "amber",
-      "text": "The authenticated half of the security boundary is still ungated — conformance covers anon only. Tier 2 = two permanent seeded users/orgs in DEV, making cross-tenant isolation a read-only assertion (no purge, no new project)",
-      "tag": "NEXT?"
-    },
-    {
-      "led": "amber",
-      "text": "E5 semantic search still inert — item_embeddings = 0 vs 439 live prod items; needs OPENAI_EMBEDDING_API_KEY on Vercel (vercel env add was blocked by the permission classifier), then the backfill",
-      "tag": "OWED"
-    },
-    {
-      "led": "amber",
-      "text": "Live end-to-end MCP connection test — possible since the proxy stopped login-walling /api/mcp and /api/oauth/*, still unrun",
-      "tag": "OWED"
+      "led": "red",
+      "tag": "CRITICAL",
+      "text": "Never run /sync-prod data phase without excluding fixtures — a full replace would copy the two Tier 2 fixture accounts, whose passwords are committed to the repo, into PRODUCTION. Schema-only db push is unaffected."
     },
     {
       "led": "hollow",
-      "text": "69 integration suites still report 'skipped' every run — coverage theatre until quarantined or deleted",
-      "tag": "OWED"
+      "tag": "OWED",
+      "text": "E5 embeddings still inert (0 rows vs 439 prod items) — but OPENAI_EMBEDDING_API_KEY WAS provisioned 2026-07-25; that vault claim was stale. Only the item_embed_queue enqueue remains, and supabase-prod MCP is read-only (25006), so it needs a prod SQL editor paste."
     },
     {
       "led": "hollow",
-      "text": "Report Builder v2 remainder — roll-ups + org templates, both blocked by reports.board_id NOT NULL, sharing one migration",
-      "tag": "NEXT?"
+      "tag": "OWED",
+      "text": "Ask Pulse write path still unexercised on production — now worth doing, since the disconnect fix is live."
     },
     {
-      "led": "hollow",
-      "text": "E6 Stripe billing — F16 blocked on owner creds; the only genuinely open Phase-10 epic",
-      "tag": "NEXT?"
-    },
-    {
-      "led": "green",
-      "text": "Conformance probes — 129 function signatures + 53 tables probed as anon on DEV and PROD: 0 reachable, 0 readable. Zero writes, anon key only, no Docker and no third Supabase project. Proven to bite, not just green (decision-30)",
-      "tag": "DONE"
-    },
-    {
-      "led": "green",
-      "text": "F1 closed — upsertCellCore hoisted so MCP writes send the assigned notification; explicit actor drops a GoTrue round-trip per people-write and N per bulkSetCell",
-      "tag": "DONE"
-    },
-    {
-      "led": "green",
-      "text": "Report Builder v2 charts — hand-rolled static SVG after a spike proved recharts renders an empty 127-char wrapper in the JS-less PDF page; caught a bug no DOM test could see (every bar would have been invisible)",
-      "tag": "DONE"
-    },
-    {
-      "led": "green",
-      "text": "Ask Pulse Phase 2 — /ask proposes writes and executes them behind a confirm card; turn ends at the card, proposal rides in ai_messages.tool_trace, outcome is an appended turn (no UPDATE policy exists)",
-      "tag": "DONE"
-    },
-    {
-      "led": "green",
-      "text": "North-star drift reconciled — §3 had claimed PROD STILL EXPOSED after /sync-prod and promotion #73 had both already shipped",
-      "tag": "DONE"
+      "led": "brand",
+      "tag": "NEXT?",
+      "text": "Report Builder v2 roll-ups + org templates is the critical path — one migration dropping reports.board_id NOT NULL, then unwinding the single-board assumption across access, shaping, routing and ~1.4k lines of tests."
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-07-27-1254-ask-stream-honesty-drop-recovery-thinking",
-    "when": "07-27 12:54",
+    "id": "2026-07-27-1734-group-1-closeout-monolith-rename-promote",
+    "when": "2026-07-27 17:34",
     "bullets": [
-      "'AI is not replying' was THREE problems in one costume: a rebuild severing the stream, a completed answer rendering as nothing, and 25–42s of motionless silence during tool rounds",
-      "A dropped stream now auto-recovers the persisted answer; the static '…' is replaced by an animated indicator that starts at submit, with an opening status as the first byte",
-      "A mid-session GitHub lockout blocked every push for hours; once the email was verified it cleared in one pass and promotion #74 went live"
+      "Seven branches built, gated and merged, then promoted as #78; prod schema synced to 118.",
+      "MCP list_items cut a board read from ~164 round trips to 2; search_items now reports truncation.",
+      "Monolith branding replaced the last 13 user-visible Pulse strings, incl. the OAuth consent screen."
     ]
   },
   "roadmap": [
