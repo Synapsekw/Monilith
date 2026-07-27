@@ -14,6 +14,17 @@ import { upsertCellCore } from "@/lib/boards/actions/cell-core";
  */
 export type GetClient = () => Promise<SupabaseClient<Database>>;
 
+/**
+ * The uniform shape an MCP tool handler returns: one text block, plus an
+ * optional `isError` flag. Declaring it (rather than letting TS infer a union
+ * of the success and failure literals) is what lets callers and tests read
+ * `result.isError` without narrowing gymnastics.
+ */
+export type ToolResult = {
+  content: { type: "text"; text: string }[];
+  isError?: boolean;
+};
+
 /** One field write in `create_item` / `update_item`: a column id plus its raw value. */
 export const fieldInput = z.object({
   columnId: z.string().uuid(),
