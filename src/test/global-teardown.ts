@@ -1,6 +1,7 @@
 import { type SupabaseClient, createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { isSafeTestTarget, loadIntegrationEnv } from "./integration-env";
+import { isPermanentFixtureEmail } from "./tenant-fixtures";
 
 // Vitest globalSetup file: the exported `teardown` runs ONCE after the whole
 // run. Integration suites (`*.integration.test.ts`) provision throwaway
@@ -36,6 +37,12 @@ export function selectPurgeableUserIds(
   const ids: string[] = [];
   for (const u of users) {
     if (!u.email?.toLowerCase().endsWith(EXAMPLE_SUFFIX)) continue;
+    // PERMANENT Tier-2 fixtures share the @example.com domain but are seeded
+    // once and never mutated, so the age gate above would mark them purgeable
+    // 30 minutes after creation and cascade-delete their orgs — silently
+    // emptying the tenant-isolation suite instead of failing it. Exempt them by
+    // exact address (src/test/tenant-fixtures.ts is the single source of truth).
+    if (isPermanentFixtureEmail(u.email)) continue;
     const createdMs = Date.parse(u.created_at);
     if (Number.isNaN(createdMs)) continue; // unknown age → never purge
     if (nowMs - createdMs >= minAgeMs) ids.push(u.id);
