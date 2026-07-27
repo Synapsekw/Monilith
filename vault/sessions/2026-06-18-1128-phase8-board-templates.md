@@ -15,7 +15,7 @@ related:
 ## What changed
 
 - Shipped the **templates** slice of Phase 8 (subagent-driven, commits `d678094..f99ccb6`, pushed):
-  a built-in catalog of 4 templates (Blank/Sprint/Content/CRM, donor-ported, mapped to Pulse's 6
+  a built-in catalog of 4 templates (Blank/Sprint/Content/CRM, donor-ported, mapped to Monolith's 6
   column kinds), a `createBoardFromTemplate` Server Action + pure `buildTemplatePayload` (mints
   uuids, resolves date offsets), an atomic `create_board_from_template` RPC (security definer,
   membership-checked — **applied to cloud + types regenerated**), and a sidebar template picker.

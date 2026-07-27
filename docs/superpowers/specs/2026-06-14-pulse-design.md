@@ -6,14 +6,14 @@ tags: [project/pulse, spec]
 related: ["[[00-north-star]]"]
 ---
 
-# Pulse — Master Design Spec
+# Monolith — Master Design Spec
 
 > Status: Approved (source brief by Danijel, 2026-06-14). This document is the master
 > spec; per-phase implementation plans are derived from §7 and live alongside this file.
 
 ## 1. Product vision
 
-Build **Pulse** — a cloud-native "Work OS" in the spirit of Monday.com, folding in the
+Build **Monolith** — a cloud-native "Work OS" in the spirit of Monday.com, folding in the
 best ideas from ClickUp and Asana into one coherent product. Not a clone: the _ultimate_
 version. Monday's visual, color-coded board experience as the foundation; ClickUp's depth
 (nested hierarchy, docs, native time tracking); Asana's polish (goals/OKRs tied to work,
@@ -151,7 +151,7 @@ board Table/Kanban, cells + editors) to the dark-first near-black look in §6, t
 in-repo prototype's palette/density/animations into the `@theme`/OKLch tokens. Reuse the
 prototype's portable, framework-agnostic code (exporters, templates, filter/sort/group + formula
 logic) and port its view rendering (Calendar/Timeline/Dashboard, item panel, filter builder, label
-editor) onto Pulse's Supabase + Server-Actions + cache/realtime spine — never its Zustand/
+editor) onto Monolith's Supabase + Server-Actions + cache/realtime spine — never its Zustand/
 localStorage architecture. Reuse map: [`2026-06-16-decision-08-dark-first-monday-reskin`](../../../vault/decisions/2026-06-16-decision-08-dark-first-monday-reskin.md).
 
 After each phase: run tests, run advisors, regenerate types, write a CHANGELOG entry, pause

@@ -32,7 +32,7 @@ on `develop` (`bc2a0fb` → `7b018cb`). The repo's **first use of Supabase Stora
 - **Client:** `attachments-cache`, lazy `use-item-attachments` (enabled on first Files-tab open;
   batch preview-URL mint), optimistic `use-attachment-mutations` (client-direct upload + orphan cleanup),
   and the per-item Realtime channel extended to `attachments`.
-- **UI (Monday-style, Pulse dark):** new **Files tab** in `ItemPanel` — gallery (default) / list toggle,
+- **UI (Monday-style, Monolith dark):** new **Files tab** in `ItemPanel` — gallery (default) / list toggle,
   drag-and-drop + Add files, hover Preview/Download/Delete (delete uploader-gated), and a **preview
   lightbox** (inline image/video, ←/→/Esc nav, icon+Download fallback). Mocked visually first in the
   brainstorming companion.

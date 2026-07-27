@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Pulse feel polished, fast and snappy — cut cold-load latency on the hottest routes, give every navigation instant feedback, keep the client bundle off the critical path, and remove interaction jank — without regressing the gotcha-09 0-refetch view model or the RLS boundary.
+**Goal:** Make Monolith feel polished, fast and snappy — cut cold-load latency on the hottest routes, give every navigation instant feedback, keep the client bundle off the critical path, and remove interaction jank — without regressing the gotcha-09 0-refetch view model or the RLS boundary.
 
 **Architecture:** Four independent workstreams, each in its own `task/*` worktree, derived from a four-dimension performance scan (rendering/caching, data-fetching, client smoothness, bundle). The baseline is already strong (Cache Components/PPR, streamed shell, `React.cache` on auth/org reads, optimistic board mutations, virtualized Table/Kanban, disciplined code-splitting), so this is a **targeted-gap** program, not a rewrite. Batch A removes server round-trips on the board / home / dashboard / my-work paths; Batch B removes typing lag and un-virtualized renders in the board views; Batch C trims the always-loaded JS bundle; Batch D removes redundant refreshes and blank-content windows.
 
@@ -1220,7 +1220,7 @@ git commit -m "perf(gantt): virtualize timeline rows and clamp the arrow overlay
 **Interfaces:**
 
 - Consumes: nothing (leaf).
-- Produces: a per-day render clamp (default 8 items) with a client-state "+N more" expander — reusing the **existing** "+N more" pattern already shipped in `CalendarMonth.tsx` (line 165/249, verified working via `CalendarMonth.test.tsx`). Pulse monochrome tokens for the expander trigger.
+- Produces: a per-day render clamp (default 8 items) with a client-state "+N more" expander — reusing the **existing** "+N more" pattern already shipped in `CalendarMonth.tsx` (line 165/249, verified working via `CalendarMonth.test.tsx`). Monolith monochrome tokens for the expander trigger.
 
 > **Scan correction:** there is no `CalendarBoard.tsx`; the calendar views are `CalendarMonth` (already lane-capped with "+N more"), `CalendarWeek`, and `CalendarAgenda`. Only **Agenda** renders every dated item unbounded (`groups.map` → `group.items.map` with no cap). This task targets Agenda only; model the expander on `CalendarMonth`'s.
 

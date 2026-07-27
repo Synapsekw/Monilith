@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a real-time presence layer on top of Pulse's existing board data sync — a board-wide avatar stack, per-element "who is editing here" indicators across all views, and a visible (non-blocking) last-write-wins collision flash — without any new tables and without touching the existing `postgres_changes` data channel.
+**Goal:** Add a real-time presence layer on top of Monolith's existing board data sync — a board-wide avatar stack, per-element "who is editing here" indicators across all views, and a visible (non-blocking) last-write-wins collision flash — without any new tables and without touching the existing `postgres_changes` data channel.
 
 **Architecture:** Ephemeral Supabase Realtime **Presence** on a **separate private channel** `presence:board:${boardId}`, gated by an RLS policy on `realtime.messages` that reuses the existing `can_read_board(uuid)` function. A small pure core (color + reducer + target helpers) feeds a single `useBoardPresence` hook owned by `BoardViews` (mounted once, survives view switches per gotcha-09), exposed to all views through a context so each view only drops a `<PresenceRing>` and calls `usePresenceFocus`. The LWW flash observes the existing data-sync events and attributes the change from presence state.
 
@@ -763,7 +763,7 @@ git commit -m "feat(presence): useBoardPresence hook + provider + usePresenceFoc
 
 ## Task 6: UI primitives — `PresenceRing` + `BoardPresenceBar`
 
-> **REQUIRED SUB-SKILLS:** load `pulse-ui` and `frontend-design` before styling. Use Pulse tokens (dark-first near-black surfaces, single accent). The structure below is correct; the styling must come from `pulse-ui`.
+> **REQUIRED SUB-SKILLS:** load `pulse-ui` and `frontend-design` before styling. Use Monolith tokens (dark-first near-black surfaces, single accent). The structure below is correct; the styling must come from `pulse-ui`.
 
 **Files:**
 - Create: `src/components/boards/presence/PresenceRing.tsx`, `src/components/boards/presence/BoardPresenceBar.tsx`

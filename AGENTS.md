@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Where things live
 
-Pulse is a Next.js 16 (App Router) + Supabase multi-tenant "Work OS". Orientation map:
+Monolith is a Next.js 16 (App Router) + Supabase multi-tenant "Work OS". Orientation map:
 
 | Path                          | What's there                                                        |
 | ----------------------------- | ------------------------------------------------------------------- |
@@ -136,7 +136,7 @@ These rules are mandatory for agents and humans. See `CONTRIBUTING.md` for the f
    `systematic-debugging`, etc.). For a one-line fix, typo, or trivial tweak, just do it.
 
 3. **UI work requires the design skills.** Before building or styling any UI, load the front-end
-   design skills — the project `pulse-ui` skill (Pulse's monochromatic + single-accent system,
+   design skills — the project `pulse-ui` skill (Monolith's monochromatic + single-accent system,
    tokens, app primitives) and the generic `frontend-design` skill. This is not optional for
    visual/component work.
 

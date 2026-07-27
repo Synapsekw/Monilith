@@ -26,7 +26,7 @@ A goal measures progress one of **four ways** (`progress_mode`), picked per goal
   completion mapping (reuses 7a's mapping shape + the dashboard-aggregate spine).
 
 Goals are **org-wide, cross-workspace** exec objects (like Portfolios), each **person-owned** with an
-optional **workspace** association standing in for "team" (Pulse has no teams entity). Surfaced at
+optional **workspace** association standing in for "team" (Monolith has no teams entity). Surfaced at
 `/goals` (the sidebar already carries a disabled **Goals** stub awaiting this slice).
 
 Status is **hybrid, Portfolio-style**: a manual `status` (On track / At risk / Off track / Done) that

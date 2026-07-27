@@ -19,7 +19,7 @@ validate as instant. In **Next.js 16.2.9** that premise is false.
 ## The trap
 
 Build-time instant validation flags **every dynamic read anywhere in the rendered tree**, not just
-the page body. Pulse's core "0-refetch on view switch" pattern (gotcha 09) means the persistent
+the page body. Monolith's core "0-refetch on view switch" pattern (gotcha 09) means the persistent
 static shell reads `useSearchParams()` pervasively — the sidebar (`DashboardsNav` reads
 `searchParams.get("ai")`) plus page-level view-state components (`GoalTree`, `PortfolioGrid`,
 `WorkloadGrid`, `org-admin-console`, …). So:

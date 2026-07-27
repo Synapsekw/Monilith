@@ -34,4 +34,4 @@ Two small UX papercuts: board groups sat visually flush with no separation, and 
 
 ## Next session entry point
 
-Roadmap thrust is unchanged: **Phase 10 — AI & Agents, Epic 1** (foundation + Ask Pulse) via `/develop` in a `task/ai-foundation-ask-pulse` worktree. Repair the dev migration-ledger drift first.
+Roadmap thrust is unchanged: **Phase 10 — AI & Agents, Epic 1** (foundation + Ask Monolith) via `/develop` in a `task/ai-foundation-ask-pulse` worktree. Repair the dev migration-ledger drift first.

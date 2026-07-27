@@ -9,7 +9,7 @@ tags: [adr, gotcha, supabase, auth, email, deploy]
 
 ## Context
 
-Pulse/MONOLITH brands its Supabase auth emails (confirmation, recovery, invite) as HTML in
+Monolith brands its Supabase auth emails (confirmation, recovery, invite) as HTML in
 `supabase/templates/*.html`, wired in `supabase/config.toml` under `[auth.email.template.*]`.
 
 ## The trap

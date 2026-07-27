@@ -112,7 +112,7 @@ comment in `create-item.ts:19` says so explicitly. Every other server-side cell 
 
 `upsertCell` is a `"use server"` Server Action whose first act is
 `await createClient()` from `src/lib/supabase/server.ts`, which builds the client from
-**`cookies()` (`next/headers`)**. An MCP request carries **no Pulse session cookie** — only our
+**`cookies()` (`next/headers`)**. An MCP request carries **no Monolith session cookie** — only our
 opaque OAuth bearer token, which `src/lib/mcp/context.ts:36 getRequestClient` resolves to a
 **bridged** client via `getBridgedClient` → `clientFromAccessToken`
 (`src/lib/mcp/oauth/session-bridge.ts:131`). Calling `upsertCell` from a tool handler would
@@ -168,8 +168,8 @@ Verified as a real gap, not a false positive:
   it does not create them.
 
 **User-observable effect:** "Assign Sarah to this task" in Claude Desktop assigns Sarah and she is
-never notified. The same edit in the Pulse UI notifies her. Silent, and the kind of thing that is
-only noticed as "Pulse notifications are unreliable."
+never notified. The same edit in the Monolith UI notifies her. Silent, and the kind of thing that is
+only noticed as "Monolith notifications are unreliable."
 
 **Recommendation:** separate `fix(mcp):` task, and the right way to fix it is §5 Option B —
 hoist a client-injected `upsertCellCore(supabase, …)` out of `upsertCell`, have both `upsertCell`

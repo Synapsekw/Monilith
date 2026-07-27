@@ -22,7 +22,7 @@ related:
 
 ## Why
 
-Phase 6 ("ClickUp depth") needed native time tracking after subitems (6a) and custom fields (6b). Built as a column kind (not a global timesheet) to match Pulse's architecture; a cross-board timesheet stays deferred to Phase 7-scale reporting.
+Phase 6 ("ClickUp depth") needed native time tracking after subitems (6a) and custom fields (6b). Built as a column kind (not a global timesheet) to match Monolith's architecture; a cross-board timesheet stays deferred to Phase 7-scale reporting.
 
 ## Open threads
 

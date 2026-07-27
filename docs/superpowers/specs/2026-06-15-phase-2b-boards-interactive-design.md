@@ -11,7 +11,7 @@ related:
   ]
 ---
 
-# Pulse — Phase 2b: Boards Interactive — Design Spec
+# Monolith — Phase 2b: Boards Interactive — Design Spec
 
 > Slice 2b of Phase 2. Builds on the merged 2a data layer + read-only Table
 > ([[2026-06-15-phase-2-boards-core-design]], PR #9). Makes the Table interactive:

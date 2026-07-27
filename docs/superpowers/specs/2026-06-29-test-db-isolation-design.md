@@ -120,7 +120,7 @@ because the old line is byte-identical everywhere.
 
 This is a **remote step the user performs once**; the plan documents it, does not run it:
 
-1. Create a new Supabase project (e.g. "Pulse TEST") in the dashboard. Note its project
+1. Create a new Supabase project (e.g. "Monolith TEST") in the dashboard. Note its project
    ref, URL, anon/publishable key, and service-role key.
 2. Apply the schema (the 69 migrations in `supabase/migrations/` are the source of
    truth):

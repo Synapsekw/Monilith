@@ -5,7 +5,7 @@
 > **Load before UI tasks:** `pulse-ui` + `frontend-design` skills (Task 8 builds/styles UI).
 > **Spec:** `docs/superpowers/specs/2026-07-12-e3-conversational-actions-design.md`
 
-**Goal:** Turn a ⌘K natural-language command ("create task X due Friday for Dana in Backlog") into a **confirmed** structured write, via a shared headless write-action engine that the Ask-Pulse-full-page track will also consume.
+**Goal:** Turn a ⌘K natural-language command ("create task X due Friday for Dana in Backlog") into a **confirmed** structured write, via a shared headless write-action engine that the Ask-Monolith-full-page track will also consume.
 
 **Architecture:** A surface-agnostic engine in `src/lib/ai/write/` (Zod proposal/validated schema → proposal-only write tools + F5 read tools → a tool-use `proposeLoop` that resolves names to ids → an `executeAction` mapper onto the canonical typed Server Actions `createItem`/`createGroup`/`upsertCell`). Two Server Actions (`proposeActions`, `executeActions`) bracket a **human Approve**. A lazy ⌘K "Run a command…" surface renders confirm cards. The model **never** mutates — every write is an RLS-enforced Server Action gated behind an explicit confirm.
 
@@ -1797,7 +1797,7 @@ git commit -m "feat(ai): ⌘K quick-action composer (propose → confirm → exe
 - Consumes: `QuickAction` (Task 8, lazy).
 - Produces: a "Run a command…" entry in ⌘K that switches the palette body into `QuickAction`.
 
-**Coordination:** if the Ask-full-page ⌘K repoint has merged, `command-palette.tsx` may already have changed the "Ask Pulse…" entry to navigate to `/ask`. Reconcile: keep that entry, ADD a separate "Actions" group. If it has **not** merged, leave the existing "Ask Pulse…" entry untouched. Do not delete anything you didn't add.
+**Coordination:** if the Ask-full-page ⌘K repoint has merged, `command-palette.tsx` may already have changed the "Ask Monolith…" entry to navigate to `/ask`. Reconcile: keep that entry, ADD a separate "Actions" group. If it has **not** merged, leave the existing "Ask Monolith…" entry untouched. Do not delete anything you didn't add.
 
 - [ ] **Step 1: Add lazy import + local mode state** near the top of `CommandPalette`
 

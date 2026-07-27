@@ -5,7 +5,7 @@
 
 ## Problem & context
 
-Pulse already has working `postgres_changes` realtime **data** sync on boards
+Monolith already has working `postgres_changes` realtime **data** sync on boards
 (`src/lib/boards/use-board-realtime.ts`, channel `board:${boardId}`): cell values, items,
 columns, groups, and dependencies reconcile into the `["board", boardId]` React Query cache and
 re-render every viewer. That part is solid and **must not change**.
@@ -125,7 +125,7 @@ type PresenceState = {
 ### Unit 2 — presence reducer + identity/color util (pure logic)
 
 - `src/lib/boards/presence-color.ts` — `presenceColor(userId: string): string`: deterministic
-  hash → one of a fixed palette (Pulse accent-compatible). Same user → same color everywhere.
+  hash → one of a fixed palette (Monolith accent-compatible). Same user → same color everywhere.
 - `src/lib/boards/presence-reducer.ts` — pure functions over the raw Supabase presence state
   (`channel.presenceState()` shape: `Record<presenceKey, PresenceState[]>`):
   - `toRoster(raw, selfUserId)` → deduped list of occupants (merge a user's multiple

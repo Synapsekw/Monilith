@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Pulse's existing board surfaces read like the Monday prototype in dark mode by applying the approved "direction C" density/treatment — a visual-only pass of `className`/constant edits on existing components.
+**Goal:** Make Monolith's existing board surfaces read like the Monday prototype in dark mode by applying the approved "direction C" density/treatment — a visual-only pass of `className`/constant edits on existing components.
 
-**Architecture:** No new components, no logic/data-flow/routing changes. Every change is a localized `className` or constant edit on a component that already styles with Pulse semantic tokens. Correctness = the full existing test suite stays green + visual verification (the board tests assert behavior, not classes/pixels, so they must not regress). Per-row group/option colors remain DB-driven inline `style={{ backgroundColor }}`.
+**Architecture:** No new components, no logic/data-flow/routing changes. Every change is a localized `className` or constant edit on a component that already styles with Monolith semantic tokens. Correctness = the full existing test suite stays green + visual verification (the board tests assert behavior, not classes/pixels, so they must not regress). Per-row group/option colors remain DB-driven inline `style={{ backgroundColor }}`.
 
 **Tech Stack:** Next.js 16, React 19, Tailwind v4 (semantic tokens in `globals.css`), shadcn/ui, dnd-kit, TanStack Table/Virtual.
 

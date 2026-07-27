@@ -13,7 +13,7 @@ related:
 ## Context
 
 Mid-session the user reported "nothing happening, AI is not replying" on `/ask`. The obvious suspect
-was the Ask Pulse Phase 2 merge, which had landed hours earlier and changed the streaming loop.
+was the Ask Monolith Phase 2 merge, which had landed hours earlier and changed the streaming loop.
 
 It was not the merge. The evidence, gathered read-only:
 

@@ -35,7 +35,7 @@ This is the only change. Average-on-collapse already works and is untouched.
 
 ## Design-system fit
 
-Pulse is deliberately monochromatic + single-accent, so a red→green scale is an
+Monolith is deliberately monochromatic + single-accent, so a red→green scale is an
 intentional, calibrated data-viz signal — not a decorative rainbow. To stay inside
 the system:
 

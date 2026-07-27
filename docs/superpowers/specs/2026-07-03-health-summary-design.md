@@ -95,13 +95,13 @@ incomplete** when either:
   item or `userIds` is empty. _Skipped if the board has no people column_ (the criterion is
   inexpressible there; flagging every item would be noise).
 - **Date missing** — the board's **first `date` column by position** has no cell or no
-  `date` value. In Pulse a single date column carries start (`date`) and optional end
+  `date` value. In Monolith a single date column carries start (`date`) and optional end
   (`end`); "start date" and "due date" collapse to this one value, and `end` is optional
   (single-date boards dominate). _Skipped if the board has no date column._
 
 **Adjustments to the suggested rule, made explicit (the "confirm or adjust"):**
 
-- **"Parent/group item must have ≥1 sub-item" is vacuous in Pulse** — parentage is emergent
+- **"Parent/group item must have ≥1 sub-item" is vacuous in Monolith** — parentage is emergent
   (`items.parent_id`); an item with zero children is indistinguishable from a deliberate
   leaf activity, so the criterion can never fire. The nearest expressible analog (a board
   _group_ with zero items) is excluded from this slice. Recorded as Open question 1.
@@ -362,13 +362,13 @@ question 3.
 
 ## Open questions for review
 
-1. **The "parent must have ≥1 sub-item" criterion is dropped** — in Pulse parentage is
+1. **The "parent must have ≥1 sub-item" criterion is dropped** — in Monolith parentage is
    emergent (an item becomes a parent by having children), so the criterion can never fire.
    Nearest expressible analogs: flag _groups_ with zero items, or a per-board "expects
    subitems" setting — both excluded as not-cheap. **Needs requester confirmation**
    (irdhina.harith@accenture.com) per the goal plan's definition of done, alongside the rest
    of the rule: owner = first people column, date = first date column (single check — start
-   and due collapse to one value on Pulse date columns), done items never flagged,
+   and due collapse to one value on Monolith date columns), done items never flagged,
    criteria skipped on boards lacking that column kind.
 2. **Rule configurability deferred.** Org/board-level rule config (which columns, which
    criteria) needs schema + UI on both the widget and the org — not cheap; the fixed rule

@@ -129,7 +129,7 @@ Settings are validated with the existing `columnSettingsSchema(kind)` before ins
   A pointer-drag updates a local `liveWidths` state (smooth, 0 round-trips, clamped 80–1200); on
   `pointerup`, `resizeColumn` persists and Realtime echoes to peers. Fixed-px value columns are the
   standard for resizable tables. **Table view only** — Kanban/Calendar/Gantt are untouched.
-- Pulse-UI: monochrome chrome, `ui/*` primitives, icon-only controls get `aria-label`, AA focus
+- Monolith-UI: monochrome chrome, `ui/*` primitives, icon-only controls get `aria-label`, AA focus
   rings, `text-destructive` for delete (load `pulse-ui` + `frontend-design` at build time).
 
 ## 6. Perf & data-fetching budget (gotcha-09 — mandatory)

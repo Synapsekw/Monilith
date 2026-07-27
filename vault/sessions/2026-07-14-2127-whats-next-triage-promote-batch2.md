@@ -25,15 +25,15 @@ Batch 2 was built + hand-verified on develop but unpromoted — promoting it was
 
 ## How to test (for the user)
 
-Batch 2 is now live in prod. Quick regression on production: 1) open an item panel → **Fields** tab, use **AI item assist** to generate field content; 2) item **Updates** tab → "Catch me up" thread summary; 3) ⌘K → "run a command", give a NL action, confirm the propose→confirm→execute card; 4) new board → **Generate with AI** wizard → Keep/Discard banner; 5) ⌘K clarification: ask something ambiguous, confirm the multi-turn "Pulse is working…" flow with a scrollable, bounded panel.
+Batch 2 is now live in prod. Quick regression on production: 1) open an item panel → **Fields** tab, use **AI item assist** to generate field content; 2) item **Updates** tab → "Catch me up" thread summary; 3) ⌘K → "run a command", give a NL action, confirm the propose→confirm→execute card; 4) new board → **Generate with AI** wizard → Keep/Discard banner; 5) ⌘K clarification: ask something ambiguous, confirm the multi-turn "Monolith is working…" flow with a scrollable, bounded panel.
 
 ## Open threads
 
 - **E5 + Landing specs are written but uncommitted** in their worktrees, awaiting review. Next session: review, then build (re-enter worktree → `executing-plans`), or `git worktree remove` if abandoning.
-- Build-ready plans (via `/develop`, not scope): **Ask Pulse full-page**, **E6 billing**, **PF**. On the AI track build **Ask Pulse full-page before E5** (shared `src/lib/ai/ask/`).
+- Build-ready plans (via `/develop`, not scope): **Ask Monolith full-page**, **E6 billing**, **PF**. On the AI track build **Ask Monolith full-page before E5** (shared `src/lib/ai/ask/`).
 - **North-star correction found:** the "no pg_cron scheduler" assumption is wrong — the `pg_cron`/`pg_net` + `_automation_run` substrate exists and E5's agentic track reuses it.
 - Deferred as before: Audit Batch B (org switcher, auth rate limiting, notification prefs, saved views); Wordmark revert (conditional); perf tier-3 Task A (blocked by shell searchParams).
 
 ## Next session entry point
 
-Review the two uncommitted scoping specs (E5, Landing) and green-light a build — or start building a ready plan (Ask Pulse full-page first on the AI track). Prod and develop are in sync.
+Review the two uncommitted scoping specs (E5, Landing) and green-light a build — or start building a ready plan (Ask Monolith full-page first on the AI track). Prod and develop are in sync.

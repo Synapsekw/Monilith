@@ -11,7 +11,7 @@
 
 ## 1. Problem
 
-A Pulse user can belong to multiple organizations (`getUserOrgs()` already
+A Monolith user can belong to multiple organizations (`getUserOrgs()` already
 returns **all** of them, RLS-scoped). But there is **no concept of an active
 org** anywhere in the app: ~22 files hardcode `orgs[0]` (or the equivalent
 `(await getUserOrgs())[0]`) as "the org." A multi-org user is therefore

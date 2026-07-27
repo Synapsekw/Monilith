@@ -40,4 +40,4 @@ Clearing the small, disjoint carryover follow-ups (perf/a11y/dead-code) that had
 
 ## Next session entry point
 
-Do the cross-group-DnD browser pass, then `/promote develop → main`. After that, build **Phase 10 Epic 1** (foundation + Ask Pulse) — spec+plan ready at `docs/superpowers/{specs,plans}/2026-07-05-ai-foundation-and-ask-pulse*` (Task 0 migration is user-applied).
+Do the cross-group-DnD browser pass, then `/promote develop → main`. After that, build **Phase 10 Epic 1** (foundation + Ask Monolith) — spec+plan ready at `docs/superpowers/{specs,plans}/2026-07-05-ai-foundation-and-ask-pulse*` (Task 0 migration is user-applied).

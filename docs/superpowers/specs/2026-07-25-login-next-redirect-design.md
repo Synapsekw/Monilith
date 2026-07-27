@@ -423,20 +423,20 @@ Setup: `git checkout develop && git pull && pnpm install && pnpm dev` (DEV Supab
    `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/mcp`
    → `401` with a `WWW-Authenticate` header, not a redirect.
 8. Sign in once, open **Settings → MCP**, and copy the server URL shown there.
-9. Sign out again (private window, or Settings → sign out) so the browser has no Pulse session.
+9. Sign out again (private window, or Settings → sign out) so the browser has no Monolith session.
 10. Add the copied URL as an MCP connector in your MCP client (Claude Desktop → Settings →
     Connectors → Add custom connector, or claude.ai → Connectors). Click **Connect**.
 11. The client opens the browser at `/api/oauth/authorize?client_id=…&code_challenge=…`.
     → Because you're signed out you land on **`/login?next=%2Fapi%2Foauth%2Fauthorize%3F…`** with the
     full authorize query intact in `next`.
 12. Enter your credentials and submit.
-    → **You land directly on the "… wants to access your Pulse account" consent screen** — you do
+    → **You land directly on the "… wants to access your Monolith account" consent screen** — you do
     **not** pass through the dashboard and you do **not** touch the MCP client again. This single step
     is the whole point of the task.
 13. Click **Allow access**.
     → The browser returns to the MCP client's redirect URI with `code=…`; the client reports the
     connector as connected.
-14. In the MCP client, ask it to list your Pulse boards.
+14. In the MCP client, ask it to list your Monolith boards.
     → It returns your boards, proving the token exchange completed on the same uninterrupted pass.
 
 **D — no regressions (2 minutes)**

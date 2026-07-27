@@ -22,7 +22,7 @@ related:
 
 ## Why
 
-Pulse had exactly one AI feature and no agentic layer; the product owner wants an agentic AI wave sold two ways (included-in-plan or bring-your-own key). This session turns that into a scoped, prioritized, `/whats-next`-triageable plan — not code yet.
+Monolith had exactly one AI feature and no agentic layer; the product owner wants an agentic AI wave sold two ways (included-in-plan or bring-your-own key). This session turns that into a scoped, prioritized, `/whats-next`-triageable plan — not code yet.
 
 ## How to test (for the user)
 

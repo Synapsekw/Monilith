@@ -26,17 +26,17 @@ related: ["[[00-north-star]]"]
 | 7   | Asana polish                       | Goals/OKRs, Portfolios, Workload/capacity                                                                                                                                                                                                                                                                                                                                                                    | **In progress** (7a + 7b + 7c done)                 |
 | 8   | Dashboards + templates + ⌘K polish | Cross-board widgets, templates, palette polish                                                                                                                                                                                                                                                                                                                                                               | **Done** (D1–D3b + templates + ⌘K)                  |
 | 9   | Hardening                          | Performance, advisors clean, tests, a11y audit, Vercel deploy                                                                                                                                                                                                                                                                                                                                                | **In progress** (design locked; 9.1 done; 9.2 next) |
-| 10  | AI & Agents                        | Reusable AI platform layer (gateway · Vault BYO-key store · usage ledger/credits · entitlements) + a feature wave (Ask Pulse, item assist, generation, agentic automations, semantic search) sold **managed or BYO-key**. Scope: `docs/superpowers/specs/2026-07-05-ai-platform-phase-10-scope.md`; E1 spec `…-ai-foundation-and-ask-pulse-design.md`. ([[2026-07-05-decision-26-ai-platform-dual-billing]]) | **E1 done** (develop); E2–E6 + Ask-full-page open   |
+| 10  | AI & Agents                        | Reusable AI platform layer (gateway · Vault BYO-key store · usage ledger/credits · entitlements) + a feature wave (Ask Monolith, item assist, generation, agentic automations, semantic search) sold **managed or BYO-key**. Scope: `docs/superpowers/specs/2026-07-05-ai-platform-phase-10-scope.md`; E1 spec `…-ai-foundation-and-ask-pulse-design.md`. ([[2026-07-05-decision-26-ai-platform-dual-billing]]) | **E1 done** (develop); E2–E6 + Ask-full-page open   |
 
 > **RS** is a cross-cutting workstream, not a renumber of 0–9 — it re-skins what's shipped and the
 > feature phases then land on the dark surface, reusing prototype view/logic code where portable.
 
-> **Phase 10** is decomposed into 6 epics (E1 Foundation+Ask Pulse → E2 Item assist · E3 Conversational
+> **Phase 10** is decomposed into 6 epics (E1 Foundation+Ask Monolith → E2 Item assist · E3 Conversational
 > actions · E4 Generation · E6 Billing [parallel after E1] → E5 Agentic automation [long pole]). E1 is
 > the critical path and the ~2-week ship-in-2 slice. Per-epic specs/plans land just-in-time. **E1 is
 > done on develop.**
 
-> **Ask Pulse full-page (queued, not started)** — owner-approved expansion of the shipped Ask Pulse
+> **Ask Monolith full-page (queued, not started)** — owner-approved expansion of the shipped Ask Monolith
 > popup into a standalone `/ask` chat page (side-nav destination, persisted per-user cross-board
 > history, multi-turn rolling-summary memory, token streaming; Phase 2 adds confirm-before-execute
 > write actions). Spans E1 F5 (the chat surface) + E3 F6 (write actions, pulled forward). Deliberately

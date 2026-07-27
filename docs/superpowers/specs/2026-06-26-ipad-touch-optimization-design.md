@@ -6,7 +6,7 @@
 
 ## Goal
 
-Make Pulse fully usable for **full authoring parity on iPad** by touch. Everything
+Make Monolith fully usable for **full authoring parity on iPad** by touch. Everything
 desktop can do — create/restructure boards, drag Kanban/Gantt, resize columns, reorder
 rows, build dashboards — must work well under a finger on an iPad in both portrait
 (768px) and landscape (1024px).

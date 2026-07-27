@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the cramped single `/admin` page into a proper multi-page platform admin area (Overview · Organizations · Users · Audit log) reached from a collapsible, admin-only "Platform" section in the left sidebar, styled in Pulse's dark monochromatic + indigo system.
+**Goal:** Turn the cramped single `/admin` page into a proper multi-page platform admin area (Overview · Organizations · Users · Audit log) reached from a collapsible, admin-only "Platform" section in the left sidebar, styled in Monolith's dark monochromatic + indigo system.
 
 **Architecture:** Pure UI/IA layer on top of the existing platform tier (no change to the security model). Distinct server pages under `/admin/*`, each guarded by `requirePlatformAdmin()`; bounded/paginated reads via expanded `src/lib/platform/queries.ts` + two new `SECURITY DEFINER` RPCs (`platform_stats`, `platform_search_users` — the latter retires the first-200-only user-search cap). A new client `PlatformNav` sidebar section mirrors the existing `DashboardsNav` pattern.
 

@@ -20,7 +20,7 @@ related:
   114 definers, 0 anon-executable. Also corrected the stale "38 suites" comments (there are 69).
 - **Four merges, no schema change** (ledger stays 115 = 115 = 115): `6a5aa0e` anon conformance
   probes · `ad5fb8a` F1 MCP assigned-notification · `4436350` Report Builder v2 charts · `c58e890`
-  Ask Pulse Phase 2 write actions. 70 files, +12,479 lines.
+  Ask Monolith Phase 2 write actions. 70 files, +12,479 lines.
 - **F1** hoisted `upsertCellCore(supabase, input, actorId)` into its own non-`"use server"` module so
   MCP writes inherit the `assigned` fan-out. Explicit actor, no `auth.getUser()` in the core — which
   also drops a GoTrue round-trip per UI people-write and N per `bulkSetCell`.
@@ -28,7 +28,7 @@ related:
   127-char empty wrapper under `renderToStaticMarkup` (it builds geometry in effects; the PDF page
   runs no JS). `REPORT_CONFIG_VERSION` stays at `1` — bumping would 500 the reports list for every
   existing report.
-- **Ask Pulse Phase 2** ends the turn at the confirm card, persists proposals in the existing
+- **Ask Monolith Phase 2** ends the turn at the confirm card, persists proposals in the existing
   `ai_messages.tool_trace`, and appends an outcome turn on Approve/Cancel because `ai_messages` has
   no UPDATE policy.
 - **Two ADRs:** [[2026-07-27-decision-30-conformance-probes-third-test-tier]] and
@@ -51,7 +51,7 @@ value for nothing. Batch A itself was the roadmap unblocking after the Group-1 c
    new **Chart** row, unchecked, preview unchanged. Tick it → donut. Switch to Bars → zero new
    network requests. Save → Export PDF → compare against the preview segment for segment, then view
    in grayscale.
-3. **Ask Pulse:** at `/ask`, ask _"create a task called Ship v2 in Backlog on \<board\>, due Friday"_
+3. **Ask Monolith:** at `/ask`, ask _"create a task called Ship v2 in Backlog on \<board\>, due Friday"_
    → lead-in streams, then a **Proposed action** card; nothing is written yet. Reload — the card
    survives. Approve → "Applied." plus an outcome turn. Cancel on another → "nothing was changed."
    Approve the same proposal in two tabs → the second reports it already resolved.
@@ -64,7 +64,7 @@ value for nothing. Batch A itself was the roadmap unblocking after the Group-1 c
   though the turn succeeded and persisted. Real user-facing bug on flaky connections; own task.
 - **Tier 2 not built:** the `authenticated` half of the security boundary is still ungated. Plan is
   two permanent fixture users/orgs seeded once in DEV, never mutated, making isolation assertions
-  read-only. Ask Pulse Phase 2 shipped 2 RLS tests that have never executed.
+  read-only. Ask Monolith Phase 2 shipped 2 RLS tests that have never executed.
 - **The 69 integration suites still report "skipped"** every run — coverage theatre until quarantined
   or deleted.
 - **Report Builder v2 remainder:** roll-ups + org templates, both blocked by `reports.board_id NOT NULL`,

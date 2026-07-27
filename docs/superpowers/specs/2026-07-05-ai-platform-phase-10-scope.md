@@ -7,7 +7,7 @@
 
 ## Why this phase
 
-Pulse ships phases 0–9 and has exactly **one** AI feature today — AI dashboard generation
+Monolith ships phases 0–9 and has exactly **one** AI feature today — AI dashboard generation
 (`src/lib/ai/`). It has no agentic behaviour, no natural-language surface, no AI inside automations,
 and a completely greenfield billing surface (no Stripe, no plan column, no quota, no secrets-at-rest).
 Phase 10 adds a **reusable AI platform layer** and a wave of features on top of it, sold **two ways**:
@@ -23,7 +23,7 @@ and meters spend.
 
 ## Design stance (non-negotiable)
 
-`vault/product.md` lists "Powered-by-AI badges, glow-everything" as an **anti-reference** and Pulse's
+`vault/product.md` lists "Powered-by-AI badges, glow-everything" as an **anti-reference** and Monolith's
 personality as **Calm · Capable · Crisp**. AI ships **at the seams**, not as chrome: no glow, no
 badges, intelligence surfaced where work already happens (the item panel, ⌘K, the automations
 builder). Every feature reuses the proven pattern from dashboard-gen: **privacy-safe snapshot →
@@ -35,9 +35,9 @@ the workspace only when a feature genuinely needs them, and that is called out p
 | Decision                 | Choice                                                                                                                                                                                                        |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Billing depth (v1)**   | Admin-set entitlements first (set from the existing `src/app/admin/` console). Self-serve Stripe (E6) is a fast-follow, **not** in the first two weeks. Both managed + BYO work day one.                      |
-| **Lead feature**         | **Ask Pulse** (natural-language Q&A over your work) is the flagship after the foundation.                                                                                                                     |
+| **Lead feature**         | **Ask Monolith** (natural-language Q&A over your work) is the flagship after the foundation.                                                                                                                     |
 | **BYO key storage**      | **Supabase Vault** (`vault.secrets`, libsodium). Service-role-only access via a `SECURITY DEFINER` decrypt path; never RLS-exposed to `authenticated`. We hold no master key.                                 |
-| **Ask Pulse scope (v1)** | **Workspace-wide** — question answered across all boards in a workspace via RLS-scoped read tools (not single-board).                                                                                         |
+| **Ask Monolith scope (v1)** | **Workspace-wide** — question answered across all boards in a workspace via RLS-scoped read tools (not single-board).                                                                                         |
 | **Metering unit**        | Ledger stores precise **input/output tokens + computed cost** per call (source of truth). Users see a friendly monthly **"AI credit"** allowance; managed enforcement is a **monthly cost ceiling per tier**. |
 | **Model / provider**     | Anthropic `claude-opus-4-8` primary (reuses today's SDK path). Gateway is provider-shaped so an OpenAI-compatible provider can be added for BYO later (not in v1).                                            |
 
@@ -46,7 +46,7 @@ the workspace only when a feature genuinely needs them, and that is called out p
 Six epics. **E1 is the critical path — nothing is monetizable, BYO-capable, or gated without it.**
 Feature IDs (F1–F17) match the roadmap artifact.
 
-### E1 — AI Platform Foundation + Ask Pulse · P0/P1 · ~2 weeks (the ship-in-2 slice)
+### E1 — AI Platform Foundation + Ask Monolith · P0/P1 · ~2 weeks (the ship-in-2 slice)
 
 Foundation F1–F4 + the flagship F5. Full spec:
 `docs/superpowers/specs/2026-07-05-ai-foundation-and-ask-pulse-design.md`.
@@ -55,7 +55,7 @@ Foundation F1–F4 + the flagship F5. Full spec:
 - **F2 Encrypted BYO-key store** — Supabase Vault secret per org + Settings entry/validate/rotate flow.
 - **F3 Usage ledger + credits** — `ai_usage` ledger (reads `message.usage`), monthly credit balance, pre-spend quota check for managed.
 - **F4 Entitlements + controls** — `org_ai_settings` (ai_mode / tier / credit limit), Settings "AI" section for org admins, platform-admin plan control.
-- **F5 Ask Pulse** — workspace-wide NL Q&A via RLS-scoped read tools (tool-use loop). Read-only, non-destructive.
+- **F5 Ask Monolith** — workspace-wide NL Q&A via RLS-scoped read tools (tool-use loop). Read-only, non-destructive.
 - **Produces (interfaces later epics consume):** `resolveAiClient(orgId)`, `recordUsage()`, `requireAiEntitlement(orgId, feature)`, `org_ai_settings` + `ai_usage` tables, the read-tool pattern over items/cells.
 - **Consumes:** existing `src/lib/ai/*`, `board-snapshot`, org/role guards (`has_org_role`, `isOrgAdmin`), `src/app/admin/`, Supabase Vault.
 
@@ -79,7 +79,7 @@ Foundation F1–F4 + the flagship F5. Full spec:
 
 - **F13 AI action type in automations** — a new AI step in the rules engine. The engine runs in Postgres triggers, so this needs an **async edge hop** (`pg_net` → a server endpoint) — the one genuinely new architectural piece. **Consumes** E1 + the automations engine.
 - **F14 Autopilot agent** — scheduled board agent (triage new items, chase overdue owners via a comment @mention, keep goal rollups current). Builds on F13 + `pg_cron`. Needs an **agent author identity** (note `item_updates` freezes author).
-- **F15 Semantic search** — pgvector + embedding backfill → semantic ⌘K, "find similar", and the retrieval layer that lets Ask Pulse scale past eager snapshotting.
+- **F15 Semantic search** — pgvector + embedding backfill → semantic ⌘K, "find similar", and the retrieval layer that lets Ask Monolith scale past eager snapshotting.
 
 ### E6 — Billing & Platform · P1/P2 · ~1 week
 
@@ -108,12 +108,12 @@ Phase-wide invariant: **AI is always an explicit, on-demand action, never a view
 
 - **First paint** of any page is unchanged — AI entries are static buttons; panels/wizards are lazy (`next/dynamic`, `ssr:false`) and driven by **client state + History API (0 RSC navigations)**.
 - **Server round-trips only on explicit user actions** (Ask, Generate, Assist, Fill) — each is one Server Action; none are triggered by tab/filter/sort switches.
-- **Bounded/indexed reads:** snapshots aggregate server-side over `board_id`-indexed tables; Ask Pulse's read tools use bounded, paginated queries over indexed filter columns (never unbounded `select *`); the `ai_usage` ledger is indexed `(org_id, created_at)` and rolled up per-month.
+- **Bounded/indexed reads:** snapshots aggregate server-side over `board_id`-indexed tables; Ask Monolith's read tools use bounded, paginated queries over indexed filter columns (never unbounded `select *`); the `ai_usage` ledger is indexed `(org_id, created_at)` and rolled up per-month.
 - Each epic spec restates its own budget.
 
 ## Parallelization plan (AGENTS.md #6)
 
-- **E1** is itself internally parallelizable — see its plan's DAG (schema + gateway + ledger + entitlement fan out, then Ask Pulse's tools, then UI). It is a single worktree because its pieces share the new `src/lib/ai/*` surface and the migration.
+- **E1** is itself internally parallelizable — see its plan's DAG (schema + gateway + ledger + entitlement fan out, then Ask Monolith's tools, then UI). It is a single worktree because its pieces share the new `src/lib/ai/*` surface and the migration.
 - **E2/E3/E4/E6** are independent worktrees dispatched together once E1 merges (they touch disjoint feature folders). This is the primary `superpowers:dispatching-parallel-agents` wave.
 - **E5** runs after, as its own worktrees (F13→F14 sequential; F15 parallel).
 

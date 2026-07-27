@@ -54,7 +54,7 @@ public.escape_like(text) to anon` on DEV made the suite fail with `escape_like(p
    the grant was then revoked and the ACL verified back to `{postgres,authenticated,service_role}`.
 
 Result on both projects: **129 function signatures, 53 tables, 0 reachable, 0 readable**, with both
-allow-lists empty — which is the correct state, since Pulse has no anonymous surface.
+allow-lists empty — which is the correct state, since Monolith has no anonymous surface.
 
 ## Consequences
 

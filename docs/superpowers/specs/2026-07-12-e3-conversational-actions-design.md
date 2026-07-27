@@ -17,7 +17,7 @@ human-readable **confirm card**, and only on **Approve** does a typed, RLS-enfor
 the canonical create/upsert mutations. Nothing the model says ever writes to the database directly.
 
 The load-bearing deliverable is a **shared, headless write-action engine** (`src/lib/ai/write/`) that
-is surface-agnostic: E3 ships it plus the ⌘K surface, and the separately-planned Ask-Pulse-full-page
+is surface-agnostic: E3 ships it plus the ⌘K surface, and the separately-planned Ask-Monolith-full-page
 track consumes the _same_ engine for its in-thread confirm cards (its "Phase 2"). No duplication of
 write tools, proposal validation, name resolution, or execution across the two surfaces.
 
@@ -30,16 +30,16 @@ write tools, proposal validation, name resolution, or execution across the two s
 | **Name resolution**     | Happens **inside** the tool-use loop via RLS-scoped read tools (reuse F5's `list_boards`/`get_board_overview`, add `list_board_members`). The model resolves board/group/column/status-option/owner **ids**; the server then **re-derives** every human label from those ids for the confirm card and **re-validates** the ids at execute time. |
 | **Action surface (v1)** | `create_item` (in a named group, with optional owner/due-date/status), `set_item_fields` (update an existing item's owner/date/status), `create_group`. Board creation is **F10** (Generation), not here.                                                                                                                                       |
 | **Engine ownership**    | E3 owns and builds `src/lib/ai/write/` (engine + Server Actions). The ⌘K surface and the Ask-full-page Phase 2 are both **thin consumers** of it.                                                                                                                                                                                               |
-| **Model / provider**    | Anthropic `claude-opus-4-8` (tool use requires `adapter.supportsTools`, same gate as Ask Pulse). Routes through `runAi` for metering; `feature = "conversational_action"`.                                                                                                                                                                      |
+| **Model / provider**    | Anthropic `claude-opus-4-8` (tool use requires `adapter.supportsTools`, same gate as Ask Monolith). Routes through `runAi` for metering; `feature = "conversational_action"`.                                                                                                                                                                      |
 | **Persistence**         | Stateless per command (no conversation memory in ⌘K). A proposal is passed from `propose` to the client and back to `execute`; nothing is stored between the two calls except in client state.                                                                                                                                                  |
 
-## The Ask-Pulse-full-page boundary (key coordination decision)
+## The Ask-Monolith-full-page boundary (key coordination decision)
 
 The full-page conversational spec (2026-07-12) explicitly folds F6 into its **Phase 2** ("Ask proposes
 create/update actions that render as a confirm-before-execute card"). Left unmanaged, that would
 **duplicate** the write-tool + confirm-execute logic across two surfaces, and it also **collides on the
 exact ⌘K wiring E3 builds on** — that track _retires_ the `AskPulse` dialog and _repoints_ the ⌘K
-"Ask Pulse…" entry to navigate to `/ask` (removing `AskPulse.tsx`/`AskPulseHost`/`AskPulseTrigger` and
+"Ask Monolith…" entry to navigate to `/ask` (removing `AskPulse.tsx`/`AskPulseHost`/`AskPulseTrigger` and
 the `askPulseOpen` slice in `src/stores/ui.ts`).
 
 **Decision:**

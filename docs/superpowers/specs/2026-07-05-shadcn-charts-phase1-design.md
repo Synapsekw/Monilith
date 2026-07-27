@@ -44,7 +44,7 @@ looking the same or better, with no behavior change and no bundle regression.
   `line`, `area`, `combo`, `bar`, `stackedBar`, `groupedBar`. Uses
   `ResponsiveContainer`, raw `Tooltip {...TOOLTIP_STYLE}`, raw `Legend`.
 - `src/components/dashboards/widgets/chart-theme.ts` — shared `AXIS_PROPS`,
-  `TOOLTIP_STYLE`, `GRID_STROKE`, all reading Pulse CSS tokens.
+  `TOOLTIP_STYLE`, `GRID_STROKE`, all reading Monolith CSS tokens.
 - `src/lib/dashboards/series.ts` — `pivotSeries(data)` returns
   `{ rows, series: { key, color }[] }`. Multi-series: one numeric field per
   series label, each with a `color`. Single-series: a `Value` field plus a
@@ -142,4 +142,4 @@ our vendored `ui/chart.tsx`** — not a blocker, and **not** a Recharts downgrad
 A separate brainstorm, done **after Phase 1 merges**, iterating visually against
 live charts (visual companion + `pulse-ui` skill): gridline/axis typography,
 rounded/gradient fills, active-dot hovers, interactive legend (click to toggle
-series), and token-ifying `SOLO_COLOR` to a Pulse accent.
+series), and token-ifying `SOLO_COLOR` to a Monolith accent.

@@ -39,7 +39,7 @@ related:
 
 The platform tier shipped functionally but its UI was one stacked page with no sidebar entry
 point — the user couldn't reach or navigate it. This makes it a real, navigable admin area in
-Pulse's dark design, matching the in-browser mockups they approved.
+Monolith's dark design, matching the in-browser mockups they approved.
 
 ## Open threads
 

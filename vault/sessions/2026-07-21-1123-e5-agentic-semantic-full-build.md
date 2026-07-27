@@ -33,7 +33,7 @@ E5 is the Phase-10 long pole: F13/F14 give the automations engine its first **un
 Not on prod (`develop` never deploys). Test on a **preview deploy** with org AI mode `on` and the env below set:
 
 1. **F13 AI step** — board → Automations → new rule → add an **"AI step"** action (instruction + allowed actions) → **"Test this step"** shows the chosen action _without applying_. Enable + trigger → check run history for an `ai_decided`/`ai_skipped` outcome.
-2. **F14 Autopilot** — board settings → **Autopilot** card → enable + pick cadence/tasks. Next sweep → a `board_agent_runs` row; any bot comment attributed to **"Pulse Autopilot"**.
+2. **F14 Autopilot** — board settings → **Autopilot** card → enable + pick cadence/tasks. Next sweep → a `board_agent_runs` row; any bot comment attributed to **"Monolith Autopilot"**.
 3. **F15 Find similar** — backfill first (`POST /api/ai/embed?mode=backfill`, signed) or edit a few items and wait for the 2-min sweep → item panel → **"Find similar"** → ranked related items (or "indexing…").
 4. **F15 semantic Ask** — Ask AI, ask a meaning-based question → the `semantic_search_items` tool surfaces lexically-disjoint matches.
 

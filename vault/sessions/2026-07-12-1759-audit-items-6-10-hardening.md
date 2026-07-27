@@ -50,7 +50,7 @@ importable instead of prose, and give god-files a gate that pushes back.
 ## How to test (for the user)
 
 1. Pull `develop`, start a NEW Claude Code session in the repo — the first message should show
-   auto-injected "Pulse session context" (branch, status, north-star §3) with zero tool calls.
+   auto-injected "Monolith session context" (branch, status, north-star §3) with zero tool calls.
 2. Boards regression check: open any board — table renders/edits/drags exactly as before (pure
    refactor; 591 board tests + full suite green, but a human eye on the hot surface is owed).
 3. `pnpm lint` — expect 0 errors and max-lines warnings only for GanttBoard, AutomationBuilder,
@@ -73,4 +73,4 @@ importable instead of prose, and give god-files a gate that pushes back.
 ## Next session entry point
 
 Promote `develop → main` (E1 + both hardening batches unpromoted), or pick from §3 Next
-(Phase 10 Batch 2, Ask Pulse full-page, PF, Landing).
+(Phase 10 Batch 2, Ask Monolith full-page, PF, Landing).

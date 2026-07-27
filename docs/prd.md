@@ -1,8 +1,8 @@
-# Pulse — Product Requirements Document (PRD)
+# Monolith — Product Requirements Document (PRD)
 
 > **Status:** Living document · **Last updated:** 2026-06-15 · **Audience:** contributors (human + AI)
 >
-> This PRD is the product-lens view of Pulse: the _why_, _for whom_, and _what_ (as
+> This PRD is the product-lens view of Monolith: the _why_, _for whom_, and _what_ (as
 > prioritized requirements). It is deliberately thin where other docs already say it well and
 > links out to them. The **engineering source-of-truth** is the
 > [master design spec](superpowers/specs/2026-06-14-pulse-design.md); the **phased build plan**
@@ -33,7 +33,7 @@ _ultimate_ version of the category, with Linear-grade restraint applied to a col
 
 ## 2. Vision & positioning
 
-**Pulse** is a cloud-native **"Work OS"**: a flexible, visual platform for teams to plan, track,
+**Monolith** is a cloud-native **"Work OS"**: a flexible, visual platform for teams to plan, track,
 and run any kind of work. Multi-tenant from day one; performance that stays smooth at
 10k-item boards.
 
@@ -65,7 +65,7 @@ Condensed from [`vault/product.md`](../vault/product.md#users); see there for th
 
 ## 4. Jobs-to-be-done
 
-Per persona, the core jobs Pulse must serve ("when I…, I want to…, so I can…"):
+Per persona, the core jobs Monolith must serve ("when I…, I want to…, so I can…"):
 
 - **Team member**
   - When work lands on me, I want to see what's mine and its status at a glance, so I can act
@@ -176,7 +176,7 @@ pre-launch; these are the build-quality and experience signals we hold ourselves
 
 ## 8. Release plan
 
-Pulse ships in **10 phases (0 → 9)**, each committed and checkpointed (tests + advisors +
+Monolith ships in **10 phases (0 → 9)**, each committed and checkpointed (tests + advisors +
 regenerated types + CHANGELOG, then review) before the next. The authoritative plan is the
 master spec [§7 Phased build plan](superpowers/specs/2026-06-14-pulse-design.md#7-phased-build-plan-commit--checkpoint-after-each);
 current status is tracked in [`00-north-star`](../vault/00-north-star.md) §2 and

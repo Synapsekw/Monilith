@@ -49,7 +49,7 @@ managed platform.
 - No multiple simultaneous keys per user (schema allows it; app enforces one).
 - No change to the dashboard-gen **product** behavior, prompts, board snapshot,
   or `validateProposal` logic — only _which client_ runs the call.
-- No new AI features (Ask Pulse, item assist, etc.) — those stay in Phase 10.
+- No new AI features (Ask Monolith, item assist, etc.) — those stay in Phase 10.
 
 ## Architecture
 

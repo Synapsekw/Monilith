@@ -7,7 +7,7 @@ related: ["[[00-north-star]]", "[[README]]"]
 
 # Memory — Map of Content
 
-> Self-referential map. Where does Pulse's project memory live? Three layers:
+> Self-referential map. Where does Monolith's project memory live? Three layers:
 
 ## Layer 1: Project state (this vault)
 

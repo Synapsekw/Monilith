@@ -8,7 +8,7 @@
 
 ## 1. Problem
 
-Board access in Pulse is per-board on the org spine: a user sees a board only if
+Board access in Monolith is per-board on the org spine: a user sees a board only if
 they created it or someone ran `share_board` to add them to `board_members`
 (`supabase/migrations/20260620100000_board_level_sharing.sql`). Crucially,
 `share_board` **hard-gates the target to the board's own org**

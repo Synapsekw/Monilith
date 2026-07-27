@@ -55,7 +55,7 @@ round-trip behavior is preserved.
   extensions.
 - **C. Full-page route** (`/import`, Airtable-style): maximal real estate but new route
   plumbing, file-state-across-navigation complexity, and inconsistent with every other
-  Pulse flow (dialog/sheet-based). Rejected as over-engineering at 2000-row scale.
+  Monolith flow (dialog/sheet-based). Rejected as over-engineering at 2000-row scale.
 
 ## Architecture
 

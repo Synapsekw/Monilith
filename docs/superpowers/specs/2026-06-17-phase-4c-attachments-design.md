@@ -224,7 +224,7 @@ attachmentUrlsSchema = { attachmentIds: z.array(UUID).max(60) }; // batch previe
    (Upload-then-register orphan window is acceptable for v1 with this cleanup; a sweep job is a
    later hardening item.)
 
-## 5. UI — the Files tab (Monday-style, Pulse dark)
+## 5. UI — the Files tab (Monday-style, Monolith dark)
 
 Built with the `pulse-ui` + `frontend-design` skills at implementation time. Components under
 `src/components/boards/item-panel/`:

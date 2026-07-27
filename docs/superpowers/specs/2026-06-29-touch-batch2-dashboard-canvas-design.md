@@ -178,7 +178,7 @@ Three options were evaluated:
   stylesheet makes the coarse rules win without `!important`. Only the `se` handle is shown by default
   (rgl default `handles: ['se']`), so we grow exactly one grip per widget — no overlap.
 
-  **Pulse-UI note:** this is chrome/affordance sizing, not color — no tokens involved; we touch only
+  **Monolith-UI note:** this is chrome/affordance sizing, not color — no tokens involved; we touch only
   geometry/visibility. The `::after` chevron keeps the existing monochrome look. No brand color, no
   status color (consistent with the pulse-ui "chrome is monochrome" rule).
 

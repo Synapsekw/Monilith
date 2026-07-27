@@ -19,7 +19,7 @@ draft of the spec/plan asserted a prerequisite: _"disable the Realtime 'Allow
 public access' setting or private channels aren't enforced."_
 
 That assertion is wrong for a mixed codebase, and acting on it would have caused
-a regression. Pulse already runs several **public** channels (`board:<id>`,
+a regression. Monolith already runs several **public** channels (`board:<id>`,
 `notifications:<id>`, `item:<id>`) carrying `postgres_changes` (and presence).
 Doc research established:
 

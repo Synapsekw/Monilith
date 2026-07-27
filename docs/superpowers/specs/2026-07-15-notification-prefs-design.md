@@ -7,7 +7,7 @@
 
 ## 1. Problem & intent
 
-Pulse fans out per-user notifications (in-app rows + one email path) with **no
+Monolith fans out per-user notifications (in-app rows + one email path) with **no
 user control over which event-types they receive**. The only existing
 preference is a weekly-digest _email_ opt-out. A user who does not want, say,
 "assigned to an item" pings has no way to turn them off. This feature gives each

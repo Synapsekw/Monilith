@@ -46,7 +46,7 @@ robust cross-browser fix is to stop relying on the native control and render our
   look, no icon clutter in every row). The visible lucide `Calendar` icon + date appears only in the
   **editor**, which auto-opens/focuses the calendar on edit — giving Safari the missing affordance.
 - **Q4 — react-day-picker v9 / React 19 / a11y.** Use `mode="single"`. No direct `date-fns` import in
-  app code. Theme via `classNames` mapped to Pulse tokens (monochrome + indigo accent, dark-first) with
+  app code. Theme via `classNames` mapped to Monolith tokens (monochrome + indigo accent, dark-first) with
   lucide chevrons. rdp's built-in accessible keyboard grid replaces the native free-text entry, keeping
   the field keyboard-operable. ISO↔local-`Date` conversion via split-integer parsing to avoid the
   UTC off-by-one.
@@ -54,7 +54,7 @@ robust cross-browser fix is to stop relying on the native control and render our
 ## Components / units
 
 - **`src/components/ui/calendar.tsx`** — new shadcn-style Calendar primitive wrapping `react-day-picker`
-  v9, themed with Pulse tokens. Single responsibility: render an accessible month grid; emit a selected
+  v9, themed with Monolith tokens. Single responsibility: render an accessible month grid; emit a selected
   `Date`. Depends on `react-day-picker`, lucide icons, `cn`.
 - **`DateEditor`** (`src/components/boards/cells/editors/index.tsx`) — rewritten to render a Popover
   whose trigger shows the lucide `Calendar` icon + formatted current value, and whose content is the

@@ -85,7 +85,7 @@ export function applyWorkbookFormatting(ws: ExcelJS.Worksheet, plan: FormatPlan)
 
 Concretely it applies:
 
-- **Header (row 1):** bold, white text on near-black fill (`#1A1A1D` — Pulse's `DARK_FG`),
+- **Header (row 1):** bold, white text on near-black fill (`#1A1A1D` — Monolith's `DARK_FG`),
   row height 22, thin bottom border; `ws.views = [{ state: "frozen", ySplit: 1 }]`;
   `ws.autoFilter` spanning the header.
 - **Column widths (per kind):** Group 18, Name 32, text/link/email 24, date 12, status/dropdown 16,
@@ -205,7 +205,7 @@ data already RLS-scoped by `getBoardPayload`. exceljs stays server-only.
 1. **Multi-select dropdown fill:** v1 fills only single-selection cells. Alternative: always fill
    with the first selected option's color. Which reads more honestly to users?
 2. **Header aesthetic:** near-black fill + white text (chosen, Monday-style, unambiguous
-   "formatted") vs. light gray fill + dark text (closer to Pulse light mode). Cheap to flip.
+   "formatted") vs. light gray fill + dark text (closer to Monolith light mode). Cheap to flip.
 3. **Column widths:** fixed per-kind defaults (chosen) vs. mapping the board's stored per-column
    pixel widths (`columns.width`, `boards.name_column_width`) at ~7 px/char. Defaults are
    predictable; stored widths are more "my board". Could be a fast follow.

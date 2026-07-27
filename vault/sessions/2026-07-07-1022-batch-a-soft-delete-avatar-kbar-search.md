@@ -39,4 +39,4 @@ Pull `develop`, `pnpm dev` (all three migrations already applied to **dev**; pro
 
 ## Next session entry point
 
-Roadmap thrust is **Phase 10 — AI & Agents, Epic 1** (foundation + Ask Pulse) — already planned; build via `/develop` in `task/ai-foundation-ask-pulse` (Task 0 migration user-applied). Repair the dev ledger drift first. A `develop → main` promote is due to ship this Batch A to prod when ready.
+Roadmap thrust is **Phase 10 — AI & Agents, Epic 1** (foundation + Ask Monolith) — already planned; build via `/develop` in `task/ai-foundation-ask-pulse` (Task 0 migration user-applied). Repair the dev ledger drift first. A `develop → main` promote is due to ship this Batch A to prod when ready.

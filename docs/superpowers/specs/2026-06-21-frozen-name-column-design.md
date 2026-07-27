@@ -86,7 +86,7 @@ scroll that broke the freeze.
 Add a subtle right-edge shadow on the frozen Name column that appears once the outer container's
 `scrollLeft > 0`, so the column reads as a floating frozen pane. Implementation: track
 `scrolledX` (boolean) from the outer container's scroll position and toggle a shadow utility
-(e.g. an `inset`/`box-shadow` on the right edge of the sticky name header + cells). Uses Pulse
+(e.g. an `inset`/`box-shadow` on the right edge of the sticky name header + cells). Uses Monolith
 tokens; no new color. Disappears at `scrollLeft === 0`.
 
 ## Out of scope
