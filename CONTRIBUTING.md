@@ -1,6 +1,6 @@
-# Contributing to Pulse
+# Contributing to Monolith
 
-Thanks for working on Pulse. This guide covers the conventions the project enforces.
+Thanks for working on Monolith. This guide covers the conventions the project enforces.
 
 ## Prerequisites
 
@@ -174,7 +174,7 @@ can one logged-in tenant reach another's rows? It asserts against **two permanen
 into DEV by `supabase/migrations/20260727094033_seed_tier2_tenant_fixtures.sql` and never mutated,
 so isolation is a **read-only** assertion — sign in as one, ask for the other's rows, expect
 nothing. It covers `organizations`, `org_members`, `workspaces`, `boards`, `groups`, `profiles`,
-`ai_conversations` and `ai_messages`, including the two Ask Pulse Phase 2 `tool_trace` assertions.
+`ai_conversations` and `ai_messages`, including the two Ask Monolith Phase 2 `tool_trace` assertions.
 
 Like the conformance probes, it needs **no test project**:
 
@@ -267,7 +267,7 @@ or PROD.
 runs unit tests only) and the teardown sweeper refuses to purge — so DEV is never polluted. Running
 the integration suites is therefore **opt-in** and requires a one-time test-project setup:
 
-1. **Create a dedicated Supabase project** (e.g. "Pulse TEST") in the dashboard. Note its project
+1. **Create a dedicated Supabase project** (e.g. "Monolith TEST") in the dashboard. Note its project
    ref, URL, anon/publishable key, and service-role key.
 2. **Apply the schema** — the migrations in `supabase/migrations/` are the source of truth:
 
