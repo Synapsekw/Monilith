@@ -74,15 +74,15 @@ export function McpClientGuide({ serverUrl }: { serverUrl: string }) {
             Choose <b>Add custom connector</b>.
           </li>
           <li>
-            Name it <b>Pulse</b> and paste the server URL from above.
+            Name it <b>Monolith</b> and paste the server URL from above.
           </li>
           <li>
-            Click <b>Connect</b>. A Pulse sign-in page opens in your browser —
-            approve the request there.
+            Click <b>Connect</b>. A Monolith sign-in page opens in your browser
+            — approve the request there.
           </li>
           <li>
-            Back in Claude, ask &ldquo;list my Pulse boards&rdquo; to confirm it
-            works.
+            Back in Claude, ask &ldquo;list my Monolith boards&rdquo; to confirm
+            it works.
           </li>
         </Steps>
       )}
@@ -94,9 +94,9 @@ export function McpClientGuide({ serverUrl }: { serverUrl: string }) {
             Choose <b>Add custom connector</b> and paste the server URL from
             above.
           </li>
-          <li>Approve the Pulse sign-in prompt that opens.</li>
+          <li>Approve the Monolith sign-in prompt that opens.</li>
           <li>
-            Start a new chat and ask &ldquo;list my Pulse boards&rdquo; to
+            Start a new chat and ask &ldquo;list my Monolith boards&rdquo; to
             confirm it works.
           </li>
         </Steps>
@@ -106,14 +106,18 @@ export function McpClientGuide({ serverUrl }: { serverUrl: string }) {
         <Steps>
           <li>
             Run this in your terminal:
-            <Command>claude mcp add --transport http pulse {serverUrl}</Command>
+            <Command>
+              claude mcp add --transport http monolith {serverUrl}
+            </Command>
+            {/* The alias is client-local — it names the connector inside the
+                MCP client, so it carries no server-side contract. */}
           </li>
           <li>
             Run <code className="font-mono text-xs">/mcp</code> inside Claude
             Code and authenticate when prompted.
           </li>
           <li>
-            Ask &ldquo;list my Pulse boards&rdquo; to confirm the connection.
+            Ask &ldquo;list my Monolith boards&rdquo; to confirm the connection.
           </li>
         </Steps>
       )}
@@ -121,8 +125,9 @@ export function McpClientGuide({ serverUrl }: { serverUrl: string }) {
       {client === "other" && (
         <Steps>
           <li>
-            Pulse speaks the Model Context Protocol over streamable HTTP, with
-            OAuth 2.1 (dynamic client registration + PKCE) for authentication.
+            Monolith speaks the Model Context Protocol over streamable HTTP,
+            with OAuth 2.1 (dynamic client registration + PKCE) for
+            authentication.
           </li>
           <li>
             Point your client at the server URL from above. It discovers the
