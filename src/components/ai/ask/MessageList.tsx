@@ -6,6 +6,7 @@ import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { Kicker } from "@/components/ui/kicker";
 import { ActionConfirmCard } from "@/components/ai/actions/ActionConfirmCard";
 import { StreamDropNotice, type DropState } from "./StreamDropNotice";
+import { ThinkingIndicator } from "./ThinkingIndicator";
 import {
   resolveProposalStates,
   type AskToolTrace,
@@ -51,9 +52,10 @@ function Bubble({
 }
 
 /**
- * The conversation transcript. Renders persisted turns, then the live streaming
- * assistant bubble (token deltas) and a status line ("Consulting N boards…")
- * while a turn is in flight. Auto-scrolls to the newest content.
+ * The conversation transcript. Renders persisted turns, then — while a turn is
+ * in flight — either the animated `ThinkingIndicator` (open, no tokens yet) or
+ * the live assistant bubble plus a status line ("Consulting N boards…").
+ * Auto-scrolls to the newest content.
  *
  * `dropState` is the severed-stream surface (gotcha-61): when a turn's response
  * body ends without `done`, this list must never fall silent.
@@ -135,14 +137,20 @@ export function MessageList({
           );
         })}
 
-        {streamingText !== null ? (
-          <Bubble
-            role="assistant"
-            content={streamingText || (status ? "" : "…")}
-          />
+        {/* Three states, in the order a turn passes through them.
+            `streamingText` is the discriminator: null = no live turn,
+            "" = open but nothing back yet, non-empty = tokens arriving. */}
+
+        {/* Open, no tokens: the 25–42s stretch that used to render a static "…"
+            and read as a hung page (gotcha-62). One live region, carrying the
+            freshest status — so the status is NOT also drawn below. */}
+        {streamingText === "" ? <ThinkingIndicator label={status} /> : null}
+
+        {streamingText ? (
+          <Bubble role="assistant" content={streamingText} />
         ) : null}
 
-        {status ? (
+        {status && streamingText !== "" ? (
           <p
             aria-live="polite"
             className={cn(

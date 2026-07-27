@@ -103,3 +103,57 @@ describe("MessageList proposals", () => {
     expect(screen.getByRole("button", { name: /applying/i })).toBeDisabled();
   });
 });
+
+const QUESTION: UIMessage = {
+  id: "m1",
+  role: "user",
+  content: "what's overdue?",
+};
+
+// gotcha-62: the ONLY pre-token feedback used to be a static "…". Ask Pulse runs
+// its read tools with text buffered, so that dead stretch is routinely 25–42s —
+// long enough that users conclude it broke and resend.
+describe("MessageList — pre-token working state (gotcha-62)", () => {
+  it("shows a live indicator, not a static ellipsis, once a turn has opened", () => {
+    renderList([QUESTION], { streamingText: "" });
+    expect(screen.getByRole("status")).toHaveTextContent("Thinking…");
+    expect(screen.queryByText("…")).toBeNull();
+  });
+
+  it("carries the turn's status as the indicator's label, without doubling it", () => {
+    renderList([QUESTION], {
+      streamingText: "",
+      status: "Reading your boards…",
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Reading your boards…",
+    );
+    // One live region, one line — not an indicator plus a separate status line.
+    expect(screen.getAllByText("Reading your boards…")).toHaveLength(1);
+  });
+
+  it("drops the indicator the instant the first token lands", () => {
+    renderList([QUESTION], { streamingText: "Three items are ov" });
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByText("Three items are ov")).toBeInTheDocument();
+  });
+
+  it("keeps the status line under a partially-streamed answer", () => {
+    renderList([QUESTION], {
+      streamingText: "Three items",
+      status: "Consulting 2 boards…",
+    });
+    expect(screen.getByText("Consulting 2 boards…")).toBeInTheDocument();
+  });
+
+  it("still renders a plain status line for an error with no live turn", () => {
+    renderList([QUESTION], {
+      streamingText: null,
+      status: "The AI assistant hit a snag.",
+    });
+    expect(
+      screen.getByText("The AI assistant hit a snag."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});

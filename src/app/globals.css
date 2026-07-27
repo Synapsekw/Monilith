@@ -92,6 +92,11 @@
   /* Signature motion (150–250ms, ease-out) — usable as animate-fadein / animate-slidein */
   --animate-fadein: fadein 0.15s ease-out;
   --animate-slidein: slidein 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Long-running "the machine is working" tell (Ask AI's pre-token stretch is
+     routinely 25–42s). Applied to staggered dots so it reads as a travelling
+     wave; the reduced-motion block below stands it down. */
+  --animate-thinking-dot: thinking-dot 1.2s cubic-bezier(0.16, 1, 0.3, 1)
+    infinite;
 }
 
 @keyframes fadein {
@@ -111,6 +116,19 @@
   }
   to {
     transform: translateX(0);
+  }
+}
+
+@keyframes thinking-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px);
   }
 }
 

@@ -110,6 +110,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import { POST } from "./route";
+import { OPENING_STATUS } from "@/lib/ai/ask/stream-protocol";
 
 const CONV_ID = "11111111-1111-4111-8111-111111111111";
 const makeReq = () =>
@@ -127,6 +128,21 @@ describe("POST /api/ask", () => {
     expect(text).toContain('"type":"token"');
     expect(text).toContain('"type":"done"');
     expect(text).toContain('"assistantMessageId":"a1"');
+  });
+
+  // gotcha-62: statuses only ever appeared AFTER a tool round completed, so the
+  // opening 25–42s of a turn carried no server signal at all.
+  it("opens the turn with a status event, before any token", async () => {
+    const res = await POST(makeReq());
+    const events = (await res.text())
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { type: string; text?: string });
+
+    expect(events[0]).toEqual({ type: "status", text: OPENING_STATUS });
+    expect(events.findIndex((e) => e.type === "status")).toBeLessThan(
+      events.findIndex((e) => e.type === "token"),
+    );
   });
 
   it("auto-titles on the first exchange", async () => {

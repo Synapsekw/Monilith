@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   appendUserMessage,
@@ -36,6 +36,13 @@ import { Composer } from "./Composer";
  * row through RLS — and their outcome turn is appended to client state, so
  * confirming costs exactly ONE round-trip and zero RSC navigations.
  *
+ * A turn is ATOMIC from the user's side (gotcha-62): submit opens the working
+ * state immediately and takes the composer with it, and only `done` / `error` /
+ * a finished drop-recovery gives it back. Blocking beats cancel-and-restart
+ * here because a turn that the client walks away from is not free — it is a
+ * paid model call that may still land in `ai_messages` — so the cheap outcome
+ * is to never start the second one.
+ *
  * A turn's stream can also end ABNORMALLY — no `done`, no `error`, just a dead
  * body (flaky mobile, a dev-server rebuild). That used to render nothing at all
  * while the answer sat persisted server-side (gotcha-61). Now it triggers one
@@ -64,6 +71,21 @@ export function AskChat({
   const { streaming, send } = useAskStream();
 
   /**
+   * ONE turn at a time, owned HERE rather than by the network layer.
+   *
+   * The composer used to be gated on `streaming`, which `useAskStream` only
+   * raises once the fetch starts — so the whole createConversation /
+   * appendUserMessage round-trip that PRECEDES the stream was an open window in
+   * which a second submit could start a second, concurrent turn (gotcha-62).
+   *
+   * A ref, not state, because two submits can land in the same tick, before
+   * React has re-rendered the composer with the new `disabled`. `turnBusy`
+   * mirrors it for rendering; the ref is what actually decides.
+   */
+  const turnInFlight = useRef(false);
+  const [turnBusy, setTurnBusy] = useState(false);
+
+  /**
    * The stream died mid-turn. Re-read the thread: the assistant turn has very
    * often already been persisted, in which case the user gets their real answer
    * (proposal card and all) instead of silence. One bounded, indexed, read-only
@@ -87,73 +109,91 @@ export function AskChat({
   }
 
   async function onSubmit(text: string) {
-    let convId = activeId;
-    setDropState("none");
-    setMessages((m) => [
-      ...m,
-      { id: `tmp-${Date.now()}`, role: "user", content: text },
-    ]);
+    // The hard guard. Everything below — including two awaited Server Actions —
+    // is part of ONE turn, and a second one may not start inside it.
+    if (turnInFlight.current) return;
+    turnInFlight.current = true;
+    setTurnBusy(true);
+    try {
+      let convId = activeId;
+      setDropState("none");
+      setMessages((m) => [
+        ...m,
+        { id: `tmp-${Date.now()}`, role: "user", content: text },
+      ]);
+      // Open the working state NOW, not when the first byte arrives: minting
+      // the conversation / appending the user turn are round-trips of their
+      // own, and silence during them is the same lie as silence during the
+      // tool loop. `""` means "a turn is open with no tokens yet".
+      setStreamText("");
+      setStatus(null);
 
-    if (!convId) {
-      const res = await createConversation({ firstMessage: text });
-      if (!res.ok) {
-        setStatus(res.error);
-        return;
+      if (!convId) {
+        const res = await createConversation({ firstMessage: text });
+        if (!res.ok) {
+          setStreamText(null);
+          setStatus(res.error);
+          return;
+        }
+        convId = res.data.conversationId;
+        setActiveId(convId);
+        // Client nav — no RSC refetch (working agreement #5).
+        window.history.pushState(null, "", `/ask/${convId}`);
+      } else {
+        const res = await appendUserMessage({
+          conversationId: convId,
+          content: text,
+        });
+        if (!res.ok) {
+          setStreamText(null);
+          setStatus(res.error);
+          return;
+        }
       }
-      convId = res.data.conversationId;
-      setActiveId(convId);
-      // Client nav — no RSC refetch (working agreement #5).
-      window.history.pushState(null, "", `/ask/${convId}`);
-    } else {
-      const res = await appendUserMessage({
-        conversationId: convId,
-        content: text,
+
+      // Accumulate streamed tokens and any proposal in closure locals so the
+      // `done` handler sees both regardless of React's render batching.
+      let acc = "";
+      let proposed: ValidatedAction[] = [];
+      const outcome = await send(convId, (e) => {
+        if (e.type === "token") {
+          acc += e.text;
+          setStreamText(acc);
+        } else if (e.type === "status") {
+          setStatus(e.text);
+        } else if (e.type === "proposal") {
+          proposed = e.actions;
+        } else if (e.type === "error") {
+          setStatus(e.message);
+          setStreamText(null);
+        } else if (e.type === "done") {
+          setMessages((m) => [
+            ...m,
+            {
+              id: e.assistantMessageId || `a-${Date.now()}`,
+              role: "assistant",
+              content: acc || (proposed.length ? PROPOSAL_FALLBACK_ANSWER : ""),
+              trace: proposed.length
+                ? {
+                    boardsConsulted: e.boardsConsulted,
+                    proposedActions: proposed,
+                  }
+                : null,
+            },
+          ]);
+          setStreamText(null);
+          setStatus(null);
+          router.refresh(); // refresh rail (titles) once, after completion
+        }
       });
-      if (!res.ok) {
-        setStatus(res.error);
-        return;
-      }
+
+      if (outcome === "dropped") await recoverAfterDrop(convId);
+    } finally {
+      // Released on every path — a stuck flag would strand the composer, which
+      // is the failure mode this guard exists to avoid, not to create.
+      turnInFlight.current = false;
+      setTurnBusy(false);
     }
-
-    // Accumulate streamed tokens and any proposal in closure locals so the
-    // `done` handler sees both regardless of React's render batching.
-    let acc = "";
-    let proposed: ValidatedAction[] = [];
-    setStreamText("");
-    setStatus(null);
-    const outcome = await send(convId, (e) => {
-      if (e.type === "token") {
-        acc += e.text;
-        setStreamText(acc);
-      } else if (e.type === "status") {
-        setStatus(e.text);
-      } else if (e.type === "proposal") {
-        proposed = e.actions;
-      } else if (e.type === "error") {
-        setStatus(e.message);
-        setStreamText(null);
-      } else if (e.type === "done") {
-        setMessages((m) => [
-          ...m,
-          {
-            id: e.assistantMessageId || `a-${Date.now()}`,
-            role: "assistant",
-            content: acc || (proposed.length ? PROPOSAL_FALLBACK_ANSWER : ""),
-            trace: proposed.length
-              ? {
-                  boardsConsulted: e.boardsConsulted,
-                  proposedActions: proposed,
-                }
-              : null,
-          },
-        ]);
-        setStreamText(null);
-        setStatus(null);
-        router.refresh(); // refresh rail (titles) once, after completion
-      }
-    });
-
-    if (outcome === "dropped") await recoverAfterDrop(convId);
   }
 
   /** Approve or decline a proposal. Both append the server's outcome turn,
@@ -197,9 +237,10 @@ export function AskChat({
         }}
       />
       {/* Never stranded: the composer is dead only while a turn or a recovery
-          check is genuinely in flight. */}
+          check is genuinely in flight — but for ALL of a turn, `turnBusy`
+          covering the pre-stream round-trips that `streaming` misses. */}
       <Composer
-        disabled={streaming || dropState === "checking"}
+        disabled={turnBusy || streaming || dropState === "checking"}
         onSubmit={onSubmit}
       />
     </div>

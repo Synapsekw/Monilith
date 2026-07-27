@@ -10,8 +10,11 @@ const MAX = 4000;
 
 /**
  * Chat composer: a growing textarea + submit. ⌘/Ctrl+Enter sends (mirrors the
- * retired AskPulse popup). Clears on a successful hand-off; stays disabled while
- * the assistant is streaming.
+ * retired AskPulse popup). Clears on a successful hand-off; stays disabled for
+ * the whole of an in-flight turn.
+ *
+ * `disabled` is an affordance, not the guard — the real one-turn-at-a-time
+ * check lives in AskChat, which owns the turn (gotcha-62).
  */
 export function Composer({
   disabled,
@@ -65,8 +68,10 @@ export function Composer({
           <ArrowUp className="size-4" />
         </Button>
       </form>
+      {/* Says WHY it's shut. A dead composer with no explanation is what makes
+          a slow turn look broken. */}
       <p className="text-kicker mx-auto mt-1.5 max-w-3xl px-1 font-mono text-[11px] tracking-[0.12em] uppercase">
-        ⌘↵ to send
+        {disabled ? "Working — one question at a time" : "⌘↵ to send"}
       </p>
     </div>
   );

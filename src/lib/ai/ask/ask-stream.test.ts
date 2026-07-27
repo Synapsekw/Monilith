@@ -214,4 +214,29 @@ describe("askPulseStream", () => {
     expect(mockExecuteAskTool).toHaveBeenCalled();
     expect(res.boardsConsulted).toEqual(["b1"]);
   });
+
+  // The route now emits an OPENING status; these per-round ones must survive it
+  // (they are the only progress signal once the loop is grinding).
+  it("still reports progress after each completed tool round", async () => {
+    mockExecuteAskTool.mockResolvedValue({ content: "[]", boardId: "b1" });
+    const client = fakeClient([
+      {
+        stop_reason: "tool_use",
+        content: [
+          { type: "tool_use", id: "t1", name: "get_board_overview", input: {} },
+        ],
+      },
+      {
+        text: "Two overdue.",
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "Two overdue." }],
+      },
+    ]);
+    const events: AskStreamEvent[] = [];
+    await run(client, (e) => events.push(e));
+    expect(events).toContainEqual({
+      type: "status",
+      text: "Consulting 1 board…",
+    });
+  });
 });

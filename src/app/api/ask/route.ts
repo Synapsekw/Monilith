@@ -19,7 +19,11 @@ import {
   generateTitle,
   KEEP_RECENT,
 } from "@/lib/ai/ask/context";
-import { encodeEvent, type AskStreamEvent } from "@/lib/ai/ask/stream-protocol";
+import {
+  encodeEvent,
+  OPENING_STATUS,
+  type AskStreamEvent,
+} from "@/lib/ai/ask/stream-protocol";
 import { MODEL } from "@/lib/ai/providers/anthropic";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
@@ -115,6 +119,10 @@ export async function POST(req: Request) {
       const enc = new TextEncoder();
       const emit = (e: AskStreamEvent) =>
         controller.enqueue(enc.encode(encodeEvent(e)));
+      // The turn's first byte, before ANY model work: compaction and the first
+      // tool round together account for most of the opening wait, and the
+      // engine's statuses cannot fire until a round has finished (gotcha-62).
+      emit({ type: "status", text: OPENING_STATUS });
       try {
         const allRows = await getMessages(conversationId);
         let summary = conv.data.summary;

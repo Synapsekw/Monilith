@@ -17,6 +17,17 @@ import type { ValidatedAction } from "@/lib/ai/write/schema";
  *  say the same thing. */
 export const PROPOSAL_FALLBACK_ANSWER = "Here's what I'll do — confirm below.";
 
+/**
+ * The FIRST event of every turn, emitted the moment the response body opens —
+ * before compaction, before the first model round.
+ *
+ * The engine's own statuses only fire once a tool round has COMPLETED, so
+ * without this the opening 25–42s of a turn carried no server signal at all
+ * (gotcha-62). It is also the byte that proves to the client that the stream is
+ * genuinely live rather than hung.
+ */
+export const OPENING_STATUS = "Reading your boards…";
+
 export type AskStreamEvent =
   | { type: "token"; text: string }
   | { type: "status"; text: string }
