@@ -20,24 +20,24 @@
 
 ## File structure (Phase 1)
 
-| Path                                                      | Responsibility                                                                                                    |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `supabase/migrations/<ts>_ai_conversations.sql`           | Two tables, owner-scoped RLS, indexes, `updated_at` trigger                                                       |
-| `src/lib/ai/ask/conversations.ts`                         | Read queries: list conversations, get one, get messages (bounded)                                                 |
-| `src/lib/ai/ask/conversation-actions.ts`                  | Server Actions: create / rename / delete / append user message                                                    |
-| `src/lib/ai/ask/context.ts`                               | Pure context assembler + rolling-summary compaction + title generation                                            |
-| `src/lib/ai/ask/ask-stream.ts`                            | Streaming tool-use loop (`.stream()`), emits text deltas                                                          |
-| `src/app/api/ask/route.ts`                                | POST streaming endpoint: entitlement → stream → persist assistant msg + title                                     |
+| Path                                                      | Responsibility                                                                                                          |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `supabase/migrations/<ts>_ai_conversations.sql`           | Two tables, owner-scoped RLS, indexes, `updated_at` trigger                                                             |
+| `src/lib/ai/ask/conversations.ts`                         | Read queries: list conversations, get one, get messages (bounded)                                                       |
+| `src/lib/ai/ask/conversation-actions.ts`                  | Server Actions: create / rename / delete / append user message                                                          |
+| `src/lib/ai/ask/context.ts`                               | Pure context assembler + rolling-summary compaction + title generation                                                  |
+| `src/lib/ai/ask/ask-stream.ts`                            | Streaming tool-use loop (`.stream()`), emits text deltas                                                                |
+| `src/app/api/ask/route.ts`                                | POST streaming endpoint: entitlement → stream → persist assistant msg + title                                           |
 | `src/app/ask/layout.tsx`                                  | Layout B: conversation rail replaces Monolith nav; "Back to Monolith" (route lives OUTSIDE the `(app)` group — see T10) |
-| `src/app/ask/page.tsx`                                    | New-chat entry                                                                                                    |
-| `src/app/ask/[conversationId]/page.tsx`                   | Existing conversation (loads thread)                                                                              |
-| `src/components/ai/ask/AskChat.tsx`                       | Client chat controller (thread + composer + `useAskStream`)                                                       |
-| `src/components/ai/ask/ConversationRail.tsx`              | Conversation list, new/rename/delete                                                                              |
-| `src/components/ai/ask/MessageList.tsx`                   | Renders messages + streaming assistant bubble                                                                     |
-| `src/components/ai/ask/Composer.tsx`                      | Textarea + submit (⌘/Ctrl+Enter)                                                                                  |
-| `src/components/ai/ask/use-ask-stream.ts`                 | Hook: POST `/api/ask`, read NDJSON stream                                                                         |
-| `src/lib/ai/ask/stream-protocol.ts`                       | Shared NDJSON event types (`token`/`status`/`done`/`error`)                                                       |
-| `src/lib/ai/ask/ai-conversations.rls.integration.test.ts` | RLS boundary test                                                                                                 |
+| `src/app/ask/page.tsx`                                    | New-chat entry                                                                                                          |
+| `src/app/ask/[conversationId]/page.tsx`                   | Existing conversation (loads thread)                                                                                    |
+| `src/components/ai/ask/AskChat.tsx`                       | Client chat controller (thread + composer + `useAskStream`)                                                             |
+| `src/components/ai/ask/ConversationRail.tsx`              | Conversation list, new/rename/delete                                                                                    |
+| `src/components/ai/ask/MessageList.tsx`                   | Renders messages + streaming assistant bubble                                                                           |
+| `src/components/ai/ask/Composer.tsx`                      | Textarea + submit (⌘/Ctrl+Enter)                                                                                        |
+| `src/components/ai/ask/use-ask-stream.ts`                 | Hook: POST `/api/ask`, read NDJSON stream                                                                               |
+| `src/lib/ai/ask/stream-protocol.ts`                       | Shared NDJSON event types (`token`/`status`/`done`/`error`)                                                             |
+| `src/lib/ai/ask/ai-conversations.rls.integration.test.ts` | RLS boundary test                                                                                                       |
 
 **Removed** in Task 11: `src/components/ai/ask/AskPulse.tsx`, `AskPulseHost.tsx`, `AskPulseTrigger.tsx`, the `askPulseOpen` slice in `src/stores/ui.ts`, and their wiring in `app-shell.tsx`.
 

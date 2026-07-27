@@ -61,18 +61,18 @@ Read the 6d-1 spec first: `docs/superpowers/specs/2026-06-21-phase-6d1-relations
 
 ## Decisions (locked in brainstorming)
 
-| Decision                  | Choice                                                                                           |
-| ------------------------- | ------------------------------------------------------------------------------------------------ |
-| Storage                   | **None new** — derived from `relation_links` + the target cells' `cell_values`. Mirror has no `cell_values` row (like `relation`/`files`). |
-| New table / RPC           | **None.** Migration adds only the `mirror` enum value.                                            |
-| Config shape              | `columns.settings = { source_relation_column_id: uuid, target_column_id: uuid }`                 |
-| Indirection               | Mirror points at a **local relation column**, not directly at a board — the relation column owns `target_board_id`. Re-pointing the relation re-points all its mirrors. |
-| Rendering                 | **Delegate** to the target kind's `CellRenderer` (reuse, no per-kind mirror renderers).          |
-| Multi-value display       | Inline list of rendered values, capped with "+K more" (mirror of `RelationCell` overflow).       |
-| Editability               | **Read-only.** Special-cased in `BoardTable` `EditableCell` like `relation`/`files`; never reaches `CellEditor`. |
-| RLS                       | Inherited from board-level sharing: mirrored source values are read through the **user's** RLS-scoped client → unreadable target board yields no value. |
-| First-paint cost          | **+1 bounded query** (target cells for this board's linked items × the mirror configs' target columns). |
-| Collapsed-parent rollup   | `blank` (no aggregate in v1), same as `relation`.                                                 |
+| Decision                | Choice                                                                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage                 | **None new** — derived from `relation_links` + the target cells' `cell_values`. Mirror has no `cell_values` row (like `relation`/`files`).                              |
+| New table / RPC         | **None.** Migration adds only the `mirror` enum value.                                                                                                                  |
+| Config shape            | `columns.settings = { source_relation_column_id: uuid, target_column_id: uuid }`                                                                                        |
+| Indirection             | Mirror points at a **local relation column**, not directly at a board — the relation column owns `target_board_id`. Re-pointing the relation re-points all its mirrors. |
+| Rendering               | **Delegate** to the target kind's `CellRenderer` (reuse, no per-kind mirror renderers).                                                                                 |
+| Multi-value display     | Inline list of rendered values, capped with "+K more" (mirror of `RelationCell` overflow).                                                                              |
+| Editability             | **Read-only.** Special-cased in `BoardTable` `EditableCell` like `relation`/`files`; never reaches `CellEditor`.                                                        |
+| RLS                     | Inherited from board-level sharing: mirrored source values are read through the **user's** RLS-scoped client → unreadable target board yields no value.                 |
+| First-paint cost        | **+1 bounded query** (target cells for this board's linked items × the mirror configs' target columns).                                                                 |
+| Collapsed-parent rollup | `blank` (no aggregate in v1), same as `relation`.                                                                                                                       |
 
 ## Architecture
 
@@ -119,8 +119,8 @@ identical to 6d-1's linked-name resolution and the board-sharing storage-RLS fix
 - **There is no new write path**, so there is no new `with check` / `can_edit_board` surface to get
   wrong. Mirror is select-only.
 
-The single proof obligation (integration test, below): *a viewer of board A who cannot read board B
-sees the relation chips' link rows but the mirror cell for those links is empty.*
+The single proof obligation (integration test, below): _a viewer of board A who cannot read board B
+sees the relation chips' link rows but the mirror cell for those links is empty._
 
 ### First paint (0 round-trips) — payload hydration
 
@@ -132,7 +132,7 @@ two-query relation-name join. Mirror adds:
 2. **Collect the target item ids** = the `linked_item_id`s of every link belonging to a referenced
    source relation column (already in `relationLinks`).
 3. **One bounded query** `cell_values where item_id IN (<linked ids>) AND column_id IN (<target
-   column ids>)`, RLS-filtered → returns only target cells the caller may read. Bounded by the same
+column ids>)`, RLS-filtered → returns only target cells the caller may read. Bounded by the same
    first-paint budget posture as `relationLinks` (`.limit(...)`, indexed on `(item_id, column_id)`).
 4. **Also fetch the target columns' metadata** (`id, kind, settings`) for the referenced
    `target_column_id`s — needed so the cell can render with the correct kind + settings (e.g. a
@@ -261,7 +261,7 @@ so the cell can delegate to `CellRenderer`.
   dialog's lifetime. Identical posture to 6d-1's lazy `listRelationCandidates`.
 - **Cross-board staleness:** a source-cell edit on the target board does not push to an open owning
   board (no live refresh in v1). Refreshes on next owning-board load / mutation. Documented
-  limitation, not a budget violation (it's a *freshness* tradeoff, deliberately chosen to keep the
+  limitation, not a budget violation (it's a _freshness_ tradeoff, deliberately chosen to keep the
   hot path at 0 round-trips).
 
 ## Cross-board RLS — proof obligations
@@ -311,8 +311,8 @@ linked-item name" test — that test is the template.
   `ORDER`; `rollupCell` arm + every other `ColumnKind` exhaustive-switch arm; column-default seed.
   Unit tests for schemas + registry parity. **(Root — everything below depends on it.)**
 - **U2 — payload + cache derivation:** `mirrorTargetCells`/`mirrorTargetColumns` in `getBoardPayload`
-  + `BoardPayload`/`BoardCache`; `mirrorValuesForCell` accessor + `listMirrorableColumns` query.
-  Unit tests for the derivation. **(Depends on U1's types.)**
+  - `BoardPayload`/`BoardCache`; `mirrorValuesForCell` accessor + `listMirrorableColumns` query.
+    Unit tests for the derivation. **(Depends on U1's types.)**
 - **U3 — `MirrorCell`:** presentational read-only cell delegating to `CellRenderer` + overflow + unit
   tests. **(Depends on U1 for `ColumnKind`; consumes the `MirrorValue` shape U2 produces — so depends
   on U2's type export.)**
@@ -333,12 +333,12 @@ The five open questions are resolved as follows; the rationale is fidelity to Mo
 ClickUp's Rollup behavior.
 
 - **Q1 — Aggregation → DEFER to a committed 6d-3.** Ship the **per-item value list** (capped "+K
-  more") in 6d-2. This is Monday's mirror *default* (the column shows the connected items' values);
+  more") in 6d-2. This is Monday's mirror _default_ (the column shows the connected items' values);
   sum/avg/min/max/count belong in the column **summary footer** (ClickUp's Rollup calc), scheduled
   as **6d-3** — not optional.
 - **Q2 — Mirrorable source kinds → all `cell_values`-backed kinds** (text, long-text, number,
   status, dropdown, date, **people**, checkbox, rating, link, email, phone). status/people/date are
-  *the* core Monday mirror targets and already have `CellRenderer` arms + payload-resident data
+  _the_ core Monday mirror targets and already have `CellRenderer` arms + payload-resident data
   (org members included), so near-zero extra hydration. **Exclude** `files`, `time_tracking`,
   `relation`, and `mirror` (no 2-hop chains / side-table reads in v1).
 - **Q3 — Multi-link → SUPPORT, capped.** A multi-link relation mirrors all N values with a "+K more"

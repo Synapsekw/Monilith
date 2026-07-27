@@ -32,14 +32,14 @@ the workspace only when a feature genuinely needs them, and that is called out p
 
 ## Locked decisions
 
-| Decision                 | Choice                                                                                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing depth (v1)**   | Admin-set entitlements first (set from the existing `src/app/admin/` console). Self-serve Stripe (E6) is a fast-follow, **not** in the first two weeks. Both managed + BYO work day one.                      |
-| **Lead feature**         | **Ask Monolith** (natural-language Q&A over your work) is the flagship after the foundation.                                                                                                                     |
-| **BYO key storage**      | **Supabase Vault** (`vault.secrets`, libsodium). Service-role-only access via a `SECURITY DEFINER` decrypt path; never RLS-exposed to `authenticated`. We hold no master key.                                 |
+| Decision                    | Choice                                                                                                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing depth (v1)**      | Admin-set entitlements first (set from the existing `src/app/admin/` console). Self-serve Stripe (E6) is a fast-follow, **not** in the first two weeks. Both managed + BYO work day one.                      |
+| **Lead feature**            | **Ask Monolith** (natural-language Q&A over your work) is the flagship after the foundation.                                                                                                                  |
+| **BYO key storage**         | **Supabase Vault** (`vault.secrets`, libsodium). Service-role-only access via a `SECURITY DEFINER` decrypt path; never RLS-exposed to `authenticated`. We hold no master key.                                 |
 | **Ask Monolith scope (v1)** | **Workspace-wide** — question answered across all boards in a workspace via RLS-scoped read tools (not single-board).                                                                                         |
-| **Metering unit**        | Ledger stores precise **input/output tokens + computed cost** per call (source of truth). Users see a friendly monthly **"AI credit"** allowance; managed enforcement is a **monthly cost ceiling per tier**. |
-| **Model / provider**     | Anthropic `claude-opus-4-8` primary (reuses today's SDK path). Gateway is provider-shaped so an OpenAI-compatible provider can be added for BYO later (not in v1).                                            |
+| **Metering unit**           | Ledger stores precise **input/output tokens + computed cost** per call (source of truth). Users see a friendly monthly **"AI credit"** allowance; managed enforcement is a **monthly cost ceiling per tier**. |
+| **Model / provider**        | Anthropic `claude-opus-4-8` primary (reuses today's SDK path). Gateway is provider-shaped so an OpenAI-compatible provider can be added for BYO later (not in v1).                                            |
 
 ## Epic decomposition
 

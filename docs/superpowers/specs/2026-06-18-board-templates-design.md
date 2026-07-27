@@ -98,11 +98,11 @@ Monolith kinds: `text, status, people, date, numbers, dropdown`. The donor uses 
 not have; map them:
 
 | Donor kind | Monolith kind | Notes                                               |
-| ---------- | ---------- | --------------------------------------------------- |
-| `progress` | `numbers`  | `settings.unit = '%'`                               |
-| `timeline` | `date`     | uses the date value's optional `end` → a date range |
-| `link`     | `text`     | plain text URL                                      |
-| `priority` | `status`   | options Hot / Warm / Cold                           |
+| ---------- | ------------- | --------------------------------------------------- |
+| `progress` | `numbers`     | `settings.unit = '%'`                               |
+| `timeline` | `date`        | uses the date value's optional `end` → a date range |
+| `link`     | `text`        | plain text URL                                      |
+| `priority` | `status`      | options Hot / Warm / Cold                           |
 
 ### The four templates
 

@@ -19,7 +19,7 @@
   - CLI bins aren't on PATH inside the worktree — `export PATH="$(git -C . rev-parse --show-toplevel)/../../node_modules/.bin:$PATH"` or run via `pnpm`.
   - `*.integration.test.ts` **silently skip** without `.env.local` — symlink it from the main checkout before running live tests: `ln -s ../../../.env.local .env.local` (verify the relative depth).
   - `next build` cannot run from the worktree — run `pnpm build` in the **main checkout** before merge.
-- **No project setting change (RESOLVED by research).** A `private: true` channel is ALWAYS authorized against the `realtime.messages` policies on its own merits, independent of the "Channel Restrictions / Allow public access" toggle. **Leave the toggle on "allow public"** — switching to "private only" would break the app's existing PUBLIC channels (`board:`/`notifications:`/`item:` postgres_changes), which have no policies. The non-member-denied integration test (Task 10) proves enforcement with the toggle left on. (A same-named *public* `presence:board:` channel is a separate channel and never receives the private channel's traffic, so there is no bypass leak.)
+- **No project setting change (RESOLVED by research).** A `private: true` channel is ALWAYS authorized against the `realtime.messages` policies on its own merits, independent of the "Channel Restrictions / Allow public access" toggle. **Leave the toggle on "allow public"** — switching to "private only" would break the app's existing PUBLIC channels (`board:`/`notifications:`/`item:` postgres*changes), which have no policies. The non-member-denied integration test (Task 10) proves enforcement with the toggle left on. (A same-named \_public* `presence:board:` channel is a separate channel and never receives the private channel's traffic, so there is no bypass leak.)
 
 ---
 
@@ -29,13 +29,14 @@ Discovered while scoping the real components — these adjust the plan:
 
 1. **Header mount point.** `BoardViews` does not render the header directly; each view renders `<BoardHeader … members={…} />` (e.g. `BoardTable.tsx`). So `<BoardPresenceBar>` goes inside **`BoardHeader`** (it already receives `members`) — one insertion covers all views. The `BoardPresenceProvider` + `useBoardPresence` still live in `BoardViews` (wraps everything).
 2. **Self identity.** Derive the presence `self` in `BoardViews` from `members.find(m => m.userId === currentUserId)` → `{ userId: currentUserId, name: fullName ?? email ?? "Someone", avatarUrl }`. `EditorMember = { userId, fullName, email, avatarUrl }` (camelCase).
-3. **T8d (item-panel field indicators) is DROPPED for v1.** The item panel's "fields" tab is a placeholder — *"Inline field editing in the panel is a fast-follow."* There are **no editable field components** to attach a focus/indicator to. Per-field presence is impossible until field editing exists. Documented as a fast-follow (revisit when the panel gains inline field editors). Avatar-stack presence still appears in the panel's surrounding board (the bar is board-wide).
+3. **T8d (item-panel field indicators) is DROPPED for v1.** The item panel's "fields" tab is a placeholder — _"Inline field editing in the panel is a fast-follow."_ There are **no editable field components** to attach a focus/indicator to. Per-field presence is impossible until field editing exists. Documented as a fast-follow (revisit when the panel gains inline field editors). Avatar-stack presence still appears in the panel's surrounding board (the bar is board-wide).
 4. **Toast primitive does not exist** (the repo deliberately has none — see the comment in `members-table.tsx`). To honor "visible LWW" without adding an unrequested dependency, T9 ships as: (a) a **visual flash highlight** on the changed-under-you element (the core "seen" signal), plus (b) a **self-contained ephemeral message** rendered by `BoardViews` from flash state (a tiny inline "toast-lite"), NOT `sonner`. Attribution comes from presence (`focusMap`). If the team later adds a toast lib, the message can move to it.
 5. **`onRemoteChange` wiring.** `useBoardRealtime(boardId)`'s `onCell` handler (the existing data hook) has `p.new = { item_id, column_id, value }` and echo-dedups at the value level; fire an additive optional `onRemoteChange?({ targetId: cell:${item_id}:${column_id}, valueChanged: true })` only when it actually patches (i.e. not an echo). To know the local user's focused target for the flash, extend `useBoardPresence` to also expose `selfFocusTargetId: string | null` (state mirror of its focus ref).
 
 ## File Structure
 
 **Create:**
+
 - `supabase/migrations/<ts>_realtime_presence_authorization.sql` — RLS policies on `realtime.messages` for the presence channel.
 - `src/lib/boards/presence-types.ts` — `PresenceFocus`, `PresenceState`, `RosterOccupant`.
 - `src/lib/boards/presence-color.ts` — `presenceColor(userId)`.
@@ -51,6 +52,7 @@ Discovered while scoping the real components — these adjust the plan:
 - Test files mirroring each unit (`*.test.ts(x)`) + `src/lib/boards/presence.rls.integration.test.ts`.
 
 **Modify:**
+
 - `src/components/boards/BoardViews.tsx` — mount `useBoardPresence` + `BoardPresenceProvider` + render `<BoardPresenceBar>` in the header; wire the LWW flash callback alongside the existing realtime hook.
 - `src/components/boards/BoardTable.tsx` — cell focus + `<PresenceRing>` on the cell wrapper.
 - `src/components/boards/KanbanBoard.tsx` — card focus + ring.
@@ -64,6 +66,7 @@ Discovered while scoping the real components — these adjust the plan:
 ## Task 1: Presence color util (pure)
 
 **Files:**
+
 - Create: `src/lib/boards/presence-color.ts`
 - Test: `src/lib/boards/presence-color.test.ts`
 
@@ -144,6 +147,7 @@ git commit -m "feat(presence): deterministic per-user color util"
 ## Task 2: Presence types + target-id helper (pure)
 
 **Files:**
+
 - Create: `src/lib/boards/presence-types.ts`, `src/lib/boards/presence-target.ts`
 - Test: `src/lib/boards/presence-target.test.ts`
 
@@ -230,6 +234,7 @@ git commit -m "feat(presence): presence types + composite target-id helper"
 ## Task 3: Presence reducer (pure)
 
 **Files:**
+
 - Create: `src/lib/boards/presence-reducer.ts`
 - Test: `src/lib/boards/presence-reducer.test.ts`
 
@@ -271,12 +276,23 @@ describe("toRoster", () => {
 describe("toFocusMap", () => {
   it("maps targetId -> occupants currently focused there", () => {
     const state = raw([
-      mk({ userId: "u1", focus: { viewKind: "table", targetId: "cell:i1:c1" } }),
-      mk({ userId: "u2", focus: { viewKind: "table", targetId: "cell:i1:c1" } }),
+      mk({
+        userId: "u1",
+        focus: { viewKind: "table", targetId: "cell:i1:c1" },
+      }),
+      mk({
+        userId: "u2",
+        focus: { viewKind: "table", targetId: "cell:i1:c1" },
+      }),
       mk({ userId: "u3", focus: null }),
     ]);
     const map = toFocusMap(state);
-    expect(map.get("cell:i1:c1")?.map((o) => o.userId).sort()).toEqual(["u1", "u2"]);
+    expect(
+      map
+        .get("cell:i1:c1")
+        ?.map((o) => o.userId)
+        .sort(),
+    ).toEqual(["u1", "u2"]);
     expect(map.has("cell:i2:c1")).toBe(false);
   });
 });
@@ -304,10 +320,18 @@ describe("flashDecision", () => {
 
   it("does not flash when nothing is focused or value is unchanged", () => {
     expect(
-      flashDecision({ incomingTargetId: "cell:i1:c1", focusedTargetId: null, valueChanged: true }),
+      flashDecision({
+        incomingTargetId: "cell:i1:c1",
+        focusedTargetId: null,
+        valueChanged: true,
+      }),
     ).toBe(false);
     expect(
-      flashDecision({ incomingTargetId: "cell:i1:c1", focusedTargetId: "cell:i1:c1", valueChanged: false }),
+      flashDecision({
+        incomingTargetId: "cell:i1:c1",
+        focusedTargetId: "cell:i1:c1",
+        valueChanged: false,
+      }),
     ).toBe(false);
   });
 });
@@ -330,7 +354,10 @@ function flatten(raw: RawPresence): PresenceState[] {
 }
 
 /** One entry per user (multiple tabs merged); self flagged. */
-export function toRoster(raw: RawPresence, selfUserId: string): RosterOccupant[] {
+export function toRoster(
+  raw: RawPresence,
+  selfUserId: string,
+): RosterOccupant[] {
   const byUser = new Map<string, RosterOccupant>();
   for (const s of flatten(raw)) {
     if (byUser.has(s.userId)) continue;
@@ -396,6 +423,7 @@ git commit -m "feat(presence): pure reducer — roster dedup, focus map, flash d
 ## Task 4: Realtime-Authorization migration + channel helper
 
 **Files:**
+
 - Create: `supabase/migrations/<ts>_realtime_presence_authorization.sql`
 - Create: `src/lib/boards/presence-channel.ts`
 - Test: covered live in Task 8 (RLS cannot be unit-tested without a socket).
@@ -508,6 +536,7 @@ git commit -m "feat(presence): private presence channel + realtime.messages RLS 
 ## Task 5: `useBoardPresence` hook + context + `usePresenceFocus`
 
 **Files:**
+
 - Create: `src/lib/boards/use-board-presence.ts`, `src/lib/boards/presence-context.tsx`, `src/lib/boards/use-presence-focus.ts`
 - Test: `src/lib/boards/use-board-presence.test.tsx` (hook behavior with a mocked channel)
 
@@ -551,7 +580,12 @@ describe("useBoardPresence", () => {
 
   it("tracks the local presence state on subscribe", async () => {
     renderHook(
-      () => useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+      () =>
+        useBoardPresence("board-1", {
+          userId: "u1",
+          name: "Dani",
+          avatarUrl: null,
+        }),
       { wrapper },
     );
     // async channel creation → wait until subscribe is wired
@@ -565,16 +599,25 @@ describe("useBoardPresence", () => {
 
   it("setFocus re-tracks with the new focus (throttled)", async () => {
     const { result } = renderHook(
-      () => useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+      () =>
+        useBoardPresence("board-1", {
+          userId: "u1",
+          name: "Dani",
+          avatarUrl: null,
+        }),
       { wrapper },
     );
     await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
     act(() => subscribeMock.mock.calls[0][0]("SUBSCRIBED"));
-    act(() => result.current.setFocus({ viewKind: "table", targetId: "cell:i1:c1" }));
+    act(() =>
+      result.current.setFocus({ viewKind: "table", targetId: "cell:i1:c1" }),
+    );
     // setFocus is throttled (~150ms) → assert eventually
     await waitFor(() =>
       expect(trackMock).toHaveBeenLastCalledWith(
-        expect.objectContaining({ focus: { viewKind: "table", targetId: "cell:i1:c1" } }),
+        expect.objectContaining({
+          focus: { viewKind: "table", targetId: "cell:i1:c1" },
+        }),
       ),
     );
   });
@@ -598,7 +641,11 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createBoardPresenceChannel } from "./presence-channel";
 import { presenceColor } from "./presence-color";
 import { toFocusMap, toRoster } from "./presence-reducer";
-import type { PresenceFocus, PresenceState, RosterOccupant } from "./presence-types";
+import type {
+  PresenceFocus,
+  PresenceState,
+  RosterOccupant,
+} from "./presence-types";
 
 type Self = { userId: string; name: string; avatarUrl: string | null };
 
@@ -645,7 +692,8 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
       }
       channel = ch;
       channelRef.current = ch;
-      const sync = () => setRaw(ch.presenceState() as Record<string, PresenceState[]>);
+      const sync = () =>
+        setRaw(ch.presenceState() as Record<string, PresenceState[]>);
       ch.on("presence", { event: "sync" }, sync)
         .on("presence", { event: "join" }, sync)
         .on("presence", { event: "leave" }, sync)
@@ -659,7 +707,11 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
               hadDropRef.current = false;
             }
           }
-          if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (
+            status === "CLOSED" ||
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT"
+          ) {
             hadDropRef.current = true;
           }
         });
@@ -714,7 +766,10 @@ export function BoardPresenceProvider({
 
 export function useBoardPresenceContext(): BoardPresence {
   const v = useContext(Ctx);
-  if (!v) throw new Error("useBoardPresenceContext must be used within BoardPresenceProvider");
+  if (!v)
+    throw new Error(
+      "useBoardPresenceContext must be used within BoardPresenceProvider",
+    );
   return v;
 }
 ```
@@ -729,7 +784,10 @@ import type { PresenceFocus } from "./presence-types";
 
 /** Call from an editable element. Reports focus on mount/focus and clears on blur/unmount.
  *  Pass `active` (e.g. isEditing) to drive focus/blur, or call setActive imperatively. */
-export function usePresenceFocus(target: PresenceFocus | null, active: boolean) {
+export function usePresenceFocus(
+  target: PresenceFocus | null,
+  active: boolean,
+) {
   const { setFocus } = useBoardPresenceContext();
   const prev = useRef(false);
   useEffect(() => {
@@ -766,6 +824,7 @@ git commit -m "feat(presence): useBoardPresence hook + provider + usePresenceFoc
 > **REQUIRED SUB-SKILLS:** load `pulse-ui` and `frontend-design` before styling. Use Monolith tokens (dark-first near-black surfaces, single accent). The structure below is correct; the styling must come from `pulse-ui`.
 
 **Files:**
+
 - Create: `src/components/boards/presence/PresenceRing.tsx`, `src/components/boards/presence/BoardPresenceBar.tsx`
 - Test: `src/components/boards/presence/PresenceRing.test.tsx`, `BoardPresenceBar.test.tsx`
 
@@ -781,7 +840,18 @@ vi.mock("@/lib/boards/presence-context", () => ({
   useBoardPresenceContext: () => ({
     selfUserId: "self",
     focusMap: new Map([
-      ["cell:i1:c1", [{ userId: "u2", name: "Sam", avatarUrl: null, color: "#2d9cdb", isSelf: false }]],
+      [
+        "cell:i1:c1",
+        [
+          {
+            userId: "u2",
+            name: "Sam",
+            avatarUrl: null,
+            color: "#2d9cdb",
+            isSelf: false,
+          },
+        ],
+      ],
     ]),
   }),
 }));
@@ -806,7 +876,11 @@ import { describe, expect, it, vi } from "vitest";
 import { BoardPresenceBar } from "./BoardPresenceBar";
 
 const occ = (id: string, name: string) => ({
-  userId: id, name, avatarUrl: null, color: "#2d9cdb", isSelf: false,
+  userId: id,
+  name,
+  avatarUrl: null,
+  color: "#2d9cdb",
+  isSelf: false,
 });
 
 vi.mock("@/lib/boards/presence-context", () => ({
@@ -842,7 +916,9 @@ import { useBoardPresenceContext } from "@/lib/boards/presence-context";
 
 export function PresenceRing({ target }: { target: string }) {
   const { focusMap, selfUserId } = useBoardPresenceContext();
-  const others = (focusMap.get(target) ?? []).filter((o) => o.userId !== selfUserId);
+  const others = (focusMap.get(target) ?? []).filter(
+    (o) => o.userId !== selfUserId,
+  );
   if (others.length === 0) return null;
   const first = others[0];
   return (
@@ -882,13 +958,20 @@ export function BoardPresenceBar({ maxFaces = 5 }: { maxFaces?: number }) {
           {o.avatarUrl ? <img src={o.avatarUrl} alt="" /> : initials(o.name)}
         </span>
       ))}
-      {overflow > 0 ? <span data-presence-overflow>{`+${overflow}`}</span> : null}
+      {overflow > 0 ? (
+        <span data-presence-overflow>{`+${overflow}`}</span>
+      ) : null}
     </div>
   );
 }
 
 function initials(name: string): string {
-  return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 }
 ```
 
@@ -909,6 +992,7 @@ git commit -m "feat(presence): PresenceRing + BoardPresenceBar primitives"
 ## Task 7: Mount presence in `BoardViews` + wire `BoardPresenceBar`
 
 **Files:**
+
 - Modify: `src/components/boards/BoardViews.tsx`
 
 > `BoardViews` already owns the data-realtime hook and persists across view switches — mount presence here so it does too (gotcha-09). It already receives `currentUserId`; get the display name/avatar from the members list already passed for the People editor (no new query).
@@ -952,15 +1036,19 @@ git commit -m "feat(presence): mount useBoardPresence + avatar bar in BoardViews
 Each sub-task: on the editable element, call `usePresenceFocus(target, isFocused)` and render `<PresenceRing target={...} />`. **No data fetching.** These four are independent (different files) → run as parallel subagents/worktrees.
 
 ### 8a — Table (`src/components/boards/BoardTable.tsx`)
+
 - [ ] Target `presenceTarget.cell(itemId, columnId)`; `usePresenceFocus(target, isEditing)` in the cell wrapper; overlay `<PresenceRing>` on the cell. Test: a cell shows a ring when `focusMap` has another occupant (mock context). Commit `feat(presence): table cell editing indicators`.
 
 ### 8b — Kanban (`src/components/boards/KanbanBoard.tsx`)
+
 - [ ] Target `presenceTarget.card(itemId)`; focus on card-edit; `<PresenceRing>` on the card. Test + commit `feat(presence): kanban card editing indicators`.
 
 ### 8c — Calendar + Gantt (`CalendarBoard.tsx`, `GanttBoard.tsx`)
+
 - [ ] Target `presenceTarget.event(itemId)` on both; `<PresenceRing>` on the event block. Test + commit `feat(presence): calendar/gantt event editing indicators`.
 
 ### 8d — Item panel (`src/components/boards/item-panel/…`)
+
 - [ ] Target `presenceTarget.field(itemId, fieldKey)` per editable field; focus on field focus/blur; `<PresenceRing>` per field. Test + commit `feat(presence): item-panel field editing indicators`.
 
 > Each sub-task is its own TDD cycle (failing component test with a mocked `useBoardPresenceContext` → wire → pass → commit). Keep the ring purely presentational; **never** let a ring or focus call trigger a data read.
@@ -970,6 +1058,7 @@ Each sub-task: on the editable element, call `usePresenceFocus(target, isFocused
 ## Task 9: Visible-LWW flash
 
 **Files:**
+
 - Create: `src/lib/boards/use-lww-flash.ts`
 - Test: `src/lib/boards/use-lww-flash.test.tsx`
 - Modify: `src/components/boards/BoardViews.tsx` (pass a change-event callback from the existing data realtime path into the flash hook) — **without changing `use-board-realtime.ts` reconciliation.**
@@ -990,7 +1079,18 @@ vi.mock("./presence-context", () => ({
   useBoardPresenceContext: () => ({
     selfUserId: "self",
     focusMap: new Map([
-      ["cell:i1:c1", [{ userId: "u2", name: "Sam", avatarUrl: null, color: "#2d9cdb", isSelf: false }]],
+      [
+        "cell:i1:c1",
+        [
+          {
+            userId: "u2",
+            name: "Sam",
+            avatarUrl: null,
+            color: "#2d9cdb",
+            isSelf: false,
+          },
+        ],
+      ],
     ]),
   }),
 }));
@@ -999,14 +1099,26 @@ describe("useLwwFlash", () => {
   it("flashes + toasts attributed to the occupant when a change hits the focused cell", () => {
     const { result } = renderHook(() => useLwwFlash());
     act(() => result.current.setFocusedTarget("cell:i1:c1"));
-    act(() => result.current.onRemoteChange({ targetId: "cell:i1:c1", valueChanged: true }));
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/Sam changed this/i));
+    act(() =>
+      result.current.onRemoteChange({
+        targetId: "cell:i1:c1",
+        valueChanged: true,
+      }),
+    );
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringMatching(/Sam changed this/i),
+    );
   });
 
   it("does not toast for an unfocused target", () => {
     const { result } = renderHook(() => useLwwFlash());
     act(() => result.current.setFocusedTarget("cell:i1:c1"));
-    act(() => result.current.onRemoteChange({ targetId: "cell:i2:c2", valueChanged: true }));
+    act(() =>
+      result.current.onRemoteChange({
+        targetId: "cell:i2:c2",
+        valueChanged: true,
+      }),
+    );
     expect(toast).not.toHaveBeenCalled();
   });
 });
@@ -1036,11 +1148,21 @@ export function useLwwFlash() {
 
   const onRemoteChange = useCallback(
     (e: { targetId: string; valueChanged: boolean }) => {
-      if (!flashDecision({ incomingTargetId: e.targetId, focusedTargetId: focusedRef.current, valueChanged: e.valueChanged })) {
+      if (
+        !flashDecision({
+          incomingTargetId: e.targetId,
+          focusedTargetId: focusedRef.current,
+          valueChanged: e.valueChanged,
+        })
+      ) {
         return;
       }
       const occupant = focusMap.get(e.targetId)?.[0];
-      toast(occupant ? `${occupant.name} changed this just now` : "Updated just now");
+      toast(
+        occupant
+          ? `${occupant.name} changed this just now`
+          : "Updated just now",
+      );
       setFlashTarget(e.targetId);
       setTimeout(() => setFlashTarget(null), 1200);
     },
@@ -1069,6 +1191,7 @@ git commit -m "feat(presence): visible last-write-wins flash + toast"
 ## Task 10: Live integration tests (presence + RLS gate)
 
 **Files:**
+
 - Create: `src/lib/boards/presence.rls.integration.test.ts`
 
 > Mirror an existing `*.rls.integration.test.ts` (e.g. the relations cross-board RLS test): service-role admin seeds an org, a board, a member, and a non-member; anon clients sign in and act. **Symlink `.env.local` first** or the test silently skips.
@@ -1100,10 +1223,12 @@ describe("board presence channel authorization (live)", () => {
 - [ ] **Step 2: Symlink env + run live**
 
 Run:
+
 ```bash
 ln -sf ../../../.env.local .env.local   # verify relative depth from this worktree
 pnpm test src/lib/boards/presence.rls.integration.test.ts
 ```
+
 Expected: both tests run (NOT skipped) and PASS — members see each other; non-member denied. If they skip, the symlink is wrong.
 
 - [ ] **Step 3: Flesh out the assertions** using the repo's existing live-RLS harness until both pass for real (replace the placeholder `expect(true)` lines).
@@ -1130,6 +1255,7 @@ git commit -m "test(presence): live presence sync + non-member RLS-denied gate"
 ## Execution DAG (AGENTS.md rule 6)
 
 **Dependency graph:**
+
 - T1 (color) — none
 - T2 (types/target) — none
 - T3 (reducer) — T2 (types)
@@ -1137,12 +1263,13 @@ git commit -m "test(presence): live presence sync + non-member RLS-denied gate"
 - T5 (useBoardPresence + context + focus) — T1, T2, T3, T4
 - T6 (UI primitives) — T2, T5 (context shape)
 - T7 (mount in BoardViews) — T5, T6
-- T8a–d (view wiring) — T5, T6, T7  *(four parallel, disjoint files)*
+- T8a–d (view wiring) — T5, T6, T7 _(four parallel, disjoint files)_
 - T9 (LWW flash) — T3, T5, T7
 - T10 (live integration) — T4, T5
 - T11 (gate) — everything
 
 **Parallel batches (waves of concurrent agents):**
+
 - **Batch A:** T1, T2, T4 (no unmet deps; pure utils + migration).
 - **Batch B:** T3 (after T2).
 - **Batch C:** T5 (after A+B).

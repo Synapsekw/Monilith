@@ -238,7 +238,7 @@ only changes view state issues an RSC navigation.
 
 ## 10. Reject-list — My-Day anti-patterns we explicitly do NOT copy
 
-| My-Day                                                                  | Why it's wrong here                                  | Monolith-native                                                               |
+| My-Day                                                                  | Why it's wrong here                                  | Monolith-native                                                            |
 | ----------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------- |
 | Activities = capped 30-item array on the board doc (`activities.pop()`) | Silent history loss; full-board re-save per event    | Append-only `item_activities` rows, paginated, never capped                |
 | Comments nested array on the task                                       | No pagination/permissions; board re-save per comment | `item_updates` table, RLS, optimistic per-row                              |

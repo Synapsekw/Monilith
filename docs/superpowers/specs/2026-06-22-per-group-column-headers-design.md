@@ -80,7 +80,7 @@ board-level mutations that already propagate through the board cache to every gr
 
 - `GroupHeaderRow` — pure presentational row: given `group`, `columns`, `template`, group-control
   callbacks, and `ColumnHeaderControls`, renders the frozen group cell + per-column `ColumnHeader`s
-  + `AddColumnMenu`. Testable in isolation.
+  - `AddColumnMenu`. Testable in isolation.
 - `GroupSection` — composes `GroupHeaderRow` + (when not collapsed) the virtualized item rows +
   `AddItemRow`.
 - `BoardTable` — owns shared state + dialogs + footer; renders `groups.map(GroupSection)`; no longer
@@ -97,7 +97,7 @@ board-level mutations that already propagate through the board cache to every gr
 
 - **First paint:** unchanged — same `getBoardPayload`; no new queries.
 - **Every interaction:** **0 new server round-trips.** Resize / rename / add / edit-options use the
-  existing Server Actions + optimistic cache exactly as today; the only change is *where* the header
+  existing Server Actions + optimistic cache exactly as today; the only change is _where_ the header
   renders. Width changes are client state (no RSC re-run).
 - More DOM (headers × groups), but groups are not virtualized and are few per board; per-column
   header is a light component. Acceptable.

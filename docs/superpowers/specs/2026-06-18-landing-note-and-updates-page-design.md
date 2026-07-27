@@ -40,7 +40,7 @@ page or components.
 | Landing note placement  | **Status pill above the wordmark** + **minimal hero footer** | Pill (`In active development`) reads first without competing with the CTAs; footer carries `Invitation only` (left) and an `Updates →` link (right).                                             |
 | Updates discoverability | **Linked from the landing** (footer `Updates →`)             | Page is public regardless; the link makes it findable for logged-out visitors.                                                                                                                   |
 | Page styling            | Reuse the dark hero aesthetic, not the app shell             | `/updates` is a public marketing-ish page, not part of the authenticated product.                                                                                                                |
-| Badge palette           | **Monolith monochromatic + single-accent**                      | Not Mubarak's gold/blue/emerald. Accent for `new`; muted/outline for `improved`/`fixed`. Exact tokens from the `pulse-ui` skill at build time.                                                   |
+| Badge palette           | **Monolith monochromatic + single-accent**                   | Not Mubarak's gold/blue/emerald. Accent for `new`; muted/outline for `improved`/`fixed`. Exact tokens from the `pulse-ui` skill at build time.                                                   |
 
 ## Architecture & components
 

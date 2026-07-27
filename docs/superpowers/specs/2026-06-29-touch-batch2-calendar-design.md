@@ -238,8 +238,8 @@ Vitest + jsdom.
 - [ ] **Step 3 — Run.** `pnpm test:unit CalendarBoard` → PASS. `pnpm typecheck` → no unused-import
       error.
 - [ ] **Step 4 — Commit.** `git add src/components/boards/CalendarBoard.tsx
-  src/components/boards/CalendarBoard.test.tsx` → `feat(boards): touch-aware event-drag sensor in
-  calendar`.
+src/components/boards/CalendarBoard.test.tsx` → `feat(boards): touch-aware event-drag sensor in
+calendar`.
 
 ### Task 2: CalendarControls — ≥44px nav touch targets on coarse pointers
 
@@ -257,8 +257,8 @@ Vitest + jsdom.
       className. Icon sizes unchanged. All `pointer-coarse:`-gated → zero desktop change.
 - [ ] **Step 3 — Run.** `pnpm test:unit CalendarControls` → PASS.
 - [ ] **Step 4 — Commit.** `git add src/components/boards/calendar/CalendarControls.tsx
-  src/components/boards/calendar/CalendarControls.test.tsx` → `feat(boards): finger-friendly
-  calendar nav controls`.
+src/components/boards/calendar/CalendarControls.test.tsx` → `feat(boards): finger-friendly
+calendar nav controls`.
 
 ### Task 3: Full gate + handoff
 

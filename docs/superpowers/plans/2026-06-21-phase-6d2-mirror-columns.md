@@ -20,6 +20,7 @@
 ## File Structure
 
 **New files:**
+
 - `supabase/migrations/<ts>_mirror_enum.sql` — the `mirror` enum value (own migration, like `20260621060000_relation_enum.sql`).
 - `src/lib/boards/mirror.ts` — `MirrorValue` type, `mirrorValuesForCell` derivation, `mirrorRollup` helper (pure).
 - `src/components/boards/cells/MirrorCell.tsx` — read-only presentational cell delegating to `CellRenderer`.
@@ -31,6 +32,7 @@
 - `e2e/mirror-columns.spec.ts` — Playwright flow.
 
 **Modified files:**
+
 - `src/types/database.types.ts` — regenerated (enum gains `mirror`). Never hand-edit.
 - `src/lib/validations/boards.ts` — `columnKindSchema`, `columnSettingsSchema`, `cellValueSchema`, `mirrorSettingsSchema`, `mirrorValueSchema`.
 - `src/lib/boards/column-kinds.ts` — `COLUMN_KIND_META.mirror`, `COLUMN_KIND_ORDER`.
@@ -47,17 +49,18 @@
 
 **Dependency edges (Consumes / Produces):**
 
-| Task | Consumes | Produces |
-| ---- | -------- | -------- |
-| T1 — enum + types + validation + registry + switch arms | — | `mirror` enum, regenerated types, `columnKindSchema`/`mirrorSettingsSchema`/`mirrorValueSchema`, `COLUMN_KIND_META`/`ORDER`, `rollupCell`/`column-defaults` arms |
-| T2 — payload + cache + derivation + query | T1 (types) | `BoardPayload`/`BoardCache` mirror slices, `mirrorValuesForCell`, `MirrorValue`, `listMirrorableColumns` |
-| T3 — `MirrorCell` | T1 (kind), T2 (`MirrorValue` type) | `MirrorCell` component |
-| T4 — `MirrorColumnConfig` | T1 (kind), T2 (`listMirrorableColumns`) | `MirrorColumnConfig` component |
-| T5 — `BoardTable` wiring | T2 (cache slices + accessor), T3 (`MirrorCell`), T4 (`MirrorColumnConfig`) | read-only cell routing, add-column branch, parent rollup |
-| T6 — RLS integration tests | T1, T2 (read path) | cross-board RLS proof |
-| T7 — e2e + full gate | T1–T6 | Playwright + green gate |
+| Task                                                    | Consumes                                                                   | Produces                                                                                                                                                         |
+| ------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1 — enum + types + validation + registry + switch arms | —                                                                          | `mirror` enum, regenerated types, `columnKindSchema`/`mirrorSettingsSchema`/`mirrorValueSchema`, `COLUMN_KIND_META`/`ORDER`, `rollupCell`/`column-defaults` arms |
+| T2 — payload + cache + derivation + query               | T1 (types)                                                                 | `BoardPayload`/`BoardCache` mirror slices, `mirrorValuesForCell`, `MirrorValue`, `listMirrorableColumns`                                                         |
+| T3 — `MirrorCell`                                       | T1 (kind), T2 (`MirrorValue` type)                                         | `MirrorCell` component                                                                                                                                           |
+| T4 — `MirrorColumnConfig`                               | T1 (kind), T2 (`listMirrorableColumns`)                                    | `MirrorColumnConfig` component                                                                                                                                   |
+| T5 — `BoardTable` wiring                                | T2 (cache slices + accessor), T3 (`MirrorCell`), T4 (`MirrorColumnConfig`) | read-only cell routing, add-column branch, parent rollup                                                                                                         |
+| T6 — RLS integration tests                              | T1, T2 (read path)                                                         | cross-board RLS proof                                                                                                                                            |
+| T7 — e2e + full gate                                    | T1–T6                                                                      | Playwright + green gate                                                                                                                                          |
 
 **Parallel batches (waves):**
+
 - **Batch A:** `T1` (root; alone — every other task needs the enum/types).
 - **Batch B:** `T2` (alone; gates the UI and tests).
 - **Batch C (parallel, 3 agents):** `T3`, `T4`, `T6` — mutually independent once T1+T2 land. Dispatch with `superpowers:dispatching-parallel-agents`; each in its own scratch (they touch disjoint files: T3→`cells/MirrorCell.tsx`, T4→`MirrorColumnConfig.tsx`, T6→`*.rls.integration.test.ts`).
@@ -71,6 +74,7 @@
 ## Task 1: Enum, types, validation, registry, and exhaustive-switch arms
 
 **Files:**
+
 - Create: `supabase/migrations/<ts>_mirror_enum.sql`
 - Modify: `src/types/database.types.ts` (regenerated)
 - Modify: `src/lib/validations/boards.ts`
@@ -82,15 +86,18 @@
 - [ ] **Step 1: Grep every `ColumnKind` exhaustive switch so none is missed**
 
 Run:
+
 ```bash
 cd /Users/danijeljovanovic/Dev/Monolith/.claude/worktrees/mirror-columns-6d2
 grep -rln 'ColumnKind\|case "relation"\|kind === "relation"' src/ | grep -v '\.test\.'
 ```
+
 Expected sites to touch: `src/lib/validations/boards.ts`, `src/lib/boards/column-kinds.ts`, `src/lib/boards/rollup.ts`, `src/lib/boards/column-defaults.ts`, `src/components/boards/BoardTable.tsx` (BoardTable handled in T5). Note any others the grep surfaces.
 
 - [ ] **Step 2: Write the migration**
 
 Create `supabase/migrations/<ts>_mirror_enum.sql` (use a timestamp later than `20260621130000`, e.g. `20260621140000_mirror_enum.sql`):
+
 ```sql
 -- Phase 6d-2: mirror column kind. Enum value added in its own migration so it
 -- is committed before any migration/code references it (alter type … add value
@@ -103,14 +110,17 @@ alter type public.column_kind add value if not exists 'mirror';
 - [ ] **Step 3: Apply migration + regenerate types**
 
 Apply via the Supabase MCP `apply_migration` (name `mirror_enum`, the SQL above), then regenerate:
+
 ```bash
 pnpm db:types   # or the Supabase MCP generate_typescript_types tool
 ```
+
 Expected: `src/types/database.types.ts` `column_kind` enum now includes `"mirror"`.
 
 - [ ] **Step 4: Write failing validation assertions**
 
 Add to `src/lib/validations/boards.test.ts` (create if absent; follow existing validation test style):
+
 ```ts
 import { describe, expect, it } from "vitest";
 import {
@@ -149,8 +159,10 @@ Expected: FAIL — `columnKindSchema` rejects `"mirror"`, switches non-exhaustiv
 - [ ] **Step 6: Implement validation**
 
 In `src/lib/validations/boards.ts`:
+
 - Add `"mirror"` to the `columnKindSchema` `z.enum([...])` array.
 - Add the settings schema:
+
 ```ts
 // Mirror column displays a value from the linked items on a relation's target
 // board. It references a local relation column + a target column on that board.
@@ -159,13 +171,16 @@ export const mirrorSettingsSchema = z.object({
   target_column_id: z.string().uuid(),
 });
 ```
+
 - Add `case "mirror": return mirrorSettingsSchema;` to `columnSettingsSchema`.
 - Add the value schema + case:
+
 ```ts
 // Mirror cells store no cell_values row (content derives from relation_links +
 // the target board's cell_values); empty-strict, never written by upsertCell.
 export const mirrorValueSchema = z.object({}).strict();
 ```
+
 and `case "mirror": return mirrorValueSchema;` to `cellValueSchema`.
 
 - [ ] **Step 7: Implement registry**
@@ -177,6 +192,7 @@ append `"mirror"` to `COLUMN_KIND_ORDER`.
 - [ ] **Step 8: Implement rollup + column-defaults arms**
 
 In `src/lib/boards/rollup.ts`, add `case "mirror":` to the blank-returning group (alongside `relation`):
+
 ```ts
     case "files":
     case "time_tracking":
@@ -184,15 +200,18 @@ In `src/lib/boards/rollup.ts`, add `case "mirror":` to the blank-returning group
     case "mirror":
       return { kind: "blank" };
 ```
+
 In `src/lib/boards/column-defaults.ts`, add the `mirror` arm the exhaustive switch requires (match the
 `relation` arm — mirror has no default cell value).
 
 - [ ] **Step 9: Run validation + parity tests — expect PASS**
 
 Run:
+
 ```bash
 pnpm vitest run src/lib/validations/boards.test.ts src/lib/boards/column-kinds.test.ts src/lib/boards/rollup.test.ts src/lib/boards/column-defaults.test.ts
 ```
+
 Expected: PASS (META↔ORDER parity green; all switches exhaustive).
 
 - [ ] **Step 10: Typecheck**
@@ -214,6 +233,7 @@ git commit -m "feat(boards): add mirror column kind enum, validation, and regist
 ## Task 2: Payload hydration, cache slices, derivation, and `listMirrorableColumns`
 
 **Files:**
+
 - Create: `src/lib/boards/mirror.ts`
 - Create: `src/lib/boards/mirror.test.ts`
 - Modify: `src/lib/boards/queries.ts`
@@ -222,6 +242,7 @@ git commit -m "feat(boards): add mirror column kind enum, validation, and regist
 - [ ] **Step 1: Write the failing derivation test**
 
 Create `src/lib/boards/mirror.test.ts`:
+
 ```ts
 import { describe, expect, it } from "vitest";
 import { mirrorValuesForCell } from "@/lib/boards/mirror";
@@ -253,8 +274,22 @@ const mirrorCol = {
 it("derives one value per linked item, in link position order", () => {
   const cache = baseCache({
     relationLinks: [
-      { id: "l2", itemId: "i1", columnId: "rel", linkedItemId: "b2", linkedItemName: "B2", position: 1 },
-      { id: "l1", itemId: "i1", columnId: "rel", linkedItemId: "b1", linkedItemName: "B1", position: 0 },
+      {
+        id: "l2",
+        itemId: "i1",
+        columnId: "rel",
+        linkedItemId: "b2",
+        linkedItemName: "B2",
+        position: 1,
+      },
+      {
+        id: "l1",
+        itemId: "i1",
+        columnId: "rel",
+        linkedItemId: "b1",
+        linkedItemName: "B1",
+        position: 0,
+      },
     ],
     mirrorTargetCells: [
       { item_id: "b1", column_id: "tcol", value: { text: "alpha" } } as never,
@@ -263,13 +298,23 @@ it("derives one value per linked item, in link position order", () => {
   });
   const vals = mirrorValuesForCell(cache, "i1", mirrorCol);
   expect(vals.map((v) => v.linkedItemId)).toEqual(["b1", "b2"]); // position order
-  expect(vals.map((v) => v.value)).toEqual([{ text: "alpha" }, { text: "beta" }]);
+  expect(vals.map((v) => v.value)).toEqual([
+    { text: "alpha" },
+    { text: "beta" },
+  ]);
 });
 
 it("yields an absent value when the target cell is unreadable/missing", () => {
   const cache = baseCache({
     relationLinks: [
-      { id: "l1", itemId: "i1", columnId: "rel", linkedItemId: "b1", linkedItemName: null, position: 0 },
+      {
+        id: "l1",
+        itemId: "i1",
+        columnId: "rel",
+        linkedItemId: "b1",
+        linkedItemName: null,
+        position: 0,
+      },
     ],
     mirrorTargetCells: [], // RLS filtered out the target cell
   });
@@ -279,7 +324,10 @@ it("yields an absent value when the target cell is unreadable/missing", () => {
 
 it("returns empty when the mirror config points at a missing relation column", () => {
   const cache = baseCache({ relationLinks: [] });
-  const broken = { ...mirrorCol, settings: { source_relation_column_id: "gone", target_column_id: "tcol" } } as typeof mirrorCol;
+  const broken = {
+    ...mirrorCol,
+    settings: { source_relation_column_id: "gone", target_column_id: "tcol" },
+  } as typeof mirrorCol;
   expect(mirrorValuesForCell(cache, "i1", broken)).toEqual([]);
 });
 ```
@@ -292,16 +340,22 @@ Expected: FAIL — `@/lib/boards/mirror` not found; `BoardCache` lacks `mirrorTa
 - [ ] **Step 3: Extend `BoardCache`**
 
 In `src/lib/boards/cache.ts`, add to the `BoardCache` type:
+
 ```ts
   mirrorTargetCells: CacheCellValue[];      // (linked item, target column) values the caller can read
   mirrorTargetColumns: Pick<CacheColumn, "id" | "kind" | "settings">[]; // referenced target columns
 ```
+
 (Place after `relationLinks`. These are read-only at runtime — no mutator helpers; they refresh via `revalidatePath` re-hydration.)
 
 - [ ] **Step 4: Implement `src/lib/boards/mirror.ts`**
 
 ```ts
-import type { BoardCache, CacheColumn, CacheCellValue } from "@/lib/boards/cache";
+import type {
+  BoardCache,
+  CacheColumn,
+  CacheCellValue,
+} from "@/lib/boards/cache";
 
 export type MirrorValue = {
   linkedItemId: string;
@@ -330,7 +384,9 @@ export function mirrorValuesForCell(
   if (!s.source_relation_column_id || !s.target_column_id) return [];
 
   const links = cache.relationLinks
-    .filter((l) => l.itemId === itemId && l.columnId === s.source_relation_column_id)
+    .filter(
+      (l) => l.itemId === itemId && l.columnId === s.source_relation_column_id,
+    )
     .sort((a, b) => a.position - b.position);
 
   return links.map((l) => {
@@ -348,7 +404,9 @@ export function mirrorTargetColumnFor(
 ): Pick<CacheColumn, "id" | "kind" | "settings"> | null {
   const s = (mirrorColumn.settings ?? {}) as MirrorSettings;
   if (!s.target_column_id) return null;
-  return cache.mirrorTargetColumns.find((c) => c.id === s.target_column_id) ?? null;
+  return (
+    cache.mirrorTargetColumns.find((c) => c.id === s.target_column_id) ?? null
+  );
 }
 
 /** Collapsed-parent rollup: blank in v1 (no aggregate), like relation. */
@@ -365,69 +423,82 @@ Expected: PASS.
 - [ ] **Step 6: Extend `BoardPayload` + hydrate in `getBoardPayload`**
 
 In `src/lib/boards/queries.ts`:
+
 - Add to `BoardPayload`:
+
 ```ts
   mirrorTargetCells: CellValue[];
   mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[];
 ```
+
 - After the existing relation-name resolution block (which already produced `relationLinks`), add the mirror-source hydration. Place it after the `Promise.all` so it can read `columnsRes.data` and `rawLinks`:
+
 ```ts
-  // --- Mirror columns: derive the readable target cells + target column meta ---
-  // Each mirror column references a local relation column + a target column on
-  // that relation's target board. We fetch the target cells for THIS board's
-  // linked items, RLS-scoped → an unreadable target board yields no rows (mirror
-  // renders empty), exactly like the linked-name filter above. 0 extra user
-  // round-trips (part of this one server payload fetch).
-  const cols = columnsRes.data ?? [];
-  const mirrorCols = cols.filter((c) => c.kind === "mirror");
-  let mirrorTargetCells: CellValue[] = [];
-  let mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[] = [];
-  if (mirrorCols.length > 0) {
-    const targetColumnIds = [
-      ...new Set(
-        mirrorCols
-          .map((c) => (c.settings as { target_column_id?: string })?.target_column_id)
-          .filter((x): x is string => Boolean(x)),
-      ),
-    ];
-    const sourceRelIds = new Set(
+// --- Mirror columns: derive the readable target cells + target column meta ---
+// Each mirror column references a local relation column + a target column on
+// that relation's target board. We fetch the target cells for THIS board's
+// linked items, RLS-scoped → an unreadable target board yields no rows (mirror
+// renders empty), exactly like the linked-name filter above. 0 extra user
+// round-trips (part of this one server payload fetch).
+const cols = columnsRes.data ?? [];
+const mirrorCols = cols.filter((c) => c.kind === "mirror");
+let mirrorTargetCells: CellValue[] = [];
+let mirrorTargetColumns: Pick<Column, "id" | "kind" | "settings">[] = [];
+if (mirrorCols.length > 0) {
+  const targetColumnIds = [
+    ...new Set(
       mirrorCols
-        .map((c) => (c.settings as { source_relation_column_id?: string })?.source_relation_column_id)
+        .map(
+          (c) =>
+            (c.settings as { target_column_id?: string })?.target_column_id,
+        )
         .filter((x): x is string => Boolean(x)),
-    );
-    // Linked items reachable through the referenced source relation columns.
-    const linkedItemIds = [
-      ...new Set(
-        rawLinks
-          .filter((l) => sourceRelIds.has(l.column_id))
-          .map((l) => l.linked_item_id),
-      ),
-    ];
-    if (targetColumnIds.length > 0 && linkedItemIds.length > 0) {
-      const [cellsRes2, colsRes2] = await Promise.all([
-        // Bounded over the (item_id, column_id) PK index; RLS-filtered.
-        supabase
-          .from("cell_values")
-          .select("*")
-          .in("item_id", linkedItemIds)
-          .in("column_id", targetColumnIds)
-          .limit(4000),
-        // Target column render metadata (kind + settings, e.g. status options).
-        supabase
-          .from("columns")
-          .select("id, kind, settings")
-          .in("id", targetColumnIds),
-      ]);
-      mirrorTargetCells = cellsRes2.data ?? [];
-      mirrorTargetColumns = colsRes2.data ?? [];
-    }
+    ),
+  ];
+  const sourceRelIds = new Set(
+    mirrorCols
+      .map(
+        (c) =>
+          (c.settings as { source_relation_column_id?: string })
+            ?.source_relation_column_id,
+      )
+      .filter((x): x is string => Boolean(x)),
+  );
+  // Linked items reachable through the referenced source relation columns.
+  const linkedItemIds = [
+    ...new Set(
+      rawLinks
+        .filter((l) => sourceRelIds.has(l.column_id))
+        .map((l) => l.linked_item_id),
+    ),
+  ];
+  if (targetColumnIds.length > 0 && linkedItemIds.length > 0) {
+    const [cellsRes2, colsRes2] = await Promise.all([
+      // Bounded over the (item_id, column_id) PK index; RLS-filtered.
+      supabase
+        .from("cell_values")
+        .select("*")
+        .in("item_id", linkedItemIds)
+        .in("column_id", targetColumnIds)
+        .limit(4000),
+      // Target column render metadata (kind + settings, e.g. status options).
+      supabase
+        .from("columns")
+        .select("id, kind, settings")
+        .in("id", targetColumnIds),
+    ]);
+    mirrorTargetCells = cellsRes2.data ?? [];
+    mirrorTargetColumns = colsRes2.data ?? [];
   }
+}
 ```
+
 - Add both to the returned object.
 
 - [ ] **Step 7: Add `listMirrorableColumns`**
 
 In `src/lib/boards/queries.ts` (or `src/lib/boards/relation-candidates.ts` — keep next to `listRelationCandidates` for cohesion; pick one and reference it consistently in T4). Add:
+
 ```ts
 /** Mirrorable (scalar, cell_values-backed) columns on a target board, for the
  *  mirror config's target-column picker. RLS-scoped. Excludes derived kinds. */
@@ -448,10 +519,12 @@ export async function listMirrorableColumns(
 - [ ] **Step 8: Typecheck + run the board-cache/query test suites**
 
 Run:
+
 ```bash
 pnpm typecheck
 pnpm vitest run src/lib/boards/cache.test.ts src/lib/boards/mirror.test.ts
 ```
+
 Expected: PASS. (Any consumer that constructs a `BoardCache`/`BoardPayload` literal must now include the two new arrays — fix those construction sites; the typecheck error names them. The board page that maps `BoardPayload`→`BoardCache` must copy the two fields through.)
 
 - [ ] **Step 9: Commit**
@@ -467,6 +540,7 @@ git commit -m "feat(boards): hydrate mirror target cells + derive mirror values 
 ## Task 3: `MirrorCell` (read-only, delegates to `CellRenderer`)
 
 **Files:**
+
 - Create: `src/components/boards/cells/MirrorCell.tsx`
 - Create: `src/components/boards/cells/MirrorCell.test.tsx`
 - Modify: `src/components/boards/cells/editors/index.tsx` (`mirror` → `null`)
@@ -476,6 +550,7 @@ git commit -m "feat(boards): hydrate mirror target cells + derive mirror values 
 - [ ] **Step 1: Write the failing render test**
 
 Create `src/components/boards/cells/MirrorCell.test.tsx`:
+
 ```tsx
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -502,7 +577,9 @@ describe("MirrorCell", () => {
       <MirrorCell
         values={[{ linkedItemId: "b1", value: { optionId: "o1" } }]}
         targetKind="status"
-        targetSettings={{ options: [{ id: "o1", label: "Done", color: "#22c55e" }] }}
+        targetSettings={{
+          options: [{ id: "o1", label: "Done", color: "#22c55e" }],
+        }}
       />,
     );
     expect(screen.getByText("Done")).toBeInTheDocument();
@@ -510,7 +587,11 @@ describe("MirrorCell", () => {
 
   it("omits absent (RLS-filtered) values and shows blank when all absent", () => {
     const { container } = render(
-      <MirrorCell values={[{ linkedItemId: "b1", value: null }]} targetKind="text" targetSettings={{}} />,
+      <MirrorCell
+        values={[{ linkedItemId: "b1", value: null }]}
+        targetKind="text"
+        targetSettings={{}}
+      />,
     );
     expect(container.textContent).toBe("");
   });
@@ -533,7 +614,11 @@ describe("MirrorCell", () => {
 
   it("shows a muted dash for a non-renderable target kind", () => {
     render(
-      <MirrorCell values={[{ linkedItemId: "b1", value: {} }]} targetKind="files" targetSettings={{}} />,
+      <MirrorCell
+        values={[{ linkedItemId: "b1", value: {} }]}
+        targetKind="files"
+        targetSettings={{}}
+      />,
     );
     expect(screen.getByText("—")).toBeInTheDocument();
   });
@@ -589,11 +674,17 @@ export function MirrorCell({
     <span className="flex min-w-0 items-center gap-1.5">
       {visible.map((v) => (
         <span key={v.linkedItemId} className="min-w-0 truncate">
-          <CellRenderer kind={targetKind} value={v.value} settings={targetSettings} />
+          <CellRenderer
+            kind={targetKind}
+            value={v.value}
+            settings={targetSettings}
+          />
         </span>
       ))}
       {overflow > 0 && (
-        <span className="text-muted-foreground shrink-0 text-xs">+{overflow} more</span>
+        <span className="text-muted-foreground shrink-0 text-xs">
+          +{overflow} more
+        </span>
       )}
     </span>
   );
@@ -608,10 +699,12 @@ In `src/components/boards/cells/editors/index.tsx`, add `case "mirror": return n
 - [ ] **Step 5: Run — expect PASS + typecheck**
 
 Run:
+
 ```bash
 pnpm vitest run src/components/boards/cells/MirrorCell.test.tsx
 pnpm typecheck
 ```
+
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -628,6 +721,7 @@ git commit -m "feat(boards): read-only MirrorCell delegating to target renderer 
 ## Task 4: `MirrorColumnConfig` (add-column dual-select)
 
 **Files:**
+
 - Create: `src/components/boards/MirrorColumnConfig.tsx`
 - Create: `src/components/boards/MirrorColumnConfig.test.tsx`
 
@@ -636,6 +730,7 @@ git commit -m "feat(boards): read-only MirrorCell delegating to target renderer 
 - [ ] **Step 1: Write the failing test**
 
 Create `src/components/boards/MirrorColumnConfig.test.tsx`:
+
 ```tsx
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -656,9 +751,9 @@ it("shows an empty state when the board has no relation column", () => {
 });
 
 it("disables confirm until both selects are set, then emits settings", async () => {
-  const loadTargetColumns = vi.fn().mockResolvedValue([
-    { id: "tcol", name: "Status", kind: "status" },
-  ]);
+  const loadTargetColumns = vi
+    .fn()
+    .mockResolvedValue([{ id: "tcol", name: "Status", kind: "status" }]);
   const onConfirm = vi.fn();
   render(
     <MirrorColumnConfig
@@ -669,11 +764,15 @@ it("disables confirm until both selects are set, then emits settings", async () 
     />,
   );
   // pick the source relation → triggers loadTargetColumns(boardB)
-  fireEvent.change(screen.getByLabelText(/source relation/i), { target: { value: "rel1" } });
+  fireEvent.change(screen.getByLabelText(/source relation/i), {
+    target: { value: "rel1" },
+  });
   await waitFor(() => expect(loadTargetColumns).toHaveBeenCalledWith("boardB"));
   // pick the target column
   await waitFor(() => screen.getByRole("option", { name: "Status" }));
-  fireEvent.change(screen.getByLabelText(/column to mirror/i), { target: { value: "tcol" } });
+  fireEvent.change(screen.getByLabelText(/column to mirror/i), {
+    target: { value: "tcol" },
+  });
   fireEvent.click(screen.getByRole("button", { name: /add column/i }));
   expect(onConfirm).toHaveBeenCalledWith({
     source_relation_column_id: "rel1",
@@ -694,7 +793,11 @@ Expected: FAIL.
 
 import { useState } from "react";
 
-export type MirrorRelationOption = { id: string; name: string; target_board_id: string };
+export type MirrorRelationOption = {
+  id: string;
+  name: string;
+  target_board_id: string;
+};
 export type MirrorTargetColumn = { id: string; name: string; kind: string };
 export type MirrorColumnSettings = {
   source_relation_column_id: string;
@@ -752,7 +855,9 @@ export function MirrorColumnConfig({
         >
           <option value="">Select a relation…</option>
           {relationColumns.map((r) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
           ))}
         </select>
       </label>
@@ -768,20 +873,27 @@ export function MirrorColumnConfig({
         >
           <option value="">Select a column…</option>
           {targetCols.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
           ))}
         </select>
       </label>
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="text-sm">Cancel</button>
+        <button type="button" onClick={onCancel} className="text-sm">
+          Cancel
+        </button>
         <button
           type="button"
           disabled={!relId || !targetColId}
           onClick={() =>
-            onConfirm({ source_relation_column_id: relId, target_column_id: targetColId })
+            onConfirm({
+              source_relation_column_id: relId,
+              target_column_id: targetColId,
+            })
           }
-          className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50"
+          className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm disabled:opacity-50"
         >
           Add column
         </button>
@@ -794,10 +906,12 @@ export function MirrorColumnConfig({
 - [ ] **Step 4: Run — expect PASS + typecheck**
 
 Run:
+
 ```bash
 pnpm vitest run src/components/boards/MirrorColumnConfig.test.tsx
 pnpm typecheck
 ```
+
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -812,6 +926,7 @@ git commit -m "feat(boards): MirrorColumnConfig dual-select add-column dialog (6
 ## Task 5: `BoardTable` wiring (read-only cell, add-column branch, parent rollup)
 
 **Files:**
+
 - Modify: `src/components/boards/BoardTable.tsx`
 
 > Single writer of `BoardTable.tsx` — do not run in parallel with another task that touches it. Load `pulse-ui` first.
@@ -821,43 +936,50 @@ git commit -m "feat(boards): MirrorColumnConfig dual-select add-column dialog (6
 In `EditableCell`, add a branch **before** the generic `isEditing` path, alongside the existing
 `relation` branch (study how `relation` reads `relationLinksForCell(controls.cache, …)` and renders in
 a `border-l` container). Use the derivation helpers:
+
 ```tsx
-  if (column.kind === "mirror") {
-    const values = mirrorValuesForCell(controls.cache, item.id, column);
-    const target = mirrorTargetColumnFor(controls.cache, column);
-    return (
-      <div className="flex h-full items-center border-l px-3">
-        {target ? (
-          <MirrorCell
-            values={values}
-            targetKind={target.kind as ColumnKind}
-            targetSettings={(target.settings ?? {}) as Record<string, unknown>}
-          />
-        ) : (
-          <span className="text-muted-foreground text-sm">—</span>
-        )}
-      </div>
-    );
-  }
+if (column.kind === "mirror") {
+  const values = mirrorValuesForCell(controls.cache, item.id, column);
+  const target = mirrorTargetColumnFor(controls.cache, column);
+  return (
+    <div className="flex h-full items-center border-l px-3">
+      {target ? (
+        <MirrorCell
+          values={values}
+          targetKind={target.kind as ColumnKind}
+          targetSettings={(target.settings ?? {}) as Record<string, unknown>}
+        />
+      ) : (
+        <span className="text-muted-foreground text-sm">—</span>
+      )}
+    </div>
+  );
+}
 ```
+
 Add imports: `MirrorCell`, `mirrorValuesForCell`, `mirrorTargetColumnFor`, and `ColumnKind` if not present.
 
 - [ ] **Step 2: Add the collapsed-parent rollup arm for `mirror`**
 
 Find the parent-rollup block that special-cases `relation` (renders `relationRollup(childLinks)`) and
 add a sibling `mirror` arm that renders blank (v1 — no aggregate):
+
 ```tsx
-  if (col.kind === "mirror") {
-    return (
-      <div key={col.id} className="flex h-full items-center truncate border-l px-3" />
-    );
-  }
+if (col.kind === "mirror") {
+  return (
+    <div
+      key={col.id}
+      className="flex h-full items-center truncate border-l px-3"
+    />
+  );
+}
 ```
 
 - [ ] **Step 3: Wire the "Mirror" add-column branch**
 
 Find where selecting "Relation" in `AddColumnMenu` opens the `RelationColumnConfig` modal (loads
 target boards, then shows the dialog). Add a parallel "Mirror" branch:
+
 - On selecting "Mirror", open the `MirrorColumnConfig` dialog.
 - Pass `relationColumns` = this board's `relation` columns mapped to `{ id, name, target_board_id }`
   (from `board.columns` in memory — `settings.target_board_id`). No fetch.
@@ -874,10 +996,12 @@ it is the board page and not a stub.)
 - [ ] **Step 5: Typecheck + run board component tests**
 
 Run:
+
 ```bash
 pnpm typecheck
 pnpm vitest run src/components/boards
 ```
+
 Expected: PASS.
 
 - [ ] **Step 6: Manual smoke (dev server in the main checkout if the worktree can't build)**
@@ -897,6 +1021,7 @@ git commit -m "feat(boards): wire mirror column into BoardTable (read-only cell 
 ## Task 6: Cross-board RLS integration tests
 
 **Files:**
+
 - Create: `src/lib/boards/mirror-columns.rls.integration.test.ts`
 
 > Runs only with `.env.local` present (symlink from the main checkout) — it SILENTLY SKIPS otherwise. This is the spec's security proof obligation; it MUST be written and MUST pass against the live DB before merge. Independent of the UI tasks — can run in parallel with T3/T4/T5.
@@ -907,12 +1032,14 @@ Create `src/lib/boards/mirror-columns.rls.integration.test.ts`. Reuse the exact 
 `src/lib/boards/relation-links.rls.integration.test.ts` (admin/service-role + per-user anon clients;
 `makeUser`/`makeBoard`/`makeItem` helpers; owner with board A owning + board B target; outsider = org
 member, viewer of A, NOT a member of B). Then:
+
 - On board B, create a **status** (or text) source column `T` and set a value on `(b1, T)`.
 - On board A, create a **relation** column `R` → board B, and a **mirror** column
   `M` with `settings = { source_relation_column_id: R, target_column_id: T }`.
 - Link `itemA → [b1]` via `set_relation_links`.
 
 Assertions (the four proof obligations):
+
 ```ts
 it("owner (can read B) reads the mirrored source cell", async () => {
   const { data } = await owner
@@ -954,14 +1081,17 @@ it("deleting the target column makes the mirror source unresolvable without erro
   expect(data).toHaveLength(0); // cascade removed the cell; mirror renders empty
 });
 ```
+
 (Capture `T`, `R`, `M`, `b1`, `itemA` in `beforeAll`, mirroring the 6d-1 file.)
 
 - [ ] **Step 2: Run against the live DB**
 
 Run (with `.env.local` linked and the bins on PATH):
+
 ```bash
 pnpm vitest run src/lib/boards/mirror-columns.rls.integration.test.ts
 ```
+
 Expected: PASS (4 assertions). If the suite reports 0 tests, `.env.local` is missing — fix the symlink (it must not be reported as "passing" while skipped).
 
 - [ ] **Step 3: Commit**
@@ -976,6 +1106,7 @@ git commit -m "test(boards): cross-board RLS proof for mirror columns (6d-2)"
 ## Task 7: e2e + full gate + closure
 
 **Files:**
+
 - Create: `e2e/mirror-columns.spec.ts`
 
 - [ ] **Step 1: Write the Playwright flow**
@@ -994,11 +1125,13 @@ Expected: PASS.
 - [ ] **Step 3: Full gate (build in the main checkout per the worktree caveat)**
 
 Run:
+
 ```bash
 pnpm typecheck && pnpm lint && pnpm test
 # build in the MAIN checkout for a compile-graph-clean diff (next build can't run in the worktree):
 ( cd /Users/danijeljovanovic/Dev/Monolith && pnpm build )
 ```
+
 Expected: all green.
 
 - [ ] **Step 4: Commit + finish**
@@ -1007,6 +1140,7 @@ Expected: all green.
 git add e2e/mirror-columns.spec.ts
 git commit -m "test(boards): e2e flow for mirror columns (6d-2)"
 ```
+
 Then close the task per the working agreement: run `scripts/finish-task.sh` from inside the worktree
 (merges `task/mirror-columns-6d2` → `develop`, pushes, removes the worktree + branch). If the worktree
 gates fail spuriously (binaries/Turbopack/integration-skip caveat), run the gates manually as above,
@@ -1026,6 +1160,7 @@ message **and** the `/wrapup` session note.
 ## Self-Review
 
 **Spec coverage:**
+
 - Read-only `mirror` kind in Add-column menu → T1 (registry) + T5 (add-column branch) ✓
 - Config `{ source_relation_column_id, target_column_id }` → T1 (schema) + T4 (UI) ✓
 - Delegate to target `CellRenderer` → T3 ✓

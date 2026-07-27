@@ -998,9 +998,7 @@ export async function saveLayout(input: {
 }
 
 /** Fetch a widget's bounded aggregate data. Reads the widget, runs the RPC. */
-export async function getWidgetData(input: {
-  widgetId: string;
-}): Promise<
+export async function getWidgetData(input: { widgetId: string }): Promise<
   ActionResult<{
     kind: Widget["kind"];
     config: Record<string, unknown>;

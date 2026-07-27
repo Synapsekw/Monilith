@@ -29,6 +29,7 @@ Spec: `docs/superpowers/specs/2026-06-22-per-group-column-headers-design.md`.
 ## Task 1: Failing tests for per-group column headers
 
 **Files:**
+
 - Test: `src/components/boards/BoardTable.test.tsx`
 
 - [ ] **Step 1: Add a multi-group + columns fixture and write failing tests**
@@ -52,8 +53,22 @@ function payloadWithColumns() {
   return {
     board: { id: "b1", org_id: "o1", name: "Board", name_column_width: null },
     groups: [
-      { id: "g1", board_id: "b1", org_id: "o1", name: "Group 1", color: "#0073ea", position: 0 },
-      { id: "g2", board_id: "b1", org_id: "o1", name: "Group 2", color: "#e2445c", position: 1 },
+      {
+        id: "g1",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 1",
+        color: "#0073ea",
+        position: 0,
+      },
+      {
+        id: "g2",
+        board_id: "b1",
+        org_id: "o1",
+        name: "Group 2",
+        color: "#e2445c",
+        position: 1,
+      },
     ],
     columns: [
       col("c_status", "Status", "status", 0),
@@ -61,7 +76,15 @@ function payloadWithColumns() {
       col("c_date", "Due Date", "date", 2),
     ],
     items: [
-      { id: "i1", board_id: "b1", org_id: "o1", group_id: "g1", name: "Item 1", position: 0, parent_id: null },
+      {
+        id: "i1",
+        board_id: "b1",
+        org_id: "o1",
+        group_id: "g1",
+        name: "Item 1",
+        position: 0,
+        parent_id: null,
+      },
     ],
     cellValues: [],
     dependencies: [],
@@ -95,7 +118,9 @@ describe("BoardTable per-group column headers", () => {
   it("renders an Add-column control in every group header (not one global one)", () => {
     renderBoardWithColumns();
     // AddColumnMenu exposes an accessible trigger; one per group.
-    expect(screen.getAllByRole("button", { name: /add column/i })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /add column/i })).toHaveLength(
+      2,
+    );
   });
 
   it("does not render a single global header above the groups", () => {
@@ -103,7 +128,9 @@ describe("BoardTable per-group column headers", () => {
     // The old global header rendered a standalone "Name" resize separator with
     // this exact label. Per-group headers use group controls instead, so the
     // old global "Name" column header must be gone.
-    expect(screen.queryByRole("separator", { name: /^Resize Name column/i })).toBeNull();
+    expect(
+      screen.queryByRole("separator", { name: /^Resize Name column/i }),
+    ).toBeNull();
   });
 });
 ```
@@ -129,6 +156,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 2: Implement per-group headers in BoardTable.tsx
 
 **Files:**
+
 - Modify: `src/components/boards/BoardTable.tsx`
 
 - [ ] **Step 1: Add the `ColumnHeaderControls` type and `NameResizeHandle`**
@@ -174,7 +202,11 @@ function NameResizeHandle({
     const startW = width;
     let last = width;
     const move = (ev: PointerEvent) => {
-      last = clampDragWidth(startW + (ev.clientX - startX), NAME_DRAG_MIN, NAME_COL_MAX);
+      last = clampDragWidth(
+        startW + (ev.clientX - startX),
+        NAME_DRAG_MIN,
+        NAME_COL_MAX,
+      );
       onResize(last);
     };
     const up = () => {
@@ -269,7 +301,11 @@ function GroupHeaderRow({
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
           className="text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
         >
-          {collapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+          {collapsed ? (
+            <ChevronRight className="size-4" />
+          ) : (
+            <ChevronDown className="size-4" />
+          )}
         </button>
         <span
           className="inline-block size-2 shrink-0 rounded-full"
@@ -303,8 +339,15 @@ function GroupHeaderRow({
             {group.name}
           </button>
         )}
-        <span className="text-muted-foreground text-xs font-normal">{itemCount}</span>
-        <GroupMenu group={group} onRename={onOpenRename} onSetColor={onSetColor} onDelete={onDelete} />
+        <span className="text-muted-foreground text-xs font-normal">
+          {itemCount}
+        </span>
+        <GroupMenu
+          group={group}
+          onRename={onOpenRename}
+          onSetColor={onSetColor}
+          onDelete={onDelete}
+        />
         <NameResizeHandle
           width={col.nameWidth}
           onResize={(w) => col.setLiveNameWidth(w)}
@@ -344,28 +387,28 @@ function GroupHeaderRow({
 In `GroupSection` (signature ~981): add `col: ColumnHeaderControls` to props/type. Replace the colored-band `<div className="group/grouphdr ...">…</div>` block (currently ~1127–1196) with:
 
 ```tsx
-      <GroupHeaderRow
-        group={group}
-        columns={columns}
-        template={template}
-        collapsed={collapsed}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
-        renaming={renaming}
-        name={name}
-        onNameChange={setName}
-        onCommitRename={commitRename}
-        onCancelRename={() => {
-          setRenaming(false);
-          onRenameSettled();
-        }}
-        onOpenRename={openRename}
-        itemCount={items.length}
-        dragAttributes={attributes}
-        dragListeners={listeners}
-        onSetColor={onSetColor}
-        onDelete={onDelete}
-        col={col}
-      />
+<GroupHeaderRow
+  group={group}
+  columns={columns}
+  template={template}
+  collapsed={collapsed}
+  onToggleCollapse={() => setCollapsed((c) => !c)}
+  renaming={renaming}
+  name={name}
+  onNameChange={setName}
+  onCommitRename={commitRename}
+  onCancelRename={() => {
+    setRenaming(false);
+    onRenameSettled();
+  }}
+  onOpenRename={openRename}
+  itemCount={items.length}
+  dragAttributes={attributes}
+  dragListeners={listeners}
+  onSetColor={onSetColor}
+  onDelete={onDelete}
+  col={col}
+/>
 ```
 
 Leave the rest of `GroupSection` (collapse-guarded item rows + `AddItemRow`) unchanged — the header now always renders regardless of `collapsed`.
@@ -375,28 +418,28 @@ Leave the rest of `GroupSection` (collapse-guarded item rows + `AddItemRow`) unc
 In `BoardTable` (after `setColumnSummary`, ~line 504), build the bundle (reuse the existing `addColumn` relation/mirror branch verbatim from the old header's `AddColumnMenu.onAdd`, lines ~605–617):
 
 ```tsx
-  const columnControls: ColumnHeaderControls = {
-    nameWidth,
-    liveWidths,
-    setLiveWidths,
-    setLiveNameWidth,
-    renameColumn: mutations.renameColumn,
-    deleteColumn: mutations.deleteColumn,
-    resizeColumn: mutations.resizeColumn,
-    resizeNameColumn: mutations.resizeNameColumn,
-    onAddColumn: (kind) => {
-      if (kind === "relation") {
-        setRelationTargetBoards([]);
-        setRelationConfigOpen(true);
-        listRelationTargetBoards().then(setRelationTargetBoards);
-      } else if (kind === "mirror") {
-        setMirrorConfigOpen(true);
-      } else {
-        mutations.addColumn(kind);
-      }
-    },
-    onEditOptions: (c) => setOptionsFor(c as CacheColumn),
-  };
+const columnControls: ColumnHeaderControls = {
+  nameWidth,
+  liveWidths,
+  setLiveWidths,
+  setLiveNameWidth,
+  renameColumn: mutations.renameColumn,
+  deleteColumn: mutations.deleteColumn,
+  resizeColumn: mutations.resizeColumn,
+  resizeNameColumn: mutations.resizeNameColumn,
+  onAddColumn: (kind) => {
+    if (kind === "relation") {
+      setRelationTargetBoards([]);
+      setRelationConfigOpen(true);
+      listRelationTargetBoards().then(setRelationTargetBoards);
+    } else if (kind === "mirror") {
+      setMirrorConfigOpen(true);
+    } else {
+      mutations.addColumn(kind);
+    }
+  },
+  onEditOptions: (c) => setOptionsFor(c as CacheColumn),
+};
 ```
 
 Delete the global header grid `<div>` (lines ~576–618: the `NameColumnHeader` + `columns.map(ColumnHeader)` + `AddColumnMenu` block). Keep the surrounding `scrollContainerRef` div and `contentRef` div. Pass `col={columnControls}` into each `<GroupSection .../>` (the `.map` at ~635).
@@ -426,6 +469,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 3: Propagation tests (add + resize reflect across all groups)
 
 **Files:**
+
 - Test: `src/components/boards/BoardTable.test.tsx`
 
 - [ ] **Step 1: Add tests asserting shared column state**
@@ -433,19 +477,21 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Append to the `per-group column headers` describe. These confirm the shared-state design (board-level columns appear in every group; resize from one group updates all). Use the real mutation hook (no extra mock needed — adding a column goes through `useBoardMutations`/optimistic cache; assert at the render level):
 
 ```tsx
-  it("a resize handle exists per column per group (resize from any group)", () => {
-    renderBoardWithColumns();
-    // ColumnHeader renders a separator labelled `Resize <name>`; 2 groups → 2 each.
-    expect(screen.getAllByRole("separator", { name: "Resize Status" })).toHaveLength(2);
-  });
+it("a resize handle exists per column per group (resize from any group)", () => {
+  renderBoardWithColumns();
+  // ColumnHeader renders a separator labelled `Resize <name>`; 2 groups → 2 each.
+  expect(
+    screen.getAllByRole("separator", { name: "Resize Status" }),
+  ).toHaveLength(2);
+});
 
-  it("keeps the column header visible when a group is collapsed", () => {
-    renderBoardWithColumns();
-    const collapse = screen.getByRole("button", { name: /Collapse Group 2/i });
-    fireEvent.click(collapse);
-    // Even collapsed, Group 2 still shows all 3 column headers (2 groups worth total).
-    expect(screen.getAllByText("Status")).toHaveLength(2);
-  });
+it("keeps the column header visible when a group is collapsed", () => {
+  renderBoardWithColumns();
+  const collapse = screen.getByRole("button", { name: /Collapse Group 2/i });
+  fireEvent.click(collapse);
+  // Even collapsed, Group 2 still shows all 3 column headers (2 groups worth total).
+  expect(screen.getAllByText("Status")).toHaveLength(2);
+});
 ```
 
 - [ ] **Step 2: Run and confirm PASS**

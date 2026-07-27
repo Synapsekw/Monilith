@@ -1339,16 +1339,14 @@ export async function setAiMode(input: {
     if (!settings.byoKeyLast4)
       return fail("Add an organization key before switching to it.");
   }
-  const { error } = await svc
-    .from("org_ai_settings")
-    .upsert(
-      {
-        org_id: admin.orgId,
-        ai_mode: parsed.data.mode,
-        updated_by: admin.userId,
-      },
-      { onConflict: "org_id" },
-    );
+  const { error } = await svc.from("org_ai_settings").upsert(
+    {
+      org_id: admin.orgId,
+      ai_mode: parsed.data.mode,
+      updated_by: admin.userId,
+    },
+    { onConflict: "org_id" },
+  );
   if (error) return fail("Couldn't update the AI mode. Please try again.");
   revalidatePath("/settings");
   return { ok: true, data: { mode: parsed.data.mode } };

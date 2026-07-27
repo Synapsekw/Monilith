@@ -79,6 +79,7 @@
 ## Task 1: Migration — schema, hierarchy trigger, RLS, RPCs + regenerated types
 
 **Files:**
+
 - Create: `supabase/migrations/<ts>_goals.sql` (timestamp **after** 6d-3's migration)
 - Modify: `src/types/database.types.ts` (regenerated)
 
@@ -368,6 +369,7 @@ git commit -m "feat(goals): schema, hierarchy guard, RLS, create/set-links/rollu
 ## Task 2: Validation schemas (Zod)
 
 **Files:**
+
 - Create: `src/lib/validations/goals.ts`
 - Test: `src/lib/validations/goals.test.ts`
 
@@ -383,11 +385,17 @@ import {
 
 describe("createGoalSchema", () => {
   it("accepts a minimal manual_percent goal", () => {
-    const r = createGoalSchema.safeParse({ name: "Grow ARR", progressMode: "manual_percent" });
+    const r = createGoalSchema.safeParse({
+      name: "Grow ARR",
+      progressMode: "manual_percent",
+    });
     expect(r.success).toBe(true);
   });
   it("rejects an empty name", () => {
-    const r = createGoalSchema.safeParse({ name: "", progressMode: "manual_percent" });
+    const r = createGoalSchema.safeParse({
+      name: "",
+      progressMode: "manual_percent",
+    });
     expect(r.success).toBe(false);
   });
   it("rejects an unknown progress mode", () => {
@@ -488,7 +496,10 @@ export const updateGoalSchema = z.object({
   dueDate: z.string().nullable().optional(),
 });
 
-export const reorderGoalSchema = z.object({ goalId: uuid, position: z.number() });
+export const reorderGoalSchema = z.object({
+  goalId: uuid,
+  position: z.number(),
+});
 export const deleteGoalSchema = z.object({ goalId: uuid });
 
 export const setGoalLinksSchema = z.object({
@@ -522,6 +533,7 @@ git commit -m "feat(goals): zod validation schemas"
 ## Task 3: Progress helpers + types (pure TS — the heart of the slice)
 
 **Files:**
+
 - Create: `src/lib/goals/types.ts`, `src/lib/goals/progress.ts`
 - Test: `src/lib/goals/progress.test.ts`
 
@@ -582,7 +594,11 @@ export interface GoalNode extends GoalRow {
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { buildGoalTree, computeGoalHealth, leafProgress } from "@/lib/goals/progress";
+import {
+  buildGoalTree,
+  computeGoalHealth,
+  leafProgress,
+} from "@/lib/goals/progress";
 import type { BoardAgg, GoalRow } from "@/lib/goals/types";
 
 const base: Omit<GoalRow, "id" | "progressMode"> = {
@@ -611,7 +627,13 @@ describe("leafProgress", () => {
   it("manual_number: (current-start)/(target-start), clamped", () => {
     expect(
       leafProgress(
-        row({ id: "a", progressMode: "manual_number", startValue: 0, currentValue: 25, targetValue: 100 }),
+        row({
+          id: "a",
+          progressMode: "manual_number",
+          startValue: 0,
+          currentValue: 25,
+          targetValue: 100,
+        }),
         [],
       ),
     ).toBe(0.25);
@@ -619,48 +641,85 @@ describe("leafProgress", () => {
   it("manual_number: null when target === start", () => {
     expect(
       leafProgress(
-        row({ id: "a", progressMode: "manual_number", startValue: 10, currentValue: 10, targetValue: 10 }),
+        row({
+          id: "a",
+          progressMode: "manual_number",
+          startValue: 10,
+          currentValue: 10,
+          targetValue: 10,
+        }),
         [],
       ),
     ).toBeNull();
   });
   it("manual_percent: percent/100", () => {
-    expect(leafProgress(row({ id: "a", progressMode: "manual_percent", percent: 60 }), [])).toBe(0.6);
+    expect(
+      leafProgress(
+        row({ id: "a", progressMode: "manual_percent", percent: 60 }),
+        [],
+      ),
+    ).toBe(0.6);
   });
   it("auto_boards: sum(done)/sum(total) across this goal's aggregates", () => {
     const aggs: BoardAgg[] = [
       { goalId: "a", boardId: "b1", total: 4, done: 1 },
       { goalId: "a", boardId: "b2", total: 6, done: 2 },
     ];
-    expect(leafProgress(row({ id: "a", progressMode: "auto_boards" }), aggs)).toBeCloseTo(0.3);
+    expect(
+      leafProgress(row({ id: "a", progressMode: "auto_boards" }), aggs),
+    ).toBeCloseTo(0.3);
   });
   it("auto_boards: null when there are no items", () => {
-    expect(leafProgress(row({ id: "a", progressMode: "auto_boards" }), [])).toBeNull();
+    expect(
+      leafProgress(row({ id: "a", progressMode: "auto_boards" }), []),
+    ).toBeNull();
   });
   it("auto_subgoals: leaf returns null (resolved during roll-up)", () => {
-    expect(leafProgress(row({ id: "a", progressMode: "auto_subgoals" }), [])).toBeNull();
+    expect(
+      leafProgress(row({ id: "a", progressMode: "auto_subgoals" }), []),
+    ).toBeNull();
   });
 });
 
 describe("computeGoalHealth", () => {
   it("off_track when past due and unfinished", () => {
     expect(
-      computeGoalHealth({ progress: 0.5, startDate: "2026-01-01", dueDate: "2026-06-01", today: "2026-06-21" }),
+      computeGoalHealth({
+        progress: 0.5,
+        startDate: "2026-01-01",
+        dueDate: "2026-06-01",
+        today: "2026-06-21",
+      }),
     ).toBe("off_track");
   });
   it("at_risk when behind pace", () => {
     expect(
-      computeGoalHealth({ progress: 0.1, startDate: "2026-01-01", dueDate: "2026-12-31", today: "2026-07-01" }),
+      computeGoalHealth({
+        progress: 0.1,
+        startDate: "2026-01-01",
+        dueDate: "2026-12-31",
+        today: "2026-07-01",
+      }),
     ).toBe("at_risk");
   });
   it("on_track when ahead of pace", () => {
     expect(
-      computeGoalHealth({ progress: 0.9, startDate: "2026-01-01", dueDate: "2026-12-31", today: "2026-03-01" }),
+      computeGoalHealth({
+        progress: 0.9,
+        startDate: "2026-01-01",
+        dueDate: "2026-12-31",
+        today: "2026-03-01",
+      }),
     ).toBe("on_track");
   });
   it("null when no signal", () => {
     expect(
-      computeGoalHealth({ progress: null, startDate: null, dueDate: null, today: "2026-06-21" }),
+      computeGoalHealth({
+        progress: null,
+        startDate: null,
+        dueDate: null,
+        today: "2026-06-21",
+      }),
     ).toBeNull();
   });
 });
@@ -669,8 +728,20 @@ describe("buildGoalTree", () => {
   it("rolls auto_subgoals up as the equal-weight mean of children", () => {
     const rows: GoalRow[] = [
       row({ id: "root", progressMode: "auto_subgoals" }),
-      row({ id: "c1", parentGoalId: "root", progressMode: "manual_percent", percent: 40, position: 0 }),
-      row({ id: "c2", parentGoalId: "root", progressMode: "manual_percent", percent: 80, position: 1 }),
+      row({
+        id: "c1",
+        parentGoalId: "root",
+        progressMode: "manual_percent",
+        percent: 40,
+        position: 0,
+      }),
+      row({
+        id: "c2",
+        parentGoalId: "root",
+        progressMode: "manual_percent",
+        percent: 80,
+        position: 1,
+      }),
     ];
     const tree = buildGoalTree(rows, [], new Map(), "2026-06-21");
     expect(tree).toHaveLength(1);
@@ -681,7 +752,12 @@ describe("buildGoalTree", () => {
   it("excludes children with null progress from the mean", () => {
     const rows: GoalRow[] = [
       row({ id: "root", progressMode: "auto_subgoals" }),
-      row({ id: "c1", parentGoalId: "root", progressMode: "manual_percent", percent: 50 }),
+      row({
+        id: "c1",
+        parentGoalId: "root",
+        progressMode: "manual_percent",
+        percent: 50,
+      }),
       row({ id: "c2", parentGoalId: "root", progressMode: "auto_boards" }), // null (no items)
     ];
     const tree = buildGoalTree(rows, [], new Map(), "2026-06-21");
@@ -691,7 +767,14 @@ describe("buildGoalTree", () => {
     const rows: GoalRow[] = [
       row({ id: "co", progressMode: "auto_subgoals" }),
       row({ id: "team", parentGoalId: "co", progressMode: "auto_subgoals" }),
-      row({ id: "ic", parentGoalId: "team", progressMode: "manual_number", startValue: 0, currentValue: 50, targetValue: 100 }),
+      row({
+        id: "ic",
+        parentGoalId: "team",
+        progressMode: "manual_number",
+        startValue: 0,
+        currentValue: 50,
+        targetValue: 100,
+      }),
     ];
     const tree = buildGoalTree(rows, [], new Map(), "2026-06-21");
     expect(tree[0].progress).toBeCloseTo(0.5);
@@ -708,7 +791,13 @@ Expected: FAIL — module `@/lib/goals/progress` not found.
 - [ ] **Step 4: Write `progress.ts`**
 
 ```ts
-import type { BoardAgg, GoalHealth, GoalNode, GoalRow, RowOwner } from "./types";
+import type {
+  BoardAgg,
+  GoalHealth,
+  GoalNode,
+  GoalRow,
+  RowOwner,
+} from "./types";
 
 const DAY = 86_400_000;
 const clamp01 = (n: number) => Math.min(Math.max(n, 0), 1);
@@ -722,7 +811,10 @@ export function serverToday(now: number): string {
 }
 
 /** Progress (0..1) for a single goal, ignoring children. auto_subgoals → null here. */
-export function leafProgress(goal: GoalRow, boardAggs: BoardAgg[]): number | null {
+export function leafProgress(
+  goal: GoalRow,
+  boardAggs: BoardAgg[],
+): number | null {
   switch (goal.progressMode) {
     case "manual_number": {
       const start = goal.startValue ?? 0;
@@ -756,7 +848,11 @@ export function computeGoalHealth(input: {
 }): GoalHealth | null {
   const { progress, startDate, dueDate, today } = input;
   if (progress === null && dueDate === null) return null;
-  if (dueDate !== null && today > dueDate && (progress === null || progress < 1)) {
+  if (
+    dueDate !== null &&
+    today > dueDate &&
+    (progress === null || progress < 1)
+  ) {
     return "off_track";
   }
   let behind = false;
@@ -796,8 +892,13 @@ export function buildGoalTree(
 
     let progress: number | null;
     if (rowNode.progressMode === "auto_subgoals") {
-      const vals = children.map((c) => c.progress).filter((p): p is number => p != null);
-      progress = vals.length === 0 ? null : clamp01(vals.reduce((s, v) => s + v, 0) / vals.length);
+      const vals = children
+        .map((c) => c.progress)
+        .filter((p): p is number => p != null);
+      progress =
+        vals.length === 0
+          ? null
+          : clamp01(vals.reduce((s, v) => s + v, 0) / vals.length);
     } else {
       progress = leafProgress(rowNode, boardAggs);
     }
@@ -840,6 +941,7 @@ git commit -m "feat(goals): pure progress + tree roll-up helpers"
 ## Task 4: Queries (RSC data layer)
 
 **Files:**
+
 - Create: `src/lib/goals/queries.ts`
 
 > Mirrors `src/lib/portfolios/queries.ts`. Read it first for the exact Supabase-server-client idiom, the `listOrgMembers` shape, and `getBoardStatusColumns` (reuse it — status columns are identical for goals' board mapping).
@@ -854,7 +956,10 @@ import type { BoardAgg, GoalNode, GoalRow, RowOwner } from "@/lib/goals/types";
 
 // Reuse the portfolio helpers verbatim — board status columns + readable boards
 // are identical concerns for the auto_boards mapping picker.
-export { getBoardStatusColumns, listReadableBoards } from "@/lib/portfolios/queries";
+export {
+  getBoardStatusColumns,
+  listReadableBoards,
+} from "@/lib/portfolios/queries";
 
 function toGoalRow(r: {
   id: string;
@@ -955,6 +1060,7 @@ git commit -m "feat(goals): RSC query layer (tree assembly off goals_rollup)"
 ## Task 5: Server Actions
 
 **Files:**
+
 - Create: `src/lib/goals/actions.ts`
 
 > Mirrors `src/lib/portfolios/actions.ts` (the `ActionResult` / `fail` helpers, the `revalidatePath` discipline, the RPC-vs-direct-update split). `createGoal` + `setGoalLinks` call RPCs; every other edit is a direct `can_edit_goal`-gated table update (the 7a pattern — reorder/rename/placement were all direct updates there).
@@ -968,7 +1074,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { getBoardStatusColumns, type StatusColumn } from "@/lib/portfolios/queries";
+import {
+  getBoardStatusColumns,
+  type StatusColumn,
+} from "@/lib/portfolios/queries";
 import {
   createGoalSchema,
   deleteGoalSchema,
@@ -985,7 +1094,8 @@ export async function createGoal(
   input: z.input<typeof createGoalSchema>,
 ): Promise<ActionResult<{ goal: Tables<"goals"> }>> {
   const parsed = createGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const d = parsed.data;
 
   const supabase = await createClient();
@@ -1014,7 +1124,8 @@ export async function updateGoal(
   input: z.input<typeof updateGoalSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = updateGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
   const d = parsed.data;
 
   const patch: TablesUpdate<"goals"> = {};
@@ -1034,7 +1145,10 @@ export async function updateGoal(
   if ("dueDate" in input) patch.due_date = d.dueDate;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("goals").update(patch).eq("id", d.goalId);
+  const { error } = await supabase
+    .from("goals")
+    .update(patch)
+    .eq("id", d.goalId);
   if (error) return fail(error.message);
 
   revalidatePath("/goals");
@@ -1045,7 +1159,8 @@ export async function reorderGoal(
   input: z.input<typeof reorderGoalSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = reorderGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -1062,10 +1177,14 @@ export async function deleteGoal(
   input: z.input<typeof deleteGoalSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = deleteGoalSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("goals").delete().eq("id", parsed.data.goalId);
+  const { error } = await supabase
+    .from("goals")
+    .delete()
+    .eq("id", parsed.data.goalId);
   if (error) return fail(error.message);
 
   revalidatePath("/goals");
@@ -1076,7 +1195,8 @@ export async function setGoalLinks(
   input: z.input<typeof setGoalLinksSchema>,
 ): Promise<ActionResult<null>> {
   const parsed = setGoalLinksSchema.safeParse(input);
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid");
+  if (!parsed.success)
+    return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_goal_links", {
@@ -1120,6 +1240,7 @@ git commit -m "feat(goals): server actions (create/update/delete/reorder/set-lin
 ## Task 6: Integration test — RPC + RLS + cycle guard (live)
 
 **Files:**
+
 - Create: `src/lib/goals/goals.rls.integration.test.ts`
 
 > Mirrors `src/lib/portfolios/portfolios.rls.integration.test.ts`. Reuse its `provisionUser` helper, the `signInWithRetry` import, the `describe.skipIf(!SERVICE_ROLE_KEY)` guard, and the admin-client seeding idiom (copy the `beforeAll` board/status-column/option seeding verbatim — goals' `auto_boards` needs the same 3-item board). **`*.integration.test.ts` silently skips without `.env.local`** — symlink it into the worktree first (worktree-gates note).
@@ -1230,9 +1351,11 @@ git commit -m "test(goals): live RLS + cycle-guard + auto_boards visibility"
 ## Task 7: UI components
 
 **Files:**
+
 - Create: `src/components/goals/ProgressBar.tsx`, `GoalStatusPill.tsx`, `GoalTree.tsx`, `GoalDetailDrawer.tsx`, `NewGoalDialog.tsx`
 
 > **Scaffold sources (copy then adapt — these are known in-repo components, not vague TODOs):**
+>
 > - `ProgressBar` / `GoalStatusPill` ← `src/components/portfolios/ProgressBar.tsx` + `HealthPill.tsx` (add the `done` status). Progress is `0..1`; render `Math.round(progress*100)%` or "—" when null.
 > - `GoalTree` ← `src/components/portfolios/PortfolioGrid.tsx` for the History-API sort/filter pattern (`pushState`, read from `useSearchParams`, **0 refetch**). Render recursively: a row per `GoalNode` with chevron (expand/collapse = client `Set<string>` of expanded ids), indent `paddingLeft: depth*20`, name, `ProgressBar`, `GoalStatusPill` (manual `status`; show `autoHealth` as a muted `·auto` hint when it differs), owner avatar, and the measurable readout (`{current}/{target} {unit}` for manual_number, `{percent}%` for manual_percent, rolled-up `%` otherwise). Clicking a row pushes `?goal=<id>`.
 > - `GoalDetailDrawer` ← the existing item drawer (`?item=` History-API drawer) for the open/close-via-URL pattern, plus `src/components/portfolios/EditPlacementPopover.tsx` for the field-editing form idiom. Edits call `updateGoal`; "Add sub-goal" calls `createGoal({ parentGoalId })`; the board-links section reuses `AddBoardDialog`'s board + completion-mapping picker (`getStatusColumnsForBoard`) and calls `setGoalLinks`.
@@ -1283,6 +1406,7 @@ git commit -m "feat(goals): tree, detail drawer, new-goal dialog, render bits"
 ## Task 8: Route + sidebar wiring
 
 **Files:**
+
 - Create: `src/app/goals/layout.tsx`, `src/app/goals/page.tsx`
 - Modify: `src/components/sidebar.tsx:30`, `src/components/app-shell.test.tsx`
 
@@ -1299,9 +1423,18 @@ it("renders live Dashboards, Portfolios and Goals links and a disabled Inbox stu
       <div>content</div>
     </AppShell>,
   );
-  expect(screen.getByText("Dashboards").closest("a")).toHaveAttribute("href", "/dashboards");
-  expect(screen.getByText("Portfolios").closest("a")).toHaveAttribute("href", "/portfolios");
-  expect(screen.getByText("Goals").closest("a")).toHaveAttribute("href", "/goals");
+  expect(screen.getByText("Dashboards").closest("a")).toHaveAttribute(
+    "href",
+    "/dashboards",
+  );
+  expect(screen.getByText("Portfolios").closest("a")).toHaveAttribute(
+    "href",
+    "/portfolios",
+  );
+  expect(screen.getByText("Goals").closest("a")).toHaveAttribute(
+    "href",
+    "/goals",
+  );
   expect(screen.getByText("Inbox").closest("button")).toBeDisabled();
 });
 ```
@@ -1338,6 +1471,7 @@ git commit -m "feat(goals): /goals route + live sidebar link"
 ## Task 9: e2e happy path + final gate
 
 **Files:**
+
 - Create: `e2e/goals.spec.ts`
 
 - [ ] **Step 1: Write the e2e spec**
@@ -1404,6 +1538,7 @@ Expected: gate re-runs green → `task/goals-7b` merged into `develop`, pushed �
 ## Self-Review (completed)
 
 **Spec coverage:**
+
 - §1 recursive entity + 4 progress modes → T1 (`goals` table, `goal_progress_mode` enum) + T3 (`leafProgress`/`buildGoalTree`).
 - §1 org-wide, person-owned, optional workspace → T1 (`org_id`, `owner_id`, nullable `workspace_id` + same-org guard).
 - §1 manual status + auto-health hint → T3 (`computeGoalHealth`) + T7 (`GoalStatusPill` `·auto`).
