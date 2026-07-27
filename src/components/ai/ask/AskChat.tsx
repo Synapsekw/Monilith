@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   appendUserMessage,
   createConversation,
+  recoverConversation,
 } from "@/lib/ai/ask/conversation-actions";
 import {
   applyAskProposal,
@@ -14,6 +15,7 @@ import { PROPOSAL_FALLBACK_ANSWER } from "@/lib/ai/ask/stream-protocol";
 import type { ValidatedAction } from "@/lib/ai/write/schema";
 import { useAskStream } from "./use-ask-stream";
 import { MessageList, type UIMessage } from "./MessageList";
+import type { DropState } from "./StreamDropNotice";
 import { Composer } from "./Composer";
 
 /**
@@ -33,6 +35,13 @@ import { Composer } from "./Composer";
  * only ids — the actions themselves are re-read server-side from the message
  * row through RLS — and their outcome turn is appended to client state, so
  * confirming costs exactly ONE round-trip and zero RSC navigations.
+ *
+ * A turn's stream can also end ABNORMALLY — no `done`, no `error`, just a dead
+ * body (flaky mobile, a dev-server rebuild). That used to render nothing at all
+ * while the answer sat persisted server-side (gotcha-61). Now it triggers one
+ * automatic `recoverConversation` read — the hard refresh that fixed it, minus
+ * the refresh — and, if the turn genuinely hasn't landed yet, a notice the user
+ * can retry from.
  */
 export function AskChat({
   conversationId,
@@ -50,11 +59,36 @@ export function AskChat({
   // would have no conversation to address.
   const [activeId, setActiveId] = useState<string | null>(conversationId);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [dropState, setDropState] = useState<DropState>("none");
   const [, startTransition] = useTransition();
   const { streaming, send } = useAskStream();
 
+  /**
+   * The stream died mid-turn. Re-read the thread: the assistant turn has very
+   * often already been persisted, in which case the user gets their real answer
+   * (proposal card and all) instead of silence. One bounded, indexed, read-only
+   * round-trip — cheap and idempotent enough to run without asking.
+   *
+   * "Did it land?" is one predicate: threads always end on the assistant's turn
+   * once it exists, because the user's turn is persisted before the stream opens.
+   */
+  async function recoverAfterDrop(convId: string) {
+    setStreamText(null);
+    setStatus(null);
+    setDropState("checking");
+    const res = await recoverConversation({ conversationId: convId });
+    if (res.ok && res.data.messages.at(-1)?.role === "assistant") {
+      setMessages(res.data.messages);
+      setDropState("recovered");
+      router.refresh(); // the turn may have auto-titled the thread
+    } else {
+      setDropState("unrecovered");
+    }
+  }
+
   async function onSubmit(text: string) {
     let convId = activeId;
+    setDropState("none");
     setMessages((m) => [
       ...m,
       { id: `tmp-${Date.now()}`, role: "user", content: text },
@@ -87,7 +121,7 @@ export function AskChat({
     let proposed: ValidatedAction[] = [];
     setStreamText("");
     setStatus(null);
-    await send(convId, (e) => {
+    const outcome = await send(convId, (e) => {
       if (e.type === "token") {
         acc += e.text;
         setStreamText(acc);
@@ -118,6 +152,8 @@ export function AskChat({
         router.refresh(); // refresh rail (titles) once, after completion
       }
     });
+
+    if (outcome === "dropped") await recoverAfterDrop(convId);
   }
 
   /** Approve or decline a proposal. Both append the server's outcome turn,
@@ -155,8 +191,17 @@ export function AskChat({
         busyMessageId={busyId}
         onApprove={(id) => resolve(id, true)}
         onCancel={(id) => resolve(id, false)}
+        dropState={dropState}
+        onRetryDrop={() => {
+          if (activeId) void recoverAfterDrop(activeId);
+        }}
       />
-      <Composer disabled={streaming} onSubmit={onSubmit} />
+      {/* Never stranded: the composer is dead only while a turn or a recovery
+          check is genuinely in flight. */}
+      <Composer
+        disabled={streaming || dropState === "checking"}
+        onSubmit={onSubmit}
+      />
     </div>
   );
 }

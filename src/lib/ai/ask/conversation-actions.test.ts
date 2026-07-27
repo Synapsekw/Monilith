@@ -33,11 +33,18 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
+const getMessages = vi.fn();
+vi.mock("./conversations", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./conversations")>()),
+  getMessages: (id: string) => getMessages(id),
+}));
+
 import {
   createConversation,
   appendUserMessage,
   renameConversation,
   deleteConversation,
+  recoverConversation,
 } from "./conversation-actions";
 
 beforeEach(() => {
@@ -45,6 +52,7 @@ beforeEach(() => {
   insertMsg.mockReset();
   updateConv.mockReset();
   deleteConv.mockReset();
+  getMessages.mockReset();
 });
 
 describe("createConversation", () => {
@@ -105,6 +113,72 @@ describe("renameConversation", () => {
       title: "Overdue triage",
     });
     expect(res).toEqual({ ok: true, data: { title: "Overdue triage" } });
+  });
+});
+
+describe("recoverConversation", () => {
+  const CONV = "11111111-1111-4111-8111-111111111111";
+
+  it("returns the persisted thread after a severed stream", async () => {
+    getMessages.mockResolvedValue([
+      {
+        id: "m1",
+        role: "user",
+        content: "what's overdue?",
+        tool_trace: null,
+        created_at: "2026-07-27T10:00:00Z",
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: "Three items are overdue.",
+        tool_trace: { boardsConsulted: ["b1"] },
+        created_at: "2026-07-27T10:00:09Z",
+      },
+    ]);
+
+    const res = await recoverConversation({ conversationId: CONV });
+    expect(res).toEqual({
+      ok: true,
+      data: {
+        messages: [
+          { id: "m1", role: "user", content: "what's overdue?", trace: null },
+          {
+            id: "m2",
+            role: "assistant",
+            content: "Three items are overdue.",
+            trace: { boardsConsulted: ["b1"] },
+          },
+        ],
+      },
+    });
+    expect(getMessages).toHaveBeenCalledWith(CONV);
+  });
+
+  it("returns the thread unchanged when nothing landed — the caller decides", async () => {
+    getMessages.mockResolvedValue([
+      {
+        id: "m1",
+        role: "user",
+        content: "what's overdue?",
+        tool_trace: null,
+        created_at: "2026-07-27T10:00:00Z",
+      },
+    ]);
+    const res = await recoverConversation({ conversationId: CONV });
+    expect(res.ok && res.data.messages.at(-1)?.role).toBe("user");
+  });
+
+  it("rejects a non-uuid conversation id before touching the DB", async () => {
+    const res = await recoverConversation({ conversationId: "nope" });
+    expect(res.ok).toBe(false);
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it("fails softly when the read throws", async () => {
+    getMessages.mockRejectedValue(new Error("getMessages: boom"));
+    const res = await recoverConversation({ conversationId: CONV });
+    expect(res.ok).toBe(false);
   });
 });
 

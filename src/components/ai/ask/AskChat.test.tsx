@@ -1,10 +1,17 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh }),
 }));
+const recoverConversation = vi.fn();
 vi.mock("@/lib/ai/ask/conversation-actions", () => ({
   createConversation: vi.fn(async () => ({
     ok: true,
@@ -14,6 +21,7 @@ vi.mock("@/lib/ai/ask/conversation-actions", () => ({
     ok: true,
     data: { messageId: "m2" },
   })),
+  recoverConversation: (i: unknown) => recoverConversation(i),
 }));
 // Typed as taking the ids argument (the impl ignores it) so the spy can be
 // asserted with `toHaveBeenCalledWith` without an unused-parameter binding.
@@ -70,9 +78,44 @@ beforeEach(() => {
         assistantMessageId: "a1",
         boardsConsulted: [],
       });
+      return "ok";
     },
   );
 });
+
+/** The gotcha-61 failure mode: some tokens arrive, then the response body is
+ *  severed — no `done`, no `error`. The turn keeps running server-side. */
+function severedStream() {
+  send.mockImplementation(
+    async (_id: string, onEvent: (e: Record<string, unknown>) => void) => {
+      onEvent({ type: "token", text: "Three items are ov" });
+      return "dropped";
+    },
+  );
+}
+
+const USER_ROW = {
+  id: "m1",
+  role: "user" as const,
+  content: "what's overdue?",
+  trace: null,
+};
+const ANSWER_ROW = {
+  id: "a1",
+  role: "assistant" as const,
+  content: "Three items are overdue: Ship v2, Migrate DB, QA pass.",
+  trace: { boardsConsulted: ["b1"] },
+};
+
+function ask(question = "what's overdue?") {
+  fireEvent.change(screen.getByLabelText("Your question"), {
+    target: { value: question },
+  });
+  fireEvent.keyDown(screen.getByLabelText("Your question"), {
+    key: "Enter",
+    metaKey: true,
+  });
+}
 
 describe("AskChat", () => {
   it("sends a first message, streams the answer, and persists both turns", async () => {
@@ -144,5 +187,139 @@ describe("AskChat", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+  });
+});
+
+// gotcha-61: a severed stream used to render ABSOLUTELY NOTHING — no error, no
+// spinner change, no notice — while the answer sat persisted in ai_messages.
+describe("AskChat — severed stream (gotcha-61)", () => {
+  it("recovers the persisted answer automatically instead of going silent", async () => {
+    severedStream();
+    recoverConversation.mockResolvedValue({
+      ok: true,
+      data: { messages: [USER_ROW, ANSWER_ROW] },
+    });
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask();
+
+    await waitFor(() =>
+      expect(screen.getByText(ANSWER_ROW.content)).toBeInTheDocument(),
+    );
+    expect(recoverConversation).toHaveBeenCalledWith({ conversationId: "c1" });
+    // The truncated partial token bubble is replaced by the real turn.
+    expect(screen.queryByText("Three items are ov")).toBeNull();
+    // The user is told what happened — silence is the bug.
+    expect(screen.getByText(/recovered your answer/i)).toBeInTheDocument();
+    // And is never stranded: the composer is usable again.
+    expect(screen.getByLabelText("Your question")).not.toBeDisabled();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("shows a recoverable notice when nothing landed, and recovers on Check again", async () => {
+    severedStream();
+    // First check: the turn is still finishing, only the user row exists.
+    recoverConversation.mockResolvedValueOnce({
+      ok: true,
+      data: { messages: [USER_ROW] },
+    });
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask();
+
+    await waitFor(() =>
+      expect(screen.getByText(/connection lost/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Your question")).not.toBeDisabled();
+
+    // Second check: it landed.
+    recoverConversation.mockResolvedValueOnce({
+      ok: true,
+      data: { messages: [USER_ROW, ANSWER_ROW] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /check again/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(ANSWER_ROW.content)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/connection lost/i)).toBeNull();
+  });
+
+  it("holds the composer shut only while the recovery check is in flight", async () => {
+    severedStream();
+    let land!: (v: unknown) => void;
+    recoverConversation.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask();
+
+    // Mid-check: the user is told what's happening and can't fire a second turn.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/checking whether your answer arrived/i),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText("Your question")).toBeDisabled();
+
+    await act(async () => {
+      land({ ok: true, data: { messages: [USER_ROW, ANSWER_ROW] } });
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Your question")).not.toBeDisabled(),
+    );
+  });
+
+  it("shows the notice when the recovery read itself fails", async () => {
+    severedStream();
+    recoverConversation.mockResolvedValue({
+      ok: false,
+      error: "Couldn't reach the server.",
+    });
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask();
+
+    await waitFor(() =>
+      expect(screen.getByText(/connection lost/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: /check again/i })).toBeEnabled();
+  });
+
+  it("recovers a proposal turn with its confirm card intact and actionable", async () => {
+    severedStream();
+    recoverConversation.mockResolvedValue({
+      ok: true,
+      data: {
+        messages: [
+          { ...USER_ROW, content: "create Ship v2 in Backlog" },
+          {
+            id: "a1",
+            role: "assistant",
+            content: "I'll create that — confirm below.",
+            trace: { boardsConsulted: ["b1"], proposedActions: [ACTION] },
+          },
+        ],
+      },
+    });
+    render(<AskChat conversationId={null} initialMessages={[]} />);
+    ask("create Ship v2 in Backlog");
+
+    await waitFor(() =>
+      expect(screen.getByText(ACTION.summary)).toBeInTheDocument(),
+    );
+
+    // Still actionable: Approve addresses the RECOVERED message id.
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+    await waitFor(() =>
+      expect(applyAskProposal).toHaveBeenCalledWith({
+        conversationId: "c1",
+        messageId: "a1",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText('Done — Create task "Ship v2" in Backlog.'),
+      ).toBeInTheDocument(),
+    );
   });
 });

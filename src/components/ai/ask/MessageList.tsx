@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { Kicker } from "@/components/ui/kicker";
 import { ActionConfirmCard } from "@/components/ai/actions/ActionConfirmCard";
+import { StreamDropNotice, type DropState } from "./StreamDropNotice";
 import {
   resolveProposalStates,
   type AskToolTrace,
@@ -53,6 +54,9 @@ function Bubble({
  * The conversation transcript. Renders persisted turns, then the live streaming
  * assistant bubble (token deltas) and a status line ("Consulting N boards…")
  * while a turn is in flight. Auto-scrolls to the newest content.
+ *
+ * `dropState` is the severed-stream surface (gotcha-61): when a turn's response
+ * body ends without `done`, this list must never fall silent.
  */
 export function MessageList({
   messages,
@@ -61,6 +65,8 @@ export function MessageList({
   onApprove,
   onCancel,
   busyMessageId,
+  dropState = "none",
+  onRetryDrop,
 }: {
   messages: UIMessage[];
   streamingText: string | null;
@@ -68,11 +74,13 @@ export function MessageList({
   onApprove: (messageId: string) => void;
   onCancel: (messageId: string) => void;
   busyMessageId?: string | null;
+  dropState?: DropState;
+  onRetryDrop?: () => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, streamingText, status]);
+  }, [messages, streamingText, status, dropState]);
 
   const empty = messages.length === 0 && streamingText === null;
   // Pure derivation over the thread — a proposal is resolved by a LATER message
@@ -145,6 +153,8 @@ export function MessageList({
             {status}
           </p>
         ) : null}
+
+        <StreamDropNotice state={dropState} onRetry={() => onRetryDrop?.()} />
 
         <div ref={endRef} />
       </div>

@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { parseToolTrace, type AskToolTrace } from "@/lib/ai/ask/tool-trace";
 import type { Database } from "@/types/database.types";
 
 export type ConversationRow = Pick<
@@ -48,4 +49,31 @@ export async function getMessages(
     .limit(MESSAGES_LIMIT);
   if (error) throw new Error(`getMessages: ${error.message}`);
   return data ?? [];
+}
+
+/** A persisted turn, shaped for render. Structurally the `UIMessage` the chat
+ *  client holds — kept as a plain type so a server module never has to import
+ *  from a `"use client"` file. */
+export type ThreadMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  trace: AskToolTrace | null;
+};
+
+/**
+ * Map DB rows to render-ready turns. The ONE mapping used by both first paint
+ * (`/ask/[conversationId]`) and mid-turn drop recovery (`recoverConversation`),
+ * so a recovered thread is byte-for-byte what a hard reload would have shown —
+ * including an unconfirmed proposal's `tool_trace`, which is what keeps its
+ * confirm card intact and still actionable.
+ */
+export function toThreadMessages(rows: MessageRow[]): ThreadMessage[] {
+  return rows.map((r) => ({
+    id: r.id,
+    // DB stores role as text (CHECK-constrained to these two values).
+    role: r.role as "user" | "assistant",
+    content: r.content,
+    trace: parseToolTrace(r.tool_trace),
+  }));
 }
