@@ -33,19 +33,33 @@ export default defineConfig({
     // src/test/global-teardown.ts (exports a named `teardown`).
     globalSetup: ["./src/test/global-teardown.ts"],
     globals: true,
-    // Three projects (all inherit the options above via `extends: true`):
-    //   - unit: fast, parallel, everything except the integration + conformance
+    // Four projects (all inherit the options above via `extends: true`).
+    // `pnpm test` runs three of them — unit + conformance + fixtures. The
+    // integration project is OPT-IN (`pnpm test:integration`); see below.
+    //
+    //   - unit: fast, parallel, everything except the three live-project
     //     suites.
-    //   - integration: the *.integration.test.ts suites, which hit the live
-    //     cloud Supabase project. Run serially — concurrent files collectively
+    //   - integration (TIER 1, opt-in): the *.integration.test.ts suites, which
+    //     PROVISION throwaway users/orgs against a live cloud project and run a
+    //     destructive @example.com purge. That needs a privileged key AND a
+    //     sacrificial project, which decision-25 ruled we will not provision —
+    //     so all 70 of them skip. Keeping them in the default run advertised
+    //     coverage that does not exist, so they moved out to their own script
+    //     rather than being deleted (the wiring still works the moment a
+    //     `.env.test` exists). Run serially — concurrent files collectively
     //     trip GoTrue's auth rate limit (429 over_request_rate_limit), which
     //     surfaces either loudly or silently as a null org from
     //     create_organization. Pairs with signInWithRetry() in
     //     src/test/integration-auth.ts.
-    //   - conformance: the *.conformance.test.ts suites. Read-only probes that
-    //     prove `anon` can reach nothing on a LIVE project. Unlike integration
-    //     they provision NOTHING and hold no privileged key, so they are safe
-    //     against DEV (the default) and against PROD on demand.
+    //   - conformance (TIER 3): the *.conformance.test.ts suites. Read-only
+    //     probes that prove `anon` can reach nothing on a LIVE project. Unlike
+    //     integration they provision NOTHING and hold no privileged key, so
+    //     they are safe against DEV (the default) and against PROD on demand.
+    //   - fixtures (TIER 2): the *.fixtures.test.ts suites. The AUTHENTICATED
+    //     half of the same boundary — two permanent seeded tenants on DEV,
+    //     never mutated, so cross-tenant isolation is a read-only assertion.
+    //     Also non-privileged and provisioning-free. DEV only, by design; see
+    //     allowsTier2Fixtures() in src/lib/supabase/project-refs.ts.
     projects: [
       {
         extends: true,
@@ -65,6 +79,7 @@ export default defineConfig({
             ...sharedExclude,
             "src/**/*.integration.test.{ts,tsx}",
             "src/**/*.conformance.test.ts",
+            "src/**/*.fixtures.test.ts",
           ],
         },
       },
@@ -111,6 +126,21 @@ export default defineConfig({
           hookTimeout: 180_000,
           // Absorbs a one-off network blip. A genuine finding is deterministic
           // and survives the retry.
+          retry: 1,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "fixtures",
+          include: ["src/**/*.fixtures.test.ts"],
+          exclude: sharedExclude,
+          // Serial for the same reason as integration: every file signs the two
+          // permanent fixture accounts in, and parallel worktrees share one
+          // GoTrue instance. signInOrThrow() rides out the 429 on top of this.
+          fileParallelism: false,
+          testTimeout: 30_000,
+          hookTimeout: 120_000,
           retry: 1,
         },
       },

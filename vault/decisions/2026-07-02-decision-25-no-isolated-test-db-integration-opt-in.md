@@ -47,3 +47,18 @@ stays an optional, opt-in local capability. It is removed from the roadmap as ow
   the north-star Owed/Next. Do not re-raise it in `/whats-next`.
 - **Reversible.** The wiring stays in the tree, so provisioning later is just creating a
   project and adding `.env.test` — no code change required.
+
+## Amendment (2026-07-27, decision-31)
+
+The ruling above stands — we still will not provision a test-only project, and the suites
+still self-skip. What changed is **where they skip**. Reporting 70 "skipped" suites on every
+`pnpm test` read as coverage that does not exist, so the `integration` vitest project moved
+out of the default run into its own **`pnpm test:integration`** script. Nothing was deleted
+and no gate was loosened: the suites, `integration-env.ts`, the `PULSE_TEST_DB` marker and
+the deny-list are all untouched, and `.env.test` + `pnpm test:integration` runs them exactly
+as before.
+
+The confidence that decision-25 traded away is now being bought back a different way — not
+with a project, but by designing the assertions so they need no provisioning at all:
+Tier 3 conformance probes (decision-30) for the `anon` boundary and Tier 2 permanent tenant
+fixtures (decision-31) for the authenticated one. Both run in the default `pnpm test`.
