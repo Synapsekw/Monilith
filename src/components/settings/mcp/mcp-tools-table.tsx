@@ -20,6 +20,11 @@ const TOOLS = [
     what: "Read a board's columns and groups.",
   },
   {
+    name: "list_items",
+    access: "read",
+    what: "Read a board's items and their values.",
+  },
+  {
     name: "search_items",
     access: "read",
     what: "Find items by name within a board.",

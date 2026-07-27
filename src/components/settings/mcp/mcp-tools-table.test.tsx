@@ -3,11 +3,12 @@ import { describe, it, expect } from "vitest";
 import { McpToolsTable } from "./mcp-tools-table";
 
 describe("McpToolsTable", () => {
-  it("lists all six registered tools", () => {
+  it("lists all seven registered tools", () => {
     render(<McpToolsTable />);
     for (const name of [
       "list_boards",
       "get_board",
+      "list_items",
       "search_items",
       "get_item",
       "create_item",
@@ -17,10 +18,10 @@ describe("McpToolsTable", () => {
     }
   });
 
-  it("marks exactly two tools as write access and four as read", () => {
+  it("marks exactly two tools as write access and five as read", () => {
     render(<McpToolsTable />);
     expect(screen.getAllByText("Write")).toHaveLength(2);
-    expect(screen.getAllByText("Read")).toHaveLength(4);
+    expect(screen.getAllByText("Read")).toHaveLength(5);
   });
 
   it("states that no tool can delete", () => {
