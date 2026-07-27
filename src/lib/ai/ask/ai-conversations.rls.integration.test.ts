@@ -118,5 +118,76 @@ describe.skipIf(!integrationTargetReady())(
         .insert({ org_id: orgA, user_id: alice.id, title: "forged" });
       expect(bobForge.error).not.toBeNull();
     });
+
+    // ── Phase 2: proposal + outcome rows ride in `ai_messages.tool_trace` ──────
+    // No new table and no new policy, so the isolation guarantee is exactly the
+    // parent conversation's. These two cases pin that down for the write path.
+
+    /** Provisioned once and shared by the two cases below — GoTrue rate-limits
+     *  aggressive per-test user creation (hence `fileParallelism: false`). */
+    let pair: { owner: TestUser; stranger: TestUser; orgId: string } | null =
+      null;
+    async function proposalPair() {
+      if (!pair) {
+        const owner = await provisionUser("owner");
+        const orgId = await provisionOrg(owner, "owner");
+        const stranger = await provisionUser("stranger");
+        pair = { owner, stranger, orgId };
+      }
+      return pair;
+    }
+
+    async function createConversationFor(u: TestUser, orgId: string) {
+      const ins = await u.anon
+        .from("ai_conversations")
+        .insert({ org_id: orgId, user_id: u.id, title: "proposal thread" })
+        .select("id")
+        .single();
+      expect(ins.error).toBeNull();
+      return ins.data!.id;
+    }
+
+    it("hides a proposal trace from a non-owner", async () => {
+      const { owner, stranger, orgId } = await proposalPair();
+      const conversationId = await createConversationFor(owner, orgId);
+
+      const wrote = await owner.anon.from("ai_messages").insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: "I'll create that —",
+        tool_trace: {
+          proposedActions: [
+            {
+              kind: "create_item",
+              boardId: "b1",
+              groupId: "g1",
+              name: "Ship v2",
+              summary: 'Create task "Ship v2" in Backlog',
+              warnings: [],
+            },
+          ],
+        },
+      });
+      expect(wrote.error).toBeNull();
+
+      const { data } = await stranger.anon
+        .from("ai_messages")
+        .select("id, tool_trace")
+        .eq("conversation_id", conversationId);
+      expect(data ?? []).toHaveLength(0);
+    });
+
+    it("refuses an outcome message written into someone else's thread", async () => {
+      const { owner, stranger, orgId } = await proposalPair();
+      const conversationId = await createConversationFor(owner, orgId);
+
+      const { error } = await stranger.anon.from("ai_messages").insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: "Cancelled — nothing was changed.",
+        tool_trace: { resolvesProposal: conversationId, outcome: "cancelled" },
+      });
+      expect(error).not.toBeNull();
+    });
   },
 );

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getMessages } from "@/lib/ai/ask/conversations";
+import { getMessages, toThreadMessages } from "@/lib/ai/ask/conversations";
 import { AskChat } from "@/components/ai/ask/AskChat";
 
 /**
@@ -17,15 +17,14 @@ export default async function AskConversationPage({
   const rows = await getMessages(conversationId);
   if (rows.length === 0) notFound();
 
+  // `toThreadMessages` is shared with `recoverConversation`, so a stream that
+  // dropped mid-turn recovers to exactly what this reload would have rendered —
+  // including an unconfirmed proposal, which survives in tool_trace rather than
+  // client state (Approve re-reads it server-side).
   return (
     <AskChat
       conversationId={conversationId}
-      initialMessages={rows.map((r) => ({
-        id: r.id,
-        // DB stores role as text (CHECK-constrained to these two values).
-        role: r.role as "user" | "assistant",
-        content: r.content,
-      }))}
+      initialMessages={toThreadMessages(rows)}
     />
   );
 }

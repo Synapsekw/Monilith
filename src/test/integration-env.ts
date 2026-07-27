@@ -4,7 +4,7 @@ import { SUPABASE_PROJECT_REFS } from "@/lib/supabase/project-refs";
 
 // Single source of truth for integration-suite env resolution.
 //
-// The 38 `*.integration.test.ts(x)` suites + `global-teardown.ts` all import
+// The 69 `*.integration.test.ts(x)` suites + `global-teardown.ts` all import
 // this module instead of each hardcoding `config({ path: ".env.local" })`.
 // It loads `.env.local` (base) then `.env.test` (override) if present, so a
 // dedicated test project's creds win when `.env.test` exists. With no

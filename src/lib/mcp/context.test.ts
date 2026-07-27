@@ -8,7 +8,7 @@ vi.mock("@/lib/rate-limit/mcp-rate-limit", () => ({
 }));
 
 import { lookupTokenByAccessToken } from "@/lib/mcp/oauth/token-store";
-import { resolveMcpAuth } from "./context";
+import { mcpActorId, resolveMcpAuth } from "./context";
 
 describe("resolveMcpAuth", () => {
   it("returns undefined for a missing bearer token", async () => {
@@ -44,5 +44,24 @@ describe("resolveMcpAuth", () => {
     expect(result?.extra?.userId).toBe("user-1");
     expect(result?.extra?.tokenRowId).toBe("row-1");
     expect(result?.extra?.bridgeSecretId).toBe("secret-1");
+  });
+});
+
+describe("mcpActorId", () => {
+  it("returns the user id resolveMcpAuth stamped on the auth context", () => {
+    expect(
+      mcpActorId({
+        token: "t",
+        clientId: "c",
+        scopes: [],
+        extra: { userId: "user-1" },
+      } as never),
+    ).toBe("user-1");
+  });
+
+  it("throws on a malformed auth context", () => {
+    expect(() =>
+      mcpActorId({ token: "t", clientId: "c", scopes: [] } as never),
+    ).toThrow("Malformed auth context.");
   });
 });

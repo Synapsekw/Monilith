@@ -20,6 +20,7 @@ export async function createItemHandler(
     name: string;
     fields?: FieldInput[];
   },
+  actorId: string,
 ) {
   const supabase = await getClient();
   const { data: item, error } = await supabase.rpc("create_item", {
@@ -39,7 +40,7 @@ export async function createItemHandler(
   }
   const fieldErrors: string[] = [];
   for (const field of input.fields ?? []) {
-    const err = await writeCellValue(supabase, item.id, field);
+    const err = await writeCellValue(supabase, item.id, field, actorId);
     if (err) fieldErrors.push(`${field.columnId}: ${err}`);
   }
   return {
@@ -57,6 +58,7 @@ export async function createItemHandler(
 export function registerCreateItemTool(
   server: McpServer,
   getClient: GetClient,
+  actorId: string,
 ): void {
   server.registerTool(
     "create_item",
@@ -66,6 +68,6 @@ export function registerCreateItemTool(
         "Create a new item in a group, optionally setting initial field values.",
       inputSchema: createItemInput,
     },
-    async (input) => createItemHandler(getClient, input),
+    async (input) => createItemHandler(getClient, input, actorId),
   );
 }

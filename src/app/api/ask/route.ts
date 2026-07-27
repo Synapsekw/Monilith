@@ -19,20 +19,52 @@ import {
   generateTitle,
   KEEP_RECENT,
 } from "@/lib/ai/ask/context";
-import { encodeEvent, type AskStreamEvent } from "@/lib/ai/ask/stream-protocol";
+import {
+  encodeEvent,
+  OPENING_STATUS,
+  type AskStreamEvent,
+} from "@/lib/ai/ask/stream-protocol";
 import { MODEL } from "@/lib/ai/providers/anthropic";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
+import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
+import { zonedDayOf } from "@/lib/datetime/timezone";
+import type { AskToolTrace } from "@/lib/ai/ask/tool-trace";
+import type { Json } from "@/types/database.types";
 
 // Runs on the default Node.js runtime (Cache Components forbids an explicit
 // `runtime` export). The Anthropic SDK + service client need Node APIs anyway.
 
-const SYSTEM = [
-  "You are the AI assistant for Monolith, a helpful analyst answering questions about the user's boards.",
-  "Use the read tools to ground every claim in real data. Never fabricate.",
-  "Start broad (list_boards, get_board_overview) and query_items only for the rows a question needs.",
-  "Cell values reference option/user ids — decode labels via get_board_overview before answering.",
-  "If you cannot answer from the data, say so plainly.",
-].join("\n");
+/** Today's calendar date in a given IANA zone, so "Friday" resolves correctly
+ *  for a write. `zonedDayOf` is the canonical helper; a stored zone the runtime
+ *  rejects falls back to UTC rather than failing the turn. */
+function todayIn(timezone: string): string {
+  try {
+    return zonedDayOf(new Date(), timezone);
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * One prompt for one loop: the read guidance that grounds every answer, plus
+ * the write guidance already proven in `src/lib/ai/write/propose.ts`. The
+ * propose_* tools do not write — the "stop after proposing" instruction matches
+ * the engine, which ends the turn at the confirm card either way.
+ */
+function buildSystem(today: string, timezone: string): string {
+  return [
+    "You are the AI assistant for Monolith, a helpful analyst answering questions about the user's boards — and, when asked, proposing changes to them.",
+    "Use the read tools to ground every claim in real data. Never fabricate.",
+    "Start broad (list_boards, get_board_overview) and query_items only for the rows a question needs.",
+    "Cell values reference option/user ids — decode labels via get_board_overview before answering.",
+    "If you cannot answer from the data, say so plainly.",
+    "",
+    `Today is ${today} (timezone ${timezone}). Resolve relative dates like "Friday" to an ISO date (YYYY-MM-DD).`,
+    "When the user asks you to CHANGE something, first resolve the exact board, group, status option and owner userIds with the read tools (list_boards, get_board_overview, list_board_members). NEVER assume an id you have not read.",
+    "Then call a propose_* tool with the resolved ids. The propose_* tools do NOT write — the user confirms first. Say in ONE short sentence what you are about to propose, then stop.",
+    "If the target board, group or item is ambiguous, DO NOT propose — ask exactly ONE focused question and wait for the answer.",
+  ].join("\n");
+}
 
 const bodySchema = z.object({ conversationId: z.string().uuid() });
 
@@ -68,6 +100,9 @@ export async function POST(req: Request) {
   if (!workspaceId)
     return NextResponse.json({ error: "No workspace." }, { status: 400 });
 
+  const timezone = (await getUserTimeZoneCached(user.id)) ?? "UTC";
+  const system = buildSystem(todayIn(timezone), timezone);
+
   const conv = await supabase
     .from("ai_conversations")
     .select("summary, summarized_upto")
@@ -84,6 +119,10 @@ export async function POST(req: Request) {
       const enc = new TextEncoder();
       const emit = (e: AskStreamEvent) =>
         controller.enqueue(enc.encode(encodeEvent(e)));
+      // The turn's first byte, before ANY model work: compaction and the first
+      // tool round together account for most of the opening wait, and the
+      // engine's statuses cannot fire until a round has finished (gotcha-62).
+      emit({ type: "status", text: OPENING_STATUS });
       try {
         const allRows = await getMessages(conversationId);
         let summary = conv.data.summary;
@@ -122,10 +161,11 @@ export async function POST(req: Request) {
 
             const r = await askPulseStream({
               apiKey,
+              orgId: org.id,
               workspaceId,
               client,
               messages: buildAskMessages(recent),
-              system: composeSystem(SYSTEM, summary),
+              system: composeSystem(system, summary),
               emit,
             });
             usage.inputTokens += r.usage.inputTokens;
@@ -153,6 +193,7 @@ export async function POST(req: Request) {
               result: {
                 answer: r.answer,
                 boardsConsulted: r.boardsConsulted,
+                proposedActions: r.proposedActions,
                 title,
               },
               usage,
@@ -161,13 +202,20 @@ export async function POST(req: Request) {
           },
         );
 
+        // One column, two shapes (see lib/ai/ask/tool-trace.ts): a read-only
+        // turn stores only boardsConsulted; a proposal turn also stores the
+        // actions, which is what makes an unconfirmed card survive a reload.
+        const trace: AskToolTrace = { boardsConsulted: result.boardsConsulted };
+        if (result.proposedActions.length)
+          trace.proposedActions = result.proposedActions;
+
         const ins = await supabase
           .from("ai_messages")
           .insert({
             conversation_id: conversationId,
             role: "assistant",
             content: result.answer,
-            tool_trace: { boardsConsulted: result.boardsConsulted },
+            tool_trace: trace as unknown as Json,
           })
           .select("id")
           .single();

@@ -26,6 +26,7 @@ const LABELS: Record<ReportBlock["type"], string> = {
   cover: "Cover",
   summary: "Executive summary",
   kpis: "Key metrics",
+  chart: "Chart",
   table: "Board table",
   group_summaries: "Group summaries",
   spotlight: "Item spotlight",

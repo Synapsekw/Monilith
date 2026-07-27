@@ -16,15 +16,16 @@ pnpm dev            # start the app
 
 ## Scripts
 
-| Script           | Purpose                       |
-| ---------------- | ----------------------------- |
-| `pnpm dev`       | Run the app (Turbopack)       |
-| `pnpm build`     | Production build              |
-| `pnpm typecheck` | `tsc --noEmit`                |
-| `pnpm lint`      | ESLint                        |
-| `pnpm test`      | Vitest unit/integration tests |
-| `pnpm e2e`       | Playwright end-to-end tests   |
-| `pnpm format`    | Prettier write                |
+| Script                  | Purpose                                     |
+| ----------------------- | ------------------------------------------- |
+| `pnpm dev`              | Run the app (Turbopack)                     |
+| `pnpm build`            | Production build                            |
+| `pnpm typecheck`        | `tsc --noEmit`                              |
+| `pnpm lint`             | ESLint                                      |
+| `pnpm test`             | Vitest (all three projects)                 |
+| `pnpm test:conformance` | Live anon-reachability probes (see Testing) |
+| `pnpm e2e`              | Playwright end-to-end tests                 |
+| `pnpm format`           | Prettier write                              |
 
 ## Branching & promotion workflow
 
@@ -146,6 +147,63 @@ Pre-convention history lives in `src/lib/changelog/seed.ts`.
 
 Every feature ships with at least basic tests. Don't merge with failing checks. RLS-sensitive changes
 should include an isolation test.
+
+There are three vitest projects (`vitest.config.ts`); `pnpm test` runs all three:
+
+| Project       | Files                      | Needs                            |
+| ------------- | -------------------------- | -------------------------------- |
+| `unit`        | `*.test.ts(x)`             | nothing                          |
+| `integration` | `*.integration.test.ts(x)` | a dedicated test project (below) |
+| `conformance` | `*.conformance.test.ts`    | just a URL + anon key            |
+
+### Conformance probes (`pnpm test:conformance`)
+
+**Conformance probes ask a LIVE Supabase project what a logged-out visitor can reach, and assert the
+answer is "nothing".** They are the standing regression gate for the incident that
+`supabase/migrations/20260725102610_definer_acl_lockdown.sql` fixed: 8 `SECURITY DEFINER` functions
+were `anon`-executable in production, two of them able to delete rows from `vault.secrets`.
+
+Two probe families, both self-maintaining — **a new function or table is covered automatically**:
+
+- **Functions** — every `public` function is parsed out of `supabase/migrations/*.sql` and called as
+  `anon` via `POST /rest/v1/rpc/<name>`. Only `42501` (permission denied) or `PGRST202` (PostgREST
+  does not expose it to `anon` at all) count as denial. Anything else, above all a `200`, fails.
+- **Tables** — every table name is read out of the generated `src/types/database.types.ts` and
+  `select`-ed as `anon`. Only empty or denied passes; a returned row is a live data leak.
+
+**They need no test project, unlike the integration suites.** That is the whole point:
+
+- **Zero writes, zero provisioning.** Every probe is a read that is expected to be refused or empty.
+- **No privileged key is ever loaded** — only the publishable anon key that already ships to every
+  browser. A unit test in `src/test/anon-conformance.test.ts` fails if the suite so much as names
+  one. That absence is what makes the probes safe to point at production.
+- They therefore skip the integration gate in `src/test/integration-env.ts` (which demands a
+  privileged key **and** a throwaway project) and never run the destructive `@example.com` teardown.
+
+**Target:** by default whatever `.env.local` points at, i.e. **DEV**. There is no way to reach
+production by accident. With no credentials at all (CI without secrets) the suite **skips cleanly**,
+so CI stays green.
+
+**Aiming at production** — what `/promote` and `/sync-prod` do, and safe to run by hand:
+
+```bash
+CONFORMANCE_TARGET_URL=https://<prod-ref>.supabase.co \
+CONFORMANCE_TARGET_ANON_KEY=<prod anon/publishable key> \
+  pnpm test:conformance
+```
+
+Both variables are required together; setting only one skips rather than quietly probing DEV. Each
+run prints which target it hit and the verdict tally, e.g.:
+
+```
+[conformance] probing DEV (ambient) — 129 function signatures, 53 tables
+[conformance] functions: 109 denied (42501), 20 not exposed (PGRST202), 0 REACHABLE — tables: 13 denied, 40 empty, 0 READABLE
+```
+
+If something genuinely must be reachable by a logged-out visitor, add it to
+`ANON_REACHABLE_FUNCTION_ALLOWLIST` / `ANON_REACHABLE_TABLE_ALLOWLIST` in
+`src/test/anon-conformance.ts` **with a comment saying why** — never by loosening an assertion. Both
+are currently empty, and a test asserts that.
 
 ### Running integration tests (`.env.test`)
 

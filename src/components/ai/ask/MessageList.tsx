@@ -4,11 +4,21 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { Kicker } from "@/components/ui/kicker";
+import { ActionConfirmCard } from "@/components/ai/actions/ActionConfirmCard";
+import { StreamDropNotice, type DropState } from "./StreamDropNotice";
+import { ThinkingIndicator } from "./ThinkingIndicator";
+import {
+  resolveProposalStates,
+  type AskToolTrace,
+} from "@/lib/ai/ask/tool-trace";
 
 export type UIMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  /** Parsed `ai_messages.tool_trace`. Carries a turn's proposed actions, or —
+   *  on an outcome turn — which proposal it resolved. */
+  trace?: AskToolTrace | null;
 };
 
 /** A single chat turn. User turns sit right in a muted bubble; assistant turns
@@ -42,25 +52,42 @@ function Bubble({
 }
 
 /**
- * The conversation transcript. Renders persisted turns, then the live streaming
- * assistant bubble (token deltas) and a status line ("Consulting N boards…")
- * while a turn is in flight. Auto-scrolls to the newest content.
+ * The conversation transcript. Renders persisted turns, then — while a turn is
+ * in flight — either the animated `ThinkingIndicator` (open, no tokens yet) or
+ * the live assistant bubble plus a status line ("Consulting N boards…").
+ * Auto-scrolls to the newest content.
+ *
+ * `dropState` is the severed-stream surface (gotcha-61): when a turn's response
+ * body ends without `done`, this list must never fall silent.
  */
 export function MessageList({
   messages,
   streamingText,
   status,
+  onApprove,
+  onCancel,
+  busyMessageId,
+  dropState = "none",
+  onRetryDrop,
 }: {
   messages: UIMessage[];
   streamingText: string | null;
   status: string | null;
+  onApprove: (messageId: string) => void;
+  onCancel: (messageId: string) => void;
+  busyMessageId?: string | null;
+  dropState?: DropState;
+  onRetryDrop?: () => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, streamingText, status]);
+  }, [messages, streamingText, status, dropState]);
 
   const empty = messages.length === 0 && streamingText === null;
+  // Pure derivation over the thread — a proposal is resolved by a LATER message
+  // naming it, so reload and live-update render identically.
+  const proposalStates = resolveProposalStates(messages);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -79,18 +106,51 @@ export function MessageList({
           </div>
         ) : null}
 
-        {messages.map((m) => (
-          <Bubble key={m.id} role={m.role} content={m.content} />
-        ))}
+        {messages.map((m) => {
+          const actions = m.trace?.proposedActions ?? [];
+          // NOT named `status` — that is the streaming status-line prop.
+          const proposalStatus = proposalStates.get(m.id);
+          return (
+            <div key={m.id} className="flex flex-col gap-3">
+              <Bubble role={m.role} content={m.content} />
+              {actions.length > 0 && proposalStatus ? (
+                // Indented to the assistant gutter (size-7 mark + gap-3), so the
+                // card hangs off the turn it belongs to.
+                <div className="flex flex-col gap-2 pl-10">
+                  {actions.map((action, i) => (
+                    <ActionConfirmCard
+                      key={i}
+                      action={action}
+                      state={
+                        busyMessageId === m.id
+                          ? "running"
+                          : proposalStatus.state
+                      }
+                      resultNote={proposalStatus.note}
+                      onApprove={() => onApprove(m.id)}
+                      onCancel={() => onCancel(m.id)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
 
-        {streamingText !== null ? (
-          <Bubble
-            role="assistant"
-            content={streamingText || (status ? "" : "…")}
-          />
+        {/* Three states, in the order a turn passes through them.
+            `streamingText` is the discriminator: null = no live turn,
+            "" = open but nothing back yet, non-empty = tokens arriving. */}
+
+        {/* Open, no tokens: the 25–42s stretch that used to render a static "…"
+            and read as a hung page (gotcha-62). One live region, carrying the
+            freshest status — so the status is NOT also drawn below. */}
+        {streamingText === "" ? <ThinkingIndicator label={status} /> : null}
+
+        {streamingText ? (
+          <Bubble role="assistant" content={streamingText} />
         ) : null}
 
-        {status ? (
+        {status && streamingText !== "" ? (
           <p
             aria-live="polite"
             className={cn(
@@ -101,6 +161,8 @@ export function MessageList({
             {status}
           </p>
         ) : null}
+
+        <StreamDropNotice state={dropState} onRetry={() => onRetryDrop?.()} />
 
         <div ref={endRef} />
       </div>

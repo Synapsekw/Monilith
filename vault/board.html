@@ -8,82 +8,77 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-25 16:20",
+  "updated": "2026-07-27 12:54",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "Group 1 closeout — the carryover bucket was hiding live security holes and features that had never worked",
+  "headline": "Ask Pulse tells the truth about what it is doing — and GitHub locked us out of the remote",
   "chips": [
     {
       "label": "develop",
-      "value": "c72bc02",
-      "note": "== origin · 4 migrations ahead of prod",
-      "tone": "ok"
+      "value": "cb3362a",
+      "note": "4 commits AHEAD of origin — unpushed, local only",
+      "tone": "warn"
     },
     {
       "label": "main",
-      "value": "186782d",
-      "note": "#72 shipped MCP server + E5 + settings redesign",
-      "tone": "ok"
+      "value": "ff2bbaa",
+      "note": "PR #74 open + green, blocked on email verification",
+      "tone": "warn"
     },
     {
       "label": "prod",
       "value": "",
-      "note": "8 anon-executable definer fns still live · Vault unprovisioned",
-      "tone": "warn"
+      "note": "114 definers, 0 anon-executable · ledger 115 = 115",
+      "tone": "ok"
     }
   ],
   "progress": {
-    "done": 13,
+    "done": 14,
     "total": 15
   },
   "gates": [
     {
       "led": "red",
-      "text": "PROD STILL EXPOSED — 8 anon-executable SECURITY DEFINER fns live, 2 of them delete vault.secrets. Fixed on DEV only; promotion does not apply migrations, /sync-prod must run",
-      "tag": "CRITICAL"
+      "text": "GITHUB REFUSES ALL PUSHES — 'You must verify your email address' 403 on the Synapsekw account. Local develop is 4 commits ahead and exists ONLY on this machine; two task worktrees deliberately retained until a push succeeds",
+      "tag": "BLOCKED"
+    },
+    {
+      "led": "amber",
+      "text": "Promotion PR #74 open and fully green (verify passed, 0 required reviews, no unresolved threads, main is an ancestor) — blocked solely by the same email verification. Merging needs no re-validation",
+      "tag": "NEXT?"
+    },
+    {
+      "led": "amber",
+      "text": "A client disconnect still DESTROYS an in-flight turn — no answer, no bill, just an orphaned user message. Persistence lives inside the response body's lifetime; decoupling it is the real fix (gotcha-62)",
+      "tag": "NEXT?"
     },
     {
       "led": "red",
-      "text": "Prod Vault empty (no app_url / ai_pgnet_hmac_secret / digest_secret) — the health digest has NEVER fired in prod since 2026-07-03 (digest_runs = 0) and E5 semantic search returns nothing (item_embeddings = 0 vs 380 live items). Crons report succeeded while skipping, so nothing alerts",
+      "text": "Prod Vault still missing digest_secret — the health digest has NEVER fired in prod since 2026-07-03 (digest_runs = 0). Crons report succeeded while skipping, so nothing alerts. Turning it on emails real users three weeks of backlog",
       "tag": "CRITICAL"
     },
     {
       "led": "amber",
-      "text": "/sync-prod FIRST, then promote develop → main — the order is load-bearing: promoting first ships a Delete Account button with no reassignment RPC behind it",
+      "text": "The authenticated half of the security boundary is still ungated — conformance covers anon only. Tier 2 = two permanent seeded users/orgs in DEV, making cross-tenant isolation a read-only assertion (no purge, no new project)",
       "tag": "NEXT?"
     },
     {
       "led": "amber",
-      "text": "Two vercel env add commands blocked by the permission classifier — owner runs them, then Vault mirror + embeddings backfill",
-      "tag": "NEXT?"
+      "text": "E5 semantic search still inert — item_embeddings = 0 vs 439 live prod items; needs OPENAI_EMBEDDING_API_KEY on Vercel (vercel env add was blocked by the permission classifier), then the backfill",
+      "tag": "OWED"
     },
     {
       "led": "amber",
-      "text": "Live end-to-end MCP connection test — finally possible now the proxy no longer login-walls /api/mcp and /api/oauth/*",
-      "tag": "NEXT?"
-    },
-    {
-      "led": "hollow",
-      "text": "Finding F1 — MCP assigns people without ever notifying them; one-line swap once upsertCellCore is hoisted (gotcha-60)",
+      "text": "Live end-to-end MCP connection test — possible since the proxy stopped login-walling /api/mcp and /api/oauth/*, still unrun",
       "tag": "OWED"
     },
     {
       "led": "hollow",
-      "text": "Provisioning digest_secret starts emailing real users with three weeks of backlog — needs an explicit decision",
+      "text": "69 integration suites still report 'skipped' every run — coverage theatre until quarantined or deleted",
       "tag": "OWED"
     },
     {
       "led": "hollow",
-      "text": "Integration suites still skip (no .env.test) — a skip is not a pass",
-      "tag": "OWED"
-    },
-    {
-      "led": "hollow",
-      "text": "Ask Pulse Phase 2 — wire the already-built write engine + ActionConfirmCard into /ask (S–M, no migration)",
-      "tag": "NEXT?"
-    },
-    {
-      "led": "hollow",
-      "text": "Report Builder v2 — charts + wide-board table continuation",
+      "text": "Report Builder v2 remainder — roll-ups + org templates, both blocked by reports.board_id NOT NULL, sharing one migration",
       "tag": "NEXT?"
     },
     {
@@ -93,33 +88,47 @@
     },
     {
       "led": "green",
-      "text": "Definer ACL lockdown merged — DEV now 114 definers, 0 anon-executable, guarded by an in-migration assertion; gotcha-59 explains why alter default privileges never worked",
+      "text": "Conformance probes — 129 function signatures + 53 tables probed as anon on DEV and PROD: 0 reachable, 0 readable. Zero writes, anon key only, no Docker and no third Supabase project. Proven to bite, not just green (decision-30)",
       "tag": "DONE"
     },
     {
       "led": "green",
-      "text": "Live open redirect closed (control chars reached evil.com) + cookieless MCP/OAuth endpoints un-login-walled — the MCP OAuth flow had been unreachable end-to-end",
+      "text": "F1 closed — upsertCellCore hoisted so MCP writes send the assigned notification; explicit actor drops a GoTrue round-trip per people-write and N per bulkSetCell",
       "tag": "DONE"
     },
     {
       "led": "green",
-      "text": "Account deletion possible for the first time (org FK blocked everyone) and the admin Delete permanently button fixed — it had never worked",
+      "text": "Report Builder v2 charts — hand-rolled static SVG after a spike proved recharts renders an empty 127-char wrapper in the JS-less PDF page; caught a bug no DOM test could see (every bar would have been invisible)",
       "tag": "DONE"
     },
     {
       "led": "green",
-      "text": "oauth-register rate limited · MCP tool dedupe (22 mutations, 0 survivors) · pnpm db:ledger-check wired into finish-task / sync-prod / promote",
+      "text": "Ask Pulse Phase 2 — /ask proposes writes and executes them behind a confirm card; turn ends at the card, proposal rides in ai_messages.tool_trace, outcome is an appended turn (no UPDATE policy exists)",
+      "tag": "DONE"
+    },
+    {
+      "led": "green",
+      "text": "North-star drift reconciled — §3 had claimed PROD STILL EXPOSED after /sync-prod and promotion #73 had both already shipped",
       "tag": "DONE"
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "name": "task/ask-stream-drop-recovery",
+      "note": "merged into LOCAL develop — retained until a push succeeds"
+    },
+    {
+      "name": "task/ask-thinking-indicator",
+      "note": "merged into LOCAL develop — retained until a push succeeds"
+    }
+  ],
   "session": {
-    "id": "2026-07-25-1620-group-1-closeout-security-and-deletion",
-    "when": "07-25 16:20",
+    "id": "2026-07-27-1254-ask-stream-honesty-drop-recovery-thinking",
+    "when": "07-27 12:54",
     "bullets": [
-      "Six worktrees scoped to plans, built and merged serially → develop c72bc02; ledger clean at 115 files = 115 DEV rows",
-      "Two items were live-exploitable or live-broken in prod, two were shipped features that had never worked, one has been silently inert for three weeks",
-      "Wordmark mark reverted; prod-DB-password rotation dropped from Owed; two load-sensitive tests given explicit budgets so merges stopped being a coin flip"
+      "'AI is not replying' was THREE problems in one costume: a rebuild severing the stream, a completed answer rendering as nothing, and 25–42s of motionless silence during tool rounds",
+      "A dropped stream now auto-recovers the persisted answer; the static '…' is replaced by an animated indicator that starts at submit, with an opening status as the first byte",
+      "GitHub began refusing all pushes mid-session — four commits and a green promotion PR now wait on one email verification"
     ]
   },
   "roadmap": [
