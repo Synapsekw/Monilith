@@ -36,14 +36,14 @@ export default async function McpSettingsPage() {
     <>
       <SettingsSection
         title="Connect via MCP"
-        description="Let Claude and other AI clients read and update your Pulse boards."
+        description="Let Claude and other AI clients read and update your Monolith boards."
       >
         <div className="space-y-4 py-4">
           <p className="text-muted-foreground text-sm">
             The Model Context Protocol (MCP) is an open standard that lets AI
-            apps talk to tools like Pulse. Once connected, you can ask your AI
-            client to find items, summarize a board, or create and update work —
-            without leaving the conversation.
+            apps talk to tools like Monolith. Once connected, you can ask your
+            AI client to find items, summarize a board, or create and update
+            work — without leaving the conversation.
           </p>
           <div>
             <p className="text-foreground mb-1.5 text-sm font-medium">
@@ -79,7 +79,7 @@ export default async function McpSettingsPage() {
             member&apos;s private work, never another organization&apos;s data.
           </li>
           <li>
-            You sign in on Pulse itself. The client never sees your password.
+            You sign in on Monolith itself. The client never sees your password.
           </li>
           <li>
             Nothing can be deleted over MCP — no delete tool exists on the
@@ -110,7 +110,7 @@ export default async function McpSettingsPage() {
             </dt>
             <dd className="text-muted-foreground mt-1">
               Check the URL ends in <code className="font-mono">/api/mcp</code>,
-              and that you&apos;re signed in to Pulse in the same browser the
+              and that you&apos;re signed in to Monolith in the same browser the
               approval window opens in.
             </dd>
           </div>

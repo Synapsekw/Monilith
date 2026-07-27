@@ -24,7 +24,7 @@ export default async function OrganizationSettingsPage() {
         label="Name"
         description={
           isAdmin
-            ? "Shown across Pulse and in invitation emails."
+            ? "Shown across Monolith and in invitation emails."
             : "Only owners and admins can change the organization name."
         }
       >

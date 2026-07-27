@@ -37,7 +37,7 @@ export default async function SecuritySettingsPage() {
         </SettingRow>
         <SettingRow
           label="Active sessions"
-          description="Signs you out of Pulse everywhere, including devices you no longer have."
+          description="Signs you out of Monolith everywhere, including devices you no longer have."
         >
           <SignOutEverywhereButton />
         </SettingRow>
@@ -55,7 +55,7 @@ export default async function SecuritySettingsPage() {
         </SettingRow>
         <SettingRow
           label="Delete account"
-          description="Permanently delete your Pulse account and personal data. Boards, items and updates you created stay with your organization."
+          description="Permanently delete your Monolith account and personal data. Boards, items and updates you created stay with your organization."
         >
           {/* `user.email` is already loaded by requireUser() above, so this row
               adds no first-paint cost and the dialog is 0 server round-trips. */}

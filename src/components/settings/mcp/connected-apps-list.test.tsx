@@ -44,7 +44,7 @@ describe("ConnectedAppsList", () => {
     await user.click(screen.getByRole("button", { name: /^revoke$/i }));
     expect(revoke).not.toHaveBeenCalled();
     expect(
-      await screen.findByText(/lose access to your Pulse/i),
+      await screen.findByText(/lose access to your Monolith/i),
     ).toBeInTheDocument();
   });
 

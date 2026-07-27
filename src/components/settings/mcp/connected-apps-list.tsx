@@ -106,7 +106,7 @@ export function ConnectedAppsList({
               Revoke {target?.clientName}&apos;s access?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              It will immediately lose access to your Pulse boards. You can
+              It will immediately lose access to your Monolith boards. You can
               connect it again at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>

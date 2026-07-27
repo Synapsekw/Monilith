@@ -2,13 +2,25 @@ import { existsSync } from "node:fs";
 import { config } from "dotenv";
 import { SUPABASE_PROJECT_REFS } from "@/lib/supabase/project-refs";
 
-// Single source of truth for integration-suite env resolution.
+// Single source of truth for TIER-1 (integration-suite) env resolution.
 //
-// The 69 `*.integration.test.ts(x)` suites + `global-teardown.ts` all import
+// The 70 `*.integration.test.ts(x)` suites + `global-teardown.ts` all import
 // this module instead of each hardcoding `config({ path: ".env.local" })`.
 // It loads `.env.local` (base) then `.env.test` (override) if present, so a
 // dedicated test project's creds win when `.env.test` exists. With no
-// `.env.test`, integration suites skip cleanly (default = no DEV pollution).
+// `.env.test`, integration suites skip cleanly (default = no DEV pollution) —
+// which is why they are no longer part of `pnpm test` at all: see
+// `pnpm test:integration` and decision-25.
+//
+// THE OTHER TWO LIVE TIERS DO NOT COME THROUGH HERE, and must not:
+//   - Tier 2 `*.fixtures.test.ts`   → src/test/tenant-fixtures.ts
+//   - Tier 3 `*.conformance.test.ts` → src/test/anon-conformance.ts
+// Both are non-privileged and provisioning-free, so the gate below (a
+// privileged key AND a throwaway project) would only make them skip forever.
+// Tier 2 in particular INVERTS the deny-list below: DEV is denied here because
+// the purge is destructive, and is the one allowed target there because Tier 2
+// only reads. `allowsTier2Fixtures()` in `@/lib/supabase/project-refs` states
+// that asymmetry in one place.
 
 // Project refs the destructive teardown purge must NEVER touch. PROD is the
 // hard line; DEV is also deny-listed belt-and-suspenders so that even a

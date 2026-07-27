@@ -24,14 +24,14 @@ export default async function NotificationSettingsPage() {
     <>
       <SettingsSection
         title="In-app"
-        description="Which events create a notification inside Pulse."
+        description="Which events create a notification inside Monolith."
       >
         <NotificationPreferencesForm disabledKinds={[...disabledInApp]} />
       </SettingsSection>
 
       <SettingsSection
         title="Email"
-        description="What Pulse sends to your account address."
+        description="What Monolith sends to your account address."
       >
         <SettingRow
           label="Weekly digest"

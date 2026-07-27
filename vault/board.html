@@ -8,21 +8,21 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-27 12:54",
+  "updated": "2026-07-27 14:05",
   "kicker": "PULSE / NORTH STAR",
-  "headline": "Ask Pulse tells the truth about what it is doing — and GitHub locked us out of the remote",
+  "headline": "Ask Pulse tells the truth about what it is doing — and promotion #74 put all of it in production",
   "chips": [
     {
       "label": "develop",
-      "value": "cb3362a",
-      "note": "4 commits AHEAD of origin — unpushed, local only",
-      "tone": "warn"
+      "value": "14f4d9e",
+      "note": "== origin · squash divergence healed",
+      "tone": "ok"
     },
     {
       "label": "main",
-      "value": "ff2bbaa",
-      "note": "PR #74 open + green, blocked on email verification",
-      "tone": "warn"
+      "value": "105bb57",
+      "note": "#74 LIVE · main CI green · Vercel deploy success",
+      "tone": "ok"
     },
     {
       "label": "prod",
@@ -37,13 +37,13 @@
   },
   "gates": [
     {
-      "led": "red",
-      "text": "GITHUB REFUSES ALL PUSHES — 'You must verify your email address' 403 on the Synapsekw account. Local develop is 4 commits ahead and exists ONLY on this machine; two task worktrees deliberately retained until a push succeeds",
-      "tag": "BLOCKED"
+      "led": "green",
+      "text": "Promotion #74 SHIPPED — main @ 105bb57, main CI green, Vercel production deploy live. No migration, so prod schema and code stayed in step. Squash divergence healed on develop (gotcha-32 pre-empted)",
+      "tag": "DONE"
     },
     {
       "led": "amber",
-      "text": "Promotion PR #74 open and fully green (verify passed, 0 required reviews, no unresolved threads, main is an ancestor) — blocked solely by the same email verification. Merging needs no re-validation",
+      "text": "AI writes are reachable by real users for the FIRST time — the Ask Pulse confirm-card flow has only been exercised on DEV. Worth a deliberate prod pass, plus the conformance probes against production",
       "tag": "NEXT?"
     },
     {
@@ -112,23 +112,14 @@
       "tag": "DONE"
     }
   ],
-  "worktrees": [
-    {
-      "name": "task/ask-stream-drop-recovery",
-      "note": "merged into LOCAL develop — retained until a push succeeds"
-    },
-    {
-      "name": "task/ask-thinking-indicator",
-      "note": "merged into LOCAL develop — retained until a push succeeds"
-    }
-  ],
+  "worktrees": [],
   "session": {
     "id": "2026-07-27-1254-ask-stream-honesty-drop-recovery-thinking",
     "when": "07-27 12:54",
     "bullets": [
       "'AI is not replying' was THREE problems in one costume: a rebuild severing the stream, a completed answer rendering as nothing, and 25–42s of motionless silence during tool rounds",
       "A dropped stream now auto-recovers the persisted answer; the static '…' is replaced by an animated indicator that starts at submit, with an opening status as the first byte",
-      "GitHub began refusing all pushes mid-session — four commits and a green promotion PR now wait on one email verification"
+      "A mid-session GitHub lockout blocked every push for hours; once the email was verified it cleared in one pass and promotion #74 went live"
     ]
   },
   "roadmap": [
@@ -194,7 +185,7 @@
     }
   ]
 }
-  </script>
+</script>
 
 <style>
   /* Keystone Console — committed dark world (matches the app's dark-first identity). */

@@ -23,7 +23,9 @@ describe("McpClientGuide", () => {
     const user = userEvent.setup();
     render(<McpClientGuide serverUrl="https://x.test/api/mcp" />);
     await user.click(screen.getByRole("tab", { name: /claude code/i }));
-    expect(screen.getByText(/claude mcp add/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/claude mcp add --transport http monolith/i),
+    ).toBeInTheDocument();
     // History API only — an RSC navigation here would refetch the whole page.
     expect(pushState).toHaveBeenCalled();
   });
@@ -40,5 +42,24 @@ describe("McpClientGuide", () => {
     render(<McpClientGuide serverUrl="https://x.test/api/mcp" />);
     await user.click(screen.getByRole("tab", { name: /other client/i }));
     expect(screen.getByText(/oauth-protected-resource/i)).toBeInTheDocument();
+  });
+
+  // The product is Monolith; "Pulse" in setup copy told users to name the
+  // connector after a product that no longer exists.
+  it("names the product Monolith in every client's steps", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <McpClientGuide serverUrl="https://x.test/api/mcp" />,
+    );
+    for (const tab of [
+      /claude desktop/i,
+      /claude\.ai/i,
+      /claude code/i,
+      /other client/i,
+    ]) {
+      await user.click(screen.getByRole("tab", { name: tab }));
+      expect(container.textContent).not.toMatch(/pulse/i);
+      expect(container.textContent).toMatch(/monolith/i);
+    }
   });
 });

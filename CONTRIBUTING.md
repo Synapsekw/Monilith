@@ -22,8 +22,10 @@ pnpm dev            # start the app
 | `pnpm build`            | Production build                            |
 | `pnpm typecheck`        | `tsc --noEmit`                              |
 | `pnpm lint`             | ESLint                                      |
-| `pnpm test`             | Vitest (all three projects)                 |
+| `pnpm test`             | Vitest — unit + conformance + fixtures      |
 | `pnpm test:conformance` | Live anon-reachability probes (see Testing) |
+| `pnpm test:fixtures`    | Live cross-tenant isolation probes (DEV)    |
+| `pnpm test:integration` | Opt-in live-DB suites (needs `.env.test`)   |
 | `pnpm e2e`              | Playwright end-to-end tests                 |
 | `pnpm format`           | Prettier write                              |
 
@@ -148,13 +150,60 @@ Pre-convention history lives in `src/lib/changelog/seed.ts`.
 Every feature ships with at least basic tests. Don't merge with failing checks. RLS-sensitive changes
 should include an isolation test.
 
-There are three vitest projects (`vitest.config.ts`); `pnpm test` runs all three:
+There are four vitest projects (`vitest.config.ts`). **`pnpm test` runs three of them** —
+`unit`, `conformance` and `fixtures`. `integration` is **opt-in** (`pnpm test:integration`).
 
-| Project       | Files                      | Needs                            |
-| ------------- | -------------------------- | -------------------------------- |
-| `unit`        | `*.test.ts(x)`             | nothing                          |
-| `integration` | `*.integration.test.ts(x)` | a dedicated test project (below) |
-| `conformance` | `*.conformance.test.ts`    | just a URL + anon key            |
+| Project       | Tier | Files                      | Needs                                | In `pnpm test`? |
+| ------------- | ---- | -------------------------- | ------------------------------------ | --------------- |
+| `unit`        | —    | `*.test.ts(x)`             | nothing                              | yes             |
+| `integration` | 1    | `*.integration.test.ts(x)` | a dedicated test project (below)     | **no** — opt-in |
+| `fixtures`    | 2    | `*.fixtures.test.ts`       | DEV URL + anon key + seeded fixtures | yes             |
+| `conformance` | 3    | `*.conformance.test.ts`    | just a URL + anon key                | yes             |
+
+**Why `integration` is not in the default run.** All 70 of those suites provision throwaway
+`@example.com` users, so `integrationTargetReady()` demands a privileged key **and** a sacrificial
+project. Decision-25 ruled that we will not provision one — so every suite reported "skipped" on
+every run, which reads as coverage that does not exist. They are not deleted and the wiring is
+untouched: create `.env.test` (below) and `pnpm test:integration` runs them exactly as before.
+Tiers 2 and 3 are what actually gate the security boundary now.
+
+### Tenant-isolation fixtures (`pnpm test:fixtures`)
+
+**Tier 2 is the AUTHENTICATED half of the boundary that the conformance probes cover for `anon`:**
+can one logged-in tenant reach another's rows? It asserts against **two permanent tenants** seeded
+into DEV by `supabase/migrations/20260727094033_seed_tier2_tenant_fixtures.sql` and never mutated,
+so isolation is a **read-only** assertion — sign in as one, ask for the other's rows, expect
+nothing. It covers `organizations`, `org_members`, `workspaces`, `boards`, `groups`, `profiles`,
+`ai_conversations` and `ai_messages`, including the two Ask Pulse Phase 2 `tool_trace` assertions.
+
+Like the conformance probes, it needs **no test project**:
+
+- **No privileged key, no provisioning, no teardown.** It signs in as two ordinary users with the
+  publishable anon key. A unit test in `src/test/tenant-fixtures.test.ts` fails if the suite or its
+  helper so much as names a privileged key or the GoTrue admin API.
+- **Three assertions are write ATTEMPTS that RLS must refuse**, each followed by a re-read proving
+  the fixture is unchanged. A refused write leaves nothing behind; one that landed is the emergency
+  the tier exists to surface.
+- **DEV only, no override.** `allowsTier2Fixtures()` (`src/lib/supabase/project-refs.ts`) is the
+  deliberate inverse of the Tier-1 deny-list: DEV is denied to the destructive integration purge and
+  is the only target Tier 2 may aim at. PROD must never grow a pair of known-password accounts, and
+  an unknown ref has no fixtures — every assertion would pass vacuously. With no credentials it
+  **skips cleanly**, so CI stays green.
+
+Two details are load-bearing and must not be undone:
+
+1. **`global-teardown.ts` exempts the fixture accounts by name.** They use the same `@example.com`
+   domain as every throwaway user, so the age-based purge would delete them 30 minutes after seeding
+   and cascade away their orgs — silently emptying the suite rather than failing it.
+   `isPermanentFixtureEmail()` in `src/test/tenant-fixtures.ts` is the single source of truth.
+2. **The anti-vacuity block is not decoration.** "Returned no rows" is only evidence if the rows
+   exist and the owner CAN see them, so the suite asserts the corpus is present from each tenant's
+   own side before asserting the other side sees nothing.
+
+**Re-seeding a fresh DEV:** run `supabase/fixtures/tier2-fixture-users.dev-only.sql` (deliberately
+_not_ in `migrations/`, so `supabase db push` can never carry it to production), then re-apply the
+seed migration. The migration itself only attaches rows to accounts that already exist, so it is a
+clean no-op anywhere those two are absent.
 
 ### Conformance probes (`pnpm test:conformance`)
 
@@ -207,7 +256,8 @@ are currently empty, and a test asserts that.
 
 ### Running integration tests (`.env.test`)
 
-The `*.integration.test.ts(x)` suites and the `global-teardown` sweeper provision throwaway
+These are **opt-in** — `pnpm test:integration`, not `pnpm test`. The
+`*.integration.test.ts(x)` suites and the `global-teardown` sweeper provision throwaway
 `@example.com` users + orgs against a **real remote Supabase project** (there is no local stack).
 They run against a **dedicated test-only project** via a gitignored `.env.test` file, and a hard
 safety guard (`src/test/integration-env.ts`) ensures the destructive purge can **never** touch DEV
@@ -241,10 +291,12 @@ the integration suites is therefore **opt-in** and requires a one-time test-proj
    `PULSE_TEST_DB=1` is the **required** opt-in marker the safety guard checks before any
    destructive purge. Without it, the suites skip and the teardown refuses to delete.
 
-With `.env.test` present, `pnpm test` (and `finish-task.sh`'s gate) exercise the integration suites
-against the test project; the `@example.com` users appear there, not in DEV, and the teardown purges
-them there. **CI stays unit-only** — wiring `.env.test` secrets into GitHub Actions is a separate
-follow-up.
+With `.env.test` present, `pnpm test:integration` exercises the integration suites against the test
+project; the `@example.com` users appear there, not in DEV, and the teardown purges them there.
+Note the teardown **never** purges the two permanent Tier-2 fixture accounts, wherever it runs.
+`pnpm test` (and `finish-task.sh`'s gate) do **not** run these suites either way — that is the point
+of `test:integration` being its own script. **CI stays unit-only** — wiring `.env.test` secrets into
+GitHub Actions is a separate follow-up.
 
 ## Dev memory
 

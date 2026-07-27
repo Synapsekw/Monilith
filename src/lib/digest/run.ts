@@ -2,7 +2,7 @@ import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { getServerEnv } from "@/lib/env.server";
-import { currentDigestPeriod } from "@/lib/digest/period";
+import { currentDigestPeriod, digestWindowStart } from "@/lib/digest/period";
 import { unsubscribeSignature } from "@/lib/digest/token";
 import { renderDigestHtml, renderDigestText } from "@/lib/digest/render";
 import {
@@ -41,7 +41,8 @@ export async function runWeeklyDigest(
 ): Promise<DigestRunSummary> {
   const supabase = createServiceClient();
   const period = currentDigestPeriod(now);
-  const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // One period, always — independent of how long digest_runs has been empty.
+  const since = digestWindowStart(now).toISOString();
   const summary: DigestRunSummary = {
     processed: 0,
     sent: 0,

@@ -6,7 +6,9 @@ import { approveConsent } from "./actions";
 
 // Both dynamic reads resolve inside the Suspense boundary (Cache Components) —
 // same pattern as src/app/(auth)/change-password/page.tsx.
-async function ConsentGate({
+// Exported for unit tests: the default export wraps this in <Suspense>, which
+// the client-side test renderer cannot resolve for an async component.
+export async function ConsentGate({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -24,7 +26,7 @@ async function ConsentGate({
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-6">
       <h1 className="text-xl font-semibold">
-        {client.client_name} wants to access your Pulse account
+        {client.client_name} wants to access your Monolith account
       </h1>
       <p className="text-muted-foreground text-sm">
         Signed in as {user.email}. This grants read and write access to your

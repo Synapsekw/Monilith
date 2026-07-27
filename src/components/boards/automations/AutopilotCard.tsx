@@ -137,7 +137,9 @@ export function AutopilotCard({ boardId }: { boardId: string }) {
           </div>
           <p className="text-muted-foreground text-xs">
             Runs bounded, reversible housekeeping on a schedule, posting as{" "}
-            <span className="text-foreground font-medium">Pulse Autopilot</span>
+            <span className="text-foreground font-medium">
+              Monolith Autopilot
+            </span>
             . Every action is logged and confined to this board.
           </p>
         </div>

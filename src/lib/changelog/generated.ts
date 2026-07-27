@@ -5,6 +5,27 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-07-27",
+    kind: "fixed",
+    title: 'Autopilot now posts as "Monolith Autopilot"',
+    description:
+      "The scheduled board agent still signed its updates with the old product name.",
+  },
+  {
+    date: "2026-07-27",
+    kind: "new",
+    title: "Read a whole board over MCP in one call",
+    description:
+      "Connected AI clients can now list a board's items and their values in a single request, instead of fetching items one at a time — and a truncated search now says so.",
+  },
+  {
+    date: "2026-07-27",
+    kind: "fixed",
+    title: 'Consent screen and MCP setup say "Monolith"',
+    description:
+      "The OAuth approval screen and the Connect-via-MCP guide referred to the product by its old name.",
+  },
+  {
+    date: "2026-07-27",
     kind: "improved",
     title: "Ask AI shows what it is doing",
     description:
