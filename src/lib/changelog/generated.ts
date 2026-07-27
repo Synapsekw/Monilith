@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-07-27",
+    kind: "improved",
+    title: "Ask AI shows what it is doing",
+    description:
+      'Ask AI now shows a live "Thinking..." indicator the moment you hit send, tells you when it starts reading your boards, and holds the composer until the answer lands so a slow question can no longer look like a broken one.',
+  },
+  {
     date: "2026-07-17",
     kind: "new",
     title: "Board reports",
