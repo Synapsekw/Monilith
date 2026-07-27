@@ -41,6 +41,16 @@ related:
 - **MCP `list_items`** ([[2026-07-27-gotcha-63-mcp-tool-surface-without-enumeration-forces-n-plus-1]]) — a board reads in 2 calls instead of ~164.
 - **Prod schema synced**: 3 migrations applied via `db push` (115 → 118). The tier-2 seed correctly
   no-op'd on prod ("fixture accounts absent — skipping seed"), so **0 fixture users leaked**.
+- **The rename finished across docs and the vault** (`51e9495`, then `536ee64`) — 143 files of prose,
+  `CONTRIBUTING.md`, the `project/pulse` → `project/monolith` tag namespace (37 files), and a scoped
+  prettier pass. Replacement fired only on a **standalone** `Pulse` token never adjacent to
+  `[A-Za-z0-9_@./-]`, which structurally protects every slug, path, wikilink target and identifier;
+  code fences and inline-code spans were skipped. Verified: 143 `M` and **zero renames**, no
+  unresolved wikilinks, no orphans. Three sentences that describe the old branding **as a defect**
+  were deliberately reverted to "Pulse" — renaming inside them would falsify the record.
+- **Two prettier casualties caught by reading the diff, not trusting the tool:** it re-delimits
+  markdown emphasis, turning `postgres_changes` into `postgres*changes` and `${board_id}` into
+  `${board*id}` in prose. Both files reverted, the other 32 committed.
 
 ## Why
 
@@ -86,6 +96,13 @@ from inside the codebase.
 - **gotcha-55 recurred three times in one day** (MCP `apply_migration` stamping a different version
   than the committed file); reconciled each time. The frequency suggests the mint→apply handoff wants
   automating.
+- **The rename stops at source symbols.** Docs now say "Ask Monolith" while the code keeps
+  `askPulseLoop`, `askPulseStream`, `AskPulseVisual` and the `ask_pulse` billing string — a
+  deliberate divergence, since `ask_pulse` is written into `ai_usage` rows and renaming it orphans
+  billing history. The symbol refactor is a source change and wants its own task.
+- **22 `src/` files are prettier-dirty** (pre-existing). The style pass was deliberately scoped to
+  `docs/` + `vault/`; `brand-lab/`, `.obsidian/` and vendored `.claude/skills/` are dirty too and are
+  none of ours.
 - Unchanged: **E6** Stripe blocked on creds.
 
 ## Next session entry point
