@@ -7,7 +7,7 @@ async function baseHandler(req: Request) {
     (server) => {
       if (req.auth) registerTools(server, req.auth);
     },
-    { serverInfo: { name: "pulse", version: "1.0.0" } },
+    { serverInfo: { name: "monolith", version: "1.0.0" } },
     { basePath: "/api", disableSse: true, maxDuration: 60 },
   );
   return handler(req);

@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-07-27",
+    kind: "fixed",
+    title: 'Consent screen and MCP setup say "Monolith"',
+    description:
+      "The OAuth approval screen and the Connect-via-MCP guide referred to the product by its old name.",
+  },
+  {
+    date: "2026-07-27",
     kind: "improved",
     title: "Ask AI shows what it is doing",
     description:
