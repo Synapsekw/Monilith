@@ -4,7 +4,7 @@
 >
 > **Execution context:** per AGENTS.md working agreement #1, this is non-trivial multi-file work — start it with `scripts/start-task.sh mcp-server` (cuts `task/mcp-server` in `.claude/worktrees/mcp-server` off `develop`), then `EnterWorktree({ path: ".claude/worktrees/mcp-server" })` before dispatching subagents. Do not build this on `develop` directly.
 
-**Goal:** Ship a hosted remote MCP server (`/api/mcp`) backed by a from-scratch OAuth 2.1 authorization server, so AI agents (Claude Desktop, claude.ai custom connectors) can authenticate as a real Pulse user and read/create/update items on boards through the same RLS policies the app already enforces.
+**Goal:** Ship a hosted remote MCP server (`/api/mcp`) backed by a from-scratch OAuth 2.1 authorization server, so AI agents (Claude Desktop, claude.ai custom connectors) can authenticate as a real Monolith user and read/create/update items on boards through the same RLS policies the app already enforces.
 
 **Architecture:** Two new subsystems inside the existing Next.js app. (1) `/api/oauth/{register,authorize,token}` + `/.well-known/oauth-authorization-server` — a minimal OAuth 2.1 AS with PKCE and dynamic client registration, reusing the existing Supabase-session login/consent UI. (2) `/api/mcp` — a Streamable HTTP MCP transport (`mcp-handler` wrapping `@modelcontextprotocol/sdk`) whose `verifyToken` callback resolves our OAuth access token to a user, then bridges to a **real, RLS-respecting Supabase session** for that user (minted via `admin.generateLink` + `verifyOtp`, refreshed per request, refresh token stored in Vault) before dispatching to a tool handler. No service-role client ever touches board/item data.
 
@@ -1005,7 +1005,7 @@ Expected: PASS (2 tests)
 
 - [ ] **Step 5: Write `/api/oauth/authorize`**
 
-Validates the request and the client's registered `redirect_uri`, requires a Pulse login (redirects to `/login?next=...` if absent — mirroring how `requireUser()` already redirects elsewhere), then forwards to the consent page carrying the validated params.
+Validates the request and the client's registered `redirect_uri`, requires a Monolith login (redirects to `/login?next=...` if absent — mirroring how `requireUser()` already redirects elsewhere), then forwards to the consent page carrying the validated params.
 
 ```ts
 // src/app/api/oauth/authorize/route.ts
@@ -1754,7 +1754,7 @@ EOF
 - Consumes: `getRequestClient` (Task 9).
 - Produces: `registerListBoardsTool(server, getClient)`, `registerGetBoardTool(server, getClient)` — both take a `getClient: () => Promise<SupabaseClient<Database>>` closure so they're testable without a live `AuthInfo`. Called from `register.ts`.
 
-**Note on why these don't call existing Server Actions:** `src/lib/boards/queries.ts` functions (e.g. a `listMyBoards`-style query) call `createClient()` from `src/lib/supabase/server.ts` internally, which reads Next's `cookies()` — an MCP request carries no Pulse session cookie, only our bearer token. Reusing those functions here would silently build an **unauthenticated** client and break under RLS rather than use the bridged client Task 9 already resolved. Tool handlers instead run the same shape of query directly against the client `getRequestClient` hands them.
+**Note on why these don't call existing Server Actions:** `src/lib/boards/queries.ts` functions (e.g. a `listMyBoards`-style query) call `createClient()` from `src/lib/supabase/server.ts` internally, which reads Next's `cookies()` — an MCP request carries no Monolith session cookie, only our bearer token. Reusing those functions here would silently build an **unauthenticated** client and break under RLS rather than use the bridged client Task 9 already resolved. Tool handlers instead run the same shape of query directly against the client `getRequestClient` hands them.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2823,10 +2823,10 @@ EOF
 
 1. Deploy `develop` to a preview URL (or run `pnpm dev` locally with a public tunnel — Claude Desktop needs a reachable HTTPS URL for `/api/oauth/*` and `/api/mcp`).
 2. In Claude Desktop or claude.ai, add a custom connector pointing at `https://<host>/api/mcp`.
-3. Confirm the client completes dynamic registration, redirects to `/api/oauth/authorize` → your existing Pulse login (if not already signed in) → the consent screen — approve it.
+3. Confirm the client completes dynamic registration, redirects to `/api/oauth/authorize` → your existing Monolith login (if not already signed in) → the consent screen — approve it.
 4. Confirm the connector shows as connected and lists the 6 tools.
 5. Ask the agent to list your boards — confirm it returns exactly the boards you can see in the app.
-6. Ask it to create an item on a specific board/group — confirm the item appears in the Pulse UI immediately.
+6. Ask it to create an item on a specific board/group — confirm the item appears in the Monolith UI immediately.
 7. Ask it to update that item's name and one field — confirm both changes appear in the UI.
 8. Confirm there is **no** delete/archive tool offered — the agent should be unable to remove the item it created.
 

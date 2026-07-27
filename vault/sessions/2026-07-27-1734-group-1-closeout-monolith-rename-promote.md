@@ -22,7 +22,7 @@ related:
   promise handed to `after()`; the stream is a pure observer. **No migration, and no client change**:
   the persisted row already equals a completed one, so existing drop-recovery renders it.
 - **Tier 2 fixtures** — two permanent DEV tenants make cross-tenant isolation a read-only assertion.
-  Proven to bite on three deliberately broken policies, one of them an Ask Pulse policy that had
+  Proven to bite on three deliberately broken policies, one of them an Ask Monolith policy that had
   **never executed** since shipping. `selectPurgeableUserIds` now exempts the fixtures, without which
   the age purge would have deleted them and left the suite passing **vacuously**.
 - **The skip theatre ended** — 70 integration suites reported "skipped" on every run; they now live
@@ -81,7 +81,7 @@ from inside the codebase.
   orgs/users), but a full replace would copy DEV-only rows into prod — including the two Tier 2
   fixture accounts **whose passwords are committed to the repo**. Exclude them from the dump before
   any future data sync.
-- **Ask Pulse write path still unexercised on prod.** Now worth doing, since the disconnect fix is
+- **Ask Monolith write path still unexercised on prod.** Now worth doing, since the disconnect fix is
   live.
 - **gotcha-55 recurred three times in one day** (MCP `apply_migration` stamping a different version
   than the committed file); reconciled each time. The frequency suggests the mint→apply handoff wants

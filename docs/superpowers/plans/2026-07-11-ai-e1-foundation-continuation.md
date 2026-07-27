@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Complete Phase 10 Epic 1 on the reconciled hybrid model — org-scoped AI settings (`off | managed | org_byo | per_user`, default `per_user`), a single gateway with metering (`ai_usage` ledger), entitlements, org/admin Settings UI, dashboard-gen migrated onto the gateway, and the flagship **Ask Pulse** workspace Q&A (Anthropic-gated, read-only, RLS-scoped tools).
+**Goal:** Complete Phase 10 Epic 1 on the reconciled hybrid model — org-scoped AI settings (`off | managed | org_byo | per_user`, default `per_user`), a single gateway with metering (`ai_usage` ledger), entitlements, org/admin Settings UI, dashboard-gen migrated onto the gateway, and the flagship **Ask Monolith** workspace Q&A (Anthropic-gated, read-only, RLS-scoped tools).
 
-**Architecture:** Extends the shipped per-user BYO foundation (`user_ai_credentials` + provider adapters) rather than replacing it. One migration adds `ai_mode`/`org_ai_settings`/`ai_usage` + Vault definer functions (mirroring the shipped `ai_credential_*` pattern). A new `src/lib/ai/gateway.ts` resolves all four modes and wraps every call in metering; `entitlement.ts` gates before any spend. Adapters gain a usage return + `supportsTools` flag. Ask Pulse runs a capped Anthropic tool-use loop over three RLS-scoped read tools. Spec: `docs/superpowers/specs/2026-07-11-ai-e1-scope-reconciliation-design.md` (delta on `2026-07-05-ai-foundation-and-ask-pulse-design.md`).
+**Architecture:** Extends the shipped per-user BYO foundation (`user_ai_credentials` + provider adapters) rather than replacing it. One migration adds `ai_mode`/`org_ai_settings`/`ai_usage` + Vault definer functions (mirroring the shipped `ai_credential_*` pattern). A new `src/lib/ai/gateway.ts` resolves all four modes and wraps every call in metering; `entitlement.ts` gates before any spend. Adapters gain a usage return + `supportsTools` flag. Ask Monolith runs a capped Anthropic tool-use loop over three RLS-scoped read tools. Spec: `docs/superpowers/specs/2026-07-11-ai-e1-scope-reconciliation-design.md` (delta on `2026-07-05-ai-foundation-and-ask-pulse-design.md`).
 
 **Tech Stack:** Next.js 16 (App Router), React 19, TypeScript strict, Supabase (RLS + Vault + SECURITY DEFINER fns), `@anthropic-ai/sdk` (manual tool-use loop), Zod, Zustand, Vitest + Testing Library.
 
@@ -28,11 +28,11 @@ Copied from AGENTS.md / the north-star — every task's requirements implicitly 
 
 Single worktree (`task/ai-e1-foundation`) — the tasks share `src/lib/ai/*` and one migration — but internally parallelizable when driven by subagents:
 
-- **Wave 1 (no deps):** Task 1 (migration + types), Task 2 (pricing), Task 3 (errors), Task 4 (adapter usage + `supportsTools`), Task 10 (Ask Pulse tools)
+- **Wave 1 (no deps):** Task 1 (migration + types), Task 2 (pricing), Task 3 (errors), Task 4 (adapter usage + `supportsTools`), Task 10 (Ask Monolith tools)
 - **Wave 2 (needs 1):** Task 5 (org-settings read), Task 13 (RLS integration tests)
 - **Wave 3:** Task 6 (gateway — needs 2,3,4,5), Task 7 (entitlement — needs 3,5), Task 8 (org settings actions — needs 1,5), Task 9 (platform-admin plan control — needs 1,5)
-- **Wave 4:** Task 11 (dashboard-gen migration — needs 6,7), Task 12 (Ask Pulse loop + action — needs 6,7,10), Task 14 (Settings UI — needs 8)
-- **Wave 5:** Task 15 (Ask Pulse UI — needs 12), then Task 16 (gates + finish)
+- **Wave 4:** Task 11 (dashboard-gen migration — needs 6,7), Task 12 (Ask Monolith loop + action — needs 6,7,10), Task 14 (Settings UI — needs 8)
+- **Wave 5:** Task 15 (Ask Monolith UI — needs 12), then Task 16 (gates + finish)
 
 **Critical path:** 1 → 5 → 6 → 12 → 15 → 16.
 
@@ -1444,7 +1444,7 @@ Render `<OrgAiPlanForm orgId={orgId} initial={{ tier: aiSettings.tier, monthlyCr
 
 ---
 
-### Task 10: Ask Pulse read tools
+### Task 10: Ask Monolith read tools
 
 **Files:**
 
@@ -1526,7 +1526,7 @@ Extend the catch block to map the new typed errors by `e.name` (or `instanceof`)
 
 ---
 
-### Task 12: Ask Pulse loop + server action
+### Task 12: Ask Monolith loop + server action
 
 **Files:**
 
@@ -1709,7 +1709,7 @@ Gate the existing personal card: when the mode is **not** `per_user`, replace `<
 
 ---
 
-### Task 15: Ask Pulse UI — store flag, panel, ⌘K entry, header trigger
+### Task 15: Ask Monolith UI — store flag, panel, ⌘K entry, header trigger
 
 **Files:**
 
@@ -1721,7 +1721,7 @@ Gate the existing personal card: when the mode is **not** `per_user`, replace `<
 **Interfaces:**
 
 - Consumes: `askPulse` action (12), `useUIStore`, `CommandItem`/`run()` pattern (`command-palette.tsx` ~lines 178-192), lazy-mount pattern (`DashboardsNav.tsx:28-35` — `next/dynamic`, `ssr: false`, mounted only when open), `CommandTrigger` as the header-button model.
-- Produces: Ask Pulse reachable from ⌘K ("Ask Pulse…") and a header button; **0 RSC navigations**; the chunk (and the action import) loads only on first open. The panel needs no props — the action resolves org/workspace server-side.
+- Produces: Ask Monolith reachable from ⌘K ("Ask Monolith…") and a header button; **0 RSC navigations**; the chunk (and the action import) loads only on first open. The panel needs no props — the action resolves org/workspace server-side.
 
 **Load the `pulse-ui` and `frontend-design` skills before building.**
 
@@ -1746,16 +1746,16 @@ Gate the existing personal card: when the mode is **not** `per_user`, replace `<
 - [ ] **Step 4: Deliver the "How to test this" walkthrough** (in the closing message AND the `/wrapup` session note):
   1. Pull `develop`, run the app, sign in as an **org owner/admin**.
   2. **Settings → AI — Organization** (new card): confirm the mode selector shows "Members' own keys" selected by default, and your existing personal AI key card still renders below it. Dashboard AI generation must work exactly as before (per-user key) — regression check.
-  3. Switch mode to **Off** → open a board → Generate dashboard with AI → expect the clean "AI is turned off for your organization." error (no 500). Ask Pulse entry shows its disabled state. Switch back to "Members' own keys".
-  4. **Org key path:** paste an Anthropic key in the org-key panel → Validate & save (last4 appears) → switch mode to "Organization key" → dashboard-gen and Ask Pulse now work for a member with **no personal key**.
-  5. **Ask Pulse:** press ⌘K → "Ask Pulse…" (or the header button) → ask "what's overdue and unassigned across my boards?" → expect a thinking state, then an answer naming the boards it consulted. Ask something unanswerable → expect an honest "I don't know" style reply, not fabrication.
+  3. Switch mode to **Off** → open a board → Generate dashboard with AI → expect the clean "AI is turned off for your organization." error (no 500). Ask Monolith entry shows its disabled state. Switch back to "Members' own keys".
+  4. **Org key path:** paste an Anthropic key in the org-key panel → Validate & save (last4 appears) → switch mode to "Organization key" → dashboard-gen and Ask Monolith now work for a member with **no personal key**.
+  5. **Ask Monolith:** press ⌘K → "Ask Monolith…" (or the header button) → ask "what's overdue and unassigned across my boards?" → expect a thinking state, then an answer naming the boards it consulted. Ask something unanswerable → expect an honest "I don't know" style reply, not fabrication.
   6. **Metering:** as admin, in `/admin/organizations/<id>` set tier + a small credit limit (e.g. 1) → switch org mode to **Managed** (requires `ANTHROPIC_API_KEY` on the server) → run one generation → run another → expect "You've used this month's AI allowance." The Settings card's meter shows the spend.
-  7. **Provider gate:** store an OpenAI/Google key (org or personal) → dashboard-gen works, Ask Pulse shows "Ask Pulse needs an Anthropic key — dashboards work with any provider."
+  7. **Provider gate:** store an OpenAI/Google key (org or personal) → dashboard-gen works, Ask Monolith shows "Ask Monolith needs an Anthropic key — dashboards work with any provider."
 
 ---
 
 ## Performance & data-fetching budget (AGENTS.md #5)
 
 - **First paint:** unchanged on every route. The Settings org card is one extra RSC read on `/settings` only; `AskPulseHost` renders `null` until opened; the panel + Anthropic SDK import are in a lazy chunk.
-- **Interactions:** opening/closing Ask Pulse and switching Settings tabs are client state — 0 RSC navigations. Server round-trips happen only on explicit actions (`askPulse`, `setAiMode`, `setOrgByoKey`, `setOrgAiPlan`, generate).
-- **Bounded/indexed:** Ask Pulse tools read via `getBoardPayload` (existing bounded reads, `board_id`-indexed) and cap `query_items` at 50 rows; `ai_usage` reads roll up via the indexed `(org_id, created_at desc)` path inside a definer function; loop capped at 6 tool rounds; question capped at 1000 chars.
+- **Interactions:** opening/closing Ask Monolith and switching Settings tabs are client state — 0 RSC navigations. Server round-trips happen only on explicit actions (`askPulse`, `setAiMode`, `setOrgByoKey`, `setOrgAiPlan`, generate).
+- **Bounded/indexed:** Ask Monolith tools read via `getBoardPayload` (existing bounded reads, `board_id`-indexed) and cap `query_items` at 50 rows; `ai_usage` reads roll up via the indexed `(org_id, created_at desc)` path inside a definer function; loop capped at 6 tool rounds; question capped at 1000 chars.

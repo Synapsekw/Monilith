@@ -12,11 +12,11 @@ related:
   ]
 ---
 
-# decision-27: Ask Pulse becomes a standalone full-page chat surface
+# decision-27: Ask Monolith becomes a standalone full-page chat surface
 
 ## Context
 
-Phase 10 E1 shipped **Ask Pulse** as a stateless shadcn `Dialog` — a single question, a single
+Phase 10 E1 shipped **Ask Monolith** as a stateless shadcn `Dialog` — a single question, a single
 answer, no memory — opened from ⌘K + a header button (`src/components/ai/ask/AskPulse.tsx`). This
 followed the Phase 10 **design stance** in the scope doc: _"AI ships at the seams, not as chrome …
 intelligence surfaced where work already happens,"_ with _"a general chat assistant untethered from
@@ -29,12 +29,12 @@ memory, streaming answers, and (later) the ability to act on the workspace — n
 
 ## Decision
 
-**Promote Ask Pulse from a seam-level popup to a standalone `/ask` page**, and accept the scope this
+**Promote Ask Monolith from a seam-level popup to a standalone `/ask` page**, and accept the scope this
 implies:
 
 1. **Standalone surface.** A dedicated `/ask` route in the side nav (layout "B": entering Ask swaps
-   the Pulse nav rail for a conversation-history rail, with a "Back to Pulse" link). The popup is
-   **retired**; ⌘K "Ask Pulse…" navigates to the page.
+   the Monolith nav rail for a conversation-history rail, with a "Back to Monolith" link). The popup is
+   **retired**; ⌘K "Ask Monolith…" navigates to the page.
 2. **Persisted, per-user, cross-board history.** New `ai_conversations` + `ai_messages` tables with
    **owner-scoped RLS** (a user reads/writes only their own conversations). This reverses the
    "conversation memory deferred" call in decision-26.
@@ -63,7 +63,7 @@ implies:
 ## Consequences
 
 - Roadmap updated: [[00-north-star]] §2 (Phase 10 bullet) + §3 "Next", and [[platform-roadmap]]
-  Phase 10 note now carry "Ask Pulse full-page (queued, not started)."
+  Phase 10 note now carry "Ask Monolith full-page (queued, not started)."
 - Spec: `docs/superpowers/specs/2026-07-12-ask-pulse-full-page-conversational-design.md`.
   Phase-1 plan (12 TDD tasks + execution DAG):
   `docs/superpowers/plans/2026-07-12-ask-pulse-full-page-conversational.md`.

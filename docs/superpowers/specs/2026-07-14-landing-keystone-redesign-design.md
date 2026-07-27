@@ -21,7 +21,7 @@ original recommendation for the record.
 
 ## 1. Goal
 
-The MONOLITH landing is the one **public** surface in Pulse still living in its own bespoke,
+The MONOLITH landing is the one **public** surface in Monolith still living in its own bespoke,
 theme-independent visual system (fixed hex `#06070c` page, `#f4f4f6` white-pill CTA) rather than
 speaking the app's shipped **Monolith Keystone** language. Every authenticated surface now consumes
 Keystone tokens + primitives; the landing was deliberately deferred ("its own separate track").

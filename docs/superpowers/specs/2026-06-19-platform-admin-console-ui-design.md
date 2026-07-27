@@ -30,7 +30,7 @@ presentation/IA layer plus one search-quality fix. Pages stay server-guarded by
 - A dedicated **Users** page: global search + ban/unban + which orgs a user belongs to,
   backed by a **real filtered query** (fixes the current first-200-only in-memory cap).
 - A dedicated **Audit log** page: the full platform feed, paginated.
-- Pulse dark-first monochromatic + indigo styling throughout (pulse-ui).
+- Monolith dark-first monochromatic + indigo styling throughout (pulse-ui).
 
 **Non-goals (YAGNI)**
 

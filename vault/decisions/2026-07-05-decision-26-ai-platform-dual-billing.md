@@ -16,7 +16,7 @@ related:
 
 ## Context
 
-Pulse ships phases 0–9 with exactly **one** AI feature (dashboard generation, `src/lib/ai/`) and no
+Monolith ships phases 0–9 with exactly **one** AI feature (dashboard generation, `src/lib/ai/`) and no
 agentic behaviour. A codebase audit (2026-07-05, three research agents) confirmed: no tool-calling, no
 NL surface, no AI in automations; billing is fully greenfield (no Stripe, no plan column, no quota,
 no secrets-at-rest). The product owner asked for an agentic AI roadmap delivered **two ways** —
@@ -46,7 +46,7 @@ locked architectural commitments.
 4. **Admin-set entitlements before Stripe.** Early customers get a plan set from the existing
    `src/app/admin/` console (`setOrgAiPlan`). Self-serve Stripe checkout (Epic 6) is a fast-follow, so
    AI value ships in ~2 weeks without waiting on billing integration.
-5. **Ask Pulse is workspace-wide and read-only.** NL Q&A across all boards the asking user can see,
+5. **Ask Monolith is workspace-wide and read-only.** NL Q&A across all boards the asking user can see,
    via **RLS-scoped read tools** in a tool-use loop (RLS is the boundary by construction). Natural-
    language _writes_ are a separate, later epic (F6) behind a confirm UX.
 
@@ -69,7 +69,7 @@ no standing non-Supabase services. Phase 10 stays inside that:
 - **Migration is user-applied** (per [[migration-apply-blocked-by-classifier]]): agent writes the SQL
   (`org_ai_settings`, `ai_usage`, `ai_mode` enum, Vault definer functions), user applies, agent
   regenerates types + runs advisors.
-- Epic 1 (foundation + Ask Pulse) is the critical path and the ~2-week ship-in-2 slice; Epics 2/3/4/6
+- Epic 1 (foundation + Ask Monolith) is the critical path and the ~2-week ship-in-2 slice; Epics 2/3/4/6
   parallelize after it; Epic 5 (agentic) is the long pole. Full plans are written **just-in-time** per
   epic, not speculatively.
 - **Not locked forever:** provider is Anthropic-only in v1 (gateway is provider-shaped for an

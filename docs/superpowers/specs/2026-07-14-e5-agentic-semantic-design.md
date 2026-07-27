@@ -48,7 +48,7 @@ E5 is the "moat + long pole" of Phase 10. It has **two independent workstreams**
   `item_embeddings` table + HNSW ANN index + a SECURITY-INVOKER `match_items` RPC, an **async
   embedding pipeline** (backfill + incremental, out-of-band so it never touches the hot write path),
   and surface it as a **semantic Ask tool**, a **"find similar" item action**, and a retrieval layer
-  Ask Pulse can grow into. Distinct from the already-specced `kbar-similarity-search`
+  Ask Monolith can grow into. Distinct from the already-specced `kbar-similarity-search`
   (`2026-07-06`), which is **lexical trigram** typo-tolerance — F15 is **meaning-based**
   ("onboarding" matches "New-hire checklist" with zero shared words).
 
@@ -134,7 +134,7 @@ google}`.
 - **No hybrid re-ranking / RRF fusion** of lexical+semantic in v1 (noted as a future extension).
 - **No embedding of every cell/attachment.** v1 embeds a per-item **composite document**
   (`name` + text-cell values + recent comment text), not every field independently.
-- **No Ask-Pulse-full-page rewrite here.** F15 provides the retrieval RPC/tool that the separately
+- **No Ask-Monolith-full-page rewrite here.** F15 provides the retrieval RPC/tool that the separately
   specced `/ask` page can later consume; it does not build that page.
 - **No self-authored automations** (E4 forbids AI minting rules that self-deploy); a human authors and
   **enables** every agentic rule/agent.
@@ -229,7 +229,7 @@ Builds on F13's async-hop + confined-apply substrate, adds **scheduling** and an
   (`set_percent`). Every write goes through the confined apply path; every run logs a
   `board_agent_runs` row (`status`, per-action outcomes, error).
 - **Agent author identity (decision).** Seed **one platform bot** — a dedicated `auth.users` row
-  ("Pulse Autopilot") with a `profiles` row rendered with an agent badge — created once via a
+  ("Monolith Autopilot") with a `profiles` row rendered with an agent badge — created once via a
   migration/seed. The service-role endpoint authors `item_updates`/`notifications` as that user id
   (`agentUserId`), so attribution is truthful, the frozen-`author_id` trigger is satisfied on later
   edits, and @mentions/notifications render normally. RLS: the bot is a member of the org it acts in
@@ -299,7 +299,7 @@ board_id, enqueued_at)` row (on-conflict-do-nothing). The trigger does **zero** 
 - **Surfaces (additive):**
   1. **Ask tool `semantic_search_items`** — append to `ASK_TOOLS` (+ Zod guard + `executeAskTool`
      switch-case + RLS-scoped handler). Auto-flows into E3's write `proposeLoop` (read tools are
-     shared), giving Ask Pulse a semantic retrieval tool immediately.
+     shared), giving Ask Monolith a semantic retrieval tool immediately.
   2. **"Find similar" item action** — from the item panel, `match_items(p_query_embedding =
 &lt;this item's embedding&gt;, p_exclude_item_id)` → a small ranked list deep-linking to items. If
      the item has no embedding yet (queued), show a graceful "indexing…" state.
@@ -312,7 +312,7 @@ Anthropic has **no first-party embeddings endpoint** (confirmed against the `cla
 managed mode is Anthropic-only for _chat_). An ANN index is only coherent if **every vector comes
 from the same model + dimension** — so semantic search **cannot** use per-org BYO embedding models.
 
-**Decision:** a **single, Pulse-managed embedding model** for all orgs, resolved from a **platform
+**Decision:** a **single, Monolith-managed embedding model** for all orgs, resolved from a **platform
 embedding key in server env** (independent of any org's chat `ai_mode`/keys). Recommended default
 **`text-embedding-3-small` (OpenAI, 1536-dim, ~\$0.02/M-tok)** — it reuses the existing OpenAI SDK
 path already present for the OpenAI chat adapter, so no new dependency; **Voyage

@@ -17,7 +17,7 @@ related:
 
 ## 1. Problem & intent
 
-Every avatar surface in Pulse already reads `profiles.avatar_url` and renders it, falling
+Every avatar surface in Monolith already reads `profiles.avatar_url` and renders it, falling
 back to initials when it is `null`:
 
 - `listOrgMembersCached` (`src/lib/org/queries-cached.ts`) selects `avatar_url` → `OrgMember.avatarUrl`.

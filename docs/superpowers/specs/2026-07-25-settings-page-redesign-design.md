@@ -15,7 +15,7 @@ failures:
    whole notification matrix. Two adjacent cards are both titled about AI
    ("AI — Organization" and "AI"), and when the org manages AI centrally the personal
    card degrades to a sentence in a box that looks broken.
-3. **No MCP instructions.** Pulse ships a hosted MCP server and an OAuth 2.1
+3. **No MCP instructions.** Monolith ships a hosted MCP server and an OAuth 2.1
    authorization server, and the entire in-app surface for it is one card reading
    "No apps connected via MCP yet." with a bare Revoke link. A user cannot discover
    the server URL, cannot learn how to point a client at it, and cannot see what a
@@ -78,12 +78,12 @@ Inside a section there are no cards. The primitives:
 3. **Add it to your client** — client picker (Claude Desktop · claude.ai · Claude
    Code · Other) with numbered steps per client. Picker state is History-API only
    (`window.history.replaceState`), zero server round-trips.
-4. **What Pulse exposes** — table of the six registered tools with read/write badges:
+4. **What Monolith exposes** — table of the six registered tools with read/write badges:
    `list_boards`, `get_board`, `search_items`, `get_item` (read); `create_item`,
    `update_item` (write).
 5. **Access & safety** — the client connects as you; every read and write goes
    through RLS scoped to your account; no delete tools exist; sign-in happens on
-   Pulse so the client never sees your password; revoke at any time.
+   Monolith so the client never sees your password; revoke at any time.
 6. **Connected apps** — client name, connected date, revoke behind a confirm dialog
    with the error surfaced.
 7. **Troubleshooting** — client won't connect, connection dropped, no boards

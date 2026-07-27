@@ -39,7 +39,7 @@ related:
 ## Why
 
 5c-1 built run-history specifically so webhook delivery outcomes could land in it. 5c-2 adds the
-first **outbound HTTP** from Pulse (Slack/Zapier/Make/custom), staying 100% in-DB via pg_net +
+first **outbound HTTP** from Monolith (Slack/Zapier/Make/custom), staying 100% in-DB via pg_net +
 pg_cron, and **closes Phase 5 (Automations)**.
 
 ## Open threads

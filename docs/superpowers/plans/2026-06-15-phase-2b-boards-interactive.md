@@ -21,7 +21,7 @@
 **Pre-flight rules for the implementer:**
 
 - **AGENTS.md rule:** This is NOT stock Next.js. BEFORE writing or modifying any `"use server"` action (Task 1) or touching Server Components / the route, read the relevant guide under `node_modules/next/dist/docs/01-app/` (e.g. `01-getting-started`, `03-api-reference`). Heed deprecation notices. `cookies()`/`params` are already async in this version (see `src/lib/supabase/server.ts`, `src/app/boards/[boardId]/page.tsx`).
-- **UI rule (mandatory):** Task 5 (cell editors + edit-mode switching) MUST invoke the `pulse-ui` skill AND the `frontend-design` skill before writing any visual code. Pulse uses a monochromatic surface system with a single `--brand` accent (bound to shadcn `--primary`/`--ring`); `--accent` stays gray for hover chrome. The one sanctioned place for option color is the status/label pill (`OptionPill` in `cells/index.tsx`). Reuse `@/components/ui/*` primitives (`Input`, `Button`, `Popover`, `Command`, `Calendar`, `Checkbox`, etc.) — do not hand-roll.
+- **UI rule (mandatory):** Task 5 (cell editors + edit-mode switching) MUST invoke the `pulse-ui` skill AND the `frontend-design` skill before writing any visual code. Monolith uses a monochromatic surface system with a single `--brand` accent (bound to shadcn `--primary`/`--ring`); `--accent` stays gray for hover chrome. The one sanctioned place for option color is the status/label pill (`OptionPill` in `cells/index.tsx`). Reuse `@/components/ui/*` primitives (`Input`, `Button`, `Popover`, `Command`, `Calendar`, `Checkbox`, etc.) — do not hand-roll.
 - **`supabase db reset --linked` is DESTRUCTIVE** — it wipes all dev data on the linked project and re-applies migrations from scratch. This is **authorized** for Task 0 (squashing three 2a migrations into one canonical file). Do not run it again after Task 0.
 - **Advisors must be clean.** After Task 0's schema change, run advisors via the supabase MCP `get_advisors` tool (security + performance) — a phase is not complete with advisor warnings. (`supabase db lint --linked` is an acceptable CLI fallback.)
 - Work on branch `feat/phase-2b-boards-interactive` — **it already exists**; check it out (`git checkout feat/phase-2b-boards-interactive`). Do NOT create it.
@@ -1109,7 +1109,7 @@ Per spec §6: cells become inline-editable — click or Enter to edit, Esc cance
 
 **Steps**
 
-- [ ] Invoke the `pulse-ui` skill, then the `frontend-design` skill. Apply Pulse tokens: monochrome surfaces, the brand accent only on focus rings/`--ring`, the `OptionPill` (status/dropdown color) as the single sanctioned color surface. Reuse `@/components/ui/*` (`Input`, `Popover`/`Command` for Status/Dropdown/People, a date input or `Calendar` popover for Date). Each editor is keyboard-first: Enter commits, Esc cancels (calls `onCancel`), Tab commits then signals "advance".
+- [ ] Invoke the `pulse-ui` skill, then the `frontend-design` skill. Apply Monolith tokens: monochrome surfaces, the brand accent only on focus rings/`--ring`, the `OptionPill` (status/dropdown color) as the single sanctioned color surface. Reuse `@/components/ui/*` (`Input`, `Popover`/`Command` for Status/Dropdown/People, a date input or `Calendar` popover for Date). Each editor is keyboard-first: Enter commits, Esc cancels (calls `onCancel`), Tab commits then signals "advance".
 
 - [ ] Write the FAILING component test `src/components/boards/cells/editors/editors.test.tsx`. Each editor takes `value`, `settings`, `onCommit(value)`, `onCancel()`, and `members` (People only). Cover: open/seed initial value, commit on Enter, cancel on Esc, and (for selectors) choosing an option calls `onCommit` with the right shape.
 
@@ -1239,7 +1239,7 @@ describe("DateEditor", () => {
 ```
 
 - [ ] Run it: `pnpm test src/components/boards/cells/editors/editors.test.tsx`. Expected: **FAIL** (module missing).
-- [ ] Create `src/components/boards/cells/editors/index.tsx`. Implement all six editors fully against Pulse primitives (the shapes below are the contract the tests pin; adapt the chrome/classNames to what `pulse-ui` specifies). `OrgMember` is imported from `@/lib/boards/queries` is server-only — instead define a local `EditorMember` type to avoid the `server-only` import in a client module.
+- [ ] Create `src/components/boards/cells/editors/index.tsx`. Implement all six editors fully against Monolith primitives (the shapes below are the contract the tests pin; adapt the chrome/classNames to what `pulse-ui` specifies). `OrgMember` is imported from `@/lib/boards/queries` is server-only — instead define a local `EditorMember` type to avoid the `server-only` import in a client module.
 
 ```tsx
 "use client";

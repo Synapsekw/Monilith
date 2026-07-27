@@ -20,7 +20,7 @@ related:
 
 ## Why
 
-Pulse is desktop-first; on touch the board surfaces have tiny hit targets, hover-only actions a finger can't reach, and drag gestures that fight scroll. Building shared touch primitives **once** (foundation-first) lets the 8 per-surface Batch-2 plans adopt one consistent, tested API instead of each re-deriving touch handling.
+Monolith is desktop-first; on touch the board surfaces have tiny hit targets, hover-only actions a finger can't reach, and drag gestures that fight scroll. Building shared touch primitives **once** (foundation-first) lets the 8 per-surface Batch-2 plans adopt one consistent, tested API instead of each re-deriving touch handling.
 
 ## How to test (for the user)
 

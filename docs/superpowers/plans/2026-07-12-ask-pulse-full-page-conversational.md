@@ -1,11 +1,11 @@
-# Ask Pulse — Full-Page Conversational AI (Phase 1) Implementation Plan
+# Ask Monolith — Full-Page Conversational AI (Phase 1) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Load before UI tasks:** `pulse-ui` + `frontend-design` skills (Tasks 9–11 build/style UI).
 > **Spec:** `docs/superpowers/specs/2026-07-12-ask-pulse-full-page-conversational-design.md`
 
-**Goal:** Turn the stateless "Ask Pulse" popup into a full-page `/ask` chat surface with persisted per-user cross-board conversation history, multi-turn memory (rolling summary), and token streaming — read-only (Phase 2 write actions get their own plan).
+**Goal:** Turn the stateless "Ask Monolith" popup into a full-page `/ask` chat surface with persisted per-user cross-board conversation history, multi-turn memory (rolling summary), and token streaming — read-only (Phase 2 write actions get their own plan).
 
 **Architecture:** New `ai_conversations` + `ai_messages` tables (owner-scoped RLS). Mutations (create/rename/delete conversation, append user message) stay Server Actions on the cookie client. The **one exception** to "Server Actions for all mutations" is the streaming completion: a session-authed Route Handler (`/api/ask`) reads the conversation, runs the existing tool-use loop in **streaming** mode via the Anthropic SDK's `.stream()`, streams NDJSON events to the client, then persists the assistant message and auto-titles the conversation. Every AI call still routes through `runAi` (metering) + `requireAiEntitlement`. Conversation switching is client state + History API (0 RSC navigations).
 
@@ -28,7 +28,7 @@
 | `src/lib/ai/ask/context.ts`                               | Pure context assembler + rolling-summary compaction + title generation                                            |
 | `src/lib/ai/ask/ask-stream.ts`                            | Streaming tool-use loop (`.stream()`), emits text deltas                                                          |
 | `src/app/api/ask/route.ts`                                | POST streaming endpoint: entitlement → stream → persist assistant msg + title                                     |
-| `src/app/ask/layout.tsx`                                  | Layout B: conversation rail replaces Pulse nav; "Back to Pulse" (route lives OUTSIDE the `(app)` group — see T10) |
+| `src/app/ask/layout.tsx`                                  | Layout B: conversation rail replaces Monolith nav; "Back to Monolith" (route lives OUTSIDE the `(app)` group — see T10) |
 | `src/app/ask/page.tsx`                                    | New-chat entry                                                                                                    |
 | `src/app/ask/[conversationId]/page.tsx`                   | Existing conversation (loads thread)                                                                              |
 | `src/components/ai/ask/AskChat.tsx`                       | Client chat controller (thread + composer + `useAskStream`)                                                       |
@@ -1545,7 +1545,7 @@ git commit -m "feat(ai): ask chat components + streaming client hook"
 
 ## Task 10: `/ask` route + Layout B
 
-**Route placement (decided):** `/ask` lives **outside** the `(app)` route group — at `src/app/ask/` — because `(app)/layout.tsx` wraps every child in `AuthenticatedShell` (the Pulse sidebar nav + header), and layout B needs the _conversation rail in place of_ that nav. This mirrors the repo's own precedent: `(app)/layout.tsx` documents that `admin` and `home` "deliberately stay OUTSIDE this group." `/ask` gets its own auth-guarded layout that renders the layout-B frame. (Optional polish: reuse the header cluster — `CommandTrigger`/`ThemeToggle`/user — inside this layout for consistency; not required for v1.)
+**Route placement (decided):** `/ask` lives **outside** the `(app)` route group — at `src/app/ask/` — because `(app)/layout.tsx` wraps every child in `AuthenticatedShell` (the Monolith sidebar nav + header), and layout B needs the _conversation rail in place of_ that nav. This mirrors the repo's own precedent: `(app)/layout.tsx` documents that `admin` and `home` "deliberately stay OUTSIDE this group." `/ask` gets its own auth-guarded layout that renders the layout-B frame. (Optional polish: reuse the header cluster — `CommandTrigger`/`ThemeToggle`/user — inside this layout for consistency; not required for v1.)
 
 **Files:**
 
@@ -1553,7 +1553,7 @@ git commit -m "feat(ai): ask chat components + streaming client hook"
 - Create: `src/app/ask/page.tsx`
 - Create: `src/app/ask/[conversationId]/page.tsx`
 
-- [ ] **Step 1: Implement the layout (conversation rail replaces the Pulse nav)**
+- [ ] **Step 1: Implement the layout (conversation rail replaces the Monolith nav)**
 
 ```tsx
 import Link from "next/link";
@@ -1586,7 +1586,7 @@ export default async function AskLayout({
 }
 ```
 
-Because `/ask` sits outside `(app)`, it does **not** inherit `AuthenticatedShell` — this layout fully owns the frame, so the conversation rail cleanly takes the place of the Pulse nav with no route-group surgery. `requireUser()` provides the same auth guard the shell would.
+Because `/ask` sits outside `(app)`, it does **not** inherit `AuthenticatedShell` — this layout fully owns the frame, so the conversation rail cleanly takes the place of the Monolith nav with no route-group surgery. `requireUser()` provides the same auth guard the shell would.
 
 - [ ] **Step 2: Implement `page.tsx` (new chat) and `[conversationId]/page.tsx`**
 
@@ -1645,7 +1645,7 @@ git commit -m "feat(ai): /ask route with layout b conversation rail"
 **Files:**
 
 - Modify: `src/components/shell/sidebar-nav.tsx` (add `ASK` NavLink)
-- Modify: `src/components/command-palette.tsx` (repoint Ask Pulse to `/ask`)
+- Modify: `src/components/command-palette.tsx` (repoint Ask Monolith to `/ask`)
 - Modify: `src/components/app-shell.tsx` (remove `AskPulseTrigger` + `AskPulseHost`)
 - Modify: `src/stores/ui.ts` (remove `askPulseOpen` slice)
 - Delete: `src/components/ai/ask/AskPulse.tsx`, `AskPulseHost.tsx`, `AskPulseTrigger.tsx` (+ their tests)
@@ -1664,7 +1664,7 @@ Render `<ExpandedLink item={ASK} .../>` directly under HOME in the expanded `<na
 
 - [ ] **Step 2: Repoint ⌘K**
 
-In `command-palette.tsx`, replace the Ask Pulse `onSelect`:
+In `command-palette.tsx`, replace the Ask Monolith `onSelect`:
 
 ```tsx
 <CommandItem onSelect={() => run(() => router.push("/ask"))}>
@@ -1714,8 +1714,8 @@ Expected: all PASS.
 
 - [ ] **Step 2: Manual acceptance (drives the "How to test" walkthrough)**
 
-1. Sign in as an org member. A new **"Ask Pulse"** item appears in the sidebar (Sparkles icon) under My Work; ⌘K → "Ask Pulse…" also lands there.
-2. `/ask` opens with an empty thread + composer; the left rail shows "Back to Pulse", "New chat", and (once created) past conversations.
+1. Sign in as an org member. A new **"Ask Monolith"** item appears in the sidebar (Sparkles icon) under My Work; ⌘K → "Ask Monolith…" also lands there.
+2. `/ask` opens with an empty thread + composer; the left rail shows "Back to Monolith", "New chat", and (once created) past conversations.
 3. Ask "what's overdue and unassigned across my boards?" → the answer **streams** token-by-token; a "Consulting N boards…" status shows during tool rounds.
 4. The conversation gets an **auto-title** in the rail. Reload → the thread and title persist.
 5. Ask a **follow-up** ("which of those is highest priority?") → it answers with memory of the prior turn.
@@ -1732,5 +1732,5 @@ Run `scripts/finish-task.sh` from the worktree (rebases onto `develop`, runs gat
 ## Self-review notes
 
 - **Spec coverage:** layout B (T10), tables + owner-scoped RLS (T1–2), read-only reuse of `ask/tools.ts` (T6), rolling-summary multi-turn (T5+T7), streaming via route handler with mutations staying Server Actions (T4/T7), retire popup + ⌘K repoint (T11), perf budget — first paint = bounded list+thread, in-conversation streaming + new-chat via History API (T9), metering/entitlement reuse (T7). Phase 2 write actions intentionally deferred to a follow-on plan (per spec §0/§10).
-- **Route placement resolved (T10):** `/ask` lives outside the `(app)` group (at `src/app/ask/`), so it owns its own frame and the conversation rail replaces the Pulse nav with no route-group surgery — matching the repo's existing precedent for `admin`/`home`. No open structural decisions remain.
+- **Route placement resolved (T10):** `/ask` lives outside the `(app)` group (at `src/app/ask/`), so it owns its own frame and the conversation rail replaces the Monolith nav with no route-group surgery — matching the repo's existing precedent for `admin`/`home`. No open structural decisions remain.
 - **Type consistency:** `MessageRow`/`ConversationRow` (T3) reused by T5/T9/T10; `AskStreamEvent` (T6) reused by T7/T9; `askPulseStream` signature (T6) matches its T7 call site; `ActionResult<T>` shape matches the repo convention.

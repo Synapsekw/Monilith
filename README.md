@@ -1,4 +1,4 @@
-# Pulse
+# Monolith
 
 A cloud-native **"Work OS"** — a flexible, visual platform for teams to plan, track, and run any
 kind of work. Monday.com's color-coded board experience as the foundation, ClickUp's depth folded

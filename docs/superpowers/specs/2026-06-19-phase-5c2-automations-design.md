@@ -57,7 +57,7 @@ delivery ledger, and a `pg_cron` **reconcile sweep** patches the run's outcome t
 templating / token interpolation (`{{item.name}}`); Slack-specific message formatting; retries /
 backoff on failed deliveries; GET/PUT/PATCH/DELETE methods; a board-level webhook activity feed
 (run-history per-rule view is the surface); Realtime on delivery status (reconcile + fetch-on-expand
-suffices); incoming webhooks (Pulse as a receiver).
+suffices); incoming webhooks (Monolith as a receiver).
 
 ## 2. Data model
 
@@ -166,7 +166,7 @@ fault-isolation wrapper — **verbatim**. Two structural changes:
      `automation_runs(id)` is always satisfied (both within the one transaction, run row written
      first).
    - **Envelope is intentionally minimal** (ids + item name + trigger + time). Receivers that need
-     more can call back into Pulse; richer payloads are a future slice.
+     more can call back into Monolith; richer payloads are a future slice.
 
 - **Fault isolation preserved:** if `net.http_post` raises (malformed args), the `exception when
 others` handler logs `status='error'` and swallows it — the user's triggering edit still commits.

@@ -7,7 +7,7 @@ related:
   ["[[00-north-star]]", "[[2026-06-14-pulse-design]]", "[[platform-roadmap]]"]
 ---
 
-# Pulse — Phase 2: Boards Core — Design Spec
+# Monolith — Phase 2: Boards Core — Design Spec
 
 > Derived from the master spec ([[2026-06-14-pulse-design]] §4.1, §5, §7) and the Phase 2
 > brainstorm (2026-06-15). Builds directly on the Phase 1 auth/tenancy schema and RLS helpers.

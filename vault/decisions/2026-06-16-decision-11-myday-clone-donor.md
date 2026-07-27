@@ -29,7 +29,7 @@ design/UX reference only.
 Treat My-Day as a **UX/taxonomy donor for Phase 4**, never an architecture or code donor. Its
 data-flow model is a near-perfect catalogue of the pitfalls our invariants exist to prevent.
 
-**Steal (UX ideas, reimplemented Pulse-native):**
+**Steal (UX ideas, reimplemented Monolith-native):**
 
 - The item panel's **two-tab split**: _Updates_ (human discussion) vs _Activity Log_ (system events).
 - The **activity taxonomy** + per-action **from→to** rendering (status/date/person/number diffs) —
@@ -39,12 +39,12 @@ data-flow model is a near-perfect catalogue of the pitfalls our invariants exist
 **Reject (architecture — these are the traps):**
 
 - Activities as a **30-item capped array on the board doc** (`activities.pop()`) → silent history loss
-  - full-board re-save per event. → Pulse: append-only `item_activities` rows, paginated, never capped.
-- **Comments nested on the task** → no pagination/permissions, board re-save per comment. → Pulse:
+  - full-board re-save per event. → Monolith: append-only `item_activities` rows, paginated, never capped.
+- **Comments nested on the task** → no pagination/permissions, board re-save per comment. → Monolith:
   `item_updates` table, RLS, optimistic per-row.
-- **Full-board socket broadcast** on every change → heaviest sync + double-apply bugs. → Pulse:
+- **Full-board socket broadcast** on every change → heaviest sync + double-apply bugs. → Monolith:
   row-level Supabase Realtime deltas filtered by item/recipient (already our pattern).
-- `contentEditable` title with no validation → Pulse: Zod-validated Server Action.
+- `contentEditable` title with no validation → Monolith: Zod-validated Server Action.
 
 ## How to apply
 

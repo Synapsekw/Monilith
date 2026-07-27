@@ -6,7 +6,7 @@
 >
 > **Spec:** `docs/superpowers/specs/2026-07-26-mcp-assigned-notification-design.md`. Read §3 (the two resolved risks), §5 (design), §6 (why `clearCell` stays silent) and §7 (perf budget) before Task 1. Background ADR: `vault/decisions/2026-07-25-gotcha-60-server-action-side-effects-invisible-to-mcp.md`.
 
-**Goal:** Assigning a person to an item via MCP (`create_item` / `update_item`) sends the same `kind: "assigned"` notification the Pulse UI sends — by making both callers share one implementation instead of two.
+**Goal:** Assigning a person to an item via MCP (`create_item` / `update_item`) sends the same `kind: "assigned"` notification the Monolith UI sends — by making both callers share one implementation instead of two.
 
 **Architecture:** Hoist `upsertCellCore(supabase, input, actorId)` into a new non-`"use server"` module `src/lib/boards/actions/cell-core.ts`. `upsertCell` becomes a thin cookie-client wrapper (Zod parse → `createClient()` → actor from `@/lib/auth/session`), and the MCP `writeCellValue` becomes a thin adapter passing the bridged client plus the MCP user id. The core performs **no** auth lookup — `actorId` is always injected, which is what makes it identical under a cookie session and an OAuth bearer session.
 
@@ -1267,13 +1267,13 @@ This change **is** user-observable, so a walkthrough is required both in the clo
 the `/wrapup` session note. Use this:
 
 1. Pull `develop` and restart the app (`pnpm dev`); make sure your Claude Desktop MCP connection to
-   Pulse is authorized as **you**.
-2. In Pulse, open any board that has a **People** column and note an item plus a teammate in the
+   Monolith is authorized as **you**.
+2. In Monolith, open any board that has a **People** column and note an item plus a teammate in the
    same org who is _not_ you.
-3. In Claude Desktop, ask: "In Pulse, assign <teammate> to the item '<item name>'." (This calls
+3. In Claude Desktop, ask: "In Monolith, assign <teammate> to the item '<item name>'." (This calls
    `update_item` with a people field.)
-4. In Pulse, confirm the People cell now shows that teammate — as before.
-5. **The fix:** have the teammate open Pulse (or sign in as them) and check the notification bell —
+4. In Monolith, confirm the People cell now shows that teammate — as before.
+5. **The fix:** have the teammate open Monolith (or sign in as them) and check the notification bell —
    there should be a new "assigned you" notification pointing at that item. Before this change there
    was none.
 6. Negative check: ask Claude to assign **yourself** to another item — no notification should

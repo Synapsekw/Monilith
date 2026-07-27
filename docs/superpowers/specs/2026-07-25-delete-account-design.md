@@ -14,11 +14,11 @@ related:
 
 ## 1. Problem
 
-Pulse has no way for a user to delete their own account. The settings redesign
+Monolith has no way for a user to delete their own account. The settings redesign
 (2026-07-25) deliberately deferred it because of an "FK blocker" recorded in the session
 note. This spec resolves that blocker and specifies the feature.
 
-The blocker is worse than recorded. **Account deletion is impossible in Pulse today — for
+The blocker is worse than recorded. **Account deletion is impossible in Monolith today — for
 anybody, by any path.** Verified empirically against the live DEV database in a rolled-back
 transaction:
 
@@ -28,7 +28,7 @@ PROBE(minimal-user): BLOCKED by [organizations_created_by_fkey]
      "organizations_created_by_fkey" on table "organizations"
 ```
 
-That probe targeted a user with **zero boards and zero items**. Every real Pulse user has
+That probe targeted a user with **zero boards and zero items**. Every real Monolith user has
 created at least one organization during onboarding, so `organizations.created_by`
 (`NOT NULL`, `ON DELETE NO ACTION`, not deferrable) blocks every deletion unconditionally.
 
@@ -78,7 +78,7 @@ The 10 nullable-but-`no action`: `admin_audit_log.target_user_id`,
 `feedback.responded_by`, `groups.archived_by`, `item_activities.actor_id`,
 `items.archived_by`, `notifications.actor_id`, `org_members.deactivated_by`.
 
-### 2.1 Ownership in Pulse is derived, not stored — and the blast radius is larger than recorded
+### 2.1 Ownership in Monolith is derived, not stored — and the blast radius is larger than recorded
 
 The vault's original note proposed converting the `NOT NULL` columns to `ON DELETE SET
 NULL`. That would cause **silent, irreversible, org-wide data loss.**
@@ -149,7 +149,7 @@ favour of the recommendation in §9; the table below reflects what was **built**
 | **Reassign to a surviving org owner** (stays `NOT NULL`, stays `NO ACTION`)              | `boards.created_by`, `goals.created_by`, `goals.owner_id`, `portfolios.created_by`, `organizations.created_by`, `workspaces.created_by`, `dashboards.created_by`, `items.created_by`, `board_members.granted_by`, `org_invitations.invited_by`, `member_capacity.created_by`, `attachments.uploaded_by` (12) | These bear authority (`readable_board_ids`, `can_edit_board`, `can_edit_goal`, `can_edit_portfolio`) or are org work product. A live human must resolve to "owner".                                                                                                                                                                                                                                                                |
 | **Reassign to the platform bot** (stays `NOT NULL`, stays `NO ACTION`) — **decision D2** | `item_updates.author_id` (1)                                                                                                                                                                                                                                                                                 | The only column where the bot is right rather than disqualified. It is the truthful attribution ("no longer attributable to a person") and it hands nobody edit authority over another person's words. Safe **because** `item_updates` is gated by `author_id = auth.uid() OR can_edit_board(board_id)`, so board editors keep control regardless — unlike `boards.created_by`, this column is not visibility-load-bearing (§2.2). |
 | **Cascade** (`NOT NULL` → `ON DELETE CASCADE`)                                           | `time_entries.user_id` (1)                                                                                                                                                                                                                                                                                   | This is a _fact about the person_, not authorship. Reassigning would falsify who did the work. Its two siblings `time_allocations.user_id` and `member_capacity.user_id` are **already** `cascade` — this is consistency, not a new idea.                                                                                                                                                                                          |
-| **Nullable + `SET NULL`**                                                                | `admin_audit_log.actor_id`, `feedback.submitted_by` (2 newly nullable) + the **10** already-nullable attributive columns (12)                                                                                                                                                                                | Audit integrity forbids reassigning `actor_id` (it would attribute one admin's action to another). `feedback` is personal input to Pulse, erasable — `feedback_select` already falls back to `is_platform_admin()`. The 10 attributive columns need only the FK action changed.                                                                                                                                                    |
+| **Nullable + `SET NULL`**                                                                | `admin_audit_log.actor_id`, `feedback.submitted_by` (2 newly nullable) + the **10** already-nullable attributive columns (12)                                                                                                                                                                                | Audit integrity forbids reassigning `actor_id` (it would attribute one admin's action to another). `feedback` is personal input to Monolith, erasable — `feedback_select` already falls back to `is_platform_admin()`. The 10 attributive columns need only the FK action changed.                                                                                                                                                    |
 
 12 + 1 + 1 + 12 = 26. ✓ (13 of them reassigned by the RPC, so 13 stay
 `NOT NULL`/`NO ACTION` — verified live: `no action` went 26 → 13.)
@@ -477,7 +477,7 @@ organization's records, with the authorship pointer moved to a different data su
 GDPR Art. 17 the erasure right covers the individual's personal data, not the controller's
 business records; reparenting an `owner` pointer to a surviving account is the standard
 orphaned-record pattern and retains **no identifier** of the erased person. Content the user
-_wrote_ (an item update body) is retained as org record — Pulse's Terms should say so, which
+_wrote_ (an item update body) is retained as org record — Monolith's Terms should say so, which
 is a legal-copy task, not a code task.
 
 **Two genuine gaps**, both in scope:
@@ -597,7 +597,7 @@ make first. **Default if no answer: (a)**, as specified, since it is strictly si
 principal is pinned by a unit test so it cannot silently regress to the owner.
 
 **D3 — `time_entries` cascade deletes the org's time data.** Specified as cascade, matching
-`time_allocations`/`member_capacity`. If Pulse ever bills or reports on historical time,
+`time_allocations`/`member_capacity`. If Monolith ever bills or reports on historical time,
 losing a departed member's entries is a business-data loss.
 _Options:_ (a) cascade (specified); (b) keep the rows and null `user_id`, losing per-person
 attribution but keeping totals — costs one nullable column and one guard.

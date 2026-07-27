@@ -6,13 +6,13 @@
 
 ## 1. Goal & scope
 
-Make Pulse's existing board surfaces **read like the in-repo Monday prototype** in dark mode, by
+Make Monolith's existing board surfaces **read like the in-repo Monday prototype** in dark mode, by
 applying a denser, higher-signal "direction C" treatment. This is a **visual-only** pass: it changes
 `className`/token usage on components that already exist — **no** structural rewrites, **no** new
 views/features, **no** logic or data-flow changes.
 
 Why this is needed: the dark-token foundation already landed (palette ≈ prototype), but the app still
-reads as the old Pulse board because the **component density/treatment** is unchanged. This pass
+reads as the old Monolith board because the **component density/treatment** is unchanged. This pass
 closes that gap.
 
 **Surfaces in scope (all four):**
@@ -32,7 +32,7 @@ closes that gap.
   [`gotcha-09-rsc-nav-refetch-on-view-switch`](../../../vault/decisions/2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch.md)
   and will be addressed in a functional pass, not this visual one.
 - **Light mode** stays functional but is not retuned in this pass (dark-first).
-- **No raw colors.** Everything stays on Pulse semantic tokens (`bg-surface`, `border`,
+- **No raw colors.** Everything stays on Monolith semantic tokens (`bg-surface`, `border`,
   `text-muted-foreground`, `bg-status-*`); per-row group/option colors remain the existing inline
   `style={{ backgroundColor }}` driven by DB values. (pulse-ui invariant.)
 

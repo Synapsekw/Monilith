@@ -31,7 +31,7 @@ one lane-packing engine:
 - **Week** — all-day 7-column strip; full lanes, **no cap** (room to scroll). The detail escape hatch.
 - **Agenda** — chronological, day-grouped list; naturally density-proof.
 
-All three honor Pulse's **monochrome chrome + earned color**: chrome stays neutral, the brand
+All three honor Monolith's **monochrome chrome + earned color**: chrome stays neutral, the brand
 indigo marks today/active/focus, and the 8-color status palette is the only multi-color surface.
 
 ### Locked decisions

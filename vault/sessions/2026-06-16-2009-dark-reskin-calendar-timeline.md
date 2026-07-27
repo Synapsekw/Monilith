@@ -21,7 +21,7 @@ related:
 
 ## Why
 
-This session turned the planned-but-light "dark Monday" intent into reality: the user loves the prototype's look, so we made dark the lead and shipped the two missing Phase 3b views. Reuse map (decision-08) kept us porting the prototype's UI/logic onto Pulse's Supabase spine, never its Zustand/localStorage architecture.
+This session turned the planned-but-light "dark Monday" intent into reality: the user loves the prototype's look, so we made dark the lead and shipped the two missing Phase 3b views. Reuse map (decision-08) kept us porting the prototype's UI/logic onto Monolith's Supabase spine, never its Zustand/localStorage architecture.
 
 ## Open threads
 

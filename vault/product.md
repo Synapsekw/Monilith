@@ -15,7 +15,7 @@ product
 
 ## What it is
 
-**Pulse** — a cloud-native **"Work OS"**: a flexible, visual platform for teams to plan, track, and
+**Monolith** — a cloud-native **"Work OS"**: a flexible, visual platform for teams to plan, track, and
 run any kind of work. Monday.com's color-coded board experience as the foundation, ClickUp's depth
 folded in, Asana's polish on top. One coherent product, not a clone — the goal is the _ultimate_
 version of the category.
@@ -42,7 +42,7 @@ that stays smooth at 10k-item boards.
 
 Three words: **Calm. Capable. Crisp.**
 
-- **Calm** — a colorful category (Monday especially) tends toward visual noise. Pulse stays
+- **Calm** — a colorful category (Monday especially) tends toward visual noise. Monolith stays
   monochromatic by default; color carries _meaning_ (status, labels), not decoration. The lead look
   is **dark-first**: layered near-black surfaces, hairline borders, a single indigo accent (light
   mode supported but secondary).
@@ -53,7 +53,7 @@ Three words: **Calm. Capable. Crisp.**
 ## Anti-references
 
 - **Maximalist Work-OS chrome** — rainbow gradients on every surface, dense toolbars, color for its
-  own sake. Pulse keeps chrome strictly monochrome; status/label colors are the one controlled palette.
+  own sake. Monolith keeps chrome strictly monochrome; status/label colors are the one controlled palette.
 - **Feature-soup UI** — exposing every advanced capability at once. Depth is progressive.
 - **Heavy, janky tables** — anything that stutters past a few hundred rows. Virtualize, paginate,
   index, stream.

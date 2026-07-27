@@ -34,4 +34,4 @@ The report looked dull and, worse, showed no statuses / 0% on real boards where 
 
 ## Next session entry point
 
-Report Builder (builder + polish + subitems fix) is on `develop` @ `00e1c57`, not prod. Next: **validate PDF export on a Vercel preview**, then **promote to prod**. Or pick a roadmap build (Ask Pulse full-page / E5 / E6 / PF).
+Report Builder (builder + polish + subitems fix) is on `develop` @ `00e1c57`, not prod. Next: **validate PDF export on a Vercel preview**, then **promote to prod**. Or pick a roadmap build (Ask Monolith full-page / E5 / E6 / PF).

@@ -7,7 +7,7 @@ related: ["[[00-north-star]]"]
 
 # Operations — Map of Content
 
-> How Pulse is built, wired, and run. Runbooks for Supabase, MCP, migrations, and deploy.
+> How Monolith is built, wired, and run. Runbooks for Supabase, MCP, migrations, and deploy.
 
 ## Environment & secrets
 

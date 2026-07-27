@@ -34,9 +34,9 @@ Three sessions were merged straight to develop and promoted to prod without a `/
 
 ## Open threads
 
-- **Scope reconciliation owed:** shipped BYO is **per-user + un-metered**; the E1 plan assumes **org-scoped, managed-vs-BYO + `ai_usage` metering/entitlements + Ask Pulse**. Continuing Phase 10 must reconcile the two, not build the plan as-written. Metering/gateway core + all of Ask Pulse are still greenfield.
+- **Scope reconciliation owed:** shipped BYO is **per-user + un-metered**; the E1 plan assumes **org-scoped, managed-vs-BYO + `ai_usage` metering/entitlements + Ask Monolith**. Continuing Phase 10 must reconcile the two, not build the plan as-written. Metering/gateway core + all of Ask Monolith are still greenfield.
 - Carried, still owed: dev migration-ledger drift (`20260705120000` missing from DEV ledger); Batch-A trash follow-ups (nav link to `/boards` Trash `#archived`; surface `archived_by`); `buildImportPayload` (unsuffixed) retire-or-confirm; perf tier-3 Task A (`unstable_instant`, needs its own arch spec — gotcha-48); landing redesign brand-lab pick (Statement/Product/Editorial/Kinetic).
 
 ## Next session entry point
 
-Vault now matches reality. Next build block: Phase 10 E1 continuation — start with a **scoping/brainstorm pass reconciling the shipped per-user BYO foundation against the org-scoped managed+metering+Ask Pulse plan**, then `/develop` in a `task/ai-*` worktree. Trivial cleanups (ledger repair, trash follow-ups) can run as a disjoint parallel batch.
+Vault now matches reality. Next build block: Phase 10 E1 continuation — start with a **scoping/brainstorm pass reconciling the shipped per-user BYO foundation against the org-scoped managed+metering+Ask Monolith plan**, then `/develop` in a `task/ai-*` worktree. Trivial cleanups (ledger repair, trash follow-ups) can run as a disjoint parallel batch.

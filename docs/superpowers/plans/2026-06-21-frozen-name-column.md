@@ -435,7 +435,7 @@ git commit -m "fix(boards): single scroll container so Name column freezes on ho
 
 - Modify: `src/components/boards/BoardTable.tsx`
 
-> **Load the `pulse-ui` skill before this task** (UI styling). The shadow must use Pulse's dark-first tokens; tune the gradient opacity to read as depth on both themes. The classes below are the starting point.
+> **Load the `pulse-ui` skill before this task** (UI styling). The shadow must use Monolith's dark-first tokens; tune the gradient opacity to read as depth on both themes. The classes below are the starting point.
 
 - [ ] **Step 1: Define the shared freeze-edge class constant**
 

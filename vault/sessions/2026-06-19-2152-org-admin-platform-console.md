@@ -32,7 +32,7 @@ related:
 
 ## Why
 
-Pulse had a role enum + org-scoped RLS but **no admin operations** (settings only edited name +
+Monolith had a role enum + org-scoped RLS but **no admin operations** (settings only edited name +
 timezone) and no platform oversight. This adds real member/role/invite/recovery/audit management
 per-org, plus a separate, heavily-guarded cross-tenant super-admin tier — without weakening org RLS
 for normal users (the cross-tenant path is a distinct `is_platform_admin()`-gated mechanism).

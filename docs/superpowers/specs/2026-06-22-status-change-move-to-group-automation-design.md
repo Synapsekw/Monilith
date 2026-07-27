@@ -7,7 +7,7 @@ move the item to the Done group" works end to end.
 
 ## Summary
 
-Pulse already has a complete automation engine: `automations` / `automation_runs` tables, a
+Monolith already has a complete automation engine: `automations` / `automation_runs` tables, a
 `status_changed` trigger, an optional condition gate, run-history recording, and Supabase Realtime
 propagation of `items.group_id` changes. The existing action types are `notify`, `set_option`, and
 `call_webhook`.

@@ -767,7 +767,7 @@ git commit -m "feat(org): updateOrgTimezone server action (5b-2)"
 - Create: `src/app/(app)/settings/page.tsx` (verify the route group — see File Structure note)
 - Modify: `src/components/sidebar.tsx` **or** `src/components/app-shell.tsx` (Settings link)
 
-**UI work — load the `pulse-ui` and `frontend-design` skills before building these components.** Use existing shadcn primitives (`Select`, `Card`, `Button`, `Label`) and Pulse tokens; match the dashboards/board surfaces' density and chrome.
+**UI work — load the `pulse-ui` and `frontend-design` skills before building these components.** Use existing shadcn primitives (`Select`, `Card`, `Button`, `Label`) and Monolith tokens; match the dashboards/board surfaces' density and chrome.
 
 - [ ] **Step 1: Write the form test**
 
@@ -879,7 +879,7 @@ export function TimezoneForm({
 }
 ```
 
-> Replace raw `<button>`/`<select>`/`className="..."` with the project's shadcn `Button`/`Select` + Pulse tokens per the `pulse-ui` skill. Keep the same props/behavior so the test holds.
+> Replace raw `<button>`/`<select>`/`className="..."` with the project's shadcn `Button`/`Select` + Monolith tokens per the `pulse-ui` skill. Keep the same props/behavior so the test holds.
 
 - [ ] **Step 4: Run the test to verify it passes**
 

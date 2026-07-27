@@ -1,10 +1,10 @@
-# AI Platform Foundation + Ask Pulse Implementation Plan
+# AI Platform Foundation + Ask Monolith Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Spec: `docs/superpowers/specs/2026-07-05-ai-foundation-and-ask-pulse-design.md`. Parent scope: `docs/superpowers/specs/2026-07-05-ai-platform-phase-10-scope.md`.
 
-**Goal:** Build the reusable AI platform layer (one gateway resolving **managed** vs **bring-your-own-key**, a usage ledger with credits, and org entitlements) and ship **Ask Pulse** — a workspace-wide, read-only natural-language Q&A surface — on top of it, migrating the existing dashboard-gen feature onto the gateway to prove it end-to-end.
+**Goal:** Build the reusable AI platform layer (one gateway resolving **managed** vs **bring-your-own-key**, a usage ledger with credits, and org entitlements) and ship **Ask Monolith** — a workspace-wide, read-only natural-language Q&A surface — on top of it, migrating the existing dashboard-gen feature onto the gateway to prove it end-to-end.
 
-**Architecture:** A new migration adds `org_ai_settings` + `ai_usage` + `SECURITY DEFINER` Vault functions. A **gateway** (`resolveAiClient(orgId)` + `runAi(orgId, feature, fn)`) is the single chokepoint every AI call routes through — it picks the managed global key or the org's Vault-stored BYO key and meters every call into the ledger. An **entitlement** guard fails AI actions closed when AI is off or the managed monthly credit ceiling is hit. **Ask Pulse** runs an Anthropic tool-use loop whose read tools execute through the RLS-bound server client, so the model can only ever read what the asking user can. All UI is client-state + History API (0 RSC navigations), lazy-loaded.
+**Architecture:** A new migration adds `org_ai_settings` + `ai_usage` + `SECURITY DEFINER` Vault functions. A **gateway** (`resolveAiClient(orgId)` + `runAi(orgId, feature, fn)`) is the single chokepoint every AI call routes through — it picks the managed global key or the org's Vault-stored BYO key and meters every call into the ledger. An **entitlement** guard fails AI actions closed when AI is off or the managed monthly credit ceiling is hit. **Ask Monolith** runs an Anthropic tool-use loop whose read tools execute through the RLS-bound server client, so the model can only ever read what the asking user can. All UI is client-state + History API (0 RSC navigations), lazy-loaded.
 
 **Tech Stack:** Next.js 16 (App Router, Server Actions), Supabase (RLS + Vault + `SECURITY DEFINER` RPCs), Zod, `@anthropic-ai/sdk` (already installed), Vitest + jsdom, React (useTransition), pulse-ui (shadcn/Tailwind v4), lucide-react.
 
@@ -17,7 +17,7 @@
 - **Migration is versioned + user-applied** — the agent writes SQL under `supabase/migrations/`; per the classifier gotcha the **user applies** it, then the agent runs `generate_typescript_types` → `src/types/database.types.ts` and `get_advisors`. Never dashboard click-ops.
 - **Commit hygiene** — lowercase conventional-commit subjects (commitlint rejects sentence-case), a descriptive body + `Co-Authored-By` trailer, **stage by explicit path** (never `git add -A`), commit identity pinned by the worktree.
 - **UI skills mandatory** — load `pulse-ui` + `frontend-design` before any component work. Monochrome chrome, single accent, no "AI glow".
-- **SDK tool-use is post-cutoff** — before writing the Ask Pulse loop, **read the `claude-api` skill** (`Skill claude-api`) then its TypeScript tool-use docs for the exact `messages` tool-loop shape. Keep the Anthropic client **dependency-injected** so tests never hit the network.
+- **SDK tool-use is post-cutoff** — before writing the Ask Monolith loop, **read the `claude-api` skill** (`Skill claude-api`) then its TypeScript tool-use docs for the exact `messages` tool-loop shape. Keep the Anthropic client **dependency-injected** so tests never hit the network.
 - **Definition of done** — `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green.
 
 ---
@@ -52,7 +52,7 @@
 - `src/components/settings/ai/AiSettingsForm.tsx` + `.test.tsx` — mode + BYO key + credit meter
 - `src/components/admin/AiPlanControl.tsx` + `.test.tsx` — platform-admin tier/limit control
 
-**Create — Ask Pulse:**
+**Create — Ask Monolith:**
 
 - `src/lib/ai/ask/tools.ts` + `.test.ts` — read-tool definitions + executors (RLS-bound)
 - `src/lib/ai/ask/ask.ts` + `.test.ts` — tool-use loop (injectable client)
@@ -66,7 +66,7 @@
 - `src/lib/ai/generate.ts` + `src/lib/ai/actions.ts` — route dashboard-gen through `runAi(orgId,'dashboard_gen',…)`
 - `src/app/(app)/settings/page.tsx` — mount `AiSettingsForm`
 - `src/app/admin/organizations/[id]/page.tsx` — mount `AiPlanControl`
-- `src/components/command-palette.tsx` — add "Ask Pulse…" entry opening the launcher
+- `src/components/command-palette.tsx` — add "Ask Monolith…" entry opening the launcher
 - `src/types/database.types.ts` — regenerated after migration (not hand-edited)
 
 ---
@@ -80,12 +80,12 @@
   - **Task 5 (migrate dashboard-gen onto gateway)** — needs 4.
   - **Task 6 (settings actions)** — needs 2, 3 (+ Vault RPCs from 0).
   - **Batch B (parallel):** Task 7 (RLS integration), Task 9 (Settings UI — needs 6), Task 10 (Admin UI — needs 6). Disjoint files.
-- **Ask Pulse wave (after Foundation; needs 3, 4):**
+- **Ask Monolith wave (after Foundation; needs 3, 4):**
   - **Task 11 (tools)** → **Task 12 (loop)** → **Task 13 (action)** — sequential (each consumes the prior).
-  - **Task 14 (Ask Pulse UI)** — needs 13.
+  - **Task 14 (Ask Monolith UI)** — needs 13.
 - **Task 15 (final wiring + four gates)** — needs all.
 
-**Critical path:** 0 → 4 → (6 → 9) and 0 → 4 → 11 → 12 → 13 → 14 → 15. Ask Pulse is the long internal chain.
+**Critical path:** 0 → 4 → (6 → 9) and 0 → 4 → 11 → 12 → 13 → 14 → 15. Ask Monolith is the long internal chain.
 
 ---
 
@@ -955,7 +955,7 @@ git commit -m "feat(ai): platform-admin ai plan control per org"
 
 ---
 
-## Task 11: Ask Pulse read tools (RLS-bound)
+## Task 11: Ask Monolith read tools (RLS-bound)
 
 **Files:**
 
@@ -986,7 +986,7 @@ git commit -m "feat(ai): ask pulse rls-scoped read tools"
 
 ---
 
-## Task 12: Ask Pulse tool-use loop
+## Task 12: Ask Monolith tool-use loop
 
 **Files:**
 
@@ -1016,7 +1016,7 @@ git commit -m "feat(ai): ask pulse tool-use loop (workspace q&a)"
 
 ---
 
-## Task 13: Ask Pulse action
+## Task 13: Ask Monolith action
 
 **Files:**
 
@@ -1044,7 +1044,7 @@ git commit -m "feat(ai): ask pulse server action with entitlement + metering"
 
 ---
 
-## Task 14: Ask Pulse UI + ⌘K entry
+## Task 14: Ask Monolith UI + ⌘K entry
 
 **Files:**
 
@@ -1057,7 +1057,7 @@ git commit -m "feat(ai): ask pulse server action with entitlement + metering"
 
 - [ ] **Step 2: Run → FAIL.**
 
-- [ ] **Step 3: Implement** `AskPulse.tsx` (client; textarea + submit via `useTransition`; renders answer, sources, credit note; empty/disabled/quota states first-class — no AI glow, calm styling), `AskPulseLauncher.tsx` (lazy `next/dynamic`, `ssr:false`, controlled by `useUIStore().askPulseOpen`). Add `askPulseOpen`+`setAskPulseOpen` to `src/stores/ui.ts`. In `src/components/command-palette.tsx`, add an "Ask Pulse…" command that sets `askPulseOpen=true` and closes the palette. Pass the active `workspaceId` from existing palette data.
+- [ ] **Step 3: Implement** `AskPulse.tsx` (client; textarea + submit via `useTransition`; renders answer, sources, credit note; empty/disabled/quota states first-class — no AI glow, calm styling), `AskPulseLauncher.tsx` (lazy `next/dynamic`, `ssr:false`, controlled by `useUIStore().askPulseOpen`). Add `askPulseOpen`+`setAskPulseOpen` to `src/stores/ui.ts`. In `src/components/command-palette.tsx`, add an "Ask Monolith…" command that sets `askPulseOpen=true` and closes the palette. Pass the active `workspaceId` from existing palette data.
 
 - [ ] **Step 4: Run → PASS.** Also run `command-palette` tests to confirm no regression.
 
@@ -1074,7 +1074,7 @@ git commit -m "feat(ai): ask pulse panel and command-palette entry"
 
 **Files:** none new — integration + cleanup.
 
-- [ ] **Step 1:** Trace end-to-end against the code: Settings AI (set managed / paste BYO → validate → store) → ⌘K "Ask Pulse…" → ask a workspace question → answer + sources → credit meter reflects spend. Confirm dashboard-gen still works and now records usage. Fix any prop/return-name mismatches.
+- [ ] **Step 1:** Trace end-to-end against the code: Settings AI (set managed / paste BYO → validate → store) → ⌘K "Ask Monolith…" → ask a workspace question → answer + sources → credit meter reflects spend. Confirm dashboard-gen still works and now records usage. Fix any prop/return-name mismatches.
 - [ ] **Step 2: Run the four gates:**
 
 ```bash
@@ -1098,8 +1098,8 @@ git commit -m "chore(ai): wire ai platform + ask pulse end-to-end and green the 
 
 ## Self-review (completed)
 
-- **Spec coverage:** F1 gateway → Task 4; F2 Vault BYO store → Task 0 (funcs) + Task 6 (validate/store) + Task 9 (UI); F3 ledger+credits → Task 0 + Tasks 1,2 + Task 3 (quota); F4 entitlements+controls → Task 3 + Task 6 + Tasks 9,10; F5 Ask Pulse workspace-wide read-only → Tasks 11,12,13,14; dashboard-gen migration → Task 5; security (definer/revoke/RLS) → Task 0 + Task 7; perf budget → stated + lazy/client-state in Tasks 9,14; env/ops → Global Constraints + Task 0 Step 3. No uncovered spec section.
-- **Placeholder scan:** pure/load-bearing modules (pricing, usage, entitlement, gateway) ship full code+tests; action/UI/loop tasks give exact signatures, RPC names, Zod bounds, and representative tests — matching the accepted `2026-06-23-ai-dashboard-gen.md` plan style. The Ask Pulse loop (Task 12) explicitly defers SDK field names to the claude-api docs (post-cutoff) and keeps the client injected so tests never hit the network.
+- **Spec coverage:** F1 gateway → Task 4; F2 Vault BYO store → Task 0 (funcs) + Task 6 (validate/store) + Task 9 (UI); F3 ledger+credits → Task 0 + Tasks 1,2 + Task 3 (quota); F4 entitlements+controls → Task 3 + Task 6 + Tasks 9,10; F5 Ask Monolith workspace-wide read-only → Tasks 11,12,13,14; dashboard-gen migration → Task 5; security (definer/revoke/RLS) → Task 0 + Task 7; perf budget → stated + lazy/client-state in Tasks 9,14; env/ops → Global Constraints + Task 0 Step 3. No uncovered spec section.
+- **Placeholder scan:** pure/load-bearing modules (pricing, usage, entitlement, gateway) ship full code+tests; action/UI/loop tasks give exact signatures, RPC names, Zod bounds, and representative tests — matching the accepted `2026-06-23-ai-dashboard-gen.md` plan style. The Ask Monolith loop (Task 12) explicitly defers SDK field names to the claude-api docs (post-cutoff) and keeps the client injected so tests never hit the network.
 - **Type consistency:** `resolveAiClient`, `runAi`, `recordUsage`, `UsageInput`, `getAiEntitlement`, `requireAiEntitlement`, `AiEntitlement`, `computeCost`, `costToCredits`, `AiDisabledError`/`ByoKeyMissingError`/`AiQuotaExceededError`, `executeAskTool`/`ASK_TOOLS`, `askPulseLoop`, `askPulse`, and the RPC names (`record_ai_usage`, `ai_credits_used_this_month`, `get_byo_ai_secret`, `set_byo_ai_secret`, `remove_byo_ai_secret`, `set_org_ai_plan`) are used identically across tasks.
 - **Open verification (call out at execution):** exact `platform_admins` column, `vault.create_secret`/`decrypted_secrets` signatures, the repo's service-client factory name, and the Anthropic tool-loop SDK shape — each flagged inline in its task.
 

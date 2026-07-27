@@ -13,7 +13,7 @@
 Copied verbatim from the spec / AGENTS.md — every task's requirements implicitly include these:
 
 - **Server Components by default.** `"use client"` only for interactivity; **all mutations go through Server Actions**.
-- **Pulse tokens only** (`bg-sidebar`, `bg-accent` hover, `bg-primary/80` active, `text-muted-foreground`, `border`). Chrome stays monochrome; the brand accent marks active/focus only. Icons: lucide-react, `size-4` inline / `size-3.5` dense.
+- **Monolith tokens only** (`bg-sidebar`, `bg-accent` hover, `bg-primary/80` active, `text-muted-foreground`, `border`). Chrome stays monochrome; the brand accent marks active/focus only. Icons: lucide-react, `size-4` inline / `size-3.5` dense.
 - **Data-fetching budget:** in-page toggles (section collapse, opening menus) are **client state / `useUIStore`, 0 server round-trips**. **Switching workspace changes server-data scope → Server Action (`setActiveWorkspace`) + `router.refresh()`**, exactly one refetch of the scoped nav lists.
 - **Bounded reads:** board/dashboard nav reads filter by the indexed `workspace_id` FK.
 - **Commit identity pinned:** author every commit as `Danijel Jovanovic <info@synapse-solutions.ai>`. Commit subjects are **lowercase** after `type(scope):`, include a descriptive **body** and a `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>` trailer.

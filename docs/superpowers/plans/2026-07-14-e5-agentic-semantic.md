@@ -586,9 +586,9 @@ does not extend the floor.
   step** shows the chosen action without applying → **Save + enable** → create an item → confirm the
   status is set and a **Recent Runs** row shows `ai_decided`.
 - **F14:** Board settings → **Autopilot** → enable "chase overdue owners, daily 8am" → trigger a manual
-  run (or wait for the sweep) → confirm an @mention comment authored by **Pulse Autopilot** and a
+  run (or wait for the sweep) → confirm an @mention comment authored by **Monolith Autopilot** and a
   `board_agent_runs` entry.
-- **F15:** After backfill, open ⌘K / Ask Pulse and search a **meaning-based** query with no literal
+- **F15:** After backfill, open ⌘K / Ask Monolith and search a **meaning-based** query with no literal
   overlap (e.g. "onboarding" → a "New-hire checklist" item) → open an item → **Find similar** lists
   semantically-related items. Confirm `ai_usage` shows `semantic_index`/`semantic_query` rows.
 - Setup: pull `develop`; the USER must have applied all E5 migrations to DEV and set

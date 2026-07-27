@@ -7,7 +7,7 @@
 
 ## 1. Summary
 
-Pulse has a role enum (`owner / admin / member / guest`) and RLS that gates org
+Monolith has a role enum (`owner / admin / member / guest`) and RLS that gates org
 mutations to owners/admins, but **no admin operations exist** — the Settings page only
 edits org name (read-only) + timezone. There is also no platform-level oversight.
 

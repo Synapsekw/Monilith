@@ -60,7 +60,7 @@ All three are in prod (and on `develop`). Local `.env.local` points at DEV.
 ## Open threads
 
 - **E5 (agentic + semantic)** scoping worktree `task/e5-agentic-semantic` still parked (uncommitted
-  spec/plan); fold review risks before building — and build **Ask Pulse full-page first** (shared
+  spec/plan); fold review risks before building — and build **Ask Monolith full-page first** (shared
   `src/lib/ai/ask/`).
 - **Audit Batch B is now cleared**: org switcher, auth rate limiting, notification prefs all shipped;
   saved views was already implemented. Nothing left in that bucket.
@@ -71,6 +71,6 @@ All three are in prod (and on `develop`). Local `.env.local` points at DEV.
 
 ## Next session entry point
 
-Build **Ask Pulse full-page** (`/develop`, plan ready, unblocks E5) — the highest-value roadmap item;
+Build **Ask Monolith full-page** (`/develop`, plan ready, unblocks E5) — the highest-value roadmap item;
 alternatively E6 billing or PF batch A (plans ready), or refine + build E5 after folding its review
 risks.

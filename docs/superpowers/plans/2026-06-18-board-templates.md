@@ -983,7 +983,7 @@ git commit -m "test(templates): live RLS integration for create_board_from_templ
 - Test: `src/components/boards/NewBoardDialog.test.tsx`
 - Modify: `src/components/boards/BoardsNav.tsx`
 
-**UI skills:** before writing the component, load the **pulse-ui** and **frontend-design** skills (mandatory for UI work) and follow Pulse's monochromatic + single-accent tokens.
+**UI skills:** before writing the component, load the **pulse-ui** and **frontend-design** skills (mandatory for UI work) and follow Monolith's monochromatic + single-accent tokens.
 
 - [ ] **Step 1: Write the failing component test**
 

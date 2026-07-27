@@ -6,7 +6,7 @@
 
 ## Problem & model
 
-Pulse runs two Supabase projects:
+Monolith runs two Supabase projects:
 
 - **DEV** (`hjqca…`) — has the schema, admin data, and Danijel's **real working data**.
 - **PROD** (`jzsyq…`) — currently **empty** (no schema, no data).

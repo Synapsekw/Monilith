@@ -15,7 +15,7 @@ related:
 
 ## Context
 
-Until E5, every AI write in Pulse followed **propose → human approves → persist** (E2/E3/E4). E5's
+Until E5, every AI write in Monolith followed **propose → human approves → persist** (E2/E3/E4). E5's
 F13 ("AI action step" in a rule) and F14 ("Autopilot" scheduled board agent) deliberately **relax**
 that stance: an automation is, by definition, **unattended action** — the whole point is that it runs
 with no human in the loop. That relaxation is only safe inside a hard, enforced guardrail box. This
@@ -79,7 +79,7 @@ attribution that satisfies the frozen-`author_id` trigger; the bot never holds a
 
 ## Consequences
 
-- Pulse now has genuinely unattended AI writes — bounded, reversible, audited, killable, metered.
+- Monolith now has genuinely unattended AI writes — bounded, reversible, audited, killable, metered.
 - The blast radius is a small reversible vocabulary applied through the same guards a manual rule
   uses; the AI's only new power is _choosing parameters_, not _choosing capabilities_.
 - Confirmed against the E1 "no self-deploying automations" invariant: a human authors and enables

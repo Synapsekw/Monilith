@@ -4,9 +4,9 @@ status: active
 tags: [vault/meta]
 ---
 
-# Pulse vault — How this works
+# Monolith vault — How this works
 
-The Obsidian vault is the **whole Pulse repo** (`.obsidian/` lives at the repo root, Mubarak-style);
+The Obsidian vault is the **whole Monolith repo** (`.obsidian/` lives at the repo root, Mubarak-style);
 this `vault/` folder holds the **development-memory** layer on top of the codebase: where we are,
 why we made each call, and what happened session by session. The codebase tells you _what_ the code
 is; this folder tells you _why_ it got that way. Modeled on the Mubarak AI vault.

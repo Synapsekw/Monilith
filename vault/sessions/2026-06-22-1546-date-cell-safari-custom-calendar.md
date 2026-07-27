@@ -17,7 +17,7 @@ related:
   `src/components/boards/cells/editors/index.tsx`) with a custom calendar in the existing Popover,
   auto-opened on edit with a visible lucide affordance.
 - New `src/components/ui/calendar.tsx` — a shadcn-style react-day-picker (v10) primitive themed with
-  Pulse tokens (full Tailwind `classNames`, no base CSS import, custom lucide chevrons).
+  Monolith tokens (full Tailwind `classNames`, no base CSS import, custom lucide chevrons).
 - `DateEditor` now **preserves an existing range `end`** by duration-shift instead of dropping it
   (old `onCommit({ date })` collapsed Gantt/Calendar spans); local ISO↔Date conversion avoids the
   UTC off-by-one.

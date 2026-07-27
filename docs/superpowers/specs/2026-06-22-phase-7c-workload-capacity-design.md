@@ -14,7 +14,7 @@
 assigned to them **bucketed over time** (a horizontal timeline of weeks), with each member's total
 **effort per bucket** compared to their **capacity** so over-/under-allocation is visible at a glance.
 
-The crucial architectural observation: **the assignments already exist.** Pulse boards already carry
+The crucial architectural observation: **the assignments already exist.** Monolith boards already carry
 the three primitives this view needs, on every board:
 
 - **Who** — the **People column** kind (`cell_values.value = { userIds: string[] }`).
