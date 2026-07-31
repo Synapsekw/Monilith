@@ -27,7 +27,6 @@ import {
 } from "@/lib/validations/boards";
 import { invalidateMyBoards } from "@/lib/boards/actions/internal";
 import { fail, type ActionResult } from "@/lib/actions/result";
-import type { Json } from "@/types/database.types";
 
 const generateInputSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -179,7 +178,7 @@ export async function createBoardFromProposal(input: {
     {
       p_workspace_id: parsed.data.workspaceId,
       p_name: parsed.data.proposal.name,
-      p_template: parsed.data.proposal.templatePayload as unknown as Json,
+      p_template: parsed.data.proposal.templatePayload,
     },
   );
   if (error || !data) return fail(error?.message ?? "Could not create board.");

@@ -1,5 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getServerEnv } from "@/lib/env.server";
 import {
   AiNotConfiguredError,
@@ -135,11 +136,13 @@ export async function runEmbedding<T>(
   const costUsd = computeCostUsd(model, usage);
   const credits = costToCredits(costUsd);
   const svc = createServiceClient();
-  const { error } = await svc.rpc("record_ai_usage", {
+  // typedRpc, not svc.rpc: p_user is `string` in the generated types but the
+  // SQL parameter is nullable, and a system (cron) embedding legitimately has
+  // no user. typedRpc widens every arg to `| null`, which is what the function
+  // signature actually accepts — so null passes without a cast.
+  const { error } = await typedRpc(svc, "record_ai_usage", {
     p_org: args.orgId,
-    // p_user is `string` in generated types but the column is nullable; a system
-    // (cron) embedding legitimately has no user, so null is the honest value.
-    p_user: args.userId as unknown as string,
+    p_user: args.userId,
     p_feature: args.feature,
     p_provider: "openai",
     p_model: model,
