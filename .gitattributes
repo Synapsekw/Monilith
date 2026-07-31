@@ -1,0 +1,30 @@
+# Line endings.
+#
+# The repo has always STORED LF (every blob is LF). What was missing is a rule
+# for the working tree, so a Windows checkout with core.autocrlf=true expanded
+# every file to CRLF on disk. Nothing in the repo changed as a result — but the
+# local toolchain reads the working tree, so `pnpm format:check` reported ~1775
+# files and the anon-conformance parser failed on a trailing \r.
+#
+# `eol=lf` pins the working-tree representation to LF on every platform, which
+# makes a Windows checkout byte-identical to CI's. This is a checkout-behavior
+# rule, not a content change: normalizing produces a zero-content diff.
+* text=auto eol=lf
+
+# Binary assets — never munge line endings or attempt a text diff.
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+
+# Generated — keep out of diffs/review noise, but still LF text.
+src/types/database.types.ts linguist-generated=true
+src/lib/changelog/generated.ts linguist-generated=true
+pnpm-lock.yaml linguist-generated=true
