@@ -9,6 +9,13 @@ supabase/.branches
 supabase/.temp
 src/components/ui
 
+# Agent tooling — skills, hooks and harness config, not application source.
+# Sibling of .claude/, which eslint already ignores globally for the same
+# reason: these are vendored/authored for other harnesses and reformatting
+# them churns files this repo does not own.
+.agents
+.codex
+
 # Dev-memory vault: hand-written Obsidian notes plus a generated dashboard, not
 # source. Formatting them churns every session note and collides with /wrapup
 # and the board regeneration (this file conflicted on the very first rebase).
