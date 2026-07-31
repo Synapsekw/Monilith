@@ -4,21 +4,20 @@ import { getUser } from "@/lib/auth/session";
 import { getActiveOrgId } from "@/lib/org/active";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
-import { buildWorkloadGrid, serverToday } from "@/lib/workload/rollup";
+import { serverToday } from "@/lib/workload/rollup";
 import { EFFORT_FALLBACK } from "@/lib/workload/types";
 import type {
   MemberCapacity,
   OrgWorkloadDefaults,
   WorkloadActualRow,
   WorkloadBoard,
-  WorkloadGrid,
   WorkloadMember,
   WorkloadPageData,
   WorkloadRawRow,
   WorkloadWorkspace,
 } from "@/lib/workload/types";
 
-export async function listOrgMembersForWorkload(
+async function listOrgMembersForWorkload(
   orgId: string,
 ): Promise<WorkloadMember[]> {
   const members = await listOrgMembersCached(orgId); // { userId, fullName, email, avatarUrl }[]
@@ -30,9 +29,7 @@ export async function listOrgMembersForWorkload(
   }));
 }
 
-export async function getMemberCapacities(
-  orgId: string,
-): Promise<MemberCapacity[]> {
+async function getMemberCapacities(orgId: string): Promise<MemberCapacity[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("member_capacity")
@@ -46,7 +43,7 @@ export async function getMemberCapacities(
   }));
 }
 
-export async function getWorkloadDefaults(
+async function getWorkloadDefaults(
   orgId: string,
 ): Promise<OrgWorkloadDefaults> {
   const supabase = await createClient();
@@ -73,52 +70,6 @@ export async function getWorkloadDefaults(
   };
 }
 
-/** One bounded pass: rollup RPC + members + capacities + defaults → assembled grid. */
-export async function getWorkloadGrid(
-  from: string,
-  to: string,
-  now: number,
-  weeksBack = 1,
-  weeksFwd = 4,
-  weekStartsOn = 1,
-): Promise<{
-  grid: WorkloadGrid;
-  orgId: string;
-  capacities: MemberCapacity[];
-  defaults: OrgWorkloadDefaults;
-}> {
-  const orgId = await getActiveOrgId();
-  const supabase = await createClient();
-  const [{ data: raw }, members, caps, defaults] = await Promise.all([
-    supabase.rpc("workload_rollup", { p_from: from, p_to: to }),
-    listOrgMembersForWorkload(orgId),
-    getMemberCapacities(orgId),
-    getWorkloadDefaults(orgId),
-  ]);
-
-  const rows: WorkloadRawRow[] = (raw ?? []).map((r) => ({
-    itemId: r.item_id,
-    boardId: r.board_id,
-    itemName: r.item_name,
-    userId: r.user_id,
-    startDate: r.start_date,
-    endDate: r.end_date,
-    estimateSecs: r.estimate_secs == null ? null : Number(r.estimate_secs),
-  }));
-
-  const grid = buildWorkloadGrid(
-    rows,
-    members,
-    caps,
-    defaults,
-    serverToday(now),
-    weeksBack,
-    weeksFwd,
-    weekStartsOn,
-  );
-  return { grid, orgId, capacities: caps, defaults };
-}
-
 const DAY = 86_400_000;
 
 /**
@@ -127,7 +78,7 @@ const DAY = 86_400_000;
  * Backed by the `workload_actuals_rollup` RPC (migration 20260622170000):
  * is_org_member + can_read_board gated, completed entries only, LIMIT 5000.
  */
-export async function getWorkloadActuals(
+async function getWorkloadActuals(
   from: string,
   to: string,
 ): Promise<WorkloadActualRow[]> {

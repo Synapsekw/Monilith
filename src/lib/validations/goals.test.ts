@@ -7,11 +7,17 @@ import {
 
 describe("createGoalSchema", () => {
   it("accepts a minimal manual_percent goal", () => {
-    const r = createGoalSchema.safeParse({ name: "Grow ARR", progressMode: "manual_percent" });
+    const r = createGoalSchema.safeParse({
+      name: "Grow ARR",
+      progressMode: "manual_percent",
+    });
     expect(r.success).toBe(true);
   });
   it("rejects an empty name", () => {
-    const r = createGoalSchema.safeParse({ name: "", progressMode: "manual_percent" });
+    const r = createGoalSchema.safeParse({
+      name: "",
+      progressMode: "manual_percent",
+    });
     expect(r.success).toBe(false);
   });
   it("rejects an unknown progress mode", () => {

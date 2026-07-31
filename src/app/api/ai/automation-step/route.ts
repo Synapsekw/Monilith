@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { buildJobContext } from "@/lib/ai/agentic/context";
 import { decideAction } from "@/lib/ai/agentic/decide";
@@ -21,20 +22,19 @@ const bodySchema = z.object({ job_id: z.string().uuid() });
  * Hand the chosen action (or null → "skipped") to the CONFINED definer. This is
  * the ONLY write path: `automation_ai_apply` re-applies the same per-action
  * confinement guards as `_automation_run`, writes the `automation_runs` outcome,
- * and marks the job done/skipped. The RPC is added by this task's migration, so
- * until `pnpm db:types` regenerates database.types it isn't in the typed RPC
- * union — narrow the call here (this is the one documented migration-gate cast).
+ * and marks the job done/skipped.
+ *
+ * This call used to hand-narrow `svc.rpc` because the RPC arrived in the same
+ * task's migration and was not yet in the generated union. It has been in
+ * database.types.ts since that migration was applied, so the cast is gone and
+ * the function name, args and return type are checked again.
  */
 async function applyConfined(
   svc: SupabaseClient<Database>,
   jobId: string,
   action: AutomationAction | null,
 ): Promise<void> {
-  const rpc = svc.rpc as unknown as (
-    fn: "automation_ai_apply",
-    args: { p_job: string; p_action: AutomationAction | null },
-  ) => Promise<{ error: { message: string } | null }>;
-  const { error } = await rpc("automation_ai_apply", {
+  const { error } = await typedRpc(svc, "automation_ai_apply", {
     p_job: jobId,
     p_action: action,
   });

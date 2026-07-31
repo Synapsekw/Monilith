@@ -32,7 +32,12 @@ describe("useBoardPresence", () => {
 
   it("tracks the local presence state on subscribe", async () => {
     renderHook(
-      () => useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+      () =>
+        useBoardPresence("board-1", {
+          userId: "u1",
+          name: "Dani",
+          avatarUrl: null,
+        }),
       { wrapper },
     );
     await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
@@ -45,15 +50,24 @@ describe("useBoardPresence", () => {
 
   it("setFocus re-tracks with the new focus (throttled)", async () => {
     const { result } = renderHook(
-      () => useBoardPresence("board-1", { userId: "u1", name: "Dani", avatarUrl: null }),
+      () =>
+        useBoardPresence("board-1", {
+          userId: "u1",
+          name: "Dani",
+          avatarUrl: null,
+        }),
       { wrapper },
     );
     await waitFor(() => expect(subscribeMock).toHaveBeenCalled());
     act(() => subscribeMock.mock.calls[0][0]("SUBSCRIBED"));
-    act(() => result.current.setFocus({ viewKind: "table", targetId: "cell:i1:c1" }));
+    act(() =>
+      result.current.setFocus({ viewKind: "table", targetId: "cell:i1:c1" }),
+    );
     await waitFor(() =>
       expect(trackMock).toHaveBeenLastCalledWith(
-        expect.objectContaining({ focus: { viewKind: "table", targetId: "cell:i1:c1" } }),
+        expect.objectContaining({
+          focus: { viewKind: "table", targetId: "cell:i1:c1" },
+        }),
       ),
     );
   });

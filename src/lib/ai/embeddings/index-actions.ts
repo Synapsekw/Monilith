@@ -61,7 +61,7 @@ export async function embedTexts(
  * table is default-deny for clients (writes only through the service embed
  * endpoint). No-op on an empty batch.
  */
-export async function upsertItemEmbeddings(
+async function upsertItemEmbeddings(
   rows: ItemEmbeddingUpsert[],
   svc: SupabaseClient<Database> = createServiceClient(),
 ): Promise<void> {

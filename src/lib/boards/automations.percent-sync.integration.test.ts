@@ -58,7 +58,6 @@ describe.skipIf(!integrationTargetReady())("engine: percent sync", () => {
 
   // Status column S (options: Working, Done)
   let colSId: string;
-  let optWorkingId: string;
   let optDoneId: string;
 
   // Percent column %
@@ -120,7 +119,6 @@ describe.skipIf(!integrationTargetReady())("engine: percent sync", () => {
       { id: randomUUID(), label: "Working", color: "#00c875" },
       { id: randomUUID(), label: "Done", color: "#579bfc" },
     ];
-    optWorkingId = sOptions[0].id;
     optDoneId = sOptions[1].id;
 
     const { data: colS, error: colSErr } = await admin

@@ -62,7 +62,9 @@ test.describe("Goals happy path", () => {
     await admin.auth.admin.deleteUser(createdUserId);
   });
 
-  test("create a goal tree, roll up progress, change status", async ({ page }) => {
+  test("create a goal tree, roll up progress, change status", async ({
+    page,
+  }) => {
     test.setTimeout(180_000);
 
     // ── 1. Log in (confirmed user) ───────────────────────────────────────────
@@ -87,9 +89,13 @@ test.describe("Goals happy path", () => {
     const parent = unique("Company goal");
     await page.getByRole("button", { name: "New goal" }).click();
     await page.getByLabel(/goal name/i).fill(parent);
-    await page.getByLabel(/how is progress measured/i).selectOption("auto_subgoals");
+    await page
+      .getByLabel(/how is progress measured/i)
+      .selectOption("auto_subgoals");
     await page.getByRole("button", { name: "Create goal" }).click();
-    await expect(page.getByRole("button", { name: parent })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: parent })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // ── 5. Open the drawer (?goal=) and add a manual_percent sub-goal at 50% ──
     await page.getByRole("button", { name: parent }).click();
@@ -98,15 +104,21 @@ test.describe("Goals happy path", () => {
 
     const child = unique("KR");
     await page.getByLabel(/goal name/i).fill(child);
-    await page.getByLabel(/how is progress measured/i).selectOption("manual_percent");
+    await page
+      .getByLabel(/how is progress measured/i)
+      .selectOption("manual_percent");
     await page.getByLabel(/percent complete/i).fill("50");
     await page.getByRole("button", { name: "Create goal" }).click();
 
     // ── 6. Parent progress rolls up to 50% ───────────────────────────────────
-    await expect(page.getByText("50%").first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("50%").first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     // ── 7. Change the parent's status in the drawer ──────────────────────────
     await page.getByLabel("Status").selectOption("at_risk");
-    await expect(page.getByText(/at risk/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/at risk/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });

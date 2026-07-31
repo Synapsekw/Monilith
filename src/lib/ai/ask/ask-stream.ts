@@ -32,11 +32,11 @@ function textOf(content: Anthropic.ContentBlock[]): string {
 }
 
 /**
- * Streaming twin of `askPulseLoop`: drives the Ask Pulse Anthropic tool-use loop
- * with a prebuilt `messages` array + `system`, and STREAMS the final answer's
- * text deltas via `emit`. Tool rounds run buffered between streams; the terminal
- * answer streams token-by-token. Usage is summed across every round so the
- * caller meters the full turn. RLS-scoped tool execution throughout.
+ * Drives the Ask Pulse Anthropic tool-use loop with a prebuilt `messages` array
+ * + `system`, and STREAMS the final answer's text deltas via `emit`. Tool rounds
+ * run buffered between streams; the terminal answer streams token-by-token.
+ * Usage is summed across every round so the caller meters the full turn.
+ * RLS-scoped tool execution throughout.
  *
  * Phase 2: the loop also carries the propose-only WRITE_TOOLS. Unlike a read
  * tool, a propose_* tool RECORDS a ValidatedAction and returns nothing the model
@@ -45,7 +45,9 @@ function textOf(content: Anthropic.ContentBlock[]): string {
  * user still gets a streamed lead-in sentence for free, and we never give the
  * model a turn in which it could claim (past tense) to have done the write.
  *
- * `askPulseLoop` in ./ask.ts stays READ-ONLY — only this streaming twin writes.
+ * This is the only Ask entry point — POST /api/ask is its sole caller. A
+ * non-streaming read-only twin was kept alongside it until nothing called it
+ * any more; do not reintroduce one without a caller.
  */
 export async function askPulseStream(args: {
   apiKey: string;

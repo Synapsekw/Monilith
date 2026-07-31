@@ -36,9 +36,7 @@ export function MirrorColumnConfig({
   onCancel,
 }: {
   relationColumns: MirrorRelationOption[];
-  loadTargetColumns: (
-    targetBoardId: string,
-  ) => Promise<MirrorTargetColumn[]>;
+  loadTargetColumns: (targetBoardId: string) => Promise<MirrorTargetColumn[]>;
   onConfirm: (settings: MirrorColumnSettings) => void;
   onCancel: () => void;
 }) {

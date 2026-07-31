@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { type AuthState, signIn, signUp } from "@/app/auth/actions";
+import { signIn, signUp } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,

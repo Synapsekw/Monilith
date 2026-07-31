@@ -4,7 +4,7 @@ export type AiUsageTokens = { inputTokens: number; outputTokens: number };
  * USD per million tokens, by model id. Source of truth for metering.
  * Maintain alongside the provider catalog when models change.
  */
-export const MODEL_PRICES_PER_MTOK: Readonly<
+const MODEL_PRICES_PER_MTOK: Readonly<
   Record<string, Readonly<{ input: number; output: number }>>
 > = {
   "claude-opus-4-8": { input: 5, output: 25 },

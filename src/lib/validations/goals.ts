@@ -46,7 +46,6 @@ export const updateGoalSchema = z.object({
   dueDate: z.string().nullable().optional(),
 });
 
-export const reorderGoalSchema = z.object({ goalId: uuid, position: z.number() });
 export const deleteGoalSchema = z.object({ goalId: uuid });
 
 export const setGoalLinksSchema = z.object({

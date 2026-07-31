@@ -10,7 +10,7 @@ import {
 import type { ValidatedAction } from "./schema";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 
-/** Hard cap on tool-use rounds — bounds worst-case token spend + latency. Mirrors askPulseLoop. */
+/** Hard cap on tool-use rounds — bounds worst-case token spend + latency. Mirrors askPulseStream. */
 const MAX_ROUNDS = 6;
 const READ_TOOL_NAMES = new Set(ASK_TOOLS.map((t) => t.name));
 

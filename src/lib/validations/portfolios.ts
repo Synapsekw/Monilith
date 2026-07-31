@@ -8,8 +8,6 @@ export const healthSchema = z.enum(["on_track", "at_risk", "off_track"]);
 export const doneOptionIdsSchema = z.array(z.string().min(1)).max(50);
 
 export const createPortfolioSchema = z.object({ name });
-export const renamePortfolioSchema = z.object({ portfolioId: uuid, name });
-export const deletePortfolioSchema = z.object({ portfolioId: uuid });
 
 export const addBoardSchema = z.object({
   portfolioId: uuid,
@@ -31,11 +29,4 @@ export const updatePlacementSchema = z.object({
   budget: z.number().finite().nonnegative().nullable().optional(),
   healthOverride: healthSchema.nullable().optional(),
   statusNote: z.string().trim().max(280).nullable().optional(),
-});
-
-export const updateMappingSchema = z.object({
-  placementId: uuid,
-  portfolioId: uuid,
-  doneColumnId: uuid.nullable(),
-  doneOptionIds: doneOptionIdsSchema,
 });

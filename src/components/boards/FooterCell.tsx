@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 /** Short human labels for each aggregation, shown in the picker + as a prefix. */
-export const AGGREGATION_LABEL: Record<AggregationId, string> = {
+const AGGREGATION_LABEL: Record<AggregationId, string> = {
   count: "Count",
   count_filled: "Filled",
   count_empty: "Empty",

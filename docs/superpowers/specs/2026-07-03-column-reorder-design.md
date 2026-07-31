@@ -80,7 +80,7 @@ export async function reorderColumn(input: {
 - Single round trip: `update columns set position = ? where id = ?` with
   `.select("board_id").maybeSingle()` (same shape as `reorderItem` — no separate lookup query).
 - RLS is the security boundary (org-scoped, same as every column mutation). No trust in the client.
-- `revalidatePath(\`/boards/${board_id}\`)` — targeted revalidation for the _next_ RSC render;
+- `revalidatePath(\`/boards/${board*id}\`)` — targeted revalidation for the \_next* RSC render;
   the live session is served by the optimistic cache (gotcha-09 respected: no in-page refetch).
 
 ### 3.3 Client mutation (optimistic)

@@ -15,7 +15,11 @@ const AUTO_DISMISS_MS = 2500;
  * Accessible: `role="status"` + `aria-live="polite"` so assistive tech
  * announces it without stealing focus. Chrome stays monochrome — no accent.
  */
-export function PresenceFlashMessage({ message }: { message: LwwMessage | null }) {
+export function PresenceFlashMessage({
+  message,
+}: {
+  message: LwwMessage | null;
+}) {
   // Track the id we've auto-dismissed so a new message (new id) re-shows
   // without a synchronous setState in the effect body. setState only ever
   // fires asynchronously from the timeout below.

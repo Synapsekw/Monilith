@@ -5,7 +5,6 @@ import {
   createPortfolioSchema,
   doneOptionIdsSchema,
   removePlacementSchema,
-  updateMappingSchema,
   updatePlacementSchema,
 } from "./portfolios";
 
@@ -68,17 +67,6 @@ describe("portfolios validations", () => {
       false,
     );
   });
-  it("accepts a valid mapping update", () => {
-    expect(
-      updateMappingSchema.safeParse({
-        placementId: PLACEMENT_ID,
-        portfolioId: PORTFOLIO_ID,
-        doneColumnId: COLUMN_ID,
-        doneOptionIds: ["a", "b"],
-      }).success,
-    ).toBe(true);
-  });
-
   // Security: portfolioId flows into revalidatePath() and must be a parsed uuid,
   // not raw client input.
   it("requires portfolioId on removePlacementSchema and rejects non-uuid", () => {
@@ -103,16 +91,6 @@ describe("portfolios validations", () => {
       updatePlacementSchema.safeParse({
         placementId: PLACEMENT_ID,
         portfolioId: "not-a-uuid",
-      }).success,
-    ).toBe(false);
-  });
-  it("rejects a non-uuid portfolioId on updateMappingSchema", () => {
-    expect(
-      updateMappingSchema.safeParse({
-        placementId: PLACEMENT_ID,
-        portfolioId: "'; DROP TABLE",
-        doneColumnId: null,
-        doneOptionIds: [],
       }).success,
     ).toBe(false);
   });

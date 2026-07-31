@@ -4,7 +4,6 @@ import { effectivePriority } from "@/lib/boards/priority";
 // Constants
 // ---------------------------------------------------------------------------
 
-export const DAY_W = 28; // px per day column (Week zoom / geometry default)
 export const LABEL_W = 200; // px for the left name rail
 export const ROW_H = 40; // px per row
 export const BAR_H = 24; // px bar height

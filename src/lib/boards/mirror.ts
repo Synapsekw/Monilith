@@ -1,4 +1,8 @@
-import type { BoardCache, CacheColumn, CacheCellValue } from "@/lib/boards/cache";
+import type {
+  BoardCache,
+  CacheColumn,
+  CacheCellValue,
+} from "@/lib/boards/cache";
 
 export type MirrorValue = {
   linkedItemId: string;
@@ -45,11 +49,6 @@ export function mirrorTargetColumnFor(
   return (
     cache.mirrorTargetColumns.find((c) => c.id === s.target_column_id) ?? null
   );
-}
-
-/** Collapsed-parent rollup: blank in v1 (no aggregate), like relation. */
-export function mirrorRollup(): "" {
-  return "";
 }
 
 /**

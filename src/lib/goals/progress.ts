@@ -1,4 +1,10 @@
-import type { BoardAgg, GoalHealth, GoalNode, GoalRow, RowOwner } from "./types";
+import type {
+  BoardAgg,
+  GoalHealth,
+  GoalNode,
+  GoalRow,
+  RowOwner,
+} from "./types";
 
 const DAY = 86_400_000;
 const clamp01 = (n: number) => Math.min(Math.max(n, 0), 1);
@@ -12,7 +18,10 @@ export function serverToday(now: number): string {
 }
 
 /** Progress (0..1) for a single goal, ignoring children. auto_subgoals → null here. */
-export function leafProgress(goal: GoalRow, boardAggs: BoardAgg[]): number | null {
+export function leafProgress(
+  goal: GoalRow,
+  boardAggs: BoardAgg[],
+): number | null {
   switch (goal.progressMode) {
     case "manual_number": {
       const start = goal.startValue ?? 0;
@@ -46,7 +55,11 @@ export function computeGoalHealth(input: {
 }): GoalHealth | null {
   const { progress, startDate, dueDate, today } = input;
   if (progress === null && dueDate === null) return null;
-  if (dueDate !== null && today > dueDate && (progress === null || progress < 1)) {
+  if (
+    dueDate !== null &&
+    today > dueDate &&
+    (progress === null || progress < 1)
+  ) {
     return "off_track";
   }
   let behind = false;
@@ -86,8 +99,13 @@ export function buildGoalTree(
 
     let progress: number | null;
     if (rowNode.progressMode === "auto_subgoals") {
-      const vals = children.map((c) => c.progress).filter((p): p is number => p != null);
-      progress = vals.length === 0 ? null : clamp01(vals.reduce((s, v) => s + v, 0) / vals.length);
+      const vals = children
+        .map((c) => c.progress)
+        .filter((p): p is number => p != null);
+      progress =
+        vals.length === 0
+          ? null
+          : clamp01(vals.reduce((s, v) => s + v, 0) / vals.length);
     } else {
       progress = leafProgress(rowNode, boardAggs);
     }
