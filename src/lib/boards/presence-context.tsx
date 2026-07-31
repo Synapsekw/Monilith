@@ -27,15 +27,6 @@ export function BoardPresenceProvider({
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-export function useBoardPresenceContext(): BoardPresenceContextValue {
-  const v = useContext(Ctx);
-  if (!v)
-    throw new Error(
-      "useBoardPresenceContext must be used within BoardPresenceProvider",
-    );
-  return v;
-}
-
 /**
  * Non-throwing variant for presentational consumers (e.g. the avatar bar) that
  * can render outside a provider — they simply have nothing to show. Returns

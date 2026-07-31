@@ -51,11 +51,6 @@ export function mirrorTargetColumnFor(
   );
 }
 
-/** Collapsed-parent rollup: blank in v1 (no aggregate), like relation. */
-export function mirrorRollup(): "" {
-  return "";
-}
-
 /**
  * Flatten the mirrored target values across `itemIds` into a single array, for
  * column-summary footer aggregation (6d-3). Each link on each item contributes

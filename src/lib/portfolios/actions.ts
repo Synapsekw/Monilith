@@ -15,7 +15,7 @@ import {
   removePlacementSchema,
   updatePlacementSchema,
 } from "@/lib/validations/portfolios";
-import type { Json, Tables, TablesUpdate } from "@/types/database.types";
+import type { Tables, TablesUpdate } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createPortfolio(input: {

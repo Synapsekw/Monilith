@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 
 /** What we say before the server has said anything more specific. */
-export const THINKING_FALLBACK_LABEL = "Thinking…";
+const THINKING_FALLBACK_LABEL = "Thinking…";
 
 /** Staggered so the three dots read as one travelling wave rather than a blink.
  *  Arbitrary-property utilities keep the stagger in the markup, next to the dot
