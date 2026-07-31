@@ -8,14 +8,14 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-31 15:59",
+  "updated": "2026-07-31 17:08",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "/updates had silently stopped tracking what we ship — 19 entries backfilled across July 17-27",
+  "headline": "The gates had gone amber long enough that nobody read them — all four green again, and meaning something",
   "chips": [
     {
       "label": "develop",
-      "value": "e69e6f0c",
-      "note": "== origin · 7 ahead of main · docs-only",
+      "value": "ffee1820",
+      "note": "== origin · 20 ahead of main · no user-facing change",
       "tone": "ok"
     },
     {
@@ -27,8 +27,8 @@
     {
       "label": "prod",
       "value": "",
-      "note": "ledger 118 files = 118 DEV = 118 PROD",
-      "tone": "ok"
+      "note": "ledger 118/118/118 — UNVERIFIED this session (no psql)",
+      "tone": "warn"
     }
   ],
   "progress": {
@@ -39,7 +39,17 @@
     {
       "led": "green",
       "tag": "DONE",
-      "text": "19 changelog entries backfilled for July 17-27 — ten days and two promotions (#72, #73) had shipped with no Changelog: trailer at all, incl. the Claude connector, Settings redesign and account deletion. Six announcement commits, author-dated to their ship date."
+      "text": "Quality sweep: format:check 1775 -> 0 files, lint 31 -> 1 warning, all four gates green (510 test files, 3669 tests). The noise was hiding 42 genuinely unformatted files, an unused import, a dead let, and five reachable-but-uncalled server actions."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "Five dead \"use server\" exports removed — each compiled to a live POST endpoint with a stable action ID despite zero call sites. Their own tests were what kept them looking alive (gotcha-66). ~620 lines gone, plus Ask's superseded non-streaming path."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "CRLF write-off closed: git had always stored LF, so pinning eol=lf was a zero-content diff, not a 1775-file rewrite. The $-anchored conformance parsers only threw by luck — the siblings would have degraded silently, and a security probe matching nothing still reports green (gotcha-65)."
     },
     {
       "led": "green",
@@ -72,6 +82,11 @@
       "text": "Ask Monolith write path still unexercised on production."
     },
     {
+      "led": "hollow",
+      "tag": "OWED",
+      "text": "pnpm db:ledger-check cannot run on this machine (psql not on PATH), so finish-task.sh's ledger gate was SKIPPED. The 118/118/118 count is carried over unverified — re-run where psql exists before the next promotion."
+    },
+    {
       "led": "brand",
       "tag": "NEXT?",
       "text": "Promote develop -> main to publish the 19 entries (documentation-only, no source behaviour changed) — AFTER draining the embed queue. Then Report Builder v2 roll-ups + org templates: one migration dropping reports.board_id NOT NULL, then unwinding the single-board assumption across access, shaping, routing and ~1.4k lines of tests."
@@ -79,12 +94,12 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-07-31-1559-changelog-backfill-updates-page",
-    "when": "2026-07-31 15:59",
+    "id": "2026-07-31-1708-quality-sweep-crlf-dead-code",
+    "when": "2026-07-31 17:08",
     "bullets": [
-      "19 Changelog: trailers backfilled for July 17-27 as six announcement commits, one per ship date.",
-      "The CI drift check is a consistency check, not a coverage one — it cannot see a missing trailer (gotcha-64).",
-      "Two false starts: session-start context claimed develop was current when it was ~40 commits stale; git show --stat truncated a path and hid Autopilot's UI."
+      ".gitattributes pins the working tree to LF — a zero-content diff, since every blob was already LF (gotcha-65).",
+      "Five dead \"use server\" exports are five live endpoints, not clutter; their passing tests hid them (gotcha-66).",
+      "A raw NUL byte had git classifying use-board-filter-sort.ts as binary: no diffs, no grep, no normalization (gotcha-67)."
     ]
   },
   "roadmap": [
