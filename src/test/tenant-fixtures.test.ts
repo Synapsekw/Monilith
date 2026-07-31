@@ -192,7 +192,7 @@ describe("the seed migration and the TypeScript identities cannot drift", () => 
 // Trailing comments on code lines are kept, so nothing executable hides here.
 function codeOnly(source: string): string {
   return source
-    .split("\n")
+    .split(/\r?\n/)
     .filter((line) => {
       const t = line.trim();
       return !(
