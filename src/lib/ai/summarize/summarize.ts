@@ -108,7 +108,7 @@ function textOf(content: Anthropic.ContentBlock[]): string {
 
 /**
  * Build the transcript and ask Anthropic for a plain-text "catch me up"
- * summary. `client` is injectable for tests (mirrors askPulseLoop /
+ * summary. `client` is injectable for tests (mirrors askPulseStream /
  * generateItemAssist) so unit tests never make a network call.
  */
 export async function summarizeThread(args: {

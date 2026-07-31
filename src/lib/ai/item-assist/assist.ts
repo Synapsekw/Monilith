@@ -65,8 +65,8 @@ function buildUserPrompt(args: {
  * (see buildItemAssistJsonSchema), so unused fields stay absent rather than
  * relying on the model to omit them voluntarily.
  *
- * `client` is injectable for tests (mirrors askPulseLoop in ask.ts) so unit
- * tests never make a network call.
+ * `client` is injectable for tests (mirrors askPulseStream in ask/ask-stream.ts)
+ * so unit tests never make a network call.
  */
 export async function generateItemAssist(args: {
   apiKey: string;

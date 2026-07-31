@@ -11,7 +11,7 @@ import type { AutomationContext } from "@/lib/ai/automation-context";
 import type { AgenticContext } from "./context";
 
 /** Hard cap on tool-use rounds — bounds worst-case token spend + latency
- *  (spec §4.1 #5). Mirrors askPulseLoop/proposeLoop's MAX_ROUNDS discipline. */
+ *  (spec §4.1 #5). Mirrors askPulseStream/proposeLoop's MAX_ROUNDS discipline. */
 const MAX_ROUNDS = 3;
 
 export type DecideResult = {
