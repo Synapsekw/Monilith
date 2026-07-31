@@ -6,7 +6,7 @@ describe("getItemHandler", () => {
     const client = {
       from: (table: string) => ({
         select: () => ({
-          eq: (col: string) => {
+          eq: (_col: string) => {
             if (table === "items") {
               return {
                 maybeSingle: () =>
@@ -38,7 +38,7 @@ describe("getItemHandler", () => {
     const client = {
       from: (table: string) => ({
         select: () => ({
-          eq: (col: string) => {
+          eq: (_col: string) => {
             if (table === "items") {
               return {
                 maybeSingle: () =>

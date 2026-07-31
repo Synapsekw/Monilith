@@ -13,6 +13,22 @@ const eslintConfig = defineConfig([
     files: ["**/*.ts", "**/*.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
+      // Honour the `_`-prefix convention the codebase already uses to mark a
+      // binding as deliberately unused — test doubles that must match a real
+      // signature, destructured-and-discarded fields, ignored catch params.
+      // Without these patterns every such marker still warned, so ~25 of the
+      // 31 standing warnings were authors saying "intentional" and eslint
+      // replying "noted, still warning". That noise is what lets a genuinely
+      // unused import sit unnoticed in the same list.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
     },
   },
   // Env vars are read through the validated schemas — src/lib/env.ts (public,
