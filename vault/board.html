@@ -8,20 +8,20 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-27 17:34",
+  "updated": "2026-07-31 15:59",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "The carryover board is closed — seven merges, promotion #78, and prod schema back in step",
+  "headline": "/updates had silently stopped tracking what we ship — 19 entries backfilled across July 17-27",
   "chips": [
     {
       "label": "develop",
-      "value": "4c09f7b",
-      "note": "== origin · squash divergence healed",
+      "value": "e69e6f0c",
+      "note": "== origin · 7 ahead of main · docs-only",
       "tone": "ok"
     },
     {
       "label": "main",
       "value": "1121796",
-      "note": "#78 LIVE · main CI green · deploy verified by curl",
+      "note": "#78 LIVE · promotion pending (see gates)",
       "tone": "ok"
     },
     {
@@ -39,22 +39,22 @@
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Promotion #78 SHIPPED — main @ 1121796, CI green, Vercel deploy verified serving new code (CORS headers confirmed live by curl, not just a green status). Squash divergence healed."
+      "text": "19 changelog entries backfilled for July 17-27 — ten days and two promotions (#72, #73) had shipped with no Changelog: trailer at all, incl. the Claude connector, Settings redesign and account deletion. Six announcement commits, author-dated to their ship date."
     },
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Prod schema synced: 3 migrations applied via db push (115 → 118). The tier-2 seed correctly no-op-ed on prod — 0 fixture users leaked. Autopilot full_name verified as Monolith Autopilot."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Both halves of the security boundary now gated: anon conformance re-run against PROD (0 of 129 fns reachable, 0 of 53 tables readable) and Tier 2 fixtures covering the authenticated half — proven to bite on 3 broken policies."
+      "text": "Both halves of the security boundary gated: anon conformance re-run against PROD (0 of 129 fns reachable, 0 of 53 tables readable) and Tier 2 fixtures covering the authenticated half."
     },
     {
       "led": "red",
       "tag": "CRITICAL",
-      "text": "Prod Vault still missing digest_secret — digest has NEVER fired (digest_runs = 0). But the schema half is now LIVE, so provisioning is finally safe: ping _health_digest_ping(), confirm a blocked row appears, then add it. No RESEND_API_KEY in prod, so the first runs send no email regardless."
+      "text": "E5 embeddings are now a PROMOTION BLOCKER, not just owed: the backfilled changelog announces Find similar items + Ask AI searches by meaning the moment main advances, but item_embeddings = 0 vs 439 prod items. Enqueue into item_embed_queue first — supabase-prod MCP is read-only (25006), so it needs a prod SQL editor paste."
+    },
+    {
+      "led": "red",
+      "tag": "CRITICAL",
+      "text": "Prod Vault still missing digest_secret — digest has NEVER fired (digest_runs = 0). The schema half is LIVE, so provisioning is safe: ping _health_digest_ping(), confirm a blocked row appears, then add it. No RESEND_API_KEY in prod, so the first runs send no email regardless."
     },
     {
       "led": "red",
@@ -64,27 +64,27 @@
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "E5 embeddings still inert (0 rows vs 439 prod items) — but OPENAI_EMBEDDING_API_KEY WAS provisioned 2026-07-25; that vault claim was stale. Only the item_embed_queue enqueue remains, and supabase-prod MCP is read-only (25006), so it needs a prod SQL editor paste."
+      "text": "/promote should print the trailer-vs-commit diff (git log main..develop vs its Changelog: trailers). The CI drift check proves generated.ts MATCHES history — it can never see a trailer that was never written, so it is green precisely when the changelog is wrong (gotcha-64)."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "Ask Pulse write path still unexercised on production — now worth doing, since the disconnect fix is live."
+      "text": "Ask Monolith write path still unexercised on production."
     },
     {
       "led": "brand",
       "tag": "NEXT?",
-      "text": "Report Builder v2 roll-ups + org templates is the critical path — one migration dropping reports.board_id NOT NULL, then unwinding the single-board assumption across access, shaping, routing and ~1.4k lines of tests."
+      "text": "Promote develop -> main to publish the 19 entries (documentation-only, no source behaviour changed) — AFTER draining the embed queue. Then Report Builder v2 roll-ups + org templates: one migration dropping reports.board_id NOT NULL, then unwinding the single-board assumption across access, shaping, routing and ~1.4k lines of tests."
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-07-27-1734-group-1-closeout-monolith-rename-promote",
-    "when": "2026-07-27 17:34",
+    "id": "2026-07-31-1559-changelog-backfill-updates-page",
+    "when": "2026-07-31 15:59",
     "bullets": [
-      "Seven branches built, gated and merged, then promoted as #78; prod schema synced to 118.",
-      "MCP list_items cut a board read from ~164 round trips to 2; search_items now reports truncation.",
-      "Monolith branding replaced the last 13 user-visible Pulse strings, incl. the OAuth consent screen."
+      "19 Changelog: trailers backfilled for July 17-27 as six announcement commits, one per ship date.",
+      "The CI drift check is a consistency check, not a coverage one — it cannot see a missing trailer (gotcha-64).",
+      "Two false starts: session-start context claimed develop was current when it was ~40 commits stale; git show --stat truncated a path and hid Autopilot's UI."
     ]
   },
   "roadmap": [
