@@ -9,7 +9,6 @@ import { getBoardStatusColumns, type StatusColumn } from "@/lib/goals/queries";
 import {
   createGoalSchema,
   deleteGoalSchema,
-  reorderGoalSchema,
   setGoalLinksSchema,
   updateGoalSchema,
 } from "@/lib/validations/goals";
@@ -84,24 +83,6 @@ export async function updateGoal(
   // edits (links/delete/reorder) still revalidate — auto_boards rollups and
   // tree shape can't be patched client-side.
   return { ok: true, data: { goal: data as Tables<"goals"> } };
-}
-
-export async function reorderGoal(
-  input: z.input<typeof reorderGoalSchema>,
-): Promise<ActionResult<null>> {
-  const parsed = reorderGoalSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("goals")
-    .update({ position: parsed.data.position })
-    .eq("id", parsed.data.goalId);
-  if (error) return fail(error.message);
-
-  revalidatePath("/goals");
-  return { ok: true, data: null };
 }
 
 export async function deleteGoal(
