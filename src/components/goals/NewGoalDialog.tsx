@@ -64,7 +64,8 @@ export function NewGoalDialog({
 
   function submit() {
     setError(null);
-    const num = (s: string): number | null => (s.trim() === "" ? null : Number(s));
+    const num = (s: string): number | null =>
+      s.trim() === "" ? null : Number(s);
     startTransition(async () => {
       const res = await createGoal({
         name,
@@ -99,14 +100,20 @@ export function NewGoalDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant={parentGoalId ? "outline" : "default"}>
+        <Button
+          type="button"
+          size="sm"
+          variant={parentGoalId ? "outline" : "default"}
+        >
           <Plus className="size-4" />
           {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{parentGoalId ? "Add sub-goal" : "New goal"}</DialogTitle>
+          <DialogTitle>
+            {parentGoalId ? "Add sub-goal" : "New goal"}
+          </DialogTitle>
           <DialogDescription>
             {parentGoalId
               ? "Sub-goal progress rolls up into its parent."
@@ -139,7 +146,7 @@ export function NewGoalDialog({
               id="goal-owner"
               value={ownerId}
               onChange={(e) => setOwnerId(e.target.value)}
-              className="border-input bg-transparent h-9 rounded-md border px-2 text-sm"
+              className="border-input h-9 rounded-md border bg-transparent px-2 text-sm"
             >
               <option value="">Me</option>
               {members.map((m) => (
@@ -156,7 +163,7 @@ export function NewGoalDialog({
               id="goal-measure"
               value={mode}
               onChange={(e) => setMode(e.target.value as GoalProgressMode)}
-              className="border-input bg-transparent h-9 rounded-md border px-2 text-sm"
+              className="border-input h-9 rounded-md border bg-transparent px-2 text-sm"
             >
               {(Object.keys(MODE_LABEL) as GoalProgressMode[]).map((m) => (
                 <option key={m} value={m}>

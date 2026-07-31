@@ -8,3 +8,11 @@ playwright-report
 supabase/.branches
 supabase/.temp
 src/components/ui
+
+# Transactional auth emails, pushed to prod via scripts/push-auth-emails.ts.
+# Prettier's HTML formatter rewrites the inline `style` attributes these rely
+# on — notably escaping the font stack's 'Segoe UI' to &quot;Segoe UI&quot; and
+# exploding attributes across lines. Browsers decode that fine; email clients
+# (Outlook/Gmail) are far less predictable, and a formatting pass is not worth
+# risking the rendering of confirmation/invite/recovery mail. Edit by hand.
+supabase/templates

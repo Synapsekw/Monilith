@@ -1,4 +1,8 @@
-import type { BoardCache, CacheColumn, CacheCellValue } from "@/lib/boards/cache";
+import type {
+  BoardCache,
+  CacheColumn,
+  CacheCellValue,
+} from "@/lib/boards/cache";
 
 export type MirrorValue = {
   linkedItemId: string;

@@ -1,4 +1,10 @@
-import type { Placement, PortfolioHealth, PortfolioRow, RollupRow, RowOwner } from "./types";
+import type {
+  Placement,
+  PortfolioHealth,
+  PortfolioRow,
+  RollupRow,
+  RowOwner,
+} from "./types";
 
 const DAY = 86_400_000;
 function daysBetween(a: string, b: string): number {
@@ -28,13 +34,23 @@ export function computeAutoHealth(input: {
   overdueItems: number;
   today: string;
 }): PortfolioHealth | null {
-  const { progressPct: pct, timelineStart, timelineEnd, overdueItems, today } = input;
+  const {
+    progressPct: pct,
+    timelineStart,
+    timelineEnd,
+    overdueItems,
+    today,
+  } = input;
 
   // Nothing to judge: no progress signal, no timeline, no overdue work.
   if (pct === null && timelineEnd === null && overdueItems === 0) return null;
 
   // Past the deadline and not finished.
-  if (timelineEnd !== null && today > timelineEnd && (pct === null || pct < 100)) {
+  if (
+    timelineEnd !== null &&
+    today > timelineEnd &&
+    (pct === null || pct < 100)
+  ) {
     return "off_track";
   }
 
@@ -43,7 +59,9 @@ export function computeAutoHealth(input: {
   if (pct !== null && timelineStart !== null && timelineEnd !== null) {
     const span = daysBetween(timelineStart, timelineEnd);
     if (span > 0) {
-      const elapsed = Math.min(Math.max(daysBetween(timelineStart, today) / span, 0), 1) * 100;
+      const elapsed =
+        Math.min(Math.max(daysBetween(timelineStart, today) / span, 0), 1) *
+        100;
       behind = pct < elapsed;
     }
   }
@@ -68,8 +86,18 @@ export function mergeRows(
       const timelineStart = r?.timelineStart ?? null;
       const timelineEnd = r?.timelineEnd ?? null;
       const overdueItems = r?.overdueItems ?? 0;
-      const pct = progressPct({ totalItems, doneItems, doneColumnId: p.doneColumnId });
-      const autoHealth = computeAutoHealth({ progressPct: pct, timelineStart, timelineEnd, overdueItems, today });
+      const pct = progressPct({
+        totalItems,
+        doneItems,
+        doneColumnId: p.doneColumnId,
+      });
+      const autoHealth = computeAutoHealth({
+        progressPct: pct,
+        timelineStart,
+        timelineEnd,
+        overdueItems,
+        today,
+      });
       return {
         ...p,
         name: r?.name ?? "(no access)",

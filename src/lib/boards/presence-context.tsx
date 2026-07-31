@@ -29,7 +29,10 @@ export function BoardPresenceProvider({
 
 export function useBoardPresenceContext(): BoardPresenceContextValue {
   const v = useContext(Ctx);
-  if (!v) throw new Error("useBoardPresenceContext must be used within BoardPresenceProvider");
+  if (!v)
+    throw new Error(
+      "useBoardPresenceContext must be used within BoardPresenceProvider",
+    );
   return v;
 }
 

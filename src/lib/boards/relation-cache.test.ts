@@ -44,9 +44,13 @@ describe("relation cache helpers", () => {
     const next = setRelationLinksForCell(cache, "a", "x", [
       link("9", "a", "x", "NEW"),
     ]);
-    expect(relationLinksForCell(next, "a", "x").map((l) => l.id)).toEqual(["9"]);
+    expect(relationLinksForCell(next, "a", "x").map((l) => l.id)).toEqual([
+      "9",
+    ]);
     // other cells untouched
-    expect(relationLinksForCell(next, "b", "x").map((l) => l.id)).toEqual(["2"]);
+    expect(relationLinksForCell(next, "b", "x").map((l) => l.id)).toEqual([
+      "2",
+    ]);
   });
 
   it("setRelationLinksForCell with [] clears a cell", () => {

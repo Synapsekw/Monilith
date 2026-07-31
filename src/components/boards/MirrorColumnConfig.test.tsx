@@ -33,9 +33,7 @@ describe("MirrorColumnConfig", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: /add column/i }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: /add column/i })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/source relation/i), {
       target: { value: "rel1" },

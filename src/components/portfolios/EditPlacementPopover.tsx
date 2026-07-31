@@ -122,7 +122,9 @@ export function EditPlacementPopover({
               value={row.ownerUserId ?? ""}
               disabled={isPending}
               onChange={(e) =>
-                patch({ ownerUserId: e.target.value === "" ? null : e.target.value })
+                patch({
+                  ownerUserId: e.target.value === "" ? null : e.target.value,
+                })
               }
             >
               <option value="">Unassigned</option>

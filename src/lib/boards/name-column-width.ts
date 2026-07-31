@@ -15,7 +15,11 @@ const PADDING = 60;
  * rounded before it reaches the action. Otherwise the mutation throws, rolls back
  * the optimistic cache, and the column snaps back to its prior width.
  */
-export function clampDragWidth(value: number, min: number, max: number): number {
+export function clampDragWidth(
+  value: number,
+  min: number,
+  max: number,
+): number {
   return Math.round(Math.min(max, Math.max(min, value)));
 }
 
