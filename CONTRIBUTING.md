@@ -144,7 +144,10 @@ Pre-convention history lives in `src/lib/changelog/seed.ts`.
 
   The check shells out to `psql`, so it needs `psql` on `PATH` — or `PG_BIN` pointing at your
   PostgreSQL `bin/` in the main checkout's (gitignored) `.env.prod.local`; without either it exits 3
-  and the drift is never checked.
+  and the drift is never checked. `PG_BIN` is one plain directory path, no trailing slash, quoted if
+  it contains spaces. On Windows write the **MSYS form** (`PG_BIN="/c/Program Files/PostgreSQL/17/bin"`):
+  the `scripts/sync-prod/*.sh` scripts run under Git Bash and use it verbatim, while this check
+  converts it to `C:\…` and joins it onto `PATH` with the platform delimiter itself.
 
 - **RLS is the security boundary**: default-deny, org-scoped, no cross-tenant access. Never trust the client.
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach the browser.
