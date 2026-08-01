@@ -13,6 +13,7 @@ import {
   AiQuotaExceededError,
   PersonalAiKeyMissingError,
   ByoKeyMissingError,
+  ProviderNotCapableError,
 } from "@/lib/ai/errors";
 import { getUserAgentById, findUserAgentRun } from "@/lib/agents/agents-db";
 import { getAgentOwnerClient } from "@/lib/agents/owner-client";
@@ -246,12 +247,21 @@ export async function POST(req: Request): Promise<Response> {
       fireDate,
     );
 
-    // 7. Summarise (metered), then send. Two distinct "no key" states are
+    // 7. Summarise (metered), then send. Three distinct states are
     //    CONFIGURATION states, not faults, and are caught separately from the
     //    generic error path below so they land in `user_agent_runs` as
     //    "skipped" with a clear reason:
     //      - PersonalAiKeyMissingError: the owner has no per_user key on file.
     //      - ByoKeyMissingError: the org's org_byo mode has no vault secret.
+    //      - ProviderNotCapableError: the owner's resolved key IS present but
+    //        is for a non-Anthropic provider (per_user mode allows OpenAI/
+    //        Gemini keys, and summariseBriefing hard-codes the Anthropic SDK
+    //        — see summarise.ts). Without this guard, a wrong-provider key
+    //        gets POSTed to api.anthropic.com, 401s, and silently kills the
+    //        agent every day as an opaque "error" row with no way for the
+    //        owner to learn why. Detected INSIDE the runAi callback (only
+    //        there is `adapter` available) and thrown before summariseBriefing
+    //        is ever called, so nothing is spent.
     //    Deliberately NOT caught here: a plain (non-Personal) AiNotConfiguredError
     //    — e.g. `managed` mode's platform ANTHROPIC_API_KEY missing — is an
     //    OPERATIONAL fault (nobody but ops can fix it, and it silently kills
@@ -261,7 +271,10 @@ export async function POST(req: Request): Promise<Response> {
     try {
       result = await runAi(
         { orgId: agent.org_id, userId: agent.owner_id, feature: FEATURE },
-        async ({ apiKey }) => {
+        async ({ adapter, apiKey }) => {
+          if (adapter.id !== "anthropic") {
+            throw new ProviderNotCapableError(FEATURE);
+          }
           const r = await summariseBriefing({
             apiKey,
             instructions: agent.instructions,
@@ -280,6 +293,19 @@ export async function POST(req: Request): Promise<Response> {
           error: `AI not configured for this run (${e.message})`,
         });
         return NextResponse.json({ status: "skipped", reason: "no_key" });
+      }
+      if (e instanceof ProviderNotCapableError) {
+        await safeFinalize(svc, key, {
+          status: "skipped",
+          error:
+            "Personal agents currently require an Anthropic key. The owner's " +
+            "configured AI provider (Settings → AI) is not Anthropic, so " +
+            "this run was skipped rather than billed to the wrong provider.",
+        });
+        return NextResponse.json({
+          status: "skipped",
+          reason: "wrong_provider",
+        });
       }
       throw e;
     }

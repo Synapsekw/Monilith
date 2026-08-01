@@ -129,14 +129,17 @@ vi.mock("@/lib/agents/send", () => ({
   sendBriefingEmail: (...a: unknown[]) => sendBriefingEmail(...(a as [])),
 }));
 
-// runAi just runs the callback by default (metering exercised in the
-// gateway's own test). A vi.fn so individual tests can override it — e.g. to
-// simulate the per_user "no key on file" path throwing AiNotConfiguredError.
+// runAi just runs the callback by default with an Anthropic adapter (metering
+// exercised in the gateway's own test). A vi.fn so individual tests can
+// override it — e.g. to simulate the per_user "no key on file" path throwing
+// AiNotConfiguredError, or a non-Anthropic adapter to exercise the
+// wrong-provider skip.
+type FakeResolved = { adapter: { id: string }; apiKey: string };
 const runAi = vi.fn(
   async (
     _args: unknown,
-    fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
-  ) => (await fn({ apiKey: "k" })).result,
+    fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+  ) => (await fn({ adapter: { id: "anthropic" }, apiKey: "k" })).result,
 );
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: (...a: Parameters<typeof runAi>) => runAi(...a),
@@ -200,8 +203,8 @@ beforeEach(() => {
   runAi.mockImplementation(
     async (
       _args: unknown,
-      fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
-    ) => (await fn({ apiKey: "k" })).result,
+      fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+    ) => (await fn({ adapter: { id: "anthropic" }, apiKey: "k" })).result,
   );
 });
 
@@ -341,6 +344,51 @@ describe("POST /api/ai/personal-agent", () => {
       reason: "no_key",
     });
     expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // ── wrong-provider guard: an Anthropic adapter proceeds normally ───────
+  it("proceeds through summarise + send when the resolved adapter is anthropic", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    // Default mock already resolves { adapter: { id: "anthropic" }, apiKey }.
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(summariseBriefing).toHaveBeenCalledOnce();
+    expect(sendBriefingEmail).toHaveBeenCalledOnce();
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "ran" });
+  });
+
+  // ── wrong-provider guard: a non-Anthropic per_user key must never be sent
+  //    to api.anthropic.com. This is a CONFIGURATION state (skipped), not a
+  //    fault — it must spend nothing and never call summarise or send. ──────
+  it("finalizes as skipped (not error) when the resolved adapter is not anthropic, and never calls the model or the send", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    // Drive the REAL callback route.ts passes to runAi (not a re-implemented
+    // stand-in) with a non-anthropic adapter — this exercises route.ts's own
+    // `adapter.id !== "anthropic"` check, not just its catch block.
+    runAi.mockImplementation(
+      async (
+        _args: unknown,
+        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+      ) => (await fn({ adapter: { id: "openai" }, apiKey: "k" })).result,
+    );
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      status: "skipped",
+      reason: "wrong_provider",
+    });
+    expect(runInserts).toHaveLength(1);
+    expect(runUpdates).toHaveLength(1);
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
+    expect(runUpdates[0]!.patch.error).toMatch(/Anthropic/);
+    // Never spends: no model call, no email.
+    expect(summariseBriefing).not.toHaveBeenCalled();
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 
