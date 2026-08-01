@@ -8,27 +8,27 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-07-31 17:08",
+  "updated": "2026-08-01 11:46",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "The gates had gone amber long enough that nobody read them — all four green again, and meaning something",
+  "headline": "Green gates are when debt stops being visible — so the audit went after what gates structurally cannot see",
   "chips": [
     {
       "label": "develop",
-      "value": "ffee1820",
-      "note": "== origin · 20 ahead of main · no user-facing change",
+      "value": "59997249",
+      "note": "== origin · 2 merges today · +107 tests, 2 endpoints closed",
       "tone": "ok"
     },
     {
       "label": "main",
       "value": "1121796",
-      "note": "#78 LIVE · promotion pending (see gates)",
+      "note": "#78 LIVE · promotion blocked on embeddings",
       "tone": "ok"
     },
     {
-      "label": "prod",
-      "value": "",
-      "note": "ledger 118/118/118 — UNVERIFIED this session (no psql)",
-      "tone": "warn"
+      "label": "ledger",
+      "value": "118/118",
+      "note": "VERIFIED this session — files == DEV rows, no drift",
+      "tone": "ok"
     }
   ],
   "progress": {
@@ -39,12 +39,17 @@
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Quality sweep: format:check 1775 -> 0 files, lint 31 -> 1 warning, all four gates green (510 test files, 3669 tests). The noise was hiding 42 genuinely unformatted files, an unused import, a dead let, and five reachable-but-uncalled server actions."
+      "text": "Debt audit + paydown shipped in two merges: 3669 -> 3776 tests (+107 net) across seven previously-untested server-action modules, two more orphaned \"use server\" endpoints removed (bulkDeleteItems, bulkPurgeItems — one a bulk HARD DELETE), and two real bugs fixed. 8 parallel subagents, then 2."
     },
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Five dead \"use server\" exports removed — each compiled to a live POST endpoint with a stable action ID despite zero call sites. Their own tests were what kept them looking alive (gotcha-66). ~620 lines gone, plus Ask's superseded non-streaming path."
+      "text": "getStatusColumnsForBoard now honours its ActionResult contract in BOTH copies. getBoardStatusColumns throws by design and its comment said the wrapping action should surface it — neither of the two callers had a try/catch, so three client call sites hit Next's error boundary instead of their own error state."
+    },
+    {
+      "led": "hollow",
+      "tag": "OWED",
+      "text": "An advisory follow-up is a follow-up that does not happen. gotcha-66 closed with 'worth a periodic sweep' — the sweep, one session later, found two more live endpoints. Same shape as the ledger gate's exit-3 warning being ignored twice. The orphan detector and a ledger-staleness check should be GATES, not advice."
     },
     {
       "led": "green",
@@ -59,7 +64,7 @@
     {
       "led": "red",
       "tag": "CRITICAL",
-      "text": "E5 embeddings are now a PROMOTION BLOCKER, not just owed: the backfilled changelog announces Find similar items + Ask AI searches by meaning the moment main advances, but item_embeddings = 0 vs 439 prod items. Enqueue into item_embed_queue first — supabase-prod MCP is read-only (25006), so it needs a prod SQL editor paste."
+      "text": "E5 embeddings remain the PROMOTION BLOCKER: item_embeddings = 0 vs 439 prod items while the changelog announces Find similar items + Ask AI searches by meaning. CORRECTION — 'no secret handling needed' was wrong. _embed_sweep_ping() needs app_url AND ai_pgnet_hmac_secret in Vault; if either is missing it raises a NOTICE and returns, and cron records the job as SUCCEEDED. Verify preconditions, then enqueue, then confirm the queue actually shrinks (Phase A of the 2026-08-01 plan)."
     },
     {
       "led": "red",
@@ -82,9 +87,9 @@
       "text": "Ask Monolith write path still unexercised on production."
     },
     {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "pnpm db:ledger-check cannot run on this machine (psql not on PATH), so finish-task.sh's ledger gate was SKIPPED. The 118/118/118 count is carried over unverified — re-run where psql exists before the next promotion."
+      "led": "green",
+      "tag": "DONE",
+      "text": "Ledger gate restored and VERIFIED (118 files == 118 DEV rows, no drift). It was not unconfigured — psqlEnv joined PATH with a hardcoded POSIX colon (Windows splits on semicolon) AND assigned a fresh PATH key while node preserves the OS 'Path' casing, handing the child two path variables. Fixing either alone would not have worked (gotcha-68)."
     },
     {
       "led": "brand",
@@ -92,14 +97,21 @@
       "text": "Promote develop -> main to publish the 19 entries (documentation-only, no source behaviour changed) — AFTER draining the embed queue. Then Report Builder v2 roll-ups + org templates: one migration dropping reports.board_id NOT NULL, then unwinding the single-board assumption across access, shaping, routing and ~1.4k lines of tests."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "led": "amber",
+      "branch": "task/landing-agentic",
+      "head": "57e2c4a4",
+      "note": "concurrent session — not this one's work"
+    }
+  ],
   "session": {
-    "id": "2026-07-31-1708-quality-sweep-crlf-dead-code",
-    "when": "2026-07-31 17:08",
+    "id": "2026-08-01-1146-debt-audit-and-paydown",
+    "when": "2026-08-01 11:46",
     "bullets": [
-      ".gitattributes pins the working tree to LF — a zero-content diff, since every blob was already LF (gotcha-65).",
-      "Five dead \"use server\" exports are five live endpoints, not clutter; their passing tests hid them (gotcha-66).",
-      "A raw NUL byte had git classifying use-board-filter-sort.ts as binary: no diffs, no grep, no normalization (gotcha-67)."
+      "A POSIX path join silently disabled the ledger gate on Windows for two sessions — two bugs in four lines, and the recorded diagnosis was wrong (gotcha-68).",
+      "gotcha-66's 'worth a periodic sweep' found two more live endpoints one session later: advisory follow-ups do not happen.",
+      "Three of the audit's own findings were wrong on inspection — audit output is a hypothesis, re-derive each finding before acting."
     ]
   },
   "roadmap": [
