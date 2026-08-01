@@ -2662,6 +2662,45 @@ export type Database = {
           },
         ];
       };
+      user_agent_fires: {
+        Row: {
+          fire_date: string;
+          fire_hour: number;
+          fired_at: string;
+          org_id: string;
+          user_agent_id: string;
+        };
+        Insert: {
+          fire_date: string;
+          fire_hour: number;
+          fired_at?: string;
+          org_id: string;
+          user_agent_id: string;
+        };
+        Update: {
+          fire_date?: string;
+          fire_hour?: number;
+          fired_at?: string;
+          org_id?: string;
+          user_agent_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agent_fires_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_fires_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_agent_runs: {
         Row: {
           created_at: string;
@@ -2922,6 +2961,7 @@ export type Database = {
           total_items: number;
         }[];
       };
+      _personal_agent_sweep: { Args: { p_now?: string }; Returns: undefined };
       _reassign_authorship_target: {
         Args: { p_leaving: string; p_org_id: string };
         Returns: string;
@@ -3761,7 +3801,8 @@ export type Database = {
         | "automation"
         | "feedback_response"
         | "health_digest"
-        | "account_deleted";
+        | "account_deleted"
+        | "agent_briefing";
       org_role: "owner" | "admin" | "member" | "guest";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
@@ -3949,6 +3990,7 @@ export const Constants = {
         "feedback_response",
         "health_digest",
         "account_deleted",
+        "agent_briefing",
       ],
       org_role: ["owner", "admin", "member", "guest"],
       portfolio_health: ["on_track", "at_risk", "off_track"],
