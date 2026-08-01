@@ -270,3 +270,44 @@ describe("runAi", () => {
     );
   });
 });
+
+describe("runEmbedding", () => {
+  it("passes cache token counts through to record_ai_usage (via typedRpc)", async () => {
+    // requireAiEntitlement → readOrgAiSettings hits the same maybeSingle mock as
+    // resolveAiAdapter; any non-"off", non-"managed" mode short-circuits to an
+    // unmetered entitlement without touching `rpc`, leaving it free to assert on.
+    settingsRow("org_byo");
+    rpc.mockResolvedValue({ data: null, error: null });
+    const { runEmbedding } = await import("@/lib/ai/gateway");
+
+    const out = await runEmbedding(
+      { orgId: "org-1", userId: "user-1", feature: "item_embed" },
+      async () => ({
+        result: "ok",
+        usage: {
+          inputTokens: 800,
+          outputTokens: 0,
+          cacheReadTokens: 5_000,
+          cacheWriteTokens: 1_000,
+        },
+        model: "text-embedding-3-small",
+      }),
+    );
+
+    expect(out).toBe("ok");
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({
+        p_org: "org-1",
+        p_user: "user-1",
+        p_feature: "item_embed",
+        p_provider: "openai",
+        p_model: "text-embedding-3-small",
+        p_input_tokens: 800,
+        p_output_tokens: 0,
+        p_cache_read_tokens: 5_000,
+        p_cache_write_tokens: 1_000,
+      }),
+    );
+  });
+});

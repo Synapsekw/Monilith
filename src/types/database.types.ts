@@ -2053,8 +2053,6 @@ export type Database = {
           byo_key_last4: string | null;
           byo_provider: string | null;
           byo_secret_id: string | null;
-          max_agent_runs_per_user_per_day: number;
-          max_agents_per_user: number;
           monthly_credit_limit: number;
           org_id: string;
           tier: string;
@@ -2066,8 +2064,6 @@ export type Database = {
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
-          max_agent_runs_per_user_per_day?: number;
-          max_agents_per_user?: number;
           monthly_credit_limit?: number;
           org_id: string;
           tier?: string;
@@ -2079,8 +2075,6 @@ export type Database = {
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
-          max_agent_runs_per_user_per_day?: number;
-          max_agents_per_user?: number;
           monthly_credit_limit?: number;
           org_id?: string;
           tier?: string;
@@ -2379,7 +2373,6 @@ export type Database = {
           avatar_url: string | null;
           created_at: string;
           email: string | null;
-          email_briefing_opt_out: boolean;
           email_digest_opt_out: boolean;
           full_name: string | null;
           id: string;
@@ -2391,7 +2384,6 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           email?: string | null;
-          email_briefing_opt_out?: boolean;
           email_digest_opt_out?: boolean;
           full_name?: string | null;
           id: string;
@@ -2403,7 +2395,6 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           email?: string | null;
-          email_briefing_opt_out?: boolean;
           email_digest_opt_out?: boolean;
           full_name?: string | null;
           id?: string;
