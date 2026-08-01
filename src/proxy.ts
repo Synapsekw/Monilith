@@ -46,6 +46,7 @@ const PUBLIC_PREFIXES = [
   "/api/ai/embed",
   "/api/ai/automation-step",
   "/api/ai/autopilot",
+  "/api/ai/personal-agent",
   "/api/digest/run",
 ];
 
