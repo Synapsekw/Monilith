@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { MagneticButton } from "./magnetic-button";
 import { MonolithScene } from "./monolith-scene";
+import { LandingNav } from "./landing-nav";
 import { LandingSections } from "./landing-sections";
+import { AgentRoster } from "./landing-agent-mocks";
 import styles from "./monolith-hero.module.css";
 
 // Primary CTA: the ONE earned loud moment in Keystone — periwinkle fill +
@@ -16,10 +18,13 @@ const SECONDARY_CTA =
 
 /**
  * Public landing hero. Server Component: derives the CTA labels/targets from
- * auth state and renders the interactive client `MonolithScene`. The hero CTAs
- * are the only entry points — logged-out visitors get Get started (sign up) +
- * Sign in (log in); a signed-in viewer (the `/landing` splash) gets a single
- * "Enter app" path back into the product (`/`, which routes on to their board).
+ * auth state and renders the interactive client `MonolithScene`. Logged-out
+ * visitors get Get started (sign up) + Sign in (log in); a signed-in viewer (the
+ * `/landing` splash) gets a single "Enter app" path back into the product (`/`,
+ * which routes on to their board). The nav repeats those entry points.
+ *
+ * The agent roster is passed as a slot rather than imported inside the client
+ * scene, so its markup stays a Server Component.
  */
 export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
   return (
@@ -27,7 +32,8 @@ export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
     // (like /updates), so Keystone token-driven children (primary/border/kicker)
     // resolve to their dark values even on the static, theme-agnostic `/` route.
     <div className={`dark ${styles.page}`}>
-      <MonolithScene>
+      <LandingNav signedIn={signedIn} />
+      <MonolithScene roster={<AgentRoster />}>
         {signedIn ? (
           <MagneticButton href="/" className={PRIMARY_CTA}>
             Enter app

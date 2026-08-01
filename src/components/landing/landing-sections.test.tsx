@@ -13,6 +13,27 @@ describe("LandingSections", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the agents section with both feature rows", () => {
+    render(<LandingSections />);
+    expect(
+      screen.getByText("Work alongside agents, not another tool."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Mention an agent. It answers in the thread."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("A morning brief, without asking for it."),
+    ).toBeInTheDocument();
+  });
+
+  // Named per-user agents are NOT shipped. The claim must carry its rollout
+  // marker, or the page is announcing something a visitor cannot get — the
+  // exact trap the changelog hit when it announced semantic search early.
+  it("labels the unshipped named-agent claim as rolling out", () => {
+    render(<LandingSections />);
+    expect(screen.getByText("Named agents · rolling out")).toBeInTheDocument();
+  });
+
   it("logged out: the waitlist CTA is a Request access control", () => {
     render(<LandingSections />);
     expect(
