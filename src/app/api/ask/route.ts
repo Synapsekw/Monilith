@@ -170,7 +170,12 @@ export async function POST(req: Request) {
           if (!adapter.supportsTools)
             throw new ProviderNotCapableError("ask_pulse");
           const client = new Anthropic({ apiKey });
-          const usage: AiUsageTokens = { inputTokens: 0, outputTokens: 0 };
+          const usage: AiUsageTokens = {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          };
 
           if (toFold.length > 0) {
             const s = await summarize(client.messages, MODEL, summary, toFold);
@@ -197,6 +202,10 @@ export async function POST(req: Request) {
           });
           usage.inputTokens += r.usage.inputTokens;
           usage.outputTokens += r.usage.outputTokens;
+          usage.cacheReadTokens =
+            (usage.cacheReadTokens ?? 0) + (r.usage.cacheReadTokens ?? 0);
+          usage.cacheWriteTokens =
+            (usage.cacheWriteTokens ?? 0) + (r.usage.cacheWriteTokens ?? 0);
 
           // Auto-title on the first exchange — reuses the resolved key (works
           // for managed/BYO/per-user) and meters its tokens. Best-effort.

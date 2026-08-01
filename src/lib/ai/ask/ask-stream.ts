@@ -192,11 +192,20 @@ export async function askPulseStream(args: {
     moveMessageBreakpoint(messages);
   }
 
-  // Cap reached (or an empty tool turn): one final buffered answer.
+  // Cap reached (or an empty tool turn): one final buffered answer. `tools` +
+  // `tool_choice: "none"` are included even though this call never invokes a
+  // tool: the cached prefix is tools -> system -> messages, so omitting tools
+  // would diverge the prefix at byte zero from every streaming call in the
+  // same turn and turn both breakpoints into guaranteed (1.25x) cache WRITES
+  // instead of reads. A tool_choice change alone preserves the tools+system
+  // cache and only invalidates the messages cache — exactly what we want,
+  // since "answer now, no more tools" is what tool_choice: none already means.
   const capped = await client.messages.create({
     model: choice.model,
     max_tokens: 1024,
     system,
+    tools,
+    tool_choice: { type: "none" },
     messages: [
       ...messages,
       { role: "user", content: "Answer now with what you have." },

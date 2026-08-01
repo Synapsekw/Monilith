@@ -291,6 +291,9 @@ describe("askPulseStream", () => {
   });
 
   it("keeps exactly one message breakpoint across tool rounds", async () => {
+    // Stands alone: don't rely on an earlier test's mockResolvedValue
+    // surviving vi.clearAllMocks() (it clears calls, not implementations).
+    mockExecuteAskTool.mockResolvedValue({ content: "[]", boardId: "b1" });
     const captured: Record<string, unknown>[] = [];
     let round = 0;
     const client = {
@@ -334,5 +337,60 @@ describe("askPulseStream", () => {
     const msgs = last.messages as { content: unknown }[];
     const marked = JSON.stringify(msgs).split('"cache_control"').length - 1;
     expect(marked).toBe(1);
+  });
+
+  it("carries tools + tool_choice:none on the capped final call, so its prefix still matches the streamed rounds", async () => {
+    // Stands alone, same reasoning as above.
+    mockExecuteAskTool.mockResolvedValue({ content: "[]", boardId: "b1" });
+    let createParams: Record<string, unknown> | undefined;
+    const client = {
+      messages: {
+        // Every round hits the tool-use branch, so MAX_ROUNDS (6) is
+        // exhausted and the loop falls through to the capped call.
+        stream: () => ({
+          on: () => {},
+          finalMessage: async () => ({
+            stop_reason: "tool_use",
+            content: [
+              { type: "tool_use", id: "t1", name: "list_boards", input: {} },
+            ],
+            usage: { input_tokens: 10, output_tokens: 2 },
+          }),
+        }),
+        create: (params: Record<string, unknown>) => {
+          createParams = params;
+          return Promise.resolve({
+            content: [{ type: "text", text: "capped" }],
+            usage: { input_tokens: 5, output_tokens: 5 },
+          });
+        },
+      },
+    } as never;
+
+    await askPulseStream({
+      apiKey: "sk-ant-test",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      messages: [{ role: "user", content: "hi" }],
+      system: "You are Ask.",
+      emit: () => {},
+      client,
+    });
+
+    // Cached prefix is tools -> system -> messages: omitting tools here would
+    // diverge the prefix at byte zero and turn both breakpoints into 1.25x
+    // cache WRITES instead of reads.
+    expect(createParams?.tools).toBeDefined();
+    expect(
+      (createParams?.tools as unknown[] | undefined)?.length,
+    ).toBeGreaterThan(0);
+    expect(createParams?.tool_choice).toEqual({ type: "none" });
+    expect(createParams?.system).toEqual([
+      {
+        type: "text",
+        text: "You are Ask.",
+        cache_control: { type: "ephemeral" },
+      },
+    ]);
   });
 });
