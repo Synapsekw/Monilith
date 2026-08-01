@@ -30,6 +30,27 @@ A second silent edge: the endpoint verifies with `AI_PGNET_HMAC_SECRET` (`src/ap
 
 **So: verify first, enqueue second, confirm drain third.** Do not reorder.
 
+> ### SUPERSEDED 2026-08-01 — Phase A and Phase B are the wrong way round
+>
+> Executed as written, and it did not drain. Root cause was neither Vault nor HMAC: `src/proxy.ts`
+> gated every `pg_net` endpoint behind a session cookie, so the cron POST was 307'd to `/login`,
+> which answers **405** to a POST — while pg_cron recorded `succeeded`
+> ([[2026-08-01-gotcha-69-a-cookie-gate-turns-a-cron-post-into-a-silent-405]]). Fixed on `develop`
+> in `0b2d4e74`.
+>
+> **Production runs `main`, so the fix is not live until the promotion.** The queue therefore cannot
+> drain before Phase B. The correct order is **B then A**: promote, and the 380 already-queued rows
+> drain themselves within ~15 minutes with no further action.
+>
+> Steps A1 (verify Vault) and A2 (enqueue) are **already done** — A1 passed (`app_url` and
+> `ai_pgnet_hmac_secret` both present, no trailing slash) and A2 enqueued 380 rows on 2026-08-01.
+> Only A3 (confirm the drain) remains, and it runs **after** Phase B.
+>
+> Two corrections to this document's own reasoning while you are here: the item count is **380 live**
+> (439 total, 59 archived), and `net._http_response` **does** record the HTTP status of every pg_net
+> call — the claim below that "the database never learns it failed" is wrong, and that table is the
+> first place to look when a sweep is silently idle.
+
 ### A1 — Verify the three preconditions
 
 - [ ] **Step 1: Confirm both Vault secrets exist on PROD.** Paste into the prod SQL editor (`supabase-prod` MCP is read-only, `25006`):
@@ -129,7 +150,15 @@ A `status = 'succeeded'` with the queue unmoved means the Vault lookup returned 
 
 # Phase B — Promote `develop → main`
 
-**Precondition: Phase A Step A3.4 passed.** The promotion publishes 133 lines of changelog including _"Find similar items"_ and _"Ask AI searches by meaning"_. Promoting before the drain ships a false claim to users.
+**Precondition (CORRECTED 2026-08-01): none from Phase A — this phase now runs FIRST.** The original
+text said to wait for the drain, which is impossible: the endpoint that drains the queue only becomes
+reachable in production once this promotion ships the `proxy.ts` fix
+([[2026-08-01-gotcha-69-a-cookie-gate-turns-a-cron-post-into-a-silent-405]]).
+
+That resolves the apparent circularity rather than creating one. The promotion publishes 133 lines of
+changelog including _"Find similar items"_ and _"Ask AI searches by meaning"_ **and** the fix that
+makes them true, in the same deploy. There is no window where the claim is live and false — the queue
+drains within ~15 minutes of the deploy going green.
 
 **What this promotion actually contains:** `65 files, +523/−851` in `src/`, **zero migrations**, no user-facing behavior change. It is a net deletion — it removes five dead `"use server"` endpoints (`renamePortfolio`, `deletePortfolio`, `updatePortfolioMapping`, `reorderGoal`, `askPulse`) from production. Delaying it keeps those live.
 

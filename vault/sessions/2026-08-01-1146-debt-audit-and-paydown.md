@@ -6,6 +6,7 @@ trigger: wrapup
 status: complete
 tags: [session]
 related:
+  - "[[2026-08-01-gotcha-69-a-cookie-gate-turns-a-cron-post-into-a-silent-405]]"
   - "[[2026-08-01-gotcha-68-a-posix-path-join-silently-disables-a-windows-escape-hatch]]"
   - "[[2026-07-31-gotcha-66-an-uncalled-use-server-export-is-still-a-live-endpoint]]"
   - "[[2026-07-31-1708-quality-sweep-crlf-dead-code]]"
@@ -33,6 +34,19 @@ related:
   untested modules" were 8 (two matched `"use server"` in a comment), `platform/search-action.ts` is
   a delegation layer already covered by four test files, and the ledger gate was broken rather than
   unconfigured.
+
+- **`0b2d4e74` — the day's real finding, from acting on the plan rather than writing it.** Running
+  Phase A against prod showed the queue flat at 380 across three sweeps while every cron run logged
+  `succeeded`. `net._http_response` held one row: **405**. `src/proxy.ts` gated every `pg_net`
+  endpoint behind a session cookie, so each cron POST was 307'd to `/login`, which answers 405 to a
+  POST. **Five** integrations had never worked in production — E5 embeddings, F13 automation steps,
+  F14 Autopilot, the weekly digest, and `personal-agents`' brand-new briefings. Fixed with a test
+  that derives its endpoint list from the migrations, which then caught the fifth endpoint a
+  concurrent session merged **while the fix was parked**
+  ([[2026-08-01-gotcha-69-a-cookie-gate-turns-a-cron-post-into-a-silent-405]]).
+- **Prod state touched:** 380 live items enqueued for embedding (idempotent, drains after promotion);
+  DEV's `embed-sweep` cron unscheduled because DEV has no `app_url` and it had reported green for
+  twelve days over a queue that never moved.
 
 ## Why
 
