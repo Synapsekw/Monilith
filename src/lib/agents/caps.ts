@@ -23,7 +23,7 @@ export async function assertCanCreateAgent(
   ownerId: string,
 ): Promise<void> {
   const { maxAgentsPerUser } = await readOrgAiSettings(client, orgId);
-  const existing = await countAgentsForOwner(client, ownerId);
+  const existing = await countAgentsForOwner(client, orgId, ownerId);
   if (existing >= maxAgentsPerUser) {
     throw new AgentCapExceededError(
       `You can have at most ${maxAgentsPerUser} agents. Delete one to create another.`,
@@ -38,7 +38,7 @@ export async function assertRunAllowedToday(
   fireDate: string,
 ): Promise<void> {
   const { maxAgentRunsPerUserPerDay } = await readOrgAiSettings(svc, orgId);
-  const today = await countRunsToday(svc, ownerId, fireDate);
+  const today = await countRunsToday(svc, orgId, ownerId, fireDate);
   if (today >= maxAgentRunsPerUserPerDay) {
     throw new AgentCapExceededError(
       `Daily agent run limit of ${maxAgentRunsPerUserPerDay} reached.`,

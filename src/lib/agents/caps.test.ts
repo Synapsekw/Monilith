@@ -26,11 +26,12 @@ beforeEach(() => {
 });
 
 describe("assertCanCreateAgent", () => {
-  it("allows creation below the cap", async () => {
+  it("allows creation below the cap, passing org_id through to the counter (the cap is per-org — a person can belong to multiple orgs)", async () => {
     countAgentsForOwner.mockResolvedValue(2);
     await expect(
       assertCanCreateAgent({} as never, "org", "user"),
     ).resolves.toBeUndefined();
+    expect(countAgentsForOwner).toHaveBeenCalledWith({}, "org", "user");
   });
 
   it("rejects creation at the cap", async () => {
@@ -49,11 +50,17 @@ describe("assertCanCreateAgent", () => {
 });
 
 describe("assertRunAllowedToday", () => {
-  it("allows a run below the daily cap", async () => {
+  it("allows a run below the daily cap, passing org_id through to the counter (the cap is per-org — a person can belong to multiple orgs)", async () => {
     countRunsToday.mockResolvedValue(1);
     await expect(
       assertRunAllowedToday({} as never, "org", "user", "2026-08-01"),
     ).resolves.toBeUndefined();
+    expect(countRunsToday).toHaveBeenCalledWith(
+      {},
+      "org",
+      "user",
+      "2026-08-01",
+    );
   });
 
   it("rejects a run at the daily cap", async () => {

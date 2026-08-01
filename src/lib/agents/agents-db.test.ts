@@ -185,36 +185,47 @@ describe("setAgentBridgeSecret", () => {
 });
 
 describe("countAgentsForOwner", () => {
-  it("returns the count value (not a row-array length), filtering on owner_id", async () => {
-    const { client, calls, select } = clientForCount(1, 5);
-    const n = await countAgentsForOwner(client as never, "user-1");
+  it("returns the count value (not a row-array length), filtering on org_id and owner_id — a person can belong to multiple orgs, and the cap is per-org", async () => {
+    const { client, calls, select } = clientForCount(2, 5);
+    const n = await countAgentsForOwner(client as never, "org-1", "user-1");
     expect(n).toBe(5);
     expect(select).toHaveBeenCalledWith("id", { count: "exact", head: true });
-    expect(calls).toEqual([["owner_id", "user-1"]]);
+    expect(calls).toEqual([
+      ["org_id", "org-1"],
+      ["owner_id", "user-1"],
+    ]);
   });
 
   it("falls back to 0 when count comes back null", async () => {
-    const { client } = clientForCount(1, null);
-    const n = await countAgentsForOwner(client as never, "user-1");
+    const { client } = clientForCount(2, null);
+    const n = await countAgentsForOwner(client as never, "org-1", "user-1");
     expect(n).toBe(0);
   });
 
   it("throws (never silently returns 0) on a DB error", async () => {
-    const { client } = clientForCount(1, null, { message: "boom" });
+    const { client } = clientForCount(2, null, { message: "boom" });
     await expect(
-      countAgentsForOwner(client as never, "user-1"),
+      countAgentsForOwner(client as never, "org-1", "user-1"),
     ).rejects.toThrow("countAgentsForOwner: boom");
   });
 });
 
 describe("countRunsToday", () => {
-  it("returns the count value, filtering on owner, date and status='ran'", async () => {
-    const { client, calls, select } = clientForCount(3, 2);
-    const n = await countRunsToday(client as never, "user-1", "2026-08-01");
+  it("returns the count value, filtering on org_id, owner_id, date and status='ran'", async () => {
+    const { client, calls, select } = clientForCount(4, 2);
+    const n = await countRunsToday(
+      client as never,
+      "org-1",
+      "user-1",
+      "2026-08-01",
+    );
     expect(n).toBe(2);
     expect(select).toHaveBeenCalledWith("id", { count: "exact", head: true });
-    // 'ran' only — skipped/errored runs must not consume the daily budget.
+    // org_id first (a person can belong to multiple orgs and the cap is
+    // per-org), then owner_id, then 'ran' only — skipped/errored runs must
+    // not consume the daily budget.
     expect(calls).toEqual([
+      ["org_id", "org-1"],
       ["owner_id", "user-1"],
       ["fire_date", "2026-08-01"],
       ["status", "ran"],
@@ -222,15 +233,20 @@ describe("countRunsToday", () => {
   });
 
   it("falls back to 0 when count comes back null", async () => {
-    const { client } = clientForCount(3, null);
-    const n = await countRunsToday(client as never, "user-1", "2026-08-01");
+    const { client } = clientForCount(4, null);
+    const n = await countRunsToday(
+      client as never,
+      "org-1",
+      "user-1",
+      "2026-08-01",
+    );
     expect(n).toBe(0);
   });
 
   it("throws on a DB error — a swallow here would silently disable the per-user daily cap", async () => {
-    const { client } = clientForCount(3, null, { message: "boom" });
+    const { client } = clientForCount(4, null, { message: "boom" });
     await expect(
-      countRunsToday(client as never, "user-1", "2026-08-01"),
+      countRunsToday(client as never, "org-1", "user-1", "2026-08-01"),
     ).rejects.toThrow("countRunsToday: boom");
   });
 });

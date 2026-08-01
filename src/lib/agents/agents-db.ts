@@ -97,28 +97,41 @@ export async function setAgentBridgeSecret(
   if (error) throw new Error(`setAgentBridgeSecret: ${error.message}`);
 }
 
-/** Cap support: how many agents this person already owns. */
+/** Cap support: how many agents this person already owns IN THIS ORG. The cap
+ *  itself (`org_ai_settings.max_agents_per_user`) is per-org configuration, and
+ *  a person can belong to multiple orgs (`getUserOrgs()` returns a list) — an
+ *  unscoped count would let agents in one org consume another org's allowance,
+ *  or a busy second org silently starve the first. Always org_id-then-owner_id,
+ *  matching the `.eq("org_id", …).eq("owner_id"/"user_id", …)` filter order used
+ *  throughout the repo (e.g. `boards/autopilot-actions.ts`). */
 export async function countAgentsForOwner(
   client: Client,
+  orgId: string,
   ownerId: string,
 ): Promise<number> {
   const { count, error } = await client
     .from("user_agents")
     .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
     .eq("owner_id", ownerId);
   if (error) throw new Error(`countAgentsForOwner: ${error.message}`);
   return count ?? 0;
 }
 
-/** Cap support: how many runs this person's agents have made today. */
+/** Cap support: how many runs this person's agents have made today IN THIS
+ *  ORG. Same org-scoping rationale as `countAgentsForOwner` — the daily cap is
+ *  per-org configuration, so runs in a different org must never count against
+ *  it. */
 export async function countRunsToday(
   client: Client,
+  orgId: string,
   ownerId: string,
   fireDate: string,
 ): Promise<number> {
   const { count, error } = await client
     .from("user_agent_runs")
     .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
     .eq("owner_id", ownerId)
     .eq("fire_date", fireDate)
     .eq("status", "ran");
