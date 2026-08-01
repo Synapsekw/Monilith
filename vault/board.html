@@ -8,26 +8,26 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-08-01 11:46",
+  "updated": "2026-08-01 20:00",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "Green gates are when debt stops being visible — so the audit went after what gates structurally cannot see",
+  "headline": "The landing sold a Work OS while the product became an agentic one — and two bugs were only visible once the redesign forced them out",
   "chips": [
     {
       "label": "develop",
-      "value": "59997249",
-      "note": "== origin · 2 merges today · +107 tests, 2 endpoints closed",
+      "value": "9a866e69",
+      "note": "== origin · landing rebuilt + proxy fix + debt paydown",
       "tone": "ok"
     },
     {
       "label": "main",
       "value": "1121796",
-      "note": "#78 LIVE · promotion blocked on embeddings",
+      "note": "#78 LIVE · promotion now also publishes the new landing",
       "tone": "ok"
     },
     {
       "label": "ledger",
       "value": "118/118",
-      "note": "VERIFIED this session — files == DEV rows, no drift",
+      "note": "VERIFIED — files == DEV rows, no drift",
       "tone": "ok"
     }
   ],
@@ -36,6 +36,26 @@
     "total": 15
   },
   "gates": [
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "Landing rebuilt around agents across three merges: In active development pill gone, sticky nav carries the only CTAs, fold ends on a board-with-agent-thread window. Wordmark face/weight/tracking untouched — only its scale. 14-card capability wall folded into three columns; six-question FAQ ships as native <details>, no client JS."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "Two bugs only visible once the design forced them out: .page set overflow:hidden, which silently defeats position:sticky — the nav had NEVER stuck (measured top:-4000px), harmless until it became the only CTA. Removing the clip then exposed horizontal scroll on mobile: the agent-dock grid lacked min-w-0, so a 720px table sized the column. It had been overflowing all along, clipped and unreachable."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "Every per-section background removed. A section-level background necessarily draws a boundary, and stacked boundaries are what made the page read as grey slabs. One wash now spans the full scrollable height so the hero light continues past the fold instead of restarting."
+    },
+    {
+      "led": "hollow",
+      "tag": "OWED",
+      "text": "The landing CTA model contradicts itself and ships either way: nav says Get started -> /signup, footer says Invitation only, closing band is a waitlist whose email input is INERT (type=button, no handler). Product call, not a design fix — decide before the promotion."
+    },
     {
       "led": "green",
       "tag": "DONE",
@@ -94,24 +114,24 @@
     {
       "led": "brand",
       "tag": "NEXT?",
-      "text": "Promote develop -> main to publish the 19 entries (documentation-only, no source behaviour changed) — AFTER draining the embed queue. Then Report Builder v2 roll-ups + org templates: one migration dropping reports.board_id NOT NULL, then unwinding the single-board assumption across access, shaping, routing and ~1.4k lines of tests."
+      "text": "Promote develop -> main FIRST. Production runs main, so the proxy fix is not live until promotion and the 380 queued prod rows CANNOT drain beforehand. Promoting also publishes the new landing and makes the semantic-search changelog entries true in the same deploy. Then Report Builder v2 roll-ups + org templates."
     }
   ],
   "worktrees": [
     {
       "led": "amber",
-      "branch": "task/landing-agentic",
-      "head": "57e2c4a4",
+      "branch": "task/ai-cogs",
+      "head": "7cb53e79",
       "note": "concurrent session — not this one's work"
     }
   ],
   "session": {
-    "id": "2026-08-01-1146-debt-audit-and-paydown",
-    "when": "2026-08-01 11:46",
+    "id": "2026-08-01-2000-landing-agentic-redesign",
+    "when": "2026-08-01 20:00",
     "bullets": [
-      "A POSIX path join silently disabled the ledger gate on Windows for two sessions — two bugs in four lines, and the recorded diagnosis was wrong (gotcha-68).",
-      "gotcha-66's 'worth a periodic sweep' found two more live endpoints one session later: advisory follow-ups do not happen.",
-      "Three of the audit's own findings were wrong on inspection — audit output is a hypothesis, re-derive each finding before acting."
+      "A page that reads as a splash screen has no nav, no product above the fold, and a beta badge — all three were true, and none showed up in any gate.",
+      "overflow:hidden on an ancestor silently kills position:sticky. The nav had never stuck; it only mattered once the duplicate hero CTAs were removed.",
+      "Removing a clip exposes what it was hiding: a 720px table had been forcing horizontal overflow on mobile, invisible because it was clipped and unreachable."
     ]
   },
   "roadmap": [
