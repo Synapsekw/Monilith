@@ -3,7 +3,7 @@ import { MagneticButton } from "./magnetic-button";
 import { MonolithScene } from "./monolith-scene";
 import { LandingNav } from "./landing-nav";
 import { LandingSections } from "./landing-sections";
-import { AgentRoster } from "./landing-agent-mocks";
+import { AgentRoster, BoardWithAgentDock } from "./landing-agent-mocks";
 import styles from "./monolith-hero.module.css";
 
 // Primary CTA: the ONE earned loud moment in Keystone — periwinkle fill +
@@ -33,7 +33,7 @@ export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
     // resolve to their dark values even on the static, theme-agnostic `/` route.
     <div className={`dark ${styles.page}`}>
       <LandingNav signedIn={signedIn} />
-      <MonolithScene roster={<AgentRoster />}>
+      <MonolithScene roster={<AgentRoster />} proof={<BoardWithAgentDock />}>
         {signedIn ? (
           <MagneticButton href="/" className={PRIMARY_CTA}>
             Enter app

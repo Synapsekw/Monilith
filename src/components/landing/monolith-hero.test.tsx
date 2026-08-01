@@ -39,9 +39,22 @@ describe("MonolithHero", () => {
 
   it("renders the named-agent roster", () => {
     render(<MonolithHero />);
-    expect(screen.getByText("Morning Brief")).toBeInTheDocument();
-    expect(screen.getByText("Triage")).toBeInTheDocument();
-    expect(screen.getAllByText("AGENT")).toHaveLength(4);
+    // "Morning Brief" and "Triage" also appear as authors in the thread shot
+    // below the roster, so both are expected more than once.
+    expect(screen.getAllByText("Morning Brief").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Triage").length).toBeGreaterThan(0);
+    expect(screen.getByText("Standup")).toBeInTheDocument();
+    expect(screen.getByText("Reviewer")).toBeInTheDocument();
+  });
+
+  // The fold must not end flat on the roster: the product shot below it is what
+  // pulls the eye down, and its absence is what made the old hero read as a
+  // splash screen.
+  it("renders the board + agent-thread shot that crosses the fold", () => {
+    render(<MonolithHero />);
+    expect(screen.getByText("Q3 launch plan")).toBeInTheDocument();
+    expect(screen.getByText("THREAD")).toBeInTheDocument();
+    expect(screen.getByText("Billing-unblock-plan.pdf")).toBeInTheDocument();
   });
 
   it("links to the public /updates page from the footer", () => {
