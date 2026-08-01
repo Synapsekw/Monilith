@@ -29,6 +29,8 @@ describe("readOrgAiSettings", () => {
         monthly_credit_limit: 500,
         byo_provider: null,
         byo_key_last4: null,
+        max_agents_per_user: 5,
+        max_agent_runs_per_user_per_day: 10,
       }),
       "org-1",
     );
@@ -38,6 +40,8 @@ describe("readOrgAiSettings", () => {
       monthlyCreditLimit: 500,
       byoProvider: null,
       byoKeyLast4: null,
+      maxAgentsPerUser: 5,
+      maxAgentRunsPerUserPerDay: 10,
     });
   });
 

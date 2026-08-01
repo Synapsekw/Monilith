@@ -37,6 +37,7 @@ export default async function SettingsLayout({
         { href: "/settings/profile", label: "Profile" },
         { href: "/settings/preferences", label: "Preferences" },
         { href: "/settings/notifications", label: "Notifications" },
+        { href: "/settings/agents", label: "Agents" },
         { href: "/settings/security", label: "Security" },
       ],
     },
