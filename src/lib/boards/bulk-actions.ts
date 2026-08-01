@@ -1,22 +1,18 @@
 "use server";
 
 import {
-  deleteItem,
   moveItem,
   upsertCell,
   clearCell,
   archiveItem,
   restoreItem,
-  purgeItem,
 } from "@/lib/boards/actions";
 import type { ActionResult } from "@/lib/actions/result";
 import {
-  bulkDeleteItemsSchema,
   bulkMoveItemsSchema,
   bulkSetCellSchema,
   bulkArchiveItemsSchema,
   bulkRestoreItemsSchema,
-  bulkPurgeItemsSchema,
 } from "@/lib/validations/board-actions";
 
 /**
@@ -56,21 +52,6 @@ async function runBulk(
   return { succeeded, failed };
 }
 
-/** Delete every selected item (hard delete — reuses the single-item deleteItem,
- *  including its subitem + attachment-object cleanup). Retained until callers
- *  move to the reversible bulkArchiveItems below. */
-export async function bulkDeleteItems(input: {
-  itemIds: string[];
-}): Promise<ActionResult<BulkOutcome>> {
-  const parsed = bulkDeleteItemsSchema.safeParse(input);
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
-  const data = await runBulk(parsed.data.itemIds, (itemId) =>
-    deleteItem({ itemId }),
-  );
-  return { ok: true, data };
-}
-
 /** Archive every selected item (reversible; reuses the single-item archiveItem,
  *  which cascades to each item's live subitems). Undo restores via bulkRestoreItems. */
 export async function bulkArchiveItems(input: {
@@ -94,20 +75,6 @@ export async function bulkRestoreItems(input: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
   const data = await runBulk(parsed.data.itemIds, (itemId) =>
     restoreItem({ itemId }),
-  );
-  return { ok: true, data };
-}
-
-/** Permanently delete every selected archived item (Trash-only; reuses purgeItem,
- *  including its archived-guard + attachment-object cleanup). */
-export async function bulkPurgeItems(input: {
-  itemIds: string[];
-}): Promise<ActionResult<BulkOutcome>> {
-  const parsed = bulkPurgeItemsSchema.safeParse(input);
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid" };
-  const data = await runBulk(parsed.data.itemIds, (itemId) =>
-    purgeItem({ itemId }),
   );
   return { ok: true, data };
 }
