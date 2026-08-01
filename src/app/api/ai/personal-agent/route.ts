@@ -8,11 +8,18 @@ import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { MODEL } from "@/lib/ai/providers/anthropic";
-import { AiDisabledError, AiQuotaExceededError } from "@/lib/ai/errors";
+import {
+  AiDisabledError,
+  AiQuotaExceededError,
+  AiNotConfiguredError,
+} from "@/lib/ai/errors";
 import { getUserAgentById, findUserAgentRun } from "@/lib/agents/agents-db";
 import { getAgentOwnerClient } from "@/lib/agents/owner-client";
 import { buildBriefing } from "@/lib/agents/briefing";
-import { summariseBriefing } from "@/lib/agents/summarise";
+import {
+  summariseBriefing,
+  type BriefingSummary,
+} from "@/lib/agents/summarise";
 import { sendBriefingEmail } from "@/lib/agents/send";
 import {
   assertRunAllowedToday,
@@ -238,18 +245,34 @@ export async function POST(req: Request): Promise<Response> {
       fireDate,
     );
 
-    // 7. Summarise (metered), then send.
-    const result = await runAi(
-      { orgId: agent.org_id, userId: agent.owner_id, feature: FEATURE },
-      async ({ apiKey }) => {
-        const r = await summariseBriefing({
-          apiKey,
-          instructions: agent.instructions,
-          briefing,
+    // 7. Summarise (metered), then send. A missing key for the owner
+    //    (per_user mode, nothing on file) is a CONFIGURATION state, not a
+    //    fault — caught separately from the generic error path below so it
+    //    lands in `user_agent_runs` as "skipped" with a clear reason,
+    //    distinguishable from a real failure in the run history.
+    let result: BriefingSummary;
+    try {
+      result = await runAi(
+        { orgId: agent.org_id, userId: agent.owner_id, feature: FEATURE },
+        async ({ apiKey }) => {
+          const r = await summariseBriefing({
+            apiKey,
+            instructions: agent.instructions,
+            briefing,
+          });
+          return { result: r, usage: r.usage, model: MODEL };
+        },
+      );
+    } catch (e) {
+      if (e instanceof AiNotConfiguredError) {
+        await safeFinalize(svc, key, {
+          status: "skipped",
+          error: `No AI key on file for this agent's owner (${e.message})`,
         });
-        return { result: r, usage: r.usage, model: MODEL };
-      },
-    );
+        return NextResponse.json({ status: "skipped", reason: "no_key" });
+      }
+      throw e;
+    }
 
     await sendBriefingEmail(svc, {
       agent,

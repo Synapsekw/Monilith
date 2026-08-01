@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { signBody } from "@/lib/ai/agentic/hmac";
-import { AiDisabledError } from "@/lib/ai/errors";
+import { AiDisabledError, AiNotConfiguredError } from "@/lib/ai/errors";
 
 const SECRET = "test-secret";
 const ORG = "00000000-0000-4000-8000-0000000000f1";
@@ -124,12 +124,17 @@ vi.mock("@/lib/agents/send", () => ({
   sendBriefingEmail: (...a: unknown[]) => sendBriefingEmail(...(a as [])),
 }));
 
-// runAi just runs the callback (metering exercised in the gateway's own test).
-vi.mock("@/lib/ai/gateway", () => ({
-  runAi: async (
+// runAi just runs the callback by default (metering exercised in the
+// gateway's own test). A vi.fn so individual tests can override it — e.g. to
+// simulate the per_user "no key on file" path throwing AiNotConfiguredError.
+const runAi = vi.fn(
+  async (
     _args: unknown,
     fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
   ) => (await fn({ apiKey: "k" })).result,
+);
+vi.mock("@/lib/ai/gateway", () => ({
+  runAi: (...a: Parameters<typeof runAi>) => runAi(...a),
 }));
 
 const { POST } = await import("./route");
@@ -186,6 +191,13 @@ beforeEach(() => {
   });
   sendBriefingEmail.mockReset();
   sendBriefingEmail.mockResolvedValue({ emailed: true });
+  runAi.mockReset();
+  runAi.mockImplementation(
+    async (
+      _args: unknown,
+      fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
+    ) => (await fn({ apiKey: "k" })).result,
+  );
 });
 
 describe("POST /api/ai/personal-agent", () => {
@@ -288,6 +300,28 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
     expect(summariseBriefing).not.toHaveBeenCalled();
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // ── Gap 1: a missing per-user AI key is a config state, not a fault ────
+  it("finalizes as skipped (not error) when the owner has no AI key on file", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    runAi.mockRejectedValue(new AiNotConfiguredError());
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      status: "skipped",
+      reason: "no_key",
+    });
+    expect(runInserts).toHaveLength(1);
+    expect(runUpdates).toHaveLength(1);
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
+    expect((runUpdates[0]!.patch.error as string).toLowerCase()).toContain(
+      "no ai key",
+    );
+    // Never emails/records a "ran" outcome off an unconfigured key.
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 

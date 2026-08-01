@@ -7,15 +7,18 @@ import { getAdapter } from "@/lib/ai/providers/registry";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
 
-/** The current user's provider adapter + decrypted key, or throws when unset. */
-export async function resolveUserAdapter(): Promise<{
+/** Shared decrypt + adapter-resolve step for a KNOWN user id. Throws
+ *  AiNotConfiguredError when that user has no stored credential. Both
+ *  resolveUserAdapter (session-derived id) and resolveUserAdapterById
+ *  (caller-supplied id) funnel through here so the decryption/lookup logic
+ *  exists exactly once. */
+async function loadUserAdapter(userId: string): Promise<{
   adapter: ProviderAdapter;
   apiKey: string;
 }> {
-  const user = await requireUser();
   const svc = createServiceClient();
   const { data, error } = await svc.rpc("ai_credential_get", {
-    p_user: user.id,
+    p_user: userId,
   });
   if (error) throw error;
   const row = data?.[0];
@@ -24,6 +27,34 @@ export async function resolveUserAdapter(): Promise<{
     adapter: getAdapter(row.provider as AiProvider),
     apiKey: row.secret,
   };
+}
+
+/** The current (session) user's provider adapter + decrypted key, or throws
+ *  when unset. Cookie-bound via requireUser() — only usable inside a request
+ *  that actually has a session. */
+export async function resolveUserAdapter(): Promise<{
+  adapter: ProviderAdapter;
+  apiKey: string;
+}> {
+  const user = await requireUser();
+  return loadUserAdapter(user.id);
+}
+
+/**
+ * Session-less sibling of resolveUserAdapter, for server-role/cron callers
+ * that have no cookie session but already know — from their own scoped data,
+ * not from user input — WHICH user's key this run should spend (e.g. the
+ * personal-agent sweep resolving the agent owner's key via the `userId` it
+ * also hands `runAi` for ledger attribution). Trusts `userId` completely: it
+ * does not re-derive or verify identity the way resolveUserAdapter's
+ * requireUser() does, so only ever call it with an id a trusted server-side
+ * path already scoped.
+ */
+export async function resolveUserAdapterById(userId: string): Promise<{
+  adapter: ProviderAdapter;
+  apiKey: string;
+}> {
+  return loadUserAdapter(userId);
 }
 
 /** Masked preview safe to persist/show, e.g. "sk-ant-…AB12". */

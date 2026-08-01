@@ -9,9 +9,9 @@ vi.mock("@/lib/supabase/service", () => ({
   }),
 }));
 
-const resolveUserAdapter = vi.fn();
+const resolveUserAdapterById = vi.fn();
 vi.mock("@/lib/ai/credentials", () => ({
-  resolveUserAdapter: (...a: unknown[]) => resolveUserAdapter(...a),
+  resolveUserAdapterById: (...a: unknown[]) => resolveUserAdapterById(...a),
 }));
 
 vi.mock("@/lib/env.server", () => ({
@@ -48,7 +48,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
   it("off → AiDisabledError", async () => {
     settingsRow("off");
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    await expect(resolveAiAdapter("org-1")).rejects.toMatchObject({
+    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
       name: "AiDisabledError",
     });
   });
@@ -56,11 +56,11 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
   it("managed → anthropic adapter + env key; missing env key → AiNotConfiguredError", async () => {
     settingsRow("managed");
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    await expect(resolveAiAdapter("org-1")).rejects.toMatchObject({
+    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
       name: "AiNotConfiguredError",
     });
     process.env.TEST_MANAGED_KEY = "sk-ant-managed";
-    const r = await resolveAiAdapter("org-1");
+    const r = await resolveAiAdapter("org-1", "user-1");
     expect(r).toMatchObject({
       mode: "managed",
       provider: "anthropic",
@@ -75,7 +75,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
       error: null,
     });
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    const r = await resolveAiAdapter("org-1");
+    const r = await resolveAiAdapter("org-1", "user-1");
     expect(rpc).toHaveBeenCalledWith("org_ai_secret_get", { p_org: "org-1" });
     expect(r).toMatchObject({
       mode: "org_byo",
@@ -84,7 +84,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     });
 
     rpc.mockResolvedValueOnce({ data: [], error: null });
-    await expect(resolveAiAdapter("org-1")).rejects.toMatchObject({
+    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
       name: "ByoKeyMissingError",
     });
   });
@@ -98,7 +98,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
     let caught: unknown;
     try {
-      await resolveAiAdapter("org-1");
+      await resolveAiAdapter("org-1", "user-1");
     } catch (e) {
       caught = e;
     }
@@ -106,22 +106,36 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     expect((caught as { name?: string })?.name).not.toBe("ByoKeyMissingError");
   });
 
-  it("per_user (and missing row) → resolveUserAdapter passthrough", async () => {
+  it("per_user (and missing row) → resolveUserAdapterById passthrough, keyed on the SUPPLIED userId", async () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
-    resolveUserAdapter.mockResolvedValue({
+    resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
     });
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    const r = await resolveAiAdapter("org-1");
+    const r = await resolveAiAdapter("org-1", "user-42");
     expect(r).toMatchObject({ mode: "per_user", apiKey: "sk-user" });
+    // The whole point of the fix: resolution is keyed on the caller-supplied
+    // userId, not a session — never a different id than what runAi meters
+    // against.
+    expect(resolveUserAdapterById).toHaveBeenCalledWith("user-42");
+  });
+
+  it("per_user with no key on file → AiNotConfiguredError (a config state runAi callers can catch, not a raw crash)", async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    const { AiNotConfiguredError } = await import("@/lib/ai/errors");
+    resolveUserAdapterById.mockRejectedValue(new AiNotConfiguredError());
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    await expect(resolveAiAdapter("org-1", "user-42")).rejects.toBeInstanceOf(
+      AiNotConfiguredError,
+    );
   });
 });
 
 describe("runAi", () => {
   it("invokes fn with the resolved adapter and records a ledger row", async () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
-    resolveUserAdapter.mockResolvedValue({
+    resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
     });
@@ -152,11 +166,14 @@ describe("runAi", () => {
         p_credits: 2.25,
       }),
     );
+    // Credential resolution and ledger attribution must agree by
+    // construction: the same "u-1" that gets billed is the id whose key ran.
+    expect(resolveUserAdapterById).toHaveBeenCalledWith("u-1");
   });
 
   it("a failed ledger write does not fail the call", async () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
-    resolveUserAdapter.mockResolvedValue({
+    resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
     });
