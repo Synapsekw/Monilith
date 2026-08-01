@@ -23,18 +23,6 @@ export type UserAgentRow = {
   bridge_secret_id: string | null;
 };
 
-export type UserAgentRunInsert = {
-  user_agent_id: string;
-  org_id: string;
-  owner_id: string;
-  fire_date: string;
-  fire_hour: number;
-  status: "ran" | "skipped" | "error";
-  error?: string | null;
-  input_tokens?: number | null;
-  output_tokens?: number | null;
-};
-
 type Client = SupabaseClient<Database>;
 
 const AGENT_COLS =
@@ -72,17 +60,6 @@ export async function findUserAgentRun(
     .maybeSingle();
   if (error) throw new Error(`findUserAgentRun: ${error.message}`);
   return (data as { id: string } | null) ?? null;
-}
-
-export async function insertUserAgentRun(
-  client: Client,
-  row: UserAgentRunInsert,
-): Promise<void> {
-  // `.insert()` structurally can't be wrapped by the typed-rpc helper; the cast
-  // is the repo's established escape hatch for this exact site (see
-  // board-agents-db.ts), not a loosening of the row shape above.
-  const { error } = await client.from("user_agent_runs").insert(row as never);
-  if (error) throw new Error(`insertUserAgentRun: ${error.message}`);
 }
 
 export async function setAgentBridgeSecret(

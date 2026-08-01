@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   findUserAgentRun,
-  insertUserAgentRun,
   getUserAgentById,
   setAgentBridgeSecret,
   countAgentsForOwner,
@@ -45,13 +44,6 @@ function clientForRunLookup(data: unknown, error: unknown = null) {
   const select = vi.fn(() => chain);
   const from = vi.fn(() => ({ select }));
   return { client: { from } as never, calls };
-}
-
-/** insert() — insertUserAgentRun. */
-function clientForInsert(error: unknown) {
-  const insert = vi.fn().mockResolvedValue({ error });
-  const from = vi.fn(() => ({ insert }));
-  return { client: { from } as never, insert };
 }
 
 /** select().eq().maybeSingle() — getUserAgentById. */
@@ -126,22 +118,6 @@ describe("findUserAgentRun", () => {
     await expect(
       findUserAgentRun(client as never, "agent-1", "2026-08-01", 7),
     ).rejects.toThrow("findUserAgentRun: boom");
-  });
-});
-
-describe("insertUserAgentRun", () => {
-  it("throws when the insert errors", async () => {
-    const { client } = clientForInsert({ message: "boom" });
-    await expect(
-      insertUserAgentRun(client as never, {
-        user_agent_id: "a",
-        org_id: "o",
-        owner_id: "u",
-        fire_date: "2026-08-01",
-        fire_hour: 7,
-        status: "ran",
-      }),
-    ).rejects.toThrow(/boom/);
   });
 });
 
