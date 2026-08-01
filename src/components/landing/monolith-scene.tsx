@@ -2,13 +2,12 @@
 
 import dynamic from "next/dynamic";
 // PERF: framer-motion stays eager here — it drives the above-the-fold hero
-// reveal (wordmark/subcopy/CTA start at opacity:0 and animate in), so a lazy
+// reveal (wordmark/headline/CTA start at opacity:0 and animate in), so a lazy
 // boundary would leave the LCP text invisible until the chunk resolves. Kept
 // off the shipped barrel via optimizePackageImports("framer-motion") instead.
 import { motion, useReducedMotion } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import { nunito } from "@/lib/fonts";
-import { Kicker } from "@/components/ui/kicker";
 import styles from "./monolith-hero.module.css";
 
 // The WebGL backdrop pulls in the `ogl` renderer chunk. It's a decorative,
@@ -26,7 +25,7 @@ type Variants = MotionProps["variants"];
 const container: Variants = {
   hidden: {},
   show: {
-    transition: { staggerChildren: 0.12, delayChildren: 0.1 },
+    transition: { staggerChildren: 0.1, delayChildren: 0.1 },
   },
 };
 
@@ -41,12 +40,21 @@ const item: Variants = {
 
 /**
  * Interactive landing centerpiece. Mouse-reactive WebGL light rays stream from
- * the top behind a soft source bloom; the wordmark, subcopy and CTA slot rise in
- * on load. `children` is the CTA row, rendered by the server `MonolithHero`. The
- * reveal is disabled under prefers-reduced-motion; the backdrop freezes to a
- * single static frame (handled inside `LightRays`).
+ * the top behind a soft source bloom; the wordmark, headline, subcopy, CTA slot
+ * and agent roster rise in on load.
+ *
+ * Two slots, both filled by the server `MonolithHero` so their markup stays out
+ * of the client bundle: `children` is the CTA row, `roster` the named-agent
+ * cards. The reveal is disabled under prefers-reduced-motion; the backdrop
+ * freezes to a single static frame (handled inside `LightRays`).
  */
-export function MonolithScene({ children }: { children: React.ReactNode }) {
+export function MonolithScene({
+  children,
+  roster,
+}: {
+  children: React.ReactNode;
+  roster?: React.ReactNode;
+}) {
   const reduce = useReducedMotion();
 
   return (
@@ -59,22 +67,29 @@ export function MonolithScene({ children }: { children: React.ReactNode }) {
       <LightRays className={styles.rays} raysColor="#8ea2eb" />
       <span className={styles.source} aria-hidden />
       <span className={styles.vignette} aria-hidden />
-      <motion.span className={styles.badge} variants={item}>
-        <span className={styles.badgeDot} aria-hidden />
-        <Kicker>In active development</Kicker>
-      </motion.span>
       <motion.span
         className={`${styles.wordmark} ${nunito.className}`}
         variants={item}
       >
         MONOLITH
       </motion.span>
+      <motion.h1 className={styles.headline} variants={item}>
+        Every person gets a team.
+        <br />
+        Now everyone gets agents too.
+      </motion.h1>
       <motion.p className={styles.subcopy} variants={item}>
-        The only work surface you need.
+        Give an agent a name, a job and a schedule. It works your boards,
+        replies in your threads and emails you what&apos;s pending.
       </motion.p>
       <motion.div className={styles.ctas} variants={item}>
         {children}
       </motion.div>
+      {roster ? (
+        <motion.div className={styles.roster} variants={item}>
+          {roster}
+        </motion.div>
+      ) : null}
     </motion.div>
   );
 }
