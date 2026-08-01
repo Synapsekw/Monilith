@@ -4,7 +4,6 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import { classifyColumn as classifyColumnWithAi } from "@/lib/ai/column-fill/classify";
 import { validateClassifications } from "@/lib/ai/column-fill/validate";
 import {
@@ -137,7 +136,10 @@ export async function classifyColumn(input: {
           rows,
           targetOptions,
         });
-        return { result: r.classifications, usage: r.usage, model: MODEL };
+        // classifyColumnWithAi reports the model it actually used (it falls
+        // back to Sonnet above the Haiku row-count limit — see classify.ts),
+        // so the ledger meters against the right price row in either case.
+        return { result: r.classifications, usage: r.usage, model: r.model };
       },
     );
 

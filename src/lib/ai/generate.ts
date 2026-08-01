@@ -3,6 +3,7 @@ import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
+import type { ModelChoice } from "@/lib/ai/model-map";
 
 /**
  * System prompt teaching the model the widget vocabulary and grid. Frozen and
@@ -43,11 +44,13 @@ export async function generateProposal(
     adapter: ProviderAdapter;
     apiKey: string;
     feedback?: string;
+    choice?: ModelChoice;
   },
 ): Promise<{ proposal: DashboardProposal; usage: AiUsageTokens }> {
   return opts.adapter.generateProposal({
     apiKey: opts.apiKey,
     system: buildSystemPrompt(),
     user: buildUserPrompt(snap, opts.feedback),
+    choice: opts.choice,
   });
 }

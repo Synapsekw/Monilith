@@ -1,6 +1,7 @@
 import "server-only";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
+import type { ModelChoice } from "@/lib/ai/model-map";
 import {
   IMPORT_MAPPING_JSON_SCHEMA,
   type MappingSuggestion,
@@ -55,7 +56,7 @@ function buildUserPrompt(payload: ImportMappingPayload): string {
  */
 export async function generateImportMapping(
   payload: ImportMappingPayload,
-  opts: { adapter: ProviderAdapter; apiKey: string },
+  opts: { adapter: ProviderAdapter; apiKey: string; choice?: ModelChoice },
 ): Promise<{ suggestions: MappingSuggestion[]; usage: AiUsageTokens }> {
   const { data, usage } = await opts.adapter.generateStructured<{
     suggestions?: MappingSuggestion[];
@@ -64,6 +65,7 @@ export async function generateImportMapping(
     system: buildImportMappingSystemPrompt(),
     user: buildUserPrompt(payload),
     schema: IMPORT_MAPPING_JSON_SCHEMA,
+    choice: opts.choice,
   });
   return { suggestions: data?.suggestions ?? [], usage };
 }

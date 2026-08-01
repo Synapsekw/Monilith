@@ -10,6 +10,7 @@ import {
   type ValidatedBoardProposal,
 } from "@/lib/ai/board-gen-schema";
 import { runAi } from "@/lib/ai/gateway";
+import { modelFor } from "@/lib/ai/model-map";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   AiDisabledError,
@@ -56,14 +57,15 @@ export async function generateBoardProposal(input: {
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "board_gen");
     const user = await requireUser();
+    const choice = modelFor("board_gen");
     const proposal = await runAi(
       { orgId: org.id, userId: user.id, feature: "board_gen" },
       async ({ adapter, apiKey }) => {
         const { proposal, usage } = await generateBoardProposalLLM(
           parsed.data.prompt,
-          { adapter, apiKey, feedback: parsed.data.feedback },
+          { adapter, apiKey, feedback: parsed.data.feedback, choice },
         );
-        return { result: proposal, usage, model: adapter.defaultModel };
+        return { result: proposal, usage, model: choice.model };
       },
     );
     const validated = validateBoardProposal(proposal);

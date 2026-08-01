@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import {
   COLUMN_FILL_JSON_SCHEMA,
   type ClassifyRow,
@@ -19,6 +19,11 @@ const SYSTEM = [
 
 type ParsedOutput = { rows: { itemId: string; optionId: string | null }[] };
 
+// Haiku 4.5's context window is 200K, not 1M. classifyColumn serializes every
+// row into a single user message, so above this row count fall back to the
+// pricier Sonnet choice rather than risk a 400 on an oversized request.
+const HAIKU_ROW_LIMIT = 2000;
+
 /**
  * Classifies free-text rows against a fixed set of target options using
  * Anthropic structured output (mirrors the `messages.parse` call in
@@ -30,26 +35,36 @@ export async function classifyColumn(args: {
   rows: ClassifyRow[];
   targetOptions: TargetOption[];
   client?: Anthropic; // DI for tests
-}): Promise<{ classifications: Classification[]; usage: AiUsageTokens }> {
+}): Promise<{
+  classifications: Classification[];
+  usage: AiUsageTokens;
+  model: string;
+}> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
+  const choice =
+    args.rows.length > HAIKU_ROW_LIMIT
+      ? modelFor("dashboard_gen")
+      : modelFor("column_fill");
   const user = JSON.stringify({
     rows: args.rows,
     targetOptions: args.targetOptions,
   });
 
   const message = await client.messages.parse({
-    model: MODEL,
+    model: choice.model,
     max_tokens: 16000,
-    thinking: { type: "adaptive" },
+    thinking: choice.thinking,
     output_config: {
-      effort: "high",
+      // Haiku 4.5 rejects `effort` — omit the key entirely rather than
+      // sending undefined, which the SDK would still serialize.
+      ...(choice.effort ? { effort: choice.effort } : {}),
       format: jsonSchemaOutputFormat(COLUMN_FILL_JSON_SCHEMA as never),
     },
     system: [
       { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
     ],
     messages: [{ role: "user", content: user }],
-  });
+  } as never);
 
   const textBlock = message.content.find((b) => b.type === "text");
   const parsed = ((message as { parsed_output?: unknown }).parsed_output ??
@@ -62,9 +77,12 @@ export async function classifyColumn(args: {
       itemId: r.itemId,
       optionId: r.optionId,
     })),
+    model: choice.model,
     usage: {
       inputTokens: message.usage.input_tokens,
       outputTokens: message.usage.output_tokens,
+      cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
     },
   };
 }
