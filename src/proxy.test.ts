@@ -29,6 +29,9 @@ vi.mock("@/lib/env", () => ({
   },
 }));
 
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { NextRequest } from "next/server";
 import { proxy, config } from "./proxy";
 
@@ -240,4 +243,49 @@ describe("proxy matcher", () => {
     expect(matcher.test("/api/oauth/token")).toBe(true);
     expect(matcher.test("/.well-known/oauth-protected-resource")).toBe(true);
   });
+});
+
+describe("pg_cron endpoints are exempt from the cookie gate", () => {
+  // The endpoints pg_cron POSTs to via pg_net, derived from the migrations rather
+  // than hardcoded here. A cron call carries NO session cookie, so any of these
+  // left out of PUBLIC_PREFIXES gets 307'd to /login — and a POST to /login (a
+  // page route) answers 405. pg_net records that in net._http_response, but
+  // nothing surfaces it, so the cron job still reports `succeeded` while its work
+  // silently never runs. That is exactly what happened to embed-sweep,
+  // automation-ai-reconcile, autopilot-sweep and health-digest-ping in production
+  // until 2026-08-01. Deriving the list means a NEW cron endpoint added without an
+  // exemption fails here instead of in prod.
+  function cronEndpointsFromMigrations(): string[] {
+    const dir = join(process.cwd(), "supabase", "migrations");
+    const found = new Set<string>();
+    for (const f of readdirSync(dir).filter((n) => n.endsWith(".sql"))) {
+      const sql = readFileSync(join(dir, f), "utf8");
+      // `url := v_url || '/api/…'` — the pg_net call sites.
+      for (const m of sql.matchAll(/\|\|\s*'(\/api\/[a-z0-9/_-]+)'/g)) {
+        found.add(m[1]);
+      }
+    }
+    return [...found].sort();
+  }
+
+  const endpoints = cronEndpointsFromMigrations();
+
+  it("finds the cron endpoints in the migrations (guards the regex itself)", () => {
+    // If this ever reads empty the loop below would pass vacuously.
+    expect(endpoints.length).toBeGreaterThanOrEqual(4);
+    expect(endpoints).toContain("/api/ai/embed");
+  });
+
+  it.each(endpoints)(
+    "%s reaches its handler instead of redirecting to /login",
+    async (path) => {
+      getClaims.mockResolvedValue({
+        data: null,
+        error: { message: "no session" },
+      });
+      const res = await proxy(req(path));
+      expect(res.status).not.toBe(307);
+      expect(res.headers.get("location")).toBeNull();
+    },
+  );
 });
