@@ -51,9 +51,16 @@ const item: Variants = {
 export function MonolithScene({
   children,
   roster,
+  proof,
 }: {
   children: React.ReactNode;
   roster?: React.ReactNode;
+  /**
+   * The product shot that crosses the fold. Without it the hero ends on the
+   * roster and leaves a dead band above the first section — the same flat fold
+   * that made the original wordmark-only hero read as a splash screen.
+   */
+  proof?: React.ReactNode;
 }) {
   const reduce = useReducedMotion();
 
@@ -88,6 +95,11 @@ export function MonolithScene({
       {roster ? (
         <motion.div className={styles.roster} variants={item}>
           {roster}
+        </motion.div>
+      ) : null}
+      {proof ? (
+        <motion.div className={styles.proof} variants={item}>
+          {proof}
         </motion.div>
       ) : null}
     </motion.div>

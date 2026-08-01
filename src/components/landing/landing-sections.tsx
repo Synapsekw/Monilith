@@ -11,7 +11,7 @@ import {
 import { LandingReveal } from "./landing-reveal";
 import { LandingViewSwitcher } from "./landing-view-switcher";
 import {
-  BoardWithAgentDock,
+  AgentThreadMock,
   MorningBriefMock,
   RollingOut,
 } from "./landing-agent-mocks";
@@ -114,7 +114,18 @@ export function LandingSections({ signedIn = false }: { signedIn?: boolean }) {
                   sub: "An agent acts under its owner's access. Row-level security does the enforcing.",
                 },
               ]}
-              visual={<BoardWithAgentDock />}
+              // The board-with-dock shot is the hero's fold-crosser. Here the
+              // thread stands alone: at this column width the docked board was
+              // squeezed past legibility anyway, and the close-up is what the
+              // copy is actually about.
+              visual={
+                <WindowFrame
+                  title="Item · Redesign billing flow"
+                  chip="● 2 agents"
+                >
+                  <AgentThreadMock />
+                </WindowFrame>
+              }
               aside={<RollingOut>Named agents · rolling out</RollingOut>}
             />
 
