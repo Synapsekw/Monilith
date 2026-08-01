@@ -120,6 +120,8 @@ export async function runAi<T>(
     p_model: model,
     p_input_tokens: usage.inputTokens,
     p_output_tokens: usage.outputTokens,
+    p_cache_read_tokens: usage.cacheReadTokens ?? 0,
+    p_cache_write_tokens: usage.cacheWriteTokens ?? 0,
     p_cost_usd: costUsd,
     p_credits: credits,
   });
@@ -171,6 +173,8 @@ export async function runEmbedding<T>(
     p_model: model,
     p_input_tokens: usage.inputTokens,
     p_output_tokens: usage.outputTokens,
+    p_cache_read_tokens: usage.cacheReadTokens ?? 0,
+    p_cache_write_tokens: usage.cacheWriteTokens ?? 0,
     p_cost_usd: costUsd,
     p_credits: credits,
   });

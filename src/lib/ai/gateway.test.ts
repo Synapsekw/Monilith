@@ -205,4 +205,68 @@ describe("runAi", () => {
       })),
     ).resolves.toBe(1);
   });
+
+  it("passes cache token counts through to record_ai_usage", async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    resolveUserAdapter.mockResolvedValue({
+      adapter: anthropicAdapter,
+      apiKey: "sk-user",
+    });
+    rpc.mockResolvedValue({ data: null, error: null });
+    const { runAi } = await import("@/lib/ai/gateway");
+
+    await runAi(
+      { orgId: "org-1", userId: "user-1", feature: "ask_pulse" },
+      async () => ({
+        result: "ok",
+        usage: {
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheReadTokens: 20_000,
+          cacheWriteTokens: 4_000,
+        },
+        model: "claude-sonnet-5",
+      }),
+    );
+
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({
+        p_model: "claude-sonnet-5",
+        p_input_tokens: 1000,
+        p_output_tokens: 500,
+        p_cache_read_tokens: 20_000,
+        p_cache_write_tokens: 4_000,
+        p_cost_usd: 0.0315,
+        p_credits: 3.15,
+      }),
+    );
+  });
+
+  it("defaults cache token counts to 0 when the adapter omits them", async () => {
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    resolveUserAdapter.mockResolvedValue({
+      adapter: anthropicAdapter,
+      apiKey: "sk-user",
+    });
+    rpc.mockResolvedValue({ data: null, error: null });
+    const { runAi } = await import("@/lib/ai/gateway");
+
+    await runAi(
+      { orgId: "org-1", userId: "user-1", feature: "item_assist" },
+      async () => ({
+        result: "ok",
+        usage: { inputTokens: 100, outputTokens: 50 },
+        model: "claude-haiku-4-5",
+      }),
+    );
+
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({
+        p_cache_read_tokens: 0,
+        p_cache_write_tokens: 0,
+      }),
+    );
+  });
 });
