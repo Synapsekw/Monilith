@@ -105,7 +105,12 @@ describe("askPulseStream", () => {
     });
     expect(tokens.join("")).toBe("Hello");
     expect(res.answer).toBe("Hello");
-    expect(res.usage).toEqual({ inputTokens: 5, outputTokens: 2 });
+    expect(res.usage).toEqual({
+      inputTokens: 5,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
     expect(res.boardsConsulted).toEqual([]);
     expect(res.proposedActions).toEqual([]);
   });
@@ -238,5 +243,96 @@ describe("askPulseStream", () => {
       type: "status",
       text: "Consulting 1 board…",
     });
+  });
+
+  it("caches tools+system via a system content block and reports cache usage", async () => {
+    const captured: Record<string, unknown>[] = [];
+    const client = {
+      messages: {
+        stream: (params: Record<string, unknown>) => {
+          captured.push(params);
+          return {
+            on: () => {},
+            finalMessage: async () => ({
+              stop_reason: "end_turn",
+              content: [{ type: "text", text: "done" }],
+              usage: {
+                input_tokens: 100,
+                output_tokens: 20,
+                cache_read_input_tokens: 24_000,
+                cache_creation_input_tokens: 1_500,
+              },
+            }),
+          };
+        },
+      },
+    } as never;
+
+    const { usage } = await askPulseStream({
+      apiKey: "sk-ant-test",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      messages: [{ role: "user", content: "hi" }],
+      system: "You are Ask.",
+      emit: () => {},
+      client,
+    });
+
+    expect(captured[0].model).toBe("claude-sonnet-5");
+    expect(captured[0].system).toEqual([
+      {
+        type: "text",
+        text: "You are Ask.",
+        cache_control: { type: "ephemeral" },
+      },
+    ]);
+    expect(usage.cacheReadTokens).toBe(24_000);
+    expect(usage.cacheWriteTokens).toBe(1_500);
+  });
+
+  it("keeps exactly one message breakpoint across tool rounds", async () => {
+    const captured: Record<string, unknown>[] = [];
+    let round = 0;
+    const client = {
+      messages: {
+        stream: (params: Record<string, unknown>) => {
+          captured.push(structuredClone(params));
+          const useTool = round++ < 2;
+          return {
+            on: () => {},
+            finalMessage: async () => ({
+              stop_reason: useTool ? "tool_use" : "end_turn",
+              content: useTool
+                ? [
+                    {
+                      type: "tool_use",
+                      id: `t${round}`,
+                      name: "list_boards",
+                      input: {},
+                    },
+                  ]
+                : [{ type: "text", text: "done" }],
+              usage: { input_tokens: 10, output_tokens: 2 },
+            }),
+          };
+        },
+      },
+    } as never;
+
+    await askPulseStream({
+      apiKey: "sk-ant-test",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      messages: [{ role: "user", content: "hi" }],
+      system: "You are Ask.",
+      emit: () => {},
+      client,
+    });
+
+    // Anthropic rejects more than 4 breakpoints; 1 system + 1 message is the budget.
+    const last = captured[captured.length - 1];
+    const msgs = last.messages as { content: unknown }[];
+    const marked = JSON.stringify(msgs).split('"cache_control"').length - 1;
+    expect(marked).toBe(1);
   });
 });
