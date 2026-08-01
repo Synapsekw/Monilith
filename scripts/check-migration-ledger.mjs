@@ -34,7 +34,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const EXIT = { OK: 0, LOCAL: 1, DRIFT: 2, UNAVAILABLE: 3, USAGE: 4 };
@@ -121,6 +121,28 @@ export function parseEnvFile(contents) {
 }
 
 /**
+ * Normalize a PG_BIN directory into the form THIS platform's PATH understands.
+ *
+ * PG_BIN has two consumers whose native path forms are incompatible: this node
+ * script (on Windows, PATH entries are `C:\Program Files\…` joined by `;`) and
+ * scripts/sync-prod/*.sh, which run under Git Bash and do `PATH="$PG_BIN:$PATH"`
+ * (MSYS `/c/Program Files/…` joined by `:`). Rather than make the user write a
+ * dual-form value, the documented value is the plain POSIX/MSYS form and this
+ * converts it for node on Windows — one setting satisfies both callers.
+ *
+ * A value already in Windows form is passed through unchanged, and on non-Windows
+ * platforms nothing is rewritten at all (a leading `/c/` there is a real path).
+ */
+export function normalizePgBin(value, platform = process.platform) {
+  if (!value || platform !== "win32") return value;
+  const drive = /^\/([A-Za-z])(\/|$)/.exec(value);
+  const withDrive = drive
+    ? `${drive[1].toUpperCase()}:${value.slice(2)}`
+    : value;
+  return withDrive.replace(/\//g, "\\");
+}
+
+/**
  * Map a result to an exit code. LOCAL wins over everything: it needs no network
  * to reproduce or fix, so it is the most actionable thing to report first.
  */
@@ -195,7 +217,17 @@ function psqlEnv(pgBin) {
     PGCONNECT_TIMEOUT: "10",
     PGOPTIONS: "-c statement_timeout=15000",
   };
-  if (pgBin) env.PATH = `${pgBin}:${env.PATH ?? ""}`;
+  const bin = normalizePgBin(pgBin);
+  if (!bin) return env;
+  // `delimiter`, not a literal ":" — Windows splits PATH on ";", so a literal
+  // colon fused PG_BIN to the next entry and psql was never found (the PG_BIN
+  // escape hatch was inoperable there, and the gate silently exited 3).
+  // Windows env keys are case-insensitive but node preserves the OS casing when
+  // spreading process.env ("Path"), so assigning a fresh "PATH" key would hand
+  // the child TWO path variables; update whichever key is already present.
+  const key =
+    Object.keys(env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+  env[key] = `${bin}${delimiter}${env[key] ?? ""}`;
   return env;
 }
 

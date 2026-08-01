@@ -5,6 +5,7 @@ import {
   findDuplicateVersions,
   classifyLedger,
   parseEnvFile,
+  normalizePgBin,
   exitCodeFor,
   EXIT,
 } from "./check-migration-ledger.mjs";
@@ -188,6 +189,50 @@ describe("parseEnvFile", () => {
 
   it("keeps an explicitly empty value as an empty string", () => {
     assert.deepEqual(parseEnvFile("EMPTY=\n"), { EMPTY: "" });
+  });
+});
+
+describe("normalizePgBin", () => {
+  it("converts the MSYS drive form to a Windows path on win32", () => {
+    assert.equal(
+      normalizePgBin("/c/Program Files/PostgreSQL/17/bin", "win32"),
+      "C:\\Program Files\\PostgreSQL\\17\\bin",
+    );
+  });
+
+  it("uppercases the drive letter and handles a bare drive root", () => {
+    assert.equal(normalizePgBin("/d/pg/bin", "win32"), "D:\\pg\\bin");
+    assert.equal(normalizePgBin("/c", "win32"), "C:");
+  });
+
+  it("leaves a value already in Windows form untouched", () => {
+    assert.equal(
+      normalizePgBin("C:\\Program Files\\PostgreSQL\\17\\bin", "win32"),
+      "C:\\Program Files\\PostgreSQL\\17\\bin",
+    );
+  });
+
+  it("rewrites separators on a Windows-drive path written with slashes", () => {
+    assert.equal(
+      normalizePgBin("C:/Program Files/PostgreSQL/17/bin", "win32"),
+      "C:\\Program Files\\PostgreSQL\\17\\bin",
+    );
+  });
+
+  it("never rewrites on non-Windows — a leading /c/ there is a real path", () => {
+    assert.equal(
+      normalizePgBin("/c/Program Files/PostgreSQL/17/bin", "darwin"),
+      "/c/Program Files/PostgreSQL/17/bin",
+    );
+    assert.equal(
+      normalizePgBin("/opt/homebrew/bin", "linux"),
+      "/opt/homebrew/bin",
+    );
+  });
+
+  it("passes empty/undefined through so the caller can skip the PATH prefix", () => {
+    assert.equal(normalizePgBin("", "win32"), "");
+    assert.equal(normalizePgBin(undefined, "win32"), undefined);
   });
 });
 
