@@ -5,7 +5,6 @@ import { resolveActiveOrg } from "@/lib/org/active";
 import { createServiceClient } from "@/lib/supabase/service";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import {
   AiDisabledError,
   AiQuotaExceededError,
@@ -90,7 +89,7 @@ export async function previewAiStep(input: {
       { orgId: org.id, userId: user.id, feature: FEATURE },
       async ({ apiKey }) => {
         const r = await decideAction({ apiKey, context, instruction, allow });
-        return { result: r, usage: r.usage, model: MODEL };
+        return { result: r, usage: r.usage, model: r.model };
       },
     );
 

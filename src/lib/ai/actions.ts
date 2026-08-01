@@ -128,13 +128,16 @@ export async function generateDashboardProposal(input: {
     const proposal = await runAi(
       { orgId: org.id, userId: user.id, feature: "dashboard_gen" },
       async ({ adapter, apiKey }) => {
-        const { proposal, usage } = await generateProposal(snap, {
+        // Meter the model the ADAPTER ran, not choice.model: the OpenAI/Google
+        // adapters ignore `choice` and run their own fixed model, so a BYO org
+        // would otherwise be billed at Sonnet rates for a Gemini call.
+        const { proposal, usage, model } = await generateProposal(snap, {
           adapter,
           apiKey,
           feedback: parsed.data.feedback,
           choice,
         });
-        return { result: proposal, usage, model: choice.model };
+        return { result: proposal, usage, model };
       },
     );
     const validated = validateProposal(proposal, snap);

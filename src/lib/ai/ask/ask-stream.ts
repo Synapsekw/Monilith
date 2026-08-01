@@ -106,7 +106,14 @@ export async function askPulseStream(args: {
     let streamedText = "";
     const stream = client.messages.stream({
       model: choice.model,
-      max_tokens: 4096,
+      // 8192, not 4096: max_tokens caps thinking PLUS response text, and
+      // thinking is deliberately ON here (a Sonnet-tier model with thinking
+      // disabled reaches for tools noticeably less, which would degrade Ask).
+      // The budget has to leave room for both.
+      max_tokens: 8192,
+      // MUST be explicit — omitting it means "adaptive at effort high" on a
+      // Sonnet-tier model, which is a silent request-shape change.
+      thinking: choice.thinking,
       system,
       tools,
       messages,
@@ -202,7 +209,14 @@ export async function askPulseStream(args: {
   // since "answer now, no more tools" is what tool_choice: none already means.
   const capped = await client.messages.create({
     model: choice.model,
-    max_tokens: 1024,
+    // 4096, not 1024: same thinking-plus-text budget reasoning as the
+    // streaming rounds above — 1024 would be consumed by the thinking block
+    // and return no answer text at all.
+    max_tokens: 4096,
+    // Explicit, and the SAME value as the streaming rounds: `thinking` is part
+    // of the cache key tier for system+messages, so diverging here would cost
+    // cache reads on top of changing behaviour.
+    thinking: choice.thinking,
     system,
     tools,
     tool_choice: { type: "none" },

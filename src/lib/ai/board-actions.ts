@@ -61,11 +61,13 @@ export async function generateBoardProposal(input: {
     const proposal = await runAi(
       { orgId: org.id, userId: user.id, feature: "board_gen" },
       async ({ adapter, apiKey }) => {
-        const { proposal, usage } = await generateBoardProposalLLM(
+        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
+        // adapters ignore `choice` and run their own fixed model.
+        const { proposal, usage, model } = await generateBoardProposalLLM(
           parsed.data.prompt,
           { adapter, apiKey, feedback: parsed.data.feedback, choice },
         );
-        return { result: proposal, usage, model: choice.model };
+        return { result: proposal, usage, model };
       },
     );
     const validated = validateBoardProposal(proposal);

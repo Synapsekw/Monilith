@@ -57,8 +57,12 @@ function buildUserPrompt(payload: ImportMappingPayload): string {
 export async function generateImportMapping(
   payload: ImportMappingPayload,
   opts: { adapter: ProviderAdapter; apiKey: string; choice?: ModelChoice },
-): Promise<{ suggestions: MappingSuggestion[]; usage: AiUsageTokens }> {
-  const { data, usage } = await opts.adapter.generateStructured<{
+): Promise<{
+  suggestions: MappingSuggestion[];
+  usage: AiUsageTokens;
+  model: string;
+}> {
+  const { data, usage, model } = await opts.adapter.generateStructured<{
     suggestions?: MappingSuggestion[];
   }>({
     apiKey: opts.apiKey,
@@ -67,5 +71,5 @@ export async function generateImportMapping(
     schema: IMPORT_MAPPING_JSON_SCHEMA,
     choice: opts.choice,
   });
-  return { suggestions: data?.suggestions ?? [], usage };
+  return { suggestions: data?.suggestions ?? [], usage, model };
 }

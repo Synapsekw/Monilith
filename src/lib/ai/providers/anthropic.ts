@@ -13,9 +13,6 @@ import {
   type ProviderAdapter,
 } from "@/lib/ai/providers/types";
 
-/** Retained for call sites not yet routed through the model map (Task 5). */
-export const MODEL = DEFAULT_MODEL_CHOICE.model;
-
 export const anthropicAdapter: ProviderAdapter = {
   id: "anthropic",
   label: PROVIDER_CATALOG.anthropic.label,
@@ -25,7 +22,7 @@ export const anthropicAdapter: ProviderAdapter = {
     .trim()
     .startsWith("sk-ant-", "Anthropic keys start with sk-ant-")
     .max(300),
-  defaultModel: MODEL,
+  defaultModel: DEFAULT_MODEL_CHOICE.model,
   supportsTools: true,
   async validateKey(rawKey) {
     const client = new Anthropic({ apiKey: rawKey });
@@ -54,13 +51,14 @@ export const anthropicAdapter: ProviderAdapter = {
         { type: "text", text: system, cache_control: { type: "ephemeral" } },
       ],
       messages: [{ role: "user", content: user }],
-    } as never);
+    });
     const textBlock = message.content.find((b) => b.type === "text");
     const parsed =
       (message as { parsed_output?: unknown }).parsed_output ??
       JSON.parse(textBlock && "text" in textBlock ? textBlock.text : "{}");
     return {
       data: parsed,
+      model: m.model,
       usage: {
         inputTokens: message.usage.input_tokens,
         outputTokens: message.usage.output_tokens,
@@ -70,7 +68,7 @@ export const anthropicAdapter: ProviderAdapter = {
     };
   },
   async generateProposal({ apiKey, system, user, choice, client }) {
-    const { data, usage } = await this.generateStructured({
+    const { data, usage, model } = await this.generateStructured({
       apiKey,
       system,
       user,
@@ -78,6 +76,6 @@ export const anthropicAdapter: ProviderAdapter = {
       choice,
       client,
     });
-    return { proposal: data as DashboardProposal, usage };
+    return { proposal: data as DashboardProposal, usage, model };
   },
 };

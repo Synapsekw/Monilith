@@ -24,7 +24,7 @@ import {
   OPENING_STATUS,
   type AskStreamEvent,
 } from "@/lib/ai/ask/stream-protocol";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { zonedDayOf } from "@/lib/datetime/timezone";
@@ -164,6 +164,10 @@ export async function POST(req: Request) {
       // Rolling-summary compaction of older turns (keeps per-turn cost bounded).
       const { toFold, recent } = splitForCompaction(allRows, KEEP_RECENT);
 
+      // The whole turn — rolling summary, the tool-use loop, and the auto-title
+      // — runs on the ask_pulse model, so one lookup drives all three and the
+      // ledger row names the model that actually ran.
+      const askModel = modelFor("ask_pulse").model;
       const result = await runAi(
         { orgId: org.id, userId: user.id, feature: "ask_pulse" },
         async ({ apiKey, adapter }) => {
@@ -178,7 +182,12 @@ export async function POST(req: Request) {
           };
 
           if (toFold.length > 0) {
-            const s = await summarize(client.messages, MODEL, summary, toFold);
+            const s = await summarize(
+              client.messages,
+              askModel,
+              summary,
+              toFold,
+            );
             summary = s.summary;
             usage.inputTokens += s.usage.inputTokens;
             usage.outputTokens += s.usage.outputTokens;
@@ -214,7 +223,7 @@ export async function POST(req: Request) {
             try {
               const t = await generateTitle(
                 client.messages,
-                MODEL,
+                askModel,
                 allRows[0].content,
               );
               title = t.title;
@@ -233,7 +242,7 @@ export async function POST(req: Request) {
               title,
             },
             usage,
-            model: MODEL,
+            model: askModel,
           };
         },
       );

@@ -52,13 +52,14 @@ export async function generateBoardProposal(
     feedback?: string;
     choice?: ModelChoice;
   },
-): Promise<{ proposal: BoardProposal; usage: AiUsageTokens }> {
-  const { data, usage } = await opts.adapter.generateStructured<BoardProposal>({
-    apiKey: opts.apiKey,
-    system: buildBoardGenSystemPrompt(),
-    user: buildUserPrompt(prompt, opts.feedback),
-    schema: BOARD_PROPOSAL_JSON_SCHEMA,
-    choice: opts.choice,
-  });
-  return { proposal: data, usage };
+): Promise<{ proposal: BoardProposal; usage: AiUsageTokens; model: string }> {
+  const { data, usage, model } =
+    await opts.adapter.generateStructured<BoardProposal>({
+      apiKey: opts.apiKey,
+      system: buildBoardGenSystemPrompt(),
+      user: buildUserPrompt(prompt, opts.feedback),
+      schema: BOARD_PROPOSAL_JSON_SCHEMA,
+      choice: opts.choice,
+    });
+  return { proposal: data, usage, model };
 }

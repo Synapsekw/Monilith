@@ -8,7 +8,6 @@ import { buildJobContext } from "@/lib/ai/agentic/context";
 import { decideAction } from "@/lib/ai/agentic/decide";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import { AiDisabledError, AiQuotaExceededError } from "@/lib/ai/errors";
 import { automationActionSchema } from "@/lib/validations/automations";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -125,7 +124,7 @@ export async function POST(req: Request): Promise<Response> {
       },
       async ({ apiKey }) => {
         const r = await decideAction({ apiKey, context, instruction, allow });
-        return { result: r, usage: r.usage, model: MODEL };
+        return { result: r, usage: r.usage, model: r.model };
       },
     );
 

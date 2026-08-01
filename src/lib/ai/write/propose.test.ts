@@ -36,6 +36,7 @@ vi.mock("./write-tools", () => ({
 }));
 
 import { proposeLoop } from "./propose";
+import { modelFor } from "@/lib/ai/model-map";
 
 // Fake Anthropic: round 1 → tool_use (list_boards then propose_create_item); round 2 → end_turn.
 function fakeClient() {
@@ -176,5 +177,43 @@ describe("proposeLoop", () => {
     });
     expect(res.actions).toHaveLength(0);
     expect(res.clarification).toBe("Which board?");
+  });
+
+  // Regression guard: the request must state `thinking` explicitly. Omitting it
+  // on a Sonnet-tier model means ADAPTIVE thinking at effort "high", and
+  // max_tokens caps thinking PLUS the tool_use block — this 4096 budget was
+  // sized for a no-thinking model. Deliberately NOT choice.thinking: the system
+  // prompt already prescribes the tool sequence step by step, so the
+  // "reaches for tools less with thinking off" effect has little room to bite,
+  // and a turn with no tool_use degrades into a clarification, not lost work.
+  it("routes conversational_action through the model map and disables thinking", async () => {
+    const create = vi.fn(async (params: Record<string, unknown>) => {
+      void params;
+      return {
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "Which board?" }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      };
+    });
+    const client = { messages: { create } };
+    const { createWriteToolExecutor } = await import("./write-tools");
+    vi.mocked(createWriteToolExecutor).mockReturnValueOnce({
+      execute: vi.fn(),
+      collected: () => [],
+    });
+    const res = await proposeLoop({
+      apiKey: "k",
+      orgId: "o",
+      workspaceId: "w",
+      instruction: "do a thing",
+      client: client as unknown as Anthropic,
+    });
+    const expected = modelFor("conversational_action");
+    const params = create.mock.calls[0][0];
+    expect(params.model).toBe(expected.model);
+    expect(params.thinking).toEqual({ type: "disabled" });
+    expect(params.max_tokens).toBe(4096);
+    // Reported back so runAi's ledger row names the model that actually ran.
+    expect(res.model).toBe(expected.model);
   });
 });

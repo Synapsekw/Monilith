@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { autopilotRun, AUTOPILOT_ACTIONS } from "./autopilot";
+import { modelFor } from "@/lib/ai/model-map";
 import type { AutopilotContext } from "./autopilot";
 
 // Real uuids — automationActionSchema gates columnId/userId/groupId with .uuid().
@@ -214,5 +215,28 @@ describe("autopilotRun", () => {
       client,
     });
     expect(res.actions).toEqual([]);
+  });
+
+  // Regression guard: the request must state `thinking` explicitly. Omitting it
+  // on a Sonnet-tier model means ADAPTIVE thinking at effort "high", and
+  // max_tokens caps thinking PLUS the tool_use blocks — a thinking block would
+  // consume this 1024-token budget, leaving no tool_use, and the scheduled run
+  // would silently do nothing. Deliberately NOT choice.thinking.
+  it("routes autopilot_run through the model map and disables thinking", async () => {
+    const { client, calls } = fakeClient([
+      { stop_reason: "end_turn", content: [] },
+    ]);
+    const res = await autopilotRun({
+      apiKey: "k",
+      agentContext: CTX,
+      tasks: ["triage"],
+      client,
+    });
+    const expected = modelFor("autopilot_run");
+    expect(calls[0]!.model).toBe(expected.model);
+    expect(calls[0]!.thinking).toEqual({ type: "disabled" });
+    expect(calls[0]!.max_tokens).toBe(1024);
+    // Reported back so runAi's ledger row names the model that actually ran.
+    expect(res.model).toBe(expected.model);
   });
 });

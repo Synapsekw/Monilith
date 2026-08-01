@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import {
   automationActionSchema,
   type AutomationAction,
@@ -20,6 +20,8 @@ export type DecideResult = {
   /** Human-readable reasons a candidate choice was dropped (never applied). */
   warnings: string[];
   usage: AiUsageTokens;
+  /** The model actually used — reported to runAi so the ledger is truthful. */
+  model: string;
 };
 
 /** One Anthropic tool per action kind, gated to the rule author's `allow` set. */
@@ -222,6 +224,7 @@ export async function decideAction(args: {
   client?: Anthropic;
 }): Promise<DecideResult> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
+  const choice = modelFor("automation_ai_step");
   const tools = args.allow.map((a) => TOOL_DEFS[a]);
   const system = systemPrompt(args.context, args.instruction);
   const messages: Anthropic.MessageParam[] = [
@@ -232,8 +235,14 @@ export async function decideAction(args: {
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const res = await client.messages.create({
-      model: MODEL,
+      model: choice.model,
       max_tokens: 1024,
+      // MUST be explicit, and deliberately NOT choice.thinking: omitting
+      // `thinking` on a Sonnet-tier model runs adaptive thinking at effort
+      // "high", and max_tokens caps thinking PLUS the tool_use block. A
+      // thinking block would consume this 1024-token budget, leaving no
+      // tool_use — and a step that silently does nothing.
+      thinking: { type: "disabled" },
       system,
       tools,
       messages,
@@ -246,7 +255,7 @@ export async function decideAction(args: {
     );
     if (res.stop_reason !== "tool_use" || !toolBlock) {
       // Model declined to act (or produced no tool call) — no action.
-      return { action: null, warnings, usage };
+      return { action: null, warnings, usage, model: choice.model };
     }
 
     const candidate = validateChoice(
@@ -256,7 +265,7 @@ export async function decideAction(args: {
       (toolBlock.input ?? {}) as Record<string, unknown>,
     );
     if ("action" in candidate)
-      return { action: candidate.action, warnings, usage };
+      return { action: candidate.action, warnings, usage, model: choice.model };
 
     // Invalid choice: record it, feed the rejection back, let the model retry.
     warnings.push(candidate.error);
@@ -275,5 +284,5 @@ export async function decideAction(args: {
   }
 
   // Exhausted the round cap without a valid choice.
-  return { action: null, warnings, usage };
+  return { action: null, warnings, usage, model: choice.model };
 }

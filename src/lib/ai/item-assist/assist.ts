@@ -105,7 +105,7 @@ export async function generateItemAssist(args: {
       },
     ],
     messages: [{ role: "user", content: buildUserPrompt(args) }],
-  } as never);
+  });
 
   const textBlock = message.content.find((b) => b.type === "text");
   const parsed =

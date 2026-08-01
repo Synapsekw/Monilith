@@ -38,9 +38,12 @@ describe("anthropicAdapter.generateStructured", () => {
       type: "enabled",
       budget_tokens: 1024,
     });
-    expect(
-      (captured[0].output_config as Record<string, unknown>).effort,
-    ).toBeUndefined();
+    // The key must be ABSENT, not present-and-undefined: the SDK serializes an
+    // explicit `effort: undefined` and Haiku 4.5 rejects the field. A
+    // `toBeUndefined()` assertion passes in both cases and so cannot see the
+    // regression it exists to catch.
+    const outputConfig = captured[0].output_config as Record<string, unknown>;
+    expect("effort" in outputConfig).toBe(false);
   });
 
   it("sends the sonnet request shape with effort", async () => {
@@ -57,6 +60,19 @@ describe("anthropicAdapter.generateStructured", () => {
     expect((captured[0].output_config as Record<string, unknown>).effort).toBe(
       "high",
     );
+  });
+
+  it("reports the model it actually ran, so runAi meters the right rate", async () => {
+    const { model } = await anthropicAdapter.generateStructured({
+      apiKey: "sk-ant-test",
+      system: "s",
+      user: "u",
+      schema: { type: "object" },
+      choice: modelFor("item_assist"),
+      client: fakeClient([]),
+    });
+    // This adapter DOES honour `choice`, so the reported model follows it.
+    expect(model).toBe("claude-haiku-4-5");
   });
 
   it("reports cache tokens in usage", async () => {

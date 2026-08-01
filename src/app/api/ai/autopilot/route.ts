@@ -7,7 +7,6 @@ import { buildAgentContext } from "@/lib/ai/agentic/context";
 import { autopilotRun } from "@/lib/ai/agentic/autopilot";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import { AiDisabledError, AiQuotaExceededError } from "@/lib/ai/errors";
 import { boardAgentConfigSchema } from "@/lib/ai/agentic/autopilot-config";
 import {
@@ -131,7 +130,7 @@ export async function POST(req: Request): Promise<Response> {
           agentContext: context,
           tasks,
         });
-        return { result: r, usage: r.usage, model: MODEL };
+        return { result: r, usage: r.usage, model: r.model };
       },
     );
 

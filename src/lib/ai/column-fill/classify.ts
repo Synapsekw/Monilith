@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
-import { modelFor } from "@/lib/ai/model-map";
+import { DEFAULT_MODEL_CHOICE, modelFor } from "@/lib/ai/model-map";
 import {
   COLUMN_FILL_JSON_SCHEMA,
   type ClassifyRow,
@@ -21,7 +21,10 @@ type ParsedOutput = { rows: { itemId: string; optionId: string | null }[] };
 
 // Haiku 4.5's context window is 200K, not 1M. classifyColumn serializes every
 // row into a single user message, so above this row count fall back to the
-// pricier Sonnet choice rather than risk a 400 on an oversized request.
+// pricier long-context choice rather than risk a 400 on an oversized request.
+// DEFAULT_MODEL_CHOICE, not another feature's key: borrowing e.g.
+// modelFor("dashboard_gen") would silently route oversized requests back to a
+// 200K-context model the day that feature is remapped to Haiku.
 const HAIKU_ROW_LIMIT = 2000;
 
 /**
@@ -43,7 +46,7 @@ export async function classifyColumn(args: {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
   const choice =
     args.rows.length > HAIKU_ROW_LIMIT
-      ? modelFor("dashboard_gen")
+      ? DEFAULT_MODEL_CHOICE
       : modelFor("column_fill");
   const user = JSON.stringify({
     rows: args.rows,
@@ -64,7 +67,7 @@ export async function classifyColumn(args: {
       { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
     ],
     messages: [{ role: "user", content: user }],
-  } as never);
+  });
 
   const textBlock = message.content.find((b) => b.type === "text");
   const parsed = ((message as { parsed_output?: unknown }).parsed_output ??

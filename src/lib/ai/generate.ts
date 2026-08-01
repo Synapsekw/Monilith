@@ -46,7 +46,11 @@ export async function generateProposal(
     feedback?: string;
     choice?: ModelChoice;
   },
-): Promise<{ proposal: DashboardProposal; usage: AiUsageTokens }> {
+): Promise<{
+  proposal: DashboardProposal;
+  usage: AiUsageTokens;
+  model: string;
+}> {
   return opts.adapter.generateProposal({
     apiKey: opts.apiKey,
     system: buildSystemPrompt(),

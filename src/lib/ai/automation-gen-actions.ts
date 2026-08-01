@@ -63,12 +63,14 @@ export async function generateAutomationDraft(input: {
     const rawDraft = await runAi(
       { orgId: org.id, userId: user.id, feature: "automation_gen" },
       async ({ adapter, apiKey }) => {
-        const { draft, usage } = await generateAutomationDraftLLM(prompt, ctx, {
-          adapter,
-          apiKey,
-          choice,
-        });
-        return { result: draft, usage, model: choice.model };
+        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
+        // adapters ignore `choice` and run their own fixed model.
+        const { draft, usage, model } = await generateAutomationDraftLLM(
+          prompt,
+          ctx,
+          { adapter, apiKey, choice },
+        );
+        return { result: draft, usage, model };
       },
     );
 

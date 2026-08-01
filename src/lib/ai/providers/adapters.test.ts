@@ -275,6 +275,83 @@ describe("generateStructured", () => {
   });
 });
 
+// The BYO mis-metering regression: `choice` is an Anthropic-shaped request
+// config, and only the Anthropic adapter honours it. The OpenAI and Google
+// adapters IGNORE it and run their own fixed model — so a caller that meters
+// `choice.model` bills an org_byo org on Gemini ($0.10/$0.40) at Sonnet 5's
+// $3/$15, roughly 30x over-charged against their monthly credit ceiling.
+// Every adapter therefore reports the model it actually ran.
+describe("generateStructured reports the model actually used", () => {
+  const SCHEMA = { type: "object" };
+  const SONNET_CHOICE = {
+    model: "claude-sonnet-5",
+    thinking: { type: "adaptive" as const },
+    effort: "high" as const,
+  };
+
+  it("anthropic honours `choice`, so it reports choice.model", async () => {
+    anthropicParse.mockResolvedValueOnce({
+      content: [{ type: "text", text: "{}" }],
+      parsed_output: {},
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const res = await anthropicAdapter.generateStructured({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      schema: SCHEMA,
+      choice: SONNET_CHOICE,
+    });
+    expect(res.model).toBe("claude-sonnet-5");
+    expect(anthropicParse.mock.calls[0][0].model).toBe("claude-sonnet-5");
+  });
+
+  it("openai IGNORES `choice` — it reports its own model, never choice.model", async () => {
+    openaiCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: "{}" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    });
+    const res = await openaiAdapter.generateStructured({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      schema: SCHEMA,
+      choice: SONNET_CHOICE,
+    });
+    expect(openaiCreate.mock.calls[0][0].model).toBe("gpt-4o");
+    expect(res.model).toBe("gpt-4o");
+    expect(res.model).toBe(openaiAdapter.defaultModel);
+  });
+
+  it("google IGNORES `choice` — it reports its own model, never choice.model", async () => {
+    googleGenerate.mockResolvedValueOnce({
+      text: "{}",
+      usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
+    });
+    const res = await googleAdapter.generateStructured({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      schema: SCHEMA,
+      choice: SONNET_CHOICE,
+    });
+    expect(googleGenerate.mock.calls[0][0].model).toBe("gemini-2.0-flash");
+    expect(res.model).toBe("gemini-2.0-flash");
+    expect(res.model).toBe(googleAdapter.defaultModel);
+  });
+
+  it("generateProposal carries the same model through", async () => {
+    googleGenerate.mockResolvedValueOnce({ text: JSON.stringify(PROPOSAL) });
+    const res = await googleAdapter.generateProposal({
+      apiKey: "k",
+      system: "s",
+      user: "u",
+      choice: SONNET_CHOICE,
+    });
+    expect(res.model).toBe("gemini-2.0-flash");
+  });
+});
+
 describe("supportsTools", () => {
   it("is true for anthropic and false for openai/google", () => {
     expect(anthropicAdapter.supportsTools).toBe(true);

@@ -58,8 +58,8 @@ export async function generateAutomationDraft(
   prompt: string,
   ctx: AutomationContext,
   opts: { adapter: ProviderAdapter; apiKey: string; choice?: ModelChoice },
-): Promise<{ draft: Draft; usage: AiUsageTokens }> {
-  const { data, usage } =
+): Promise<{ draft: Draft; usage: AiUsageTokens; model: string }> {
+  const { data, usage, model } =
     await opts.adapter.generateStructured<RawAutomationDraft>({
       apiKey: opts.apiKey,
       system: buildAutomationGenSystemPrompt(),
@@ -68,5 +68,5 @@ export async function generateAutomationDraft(
       choice: opts.choice,
     });
   // The shape matches Draft closely enough for the caller, which re-validates.
-  return { draft: data as unknown as Draft, usage };
+  return { draft: data as unknown as Draft, usage, model };
 }

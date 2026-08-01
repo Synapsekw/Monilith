@@ -101,12 +101,13 @@ export async function suggestImportMapping(input: {
     const raw = await runAi(
       { orgId: org.id, userId: user.id, feature: "import_mapping" },
       async ({ adapter, apiKey }) => {
-        const { suggestions, usage } = await generateImportMapping(payload, {
-          adapter,
-          apiKey,
-          choice,
-        });
-        return { result: suggestions, usage, model: choice.model };
+        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
+        // adapters ignore `choice` and run their own fixed model.
+        const { suggestions, usage, model } = await generateImportMapping(
+          payload,
+          { adapter, apiKey, choice },
+        );
+        return { result: suggestions, usage, model };
       },
     );
 
