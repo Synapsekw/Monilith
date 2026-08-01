@@ -147,7 +147,12 @@ describe("generateProposal", () => {
       user: "u",
     });
     expect(res.proposal.name).toBe("X");
-    expect(res.usage).toEqual({ inputTokens: 1200, outputTokens: 340 });
+    expect(res.usage).toEqual({
+      inputTokens: 1200,
+      outputTokens: 340,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
   });
 
   it("openai parses the JSON message content", async () => {
@@ -206,7 +211,12 @@ describe("generateStructured", () => {
       schema: SCHEMA,
     });
     expect(res.data).toEqual({ ok: true });
-    expect(res.usage).toEqual({ inputTokens: 1, outputTokens: 2 });
+    expect(res.usage).toEqual({
+      inputTokens: 1,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
     expect(jsonSchemaOutputFormat).toHaveBeenCalledWith(SCHEMA);
   });
 
@@ -222,7 +232,12 @@ describe("generateStructured", () => {
       schema: SCHEMA,
     });
     expect(res.data).toEqual({ ok: false });
-    expect(res.usage).toEqual({ inputTokens: 3, outputTokens: 4 });
+    expect(res.usage).toEqual({
+      inputTokens: 3,
+      outputTokens: 4,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
   });
 
   it("openai returns the parsed JSON body + usage and embeds the schema in the prompt", async () => {

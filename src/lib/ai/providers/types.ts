@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { ModelChoice } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
@@ -27,6 +28,9 @@ export interface ProviderAdapter {
     apiKey: string;
     system: string;
     user: string;
+    /** Per-feature model + request shape. Defaults to the adapter's default. */
+    choice?: ModelChoice;
+    client?: unknown; // DI for tests
   }): Promise<{ proposal: DashboardProposal; usage: AiUsageTokens }>;
   /**
    * Generic structured-output call: runs the provider against an arbitrary
@@ -39,5 +43,7 @@ export interface ProviderAdapter {
     system: string;
     user: string;
     schema: object;
+    choice?: ModelChoice;
+    client?: unknown; // DI for tests
   }): Promise<{ data: T; usage: AiUsageTokens }>;
 }

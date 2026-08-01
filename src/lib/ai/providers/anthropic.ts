@@ -6,15 +6,15 @@ import {
   PROPOSAL_JSON_SCHEMA,
   type DashboardProposal,
 } from "@/lib/ai/proposal-schema";
+import { DEFAULT_MODEL_CHOICE } from "@/lib/ai/model-map";
 import { PROVIDER_CATALOG } from "@/lib/ai/providers/catalog";
 import {
   ProviderAuthError,
   type ProviderAdapter,
 } from "@/lib/ai/providers/types";
 
-/** The Anthropic model powering AI dashboard generation and Ask Pulse.
- *  Single source of truth (google/openai adapters keep their own). */
-export const MODEL = "claude-opus-4-8";
+/** Retained for call sites not yet routed through the model map (Task 5). */
+export const MODEL = DEFAULT_MODEL_CHOICE.model;
 
 export const anthropicAdapter: ProviderAdapter = {
   id: "anthropic",
@@ -37,21 +37,24 @@ export const anthropicAdapter: ProviderAdapter = {
       throw e;
     }
   },
-  async generateStructured({ apiKey, system, user, schema }) {
-    const client = new Anthropic({ apiKey });
-    const message = await client.messages.parse({
-      model: MODEL,
+  async generateStructured({ apiKey, system, user, schema, choice, client }) {
+    const c = (client as Anthropic) ?? new Anthropic({ apiKey });
+    const m = choice ?? DEFAULT_MODEL_CHOICE;
+    const message = await c.messages.parse({
+      model: m.model,
       max_tokens: 16000,
-      thinking: { type: "adaptive" },
+      thinking: m.thinking,
       output_config: {
-        effort: "high",
+        // Haiku 4.5 rejects `effort` — omit the key entirely rather than
+        // sending undefined, which the SDK would still serialize.
+        ...(m.effort ? { effort: m.effort } : {}),
         format: jsonSchemaOutputFormat(schema as never),
       },
       system: [
         { type: "text", text: system, cache_control: { type: "ephemeral" } },
       ],
       messages: [{ role: "user", content: user }],
-    });
+    } as never);
     const textBlock = message.content.find((b) => b.type === "text");
     const parsed =
       (message as { parsed_output?: unknown }).parsed_output ??
@@ -61,15 +64,19 @@ export const anthropicAdapter: ProviderAdapter = {
       usage: {
         inputTokens: message.usage.input_tokens,
         outputTokens: message.usage.output_tokens,
+        cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
       },
     };
   },
-  async generateProposal({ apiKey, system, user }) {
+  async generateProposal({ apiKey, system, user, choice, client }) {
     const { data, usage } = await this.generateStructured({
       apiKey,
       system,
       user,
       schema: PROPOSAL_JSON_SCHEMA,
+      choice,
+      client,
     });
     return { proposal: data as DashboardProposal, usage };
   },
