@@ -261,6 +261,123 @@ existing `env.server` boot check. Note that adding required env vars there **500
 `next start` / Lighthouse CI job that lacks them** while passing every local gate — so
 they go in as optional-with-runtime-check, or CI gets the placeholders.
 
+### The `setAiMode` self-grant hole — must close in the same release
+
+`setAiMode` (`src/lib/ai/settings-actions.ts:75`) accepts any of the four `ai_mode`
+values behind nothing but `requireOrgAdmin()`, and its upsert writes **only** `ai_mode` —
+`monthly_credit_limit` is left untouched. Today that is harmless. Under paid billing it
+is an exploit: a Pulse customer who downgrades to Core (webhook sets `ai_mode: 'off'`)
+can open Settings → AI, select "Managed", and resume spending against their **previous**
+credit pool. Free AI, metered to our platform key.
+
+Two changes, both required:
+
+1. `setAiMode` rejects `managed` unless `org_billing` shows an entitling status. Mode
+   becomes **derived from the subscription**, not chosen by the customer.
+2. Every downgrade/lapse path writes `monthly_credit_limit = 0` alongside `ai_mode`, so
+   the ceiling is not left armed behind a disabled mode.
+
+The remaining modes (`off`, `org_byo`, `per_user`) stay admin-selectable — they cost us
+nothing.
+
+## UI surfaces
+
+Everything below follows the **Monolith Keystone** system: monochrome chrome, periwinkle
+reserved for primary actions and focus, hairlines that **brighten** rather than thicken,
+surface steps instead of shadows, `rounded-lg` panels / `rounded-sm` chips, Nunito Sans +
+JetBrains Mono kickers. Server Components by default; `"use client"` pushed to the leaf.
+
+### A. Public / marketing
+
+| Route                                      | Notes                                                                                                                                                                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`/pricing`** (new)                       | Three `<PricingTierCard>`s, cadence toggle, feature comparison table, FAQ. **Must be registered as a public route in `src/proxy.ts`** — an unregistered public route hits the auth gate (`2026-06-17-gotcha-12`). |
+| **Landing pricing teaser** (new component) | Compact 3-card block linking to `/pricing`.                                                                                                                                                                       |
+| Landing nav + footer                       | "Pricing" link added.                                                                                                                                                                                             |
+
+> **Do not add the pricing section to `landing-sections.tsx`.** That file is 837 lines
+> against a deliberately-retained 800-line `max-lines` tripwire whose entire purpose is to
+> keep god-file accretion visible. Ship
+> `src/components/landing/pricing-section.tsx` as a new file and import it.
+
+### B. Signup → checkout
+
+| Surface                      | Notes                                                                                                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Plan selection step          | Tier + cadence + seat count, after signup / in `/onboarding`. Submits to a Server Action that creates the Stripe Checkout Session and redirects.                                                                                                                         |
+| Promo code field             | Optional input; also accepts a pre-applied code from the link query.                                                                                                                                                                                                     |
+| **`/checkout/return`** (new) | Reads `session_id` from `searchParams` — **the read must sit inside a `<Suspense>` child** or `next build` fails with cacheComponents "Uncached data outside `<Suspense>`" while typecheck, lint, and unit tests all pass. Build-only trap, previously hit in this repo. |
+| Cancel state                 | Same route, distinct state — no separate page.                                                                                                                                                                                                                           |
+
+### C. In-app settings (org admin)
+
+**`/settings/billing`** — new section, registered in `settings-nav.tsx` (which is already
+group-based, so this is one entry, not a nav rewrite). Built from the existing
+`settings-section.tsx` / `setting-row.tsx` primitives:
+
+- **Current plan card** — tier `<PlanBadge>`, seat count, cadence, next renewal date, price.
+- **Trial banner** — days remaining, converts-on date, the card that will be charged.
+- **`<CreditMeter>`** — used / limit with a progress bar and reset date in a `<MetaChip>`.
+  Tone follows `StatusPill` semantics: green under 70%, yellow 70–90%, red above 90% —
+  **always paired with the numeric text**, never colour alone (AA + colourblind).
+- **Manage billing** → Stripe hosted portal (card, invoices, cancellation) — external
+  redirect, which removes an entire category of UI from scope.
+- **Change plan** → Core ↔ Pulse.
+- **Applied discount** — badge showing percent and remaining duration, when a code is live.
+- **`<BillingStatusBanner>`** — past-due / grace / cancelled, with days left and an export CTA.
+
+**`/settings/ai` — modify.** `OrgAiSettingsForm` currently renders all four modes as a
+free choice. Under managed-only billing, `managed` stops being selectable (see the
+`setAiMode` hole above): Pulse orgs see it as read-only derived status, Core orgs see an
+upgrade CTA in its place. The form's `Initial` type **already carries `creditsLimit` and
+`creditsUsed`** — surface them with the same `<CreditMeter>` rather than a second
+treatment.
+
+### D. Paywall & quota states (all users)
+
+**One shared `<UpgradePrompt>` primitive, not N ad-hoc treatments.** AI entry points span
+Ask, item assist, column fill, dashboard generation, automation generation, report
+narrative, and semantic search; each inventing its own locked state is how a UI stops
+feeling like one product.
+
+Three distinct states, because they need three different CTAs:
+
+| Condition                            | Message                                                   | CTA                                           |
+| ------------------------------------ | --------------------------------------------------------- | --------------------------------------------- |
+| `ai_mode: 'off'` → `AiDisabledError` | "AI isn't on your plan"                                   | Upgrade (admins) / "ask your admin" (members) |
+| Ceiling hit → `AiQuotaExceededError` | "You've used this month's AI credits — resets **{date}**" | Contact admin / raise ceiling                 |
+| ≥80% consumed                        | dismissible warning banner                                | View usage                                    |
+
+Members and admins see different CTAs — showing a non-admin an upgrade button that
+`requireOrgAdmin()` will reject is a dead end.
+
+### E. Platform admin
+
+| Route                                    | Notes                                                                                                                                                                                                                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`/admin/billing`** (new)               | Subscriptions across orgs: status, tier, seats, MRR, trial ends, past-due. Bounded + paginated.                                                                                                                                                                       |
+| **`/admin/discounts`** (new)             | `<DiscountCodeTable>` + create dialog.                                                                                                                                                                                                                                |
+| Create-code dialog                       | percent, duration (months or forever), cadence restriction, plan restriction, `max_redemptions` (default 1), expiry, note. **Renders the computed cash value on both cadences before confirm**, and for 100% shows the AI COGS that is _not_ comped (~$5/seat/month). |
+| Code detail / revoke                     | Redemption status, redeeming org, revoke with confirm.                                                                                                                                                                                                                |
+| **`/admin/organizations/[id]`** — modify | Billing status block beside the existing `setOrgAiPlan` control.                                                                                                                                                                                                      |
+| Admin nav                                | Two entries added.                                                                                                                                                                                                                                                    |
+
+### F. Notifications
+
+In-app notification rows only for trial-ending, payment-failed, and credit-80%.
+**No email in v1** — production has no `RESEND_API_KEY`, so an email path would silently
+send nothing.
+
+### New components
+
+`<PricingTierCard>`, `<BillingCadenceToggle>`, `<CreditMeter>`, `<PlanBadge>`,
+`<UpgradePrompt>`, `<BillingStatusBanner>`, `<DiscountCodeTable>`, `<DiscountCodeDialog>`.
+
+`<PlanBadge>` wraps `<StatusPill variant="soft">` — it does not hand-roll
+`bg-status-* text-white`, which fails AA on the pale dark-mode fills. Only
+`<BillingCadenceToggle>` and the two dialogs are client components. Coarse pointers get
+44px targets (`pointer-coarse:` variants) — this is an iPad-optimized app.
+
 ## Performance & data-fetching budget
 
 - **Pricing page.** Static marketing surface. The monthly/annual toggle is **client state
@@ -273,6 +390,16 @@ they go in as optional-with-runtime-check, or CI gets the placeholders.
 - **Admin discount-code list.** Bounded page of 50, ordered by `created_at desc` over an
   index on `(created_at desc)`. Filters (active / redeemed / revoked) are client-side over
   the loaded page — no refetch. No unbounded `select *`.
+- **Paywall states must not become an N+1.** This is the one real risk the UI introduces.
+  A board page can render many AI entry points (per-column fill, per-item assist, Ask,
+  dashboard generation); if each `<UpgradePrompt>` independently calls `getAiEntitlement`,
+  that is one service-role round-trip **per button**. Entitlement is read **once per
+  request in the app-shell layout** and passed down as props. No AI affordance fetches its
+  own state.
+- **Credit meter costs nothing extra.** `/settings/billing` and `/settings/ai` both render
+  from the single `getAiEntitlement` call the page already makes.
+- **Cadence toggle and admin list filters are pure client state** — zero new server
+  round-trips on any in-page interaction, per working agreement #5.
 - **Hot paths untouched.** No billing read enters the board payload, the AI request path,
   or any per-request auth check. Entitlement continues to read `org_ai_settings` exactly
   as today.
@@ -295,21 +422,56 @@ they go in as optional-with-runtime-check, or CI gets the placeholders.
   forever code → subscription created _with_ a payment method attached; payment failure →
   grace → read-only; cancellation → export still works.
 
+- **Unit — `setAiMode` guard (regression test for the self-grant hole):** an org admin
+  whose `org_billing` status does not entitle AI cannot set `managed`; the other three
+  modes still succeed; a downgrade writes `monthly_credit_limit = 0`. This is the test
+  that stops the exploit coming back.
+- **Component — `<CreditMeter>`:** tone thresholds at 70% / 90%, and the numeric label
+  present in every state (guards the never-colour-alone rule).
+- **Component — `<UpgradePrompt>`:** renders the upgrade CTA for admins and the
+  ask-your-admin variant for members; distinguishes `AiDisabledError` from
+  `AiQuotaExceededError` copy.
+- **Component — discount dialog:** the computed cash value differs between cadences for a
+  sub-12-month duration, and the 100% case renders the un-comped AI cost.
+- **Build gate:** `/checkout/return` builds clean — the `searchParams` read is inside a
+  `<Suspense>` child. Unit tests will not catch this; only `pnpm build` will.
+
 Gates: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, plus `pnpm db:ledger-check`.
 
 ## Independent units (for the execution DAG)
 
 - **A — schema + entitlement mapping.** `org_billing`, `billing_discount_codes`, RLS,
-  definer RPCs, the `DEFAULT_ORG_AI_SETTINGS` change and its backfill migration.
-- **B — Stripe client + checkout + portal actions.** Depends on A.
+  definer RPCs, the `DEFAULT_ORG_AI_SETTINGS` change and its backfill migration, and the
+  `setAiMode` guard.
+- **B — Stripe client + checkout + portal Server Actions.** Depends on A.
 - **C — webhook route + seat sync.** Depends on A and B.
-- **D — pricing page + org billing settings UI.** Depends on A; parallel with B and C.
-- **E — admin discount-code screen + three server actions.** Depends on A and B.
+- **D — public marketing UI.** `/pricing`, `pricing-section.tsx`, nav/footer links,
+  `<PricingTierCard>`, `<BillingCadenceToggle>`. **No dependency on A** — it renders
+  static tier data, so it can start immediately and in parallel with everything.
+- **E — paywall primitives.** `<UpgradePrompt>`, `<CreditMeter>`, `<PlanBadge>`,
+  shell-level entitlement prop-drilling, and the `/settings/ai` mode-picker change.
+  Depends on A only.
+- **F — `/settings/billing` + checkout return page.** Depends on A, B, and E (reuses
+  `<CreditMeter>` / `<PlanBadge>`).
+- **G — admin discount-code screen + three platform actions.** Depends on A and B.
+- **H — `/admin/billing` + org detail billing block.** Depends on A and C.
 
-Critical path: **A → B → C**. D runs parallel from A. E joins after B. Nothing in this
-spec may start before the COGS spec's unit B (cache-aware pricing) has merged — the
-credit ceiling is the mechanism this entire design relies on, and it is not accurate
-until then.
+**Parallel batches:**
+
+| batch | units               | note                                              |
+| ----- | ------------------- | ------------------------------------------------- |
+| 1     | **D**, **A**        | D needs nothing; A is the root of everything else |
+| 2     | **B**, **E**        | both unblock on A                                 |
+| 3     | **C**, **F**, **G** | all unblock on B (F also on E)                    |
+| 4     | **H**               | needs C                                           |
+
+Critical path: **A → B → C → H** — four waves, and the real wall-clock floor. D is
+entirely off the critical path, so the pricing page can ship while Stripe credentials are
+still outstanding.
+
+Nothing in this spec may start before the COGS spec's unit B (cache-aware pricing) has
+merged — the credit ceiling is the mechanism this entire design relies on, and it is not
+accurate until then.
 
 ## Open dependency
 
