@@ -130,6 +130,14 @@ export async function getStatusColumnsForBoard(
 ): Promise<ActionResult<{ columns: StatusColumn[] }>> {
   const parsed = z.string().uuid().safeParse(boardId);
   if (!parsed.success) return fail("Invalid board");
-  const columns = await getBoardStatusColumns(parsed.data);
-  return { ok: true, data: { columns } };
+
+  // `getBoardStatusColumns` throws on a DB/RLS failure (deliberately — an empty
+  // picker would misrepresent it). Convert it here so the declared
+  // `ActionResult` contract holds and callers get their own error state.
+  try {
+    const columns = await getBoardStatusColumns(parsed.data);
+    return { ok: true, data: { columns } };
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
 }

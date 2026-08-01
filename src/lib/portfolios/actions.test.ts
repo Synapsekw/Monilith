@@ -272,19 +272,19 @@ describe("getStatusColumnsForBoard", () => {
   });
 
   /**
-   * DIVERGENCE, deliberately asserted as-is: unlike the other four actions,
-   * this one does NOT convert a DB failure into `{ ok: false, error }`.
-   * `getBoardStatusColumns` throws, and `getStatusColumnsForBoard` has no
-   * try/catch — so the rejection crosses the Server Action boundary and the
-   * caller sees a generic "unexpected error" instead of the typed failure the
-   * `ActionResult` signature advertises.
+   * `getBoardStatusColumns` throws on a DB failure rather than returning an
+   * empty list; the action must catch it so the `ActionResult` contract holds
+   * (a rejection would cross the Server Action boundary as a generic error).
+   * The underlying message is preserved, not flattened to a generic string.
    */
-  it("throws (does not return ok:false) when the columns read fails", async () => {
+  it("surfaces a failed columns read as a typed failure", async () => {
     from.mockImplementation(
       columnsChain({ data: null, error: { message: "db down" } }),
     );
-    await expect(getStatusColumnsForBoard(BOARD_ID)).rejects.toThrow(
-      "Failed to load status columns: db down",
-    );
+    const res = await getStatusColumnsForBoard(BOARD_ID);
+    expect(res).toEqual({
+      ok: false,
+      error: "Failed to load status columns: db down",
+    });
   });
 });
