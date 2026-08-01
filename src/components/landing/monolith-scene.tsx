@@ -40,20 +40,24 @@ const item: Variants = {
 
 /**
  * Interactive landing centerpiece. Mouse-reactive WebGL light rays stream from
- * the top behind a soft source bloom; the wordmark, headline, subcopy, CTA slot
- * and agent roster rise in on load.
+ * the top behind a soft source bloom; the wordmark, headline, subcopy, agent
+ * roster and product shot rise in on load.
  *
- * Two slots, both filled by the server `MonolithHero` so their markup stays out
- * of the client bundle: `children` is the CTA row, `roster` the named-agent
- * cards. The reveal is disabled under prefers-reduced-motion; the backdrop
- * freezes to a single static frame (handled inside `LightRays`).
+ * The slots are filled by the server `MonolithHero` so their markup stays out
+ * of the client bundle. The reveal is disabled under prefers-reduced-motion;
+ * the backdrop freezes to a single static frame (handled inside `LightRays`).
  */
 export function MonolithScene({
   children,
   roster,
   proof,
 }: {
-  children: React.ReactNode;
+  /**
+   * Optional CTA row. The landing deliberately leaves this empty: the nav
+   * already carries Get started / Sign in, and repeating them under the
+   * subcopy is the same two links a few hundred pixels lower.
+   */
+  children?: React.ReactNode;
   roster?: React.ReactNode;
   /**
    * The product shot that crosses the fold. Without it the hero ends on the
@@ -89,9 +93,11 @@ export function MonolithScene({
         Give an agent a name, a job and a schedule. It works your boards,
         replies in your threads and emails you what&apos;s pending.
       </motion.p>
-      <motion.div className={styles.ctas} variants={item}>
-        {children}
-      </motion.div>
+      {children ? (
+        <motion.div className={styles.ctas} variants={item}>
+          {children}
+        </motion.div>
+      ) : null}
       {roster ? (
         <motion.div className={styles.roster} variants={item}>
           {roster}

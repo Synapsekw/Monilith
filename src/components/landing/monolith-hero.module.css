@@ -4,8 +4,101 @@
   flex-direction: column;
   min-height: 100dvh;
   isolation: isolate;
-  overflow: hidden;
   background: #06070c;
+  /*
+   * `overflow-x: clip`, never `hidden`. Both stop sideways overflow, but
+   * `hidden` makes this a scroll container and silently kills `position:
+   * sticky` on the nav; `clip` does not. Vertical stays visible so sticky
+   * works at all.
+   */
+  overflow-x: clip;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Page wash                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * One continuous background for the whole page rather than a background per
+ * section. Any section-level background produces a boundary, and a boundary is
+ * a hard line however softly it is drawn — that is what made the earlier
+ * `bg-surface` bands read as stacked grey slabs.
+ *
+ * This spans the full scrollable height (absolute, not fixed), so its
+ * percentage stops map to scroll depth and the light travels with you. The
+ * vocabulary is the hero's own — a periwinkle source at top-centre, wide soft
+ * ellipses, a near-black base — continued past the fold instead of restarting.
+ *
+ * The source drifts as you descend: right, left, right, then gathers back at
+ * the centre for the closing CTA.
+ */
+.wash {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    /* The ray cone, continued past the fold. */
+    radial-gradient(
+      46% 34% at 50% -2%,
+      rgba(142, 162, 235, 0.13),
+      transparent 72%
+    ),
+    radial-gradient(
+      85% 22% at 76% 19%,
+      rgba(142, 162, 235, 0.06),
+      transparent 74%
+    ),
+    radial-gradient(
+      85% 22% at 18% 37%,
+      rgba(142, 162, 235, 0.055),
+      transparent 74%
+    ),
+    radial-gradient(
+      90% 22% at 82% 55%,
+      rgba(142, 162, 235, 0.05),
+      transparent 74%
+    ),
+    radial-gradient(
+      85% 20% at 22% 73%,
+      rgba(142, 162, 235, 0.042),
+      transparent 74%
+    ),
+    /* Gathers again behind the closing CTA. */
+    radial-gradient(
+        115% 24% at 50% 101%,
+        rgba(142, 162, 235, 0.08),
+        transparent 74%
+      ),
+    /* Edge falloff, matching the hero vignette so the sides never read flat. */
+    radial-gradient(
+        150% 60% at 50% 0%,
+        transparent 55%,
+        rgba(6, 7, 12, 0.5) 100%
+      ),
+    linear-gradient(
+      180deg,
+      #06070c 0%,
+      #080911 30%,
+      #090a13 58%,
+      #08090f 82%,
+      #06070c 100%
+    );
+}
+
+/*
+ * Film grain. Gradients this large band visibly on real panels — stepping is
+ * obvious across every soft bloom above. A few percent of noise dissolves the
+ * steps. Fixed to the viewport so it reads as a property of the screen.
+ */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* -------------------------------------------------------------------------- */

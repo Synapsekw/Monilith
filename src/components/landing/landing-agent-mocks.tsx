@@ -266,12 +266,18 @@ export function MorningBriefMock() {
 export function BoardWithAgentDock() {
   return (
     <WindowFrame title="Product · Q3 launch plan" chip="● 2 agents · live">
+      {/*
+        `min-w-0` on both columns is load-bearing: a grid item defaults to
+        `min-width: auto`, so without it the column sizes to the table's
+        720px min-width and pushes the whole page into horizontal scroll on
+        mobile. With it, `overflow-x-auto` inside the panel does its job.
+      */}
       <div className="grid lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         {/* The board is narrower than the table's min-width beside the dock, so
             its trailing columns are clipped. Fade the right edge so that reads
             as "more columns over there" rather than as a sliced-off pill. */}
         <div
-          className="border-border/70 lg:border-r"
+          className="border-border/70 min-w-0 lg:border-r"
           style={{
             maskImage: "linear-gradient(to right, #000 88%, transparent 100%)",
             WebkitMaskImage:
@@ -280,7 +286,7 @@ export function BoardWithAgentDock() {
         >
           <BoardTableMock rows={SWITCHER_ROWS} />
         </div>
-        <div className="border-border/70 border-t lg:border-t-0">
+        <div className="border-border/70 min-w-0 border-t lg:border-t-0">
           <AgentThreadMock />
         </div>
       </div>
