@@ -1,6 +1,7 @@
 /**
- * Per-feature model routing. Keyed by the SAME `feature` string already
- * threaded through runAi, so no new plumbing is needed at call sites.
+ * Per-feature model routing. Maps the `feature` string threaded through runAi
+ * to a model plus its request-shape config, so no new plumbing is needed at
+ * call sites.
  *
  * Carries request-shape config, not just a model id: models do not accept the
  * same knobs. Haiku 4.5 rejects `output_config.effort` and requires the older
@@ -38,22 +39,25 @@ const HAIKU: ModelChoice = {
 /** Anything unmapped: the conservative, highest-quality choice. */
 export const DEFAULT_MODEL_CHOICE: ModelChoice = SONNET;
 
-const FEATURE_MODELS: Readonly<Record<string, ModelChoice>> = {
-  // Tool-use loops — quality-sensitive, Sonnet 5 is near-Opus on agentic work.
-  ask_pulse: SONNET,
-  conversational_action: SONNET,
-  agentic_decide: SONNET,
-  agentic_autopilot: SONNET,
-  // Structured generation — moderate difficulty.
-  dashboard_gen: SONNET,
-  board_generate: SONNET,
-  automation_gen: SONNET,
-  import_mapping: SONNET,
-  report_narrative: SONNET,
-  // Short classification / rewrite.
-  item_assist: HAIKU,
-  column_fill: HAIKU,
-};
+const FEATURE_MODELS = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, ModelChoice>, {
+    // Tool-use loops — quality-sensitive, Sonnet 5 is near-Opus on agentic work.
+    ask_pulse: SONNET,
+    conversational_action: SONNET,
+    automation_ai_step: SONNET,
+    autopilot_run: SONNET,
+    // Structured generation — moderate difficulty.
+    dashboard_gen: SONNET,
+    board_gen: SONNET,
+    automation_gen: SONNET,
+    import_mapping: SONNET,
+    report_narrative: SONNET,
+    thread_summary: SONNET,
+    // Short classification / rewrite.
+    item_assist: HAIKU,
+    column_fill: HAIKU,
+  }),
+);
 
 export const AI_FEATURES = Object.keys(FEATURE_MODELS);
 

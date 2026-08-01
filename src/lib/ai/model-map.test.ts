@@ -11,8 +11,8 @@ describe("model-map", () => {
     for (const f of [
       "ask_pulse",
       "conversational_action",
-      "agentic_decide",
-      "agentic_autopilot",
+      "automation_ai_step",
+      "autopilot_run",
     ]) {
       expect(modelFor(f).model).toBe("claude-sonnet-5");
     }
@@ -37,6 +37,10 @@ describe("model-map", () => {
 
   it("falls back to the default choice for an unmapped feature", () => {
     expect(modelFor("not_a_feature")).toEqual(DEFAULT_MODEL_CHOICE);
+  });
+
+  it("does not fall into prototype chain lookup for Object methods", () => {
+    expect(modelFor("constructor")).toEqual(DEFAULT_MODEL_CHOICE);
   });
 
   // The guard that matters: computeCostUsd returns 0 for an unpriced model, so
