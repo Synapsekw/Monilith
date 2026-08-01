@@ -1,7 +1,7 @@
 # Personal Agents — Design
 
 **Date:** 2026-08-01
-**Status:** Spec written — awaiting review
+**Status:** Approved 2026-08-01 — Phase 1 planned in `docs/superpowers/plans/2026-08-01-personal-agents-phase1.md`
 **Author:** Dani (with Claude)
 **Inspiration:** [block/buzz](https://github.com/block/buzz) — ideas only; see "What we take from buzz".
 **Related:** `vault/decisions/2026-07-12-decision-27-ask-becomes-standalone-surface.md`,
@@ -157,14 +157,21 @@ inline execution would serialise them into one function invocation and blow the 
 
 ## Briefing content
 
-Reuse `src/lib/workload/queries.ts` — the bounded, indexed "assigned to me" query that already
-powers `/my-work`. The briefing is four bounded sections, each capped and each rendered from that
-one query plus the agent's instructions:
+> **Corrected during planning.** This section originally named
+> `src/lib/workload/queries.ts`; that module builds the capacity/effort grid, not an
+> assigned-to-me read. The correct source is **`src/lib/my-work/queries.ts`**, whose
+> `get_my_work_items` RPC is **SECURITY INVOKER**, RLS-filtered by the caller and capped at
+> `MY_WORK_ITEM_LIMIT = 500`. That is strictly better here: it makes "the agent sees only what
+> its owner sees" a structural property rather than a convention.
 
-- **Overdue** — past due date, not done
-- **Due today / this week**
-- **Newly assigned since the last run**
-- **Stalled** — no activity in 7 days (see Open question 2)
+Reuse `src/lib/my-work/queries.ts` and its `bucketMyWork` companion, so the briefing and the
+`/my-work` page can never disagree about what "overdue" means. The sections are the existing
+`DueBucket` vocabulary, rendered from that one bounded query plus the agent's instructions:
+
+- **Overdue** — past due date
+- **Today**
+- **This week**
+- **Later** / **No date**
 
 The model's job is _prose and prioritisation over a bounded, pre-fetched result set_ — not
 free-roaming retrieval. This keeps token cost predictable, keeps the read bounded, and sharply
@@ -244,7 +251,7 @@ surface uses `<Link>`/router navigation for an in-page toggle (gotcha-09).
 
 **Bounded reads** — every read is capped over an indexed column. Roster is per-owner and small
 by construction (`max_agents_per_user`, default 3). Run history is capped at 50 over
-`(user_agent_id, created_at desc)`. The briefing reuses `workload/queries.ts`, already bounded
+`(user_agent_id, created_at desc)`. The briefing reuses `my-work/queries.ts`, already bounded
 and indexed. There is no `select *` on a growing table anywhere in this slice.
 
 **Off the request path** — agent runs are cron-triggered and queue-fanned. No user request ever
@@ -272,7 +279,7 @@ waits on a model call.
 
 - **A — Migration**: `user_agents`, `user_agent_runs`, caps columns, RLS policies, indexes. Produces regenerated `database.types.ts`.
 - **B — Templates + schemas**: client-safe template catalog and Zod config, mirroring `autopilot-config.ts`. Pure module, no DB.
-- **C — Briefing builder**: section builders over `workload/queries.ts`. Pure functions over fixture data.
+- **C — Briefing builder**: section builders over `my-work/queries.ts`. Pure functions over fixture data.
 - **D — Sweep + signed hop + route**: pg*cron job, fire ledger, `/api/ai/personal-agent`, HMAC verify, queue fan-out. \_Consumes A.*
 - **E — Roster UI**: settings section, gallery, editor, run history. _Consumes A, B._
 - **F — Email render + send**: personal-briefing template, Resend send, separate opt-out + notification kind. _Consumes C._
@@ -367,9 +374,10 @@ reversal is defensible, but it must be an explicit new ADR rather than a silent 
    prefers a separate `board_threads` + `board_thread_messages` pair, the cost is a duplicated
    persistence layer and the benefit is that private `/ask` history is structurally unreachable.
    Worth deciding before Phase 2 rather than during it.
-2. **Does "stalled" belong in the first briefing?** It needs a last-activity read that
-   `workload/queries.ts` may not currently return. If it forces a second unbounded query, cut it
-   from Phase 1.
+2. ~~**Does "stalled" belong in the first briefing?**~~ **Resolved during planning: cut.**
+   `MyWorkItem` carries neither a last-activity nor an assigned-at field, so **"stalled" and
+   "newly assigned" both leave Phase 1** — each would need a new query. Named as follow-ups in
+   the plan.
 3. **Cap defaults.** 3 agents and 3 runs/user/day are guesses. Worth a number from real usage
    before they become load-bearing.
 4. **Should the daily briefing collapse into the weekly digest email** when both fire on the same
