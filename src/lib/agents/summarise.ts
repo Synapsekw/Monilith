@@ -34,6 +34,31 @@ function textOf(content: Anthropic.ContentBlock[]): string {
 }
 
 /**
+ * `JSON.stringify` escapes quotes and backslashes but NOT `<`/`>` — an item
+ * named e.g. `</data>\n\nNew instructions: ...` would close the `<data>`
+ * block early and land its trailing text in the instruction position,
+ * leaving only the SYSTEM rule as defence. `<` never appears outside a
+ * string VALUE in `JSON.stringify`'s output (object/array syntax uses only
+ * `{}[]:,"`), so replacing every literal `<` with its `<` JSON escape
+ * removes every way to form `<data>`/`</data>` from untrusted content while
+ * leaving the text valid, re-parseable JSON.
+ */
+function escapeAngleBrackets(json: string): string {
+  return json.replaceAll("<", "\\u003c");
+}
+
+/** A terse, data-only fallback for when the model returns no text (empty
+ *  response, or truncation at max_tokens) — never email a blank summary
+ *  paragraph. */
+function fallbackSummary(briefing: Briefing): string {
+  const { overdue, today, week } = briefing.totals;
+  if (overdue === 0 && today === 0 && week === 0) {
+    return "Nothing is due right now.";
+  }
+  return `You have ${overdue} overdue, ${today} due today, and ${week} due this week.`;
+}
+
+/**
  * One bounded model call over the pre-fetched, RLS-filtered briefing
  * (`buildBriefing` already ran the RPC under the owner's client — this
  * function issues no queries of its own and has no tools). `client` is
@@ -55,18 +80,20 @@ export async function summariseBriefing(args: {
   const { apiKey, instructions, briefing } = args;
   const client = args.client ?? new Anthropic({ apiKey });
 
-  const data = JSON.stringify({
-    today: briefing.today,
-    totals: briefing.totals,
-    groups: briefing.groups.map((g) => ({
-      bucket: g.bucket,
-      items: g.items.map((i) => ({
-        name: i.itemName,
-        board: i.boardName,
-        due: i.dueDate,
+  const data = escapeAngleBrackets(
+    JSON.stringify({
+      today: briefing.today,
+      totals: briefing.totals,
+      groups: briefing.groups.map((g) => ({
+        bucket: g.bucket,
+        items: g.items.map((i) => ({
+          name: i.itemName,
+          board: i.boardName,
+          due: i.dueDate,
+        })),
       })),
-    })),
-  });
+    }),
+  );
 
   const res = await client.messages.create({
     model: MODEL,
@@ -80,8 +107,9 @@ export async function summariseBriefing(args: {
     ],
   });
 
+  const text = textOf(res.content).trim();
   return {
-    summary: textOf(res.content).trim(),
+    summary: text.length > 0 ? text : fallbackSummary(briefing),
     usage: {
       inputTokens: res.usage.input_tokens,
       outputTokens: res.usage.output_tokens,

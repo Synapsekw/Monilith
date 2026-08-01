@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { signBody } from "@/lib/ai/agentic/hmac";
+import { AiDisabledError } from "@/lib/ai/errors";
 
 const SECRET = "test-secret";
+const ORG = "00000000-0000-4000-8000-0000000000f1";
+const OWNER = "00000000-0000-4000-8000-0000000000f2";
+
 const getUserAgentById = vi.fn();
 const findUserAgentRun = vi.fn();
-const insertUserAgentRun = vi.fn();
 
 vi.mock("@/lib/env.server", () => ({
   getServerEnv: () => ({
@@ -15,11 +18,118 @@ vi.mock("@/lib/env.server", () => ({
     DIGEST_FROM_EMAIL: null,
   }),
 }));
-vi.mock("@/lib/supabase/service", () => ({ createServiceClient: () => ({}) }));
+
 vi.mock("@/lib/agents/agents-db", () => ({
   getUserAgentById: (...a: unknown[]) => getUserAgentById(...a),
   findUserAgentRun: (...a: unknown[]) => findUserAgentRun(...a),
-  insertUserAgentRun: (...a: unknown[]) => insertUserAgentRun(...a),
+}));
+
+// ── user_agent_runs mock ────────────────────────────────────────────────
+// `claimRun`/`finalizeRun` in route.ts talk to `user_agent_runs` directly
+// (insert for the claim, update for the finalize) rather than through
+// agents-db.ts, so they need real insert/update semantics here — including a
+// simulated 23505 unique-violation on the claim insert (Finding 1) and a
+// simulated ordinary write failure on the finalize update (Finding 2).
+type RunPatch = Record<string, unknown>;
+const runInserts: RunPatch[] = [];
+const runUpdates: { patch: RunPatch; key: RunPatch }[] = [];
+let forceClaimConflict = false;
+let forceFinalizeError = false;
+
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => ({
+    from(table: string) {
+      if (table !== "user_agent_runs") return {};
+      return {
+        insert: async (row: RunPatch) => {
+          if (forceClaimConflict) {
+            return {
+              error: {
+                code: "23505",
+                message:
+                  'duplicate key value violates unique constraint "user_agent_runs_slot_uniq"',
+              },
+            };
+          }
+          runInserts.push(row);
+          return { error: null };
+        },
+        update(patch: RunPatch) {
+          const key: RunPatch = {};
+          // Thenable chain: each .eq() records a key column and returns the
+          // same builder; awaiting the builder at any point (mirrors real
+          // supabase-js query builders) resolves and records the update.
+          const builder = {
+            eq(col: string, val: unknown) {
+              key[col] = val;
+              return builder;
+            },
+            then(onFulfilled: (v: { error: unknown }) => unknown) {
+              runUpdates.push({ patch, key: { ...key } });
+              const result = forceFinalizeError
+                ? { error: { message: "db blip" } }
+                : { error: null };
+              return Promise.resolve(result).then(onFulfilled);
+            },
+          };
+          return builder;
+        },
+      };
+    },
+  }),
+}));
+
+const requireAiEntitlement = vi.fn(async () => {});
+vi.mock("@/lib/ai/entitlement", () => ({
+  requireAiEntitlement: (...a: unknown[]) => requireAiEntitlement(...(a as [])),
+}));
+
+// Real AgentCapExceededError export is preserved (route.ts does `instanceof`
+// on it); only the DB-hitting function is replaced.
+const assertRunAllowedToday = vi.fn(async () => {});
+vi.mock("@/lib/agents/caps", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agents/caps")>();
+  return {
+    ...actual,
+    assertRunAllowedToday: (...a: unknown[]) =>
+      assertRunAllowedToday(...(a as [])),
+  };
+});
+
+const getAgentOwnerClient = vi.fn(async () => ({}) as never);
+vi.mock("@/lib/agents/owner-client", () => ({
+  getAgentOwnerClient: (...a: unknown[]) => getAgentOwnerClient(...(a as [])),
+}));
+
+const fakeBriefing = {
+  today: "2026-08-01",
+  totals: { overdue: 1, today: 0, week: 0 },
+  groups: [],
+};
+const buildBriefing = vi.fn(async () => fakeBriefing);
+vi.mock("@/lib/agents/briefing", () => ({
+  buildBriefing: (...a: unknown[]) => buildBriefing(...(a as [])),
+}));
+
+const summariseBriefing = vi.fn(async () => ({
+  summary: "You have 1 overdue item.",
+  usage: { inputTokens: 5, outputTokens: 2 },
+}));
+vi.mock("@/lib/agents/summarise", () => ({
+  summariseBriefing: (...a: unknown[]) => summariseBriefing(...(a as [])),
+}));
+
+const sendBriefingEmail = vi.fn(async () => ({ emailed: true }));
+vi.mock("@/lib/agents/send", () => ({
+  sendBriefingEmail: (...a: unknown[]) => sendBriefingEmail(...(a as [])),
+}));
+
+// runAi just runs the callback (metering exercised in the gateway's own test).
+vi.mock("@/lib/ai/gateway", () => ({
+  runAi: async (
+    _args: unknown,
+    fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
+  ) => (await fn({ apiKey: "k" })).result,
 }));
 
 const { POST } = await import("./route");
@@ -33,17 +143,49 @@ function post(body: object, sig?: string) {
   });
 }
 
+const AGENT_ID = "00000000-0000-4000-8000-0000000000aa";
 const slot = {
-  agent_id: crypto.randomUUID(),
+  agent_id: AGENT_ID,
   fire_date: "2026-08-01",
   fire_hour: 7,
 };
 
+const enabledAgent = () => ({
+  id: AGENT_ID,
+  org_id: ORG,
+  owner_id: OWNER,
+  name: "Morning Brief",
+  template_id: "morning-brief",
+  instructions: "Be concise.",
+  board_scope: { mode: "all" as const },
+  cadence: "daily" as const,
+  run_at_local_hour: 7,
+  enabled: true,
+  bridge_secret_id: null,
+});
+
 beforeEach(() => {
   getUserAgentById.mockReset();
   findUserAgentRun.mockReset();
-  insertUserAgentRun.mockReset();
   findUserAgentRun.mockResolvedValue(null);
+  runInserts.length = 0;
+  runUpdates.length = 0;
+  forceClaimConflict = false;
+  forceFinalizeError = false;
+  requireAiEntitlement.mockReset();
+  requireAiEntitlement.mockResolvedValue(undefined);
+  assertRunAllowedToday.mockReset();
+  assertRunAllowedToday.mockResolvedValue(undefined);
+  getAgentOwnerClient.mockClear();
+  buildBriefing.mockReset();
+  buildBriefing.mockResolvedValue(fakeBriefing);
+  summariseBriefing.mockReset();
+  summariseBriefing.mockResolvedValue({
+    summary: "You have 1 overdue item.",
+    usage: { inputTokens: 5, outputTokens: 2 },
+  });
+  sendBriefingEmail.mockReset();
+  sendBriefingEmail.mockResolvedValue({ emailed: true });
 });
 
 describe("POST /api/ai/personal-agent", () => {
@@ -76,14 +218,127 @@ describe("POST /api/ai/personal-agent", () => {
     getUserAgentById.mockResolvedValue({ id: slot.agent_id, enabled: false });
     const res = await POST(post(slot));
     expect(await res.json()).toMatchObject({ status: "skipped" });
-    expect(insertUserAgentRun).not.toHaveBeenCalled();
+    expect(runInserts).toHaveLength(0);
+    expect(runUpdates).toHaveLength(0);
   });
 
-  it("is a no-op when the fire slot already ran", async () => {
+  it("is a no-op when the fire slot already ran (sequential redelivery, fast path)", async () => {
     getUserAgentById.mockResolvedValue({ id: slot.agent_id, enabled: true });
     findUserAgentRun.mockResolvedValue({ id: "existing" });
     const res = await POST(post(slot));
     expect(await res.json()).toMatchObject({ status: "noop" });
-    expect(insertUserAgentRun).not.toHaveBeenCalled();
+    expect(runInserts).toHaveLength(0);
+    expect(runUpdates).toHaveLength(0);
+  });
+
+  // ── Finding 1: claim-before-send is the real backstop ──────────────────
+  it("claims the slot with an insert BEFORE any token spend or email, then finalizes as ran", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+
+    // Exactly one insert (the claim) and one update (the finalize) — never
+    // a second insert for the final status.
+    expect(runInserts).toHaveLength(1);
+    expect(runInserts[0]).toMatchObject({
+      user_agent_id: AGENT_ID,
+      fire_date: slot.fire_date,
+      fire_hour: slot.fire_hour,
+      status: "error", // conservative claim placeholder — see CLAIM_PLACEHOLDER
+    });
+    expect(runUpdates).toHaveLength(1);
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "ran",
+      input_tokens: 5,
+      output_tokens: 2,
+    });
+    expect(sendBriefingEmail).toHaveBeenCalledOnce();
+  });
+
+  it("is a no-op via the claim backstop when a concurrent delivery races the fast probe", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    // Simulate the race: findUserAgentRun's fast probe still sees null (the
+    // other delivery hasn't committed yet), but by the time THIS delivery
+    // tries to claim, the other delivery has already won the unique index.
+    forceClaimConflict = true;
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "noop" });
+    // No token spend, no email — the loser does NOTHING beyond the failed claim.
+    expect(summariseBriefing).not.toHaveBeenCalled();
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+    expect(runInserts).toHaveLength(0);
+    expect(runUpdates).toHaveLength(0);
+  });
+
+  // ── the gated path also goes through claim + finalize ───────────────────
+  it("claims the slot, then finalizes as skipped when entitlement is off (no spend)", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    requireAiEntitlement.mockRejectedValue(new AiDisabledError());
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "skipped" });
+    expect(runInserts).toHaveLength(1);
+    expect(runUpdates).toHaveLength(1);
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
+    expect(summariseBriefing).not.toHaveBeenCalled();
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // ── error path still finalizes, and reports the real HTTP outcome ──────
+  it("finalizes as error and 500s when the run throws after being claimed", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    buildBriefing.mockRejectedValue(new Error("rpc boom"));
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(500);
+    expect(runInserts).toHaveLength(1);
+    expect(runUpdates).toHaveLength(1);
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "error",
+      error: "rpc boom",
+    });
+  });
+
+  // ── Finding 2: a finalize write failure must not crash the response ────
+  it("still reports the real outcome when the finalize write itself fails after a successful send", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    forceFinalizeError = true;
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(post(slot));
+
+    // The email genuinely sent — the response must say "ran", not crash
+    // into an unhandled rejection or a 500, even though the bookkeeping
+    // write that would have recorded it failed.
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(sendBriefingEmail).toHaveBeenCalledOnce();
+    // The failure was logged, not swallowed silently.
+    expect(errSpy).toHaveBeenCalledWith(
+      "[personal-agent] finalizeRun failed:",
+      expect.objectContaining({ patchStatus: "ran" }),
+    );
+    errSpy.mockRestore();
+  });
+
+  it("still reports 'skipped' when both the gate AND its finalize write fail", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    requireAiEntitlement.mockRejectedValue(new AiDisabledError());
+    forceFinalizeError = true;
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "skipped" });
+    errSpy.mockRestore();
   });
 });
