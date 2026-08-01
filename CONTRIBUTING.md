@@ -142,6 +142,10 @@ Pre-convention history lives in `src/lib/changelog/seed.ts`.
   because the stamp is copied from the ledger, not invented. `reconcile-migration-version.sh` is the
   _other_ repair (a version label that drifted while the file exists — gotcha-55).
 
+  The check shells out to `psql`, so it needs `psql` on `PATH` — or `PG_BIN` pointing at your
+  PostgreSQL `bin/` in the main checkout's (gitignored) `.env.prod.local`; without either it exits 3
+  and the drift is never checked.
+
 - **RLS is the security boundary**: default-deny, org-scoped, no cross-tenant access. Never trust the client.
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach the browser.
 

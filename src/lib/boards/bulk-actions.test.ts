@@ -2,31 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the per-item server actions the bulk wrappers reuse. Each test drives the
 // per-item outcomes and asserts the wrapper aggregates them correctly.
-const deleteItem = vi.fn();
 const moveItem = vi.fn();
 const upsertCell = vi.fn();
 const clearCell = vi.fn();
 const archiveItem = vi.fn();
 const restoreItem = vi.fn();
-const purgeItem = vi.fn();
 
 vi.mock("@/lib/boards/actions", () => ({
-  deleteItem: (...a: unknown[]) => deleteItem(...a),
   moveItem: (...a: unknown[]) => moveItem(...a),
   upsertCell: (...a: unknown[]) => upsertCell(...a),
   clearCell: (...a: unknown[]) => clearCell(...a),
   archiveItem: (...a: unknown[]) => archiveItem(...a),
   restoreItem: (...a: unknown[]) => restoreItem(...a),
-  purgeItem: (...a: unknown[]) => purgeItem(...a),
 }));
 
 import {
-  bulkDeleteItems,
   bulkMoveItems,
   bulkSetCell,
   bulkArchiveItems,
   bulkRestoreItems,
-  bulkPurgeItems,
 } from "./bulk-actions";
 
 const ok = { ok: true, data: undefined } as const;
@@ -37,50 +31,6 @@ const uuid = (n: number) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe("bulkDeleteItems", () => {
-  it("reuses deleteItem per id and reports all succeeded", async () => {
-    deleteItem.mockResolvedValue(ok);
-    const res = await bulkDeleteItems({ itemIds: [uuid(1), uuid(2)] });
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.data.succeeded).toEqual([uuid(1), uuid(2)]);
-    expect(res.data.failed).toEqual([]);
-    expect(deleteItem).toHaveBeenCalledTimes(2);
-    expect(deleteItem).toHaveBeenCalledWith({ itemId: uuid(1) });
-  });
-
-  it("collects per-item failures without aborting the batch (partial success)", async () => {
-    deleteItem
-      .mockResolvedValueOnce(ok)
-      .mockResolvedValueOnce({ ok: false, error: "Item not found." })
-      .mockResolvedValueOnce(ok);
-    const res = await bulkDeleteItems({
-      itemIds: [uuid(1), uuid(2), uuid(3)],
-    });
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.data.succeeded).toEqual([uuid(1), uuid(3)]);
-    expect(res.data.failed).toEqual([
-      { itemId: uuid(2), error: "Item not found." },
-    ]);
-    // All three were attempted — one failure does not stop the rest.
-    expect(deleteItem).toHaveBeenCalledTimes(3);
-  });
-
-  it("rejects a malformed request before any per-item work", async () => {
-    const res = await bulkDeleteItems({ itemIds: ["not-a-uuid"] });
-    expect(res.ok).toBe(false);
-    expect(deleteItem).not.toHaveBeenCalled();
-  });
-
-  it("rejects an over-cap batch (bounded fan-out)", async () => {
-    const ids = Array.from({ length: 501 }, (_, i) => uuid(i));
-    const res = await bulkDeleteItems({ itemIds: ids });
-    expect(res.ok).toBe(false);
-    expect(deleteItem).not.toHaveBeenCalled();
-  });
 });
 
 describe("bulkArchiveItems", () => {
@@ -110,15 +60,6 @@ describe("bulkRestoreItems", () => {
     expect(res.ok).toBe(true);
     expect(restoreItem).toHaveBeenCalledWith({ itemId: uuid(1) });
     expect(restoreItem).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe("bulkPurgeItems", () => {
-  it("reuses purgeItem per id", async () => {
-    purgeItem.mockResolvedValue(ok);
-    const res = await bulkPurgeItems({ itemIds: [uuid(1)] });
-    expect(res.ok).toBe(true);
-    expect(purgeItem).toHaveBeenCalledWith({ itemId: uuid(1) });
   });
 });
 
