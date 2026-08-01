@@ -7,7 +7,7 @@ import {
   AiDisabledError,
   ByoKeyMissingError,
 } from "@/lib/ai/errors";
-import { resolveUserAdapterById } from "@/lib/ai/credentials";
+import { resolveUserAdapterById, asTrustedUserId } from "@/lib/ai/credentials";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { getAdapter } from "@/lib/ai/providers/registry";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
@@ -74,8 +74,19 @@ export async function resolveAiAdapter(
     // the ledger. Credential resolution and ledger attribution therefore
     // always agree by construction — never resolve a different id here than
     // the one passed to runAi's `userId`.
+    //
+    // TRUST: `asTrustedUserId(userId)` is safe HERE because every caller of
+    // this function is itself either (a) a Server Action/route that derived
+    // `userId` from its own `requireUser()` session before ever calling
+    // runAi/resolveAiAdapter, or (b) a service-role cron handler (e.g.
+    // personal-agent's route.ts) that derived it from an HMAC-verified
+    // request's own DB row (`agent.owner_id`), never from a request
+    // parameter passed straight through. This is the ONE call site allowed
+    // to mint a TrustedUserId — see credentials.ts for what that buys.
     case "per_user": {
-      const { adapter, apiKey } = await resolveUserAdapterById(userId);
+      const { adapter, apiKey } = await resolveUserAdapterById(
+        asTrustedUserId(userId),
+      );
       return { adapter, apiKey, mode: "per_user", provider: adapter.id };
     }
   }

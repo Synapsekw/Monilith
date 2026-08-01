@@ -11,7 +11,8 @@ import { MODEL } from "@/lib/ai/providers/anthropic";
 import {
   AiDisabledError,
   AiQuotaExceededError,
-  AiNotConfiguredError,
+  PersonalAiKeyMissingError,
+  ByoKeyMissingError,
 } from "@/lib/ai/errors";
 import { getUserAgentById, findUserAgentRun } from "@/lib/agents/agents-db";
 import { getAgentOwnerClient } from "@/lib/agents/owner-client";
@@ -245,11 +246,17 @@ export async function POST(req: Request): Promise<Response> {
       fireDate,
     );
 
-    // 7. Summarise (metered), then send. A missing key for the owner
-    //    (per_user mode, nothing on file) is a CONFIGURATION state, not a
-    //    fault — caught separately from the generic error path below so it
-    //    lands in `user_agent_runs` as "skipped" with a clear reason,
-    //    distinguishable from a real failure in the run history.
+    // 7. Summarise (metered), then send. Two distinct "no key" states are
+    //    CONFIGURATION states, not faults, and are caught separately from the
+    //    generic error path below so they land in `user_agent_runs` as
+    //    "skipped" with a clear reason:
+    //      - PersonalAiKeyMissingError: the owner has no per_user key on file.
+    //      - ByoKeyMissingError: the org's org_byo mode has no vault secret.
+    //    Deliberately NOT caught here: a plain (non-Personal) AiNotConfiguredError
+    //    — e.g. `managed` mode's platform ANTHROPIC_API_KEY missing — is an
+    //    OPERATIONAL fault (nobody but ops can fix it, and it silently kills
+    //    every briefing in the org every day), so it falls through to the
+    //    generic catch below and is recorded as "error", not "skipped".
     let result: BriefingSummary;
     try {
       result = await runAi(
@@ -264,10 +271,13 @@ export async function POST(req: Request): Promise<Response> {
         },
       );
     } catch (e) {
-      if (e instanceof AiNotConfiguredError) {
+      if (
+        e instanceof PersonalAiKeyMissingError ||
+        e instanceof ByoKeyMissingError
+      ) {
         await safeFinalize(svc, key, {
           status: "skipped",
-          error: `No AI key on file for this agent's owner (${e.message})`,
+          error: `AI not configured for this run (${e.message})`,
         });
         return NextResponse.json({ status: "skipped", reason: "no_key" });
       }

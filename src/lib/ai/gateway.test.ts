@@ -12,6 +12,7 @@ vi.mock("@/lib/supabase/service", () => ({
 const resolveUserAdapterById = vi.fn();
 vi.mock("@/lib/ai/credentials", () => ({
   resolveUserAdapterById: (...a: unknown[]) => resolveUserAdapterById(...a),
+  asTrustedUserId: (id: string) => id,
 }));
 
 vi.mock("@/lib/env.server", () => ({
@@ -121,14 +122,31 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     expect(resolveUserAdapterById).toHaveBeenCalledWith("user-42");
   });
 
-  it("per_user with no key on file → AiNotConfiguredError (a config state runAi callers can catch, not a raw crash)", async () => {
+  it("per_user with no key on file → PersonalAiKeyMissingError (a per-user config state runAi callers can catch, not a raw crash)", async () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
-    const { AiNotConfiguredError } = await import("@/lib/ai/errors");
-    resolveUserAdapterById.mockRejectedValue(new AiNotConfiguredError());
+    const { AiNotConfiguredError, PersonalAiKeyMissingError } =
+      await import("@/lib/ai/errors");
+    resolveUserAdapterById.mockRejectedValue(new PersonalAiKeyMissingError());
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
     await expect(resolveAiAdapter("org-1", "user-42")).rejects.toBeInstanceOf(
-      AiNotConfiguredError,
+      PersonalAiKeyMissingError,
     );
+    // Still catchable by every existing `instanceof AiNotConfiguredError`
+    // check (mapAiError, interactive action call sites) — this is a strict
+    // narrowing, not a breaking change to that contract.
+    await expect(
+      resolveAiAdapter("org-1", "user-42").catch((e) => e),
+    ).resolves.toBeInstanceOf(AiNotConfiguredError);
+  });
+
+  it("managed with a missing platform key stays a plain AiNotConfiguredError, NOT the narrower per-user subtype", async () => {
+    settingsRow("managed");
+    const { AiNotConfiguredError, PersonalAiKeyMissingError } =
+      await import("@/lib/ai/errors");
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    const err = await resolveAiAdapter("org-1", "user-1").catch((e) => e);
+    expect(err).toBeInstanceOf(AiNotConfiguredError);
+    expect(err).not.toBeInstanceOf(PersonalAiKeyMissingError);
   });
 });
 

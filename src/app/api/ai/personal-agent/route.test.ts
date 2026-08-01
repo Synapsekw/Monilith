@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { signBody } from "@/lib/ai/agentic/hmac";
-import { AiDisabledError, AiNotConfiguredError } from "@/lib/ai/errors";
+import {
+  AiDisabledError,
+  AiNotConfiguredError,
+  PersonalAiKeyMissingError,
+  ByoKeyMissingError,
+} from "@/lib/ai/errors";
 
 const SECRET = "test-secret";
 const ORG = "00000000-0000-4000-8000-0000000000f1";
@@ -303,10 +308,10 @@ describe("POST /api/ai/personal-agent", () => {
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 
-  // ── Gap 1: a missing per-user AI key is a config state, not a fault ────
-  it("finalizes as skipped (not error) when the owner has no AI key on file", async () => {
+  // ── Gap 1 / I1: a missing PER-USER AI key is a config state, not a fault ─
+  it("finalizes as skipped (not error) when the owner has no AI key on file (per_user mode)", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
-    runAi.mockRejectedValue(new AiNotConfiguredError());
+    runAi.mockRejectedValue(new PersonalAiKeyMissingError());
 
     const res = await POST(post(slot));
 
@@ -318,10 +323,42 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runInserts).toHaveLength(1);
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
-    expect((runUpdates[0]!.patch.error as string).toLowerCase()).toContain(
-      "no ai key",
-    );
     // Never emails/records a "ran" outcome off an unconfigured key.
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // ── M2: an org_byo org with no vault secret is the same kind of config
+  //       state as a missing personal key — also skipped, not a 500. ──────
+  it("finalizes as skipped (not error) when the org's org_byo key is missing", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    runAi.mockRejectedValue(new ByoKeyMissingError());
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      status: "skipped",
+      reason: "no_key",
+    });
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // ── I1: a PLATFORM-wide AiNotConfiguredError (e.g. managed mode's
+  //       ANTHROPIC_API_KEY missing) must NOT be silently skipped — nobody
+  //       but ops can fix it, and a "skipped" row never pages anyone. ──────
+  it("finalizes as ERROR (not skipped) on a platform-wide AiNotConfiguredError, distinct from the per-user/org_byo config states above", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    // Deliberately the base class, NOT PersonalAiKeyMissingError — this is
+    // what gateway.ts's `managed` branch throws when ANTHROPIC_API_KEY is
+    // absent, which is a distinct failure mode from a per-user missing key.
+    runAi.mockRejectedValue(new AiNotConfiguredError());
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(500);
+    expect(runUpdates).toHaveLength(1);
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "error" });
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 

@@ -7,6 +7,26 @@ export class AiNotConfiguredError extends Error {
   }
 }
 
+/**
+ * Narrower than AiNotConfiguredError: specifically "the given user has no
+ * stored `user_ai_credentials` row" (`ai_mode = 'per_user'`) — as opposed to
+ * a platform `ANTHROPIC_API_KEY` misconfiguration (`ai_mode = 'managed'`),
+ * which stays a plain AiNotConfiguredError. Extends AiNotConfiguredError so
+ * every existing `instanceof AiNotConfiguredError` catch (mapAiError, the
+ * interactive action call sites) still matches unchanged for BOTH causes —
+ * this only adds a strictly narrower check for unattended callers (like the
+ * personal-agent cron route) that must tell "a person needs to add their own
+ * key" (a benign, per-user config state safe to record as a silent `skipped`
+ * run) apart from "the platform is misconfigured" (an operational fault that
+ * must surface as an `error`, because nobody else will ever see it).
+ */
+export class PersonalAiKeyMissingError extends AiNotConfiguredError {
+  constructor() {
+    super();
+    this.name = "PersonalAiKeyMissingError";
+  }
+}
+
 /** org_ai_settings.ai_mode = 'off'. */
 export class AiDisabledError extends Error {
   constructor() {
