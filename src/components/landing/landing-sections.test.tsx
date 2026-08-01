@@ -5,9 +5,13 @@ import { LandingSections } from "./landing-sections";
 describe("LandingSections", () => {
   it("renders the core marketing sections", () => {
     render(<LandingSections />);
-    expect(screen.getByText("This is your workspace.")).toBeInTheDocument();
-    expect(screen.getByText("Everything, on one surface.")).toBeInTheDocument();
-    expect(screen.getByText("Switch how you see it.")).toBeInTheDocument();
+    expect(
+      screen.getByText("The workspace thinks with you."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Agents you can actually let in."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("One dataset. Every angle.")).toBeInTheDocument();
     expect(
       screen.getByText("And all the connective tissue."),
     ).toBeInTheDocument();
@@ -39,6 +43,25 @@ describe("LandingSections", () => {
     expect(
       screen.getByRole("button", { name: "Request access" }),
     ).toBeInTheDocument();
+  });
+
+  it("answers the questions a visitor actually has", () => {
+    render(<LandingSections />);
+    expect(
+      screen.getByText("The things people actually ask."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Can an agent see data I can't?"),
+    ).toBeInTheDocument();
+  });
+
+  // No section may carry its own background: a per-section background draws a
+  // boundary, and stacked boundaries are what made this read as grey slabs.
+  // The page has one continuous wash instead.
+  it("renders no section-level background slabs", () => {
+    const { container } = render(<LandingSections />);
+    expect(container.querySelectorAll("section.bg-surface")).toHaveLength(0);
+    expect(container.querySelectorAll("section.border-y")).toHaveLength(0);
   });
 
   it("signed in: the CTA opens the app", () => {

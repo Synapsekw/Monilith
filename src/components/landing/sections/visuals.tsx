@@ -1,20 +1,4 @@
-import {
-  Bell,
-  Boxes,
-  Bot,
-  GitBranch,
-  History,
-  Layers,
-  ListChecks,
-  MessagesSquare,
-  Paperclip,
-  Plug,
-  Shield,
-  Sparkles,
-  TabletSmartphone,
-  Webhook,
-  Zap,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AskAiMark } from "@/components/brand/ask-ai-mark";
 import { WindowFrame } from "../landing-mocks";
@@ -28,9 +12,9 @@ import {
 } from "./primitives";
 
 /**
- * The framed product visuals for the landing feature sections, plus the
- * capability grid. Split out of `landing-sections.tsx` at the 800-line
- * `max-lines` tripwire; the primitives they compose live in `./primitives`.
+ * The framed product visuals for the landing feature sections. Split out of
+ * `landing-sections.tsx` at the 800-line `max-lines` tripwire; the primitives
+ * they compose live in `./primitives`.
  */
 
 export function AutomationsVisual() {
@@ -181,124 +165,5 @@ export function DashboardVisual() {
         </div>
       </div>
     </WindowFrame>
-  );
-}
-
-const CAPABILITIES: {
-  category: string;
-  title: string;
-  body: string;
-  icon: typeof Layers;
-}[] = [
-  {
-    category: "Structure",
-    title: "Custom fields & statuses",
-    body: "Model any workflow with typed columns and your own status sets.",
-    icon: Layers,
-  },
-  {
-    category: "Structure",
-    title: "Subitems & checklists",
-    body: "Break work down without ever leaving the row.",
-    icon: ListChecks,
-  },
-  {
-    category: "Structure",
-    title: "Relations & mirror columns",
-    body: "Link boards and pull live values across them, with aggregation.",
-    icon: GitBranch,
-  },
-  {
-    category: "Structure",
-    title: "Board templates",
-    body: "Spin up a proven structure in a single click.",
-    icon: Boxes,
-  },
-  {
-    category: "Collaborate",
-    title: "Updates & @mentions",
-    body: "Discuss in context, loop people in, keep the thread on the item.",
-    icon: MessagesSquare,
-  },
-  {
-    category: "Collaborate",
-    title: "Notifications inbox",
-    body: "One place for everything that actually needs you.",
-    icon: Bell,
-  },
-  {
-    category: "Collaborate",
-    title: "Activity log",
-    body: "Every change, attributed and timestamped — humans and agents alike.",
-    icon: History,
-  },
-  {
-    category: "Collaborate",
-    title: "File attachments",
-    body: "Drop files on any item and preview them inline.",
-    icon: Paperclip,
-  },
-  {
-    category: "Platform",
-    title: "Org-scoped security",
-    body: "Row-level isolation by default. Your data never crosses tenants.",
-    icon: Shield,
-  },
-  {
-    category: "Platform",
-    title: "Realtime presence & sync",
-    body: "See who's here and every edit the moment it lands.",
-    icon: Zap,
-  },
-  {
-    category: "Platform",
-    title: "Board agents",
-    body: "Scheduled agents that watch a board and propose the next move.",
-    icon: Bot,
-  },
-  {
-    category: "Platform",
-    title: "MCP server",
-    body: "Connect your own AI client and work the same data over MCP.",
-    icon: Plug,
-  },
-  {
-    category: "Platform",
-    title: "iPad & touch ready",
-    body: "Full drag-and-drop and inline editing on touch.",
-    icon: TabletSmartphone,
-  },
-  {
-    category: "Platform",
-    title: "Webhooks & API",
-    body: "Push events out to the tools you already run.",
-    icon: Webhook,
-  },
-];
-
-export function CapabilityGrid() {
-  return (
-    <div className="mt-11 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-      {CAPABILITIES.map((cap) => {
-        const Icon = cap.icon;
-        return (
-          <div
-            key={cap.title}
-            className="bg-surface border-border hover:border-border-hover rounded-lg border p-4 transition-colors"
-          >
-            <div className="text-kicker mb-3 flex items-center gap-2 font-mono text-[9px] tracking-[0.12em] uppercase">
-              <Icon className="size-3.5" aria-hidden="true" />
-              {cap.category}
-            </div>
-            <h4 className="mb-1.5 text-sm font-bold tracking-tight">
-              {cap.title}
-            </h4>
-            <p className="text-muted-foreground text-[12.5px] leading-relaxed">
-              {cap.body}
-            </p>
-          </div>
-        );
-      })}
-    </div>
   );
 }

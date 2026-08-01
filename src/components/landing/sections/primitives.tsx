@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import type { Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Kicker } from "@/components/ui/kicker";
 import type { StatusColor } from "@/components/ui/status-pill";
@@ -245,31 +244,5 @@ export function BentoTile({
         </div>
       </div>
     </LandingReveal>
-  );
-}
-
-/**
- * Compact icon card for the "Plan & manage" cluster: a periwinkle-tinted icon
- * chip, a bold title, and a one-liner. No mock — pure, quiet, three-up.
- */
-export function MiniFeatureCard({
-  icon: Icon,
-  title,
-  body,
-}: {
-  icon: typeof Target;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="bg-surface-muted border-border ease-keystone hover:border-border-hover flex h-full flex-col rounded-lg border p-5 transition-[transform,border-color] duration-300 hover:-translate-y-1">
-      <div className="bg-primary/10 text-primary mb-4 inline-flex size-9 items-center justify-center rounded-lg">
-        <Icon className="size-[18px]" aria-hidden="true" />
-      </div>
-      <h4 className="mb-1.5 text-[15px] font-bold tracking-tight">{title}</h4>
-      <p className="text-muted-foreground text-[13.5px] leading-relaxed">
-        {body}
-      </p>
-    </div>
   );
 }

@@ -66,23 +66,27 @@ describe("MonolithHero", () => {
     );
   });
 
-  it("logged out: hero CTAs link to both /signup and /login", () => {
+  // The entry points live in the nav ONLY. Repeating them under the subcopy
+  // was the same links a few hundred pixels lower; exactly one of each must
+  // exist, or the duplicate has crept back in.
+  it("logged out: exactly one Get started and one Sign in, both in the nav", () => {
     render(<MonolithHero />);
-    const ctas = screen.getAllByRole("link", { name: "Get started" });
-    // One in the nav, one in the hero — both to /signup.
-    expect(ctas).toHaveLength(2);
-    for (const cta of ctas) expect(cta).toHaveAttribute("href", "/signup");
+    const nav = screen.getByRole("banner");
 
-    const signIns = screen.getAllByRole("link", { name: "Sign in" });
-    expect(signIns).toHaveLength(2);
-    for (const link of signIns) expect(link).toHaveAttribute("href", "/login");
+    const cta = screen.getByRole("link", { name: "Get started" });
+    expect(cta).toHaveAttribute("href", "/signup");
+    expect(nav).toContainElement(cta);
+
+    const signIn = screen.getByRole("link", { name: "Sign in" });
+    expect(signIn).toHaveAttribute("href", "/login");
+    expect(nav).toContainElement(signIn);
   });
 
-  it("signed in: nav and hero both offer a single Enter app path", () => {
+  it("signed in: exactly one Enter app, in the nav", () => {
     render(<MonolithHero signedIn />);
-    const enter = screen.getAllByRole("link", { name: "Enter app" });
-    expect(enter).toHaveLength(2);
-    for (const link of enter) expect(link).toHaveAttribute("href", "/");
+    const enter = screen.getByRole("link", { name: "Enter app" });
+    expect(enter).toHaveAttribute("href", "/");
+    expect(screen.getByRole("banner")).toContainElement(enter);
     expect(
       screen.queryByRole("link", { name: "Get started" }),
     ).not.toBeInTheDocument();
