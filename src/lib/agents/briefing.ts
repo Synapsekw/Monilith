@@ -5,6 +5,7 @@ import {
   bucketMyWork,
   type MyWorkItem,
   type MyWorkGroup,
+  type DueBucket,
 } from "@/lib/my-work/bucket";
 import { MY_WORK_ITEM_LIMIT } from "@/lib/my-work/queries";
 import type { BoardScope } from "./agent-config";
@@ -59,7 +60,7 @@ export async function buildBriefing(
   }));
 
   const groups = bucketMyWork(applyBoardScope(items, scope), todayIso);
-  const countOf = (bucket: string) =>
+  const countOf = (bucket: DueBucket) =>
     groups.find((g) => g.bucket === bucket)?.items.length ?? 0;
 
   return {

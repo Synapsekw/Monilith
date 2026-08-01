@@ -53,6 +53,20 @@ describe("buildBriefing", () => {
         status_settings: null,
         due_date: "2026-08-01",
       },
+      {
+        item_id: "c",
+        item_name: "Later this week",
+        board_id: "b1",
+        board_name: "Sprint 24",
+        group_name: null,
+        status_option_id: null,
+        status_settings: null,
+        // 2026-08-01 is a Saturday; with the bucket.ts Monday-start week this
+        // is the only date that falls after today and on/before the week's
+        // end (2026-08-02, per endOfWeek), landing in the "week" bucket
+        // rather than "later".
+        due_date: "2026-08-02",
+      },
     ]);
 
     const brief = await buildBriefing(
@@ -63,6 +77,7 @@ describe("buildBriefing", () => {
 
     expect(brief.totals.overdue).toBe(1);
     expect(brief.totals.today).toBe(1);
+    expect(brief.totals.week).toBe(1);
     expect(brief.today).toBe("2026-08-01");
   });
 
