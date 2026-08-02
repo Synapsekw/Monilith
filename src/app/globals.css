@@ -356,46 +356,63 @@
     /* Disable the macOS trackpad two-finger swipe → browser back/forward
        gesture. Pulse is an app-like surface with horizontally scrolling boards;
        an accidental horizontal overscroll must not navigate away from the
-       current board. Keyboard/back-button history navigation still works. */
-    overscroll-behavior-x: none;
+       current board. Keyboard/back-button history navigation still works.
+       Both axes: vertical rubber-banding otherwise escapes the app frame and
+       reveals the browser canvas behind the wash. */
+    overscroll-behavior: none;
   }
-  /* Light-mode scrollbar — neutral thumb on the page canvas. */
-  html:not(.dark) * {
-    scrollbar-color: oklch(0.82 0 0) transparent;
+  /* Interactive elements get the pointer cursor. Tailwind's preflight leaves
+       buttons on the default arrow and the product only set this ad hoc in 13
+       files, so most of the app showed a text caret over its own controls. */
+  button:not(:disabled),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]) {
+    cursor: pointer;
   }
-  html:not(.dark) ::-webkit-scrollbar {
+  /* Scroll containers reserve their gutter so a list crossing the overflow
+       threshold does not shift content sideways. */
+  * {
+    scrollbar-gutter: stable;
+  }
+
+  /* Thumbs are invisible until the pointer is over the scroller. The 3px
+       transparent border + content-box clip is what makes the thumb read as an
+       inset pill rather than a full-width bar. */
+  ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
-  html:not(.dark) ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
-  html:not(.dark) ::-webkit-scrollbar-thumb {
-    background: oklch(0.82 0 0);
-    border: 2px solid var(--background);
-    border-radius: 6px;
-  }
-  html:not(.dark) ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.72 0 0);
-  }
-  /* Subtle themed scrollbar (ported from the prototype) — track blends into the canvas. */
-  .dark * {
-    scrollbar-color: var(--border) transparent;
-  }
-  .dark ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  .dark ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-thumb {
     background: transparent;
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+    transition: background-color var(--duration-fast) var(--ease-standard);
   }
-  .dark ::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border: 2px solid var(--background);
-    border-radius: 6px;
+  :hover::-webkit-scrollbar-thumb,
+  :focus-within::-webkit-scrollbar-thumb {
+    background: var(--state-active);
+    background-clip: content-box;
   }
-  .dark ::-webkit-scrollbar-thumb:hover {
-    background: var(--input);
+  :hover::-webkit-scrollbar-thumb:hover {
+    background: var(--border-bright);
+    background-clip: content-box;
+  }
+  /* Firefox has no thumb-hover selector; give it the resting alpha directly. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--state-active) transparent;
+    }
   }
   /* Keystone signature: interactive cards lift + hairline brightens on hover. */
   .card-lift {

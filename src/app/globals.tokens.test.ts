@@ -83,3 +83,19 @@ describe("Keystone token contract", () => {
     }
   });
 });
+
+describe("base-layer polish", () => {
+  it("restores the pointer cursor on interactive elements", () => {
+    expect(CSS).toMatch(/button:not\(:disabled\)/);
+    expect(CSS).toContain("cursor: pointer");
+  });
+
+  it("contains overscroll on both axes, not just x", () => {
+    expect(CSS).toContain("overscroll-behavior: none");
+    expect(CSS).not.toContain("overscroll-behavior-x: none");
+  });
+
+  it("reserves the scrollbar gutter so lists do not shift at the overflow threshold", () => {
+    expect(CSS).toContain("scrollbar-gutter: stable");
+  });
+});
