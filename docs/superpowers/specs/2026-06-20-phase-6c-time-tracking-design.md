@@ -23,7 +23,7 @@ related:
 Add a **Time Tracking column kind** (Monday-style): a board column whose cell shows an item's total
 tracked time against an optional estimate, with a live start/stop timer and manual time logging.
 
-The column follows the established Pulse pattern: a new value in the `column_kind` enum + the
+The column follows the established Monolith pattern: a new value in the `column_kind` enum + the
 discriminated-union / per-kind switch (exactly how 6b added its kinds). Its **session data lives in a
 new `time_entries` side table** (the same "derive cell content from a side table" pattern 6b's Files
 column uses for `attachments`), while a small per-item **estimate** rides in the column's
@@ -33,7 +33,7 @@ column uses for `attachments`), while a small per-item **estimate** rides in the
 
 | Decision              | Choice                                                                                      | Rationale                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Attach model          | **Time Tracking column kind** (Monday-style), not a global per-item feature                 | Consistent with Pulse's column architecture and 6a/6b; a global timesheet subsystem is Phase-7-scale and deferred.                    |
+| Attach model          | **Time Tracking column kind** (Monday-style), not a global per-item feature                 | Consistent with Monolith's column architecture and 6a/6b; a global timesheet subsystem is Phase-7-scale and deferred.                 |
 | Session storage       | **New `time_entries` side table**, cell content derived per `(item_id, column_id)`          | Sessions are 1-item-to-many, richer than a scalar — same precedent as 6b's Files column deriving from `attachments`.                  |
 | Estimate storage      | **The column's `cell_values` row** `{ estimateSeconds?: number }` (per item, optional)      | The estimate _is_ a per-(item, column) scalar → it belongs in `cell_values`; the tracked total is always derived from `time_entries`. |
 | Capabilities (v1)     | **Live start/stop timer + manual entry (add / edit / delete)**                              | The two capabilities chosen during brainstorming. Per-person grouped breakdown and per-entry notes deferred.                          |

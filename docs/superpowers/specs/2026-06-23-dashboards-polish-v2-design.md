@@ -100,7 +100,7 @@ One rewritten `ChartWidget` switching on `config.chartType`, mapping `dashboard_
 - **Combo** — `ComposedChart` (`Bar`+`Line`); `comboMap` picks bars vs line; optional dual Y-axis when scales differ.
 - **Donut / Pie** — `PieChart` (`innerRadius` for donut); colors from `series_color`.
 - **Radial / Gauge** — `RadialBarChart`; gauge is Number's `display:'gauge'` (arc vs target).
-- Shared Pulse theming (dark tooltip, muted axes, DB colors, consistent legend) + proper **empty / loading-skeleton / error** states.
+- Shared Monolith theming (dark tooltip, muted axes, DB colors, consistent legend) + proper **empty / loading-skeleton / error** states.
 
 ## 6. Pillar B — Edit drawer + unified config
 

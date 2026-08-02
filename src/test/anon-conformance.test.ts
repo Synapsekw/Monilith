@@ -120,6 +120,31 @@ describe("parsePublicTableNames", () => {
       /Tables/,
     );
   });
+
+  it("parses a CRLF source identically to LF", () => {
+    // A Windows checkout without .gitattributes hands this parser CRLF. Every
+    // pattern here is `$`-anchored, so a trailing \r defeats all of them and
+    // the whole conformance probe dies on a line-ending difference rather than
+    // a real security regression.
+    const lf = `export type Database = {
+  public: {
+    Tables: {
+      organizations: {
+        Row: {
+          id: string;
+        };
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+  };
+};`;
+    expect(parsePublicTableNames(lf.replace(/\n/g, "\r\n"))).toEqual(
+      parsePublicTableNames(lf),
+    );
+    expect(parsePublicTableNames(lf)).toEqual(["organizations"]);
+  });
 });
 
 describe("classifyFunctionProbe", () => {

@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-27
-tags: [project/pulse, adr, decision, testing, security, rls, tenancy]
+tags: [project/monolith, adr, decision, testing, security, rls, tenancy]
 related:
   - "[[2026-07-27-decision-30-conformance-probes-third-test-tier]]"
   - "[[2026-07-02-decision-25-no-isolated-test-db-integration-opt-in]]"
@@ -20,7 +20,7 @@ is Tier 2 … Not built."_
 
 Meanwhile all 70 `*.integration.test.ts` suites reported "skipped" on every `pnpm test` run —
 `integrationTargetReady()` wants a privileged key **and** a non-DEV/PROD project, and decision-25
-ruled we will not provision one. Among the never-executed casualties were the two Ask Pulse Phase 2
+ruled we will not provision one. Among the never-executed casualties were the two Ask Monolith Phase 2
 RLS assertions (proposal/outcome traces in `ai_messages.tool_trace`), which shipped in July 2026 and
 had **never once run**.
 
@@ -35,7 +35,7 @@ mutate them, and isolation becomes a read-only assertion — no provisioning, no
 purge, no sacrificial project.
 
 - **Permanent corpus**: two users, two orgs sharing nothing, plus workspaces, boards, groups and
-  Ask Pulse threads (one carrying a Phase-2 `proposedActions` trace). Deterministic UUIDs, seeded by
+  Ask Monolith threads (one carrying a Phase-2 `proposedActions` trace). Deterministic UUIDs, seeded by
   `20260727094033_seed_tier2_tenant_fixtures.sql`.
 - **PROD-safe by construction**: the migration never creates an auth user. Every insert hangs off
   `select id from auth.users where lower(email) = …`, the `20260619210000_seed_platform_admin_info`
@@ -82,7 +82,7 @@ Each policy was dropped afterwards, the stray rows deleted, and the suite verifi
 ## Consequences
 
 - The authenticated half of the boundary now has a standing gate that costs nothing and needs no
-  infrastructure. The two Ask Pulse Phase 2 RLS assertions execute on every `pnpm test`.
+  infrastructure. The two Ask Monolith Phase 2 RLS assertions execute on every `pnpm test`.
 - **`pnpm test` no longer advertises coverage that does not exist.** 70 skipped suites left the
   default run; nothing was deleted.
 - **The corpus is hand-listed, unlike Tier 3's.** Conformance derives its probe set from the

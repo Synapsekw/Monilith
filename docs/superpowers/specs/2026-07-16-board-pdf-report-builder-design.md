@@ -8,7 +8,7 @@
 
 A dedicated, per-board feature that lets a user compose a **saved, reusable report
 configuration** and export it as a polished **PDF**. The report is a light, print-first
-document (white paper, Pulse periwinkle accent) in an **Editorial** visual direction. The
+document (white paper, Monolith periwinkle accent) in an **Editorial** visual direction. The
 board **table renders landscape / all-columns by default**, and the executive summary +
 highlights are **AI-assisted**.
 

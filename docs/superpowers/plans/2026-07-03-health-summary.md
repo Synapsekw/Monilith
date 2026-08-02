@@ -2346,7 +2346,7 @@ T3/T4 fill the wait, and hand T2's SQL over as soon as T1 is confirmed.
 ## Out of scope (from the spec)
 
 - Rule configurability (org/board-level), the "parent needs a sub-item" criterion (vacuous in
-  Pulse — requester follow-up), org-local send times, per-board digest subscriptions, email
+  Monolith — requester follow-up), org-local send times, per-board digest subscriptions, email
   for other notification kinds, AI-wizard support for the health kind.
 - Feedback-row status update (`resolved` + admin response) happens at MVP-item closure per
   the goal plan's definition of done, not in this task.

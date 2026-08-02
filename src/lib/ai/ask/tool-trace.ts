@@ -10,7 +10,7 @@ import {
 
 /** Hard cap on proposals stored (and later executed) for one turn. Mirrors the
  *  `.max(10)` in `executeActions` so the two surfaces cannot diverge. */
-export const MAX_PROPOSED_ACTIONS = 10;
+const MAX_PROPOSED_ACTIONS = 10;
 
 /**
  * Two shapes share one column:

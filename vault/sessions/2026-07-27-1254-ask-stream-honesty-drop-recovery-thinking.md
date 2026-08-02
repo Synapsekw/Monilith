@@ -11,7 +11,7 @@ related:
   - "[[2026-07-27-0659-batch-a-builds-conformance-probes]]"
 ---
 
-# Ask Pulse tells the truth about what it is doing — and GitHub locked us out
+# Ask Monolith tells the truth about what it is doing — and GitHub locked us out
 
 ## What changed
 
@@ -73,7 +73,7 @@ GitHub verification came back and the whole backlog cleared in one pass:
 
 - **A disconnect still destroys the turn** — persistence lives inside the response body's lifetime.
   Decoupling it is the real fix (gotcha-62), unbuilt, and now live in production.
-- **Ask Pulse writes are reachable by real users for the first time.** The confirm-card flow has been
+- **Ask Monolith writes are reachable by real users for the first time.** The confirm-card flow has been
   exercised on DEV only; a prod pass is worth doing deliberately rather than discovering.
 - Worth a cheap confirmation: run the conformance probes against prod
   (`CONFORMANCE_TARGET_URL` + `CONFORMANCE_TARGET_ANON_KEY`).

@@ -845,7 +845,7 @@ EOF
 )"
 ```
 
-**No `Changelog:` trailer on purpose.** The `/updates` page is opt-in and user-facing; this is a hardening control on a machine-to-machine endpoint with no observable change for a Pulse user (a legitimate connect behaves exactly as before). Adding a trailer would publish a non-event and force a `pnpm changelog:gen` round-trip. Do not add one.
+**No `Changelog:` trailer on purpose.** The `/updates` page is opt-in and user-facing; this is a hardening control on a machine-to-machine endpoint with no observable change for a Monolith user (a legitimate connect behaves exactly as before). Adding a trailer would publish a non-event and force a `pnpm changelog:gen` round-trip. Do not add one.
 
 ---
 
@@ -899,11 +899,11 @@ This is an HTTP-level control on a machine-to-machine endpoint, so acceptance is
 
    Then repeat step 1. **Expect:** `201` again.
 
-6. **Confirm existing connectors are unaffected by a throttle.** With the `oauthRegister:ip` bucket still tripped, open Pulse → **Settings → MCP** and run a tool call from an already-connected Claude client.
+6. **Confirm existing connectors are unaffected by a throttle.** With the `oauthRegister:ip` bucket still tripped, open Monolith → **Settings → MCP** and run a tool call from an already-connected Claude client.
 
    **Expect:** it works normally. The limit gates registration only — never an established connection.
 
-7. **Real-client smoke test (once, after promoting to `main`).** Add the Pulse MCP server as a **fresh** custom connector in Claude Desktop or claude.ai and complete the OAuth consent flow.
+7. **Real-client smoke test (once, after promoting to `main`).** Add the Monolith MCP server as a **fresh** custom connector in Claude Desktop or claude.ai and complete the OAuth consent flow.
 
    **Expect:** the first-time connect succeeds on the first attempt with no throttle — this is the check that the headroom in the limits is doing its job.
 

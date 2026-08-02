@@ -26,6 +26,7 @@
 ## Task 1: Validation schema + recipe
 
 **Files:**
+
 - Modify: `src/lib/validations/automations.ts`
 - Test: `src/lib/validations/automations.test.ts`
 - Modify: `src/components/boards/automations/recipes.ts`
@@ -119,6 +120,7 @@ git commit -m "feat(automations): add move_to_group action schema + recipe"
 ## Task 2: Engine — `_automation_run` branch + integration tests
 
 **Files:**
+
 - Create: `supabase/migrations/20260622120000_automation_move_to_group.sql`
 - Test: `src/lib/boards/automations.movegroup.integration.test.ts`
 
@@ -132,14 +134,23 @@ Create `src/lib/boards/automations.movegroup.integration.test.ts`. Mirror the se
 // in beforeAll, after groupAId is resolved — create a target group:
 const { data: g2 } = await admin
   .from("groups")
-  .insert({ org_id: orgAId, board_id: boardAId, name: "Done group", position: 100 })
+  .insert({
+    org_id: orgAId,
+    board_id: boardAId,
+    name: "Done group",
+    position: 100,
+  })
   .select("id")
   .single();
 targetGroupId = (g2 as { id: string }).id;
 
 // helper:
 async function itemGroup(itemId: string): Promise<string | null> {
-  const { data } = await admin.from("items").select("group_id").eq("id", itemId).single();
+  const { data } = await admin
+    .from("items")
+    .select("group_id")
+    .eq("id", itemId)
+    .single();
   return (data as { group_id: string } | null)?.group_id ?? null;
 }
 ```
@@ -150,7 +161,11 @@ Tests (each isolates state via `cleanItemState` / fresh items, like the 5b1 file
 it("status_changed → move_to_group moves the item to the target group", async () => {
   const item = await createFreshItem(); // lands in groupAId
   const autoId = await insertAutomation({
-    trigger: { type: "status_changed", columnId: colSId, toOptionId: optDoneId },
+    trigger: {
+      type: "status_changed",
+      columnId: colSId,
+      toOptionId: optDoneId,
+    },
     actions: [{ type: "move_to_group", groupId: targetGroupId }],
   });
   await setCell(item, colSId, { optionId: optDoneId });
@@ -165,7 +180,11 @@ it("status_changed → move_to_group moves the item to the target group", async 
 it("does not move when the trigger option does not match", async () => {
   const item = await createFreshItem();
   const autoId = await insertAutomation({
-    trigger: { type: "status_changed", columnId: colSId, toOptionId: optDoneId },
+    trigger: {
+      type: "status_changed",
+      columnId: colSId,
+      toOptionId: optDoneId,
+    },
     actions: [{ type: "move_to_group", groupId: targetGroupId }],
   });
   await setCell(item, colSId, { optionId: optWorkingId }); // not Done
@@ -276,6 +295,7 @@ git commit -m "feat(automations): engine move_to_group action + integration test
 **Depends on Task 1** (the `move_to_group` variant must exist on `AutomationAction`).
 
 **Files:**
+
 - Modify: `src/components/boards/automations/AutomationBuilder.tsx`
 - Test: `src/components/boards/automations/AutomationBuilder.test.tsx`
 - Modify: `src/components/boards/automations/AutomationsDialog.tsx`
@@ -339,6 +359,7 @@ export type BuilderGroup = { id: string; name: string };
 ```ts
   groups = [],
 ```
+
 ```ts
   groups?: BuilderGroup[];
 ```
@@ -350,20 +371,20 @@ In `AutomationBuilder.tsx`:
 1. In `isActionComplete`, before the final `return`:
 
 ```ts
-  if (a.type === "move_to_group") {
-    return !!a.groupId;
-  }
+if (a.type === "move_to_group") {
+  return !!a.groupId;
+}
 ```
 
 2. Add an add-handler near `addSetOption`:
 
 ```ts
-  function addMoveToGroup() {
-    setActions((prev) => [
-      ...prev,
-      { _id: nextId(), type: "move_to_group", groupId: "" },
-    ]);
-  }
+function addMoveToGroup() {
+  setActions((prev) => [
+    ...prev,
+    { _id: nextId(), type: "move_to_group", groupId: "" },
+  ]);
+}
 ```
 
 3. In the action-row render switch (the `action.type === "notify" ? ... : ...` chain), add a branch for `move_to_group` that renders a new `MoveToGroupRow` with `groups`, `action`, and `onChange={(next) => updateAction(action._id, next)}`. (The existing fallthrough is `SetOptionRow`; add an explicit `action.type === "move_to_group"` branch before it.)
@@ -371,9 +392,9 @@ In `AutomationBuilder.tsx`:
 4. Add a "Move to group" button in the "Then" toolbar next to "Set a column":
 
 ```tsx
-          <Button type="button" variant="outline" size="sm" onClick={addMoveToGroup}>
-            <Plus className="size-3.5" /> Move to group
-          </Button>
+<Button type="button" variant="outline" size="sm" onClick={addMoveToGroup}>
+  <Plus className="size-3.5" /> Move to group
+</Button>
 ```
 
 5. Add the `MoveToGroupRow` component (mirror `SetOptionRow`):
@@ -444,9 +465,9 @@ function groupName(groups: BuilderGroup[], id: string): string {
 3. Thread `groups` into `summarize(rule, columns, members, groups)` and add a clause in the `thens` map:
 
 ```ts
-    if (a.type === "move_to_group") {
-      return `move to ${groupName(groups, a.groupId)}`;
-    }
+if (a.type === "move_to_group") {
+  return `move to ${groupName(groups, a.groupId)}`;
+}
 ```
 
 (Update the `summarize` call site to pass `groups`.)

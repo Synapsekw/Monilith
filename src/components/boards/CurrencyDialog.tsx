@@ -28,7 +28,7 @@ const RECENT_KEY = "pulse.currency.recent";
 const RECENT_MAX = 3;
 
 /** Last-picked codes, newest first. Per-device (localStorage); [] when unavailable. */
-export function readRecentCurrencies(): CurrencyCode[] {
+function readRecentCurrencies(): CurrencyCode[] {
   try {
     const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as unknown;
     return Array.isArray(raw)
@@ -39,7 +39,7 @@ export function readRecentCurrencies(): CurrencyCode[] {
   }
 }
 
-export function pushRecentCurrency(code: CurrencyCode): void {
+function pushRecentCurrency(code: CurrencyCode): void {
   try {
     const next = [code, ...readRecentCurrencies().filter((c) => c !== code)];
     localStorage.setItem(RECENT_KEY, JSON.stringify(next.slice(0, RECENT_MAX)));

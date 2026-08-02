@@ -124,6 +124,7 @@ obsidian daily:path                      # Print vault-relative path of today's 
 ```
 
 **Notes:**
+
 - `daily:prepend` inserts content after the frontmatter block, not at the very beginning.
 - If today's note doesn't exist, `daily` will create it (using the configured template if set).
 - Daily note format/folder are configured in Obsidian's Daily Notes plugin settings.
@@ -144,6 +145,7 @@ obsidian search query="text" case                   # Case-sensitive search
 ```
 
 **Parameters:**
+
 - `query=` — Search term (required)
 - `path=` — Restrict search to a folder
 - `limit=` — Maximum number of results
@@ -229,6 +231,7 @@ obsidian tag name="project/alpha"      # List notes with a specific tag
 ```
 
 **Notes:**
+
 - Nested tags are supported (e.g., `project/alpha`).
 - Tags from both frontmatter and inline `#tag` syntax are included.
 
@@ -302,6 +305,7 @@ obsidian template:insert name="weekly-review"           # Insert template into t
 ```
 
 **Parameters:**
+
 - `name=` — Template name (without path prefix or extension)
 - `resolve` — Process template variables (`{{date}}`, `{{title}}`, etc.)
 - Title and other variables can be passed as `key=value` for template rendering.
@@ -575,16 +579,16 @@ The CLI outputs plain text by default, ideal for piping into Unix tools.
 
 ### Supported `format=` values
 
-| Format | Description | Best for |
-|---|---|---|
-| `text` | Plain text (default) | Piping to grep/awk/sed |
-| `json` | JSON array or object | Processing with jq, AI agents |
-| `csv` | Comma-separated values | Spreadsheet import |
-| `tsv` | Tab-separated values | Shell parsing with cut/awk |
-| `yaml` | YAML output | Config-style processing |
-| `md` | Markdown table | Embedding results in notes |
-| `paths` | One path per line | Batch file operations |
-| `tree` | Tree view | Visual hierarchy |
+| Format  | Description            | Best for                      |
+| ------- | ---------------------- | ----------------------------- |
+| `text`  | Plain text (default)   | Piping to grep/awk/sed        |
+| `json`  | JSON array or object   | Processing with jq, AI agents |
+| `csv`   | Comma-separated values | Spreadsheet import            |
+| `tsv`   | Tab-separated values   | Shell parsing with cut/awk    |
+| `yaml`  | YAML output            | Config-style processing       |
+| `md`    | Markdown table         | Embedding results in notes    |
+| `paths` | One path per line      | Batch file operations         |
+| `tree`  | Tree view              | Visual hierarchy              |
 
 Not all formats are supported by every command. Use `text` or `json` when in doubt.
 

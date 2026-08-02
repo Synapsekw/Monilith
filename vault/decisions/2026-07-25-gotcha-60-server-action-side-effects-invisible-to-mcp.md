@@ -3,7 +3,15 @@ type: adr
 status: accepted
 date: 2026-07-25
 tags:
-  [project/pulse, adr, gotcha, mcp, server-actions, notifications, architecture]
+  [
+    project/monolith,
+    adr,
+    gotcha,
+    mcp,
+    server-actions,
+    notifications,
+    architecture,
+  ]
 related:
   - "[[2026-07-25-1620-group-1-closeout-security-and-deletion]]"
   - "[[2026-07-24-1950-mcp-server-oauth]]"
@@ -13,7 +21,7 @@ related:
 
 ## Context
 
-Pulse writes a cell value through `upsertCell` in `src/lib/boards/actions/cell.ts`. That function
+Monolith writes a cell value through `upsertCell` in `src/lib/boards/actions/cell.ts`. That function
 does two conceptually different things:
 
 1. **The write** — four validation guards plus the `cell_values` upsert.
@@ -30,7 +38,7 @@ guards and the upsert while **dropping the notification fan-out entirely**.
 The result is a behavioral fork that no test caught and no type error flagged:
 
 - "Assign Sarah to this task" via Claude Desktop **assigns Sarah and never notifies her**.
-- The identical edit in the Pulse UI **does** notify her.
+- The identical edit in the Monolith UI **does** notify her.
 
 Confirmed three ways during the 2026-07-25 MCP dedupe work: `people` is a live column kind and
 `cellValueSchema("people")` accepts `{userIds: […]}`, so MCP can write those cells today;

@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-25
-tags: [project/pulse, adr, gotcha, supabase, migrations, sync-prod, security]
+tags: [project/monolith, adr, gotcha, supabase, migrations, sync-prod, security]
 related:
   - "[[2026-07-25-0821-develop-sync-acl-migration-backfill]]"
   - "[[2026-07-11-gotcha-55-mcp-apply-migration-version-drifts-from-committed-file]]"

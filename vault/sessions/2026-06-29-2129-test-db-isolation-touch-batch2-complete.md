@@ -26,7 +26,7 @@ The integration suites re-polluted remote DEV within ~2h of every purge (proven 
 
 ## How to test (for the user)
 
-1. **Test DB (infra):** pull `develop`; with no `.env.test`, `pnpm test` → `~1620 passed | 235 skipped` + `[global-teardown] … skipping purge to protect DEV/PROD`; DEV Auth shows no new `@example.com` users. To run integration against an isolated DB: provision a "Pulse TEST" Supabase project, `supabase link` + `db push` the migrations (relink to DEV after), then add gitignored `.env.test` (URL/anon/service-role + `PULSE_TEST_DB=1`).
+1. **Test DB (infra):** pull `develop`; with no `.env.test`, `pnpm test` → `~1620 passed | 235 skipped` + `[global-teardown] … skipping purge to protect DEV/PROD`; DEV Auth shows no new `@example.com` users. To run integration against an isolated DB: provision a "Monolith TEST" Supabase project, `supabase link` + `db push` the migrations (relink to DEV after), then add gitignored `.env.test` (URL/anon/service-role + `PULSE_TEST_DB=1`).
 2. **Command palette/menus (iPad / DevTools coarse pointer):** ⌘K rows and every dropdown row (incl. checkbox/radio/sub-menu) ≥44px and tappable; desktop/trackpad unchanged (compact).
 3. **Dashboard canvas (iPad / coarse pointer):** Dashboards → open one → **Edit** → widget bottom-right resize grip is visible + finger-sized (44px), drag resizes + persists, page doesn't scroll; nav-rail dashboard `⋯` menu visible without hover; **Done** hides grips; desktop unchanged.
 

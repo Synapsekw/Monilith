@@ -1,11 +1,11 @@
-# Pulse — Documentation
+# Monolith — Documentation
 
-Start here. This is the map of Pulse's documentation for contributors (human and AI). It does
+Start here. This is the map of Monolith's documentation for contributors (human and AI). It does
 not duplicate content — it points to the canonical home of each topic.
 
 ## The two-layer model
 
-Pulse keeps documentation in two complementary places:
+Monolith keeps documentation in two complementary places:
 
 - **`docs/`** (this tree) — the **front door**: the product requirements (PRD), the master
   design spec, and per-phase specs/plans. Browsable on GitHub with standard Markdown links.

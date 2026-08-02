@@ -17,7 +17,7 @@ import {
 import { Kicker } from "@/components/ui/kicker";
 import { EventBar } from "./EventBar";
 
-export const MONTH_LANE_CAP = 3;
+const MONTH_LANE_CAP = 3;
 
 type CellMap = Map<string, BoardCache["cellValues"][number]["value"]>;
 

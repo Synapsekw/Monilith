@@ -35,7 +35,7 @@ Two aggravating factors:
 - No change to the confirm-card / execute path (`ActionConfirmCard`,
   `executeActions`, `executeAction`) beyond how it is reached.
 - Not a general chat assistant — this is scoped to resolving one write command.
-  Ask Pulse (F5) remains the conversational read surface.
+  Ask Monolith (F5) remains the conversational read surface.
 - No persistence of conversations across palette open/close — the transcript
   lives only for the life of the open palette.
 
@@ -120,7 +120,7 @@ questions." Keeps the existing "don't propose when ambiguous" rule.
 
 While a turn is pending:
 
-- An animated **"Pulse is working…"** row (pulsing dots) renders in the transcript
+- An animated **"Monolith is working…"** row (pulsing dots) renders in the transcript
   where the next answer will appear.
 - The reply box is disabled; the submit button shows a spinner + "Working…".
 - On error (timeout / quota / provider), that row is replaced by a clear error

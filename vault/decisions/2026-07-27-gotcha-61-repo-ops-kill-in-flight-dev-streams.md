@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-27
-tags: [project/pulse, adr, gotcha, worktrees, streaming, ai]
+tags: [project/monolith, adr, gotcha, worktrees, streaming, ai]
 related:
   - "[[2026-07-27-0659-batch-a-builds-conformance-probes]]"
   - "[[2026-07-25-gotcha-58-playwright-reuses-port-3000-server]]"
@@ -13,7 +13,7 @@ related:
 ## Context
 
 Mid-session the user reported "nothing happening, AI is not replying" on `/ask`. The obvious suspect
-was the Ask Pulse Phase 2 merge, which had landed hours earlier and changed the streaming loop.
+was the Ask Monolith Phase 2 merge, which had landed hours earlier and changed the streaming loop.
 
 It was not the merge. The evidence, gathered read-only:
 

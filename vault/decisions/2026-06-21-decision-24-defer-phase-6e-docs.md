@@ -30,7 +30,7 @@ slice and needs a new rich-text editor dependency (TipTap/Lexical).
 - **Too complex for current value.** The full ClickUp-Docs experience (rich blocks, real-time
   collaborative editing, presence, comments-in-doc, import/export) is a large surface relative to
   what the product needs right now.
-- **Not fully cloud-native within our architecture.** Pulse's invariant is **Postgres + RLS +
+- **Not fully cloud-native within our architecture.** Monolith's invariant is **Postgres + RLS +
   Server Actions/Storage, no standing non-Supabase infra** (cf. automations "no Edge Functions",
   PDF preview "bucket-only, no third-party egress"). The full Docs feature breaks that:
   collaborative editing realistically needs a **CRDT/OT sync layer** (Yjs + a persistent websocket

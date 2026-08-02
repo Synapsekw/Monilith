@@ -47,7 +47,10 @@ test.describe("Column-summary footer: per-column aggregation", () => {
     const anon = createClient(SUPABASE_URL!, ANON_KEY!, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    await anon.auth.signInWithPassword({ email: testEmail, password: PASSWORD });
+    await anon.auth.signInWithPassword({
+      email: testEmail,
+      password: PASSWORD,
+    });
 
     const { data: org } = await anon.rpc("create_organization", {
       p_name: unique("Org"),

@@ -10,7 +10,7 @@ to an ADR: `vault/decisions/2026-07-25-gotcha-60-server-action-side-effects-invi
 
 ## 1. Problem
 
-Assigning a person to an item through the Pulse UI notifies them. Assigning the same person
+Assigning a person to an item through the Monolith UI notifies them. Assigning the same person
 through MCP (Claude Desktop → `create_item` / `update_item`) assigns them and **notifies nobody**.
 
 `src/lib/boards/actions/cell.ts` → `upsertCell` does two things: the write (four guards + the
@@ -339,7 +339,7 @@ Gates: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
 
 **Manual acceptance (user-facing, so a walkthrough is required at closure):** from Claude Desktop,
 `update_item` assigning a co-member to an item, then confirm the notification bell shows
-"assigned you" for that member in the Pulse UI, and that the same member's notification preference
+"assigned you" for that member in the Monolith UI, and that the same member's notification preference
 opt-out still suppresses it.
 
 ---

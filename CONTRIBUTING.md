@@ -1,6 +1,6 @@
-# Contributing to Pulse
+# Contributing to Monolith
 
-Thanks for working on Pulse. This guide covers the conventions the project enforces.
+Thanks for working on Monolith. This guide covers the conventions the project enforces.
 
 ## Prerequisites
 
@@ -142,6 +142,13 @@ Pre-convention history lives in `src/lib/changelog/seed.ts`.
   because the stamp is copied from the ledger, not invented. `reconcile-migration-version.sh` is the
   _other_ repair (a version label that drifted while the file exists — gotcha-55).
 
+  The check shells out to `psql`, so it needs `psql` on `PATH` — or `PG_BIN` pointing at your
+  PostgreSQL `bin/` in the main checkout's (gitignored) `.env.prod.local`; without either it exits 3
+  and the drift is never checked. `PG_BIN` is one plain directory path, no trailing slash, quoted if
+  it contains spaces. On Windows write the **MSYS form** (`PG_BIN="/c/Program Files/PostgreSQL/17/bin"`):
+  the `scripts/sync-prod/*.sh` scripts run under Git Bash and use it verbatim, while this check
+  converts it to `C:\…` and joins it onto `PATH` with the platform delimiter itself.
+
 - **RLS is the security boundary**: default-deny, org-scoped, no cross-tenant access. Never trust the client.
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach the browser.
 
@@ -174,7 +181,7 @@ can one logged-in tenant reach another's rows? It asserts against **two permanen
 into DEV by `supabase/migrations/20260727094033_seed_tier2_tenant_fixtures.sql` and never mutated,
 so isolation is a **read-only** assertion — sign in as one, ask for the other's rows, expect
 nothing. It covers `organizations`, `org_members`, `workspaces`, `boards`, `groups`, `profiles`,
-`ai_conversations` and `ai_messages`, including the two Ask Pulse Phase 2 `tool_trace` assertions.
+`ai_conversations` and `ai_messages`, including the two Ask Monolith Phase 2 `tool_trace` assertions.
 
 Like the conformance probes, it needs **no test project**:
 
@@ -267,7 +274,7 @@ or PROD.
 runs unit tests only) and the teardown sweeper refuses to purge — so DEV is never polluted. Running
 the integration suites is therefore **opt-in** and requires a one-time test-project setup:
 
-1. **Create a dedicated Supabase project** (e.g. "Pulse TEST") in the dashboard. Note its project
+1. **Create a dedicated Supabase project** (e.g. "Monolith TEST") in the dashboard. Note its project
    ref, URL, anon/publishable key, and service-role key.
 2. **Apply the schema** — the migrations in `supabase/migrations/` are the source of truth:
 

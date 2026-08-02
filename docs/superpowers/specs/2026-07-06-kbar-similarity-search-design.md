@@ -3,7 +3,7 @@ type: spec
 status: awaiting-review
 date: 2026-07-06
 feature: kbar-similarity-search
-tags: [project/pulse, spec, search, command-palette, migration-gated]
+tags: [project/monolith, spec, search, command-palette, migration-gated]
 related:
   - "[[00-north-star]]"
   - "docs/superpowers/plans/2026-07-06-kbar-similarity-search.md"

@@ -6,7 +6,7 @@
 
 **Architecture:** A typed, hand-written changelog data module (`src/lib/changelog/`) feeds a set of static Server Components (`src/components/changelog/`). A new public RSC route `src/app/updates/page.tsx` renders them inside an always-dark, self-contained shell. The landing hero gains a status pill (inside `MonolithScene`) and a footer with an `Updates →` link (inside `MonolithHero`). Everything is fully static — no DB, no data fetching, zero server round-trips on interaction.
 
-**Tech Stack:** Next.js 16 (App Router, RSC), TypeScript (strict), Tailwind v4 + Pulse semantic tokens, framer-motion (existing hero), Vitest + @testing-library/react, lucide-react.
+**Tech Stack:** Next.js 16 (App Router, RSC), TypeScript (strict), Tailwind v4 + Monolith semantic tokens, framer-motion (existing hero), Vitest + @testing-library/react, lucide-react.
 
 **Spec:** `docs/superpowers/specs/2026-06-18-landing-note-and-updates-page-design.md`
 
@@ -14,7 +14,7 @@
 
 - Filenames are **kebab-case** (matches `monolith-hero.tsx`, `app-shell.tsx`). Diverge from Mubarak's PascalCase.
 - Components are **Server Components** (no `"use client"`) — they're all static.
-- Style with **Pulse semantic tokens** only (`bg-surface`, `text-muted-foreground`, `border`, `bg-primary`); no raw Tailwind colors. The hero CSS module keeps its existing fixed dark values (theme-independent surface).
+- Style with **Monolith semantic tokens** only (`bg-surface`, `text-muted-foreground`, `border`, `bg-primary`); no raw Tailwind colors. The hero CSS module keeps its existing fixed dark values (theme-independent surface).
 - Badge palette: `new` → brand accent; `improved`/`fixed` → muted outline. **Not** Mubarak's gold/blue/emerald.
 - All work on `develop`. Commit after each task.
 

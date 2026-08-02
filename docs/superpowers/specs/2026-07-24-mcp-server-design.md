@@ -6,9 +6,9 @@
 
 ## Summary
 
-A hosted **remote MCP server** — a new integration surface on the existing Pulse Next.js
+A hosted **remote MCP server** — a new integration surface on the existing Monolith Next.js
 deployment — that lets AI agents (Claude Desktop, claude.ai custom connectors, Claude Code,
-other MCP-speaking clients) connect as a specific Pulse user and read and write items on
+other MCP-speaking clients) connect as a specific Monolith user and read and write items on
 boards on that user's behalf. This is net-new scope: `docs/prd.md` §6 currently lists
 "third-party integrations marketplace" / "OAuth app registrations" as an explicit non-goal —
 this spec supersedes that line for the MCP use case specifically (agent-as-user, not a
@@ -16,7 +16,7 @@ third-party integrations marketplace).
 
 ## Goals
 
-- An AI agent can connect to Pulse over MCP, authenticate as a real Pulse user via OAuth, and
+- An AI agent can connect to Monolith over MCP, authenticate as a real Monolith user via OAuth, and
   call tools to list boards, read items, create items, and update items.
 - Every tool call is authorized by the **same RLS policies** that protect the app today — no
   service-role bypass, no parallel authorization system to keep in sync.
@@ -51,9 +51,9 @@ Supabase client (see "Auth bridging") before dispatching to a tool handler.
 
 - `POST /api/oauth/register` — dynamic client registration (MCP clients self-register on first
   connect; no manual app-registration step for the user).
-- `GET /api/oauth/authorize` — if the user has no Pulse session, sends them through the
+- `GET /api/oauth/authorize` — if the user has no Monolith session, sends them through the
   **existing Supabase Auth login UI** first; once authenticated, shows a one-time consent
-  screen ("Claude wants to access your Pulse account") and redirects back with an
+  screen ("Claude wants to access your Monolith account") and redirects back with an
   authorization code. PKCE required.
 - `POST /api/oauth/token` — exchanges the code (or a refresh token) for an MCP access token.
 
@@ -135,7 +135,7 @@ consistent with the `ActionResult`/`fail` convention already used by Server Acti
   growing tables; both read over indexed columns already used by the existing board queries.
 - This is a request/response tool-call API, not a UI with tabs/filters/interaction state — the
   "0 new round-trips on in-page toggles" clause doesn't apply; every tool call is inherently a
-  server round-trip by design (an agent asking Pulse for or to change data).
+  server round-trip by design (an agent asking Monolith for or to change data).
 
 ## Risks / things that could invalidate this design
 

@@ -20,7 +20,7 @@ describe("loadStorageEndpoints", () => {
   });
 
   it("throws naming the missing prod var", () => {
-    const { PROD_SUPABASE_SERVICE_ROLE_KEY, ...rest } = valid;
+    const { PROD_SUPABASE_SERVICE_ROLE_KEY: _omitted, ...rest } = valid;
     expect(() => loadStorageEndpoints(rest)).toThrow(
       /PROD_SUPABASE_SERVICE_ROLE_KEY/,
     );

@@ -12,6 +12,7 @@ Implements the locked spec. **TDD throughout** (RED → GREEN per unit). Migrati
 Gate before merge: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
 
 ## Performance budget (carried from spec §4)
+
 0 first-paint round-trips; pick-aggregation = 1 Server Action + optimistic
 `replaceColumn`; cell edit recomputes client-side. Aggregation O(loaded rows),
 memoized per column.
@@ -19,6 +20,7 @@ memoized per column.
 ## Tasks
 
 ### U1 — Validation + aggregation catalogue (ROOT)
+
 - Add `AggregationId` union + `aggregationSchema` and a shared `baseColumnSettingsSchema`
   (`{ summary_aggregation?: AggregationId }`) merged into every per-kind settings schema
   in `src/lib/validations/boards.ts`.
@@ -31,6 +33,7 @@ memoized per column.
   (matrix per kind, mirror delegation).
 
 ### U2 — Aggregation engine
+
 - New pure `src/lib/boards/aggregation.ts`: `aggregate(kind, aggId, values): AggregateResult`
   implementing avg/min/max + the count family, delegating sum/distribution/checked-total/
   time-tracking to the existing `rollupCell` / `rollupTimeTracking` reducers (no
@@ -39,7 +42,8 @@ memoized per column.
 - **Produces:** `aggregate`, `AggregateResult`.
 - Tests: `aggregation.test.ts` — each reducer, null/empty handling, count-unique.
 
-### U3 — FooterCell + aggregation picker UX  ‖ (parallel with U4)
+### U3 — FooterCell + aggregation picker UX ‖ (parallel with U4)
+
 - New `src/components/boards/FooterCell.tsx` generalizing `RollupCell` to render an
   `AggregateResult`; empty when no aggregation chosen.
 - Footer-cell click → popover listing `allowedAggregations(kind)` → calls `updateColumn`
@@ -50,7 +54,8 @@ memoized per column.
 - Tests: `FooterCell.test.tsx` (render per result kind; picker lists correct options;
   optimistic update).
 
-### U4 — Mirror aggregation wiring  ‖ (parallel with U3)
+### U4 — Mirror aggregation wiring ‖ (parallel with U3)
+
 - Resolve a mirror column's footer: flatten `mirrorValuesForCell` across loaded items →
   feed `aggregate(targetKind, aggId, flattened)`. Replace the `mirrorRollup()` placeholder
   usage path; keep `mirror.ts` pure.
@@ -59,6 +64,7 @@ memoized per column.
 - Tests: `mirror.test.ts` — aggregate-of-mirror, multi-link flatten, RLS-null handling.
 
 ### U5 — Footer surface in BoardTable (single writer)
+
 - Render the sticky non-virtualized footer row inside `scrollContainerRef` after the
   `GroupSection`s, reusing `gridTemplate(columns, liveWidths, nameWidth)` + the Name
   freeze tokens (`sticky left-0`, `NAME_FREEZE_EDGE`), z-index 15.
@@ -72,6 +78,7 @@ memoized per column.
   any other BoardTable edit.
 
 ### U6 — e2e + full gate
+
 - Playwright: add a Numbers + a mirror column, pick Sum / target-matrix agg, assert footer
   values; edit a cell, assert footer updates.
 - Run full gate; confirm migration-free (no new files in `supabase/migrations/`,
@@ -91,5 +98,6 @@ U1 ──> U2 ──> ┌─ U3 ─┐
   bottleneck on `BoardTable.tsx`).
 
 ## Out of scope / deferred
+
 Per-group subtotals; non-Table views; server-side aggregation beyond the loaded-row
 bound. F1–F3 defaults per spec §5 — flip on review if desired.

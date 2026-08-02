@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-09
-tags: [project/pulse, adr, gotcha, worktrees, testing, ci]
+tags: [project/monolith, adr, gotcha, worktrees, testing, ci]
 related:
   - "[[2026-07-09-2140-carryover-cleanups-trash-ledger-retire]]"
 ---

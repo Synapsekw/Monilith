@@ -10,7 +10,7 @@
 ## Why this spec exists
 
 The E1 spec designed an **org-scoped** AI foundation (`org_ai_settings`, managed-vs-BYO gateway,
-metering, entitlements, Ask Pulse). What actually shipped to prod (PR#53, `task/byo-ai-keys`) is a
+metering, entitlements, Ask Monolith). What actually shipped to prod (PR#53, `task/byo-ai-keys`) is a
 **per-user, un-metered** BYO key store (`user_ai_credentials` + Vault definer functions) with
 **three provider adapters** (Anthropic/OpenAI/Google) — and dashboard-gen was rewired to resolve
 _only_ the user's personal key: `resolveUserAdapter()` throws `AiNotConfiguredError` when no key is
@@ -19,7 +19,7 @@ stored, and the server `ANTHROPIC_API_KEY` is currently dead code outside a star
 
 This spec reconciles the two so the rest of E1 (and every later epic) builds on one coherent model.
 It is a **delta**: anything the E1 spec defines and this document does not mention **stands as
-specced** (Ask Pulse tool design, error handling, security notes, perf budget, test strategy).
+specced** (Ask Monolith tool design, error handling, security notes, perf budget, test strategy).
 
 ## Reconciliation decisions (locked 2026-07-11)
 
@@ -27,8 +27,8 @@ specced** (Ask Pulse tool design, error handling, security notes, perf budget, t
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Key/entitlement scoping**                    | **Hybrid.** `ai_mode` becomes a four-value enum: `off \| managed \| org_byo \| per_user`. The shipped per-user store is kept and promoted to an explicit, admin-sanctioned mode; org-scoped managed + org-BYO land as planned. One gateway resolves all four.                                                                                                                   |
 | **Default mode**                               | **`per_user`** — for existing _and_ new orgs (a missing `org_ai_settings` row is treated as `per_user`). Preserves current prod behavior exactly: members with a stored key keep working the moment the migration lands. `off` was considered (more conservative sell-to-orgs posture) and rejected because it would break live users. Admins can lock down or upgrade at will. |
-| **Multi-provider stance for agentic features** | **Anthropic-only agentic (v1).** Adapters gain a `supportsTools` capability flag — `true` only for Anthropic. Ask Pulse (and later tool-use features) require a tools-capable resolved adapter; OpenAI/Google keys keep working for dashboard-gen. The Vercel AI SDK abstraction re-opens only if multi-provider agentic becomes a product promise.                             |
-| **Slice scope**                                | **Full E1 in one epic/worktree:** org settings + gateway + `ai_usage` metering + entitlements + Settings/admin UI + Ask Pulse, with dashboard-gen migrated onto the gateway. Matches the original ship-in-2 slice; internally parallelizable.                                                                                                                                   |
+| **Multi-provider stance for agentic features** | **Anthropic-only agentic (v1).** Adapters gain a `supportsTools` capability flag — `true` only for Anthropic. Ask Monolith (and later tool-use features) require a tools-capable resolved adapter; OpenAI/Google keys keep working for dashboard-gen. The Vercel AI SDK abstraction re-opens only if multi-provider agentic becomes a product promise.                          |
+| **Slice scope**                                | **Full E1 in one epic/worktree:** org settings + gateway + `ai_usage` metering + entitlements + Settings/admin UI + Ask Monolith, with dashboard-gen migrated onto the gateway. Matches the original ship-in-2 slice; internally parallelizable.                                                                                                                                |
 | **Existing per-user keys**                     | **Untouched.** `user_ai_credentials` and its Vault functions are unchanged; no data migration.                                                                                                                                                                                                                                                                                  |
 
 ## 1. Data model (migration — applied to DEV via `supabase-dev` MCP)
@@ -88,7 +88,7 @@ the right unit of currency:
   — today the adapters discard `message.usage`; metering needs it. All three adapters updated.
 - New field `supportsTools: boolean` — `true` for `anthropicAdapter`, `false` for
   `openaiAdapter`/`googleAdapter` in v1.
-- The Anthropic adapter gains the tool-use loop entry point Ask Pulse consumes (E1 spec §4's
+- The Anthropic adapter gains the tool-use loop entry point Ask Monolith consumes (E1 spec §4's
   `ask.ts` loop lives in `src/lib/ai/ask/`; the adapter exposes the raw tool-round primitive).
   **Before coding the loop, read the `claude-api` skill's TypeScript tool-use docs** (knowledge
   cutoff — do not guess the SDK surface).
@@ -110,17 +110,17 @@ As specced in E1, adapted to four modes:
   - `AiDisabledError` when `mode = off`;
   - `AiQuotaExceededError` when `mode = managed` and `creditsRemaining ≤ 0`;
   - `org_byo`/`per_user` pass (no cap from us) — key-missing errors surface at resolve time.
-- Feature-level capability gate: Ask Pulse's action additionally requires
+- Feature-level capability gate: Ask Monolith's action additionally requires
   `resolved.adapter.supportsTools`, else a typed `ProviderNotCapableError`.
 
-## 4. Ask Pulse (F5)
+## 4. Ask Monolith (F5)
 
 Exactly as the E1 spec defines it — workspace-wide, **read-only**, RLS-scoped tools
 (`list_boards` / `get_board_overview` / `query_items` with `limit ≤ 50`), capped tool-use loop
 (~6 rounds), no streaming, stateless per question, `question` Zod-bounded to 1000 chars — with one
 addition: the **Anthropic gate**. Managed mode always qualifies; `org_byo`/`per_user` qualify when
 the stored key's provider is `anthropic`. Otherwise the UI shows a friendly, non-error state:
-_"Ask Pulse needs an Anthropic key — dashboards work with any provider."_
+_"Ask Monolith needs an Anthropic key — dashboards work with any provider."_
 
 ## 5. Server Actions — `src/lib/ai/settings-actions.ts` (F2/F4)
 
@@ -149,7 +149,7 @@ navigations for in-panel steps; all panels lazy.
   - **Everyone** keeps the personal `AiProviderForm` card, shown when the org mode is `per_user`
     (hidden otherwise, with a one-line note of what the org mode is).
 - **Admin plan control** (`src/app/admin/organizations/[id]/`): tier + monthly credit limit.
-- **Ask Pulse** (`src/components/ai/ask/AskPulse.tsx`): lazy panel from ⌘K ("Ask Pulse…") + a
+- **Ask Monolith** (`src/components/ai/ask/AskPulse.tsx`): lazy panel from ⌘K ("Ask Monolith…") + a
   header entry; thinking / answer / boards-consulted / empty / disabled / quota / not-capable
   states are all first-class.
 
@@ -168,7 +168,7 @@ The E1 spec's sections stand in full. Deltas:
   `org_ai_secret_get` **not** callable as `authenticated` (mirror the shipped
   `user-ai-credentials.rls.integration.test.ts`).
 - **Component:** Settings AI form (mode switch, org-key validate/remove, meter, per-user card
-  visibility per mode); Ask Pulse panel states.
+  visibility per mode); Ask Monolith panel states.
 - **Perf budget:** unchanged from E1 — first paint untouched, AI only on explicit actions,
   `query_items` bounded ≤ 50 over indexed columns, `ai_usage` rollup indexed `(org_id, created_at)`.
 

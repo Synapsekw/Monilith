@@ -83,10 +83,10 @@ export type CellControls = {
 export const ROW_HEIGHT = 36; // direction C density
 
 export const VALUE_COL_WIDTH = 180;
-export const ADD_COL_WIDTH = 44;
+const ADD_COL_WIDTH = 44;
 
-export const CREATED_BY_WIDTH = 180;
-export const CREATED_AT_WIDTH = 180;
+const CREATED_BY_WIDTH = 180;
+const CREATED_AT_WIDTH = 180;
 
 /** CSS grid template: pinned Name + one fixed px track per column + the add-column slot. */
 export function gridTemplate(

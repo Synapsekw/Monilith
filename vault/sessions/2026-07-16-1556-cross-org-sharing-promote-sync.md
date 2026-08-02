@@ -54,5 +54,5 @@ shares with B) still works. (B must own their own org for the reciprocal to fire
 
 ## Next session entry point
 
-Build **Ask Pulse full-page** (`/develop`, plan ready, unblocks E5) — highest-value roadmap item; or
+Build **Ask Monolith full-page** (`/develop`, plan ready, unblocks E5) — highest-value roadmap item; or
 E6 billing / PF batch A (plans ready), or E5 after folding its review risks.

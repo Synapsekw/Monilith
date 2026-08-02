@@ -13,7 +13,7 @@ related: ["[[00-north-star]]"]
 
 ## Master spec
 
-- [[2026-06-14-pulse-design]] — **Pulse — Master Design Spec**, approved 2026-06-14
+- [[2026-06-14-pulse-design]] — **Monolith — Master Design Spec**, approved 2026-06-14
   (`docs/superpowers/specs/`). The source of truth: product vision, tech stack, environment/MCP,
   full feature set, data model + Supabase conventions, design system, phased build plan, engineering
   guardrails, manual responsibilities.

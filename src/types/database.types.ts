@@ -146,6 +146,8 @@ export type Database = {
       };
       ai_usage: {
         Row: {
+          cache_read_tokens: number | null;
+          cache_write_tokens: number | null;
           cost_usd: number;
           created_at: string;
           credits: number;
@@ -159,6 +161,8 @@ export type Database = {
           user_id: string | null;
         };
         Insert: {
+          cache_read_tokens?: number | null;
+          cache_write_tokens?: number | null;
           cost_usd?: number;
           created_at?: string;
           credits?: number;
@@ -172,6 +176,8 @@ export type Database = {
           user_id?: string | null;
         };
         Update: {
+          cache_read_tokens?: number | null;
+          cache_write_tokens?: number | null;
           cost_usd?: number;
           created_at?: string;
           credits?: number;
@@ -2047,6 +2053,8 @@ export type Database = {
           byo_key_last4: string | null;
           byo_provider: string | null;
           byo_secret_id: string | null;
+          max_agent_runs_per_user_per_day: number;
+          max_agents_per_user: number;
           monthly_credit_limit: number;
           org_id: string;
           tier: string;
@@ -2058,6 +2066,8 @@ export type Database = {
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
+          max_agent_runs_per_user_per_day?: number;
+          max_agents_per_user?: number;
           monthly_credit_limit?: number;
           org_id: string;
           tier?: string;
@@ -2069,6 +2079,8 @@ export type Database = {
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
+          max_agent_runs_per_user_per_day?: number;
+          max_agents_per_user?: number;
           monthly_credit_limit?: number;
           org_id?: string;
           tier?: string;
@@ -2367,6 +2379,7 @@ export type Database = {
           avatar_url: string | null;
           created_at: string;
           email: string | null;
+          email_briefing_opt_out: boolean;
           email_digest_opt_out: boolean;
           full_name: string | null;
           id: string;
@@ -2378,6 +2391,7 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           email?: string | null;
+          email_briefing_opt_out?: boolean;
           email_digest_opt_out?: boolean;
           full_name?: string | null;
           id: string;
@@ -2389,6 +2403,7 @@ export type Database = {
           avatar_url?: string | null;
           created_at?: string;
           email?: string | null;
+          email_briefing_opt_out?: boolean;
           email_digest_opt_out?: boolean;
           full_name?: string | null;
           id?: string;
@@ -2647,6 +2662,158 @@ export type Database = {
           },
         ];
       };
+      user_agent_fires: {
+        Row: {
+          fire_date: string;
+          fire_hour: number;
+          fired_at: string;
+          org_id: string;
+          user_agent_id: string;
+        };
+        Insert: {
+          fire_date: string;
+          fire_hour: number;
+          fired_at?: string;
+          org_id: string;
+          user_agent_id: string;
+        };
+        Update: {
+          fire_date?: string;
+          fire_hour?: number;
+          fired_at?: string;
+          org_id?: string;
+          user_agent_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agent_fires_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_fires_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      user_agent_runs: {
+        Row: {
+          created_at: string;
+          error: string | null;
+          fire_date: string;
+          fire_hour: number;
+          id: string;
+          input_tokens: number | null;
+          org_id: string;
+          output_tokens: number | null;
+          owner_id: string;
+          status: string;
+          user_agent_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          error?: string | null;
+          fire_date: string;
+          fire_hour: number;
+          id?: string;
+          input_tokens?: number | null;
+          org_id: string;
+          output_tokens?: number | null;
+          owner_id: string;
+          status: string;
+          user_agent_id: string;
+        };
+        Update: {
+          created_at?: string;
+          error?: string | null;
+          fire_date?: string;
+          fire_hour?: number;
+          id?: string;
+          input_tokens?: number | null;
+          org_id?: string;
+          output_tokens?: number | null;
+          owner_id?: string;
+          status?: string;
+          user_agent_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agent_runs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_runs_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      user_agents: {
+        Row: {
+          board_scope: Json;
+          bridge_secret_id: string | null;
+          cadence: string;
+          created_at: string;
+          enabled: boolean;
+          id: string;
+          instructions: string;
+          name: string;
+          org_id: string;
+          owner_id: string;
+          run_at_local_hour: number;
+          template_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          board_scope?: Json;
+          bridge_secret_id?: string | null;
+          cadence?: string;
+          created_at?: string;
+          enabled?: boolean;
+          id?: string;
+          instructions: string;
+          name: string;
+          org_id: string;
+          owner_id: string;
+          run_at_local_hour?: number;
+          template_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          board_scope?: Json;
+          bridge_secret_id?: string | null;
+          cadence?: string;
+          created_at?: string;
+          enabled?: boolean;
+          id?: string;
+          instructions?: string;
+          name?: string;
+          org_id?: string;
+          owner_id?: string;
+          run_at_local_hour?: number;
+          template_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agents_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_ai_credentials: {
         Row: {
           created_at: string;
@@ -2794,6 +2961,7 @@ export type Database = {
           total_items: number;
         }[];
       };
+      _personal_agent_sweep: { Args: { p_now?: string }; Returns: undefined };
       _reassign_authorship_target: {
         Args: { p_leaving: string; p_org_id: string };
         Returns: string;
@@ -3446,6 +3614,8 @@ export type Database = {
       readable_board_ids: { Args: never; Returns: string[] };
       record_ai_usage: {
         Args: {
+          p_cache_read_tokens?: number;
+          p_cache_write_tokens?: number;
           p_cost_usd: number;
           p_credits: number;
           p_feature: string;
@@ -3631,7 +3801,8 @@ export type Database = {
         | "automation"
         | "feedback_response"
         | "health_digest"
-        | "account_deleted";
+        | "account_deleted"
+        | "agent_briefing";
       org_role: "owner" | "admin" | "member" | "guest";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
@@ -3819,6 +3990,7 @@ export const Constants = {
         "feedback_response",
         "health_digest",
         "account_deleted",
+        "agent_briefing",
       ],
       org_role: ["owner", "admin", "member", "guest"],
       portfolio_health: ["on_track", "at_risk", "off_track"],

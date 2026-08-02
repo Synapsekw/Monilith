@@ -149,7 +149,7 @@ function insertPosition(blocks: ReportBlock[], type: BlockType): number {
  * existed — without a data migration. Disabled on purpose: an existing saved
  * report's rendered output must not change until the user opts in.
  */
-export function backfillBlocks(blocks: ReportBlock[]): ReportBlock[] {
+function backfillBlocks(blocks: ReportBlock[]): ReportBlock[] {
   const out = [...blocks];
   for (const type of BLOCK_ORDER) {
     if (out.some((b) => b.type === type)) continue;

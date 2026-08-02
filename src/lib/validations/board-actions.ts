@@ -62,7 +62,6 @@ export const clearCellSchema = z.object({ itemId: uuid, columnId: uuid });
 // (AGENTS.md hot-path invariant). The cap matches the largest realistic manual
 // multi-select; larger sets are a spreadsheet-import concern, not bulk-edit.
 const bulkItemIds = z.array(uuid).min(1).max(500);
-export const bulkDeleteItemsSchema = z.object({ itemIds: bulkItemIds });
 
 // ── Soft-delete lifecycle schemas (archive / restore / purge) ────────────────
 // Delete becomes a reversible archive; permanent purge is Trash-only. Same id
@@ -78,7 +77,6 @@ export const restoreItemSchema = z.object({ itemId: uuid });
 export const purgeItemSchema = z.object({ itemId: uuid });
 export const bulkArchiveItemsSchema = z.object({ itemIds: bulkItemIds });
 export const bulkRestoreItemsSchema = z.object({ itemIds: bulkItemIds });
-export const bulkPurgeItemsSchema = z.object({ itemIds: bulkItemIds });
 
 export const bulkMoveItemsSchema = z.object({
   itemIds: bulkItemIds,

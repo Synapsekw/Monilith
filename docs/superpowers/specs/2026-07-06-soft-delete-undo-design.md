@@ -3,7 +3,7 @@ type: spec
 status: awaiting-review
 date: 2026-07-06
 topic: soft-delete-undo
-tags: [project/pulse, spec, boards, data-safety]
+tags: [project/monolith, spec, boards, data-safety]
 related:
   - "[[2026-07-06-soft-delete-undo]]"
   - "[[00-north-star]]"

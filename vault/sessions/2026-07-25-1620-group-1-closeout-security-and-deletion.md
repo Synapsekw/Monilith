@@ -67,7 +67,7 @@ Pull `develop`, `pnpm install`, `pnpm dev`, private window.
 3. **Delete account:** sign up a throwaway, complete onboarding, `/settings/security` → **Delete
    account**. As sole owner it refuses with a clear message and deletes nothing. Add a second owner,
    retry → signed out to `/login?deleted=1`; the surviving owner inherits the boards (still
-   archivable and restorable from Trash) and item updates read as **Pulse Autopilot** (decision D2).
+   archivable and restorable from Trash) and item updates read as **Monolith Autopilot** (decision D2).
 4. **Admin delete:** as platform admin, `/admin/users` → **Delete permanently** on a throwaway →
    succeeds. It always failed before.
 5. **Rate limit:** POST `/api/oauth/register` 11× → ten `201`s then `429` with `Retry-After`.
@@ -107,5 +107,5 @@ Pull `develop`, `pnpm install`, `pnpm dev`, private window.
 **`/sync-prod` first, then promote `develop → main`** — in that order. Then provision prod Vault +
 the two Vercel env vars, run the embeddings backfill, and finally the real MCP connection test.
 After that the board is clear for a roadmap build: **Report Builder v2** (charts + wide-board table),
-**Ask Pulse Phase 2** (write actions in `/ask` — engine and confirm card already exist, S–M), or
+**Ask Monolith Phase 2** (write actions in `/ask` — engine and confirm card already exist, S–M), or
 **E6** Stripe.

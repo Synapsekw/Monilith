@@ -9,7 +9,6 @@ import { getBoardStatusColumns, type StatusColumn } from "@/lib/goals/queries";
 import {
   createGoalSchema,
   deleteGoalSchema,
-  reorderGoalSchema,
   setGoalLinksSchema,
   updateGoalSchema,
 } from "@/lib/validations/goals";
@@ -86,24 +85,6 @@ export async function updateGoal(
   return { ok: true, data: { goal: data as Tables<"goals"> } };
 }
 
-export async function reorderGoal(
-  input: z.input<typeof reorderGoalSchema>,
-): Promise<ActionResult<null>> {
-  const parsed = reorderGoalSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("goals")
-    .update({ position: parsed.data.position })
-    .eq("id", parsed.data.goalId);
-  if (error) return fail(error.message);
-
-  revalidatePath("/goals");
-  return { ok: true, data: null };
-}
-
 export async function deleteGoal(
   input: z.input<typeof deleteGoalSchema>,
 ): Promise<ActionResult<null>> {
@@ -149,6 +130,14 @@ export async function getStatusColumnsForBoard(
 ): Promise<ActionResult<{ columns: StatusColumn[] }>> {
   const parsed = z.string().uuid().safeParse(boardId);
   if (!parsed.success) return fail("Invalid board");
-  const columns = await getBoardStatusColumns(parsed.data);
-  return { ok: true, data: { columns } };
+
+  // `getBoardStatusColumns` throws on a DB/RLS failure (deliberately — an empty
+  // picker would misrepresent it). Convert it here so the declared
+  // `ActionResult` contract holds and callers get their own error state.
+  try {
+    const columns = await getBoardStatusColumns(parsed.data);
+    return { ok: true, data: { columns } };
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
 }

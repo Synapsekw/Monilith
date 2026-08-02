@@ -10,7 +10,7 @@ import type { AutopilotContext } from "./autopilot";
 
 /** Bound on how many items the F14 agent sees per run — keeps the model context
  *  (and token spend) bounded on a large board (spec §6). */
-export const AUTOPILOT_ITEM_CAP = 200;
+const AUTOPILOT_ITEM_CAP = 200;
 
 /**
  * The labels+ids facts the F13 decision loop is allowed to see: the board's

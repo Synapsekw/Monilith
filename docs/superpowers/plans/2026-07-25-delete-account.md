@@ -23,7 +23,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let a user permanently delete their own Pulse account from Settings → Security → Danger zone, transferring authorship of org work product to a surviving org owner instead of orphaning it.
+**Goal:** Let a user permanently delete their own Monolith account from Settings → Security → Danger zone, transferring authorship of org work product to a surviving org owner instead of orphaning it.
 
 **Architecture:** One migration fixes the 26 `ON DELETE NO ACTION` foreign keys to `auth.users` using a per-column hybrid — reassign the 13 ownership-bearing columns via a new `SECURITY DEFINER` RPC, cascade `time_entries`, and `SET NULL` the 12 attributive ones. A new server action `deleteOwnAccount` reuses the widened `platform_user_sole_owned_orgs` guard and `svc.auth.admin.deleteUser`, then tears down the session. The UI is one new `SettingRow` in the existing Danger zone. Because the ownership columns stay `NOT NULL`, the TypeScript blast radius is 2 files instead of ~18, and no RLS policy or `SECURITY DEFINER` function changes.
 

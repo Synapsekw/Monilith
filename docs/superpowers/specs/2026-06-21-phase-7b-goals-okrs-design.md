@@ -26,7 +26,7 @@ A goal measures progress one of **four ways** (`progress_mode`), picked per goal
   completion mapping (reuses 7a's mapping shape + the dashboard-aggregate spine).
 
 Goals are **org-wide, cross-workspace** exec objects (like Portfolios), each **person-owned** with an
-optional **workspace** association standing in for "team" (Pulse has no teams entity). Surfaced at
+optional **workspace** association standing in for "team" (Monolith has no teams entity). Surfaced at
 `/goals` (the sidebar already carries a disabled **Goals** stub awaiting this slice).
 
 Status is **hybrid, Portfolio-style**: a manual `status` (On track / At risk / Off track / Done) that
@@ -53,7 +53,7 @@ the owner sets and that **wins for display**, plus an **auto-suggested health** 
 
 **Non-goals (YAGNI — possible future slices)**
 
-- **Check-in / update history** (periodic status posts with a note). v1 edits the *current* progress
+- **Check-in / update history** (periodic status posts with a note). v1 edits the _current_ progress
   in place; no time-series log.
 - **Per-child weighting** for sub-goal roll-up (v1 is equal-weight average).
 - **Structured cycles / time-periods entity** (e.g. a managed "Q3 2026" / "FY26"). v1 uses free-form
@@ -73,28 +73,28 @@ Two new tables. Both follow repo conventions: denormalized `org_id` on every row
 
 ### 3.1 `goals`
 
-| column            | type        | notes                                                                                 |
-| ----------------- | ----------- | ------------------------------------------------------------------------------------- |
-| `id`              | uuid pk     |                                                                                       |
-| `org_id`          | uuid        | FK `organizations`, denormalized; RLS key                                             |
-| `name`            | text        | required, non-empty (CHECK)                                                            |
-| `description`     | text        | nullable                                                                              |
-| `owner_id`        | uuid        | FK `users` (the member who owns the goal); required                                   |
-| `workspace_id`    | uuid        | FK `workspaces`, **nullable** — soft "team" tag; must be same org (guarded)           |
-| `parent_goal_id`  | uuid        | FK `goals` self-ref, **nullable**; must be same org; cycle/depth guarded              |
-| `progress_mode`   | enum        | `manual_number \| manual_percent \| auto_subgoals \| auto_boards`                      |
-| `status`          | enum        | `on_track \| at_risk \| off_track \| done` (manual; default `on_track`)               |
-| `start_value`     | float8      | `manual_number` baseline (default 0)                                                  |
-| `current_value`   | float8      | `manual_number` current                                                               |
-| `target_value`    | float8      | `manual_number` target                                                                |
-| `unit`            | text        | `manual_number` unit label (nullable)                                                 |
-| `percent`         | float8      | `manual_percent` 0–100 (nullable)                                                     |
-| `start_date`      | date        | nullable                                                                              |
-| `due_date`        | date        | nullable                                                                              |
-| `position`        | float8      | order among siblings (same `parent_goal_id`)                                          |
-| `created_by`      | uuid        | FK `users`                                                                            |
-| `created_at`      | timestamptz | default now()                                                                         |
-| `updated_at`      | timestamptz | trigger-maintained                                                                    |
+| column           | type        | notes                                                                       |
+| ---------------- | ----------- | --------------------------------------------------------------------------- |
+| `id`             | uuid pk     |                                                                             |
+| `org_id`         | uuid        | FK `organizations`, denormalized; RLS key                                   |
+| `name`           | text        | required, non-empty (CHECK)                                                 |
+| `description`    | text        | nullable                                                                    |
+| `owner_id`       | uuid        | FK `users` (the member who owns the goal); required                         |
+| `workspace_id`   | uuid        | FK `workspaces`, **nullable** — soft "team" tag; must be same org (guarded) |
+| `parent_goal_id` | uuid        | FK `goals` self-ref, **nullable**; must be same org; cycle/depth guarded    |
+| `progress_mode`  | enum        | `manual_number \| manual_percent \| auto_subgoals \| auto_boards`           |
+| `status`         | enum        | `on_track \| at_risk \| off_track \| done` (manual; default `on_track`)     |
+| `start_value`    | float8      | `manual_number` baseline (default 0)                                        |
+| `current_value`  | float8      | `manual_number` current                                                     |
+| `target_value`   | float8      | `manual_number` target                                                      |
+| `unit`           | text        | `manual_number` unit label (nullable)                                       |
+| `percent`        | float8      | `manual_percent` 0–100 (nullable)                                           |
+| `start_date`     | date        | nullable                                                                    |
+| `due_date`       | date        | nullable                                                                    |
+| `position`       | float8      | order among siblings (same `parent_goal_id`)                                |
+| `created_by`     | uuid        | FK `users`                                                                  |
+| `created_at`     | timestamptz | default now()                                                               |
+| `updated_at`     | timestamptz | trigger-maintained                                                          |
 
 Mode-specific columns are nullable and only meaningful for their mode; a CHECK or app-layer Zod
 guard enforces the shape per `progress_mode` (e.g. `manual_number` requires `target_value`). Reads
@@ -112,14 +112,14 @@ ignore irrelevant columns (auto modes derive, never read these).
 
 Board contributions for `auto_boards`, reusing 7a's per-board completion-mapping shape.
 
-| column             | type     | notes                                                        |
-| ------------------ | -------- | ------------------------------------------------------------ |
-| `id`               | uuid pk  |                                                              |
-| `org_id`           | uuid     | denormalized; RLS key                                        |
-| `goal_id`          | uuid     | FK `goals` on delete cascade                                 |
-| `board_id`         | uuid     | FK `boards`                                                  |
-| `status_column_id` | uuid     | which status column on that board marks completion           |
-| `done_option_ids`  | uuid[]   | which option(s) of that column count as "done"               |
+| column             | type    | notes                                              |
+| ------------------ | ------- | -------------------------------------------------- |
+| `id`               | uuid pk |                                                    |
+| `org_id`           | uuid    | denormalized; RLS key                              |
+| `goal_id`          | uuid    | FK `goals` on delete cascade                       |
+| `board_id`         | uuid    | FK `boards`                                        |
+| `status_column_id` | uuid    | which status column on that board marks completion |
+| `done_option_ids`  | uuid[]  | which option(s) of that column count as "done"     |
 
 Unique `(goal_id, board_id)`. RLS: `is_org_member(org_id)`; the **read** of contributing aggregates is
 additionally gated by `can_read_board` so a goal viewer who can't see a board gets no rows/credit from
@@ -213,7 +213,7 @@ Maximally parallel after a migration root, the 7a shape:
 1. **Migration root** — `goals` + `goal_links` tables, enums, triggers (same-org, cycle/depth),
    RLS, the 5 RPCs; regenerate types. (Timestamp **after** 6d-3's.)
 2. **Wave (parallel):** `progress.ts` (pure, TDD) ‖ server actions/queries (`create/update/
-   set_goal_links/reorder/rollup`) ‖ `GoalTree` ‖ detail drawer ‖ `NewGoalDialog`.
+set_goal_links/reorder/rollup`) ‖ `GoalTree` ‖ detail drawer ‖ `NewGoalDialog`.
 3. **Wire-up:** `/goals` route + live sidebar link (flip `app-shell.test.tsx`); e2e; gate
    (typecheck · lint · unit · live integration · build · e2e). Build-in-main for a clean compile
    graph per the worktree-gates note; merge via `finish-task.sh`.

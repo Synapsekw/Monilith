@@ -11,7 +11,9 @@ describe("presenceColor", () => {
     }
   });
   it("distributes different ids across the palette (not all one color)", () => {
-    const colors = new Set(Array.from({ length: 50 }, (_, i) => presenceColor(`user-${i}`)));
+    const colors = new Set(
+      Array.from({ length: 50 }, (_, i) => presenceColor(`user-${i}`)),
+    );
     expect(colors.size).toBeGreaterThan(1);
   });
 });

@@ -4,7 +4,7 @@ status: approved
 date: 2026-06-18
 phase: 5b-1
 title: Automations — more triggers + the "If" condition (Phase 5b-1)
-tags: [project/pulse, spec, phase-5, automations]
+tags: [project/monolith, spec, phase-5, automations]
 related:
   - "[[2026-06-18-phase-5a-automations-design]]"
   - "[[2026-06-14-pulse-design]]"

@@ -12,7 +12,7 @@
 ## Gap analysis (verified against this worktree's code)
 
 The user asks for: per-phase **% completion** with a **breakdown by workstream/sub-group**.
-In Pulse's data model a "phase" is most naturally a **board** (or a group on a shared board)
+In Monolith's data model a "phase" is most naturally a **board** (or a group on a shared board)
 and a "workstream/sub-group" is a **board group** (`public.groups` — the colored row-bands).
 
 What today's dashboard stack (Phase 8 + D1–D3 + 9.3b) can and cannot express:

@@ -6,6 +6,139 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-07-27",
     kind: "fixed",
+    title: "The weekly digest sends, and covers the right week",
+    description:
+      "The health digest had never actually gone out, and would have reported every overdue item ever rather than the week it is headed with. It is now scoped to its own period, and a run that cannot send is reported instead of quietly counting as a success.",
+  },
+  {
+    date: "2026-07-27",
+    kind: "fixed",
+    title: "Ask AI answers survive leaving the page",
+    description:
+      "Reloading or navigating away mid-answer used to lose the whole turn. The answer now finishes and is saved regardless, and it's waiting for you when you come back.",
+  },
+  {
+    date: "2026-07-26",
+    kind: "new",
+    title: "Charts in your reports",
+    description:
+      "Report Builder gains a chart block — donut and bar charts shaped from your board data, configured in the builder rail, and rendered in both the live preview and the exported PDF.",
+  },
+  {
+    date: "2026-07-26",
+    kind: "new",
+    title: "Ask AI can make the change for you",
+    description:
+      "Ask AI no longer stops at telling you what to do. It proposes the change as a confirm card in the thread, spelling out exactly what it will write — and nothing touches your board until you approve it. Cancel and it's dropped.",
+  },
+  {
+    date: "2026-07-26",
+    kind: "fixed",
+    title: "Assignment notifications from connected agents",
+    description:
+      "Being assigned to an item by a connected AI client now notifies you, just as an in-app assignment does.",
+  },
+  {
+    date: "2026-07-25",
+    kind: "improved",
+    title: "Settings, redesigned",
+    description:
+      "Settings is now its own area with proper navigation instead of one long page — separate Account, Organization and AI sections. Rename your organization, leave one, manage appearance and security, and copy your server URL straight from a step-by-step guide for connecting Claude.",
+  },
+  {
+    date: "2026-07-25",
+    kind: "new",
+    title: "Delete your own account",
+    description:
+      "The Account danger zone now lets you permanently delete your account, confirming by typing your email. If you're the sole owner of an organization you'll be asked to hand it over first, so no workspace is left stranded.",
+  },
+  {
+    date: "2026-07-25",
+    kind: "improved",
+    title: "Sign in and land where you were going",
+    description:
+      "Opening a link while signed out now takes you to that page once you've signed in, instead of dropping you on your dashboard.",
+  },
+  {
+    date: "2026-07-24",
+    kind: "new",
+    title: "Connect Claude to your workspace",
+    description:
+      "Add Monolith as a connector in Claude Desktop or claude.ai and let it work with your boards — list them, search and read items, and create or update them. It connects as you and sees exactly what you can see, nothing more. Approve it once from a consent screen, and revoke it any time from Settings.",
+  },
+  {
+    date: "2026-07-20",
+    kind: "new",
+    title: "Let AI decide inside an automation",
+    description:
+      "Add an AI step to any automation rule: write the instruction in plain language, then tick exactly which actions the AI is allowed to take — set a status, set percent, move to a group, or notify someone. Dry-run it to preview the decision before you turn the rule on.",
+  },
+  {
+    date: "2026-07-20",
+    kind: "new",
+    title: "Autopilot, a scheduled agent for your board",
+    description:
+      "Switch on Autopilot and your board gets tended on a cadence, with only the housekeeping you tick: triage new items into the group that fits, chase overdue owners, and keep goal rollups current. It works under its own bot identity, so every change it makes is attributable.",
+  },
+  {
+    date: "2026-07-20",
+    kind: "new",
+    title: "Find similar items",
+    description:
+      'Any item now surfaces others across your boards that are about the same thing, even when they share no words — "onboarding" turns up "New-hire checklist".',
+  },
+  {
+    date: "2026-07-20",
+    kind: "improved",
+    title: "Ask AI searches by meaning",
+    description:
+      "Ask AI can look up items by what they're about rather than the exact words in their names.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "improved",
+    title: "Zoom out on the Timeline",
+    description:
+      "The Timeline adds quarter and year zoom levels alongside day, week and month, fills the full width of the canvas, and no longer wraps its header dates.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "improved",
+    title: "Sub-items nest on the Timeline",
+    description:
+      "Sub-items now sit under their parent and start collapsed, so a busy board opens as a compact overview you expand row by row — including parents that have no dates of their own but scheduled sub-items underneath.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "new",
+    title: "Chart items by when they were created",
+    description:
+      "Timeline bars can now be driven by an item's Created at or Updated at timestamp, not just date columns.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "improved",
+    title: "Timestamps no longer flash blank",
+    description:
+      "Dates and times appear on first paint instead of filling in a moment later.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "fixed",
+    title: "Report covers show your workspace name",
+    description:
+      "The report cover printed an internal ID instead of your workspace's name, in both the live preview and the exported PDF.",
+  },
+  {
+    date: "2026-07-17",
+    kind: "fixed",
+    title: "AI report summaries respect permissions",
+    description:
+      "Only owners and editors can generate an AI summary for a report — viewers could previously trigger one they had no way to save.",
+  },
+  {
+    date: "2026-07-27",
+    kind: "fixed",
     title: 'Autopilot now posts as "Monolith Autopilot"',
     description:
       "The scheduled board agent still signed its updates with the old product name.",

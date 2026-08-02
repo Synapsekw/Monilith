@@ -35,4 +35,4 @@ Production is live (Vercel deploy from `3659b03`). Smoke-test in **prod**: open 
 
 ## Next session entry point
 
-Repair the dev migration ledger (`20260705120000`), then the roadmap thrust is **Phase 10 Epic 1** (AI foundation + Ask Pulse) — spec + plan ready at `docs/superpowers/{specs,plans}/2026-07-05-ai-foundation-and-ask-pulse*`, build via `/develop` (Task 0 migration user-applied).
+Repair the dev migration ledger (`20260705120000`), then the roadmap thrust is **Phase 10 Epic 1** (AI foundation + Ask Monolith) — spec + plan ready at `docs/superpowers/{specs,plans}/2026-07-05-ai-foundation-and-ask-pulse*`, build via `/develop` (Task 0 migration user-applied).

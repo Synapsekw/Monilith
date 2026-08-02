@@ -1,14 +1,14 @@
-# Ask Pulse — Full-Page Conversational AI — Design
+# Ask Monolith — Full-Page Conversational AI — Design
 
 **Date:** 2026-07-12
 **Slug:** `ask-pulse-full-page-conversational`
 **Status:** Design approved (owner sign-off 2026-07-12); ready for `writing-plans`
-**Phase:** 10 (AI & Agents) — expands Epic 1's Ask Pulse (F5) and pulls in E3 conversational actions (F6)
+**Phase:** 10 (AI & Agents) — expands Epic 1's Ask Monolith (F5) and pulls in E3 conversational actions (F6)
 **Companion:** brainstorm layout mockups in `.superpowers/brainstorm/` (Option B selected)
 
 ## Why this exists
 
-Today "Ask Pulse" is a **stateless shadcn `Dialog`** (`src/components/ai/ask/AskPulse.tsx`) — a single question, a single answer, no memory, opened from ⌘K + a header button. The product owner wants Ask to be a **first-class destination**: a dedicated page in the side navigation that works like ChatGPT — persisted conversation history, multi-turn memory, streaming answers, and (phase 2) the ability to _act_ on the workspace, not just read it.
+Today "Ask Monolith" is a **stateless shadcn `Dialog`** (`src/components/ai/ask/AskPulse.tsx`) — a single question, a single answer, no memory, opened from ⌘K + a header button. The product owner wants Ask to be a **first-class destination**: a dedicated page in the side navigation that works like ChatGPT — persisted conversation history, multi-turn memory, streaming answers, and (phase 2) the ability to _act_ on the workspace, not just read it.
 
 This is a **deliberate reversal** of the Phase 10 scope's original "AI at the seams, no standalone chat assistant" stance (`docs/superpowers/specs/2026-07-05-ai-platform-phase-10-scope.md`, "Out of scope" + "Design stance"). The owner has explicitly chosen to make Ask a standalone surface. That reversal is recorded as an ADR alongside this spec. The _design personality_ still holds — Calm · Capable · Crisp, no glow/badges — the change is only that Ask now has a home of its own.
 
@@ -31,7 +31,7 @@ Phase 1 ships and is usable on its own. Phase 2 is additive and shares the same 
 ## 1. Layout & routing — Option B ("history replaces the nav on Ask")
 
 - New routes: `src/app/(app)/ask/page.tsx` (new chat) and `src/app/(app)/ask/[conversationId]/page.tsx` (an existing conversation).
-- **On Ask, the Pulse nav rail is replaced by a conversation rail:** "New chat" button, list of the user's past conversations (most-recent first), and a "← Back to Pulse" link that restores the normal nav. Main area = message thread (scrollable) + a sticky composer at the bottom.
+- **On Ask, the Monolith nav rail is replaced by a conversation rail:** "New chat" button, list of the user's past conversations (most-recent first), and a "← Back to Monolith" link that restores the normal nav. Main area = message thread (scrollable) + a sticky composer at the bottom.
 - New **"Ask" nav entry** (Sparkles icon) added to `sidebar-nav.tsx` (HOME section) and `mobile-nav.tsx`.
 - **Conversation switching / new chat is client state + History API** (`window.history.pushState('/ask/[id]')`), NOT a `<Link>`/router navigation. Switching between already-loaded conversations must not re-run RSC queries (AGENTS.md #5, gotcha-09). First paint loads the conversation list + the active thread; switching is client-driven; only _sending_, _renaming_, _deleting_ hit the server.
 - UI built with the **`pulse-ui`** design system (dark-first, periwinkle accent, mono kickers, radius-14) — load `pulse-ui` + `frontend-design` skills before building the components.
@@ -100,7 +100,7 @@ Token streaming requires a **Route Handler**, not a Server Action: `src/app/api/
 ## 6. Retire the popup
 
 - Remove the header `AskPulseTrigger`, the `AskPulse` dialog, `AskPulseHost`, and the `askPulseOpen` flag in `src/stores/ui.ts`.
-- The ⌘K **"Ask Pulse…"** entry **navigates to `/ask`** instead of opening a modal, prefilling any typed text as the first message — so the fast entry point survives, it just lands on the real page.
+- The ⌘K **"Ask Monolith…"** entry **navigates to `/ask`** instead of opening a modal, prefilling any typed text as the first message — so the fast entry point survives, it just lands on the real page.
 - Update `app-shell.tsx` wiring and the affected tests.
 
 ## 7. Performance & data-fetching budget (AGENTS.md #5)

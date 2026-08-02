@@ -22,6 +22,10 @@ export default function AppleIcon() {
         background: "#0D0D0F",
       }}
     >
+      {/* Not next/image: this subtree is rendered by Satori inside an
+          ImageResponse at build/request time, not by React in a browser.
+          next/image would emit markup Satori cannot rasterise. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img width={180} height={180} src={src} alt="" />
     </div>,
     { ...size },

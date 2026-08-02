@@ -599,7 +599,7 @@ function TextLikeEditor({
   );
 }
 
-export function EmailEditor({
+function EmailEditor({
   value,
   onCommit,
   onCancel,
@@ -618,7 +618,7 @@ export function EmailEditor({
   );
 }
 
-export function PhoneEditor({
+function PhoneEditor({
   value,
   onCommit,
   onCancel,

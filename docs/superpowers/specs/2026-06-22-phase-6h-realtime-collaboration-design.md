@@ -5,12 +5,12 @@
 
 ## Problem & context
 
-Pulse already has working `postgres_changes` realtime **data** sync on boards
+Monolith already has working `postgres_changes` realtime **data** sync on boards
 (`src/lib/boards/use-board-realtime.ts`, channel `board:${boardId}`): cell values, items,
 columns, groups, and dependencies reconcile into the `["board", boardId]` React Query cache and
 re-render every viewer. That part is solid and **must not change**.
 
-What's missing — and what hurts when people share a board — is everything *around* that sync:
+What's missing — and what hurts when people share a board — is everything _around_ that sync:
 
 1. **No awareness of others.** You can't see who else is on the board, or who is editing the
    exact cell/card/field you're about to touch. Collaboration feels blind.
@@ -19,7 +19,7 @@ What's missing — and what hurts when people share a board — is everything *a
    person that it happened.
 
 This is **not** a reliability problem (sync works), and **not** primarily a coverage gap. It is
-an *awareness* and *conflict-visibility* problem. Phase 6h adds a presence layer on top of the
+an _awareness_ and _conflict-visibility_ problem. Phase 6h adds a presence layer on top of the
 existing data sync, and makes LWW collisions **seen** rather than silent.
 
 ## Goals
@@ -47,7 +47,7 @@ existing data sync, and makes LWW collisions **seen** rather than silent.
 ## Settled decisions (do not re-litigate)
 
 1. **Conflict strategy = visible LWW, no locking.** Keep LWW; surface collisions with a brief
-   flash + small toast only when the changed value is under the local user's *currently focused*
+   flash + small toast only when the changed value is under the local user's _currently focused_
    element. Never block the user.
 2. **Awareness level = editing indicators.** Board-wide avatar stack + per-element "who is
    editing here" markers. No live cursors / continuous selection streaming.
@@ -109,10 +109,12 @@ type PresenceState = {
     The topic is `presence:board:<uuid>`, so `split_part(topic, ':', 3)` is the uuid. Guard the
     cast so a malformed topic fails closed (no policy match → denied), e.g. only treat the topic
     when it matches `presence:board:%`.
+
   - **No project-setting change is required** (research-confirmed): a `private: true` channel is
     always authorized against these `realtime.messages` policies on its own, independent of the
     "Allow public access" toggle. Leave that toggle ON — switching to "private only" would break
     the app's existing PUBLIC channels (`board:`/`notifications:`/`item:`), which have no policies.
+
 - **Client helper** `src/lib/boards/presence-channel.ts`:
   - `boardPresenceTopic(boardId: string): string` → `presence:board:${boardId}`.
   - `createBoardPresenceChannel(boardId)` → builds the private channel from the browser client
@@ -125,7 +127,7 @@ type PresenceState = {
 ### Unit 2 — presence reducer + identity/color util (pure logic)
 
 - `src/lib/boards/presence-color.ts` — `presenceColor(userId: string): string`: deterministic
-  hash → one of a fixed palette (Pulse accent-compatible). Same user → same color everywhere.
+  hash → one of a fixed palette (Monolith accent-compatible). Same user → same color everywhere.
 - `src/lib/boards/presence-reducer.ts` — pure functions over the raw Supabase presence state
   (`channel.presenceState()` shape: `Record<presenceKey, PresenceState[]>`):
   - `toRoster(raw, selfUserId)` → deduped list of occupants (merge a user's multiple
@@ -164,11 +166,11 @@ testable against mock presence states in parallel.)
 **Focus-target model (one abstraction, all views):** stable composite ids built by a single
 helper `presenceTarget` in `src/lib/boards/presence-target.ts`:
 
-| Surface     | targetId format            |
-| ----------- | -------------------------- |
-| Table cell  | `cell:${itemId}:${columnId}` |
-| Kanban card | `card:${itemId}`           |
-| Cal/Gantt   | `event:${itemId}`          |
+| Surface     | targetId format               |
+| ----------- | ----------------------------- |
+| Table cell  | `cell:${itemId}:${columnId}`  |
+| Kanban card | `card:${itemId}`              |
+| Cal/Gantt   | `event:${itemId}`             |
 | Panel field | `field:${itemId}:${fieldKey}` |
 
 **Interfaces — Consumes:** Unit 1 (`createBoardPresenceChannel`), Unit 2 (reducer + color),
@@ -182,7 +184,7 @@ React Query client (`["board", boardId]`). **Produces:** `BoardPresenceProvider`
   tooltip naming the user. Caps the **rendered** avatar count (overflow folded into "+k") so a
   busy board never renders dozens of nodes.
 - `src/components/boards/presence/PresenceRing.tsx` — `<PresenceRing target=… />`: looks up
-  `focusMap.get(target)` from context; if one or more *other* users are focused there, overlays a
+  `focusMap.get(target)` from context; if one or more _other_ users are focused there, overlays a
   colored ring/initials badge (their color). Renders nothing when the target has no other
   occupants. This is the only per-view rendering primitive — each view drops it onto its element.
 
@@ -211,7 +213,7 @@ Plus the header mount of `<BoardPresenceBar>` (in `BoardViews`/`BoardHeader`) an
 - `src/lib/boards/use-lww-flash.ts` (or folded into the data-realtime path via a small callback):
   when an incoming `postgres_changes` event from the **existing** data sync targets an element the
   local user currently has focused **and** the value differs (`flashDecision` from Unit 2), trigger
-  a brief flash on that element + a toast: *"<name> changed this just now"*, where `<name>` is the
+  a brief flash on that element + a toast: _"<name> changed this just now"_, where `<name>` is the
   presence occupant of that target (fallback **"Updated just now"** if they've already left).
 - **No change to `use-board-realtime.ts`'s reconciliation behavior** — the flash hook observes the
   same events (e.g. via a lightweight subscription callback or an event the data hook emits); it
@@ -224,7 +226,7 @@ Plus the header mount of `<BoardPresenceBar>` (in `BoardViews`/`BoardHeader`) an
 ## Security model (load-bearing)
 
 Realtime Presence/Broadcast are **not** governed by table RLS by default. Without a private
-channel, any authenticated user in *any* org could `channel('presence:board:<id>')` and read who
+channel, any authenticated user in _any_ org could `channel('presence:board:<id>')` and read who
 is on a board they cannot see — a cross-tenant leak. So:
 
 - The channel is **private** (`config: { private: true }`). Realtime evaluates RLS policies on
@@ -260,7 +262,7 @@ is on a board they cannot see — a cross-tenant leak. So:
   re-run, presence hook stays mounted in `BoardViews`); focusing an element is one throttled
   presence `track()`.
 - **(b) Server data vs client state.** Presence is **ephemeral client state over the socket** — it
-  is *not* server data, so it never uses Server Actions or `revalidatePath`. The only server touch
+  is _not_ server data, so it never uses Server Actions or `revalidatePath`. The only server touch
   is the **reconnect** path: one bounded React Query refetch of `getBoardPayload` (catch-up only).
 - **(c) Bounded + indexed.** No new DB reads on the hot path; presence carries no table reads. The
   reconnect refetch reuses the existing bounded, indexed `getBoardPayload`. Rendered avatars are
@@ -315,12 +317,12 @@ is on a board they cannot see — a cross-tenant leak. So:
 
 ## Independent units (for the plan's execution DAG)
 
-- **U1** — Realtime-Authorization migration + presence-channel helper. *(foundation)*
-- **U2** — presence reducer + color util. *(pure logic; parallel with U1)*
-- **U3** — `useBoardPresence` + `usePresenceFocus` + provider. *(consumes U1, U2)*
-- **U4** — UI primitives `BoardPresenceBar` / `PresenceRing`. *(consumes U2, U3 context)*
-- **U5a–d** — view wiring: Table / Kanban / Calendar+Gantt / item-panel. *(4 parallel; consume U3, U4)*
-- **U6** — visible-LWW flash. *(consumes U2, U3, existing data sync)*
-- **U7** — live integration tests (presence join/leave/focus + non-member denied). *(consumes U1, U3)*
+- **U1** — Realtime-Authorization migration + presence-channel helper. _(foundation)_
+- **U2** — presence reducer + color util. _(pure logic; parallel with U1)_
+- **U3** — `useBoardPresence` + `usePresenceFocus` + provider. _(consumes U1, U2)_
+- **U4** — UI primitives `BoardPresenceBar` / `PresenceRing`. _(consumes U2, U3 context)_
+- **U5a–d** — view wiring: Table / Kanban / Calendar+Gantt / item-panel. _(4 parallel; consume U3, U4)_
+- **U6** — visible-LWW flash. _(consumes U2, U3, existing data sync)_
+- **U7** — live integration tests (presence join/leave/focus + non-member denied). _(consumes U1, U3)_
 
 The plan turns these into a dependency graph + parallel batches + critical path.

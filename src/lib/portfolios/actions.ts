@@ -12,13 +12,10 @@ import {
 import {
   addBoardSchema,
   createPortfolioSchema,
-  deletePortfolioSchema,
   removePlacementSchema,
-  renamePortfolioSchema,
-  updateMappingSchema,
   updatePlacementSchema,
 } from "@/lib/validations/portfolios";
-import type { Json, Tables, TablesUpdate } from "@/types/database.types";
+import type { Tables, TablesUpdate } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 export async function createPortfolio(input: {
@@ -37,44 +34,6 @@ export async function createPortfolio(input: {
 
   revalidatePath("/portfolios");
   return { ok: true, data: { portfolio: data as Tables<"portfolios"> } };
-}
-
-export async function renamePortfolio(input: {
-  portfolioId: string;
-  name: string;
-}): Promise<ActionResult<null>> {
-  const parsed = renamePortfolioSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("portfolios")
-    .update({ name: parsed.data.name })
-    .eq("id", parsed.data.portfolioId);
-  if (error) return fail(error.message);
-
-  revalidatePath("/portfolios");
-  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
-  return { ok: true, data: null };
-}
-
-export async function deletePortfolio(input: {
-  portfolioId: string;
-}): Promise<ActionResult<null>> {
-  const parsed = deletePortfolioSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("portfolios")
-    .delete()
-    .eq("id", parsed.data.portfolioId);
-  if (error) return fail(error.message);
-
-  revalidatePath("/portfolios");
-  return { ok: true, data: null };
 }
 
 export async function addBoardToPortfolio(input: {
@@ -157,30 +116,13 @@ export async function getStatusColumnsForBoard(
   const parsed = z.string().uuid().safeParse(boardId);
   if (!parsed.success) return fail("Invalid board");
 
-  const columns = await getBoardStatusColumns(parsed.data);
-  return { ok: true, data: { columns } };
-}
-
-export async function updatePortfolioMapping(input: {
-  placementId: string;
-  portfolioId: string;
-  doneColumnId: string | null;
-  doneOptionIds: string[];
-}): Promise<ActionResult<null>> {
-  const parsed = updateMappingSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("portfolio_boards")
-    .update({
-      done_column_id: parsed.data.doneColumnId,
-      done_option_ids: parsed.data.doneOptionIds as unknown as Json,
-    })
-    .eq("id", parsed.data.placementId);
-  if (error) return fail(error.message);
-
-  revalidatePath(`/portfolios/${parsed.data.portfolioId}`);
-  return { ok: true, data: null };
+  // `getBoardStatusColumns` throws on a DB/RLS failure (deliberately — an empty
+  // picker would misrepresent it). Convert it here so the declared
+  // `ActionResult` contract holds and callers get their own error state.
+  try {
+    const columns = await getBoardStatusColumns(parsed.data);
+    return { ok: true, data: { columns } };
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
 }

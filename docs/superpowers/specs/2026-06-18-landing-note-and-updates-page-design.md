@@ -40,7 +40,7 @@ page or components.
 | Landing note placement  | **Status pill above the wordmark** + **minimal hero footer** | Pill (`In active development`) reads first without competing with the CTAs; footer carries `Invitation only` (left) and an `Updates →` link (right).                                             |
 | Updates discoverability | **Linked from the landing** (footer `Updates →`)             | Page is public regardless; the link makes it findable for logged-out visitors.                                                                                                                   |
 | Page styling            | Reuse the dark hero aesthetic, not the app shell             | `/updates` is a public marketing-ish page, not part of the authenticated product.                                                                                                                |
-| Badge palette           | **Pulse monochromatic + single-accent**                      | Not Mubarak's gold/blue/emerald. Accent for `new`; muted/outline for `improved`/`fixed`. Exact tokens from the `pulse-ui` skill at build time.                                                   |
+| Badge palette           | **Monolith monochromatic + single-accent**                   | Not Mubarak's gold/blue/emerald. Accent for `new`; muted/outline for `improved`/`fixed`. Exact tokens from the `pulse-ui` skill at build time.                                                   |
 
 ## Architecture & components
 
@@ -99,7 +99,7 @@ export interface ChangelogEntry {
 
 - `ChangelogTimeline` — takes `entries`, groups by date (newest first), renders
   a date group per day; renders an empty state when there are none.
-- `ChangelogItemBadge` — small badge per `kind`, Pulse monochromatic +
+- `ChangelogItemBadge` — small badge per `kind`, Monolith monochromatic +
   single-accent: accent for `new`, muted/outline for `improved` and `fixed`.
 - (Optional) `ChangelogDateGroup` — a date header + its items, if it keeps
   `ChangelogTimeline` clean. Mirrors Mubarak's split but only if it earns its

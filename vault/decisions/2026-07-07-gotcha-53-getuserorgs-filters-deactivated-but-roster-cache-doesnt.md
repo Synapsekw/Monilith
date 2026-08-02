@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-07
-tags: [project/pulse, adr, gotcha, cache, rls]
+tags: [project/monolith, adr, gotcha, cache, rls]
 related:
   - "[[2026-07-07-1117-avatar-surfaces-header-presence-columns]]"
 ---

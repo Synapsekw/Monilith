@@ -1,7 +1,7 @@
 # Feedback (bugs & feature requests) — design
 
 **Date:** 2026-06-23
-**Topic:** An in-app channel for users to report **bugs** and request **features** about Pulse itself, triaged by the **platform admin**. A highlighted "Feedback" pill in the app-shell header opens a popover with **New** (capture form) and **My requests** (own submissions + live status) tabs. The platform admin reviews/triages everything in a new `/admin/feedback` section and can set status + post a public response; the submitter is notified in-app on each change.
+**Topic:** An in-app channel for users to report **bugs** and request **features** about Monolith itself, triaged by the **platform admin**. A highlighted "Feedback" pill in the app-shell header opens a popover with **New** (capture form) and **My requests** (own submissions + live status) tabs. The platform admin reviews/triages everything in a new `/admin/feedback` section and can set status + post a public response; the submitter is notified in-app on each change.
 **Status:** Spec — ready for plan. Nothing built.
 **Estimated size:** M (one migration + RLS, one validations module, one server-action module with notification wiring, one header client surface, one admin RSC surface).
 
@@ -9,7 +9,7 @@
 
 ## Problem
 
-Pulse has **no** channel for users to report product bugs or request features. The only adjacent concepts are `admin_audit_log` (privileged-action log, not user-facing) and the in-app notifications system (collaborative activity only). Today feedback would have to travel out-of-band (email/Slack), with no triage surface and no loop back to the reporter.
+Monolith has **no** channel for users to report product bugs or request features. The only adjacent concepts are `admin_audit_log` (privileged-action log, not user-facing) and the in-app notifications system (collaborative activity only). Today feedback would have to travel out-of-band (email/Slack), with no triage surface and no loop back to the reporter.
 
 We want a first-class, low-friction capture point in the product, plus a single triage surface for the product owner.
 

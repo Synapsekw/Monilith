@@ -6,7 +6,7 @@ const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected an ISO date (YYYY-MM-DD).");
 
-export const proposedFieldsSchema = z.object({
+const proposedFieldsSchema = z.object({
   ownerUserIds: z.array(z.string()).optional(),
   dueDate: isoDate.optional(),
   endDate: isoDate.optional(),
@@ -80,7 +80,7 @@ export type ExecutionResult = z.infer<typeof executionResultSchema>;
  * guard is a shape gate (role + content-is-string-or-array), not a deep
  * validation of every content block. The client holds it opaquely between turns.
  */
-export const aiConversationTurnSchema = z.object({
+const aiConversationTurnSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.union([z.string(), z.array(z.unknown())]),
 });

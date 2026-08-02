@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the shared touch-ergonomics primitives that every Pulse board surface will consume to reach full authoring parity on iPad.
+**Goal:** Build the shared touch-ergonomics primitives that every Monolith board surface will consume to reach full authoring parity on iPad.
 
 **Architecture:** A small set of framework-level primitives — a `useCoarsePointer()` hook (the single source of truth for "is this a touch context"), touch-aware dnd-kit sensors (long-press lift), a `<DragHandle>` primitive (the precision-drag exception), a `<RevealOnHover>` wrapper (hover-only actions become always-visible on touch), `pointer-coarse:` sizing on the `ui/` primitives (≥44px hit targets), and a touch-aware tooltip. No layout reflow, no new routes, **zero new server round-trips**. This is **Batch 1 (critical path)** of the iPad spec; all surface work depends on it.
 

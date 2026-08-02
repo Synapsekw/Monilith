@@ -12,7 +12,10 @@ export type LwwFlash = {
 };
 
 export function useLwwFlash(
-  presence: Pick<BoardPresence, "selfFocusTargetId" | "focusMap" | "selfUserId">,
+  presence: Pick<
+    BoardPresence,
+    "selfFocusTargetId" | "focusMap" | "selfUserId"
+  >,
 ): LwwFlash {
   const [flashTargetId, setFlashTargetId] = useState<string | null>(null);
   const [lastMessage, setLastMessage] = useState<LwwMessage | null>(null);
@@ -25,27 +28,32 @@ export function useLwwFlash(
     presenceRef.current = presence;
   });
 
-  const onRemoteChange = useCallback((e: { targetId: string; valueChanged: boolean }) => {
-    const p = presenceRef.current;
-    if (
-      !flashDecision({
-        incomingTargetId: e.targetId,
-        focusedTargetId: p.selfFocusTargetId,
-        valueChanged: e.valueChanged,
-      })
-    ) {
-      return;
-    }
-    const occ = p.focusMap.get(e.targetId)?.find((o) => o.userId !== p.selfUserId);
-    seqRef.current += 1;
-    setFlashTargetId(e.targetId);
-    setLastMessage({
-      id: seqRef.current,
-      text: occ ? `${occ.name} changed this just now` : "Updated just now",
-    });
-    if (clearRef.current) clearTimeout(clearRef.current);
-    clearRef.current = setTimeout(() => setFlashTargetId(null), 1200);
-  }, []);
+  const onRemoteChange = useCallback(
+    (e: { targetId: string; valueChanged: boolean }) => {
+      const p = presenceRef.current;
+      if (
+        !flashDecision({
+          incomingTargetId: e.targetId,
+          focusedTargetId: p.selfFocusTargetId,
+          valueChanged: e.valueChanged,
+        })
+      ) {
+        return;
+      }
+      const occ = p.focusMap
+        .get(e.targetId)
+        ?.find((o) => o.userId !== p.selfUserId);
+      seqRef.current += 1;
+      setFlashTargetId(e.targetId);
+      setLastMessage({
+        id: seqRef.current,
+        text: occ ? `${occ.name} changed this just now` : "Updated just now",
+      });
+      if (clearRef.current) clearTimeout(clearRef.current);
+      clearRef.current = setTimeout(() => setFlashTargetId(null), 1200);
+    },
+    [],
+  );
 
   return { flashTargetId, lastMessage, onRemoteChange };
 }

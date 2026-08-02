@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-11
-tags: [project/pulse, adr, gotcha, supabase, migrations, sync-prod]
+tags: [project/monolith, adr, gotcha, supabase, migrations, sync-prod]
 related:
   - "[[2026-07-11-1816-auth-reset-ux-and-optionpill-dry]]"
   - "[[tests-write-to-remote-db]]"

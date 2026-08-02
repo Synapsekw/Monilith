@@ -4,7 +4,7 @@ status: approved
 date: 2026-06-18
 phase: experiment
 title: "Mono — landing on-load reveal animation (test page)"
-tags: [project/pulse, spec, landing, animation, experiment]
+tags: [project/monolith, spec, landing, animation, experiment]
 related:
   - "[[2026-06-18-1957-landing-light-rays-hero]]"
   - "[[00-north-star]]"

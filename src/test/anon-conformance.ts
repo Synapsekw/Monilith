@@ -100,7 +100,7 @@ export function parsePublicFunctionSignatures(
 ): FunctionSignature[] {
   // `--` comments are prose and sometimes contain example DDL.
   const stripped = sql
-    .split("\n")
+    .split(/\r?\n/)
     .map((line) => line.replace(/--.*$/, ""))
     .join("\n");
 
@@ -146,7 +146,11 @@ export function collectPublicFunctionSignatures(
  * with every migration, so a new table is probed automatically.
  */
 export function parsePublicTableNames(databaseTypesSource: string): string[] {
-  const lines = databaseTypesSource.split("\n");
+  // Split on \r?\n, not \n: a CRLF checkout otherwise leaves a trailing \r on
+  // every line, so the anchored `$` patterns below silently match nothing and
+  // the probe throws (or worse, covers zero tables). .gitattributes now pins
+  // the working tree to LF, but the parser must not depend on that.
+  const lines = databaseTypesSource.split(/\r?\n/);
   const start = lines.findIndex((line) => /^ {4}Tables: \{$/.test(line));
   if (start === -1) {
     throw new Error(

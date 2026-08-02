@@ -1,4 +1,4 @@
-# Ask Pulse Phase 2 — Confirm-Before-Execute Write Actions — Design
+# Ask Monolith Phase 2 — Confirm-Before-Execute Write Actions — Design
 
 **Date:** 2026-07-26
 **Slug:** `ask-pulse-phase2-write-actions`

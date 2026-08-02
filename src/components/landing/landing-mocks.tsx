@@ -135,7 +135,7 @@ export function Avatar({
   );
 }
 
-export function OwnerCell({ person }: { person: Person }) {
+function OwnerCell({ person }: { person: Person }) {
   return (
     <div className="flex items-center gap-2 whitespace-nowrap">
       <Avatar person={person} />

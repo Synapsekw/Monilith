@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-07
-tags: [project/pulse, adr, gotcha, supabase, migrations]
+tags: [project/monolith, adr, gotcha, supabase, migrations]
 related:
   - "[[2026-07-07-1022-batch-a-soft-delete-avatar-kbar-search]]"
 ---

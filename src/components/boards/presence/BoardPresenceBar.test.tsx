@@ -3,13 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 import { BoardPresenceBar } from "./BoardPresenceBar";
 
 const occ = (id: string, name: string) => ({
-  userId: id, name, avatarUrl: null, color: "#2d9cdb", isSelf: false,
+  userId: id,
+  name,
+  avatarUrl: null,
+  color: "#2d9cdb",
+  isSelf: false,
 });
 
 vi.mock("@/lib/boards/presence-context", () => ({
   useBoardPresenceContextOptional: () => ({
     selfUserId: "self",
-    roster: [occ("self", "Me"), ...Array.from({ length: 8 }, (_, i) => occ(`u${i}`, `User ${i}`))],
+    roster: [
+      occ("self", "Me"),
+      ...Array.from({ length: 8 }, (_, i) => occ(`u${i}`, `User ${i}`)),
+    ],
   }),
 }));
 

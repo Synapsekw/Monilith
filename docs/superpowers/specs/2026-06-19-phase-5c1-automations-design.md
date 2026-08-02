@@ -4,7 +4,7 @@ status: approved
 date: 2026-06-19
 phase: 5c-1
 title: Automations — run-history (Phase 5c-1)
-tags: [project/pulse, spec, phase-5, automations, observability]
+tags: [project/monolith, spec, phase-5, automations, observability]
 related:
   - "[[2026-06-18-phase-5b2-automations-design]]"
   - "[[2026-06-18-phase-5b1-automations-design]]"

@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-27
-tags: [project/pulse, adr, gotcha, ai, streaming, ask]
+tags: [project/monolith, adr, gotcha, ai, streaming, ask]
 related:
   - "[[2026-07-27-1254-ask-stream-honesty-drop-recovery-thinking]]"
   - "[[2026-07-27-gotcha-61-repo-ops-kill-in-flight-dev-streams]]"

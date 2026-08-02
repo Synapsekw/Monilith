@@ -4,7 +4,7 @@ date: 2026-06-19-1316
 branch: develop
 trigger: wrapup
 status: complete
-tags: [session, project/pulse, phase-5, automations, webhooks, pg_net]
+tags: [session, project/monolith, phase-5, automations, webhooks, pg_net]
 related:
   - "[[2026-06-19-phase-5c2-automations-design]]"
   - "[[2026-06-19-0957-phase5c1-run-history]]"
@@ -39,7 +39,7 @@ related:
 ## Why
 
 5c-1 built run-history specifically so webhook delivery outcomes could land in it. 5c-2 adds the
-first **outbound HTTP** from Pulse (Slack/Zapier/Make/custom), staying 100% in-DB via pg_net +
+first **outbound HTTP** from Monolith (Slack/Zapier/Make/custom), staying 100% in-DB via pg_net +
 pg_cron, and **closes Phase 5 (Automations)**.
 
 ## Open threads

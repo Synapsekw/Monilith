@@ -11,7 +11,7 @@
 
 ## 1. Why this epic
 
-Pulse can meter and cap AI spend (E1: the `ai_usage` ledger + `org_ai_settings` entitlement + the `resolveAiAdapter`/`runAi` gateway), but there is **no way for a customer to pay** — the entitlement (tier + monthly credit ceiling) is set only by a platform operator from `src/app/admin/organizations/[id]` via `setOrgAiPlan`. Billing is fully greenfield: no Stripe SDK, no subscription table, no checkout, no webhook. E6 closes two gaps:
+Monolith can meter and cap AI spend (E1: the `ai_usage` ledger + `org_ai_settings` entitlement + the `resolveAiAdapter`/`runAi` gateway), but there is **no way for a customer to pay** — the entitlement (tier + monthly credit ceiling) is set only by a platform operator from `src/app/admin/organizations/[id]` via `setOrgAiPlan`. Billing is fully greenfield: no Stripe SDK, no subscription table, no checkout, no webhook. E6 closes two gaps:
 
 - **F16 — Stripe self-serve.** An org admin picks a plan, checks out through Stripe, and their subscription drives the same `org_ai_settings.tier` + `monthly_credit_limit` that E1 already reads. Managing/cancelling flows through the Stripe Billing Portal.
 - **F17 — Usage dashboard + exec digest narrative.** Org admins see their spend vs. quota (rolled up from the `ai_usage` ledger over its `(org_id, created_at)` index), and the existing weekly `digest_runs` email gains an AI-written narrative paragraph — generated once per run, metered through the E1 gateway, cached on the run row.

@@ -25,7 +25,7 @@ only the bare Group-1 + Status/Owner/Date board that `create_board` seeds today.
   logic). Not now.
 - Exposing templates through the ⌘K command palette — that lands in the **next** Phase-8 slice
   (⌘K polish).
-- Any new column kind. Pulse has six kinds and we map the donor's extras down (see §3).
+- Any new column kind. Monolith has six kinds and we map the donor's extras down (see §3).
 
 ## 2. Architecture & data flow
 
@@ -92,17 +92,17 @@ export const BOARD_TEMPLATES: BoardTemplate[] = [
 ];
 ```
 
-### Kind mapping (donor → Pulse's six kinds)
+### Kind mapping (donor → Monolith's six kinds)
 
-Pulse kinds: `text, status, people, date, numbers, dropdown`. The donor uses four kinds Pulse does
+Monolith kinds: `text, status, people, date, numbers, dropdown`. The donor uses four kinds Monolith does
 not have; map them:
 
-| Donor kind | Pulse kind | Notes                                               |
-| ---------- | ---------- | --------------------------------------------------- |
-| `progress` | `numbers`  | `settings.unit = '%'`                               |
-| `timeline` | `date`     | uses the date value's optional `end` → a date range |
-| `link`     | `text`     | plain text URL                                      |
-| `priority` | `status`   | options Hot / Warm / Cold                           |
+| Donor kind | Monolith kind | Notes                                               |
+| ---------- | ------------- | --------------------------------------------------- |
+| `progress` | `numbers`     | `settings.unit = '%'`                               |
+| `timeline` | `date`        | uses the date value's optional `end` → a date range |
+| `link`     | `text`        | plain text URL                                      |
+| `priority` | `status`      | options Hot / Warm / Cold                           |
 
 ### The four templates
 
@@ -186,7 +186,7 @@ Built with the **pulse-ui** and **frontend-design** skills (mandatory for UI wor
 - **Catalog integrity** (unit, `templates.test.ts`): every item's `groupRef` resolves to a defined
   group; every cell's `columnRef` resolves to a defined column; every `optionRef`/`optionRefs`
   resolves to an option on that column; cell value shape matches the column kind; all kinds are valid
-  Pulse kinds.
+  Monolith kinds.
 - **Server Action** (unit, in `actions.test.ts`): input validation; unknown `templateId` fails; date
   offsets resolve to ISO; the assembled payload is well-formed.
 - **Integration (live RLS)**: a member calling the RPC gets a fully-seeded board (correct groups,

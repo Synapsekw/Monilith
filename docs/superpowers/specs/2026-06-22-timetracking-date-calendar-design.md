@@ -6,13 +6,13 @@ Branch: `task/timetracking-date-cell`
 
 ## Goal
 
-Replace the two native `<input type="date">` inputs in `src/components/boards/cells/TimeTrackingCell.tsx` (edit-entry date **lines 310–316**, add-manual date **lines 406–412**) with the Pulse `Calendar` primitive (`src/components/ui/calendar.tsx`), fixing the Safari no-glyph problem — the deferred follow-up named in `docs/superpowers/plans/2026-06-22-date-cell-custom-calendar.md` (lines 105–106).
+Replace the two native `<input type="date">` inputs in `src/components/boards/cells/TimeTrackingCell.tsx` (edit-entry date **lines 310–316**, add-manual date **lines 406–412**) with the Monolith `Calendar` primitive (`src/components/ui/calendar.tsx`), fixing the Safari no-glyph problem — the deferred follow-up named in `docs/superpowers/plans/2026-06-22-date-cell-custom-calendar.md` (lines 105–106).
 
 ## Verified against the actual files
 
 - Native date inputs at lines 310–316 (edit) and 406–412 (add-manual).
 - Helpers `isoToLocalDate` / `localDateToISO` are **unexported at lines 290–302 of `src/components/boards/cells/editors/index.tsx`**.
-- `Calendar` primitive at `src/components/ui/calendar.tsx` (`mode="single"`, `selected`, `onSelect(Date)`, Pulse-tokened).
+- `Calendar` primitive at `src/components/ui/calendar.tsx` (`mode="single"`, `selected`, `onSelect(Date)`, Monolith-tokened).
 - **No `end` field** for time entries (single-day) → no range logic.
 
 ## Decisions (locked)

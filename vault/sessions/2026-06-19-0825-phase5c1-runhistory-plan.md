@@ -4,7 +4,7 @@ date: 2026-06-19-0825
 branch: develop
 trigger: wrapup
 status: complete
-tags: [session, project/pulse, phase-5, automations, observability]
+tags: [session, project/monolith, phase-5, automations, observability]
 related:
   - "[[2026-06-19-phase-5c1-automations-design]]"
   - "[[2026-06-18-2222-phase5b2-date-triggers]]"

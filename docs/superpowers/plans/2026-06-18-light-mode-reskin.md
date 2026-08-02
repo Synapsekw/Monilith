@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Pulse's already-defined light-mode tokens a polished, WCAG-AA counterpart to the shipped dark theme across every surface — without redesigning dark.
+**Goal:** Make Monolith's already-defined light-mode tokens a polished, WCAG-AA counterpart to the shipped dark theme across every surface — without redesigning dark.
 
 **Architecture:** One pure helper (`pillTextColor`) gives DB-colored status/label pills a luminance-chosen text color (fixes both modes); CSS-only edits in `globals.css` give light mode real elevation, soft shadows, a custom scrollbar, and a readable chart ramp; a Playwright sweep in light mode verifies every surface and fixes what breaks. Default theme stays `dark`. No schema, migration, type regen, or new server round-trips.
 

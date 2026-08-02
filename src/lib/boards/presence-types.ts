@@ -1,4 +1,9 @@
-export type PresenceViewKind = "table" | "kanban" | "calendar" | "timeline" | "panel";
+export type PresenceViewKind =
+  | "table"
+  | "kanban"
+  | "calendar"
+  | "timeline"
+  | "panel";
 
 export type PresenceFocus = {
   viewKind: PresenceViewKind;

@@ -390,7 +390,7 @@ unavailable` error-level log tag (§5), which is what an operator greps for.
 
 ## 12. How to test (manual walkthrough)
 
-Not user-observable in the Pulse UI — it is an HTTP-level control on a machine-to-machine endpoint
+Not user-observable in the Monolith UI — it is an HTTP-level control on a machine-to-machine endpoint
 — so acceptance is a `curl` pass against a running dev server, plus a real connector smoke test.
 
 1. Pull `develop` and start the app: `pnpm dev` (dev server on `http://localhost:3000`, pointed at
@@ -434,11 +434,11 @@ Not user-observable in the Pulse UI — it is an HTTP-level control on a machine
    editor) and repeat step 2. **Expect:** `201` again.
 
 7. **Confirm existing connectors are unaffected.** With the `oauthRegister:ip` bucket still
-   throttled, open Pulse → **Settings → MCP** and complete a tool call from an
+   throttled, open Monolith → **Settings → MCP** and complete a tool call from an
    already-connected Claude client. **Expect:** it works normally — the limit gates registration
    only, never an established connection.
 
-8. **Real client smoke test (once, after promote).** Add the Pulse MCP server as a fresh custom
+8. **Real client smoke test (once, after promote).** Add the Monolith MCP server as a fresh custom
    connector in Claude Desktop or claude.ai and complete the OAuth consent flow.
    **Expect:** first-time connect succeeds on the first attempt with no throttle — the headroom in
    §4 is doing its job.

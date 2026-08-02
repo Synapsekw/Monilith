@@ -39,4 +39,4 @@ Reports serve two audiences at once — client-facing deliverables (polish) and 
 
 ## Next session entry point
 
-Report Builder is on `develop`, not yet prod. Either **promote `develop → main`** (carries the builder; needs the `reports` migration synced to prod) after validating PDF export on a preview, or pick the next roadmap build (Ask Pulse full-page / E5 / E6 / PF).
+Report Builder is on `develop`, not yet prod. Either **promote `develop → main`** (carries the builder; needs the `reports` migration synced to prod) after validating PDF export on a preview, or pick the next roadmap build (Ask Monolith full-page / E5 / E6 / PF).

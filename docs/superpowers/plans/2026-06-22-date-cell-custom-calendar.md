@@ -35,11 +35,11 @@ primitive depends on the dependency). Critical path = the full chain.
 ## Task 1 — Calendar primitive
 
 **Produces:** `src/components/ui/calendar.tsx` — a shadcn-style Calendar wrapping react-day-picker v9,
-themed with Pulse tokens (monochrome + indigo accent, dark-first), lucide chevrons.
+themed with Monolith tokens (monochrome + indigo accent, dark-first), lucide chevrons.
 **Consumes:** Task 0 dependency; `cn` (`@/lib/utils`); lucide-react.
 
 - **Load the `pulse-ui` and `frontend-design` skills first** and follow them — map rdp `classNames` to
-  Pulse tokens so it matches the design system (not the default rdp look). Match the existing Popover
+  Monolith tokens so it matches the design system (not the default rdp look). Match the existing Popover
   surface styling.
 - Single-date `mode="single"`; expose `selected: Date | undefined`, `onSelect`, and month-nav.
 - Accessible keyboard grid (rdp built-in) — arrow keys move days, Enter selects, chevrons change month.

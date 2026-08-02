@@ -36,4 +36,4 @@ Post-promotion regression check on prod / `develop`: 1) open a board → **Gantt
 
 ## Next session entry point
 
-Roadmap fork: **Phase 10 Batch 2** (E2/E3/E4/E6 — no specs yet, scope→plan) or **Landing** Keystone redesign (scope→plan); **Ask Pulse full-page** and **PF** already have plans (build, not scope). First: apply the pending prod migration.
+Roadmap fork: **Phase 10 Batch 2** (E2/E3/E4/E6 — no specs yet, scope→plan) or **Landing** Keystone redesign (scope→plan); **Ask Monolith full-page** and **PF** already have plans (build, not scope). First: apply the pending prod migration.

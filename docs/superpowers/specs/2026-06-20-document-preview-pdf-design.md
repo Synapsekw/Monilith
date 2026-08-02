@@ -139,7 +139,7 @@ lightbox pattern). PDF.js executes none of the document's embedded scripts.
   arbitrary uploads are forced-download to prevent HTML/SVG/PDF script execution.
 - **PDF.js does not run embedded JavaScript** by default (we do not enable `enableScripting`).
 - **Tenant isolation unchanged.** `getAttachmentPdfUrl` is RLS-scoped exactly like the existing
-  signing actions; signed URLs are short-lived; the bucket stays private. Nothing leaves Pulse's
+  signing actions; signed URLs are short-lived; the bucket stays private. Nothing leaves Monolith's
   trust boundary — no third-party viewer, no conversion vendor.
 - **MIME gate.** The signing action refuses to sign anything but `application/pdf`, so the PDF path
   can never be coerced into signing/serving a different object type inline.

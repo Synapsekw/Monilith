@@ -3,7 +3,7 @@ type: spec
 status: draft
 date: 2026-07-06
 topic: avatar-upload
-tags: [project/pulse, spec, storage, profile]
+tags: [project/monolith, spec, storage, profile]
 related:
   - "[[00-north-star]]"
   - "docs/superpowers/specs/2026-06-16-phase-4-collaboration-design.md"
@@ -17,7 +17,7 @@ related:
 
 ## 1. Problem & intent
 
-Every avatar surface in Pulse already reads `profiles.avatar_url` and renders it, falling
+Every avatar surface in Monolith already reads `profiles.avatar_url` and renders it, falling
 back to initials when it is `null`:
 
 - `listOrgMembersCached` (`src/lib/org/queries-cached.ts`) selects `avatar_url` → `OrgMember.avatarUrl`.

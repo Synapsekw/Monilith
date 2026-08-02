@@ -102,7 +102,7 @@ commit the regenerated `src/types/database.types.ts` in the same change.
   retina crispness). Referenced in the email by an **absolute** URL built from a
   new env var **`NEXT_PUBLIC_SITE_URL`** (the deployed domain) so external mail
   clients can load it.
-- **Layout** (Pulse monochromatic + single accent, table-based for email
+- **Layout** (Monolith monochromatic + single accent, table-based for email
   compatibility, light background): centered card → logo → "Confirm your email"
   heading → one-line lead → prominent accent **Confirm email** button →
   muted plaintext fallback URL → muted footer (org/product line + "ignore if you

@@ -20,7 +20,7 @@
 **Pre-flight rules for the implementer:**
 
 - **AGENTS.md rule:** This is NOT stock Next.js. BEFORE writing the route / Server Component (Task 5) and any `"use server"` action (Tasks 3–4), read the relevant guide under `node_modules/next/dist/docs/01-app/` (e.g. `01-getting-started`, `03-api-reference`). Heed deprecation notices. `cookies()` is already async in this version (see `src/lib/supabase/server.ts`).
-- **UI rule (mandatory):** Tasks 5–7 (sidebar, route, Table, cell renderers) MUST invoke the `pulse-ui` skill AND the `frontend-design` skill before writing any visual code. Pulse uses a monochromatic surface system with a single `--brand` accent (bound to shadcn `--primary`/`--ring`); `--accent` stays gray for hover chrome. Existing primitives live in `src/components/ui/` (`button`, `card`, `input`, `label`, `dialog`, `dropdown-menu`, etc.) — reuse them, do not hand-roll.
+- **UI rule (mandatory):** Tasks 5–7 (sidebar, route, Table, cell renderers) MUST invoke the `pulse-ui` skill AND the `frontend-design` skill before writing any visual code. Monolith uses a monochromatic surface system with a single `--brand` accent (bound to shadcn `--primary`/`--ring`); `--accent` stays gray for hover chrome. Existing primitives live in `src/components/ui/` (`button`, `card`, `input`, `label`, `dialog`, `dropdown-menu`, etc.) — reuse them, do not hand-roll.
 - **Supabase CLI is linked** (`supabase/config.toml`, project_id `pulse`). Apply the migration with `supabase db push`. Regenerate types via the supabase MCP `generate_typescript_types` tool (preferred) or `supabase gen types typescript --linked`. Run advisors via the MCP `get_advisors` tool after every schema change — **a phase is not complete with advisor warnings.**
 - Work on branch `feat/phase-2a-boards-core` (cut it in Task 0).
 
@@ -1041,7 +1041,7 @@ Per spec §6: wire the disabled "Boards" stub in `app-shell.tsx` to a live list 
 
 **Steps**
 
-- [ ] Invoke the `pulse-ui` skill, then the `frontend-design` skill. Note Pulse's tokens: monochrome surfaces, single `--brand` accent on `--primary`/`--ring`, `--accent` reserved for gray hover chrome. Reuse `@/components/ui/*` primitives (`Button`, `Dialog`, `Input`, `Label`).
+- [ ] Invoke the `pulse-ui` skill, then the `frontend-design` skill. Note Monolith's tokens: monochrome surfaces, single `--brand` accent on `--primary`/`--ring`, `--accent` reserved for gray hover chrome. Reuse `@/components/ui/*` primitives (`Button`, `Dialog`, `Input`, `Label`).
 - [ ] Create `src/components/boards/BoardsNav.tsx` (client component): renders the org's boards as links to `/boards/[id]`, a **+ New board** button that opens a `Dialog` with an org-name-style form calling the `createBoard` action then `router.push` to the new board, and an empty-state line ("No boards yet") when the list is empty. Use `useRouter` from `next/navigation`, `useTransition` for pending state, and the `BoardListEntry` type from `@/lib/boards/queries`. Mirror the disabled-button styling already in `app-shell.tsx` for the list rows (active row uses `bg-accent text-foreground`). The new-board dialog needs a `workspaceId` — accept the workspaces list as a prop and default to the first workspace.
 
   Suggested shape (implement fully against the live primitives — adapt class names to what `pulse-ui` specifies):
@@ -1244,7 +1244,7 @@ Per spec §6: TanStack Table + `@tanstack/react-virtual` row virtualization; gro
 
 **Steps**
 
-- [ ] Invoke `pulse-ui` then `frontend-design`. Apply Pulse tokens to the table chrome (monochrome surfaces, group bands tinted by `group.color`, brand accent only for emphasis).
+- [ ] Invoke `pulse-ui` then `frontend-design`. Apply Monolith tokens to the table chrome (monochrome surfaces, group bands tinted by `group.color`, brand accent only for emphasis).
 - [ ] Write the FAILING component test `src/components/boards/cells/cells.test.tsx`:
 
 ```tsx

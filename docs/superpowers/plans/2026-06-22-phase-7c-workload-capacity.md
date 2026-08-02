@@ -1375,32 +1375,28 @@ describe.skipIf(!SERVICE_ROLE_KEY)("RLS + rollup: workload", () => {
   });
 
   it("capacity edit: self can upsert, an unrelated member cannot edit another's row", async () => {
-    const ins = await aMember
-      .from("member_capacity")
-      .upsert(
-        {
-          org_id: orgAId,
-          user_id: aMemberId,
-          hours_per_day: 6,
-          working_days: [1, 2, 3, 4, 5],
-          created_by: aMemberId,
-        },
-        { onConflict: "org_id,user_id" },
-      );
+    const ins = await aMember.from("member_capacity").upsert(
+      {
+        org_id: orgAId,
+        user_id: aMemberId,
+        hours_per_day: 6,
+        working_days: [1, 2, 3, 4, 5],
+        created_by: aMemberId,
+      },
+      { onConflict: "org_id,user_id" },
+    );
     expect(ins.error).toBeNull(); // self-edit allowed
 
-    const bad = await aMember
-      .from("member_capacity")
-      .upsert(
-        {
-          org_id: orgAId,
-          user_id: aOwnerId,
-          hours_per_day: 1,
-          working_days: [1],
-          created_by: aMemberId,
-        },
-        { onConflict: "org_id,user_id" },
-      );
+    const bad = await aMember.from("member_capacity").upsert(
+      {
+        org_id: orgAId,
+        user_id: aOwnerId,
+        hours_per_day: 1,
+        working_days: [1],
+        created_by: aMemberId,
+      },
+      { onConflict: "org_id,user_id" },
+    );
     expect(bad.error).not.toBeNull(); // editing someone else's capacity is RLS-denied
   });
 });

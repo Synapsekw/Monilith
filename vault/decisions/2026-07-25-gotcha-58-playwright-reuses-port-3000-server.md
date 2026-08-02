@@ -2,7 +2,7 @@
 type: adr
 status: accepted
 date: 2026-07-25
-tags: [project/pulse, adr, gotcha, testing, playwright, worktrees]
+tags: [project/monolith, adr, gotcha, testing, playwright, worktrees]
 related:
   - "[[2026-07-25-1056-settings-redesign-mcp-guide]]"
   - "[[2026-06-21-gotcha-31-worktree-needs-real-install]]"

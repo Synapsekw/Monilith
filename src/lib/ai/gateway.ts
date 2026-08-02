@@ -1,12 +1,13 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getServerEnv } from "@/lib/env.server";
 import {
   AiNotConfiguredError,
   AiDisabledError,
   ByoKeyMissingError,
 } from "@/lib/ai/errors";
-import { resolveUserAdapter } from "@/lib/ai/credentials";
+import { resolveUserAdapterById, asTrustedUserId } from "@/lib/ai/credentials";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { getAdapter } from "@/lib/ai/providers/registry";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
@@ -25,8 +26,15 @@ export type ResolvedAi = {
   provider: AiProvider;
 };
 
-/** The single chokepoint: picks the key + adapter for the org's ai_mode. */
-export async function resolveAiAdapter(orgId: string): Promise<ResolvedAi> {
+/** The single chokepoint: picks the key + adapter for the org's ai_mode.
+ *  `userId` is required because the `per_user` branch resolves THAT user's
+ *  key — always pass the id of the person whose spend this call is (the same
+ *  id you pass to runAi/record_ai_usage), never a session-derived id from a
+ *  different source. */
+export async function resolveAiAdapter(
+  orgId: string,
+  userId: string,
+): Promise<ResolvedAi> {
   const svc = createServiceClient();
   const settings = await readOrgAiSettings(svc, orgId);
 
@@ -58,11 +66,27 @@ export async function resolveAiAdapter(orgId: string): Promise<ResolvedAi> {
         provider,
       };
     }
-    // per_user resolves the SESSION user's key (cookie-bound requireUser). Callers must
-    // pass runAi a userId equal to the session user, or the ledger will attribute one
-    // user's spend to another.
+    // per_user resolves the SUPPLIED userId's key (session-less, service-role
+    // read) — not a cookie-bound session. This is what makes the gateway
+    // usable from cron/service-role callers (e.g. the personal-agent sweep)
+    // that have no session at all: they already know, from their own scoped
+    // data, which user's spend this is, and pass that same id to runAi for
+    // the ledger. Credential resolution and ledger attribution therefore
+    // always agree by construction — never resolve a different id here than
+    // the one passed to runAi's `userId`.
+    //
+    // TRUST: `asTrustedUserId(userId)` is safe HERE because every caller of
+    // this function is itself either (a) a Server Action/route that derived
+    // `userId` from its own `requireUser()` session before ever calling
+    // runAi/resolveAiAdapter, or (b) a service-role cron handler (e.g.
+    // personal-agent's route.ts) that derived it from an HMAC-verified
+    // request's own DB row (`agent.owner_id`), never from a request
+    // parameter passed straight through. This is the ONE call site allowed
+    // to mint a TrustedUserId — see credentials.ts for what that buys.
     case "per_user": {
-      const { adapter, apiKey } = await resolveUserAdapter();
+      const { adapter, apiKey } = await resolveUserAdapterById(
+        asTrustedUserId(userId),
+      );
       return { adapter, apiKey, mode: "per_user", provider: adapter.id };
     }
   }
@@ -83,7 +107,7 @@ export async function runAi<T>(
     resolved: ResolvedAi,
   ) => Promise<{ result: T; usage: AiUsageTokens; model: string }>,
 ): Promise<T> {
-  const resolved = await resolveAiAdapter(args.orgId);
+  const resolved = await resolveAiAdapter(args.orgId, args.userId);
   const { result, usage, model } = await fn(resolved);
   const costUsd = computeCostUsd(model, usage);
   const credits = costToCredits(costUsd);
@@ -135,11 +159,13 @@ export async function runEmbedding<T>(
   const costUsd = computeCostUsd(model, usage);
   const credits = costToCredits(costUsd);
   const svc = createServiceClient();
-  const { error } = await svc.rpc("record_ai_usage", {
+  // typedRpc, not svc.rpc: p_user is `string` in the generated types but the
+  // SQL parameter is nullable, and a system (cron) embedding legitimately has
+  // no user. typedRpc widens every arg to `| null`, which is what the function
+  // signature actually accepts — so null passes without a cast.
+  const { error } = await typedRpc(svc, "record_ai_usage", {
     p_org: args.orgId,
-    // p_user is `string` in generated types but the column is nullable; a system
-    // (cron) embedding legitimately has no user, so null is the honest value.
-    p_user: args.userId as unknown as string,
+    p_user: args.userId,
     p_feature: args.feature,
     p_provider: "openai",
     p_model: model,

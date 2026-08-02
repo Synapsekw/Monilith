@@ -1,109 +1,301 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MONOLITH / Keystone / Landings</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<style>
-  :root{--bg:#0e0e10;--elev:#161619;--paper:#f4f4f6;--muted:#9a9aa2;--stone:#6b6b72;--hair:rgba(255,255,255,.1);--radius:14px}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--paper);font-family:"Nunito",system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5}
-  a{color:inherit}
-  .labbar{position:sticky;top:0;z-index:1000;display:flex;align-items:center;gap:16px;height:44px;
-    padding:0 18px;background:rgba(10,10,12,.85);backdrop-filter:blur(12px);
-    border-bottom:1px solid rgba(255,255,255,.09);font-family:"JetBrains Mono",ui-monospace,monospace;
-    font-size:11.5px;letter-spacing:.04em;color:#9a9aa2}
-  .labbar b{color:#f5f5f6;font-weight:500}
-  .labbar a{color:#9a9aa2;text-decoration:none}
-  .labbar a:hover,.labbar a.on{color:#f5f5f6}
-  .labbar .sp{flex:1}
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MONOLITH / Keystone / Landings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0e0e10;
+        --elev: #161619;
+        --paper: #f4f4f6;
+        --muted: #9a9aa2;
+        --stone: #6b6b72;
+        --hair: rgba(255, 255, 255, 0.1);
+        --radius: 14px;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--paper);
+        font-family: "Nunito", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.5;
+      }
+      a {
+        color: inherit;
+      }
+      .labbar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 44px;
+        padding: 0 18px;
+        background: rgba(10, 10, 12, 0.85);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 11.5px;
+        letter-spacing: 0.04em;
+        color: #9a9aa2;
+      }
+      .labbar b {
+        color: #f5f5f6;
+        font-weight: 500;
+      }
+      .labbar a {
+        color: #9a9aa2;
+        text-decoration: none;
+      }
+      .labbar a:hover,
+      .labbar a.on {
+        color: #f5f5f6;
+      }
+      .labbar .sp {
+        flex: 1;
+      }
 
-  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
-  .wm{font-family:"Nunito",sans-serif;font-weight:800;letter-spacing:.03em;line-height:1;white-space:nowrap;display:inline-flex;align-items:baseline;color:var(--paper)}
-  .slabI{height:.72em;width:auto;margin:0 .05em;transform:translateY(.008em)}
-  .slabI path{fill:currentColor}
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 28px;
+      }
+      .wm {
+        font-family: "Nunito", sans-serif;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        line-height: 1;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: baseline;
+        color: var(--paper);
+      }
+      .slabI {
+        height: 0.72em;
+        width: auto;
+        margin: 0 0.05em;
+        transform: translateY(0.008em);
+      }
+      .slabI path {
+        fill: currentColor;
+      }
 
-  .lede{padding:80px 0 20px}
-  .kicker{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--stone)}
-  h1{font-weight:800;font-size:clamp(38px,6vw,72px);letter-spacing:-.02em;line-height:1;margin:18px 0 20px}
-  .lede p{max-width:58ch;color:var(--muted);font-size:17px}
+      .lede {
+        padding: 80px 0 20px;
+      }
+      .kicker {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--stone);
+      }
+      h1 {
+        font-weight: 800;
+        font-size: clamp(38px, 6vw, 72px);
+        letter-spacing: -0.02em;
+        line-height: 1;
+        margin: 18px 0 20px;
+      }
+      .lede p {
+        max-width: 58ch;
+        color: var(--muted);
+        font-size: 17px;
+      }
 
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:52px 0 90px}
-  @media (max-width:720px){.grid{grid-template-columns:1fr}}
-  .card{display:flex;flex-direction:column;justify-content:flex-end;min-height:220px;padding:24px;
-    border:1px solid var(--hair);border-radius:var(--radius);text-decoration:none;position:relative;overflow:hidden;
-    background:var(--elev);transition:transform .3s cubic-bezier(.16,1,.3,1),border-color .3s}
-  .card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.3)}
-  .card .top{position:absolute;top:22px;left:24px;right:24px;display:flex;align-items:center;justify-content:space-between}
-  .card .idx{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.16em;color:var(--stone)}
-  .card .theme{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.12em;color:var(--stone);
-    border:1px solid var(--hair);border-radius:999px;padding:3px 9px}
-  .card h3{font-weight:800;font-size:24px;letter-spacing:-.01em;margin-bottom:7px}
-  .card p{color:var(--muted);font-size:14px;max-width:44ch}
-  .card .go{margin-top:16px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.08em;color:var(--paper)}
-  .card.base{background:transparent}
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        padding: 52px 0 90px;
+      }
+      @media (max-width: 720px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        min-height: 220px;
+        padding: 24px;
+        border: 1px solid var(--hair);
+        border-radius: var(--radius);
+        text-decoration: none;
+        position: relative;
+        overflow: hidden;
+        background: var(--elev);
+        transition:
+          transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+          border-color 0.3s;
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+      .card .top {
+        position: absolute;
+        top: 22px;
+        left: 24px;
+        right: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .card .idx {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.16em;
+        color: var(--stone);
+      }
+      .card .theme {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        color: var(--stone);
+        border: 1px solid var(--hair);
+        border-radius: 999px;
+        padding: 3px 9px;
+      }
+      .card h3 {
+        font-weight: 800;
+        font-size: 24px;
+        letter-spacing: -0.01em;
+        margin-bottom: 7px;
+      }
+      .card p {
+        color: var(--muted);
+        font-size: 14px;
+        max-width: 44ch;
+      }
+      .card .go {
+        margin-top: 16px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        color: var(--paper);
+      }
+      .card.base {
+        background: transparent;
+      }
 
-  .foot{padding:0 0 70px;color:var(--stone);font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.06em}
-</style>
-</head>
-<body>
-  <nav class="labbar">
-    <b>MONOLITH</b><span>keystone</span>
-    <a href="/index.html">Overview</a>
-    <span class="sp"></span>
-    <a href="/keystone/variations.html">Variations</a>
-    <a href="/keystone/marks.html">Marks</a>
-    <a class="on" href="/keystone/landings.html">Landings</a>
-    <a href="/keystone/logo.html">Logo</a>
-    <a href="/keystone/favicon.html">Favicon</a>
-  </nav>
+      .foot {
+        padding: 0 0 70px;
+        color: var(--stone);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="labbar">
+      <b>MONOLITH</b><span>keystone</span>
+      <a href="/index.html">Overview</a>
+      <span class="sp"></span>
+      <a href="/keystone/variations.html">Variations</a>
+      <a href="/keystone/marks.html">Marks</a>
+      <a class="on" href="/keystone/landings.html">Landings</a>
+      <a href="/keystone/logo.html">Logo</a>
+      <a href="/keystone/favicon.html">Favicon</a>
+    </nav>
 
-  <div class="wrap">
-    <header class="lede">
-      <div class="kicker">Four directions, one brand</div>
-      <h1 class="wm">MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true"><path d="M8.6 5 15.4 3.2V20.8H8.6Z"/></svg>TH</h1>
-      <p>Four full landing pages, all on the finalized Keystone brand: the slab-I wordmark and the
-        cleaved mark. Each takes a different structure, mood, and theme. Open them, then tell me which
-        one to sharpen.</p>
-    </header>
+    <div class="wrap">
+      <header class="lede">
+        <div class="kicker">Four directions, one brand</div>
+        <h1 class="wm">
+          MONOL<svg class="slabI" viewBox="8.6 3.2 6.8 17.6" aria-hidden="true">
+            <path d="M8.6 5 15.4 3.2V20.8H8.6Z" /></svg
+          >TH
+        </h1>
+        <p>
+          Four full landing pages, all on the finalized Keystone brand: the
+          slab-I wordmark and the cleaved mark. Each takes a different
+          structure, mood, and theme. Open them, then tell me which one to
+          sharpen.
+        </p>
+      </header>
 
-    <main class="grid">
-      <a class="card" href="/keystone/landings/statement.html">
-        <div class="top"><span class="idx">01 / STATEMENT</span><span class="theme">dark</span></div>
-        <h3>Statement</h3>
-        <p>Minimal, near single-screen. The wordmark is the hero. Maximum restraint, invitation-only.</p>
-        <span class="go">Open &rarr;</span>
-      </a>
-      <a class="card" href="/keystone/landings/product.html">
-        <div class="top"><span class="idx">02 / PRODUCT</span><span class="theme">light</span></div>
-        <h3>Product-forward</h3>
-        <p>Lead with the product. A crafted board or dashboard up top, benefit-driven sections below.</p>
-        <span class="go">Open &rarr;</span>
-      </a>
-      <a class="card" href="/keystone/landings/editorial.html">
-        <div class="top"><span class="idx">03 / EDITORIAL</span><span class="theme">warm light</span></div>
-        <h3>Editorial</h3>
-        <p>Spacious and warm. Reads like a beautifully set publication about the product.</p>
-        <span class="go">Open &rarr;</span>
-      </a>
-      <a class="card" href="/keystone/landings/kinetic.html">
-        <div class="top"><span class="idx">04 / KINETIC</span><span class="theme">dark, moving</span></div>
-        <h3>Kinetic</h3>
-        <p>The dark world, but the monolith comes alive. A moving hero that reads as intentional.</p>
-        <span class="go">Open &rarr;</span>
-      </a>
-      <a class="card base" href="/keystone/landing.html">
-        <div class="top"><span class="idx">00 / BASELINE</span><span class="theme">dark</span></div>
-        <h3>Baseline</h3>
-        <p>The first Keystone landing, for reference. The starting point these four vary from.</p>
-        <span class="go">Open &rarr;</span>
-      </a>
-    </main>
+      <main class="grid">
+        <a class="card" href="/keystone/landings/statement.html">
+          <div class="top">
+            <span class="idx">01 / STATEMENT</span
+            ><span class="theme">dark</span>
+          </div>
+          <h3>Statement</h3>
+          <p>
+            Minimal, near single-screen. The wordmark is the hero. Maximum
+            restraint, invitation-only.
+          </p>
+          <span class="go">Open &rarr;</span>
+        </a>
+        <a class="card" href="/keystone/landings/product.html">
+          <div class="top">
+            <span class="idx">02 / PRODUCT</span
+            ><span class="theme">light</span>
+          </div>
+          <h3>Product-forward</h3>
+          <p>
+            Lead with the product. A crafted board or dashboard up top,
+            benefit-driven sections below.
+          </p>
+          <span class="go">Open &rarr;</span>
+        </a>
+        <a class="card" href="/keystone/landings/editorial.html">
+          <div class="top">
+            <span class="idx">03 / EDITORIAL</span
+            ><span class="theme">warm light</span>
+          </div>
+          <h3>Editorial</h3>
+          <p>
+            Spacious and warm. Reads like a beautifully set publication about
+            the product.
+          </p>
+          <span class="go">Open &rarr;</span>
+        </a>
+        <a class="card" href="/keystone/landings/kinetic.html">
+          <div class="top">
+            <span class="idx">04 / KINETIC</span
+            ><span class="theme">dark, moving</span>
+          </div>
+          <h3>Kinetic</h3>
+          <p>
+            The dark world, but the monolith comes alive. A moving hero that
+            reads as intentional.
+          </p>
+          <span class="go">Open &rarr;</span>
+        </a>
+        <a class="card base" href="/keystone/landing.html">
+          <div class="top">
+            <span class="idx">00 / BASELINE</span
+            ><span class="theme">dark</span>
+          </div>
+          <h3>Baseline</h3>
+          <p>
+            The first Keystone landing, for reference. The starting point these
+            four vary from.
+          </p>
+          <span class="go">Open &rarr;</span>
+        </a>
+      </main>
 
-    <div class="foot">MONOLITH / keystone direction &middot; landing variations</div>
-  </div>
-</body>
+      <div class="foot">
+        MONOLITH / keystone direction &middot; landing variations
+      </div>
+    </div>
+  </body>
 </html>

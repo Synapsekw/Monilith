@@ -1,4 +1,4 @@
-# AI Platform Foundation + Ask Pulse — Design Spec
+# AI Platform Foundation + Ask Monolith — Design Spec
 
 **Date:** 2026-07-05
 **Slug:** `ai-foundation-and-ask-pulse`
@@ -19,7 +19,7 @@ flagship feature on top of it in the same slice.
   credit balance, and a **pre-spend** quota check for managed orgs.
 - **F4 Entitlements + controls** — `org_ai_settings` (`ai_mode` off/managed/byo, `tier`, credit limit),
   a Settings "AI" section for org admins, and a platform-admin plan control.
-- **F5 Ask Pulse** — a **workspace-wide**, natural-language, **read-only** Q&A surface. The model
+- **F5 Ask Monolith** — a **workspace-wide**, natural-language, **read-only** Q&A surface. The model
   answers questions like "what's overdue and unassigned across my boards?" by calling **RLS-scoped
   read tools** in a tool-use loop; it never writes and never sees data the asking user can't.
 
@@ -28,14 +28,14 @@ and removes the last direct `getAnthropicClient()` call site outside `src/lib/ai
 
 ## Locked decisions
 
-| Decision             | Choice                                                                                                                                                                                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **BYO key storage**  | **Supabase Vault** (`vault.create_secret` / `vault.decrypted_secrets`), libsodium-encrypted. A `SECURITY DEFINER` function returns the decrypted key **only to the service role**; the plaintext key never crosses RLS to `authenticated` and never reaches the browser. |
-| **Ask Pulse scope**  | **Workspace-wide.** Tools are scoped to boards the asking user can see (RLS via the cookie-bound server client). Answers cite which boards were consulted.                                                                                                               |
-| **Metering**         | Ledger stores `input_tokens`, `output_tokens`, `cost_usd` per call (source of truth). Users see a monthly **AI-credit** allowance; managed enforcement is a **cost ceiling per tier**. BYO usage is logged (for the org's own visibility) but **not** capped by us.      |
-| **Entitlement gate** | Every AI Server Action calls `requireAiEntitlement(orgId, feature)` first: `ai_mode !== 'off'`, and for managed, remaining credits > 0. Fails closed with a typed, user-friendly error.                                                                                  |
-| **Ask Pulse writes** | **None.** Read-only tools only. Natural-language _writes_ are F6 (Epic 3), behind a confirm UX.                                                                                                                                                                          |
-| **Streaming**        | Deferred. F5 v1 returns a complete answer (with a "thinking…" state). Streaming is a later polish.                                                                                                                                                                       |
+| Decision                | Choice                                                                                                                                                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **BYO key storage**     | **Supabase Vault** (`vault.create_secret` / `vault.decrypted_secrets`), libsodium-encrypted. A `SECURITY DEFINER` function returns the decrypted key **only to the service role**; the plaintext key never crosses RLS to `authenticated` and never reaches the browser. |
+| **Ask Monolith scope**  | **Workspace-wide.** Tools are scoped to boards the asking user can see (RLS via the cookie-bound server client). Answers cite which boards were consulted.                                                                                                               |
+| **Metering**            | Ledger stores `input_tokens`, `output_tokens`, `cost_usd` per call (source of truth). Users see a monthly **AI-credit** allowance; managed enforcement is a **cost ceiling per tier**. BYO usage is logged (for the org's own visibility) but **not** capped by us.      |
+| **Entitlement gate**    | Every AI Server Action calls `requireAiEntitlement(orgId, feature)` first: `ai_mode !== 'off'`, and for managed, remaining credits > 0. Fails closed with a typed, user-friendly error.                                                                                  |
+| **Ask Monolith writes** | **None.** Read-only tools only. Natural-language _writes_ are F6 (Epic 3), behind a confirm UX.                                                                                                                                                                          |
+| **Streaming**           | Deferred. F5 v1 returns a complete answer (with a "thinking…" state). Streaming is a later polish.                                                                                                                                                                       |
 
 ## Architecture
 
@@ -99,7 +99,7 @@ The single chokepoint. Replaces direct `getAnthropicClient()` use at feature cal
   `AiDisabledError` (mode off), `AiQuotaExceededError` (managed & remaining ≤ 0). Every AI action
   calls this **before** doing any work. Actions translate these to clean `{ok:false,error}` messages.
 
-### 4. Ask Pulse (F5) — `src/lib/ai/ask/`
+### 4. Ask Monolith (F5) — `src/lib/ai/ask/`
 
 - `tools.ts` — read-tool definitions handed to the model (Anthropic tool-use). All execute through the
   **cookie-bound** server client, so **RLS is the boundary** — the model can only ever read what the
@@ -109,7 +109,7 @@ The single chokepoint. Replaces direct `getAnthropicClient()` use at feature cal
     raw rows) — cheap, privacy-safe context.
   - `query_items({board_id, filters?, sort?, limit})` → a **bounded** (`limit ≤ 50`) RLS-scoped read
     over `items`+`cell_values` for the specific rows a question needs (e.g. overdue + unassigned).
-    Returns names + the requested columns' values only. This is the one place Ask Pulse reads raw
+    Returns names + the requested columns' values only. This is the one place Ask Monolith reads raw
     cells — bounded, indexed, and only for the user's own data.
 - `ask.ts` — the tool-use **loop**: system prompt (teaches the tools + "answer only from tool
   results, cite boards, say when you don't know"), the user's question, iterate tool calls (cap ~6
@@ -144,13 +144,13 @@ API; **0 RSC navigations** for in-panel steps.
   never crash.
 - **Admin plan control** (`src/app/admin/organizations/[id]/`): set tier + monthly credit limit for an
   org (calls `setOrgAiPlan`).
-- **Ask Pulse** (`src/components/ai/ask/AskPulse.tsx`): a lazy panel opened from ⌘K ("Ask Pulse…")
+- **Ask Monolith** (`src/components/ai/ask/AskPulse.tsx`): a lazy panel opened from ⌘K ("Ask Monolith…")
   and a header entry. Text input → answer, with a "thinking…" state, the list of boards consulted, and
   a subtle credit note when managed. Empty/disabled/quota states are first-class.
 
-## Data flow (Ask Pulse)
+## Data flow (Ask Monolith)
 
-1. User opens Ask Pulse (lazy) → types a workspace-scoped question.
+1. User opens Ask Monolith (lazy) → types a workspace-scoped question.
 2. `askPulse` → `requireAiEntitlement` (fail-fast on off/quota) → tool-use loop.
 3. Model calls `list_boards` / `get_board_overview` / `query_items` (RLS-scoped) as needed.
 4. Loop ends → final answer + `boardsConsulted`. `runAi` has logged tokens/cost/credits.
@@ -172,13 +172,13 @@ API; **0 RSC navigations** for in-panel steps.
 - `get_byo_ai_secret` is `SECURITY DEFINER`, `search_path=''`, and **revoked** from `anon`/`authenticated`.
 - `ai_usage` has no client insert path; only the definer `record_ai_usage` writes.
 - `org_ai_settings` write is admin-gated at both RLS and action layers; reads never include plaintext.
-- Ask Pulse tools use the **cookie-bound** client so cross-org/cross-board reads are impossible by
+- Ask Monolith tools use the **cookie-bound** client so cross-org/cross-board reads are impossible by
   construction (RLS), even if the model "asks" for a board id it shouldn't see.
 - Run `get_advisors` after the migration; expect zero new warnings.
 
 ## Performance & data-fetching budget (AGENTS.md #5)
 
-- **First paint** unchanged — Ask Pulse + Settings AI form are lazy; no new work on page load.
+- **First paint** unchanged — Ask Monolith + Settings AI form are lazy; no new work on page load.
 - **In-panel interactions** — client state + History API, **0 RSC navigations**.
 - **Server round-trips only on explicit actions** — `askPulse` (one action, internal tool loop),
   `setByoKey` (one validate call), settings reads. None are view toggles.
@@ -195,14 +195,14 @@ API; **0 RSC navigations** for in-panel steps.
   passes when in-budget.
 - **RLS integration** (`*.rls.integration.test.ts`, `describe.skipIf(!SERVICE_ROLE_KEY)`): a member
   can read own `org_ai_settings` and **not** another org's; `ai_usage` is org-scoped; `get_byo_ai_secret`
-  is **not** callable as `authenticated`; Ask Pulse `query_items` returns only the user's boards.
-- **Component:** Settings AI form (mode switch, BYO validate/remove, quota meter); Ask Pulse panel
+  is **not** callable as `authenticated`; Ask Monolith `query_items` returns only the user's boards.
+- **Component:** Settings AI form (mode switch, BYO validate/remove, quota meter); Ask Monolith panel
   (thinking/answer/empty/disabled/quota states, sources list).
 
 ## Out of scope for this epic (YAGNI)
 
 - Streaming answers; natural-language **writes** (F6); per-user keys; multi-provider beyond the seam;
-  self-serve Stripe (E6); semantic retrieval (F15 — v1 Ask Pulse reads live via bounded tools);
+  self-serve Stripe (E6); semantic retrieval (F15 — v1 Ask Monolith reads live via bounded tools);
   conversation history/memory across questions (each ask is stateless in v1).
 
 ## Env / ops

@@ -18,7 +18,7 @@ related:
 ## What changed
 
 - Shipped a hosted **MCP server** so AI agents (Claude Desktop, claude.ai) can connect as a real
-  Pulse user and read/write board items: a from-scratch **OAuth 2.1 authorization server**
+  Monolith user and read/write board items: a from-scratch **OAuth 2.1 authorization server**
   (`/api/oauth/{register,authorize,token}`, RFC 8414 + RFC 9728 discovery, PKCE, a consent screen
   reusing the existing login) plus `/api/mcp` (Streamable HTTP via `mcp-handler` +
   `@modelcontextprotocol/sdk`), where every tool call runs through a **real, RLS-scoped Supabase
@@ -38,8 +38,8 @@ related:
 
 ## Why
 
-Pulse's Phase 10 roadmap wants AI agents to act on the user's behalf inside their own tools
-(Claude Desktop, Claude Code) rather than only inside Pulse's own chat surfaces. MCP is the
+Monolith's Phase 10 roadmap wants AI agents to act on the user's behalf inside their own tools
+(Claude Desktop, Claude Code) rather than only inside Monolith's own chat surfaces. MCP is the
 emerging standard transport for that; building it as a genuine OAuth-fronted remote server (not a
 pasted API key) matches how Claude Desktop/claude.ai's "custom connector" flow actually works, and
 routing every tool call through a real per-user Supabase session (rather than a service-role
@@ -51,13 +51,13 @@ authorization system to keep in sync.
 1. Pull `develop`. Deploy to a preview URL (or run `pnpm dev` with a public tunnel — Claude
    Desktop/claude.ai need a reachable HTTPS URL for `/api/oauth/*` and `/api/mcp`).
 2. In Claude Desktop or claude.ai, add a custom connector pointing at `https://<host>/api/mcp`.
-3. It should complete dynamic registration and redirect to your existing Pulse login (if not
-   already signed in) — sign in — then a consent screen ("X wants to access your Pulse account")
+3. It should complete dynamic registration and redirect to your existing Monolith login (if not
+   already signed in) — sign in — then a consent screen ("X wants to access your Monolith account")
    — approve it.
 4. The connector should show as connected with 6 tools available.
 5. Ask the agent to list your boards — should match exactly what you see in the app.
 6. Ask it to create an item on a board/group, then update its name and a field — both changes
-   should appear in the Pulse UI immediately.
+   should appear in the Monolith UI immediately.
 7. Confirm there's no delete/archive tool offered.
 8. In Settings, confirm the new "Connected apps" card lists the connection, and Revoke removes it.
 
