@@ -248,7 +248,7 @@ export function TimeCard({
                       <p className="truncate text-sm font-medium">
                         {row.label}
                       </p>
-                      <p className="text-muted-foreground truncate text-[11px]">
+                      <p className="text-muted-foreground text-2xs truncate">
                         {row.kind === "item"
                           ? (row.boardName ?? "Item")
                           : "Category"}

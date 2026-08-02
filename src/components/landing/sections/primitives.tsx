@@ -39,7 +39,7 @@ export function SectionHead({
       )}
     >
       <Kicker>{kicker}</Kicker>
-      <h2 className="mt-4 mb-4 text-3xl leading-[1.06] font-extrabold tracking-tight sm:text-4xl md:text-[46px]">
+      <h2 className="mt-4 mb-4 text-3xl leading-[1.06] font-extrabold tracking-tight sm:text-4xl md:text-5xl">
         {title}
       </h2>
       {sub ? (
@@ -61,7 +61,7 @@ export function SoftBadge({
   return (
     <span
       className={cn(
-        "flex-none rounded-sm px-2 py-1 font-mono text-[9px] font-medium tracking-[0.1em] uppercase",
+        "text-3xs flex-none rounded-sm px-2 py-1 font-mono font-medium tracking-[0.1em] uppercase",
         statusToneClasses(color, "soft"),
       )}
     >
@@ -80,7 +80,7 @@ export function SoftPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-sm px-2.5 py-0.5 text-[11px] font-semibold",
+        "text-2xs inline-flex items-center rounded-sm px-2.5 py-0.5 font-semibold",
         statusToneClasses(color, "soft"),
       )}
     >
@@ -113,10 +113,10 @@ export function FeatureRow({
     <div className="grid items-center gap-8 md:grid-cols-[1fr_1.15fr] md:gap-14">
       <LandingReveal className={cn(flip && "md:order-2")}>
         <Kicker>{kicker}</Kicker>
-        <h3 className="mt-3.5 mb-3.5 text-2xl leading-tight font-extrabold sm:text-[32px]">
+        <h3 className="mt-3.5 mb-3.5 text-2xl leading-tight font-extrabold sm:text-3xl">
           {title}
         </h3>
-        <p className="text-muted-foreground mb-6 text-[17px] leading-relaxed">
+        <p className="text-muted-foreground mb-6 text-lg leading-relaxed">
           {body}
         </p>
         <ul className="flex flex-col gap-3">
@@ -126,9 +126,9 @@ export function FeatureRow({
                 className="bg-primary mt-2 size-1.5 flex-none rounded-full"
                 aria-hidden="true"
               />
-              <span className="text-[15px]">
+              <span className="text-base">
                 <b className="font-bold">{p.title}</b>
-                <span className="text-muted-foreground block text-[13.5px]">
+                <span className="text-muted-foreground block text-sm">
                   {p.sub}
                 </span>
               </span>
@@ -171,7 +171,7 @@ export function CmdStep({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-primary/[0.05] border-primary/[0.18] flex items-center gap-3 rounded-lg border px-3.5 py-3 text-[13.5px]">
+    <div className="bg-primary/[0.05] border-primary/[0.18] flex items-center gap-3 rounded-lg border px-3.5 py-3 text-sm">
       {badge}
       <span>{children}</span>
     </div>
@@ -191,7 +191,7 @@ export function Kpi({
 }) {
   return (
     <div className="bg-surface-muted border-border rounded-lg border p-4">
-      <div className="text-kicker font-mono text-[9px] tracking-[0.1em] uppercase">
+      <div className="text-kicker text-3xs font-mono tracking-[0.1em] uppercase">
         {label}
       </div>
       <div className="mt-2 mb-1 text-3xl font-extrabold tracking-tight">
@@ -236,9 +236,7 @@ export function BentoTile({
         <h3 className="mt-2.5 mb-1.5 text-lg leading-tight font-bold tracking-tight">
           {title}
         </h3>
-        <p className="text-muted-foreground text-[13.5px] leading-relaxed">
-          {body}
-        </p>
+        <p className="text-muted-foreground text-sm leading-relaxed">{body}</p>
         <div className="mt-5 min-h-0 flex-1 overflow-hidden rounded-lg">
           {children}
         </div>

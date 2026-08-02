@@ -65,7 +65,7 @@ export function NotificationsBell({ userId }: { userId: string }) {
       >
         <Bell className="size-4" />
         {badge > 0 && (
-          <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full px-1 text-[10px] leading-4">
+          <span className="bg-primary text-primary-foreground text-3xs absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full px-1 leading-4">
             {badge > 9 ? "9+" : badge}
           </span>
         )}
