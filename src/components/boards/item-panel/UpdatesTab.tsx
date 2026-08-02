@@ -151,7 +151,7 @@ export function UpdatesTab({
                     {members.find((m) => m.userId === u.author_id)?.fullName ??
                       "Someone"}
                   </span>
-                  <span className="text-kicker font-mono text-[9.5px] tracking-wide uppercase">
+                  <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
                     <DateTime value={u.created_at} />
                   </span>
                 </span>

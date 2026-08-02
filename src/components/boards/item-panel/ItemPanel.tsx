@@ -123,7 +123,7 @@ export function ItemPanel({
             Details
           </Kicker>
           <div className="flex items-center justify-between gap-3">
-            <SheetTitle className="text-[17px] font-extrabold">
+            <SheetTitle className="text-lg font-extrabold">
               {itemName}
             </SheetTitle>
             <ItemViewersBar itemId={itemId} />

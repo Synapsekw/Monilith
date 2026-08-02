@@ -698,7 +698,7 @@ export function GanttBoard({
                 {headerTicks.map((tick) => (
                   <div
                     key={tick.dayOffset}
-                    className="text-muted-foreground absolute top-0 h-full border-l pt-2 pl-1.5 text-[11px] whitespace-nowrap"
+                    className="text-muted-foreground text-2xs absolute top-0 h-full border-l pt-2 pl-1.5 whitespace-nowrap"
                     style={{ left: tick.dayOffset * dayW }}
                   >
                     {tick.label}
