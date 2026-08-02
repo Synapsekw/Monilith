@@ -34,7 +34,7 @@ const BoardsNavSortable = dynamic(
  */
 function CoarseCaption({ label }: { label: string }) {
   return (
-    <span className="text-muted-foreground max-w-full truncate text-[10px] leading-tight normal-case">
+    <span className="text-muted-foreground text-3xs max-w-full truncate leading-tight normal-case">
       {label}
     </span>
   );

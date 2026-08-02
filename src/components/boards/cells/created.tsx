@@ -56,7 +56,7 @@ export function CreatedByCell({
   return (
     <span className="flex items-center gap-2 truncate text-xs opacity-60">
       {showAvatar ? (
-        <span className="bg-surface-muted flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-medium">
+        <span className="bg-surface-muted text-3xs flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full font-medium">
           {avatarUrl ? (
             <Image
               src={avatarUrl}

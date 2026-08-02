@@ -144,7 +144,7 @@ function AgendaDayList({
             >
               <span className="flex-1 truncate text-sm">{item.name}</span>
               {isSpan && (
-                <span className="text-muted-foreground bg-surface-muted border-border rounded-sm border px-2 py-0.5 text-[10px]">
+                <span className="text-muted-foreground bg-surface-muted border-border text-3xs rounded-sm border px-2 py-0.5">
                   {fmt(item.range.start)} – {fmt(item.range.end)}
                 </span>
               )}

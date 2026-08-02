@@ -113,7 +113,7 @@ export function CalendarMonth({
                     <div className="flex items-center justify-end">
                       <span
                         className={cn(
-                          "text-[11px] tabular-nums",
+                          "text-2xs tabular-nums",
                           day.dateISO === today
                             ? "text-primary font-bold"
                             : "text-muted-foreground",
@@ -242,7 +242,7 @@ function DayMorePopover({
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground hover:bg-state-hover w-full rounded px-1 text-left text-[10px]"
+            className="text-muted-foreground hover:bg-state-hover text-3xs w-full rounded px-1 text-left"
           >
             +{hidden.length} more
           </button>
