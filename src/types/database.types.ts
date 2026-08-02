@@ -3421,6 +3421,15 @@ export type Database = {
         };
       };
       escape_like: { Args: { p_text: string }; Returns: string };
+      get_my_agent_last_runs: {
+        Args: never;
+        Returns: {
+          created_at: string;
+          error: string;
+          status: string;
+          user_agent_id: string;
+        }[];
+      };
       get_my_work_items: {
         Args: { p_limit?: number };
         Returns: {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTranscript, summarizeThread } from "@/lib/ai/summarize/summarize";
+import { modelFor } from "@/lib/ai/model-map";
 import type {
   ItemActivityRow,
   ItemUpdateRow,
@@ -205,5 +206,38 @@ describe("summarizeThread", () => {
     expect(capturedMessages).toEqual([
       { role: "user", content: expect.stringContaining("the transcript body") },
     ]);
+  });
+
+  // Regression guard: the request must state `thinking` explicitly. Omitting it
+  // on a Sonnet-tier model means ADAPTIVE thinking at effort "high", and
+  // max_tokens caps thinking PLUS text — a thinking block would consume this
+  // 1024-token budget and the user would get an empty summary, no error.
+  // Deliberately NOT choice.thinking (which is adaptive for this feature).
+  it("routes thread_summary through the model map and disables thinking", async () => {
+    let params: Record<string, unknown> | undefined;
+    const client = {
+      messages: {
+        create: async (p: Record<string, unknown>) => {
+          params = p;
+          return {
+            content: [{ type: "text", text: "ok" }],
+            usage: { input_tokens: 1, output_tokens: 1 },
+          };
+        },
+      },
+    };
+    const res = await summarizeThread({
+      apiKey: "unused",
+      updates: [update({})],
+      activities: [],
+      columns: [],
+      members: MEMBERS,
+      client: client as never,
+    });
+    expect(params?.model).toBe(modelFor("thread_summary").model);
+    expect(params?.thinking).toEqual({ type: "disabled" });
+    expect(params?.max_tokens).toBe(1024);
+    // Reported back so runAi's ledger row names the model that actually ran.
+    expect(res.model).toBe(modelFor("thread_summary").model);
   });
 });

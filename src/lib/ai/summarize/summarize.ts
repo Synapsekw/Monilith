@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import {
   resolveActivity,
@@ -118,19 +118,27 @@ export async function summarizeThread(args: {
   columns: readonly Column[];
   members: readonly Member[];
   client?: Anthropic;
-}): Promise<{ summary: string; usage: AiUsageTokens }> {
+}): Promise<{ summary: string; usage: AiUsageTokens; model: string }> {
   const transcript = buildTranscript(args);
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
+  const choice = modelFor("thread_summary");
 
   const response = await client.messages.create({
-    model: MODEL,
+    model: choice.model,
     max_tokens: 1024,
+    // MUST be explicit, and deliberately NOT choice.thinking: omitting
+    // `thinking` on a Sonnet-tier model runs adaptive thinking at effort
+    // "high", and max_tokens caps thinking PLUS response text — a thinking
+    // block would consume this 1024-token budget and return no text at all.
+    // Disabled reproduces the pre-model-map behaviour exactly.
+    thinking: { type: "disabled" },
     system: SYSTEM,
     messages: [{ role: "user", content: transcript }],
   });
 
   return {
     summary: textOf(response.content),
+    model: choice.model,
     usage: {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,

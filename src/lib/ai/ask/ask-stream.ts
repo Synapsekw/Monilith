@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import { ASK_TOOLS, executeAskTool } from "@/lib/ai/ask/tools";
 import {
   WRITE_TOOLS,
@@ -29,6 +29,26 @@ function textOf(content: Anthropic.ContentBlock[]): string {
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("\n");
+}
+
+/**
+ * Move the single message-level cache breakpoint to the last content block of
+ * the last message. MOVE, not add: Anthropic allows 4 breakpoints per request
+ * and MAX_ROUNDS is 6, so appending one per round would blow the budget. The
+ * system block carries the other breakpoint (tools render before system, so
+ * one marker there caches the whole tool+system prefix).
+ */
+function moveMessageBreakpoint(messages: Anthropic.MessageParam[]): void {
+  for (const m of messages) {
+    if (!Array.isArray(m.content)) continue;
+    for (const b of m.content as unknown as Record<string, unknown>[])
+      delete b.cache_control;
+  }
+  const last = messages[messages.length - 1];
+  if (!last || !Array.isArray(last.content) || last.content.length === 0)
+    return;
+  const blocks = last.content as unknown as Record<string, unknown>[];
+  blocks[blocks.length - 1].cache_control = { type: "ephemeral" };
 }
 
 /**
@@ -70,15 +90,31 @@ export async function askPulseStream(args: {
   });
   const tools = [...ASK_TOOLS, LIST_MEMBERS_TOOL, ...WRITE_TOOLS];
   const messages = [...args.messages];
-  const usage: AiUsageTokens = { inputTokens: 0, outputTokens: 0 };
+  const choice = modelFor("ask_pulse");
+  const system: Anthropic.TextBlockParam[] = [
+    { type: "text", text: args.system, cache_control: { type: "ephemeral" } },
+  ];
+  const usage: AiUsageTokens = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  };
   const boards = new Set<string>();
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     let streamedText = "";
     const stream = client.messages.stream({
-      model: MODEL,
-      max_tokens: 4096,
-      system: args.system,
+      model: choice.model,
+      // 8192, not 4096: max_tokens caps thinking PLUS response text, and
+      // thinking is deliberately ON here (a Sonnet-tier model with thinking
+      // disabled reaches for tools noticeably less, which would degrade Ask).
+      // The budget has to leave room for both.
+      max_tokens: 8192,
+      // MUST be explicit — omitting it means "adaptive at effort high" on a
+      // Sonnet-tier model, which is a silent request-shape change.
+      thinking: choice.thinking,
+      system,
       tools,
       messages,
     });
@@ -89,6 +125,11 @@ export async function askPulseStream(args: {
     const final = await stream.finalMessage();
     usage.inputTokens += final.usage.input_tokens;
     usage.outputTokens += final.usage.output_tokens;
+    usage.cacheReadTokens =
+      (usage.cacheReadTokens ?? 0) + (final.usage.cache_read_input_tokens ?? 0);
+    usage.cacheWriteTokens =
+      (usage.cacheWriteTokens ?? 0) +
+      (final.usage.cache_creation_input_tokens ?? 0);
 
     if (final.stop_reason !== "tool_use") {
       const answer = streamedText || textOf(final.content);
@@ -155,13 +196,30 @@ export async function askPulseStream(args: {
         : "Thinking…",
     });
     messages.push({ role: "user", content: toolResults });
+    moveMessageBreakpoint(messages);
   }
 
-  // Cap reached (or an empty tool turn): one final buffered answer.
+  // Cap reached (or an empty tool turn): one final buffered answer. `tools` +
+  // `tool_choice: "none"` are included even though this call never invokes a
+  // tool: the cached prefix is tools -> system -> messages, so omitting tools
+  // would diverge the prefix at byte zero from every streaming call in the
+  // same turn and turn both breakpoints into guaranteed (1.25x) cache WRITES
+  // instead of reads. A tool_choice change alone preserves the tools+system
+  // cache and only invalidates the messages cache — exactly what we want,
+  // since "answer now, no more tools" is what tool_choice: none already means.
   const capped = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1024,
-    system: args.system,
+    model: choice.model,
+    // 4096, not 1024: same thinking-plus-text budget reasoning as the
+    // streaming rounds above — 1024 would be consumed by the thinking block
+    // and return no answer text at all.
+    max_tokens: 4096,
+    // Explicit, and the SAME value as the streaming rounds: `thinking` is part
+    // of the cache key tier for system+messages, so diverging here would cost
+    // cache reads on top of changing behaviour.
+    thinking: choice.thinking,
+    system,
+    tools,
+    tool_choice: { type: "none" },
     messages: [
       ...messages,
       { role: "user", content: "Answer now with what you have." },
@@ -169,6 +227,11 @@ export async function askPulseStream(args: {
   });
   usage.inputTokens += capped.usage.input_tokens;
   usage.outputTokens += capped.usage.output_tokens;
+  usage.cacheReadTokens =
+    (usage.cacheReadTokens ?? 0) + (capped.usage.cache_read_input_tokens ?? 0);
+  usage.cacheWriteTokens =
+    (usage.cacheWriteTokens ?? 0) +
+    (capped.usage.cache_creation_input_tokens ?? 0);
   const answer = textOf(capped.content);
   args.emit({ type: "token", text: answer });
   return { answer, boardsConsulted: [...boards], proposedActions: [], usage };

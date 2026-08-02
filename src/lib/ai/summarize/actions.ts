@@ -4,7 +4,6 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import {
   buildTranscript,
   summarizeThread as summarizeThreadWithAi,
@@ -102,7 +101,7 @@ export async function summarizeThread(input: {
           columns: payload.columns,
           members,
         });
-        return { result: r.summary, usage: r.usage, model: MODEL };
+        return { result: r.summary, usage: r.usage, model: r.model };
       },
     );
 

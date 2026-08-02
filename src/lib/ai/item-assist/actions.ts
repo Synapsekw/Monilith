@@ -4,7 +4,6 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import { generateItemAssist as generateItemAssistWithAi } from "@/lib/ai/item-assist/assist";
 import { validateItemAssist } from "@/lib/ai/item-assist/validate";
 import type {
@@ -159,7 +158,7 @@ export async function generateItemAssist(input: {
           statusOptions,
           want: effectiveWant,
         });
-        return { result: r.proposal, usage: r.usage, model: MODEL };
+        return { result: r.proposal, usage: r.usage, model: r.model };
       },
     );
 

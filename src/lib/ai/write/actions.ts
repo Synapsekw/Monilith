@@ -4,7 +4,6 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement, getAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import { proposeLoop } from "./propose";
 import { executeAction } from "./execute";
 import {
@@ -98,7 +97,7 @@ export async function proposeActions(input: {
           instruction: parsed.data.instruction,
           messages: history.length ? history : undefined,
         });
-        return { result: r, usage: r.usage, model: MODEL };
+        return { result: r, usage: r.usage, model: r.model };
       },
     );
     return {

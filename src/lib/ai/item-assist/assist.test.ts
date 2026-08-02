@@ -37,7 +37,12 @@ describe("generateItemAssist", () => {
     });
 
     expect(res.proposal).toEqual({ description: "A drafted description." });
-    expect(res.usage).toEqual({ inputTokens: 123, outputTokens: 45 });
+    expect(res.usage).toEqual({
+      inputTokens: 123,
+      outputTokens: 45,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
     expect(parse).toHaveBeenCalledTimes(1); // exactly one call, no retries/network
 
     const call = calls[0];
@@ -86,5 +91,43 @@ describe("generateItemAssist", () => {
     });
 
     expect(res.proposal).toEqual({ description: "from text block" });
+  });
+
+  it("assists on haiku with the enabled-thinking shape and no effort", async () => {
+    const captured: Record<string, unknown>[] = [];
+    const client = {
+      messages: {
+        parse: async (params: Record<string, unknown>) => {
+          captured.push(params);
+          return {
+            content: [{ type: "text", text: "{}" }],
+            parsed_output: { description: "d" },
+            usage: {
+              input_tokens: 20,
+              output_tokens: 8,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+          };
+        },
+      },
+    } as never;
+
+    const { usage } = await generateItemAssist({
+      apiKey: "sk-ant-test",
+      item: { name: "Ship billing" },
+      want: { description: { columnId: "col-desc" } },
+      client,
+    });
+
+    expect(captured[0].model).toBe("claude-haiku-4-5");
+    expect(captured[0].thinking).toEqual({
+      type: "enabled",
+      budget_tokens: 1024,
+    });
+    expect(
+      (captured[0].output_config as Record<string, unknown>).effort,
+    ).toBeUndefined();
+    expect(usage.cacheWriteTokens).toBe(0);
   });
 });

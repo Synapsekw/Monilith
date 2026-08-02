@@ -13,6 +13,7 @@ import {
 } from "@/lib/ai/proposal-schema";
 import { generateProposal } from "@/lib/ai/generate";
 import { runAi } from "@/lib/ai/gateway";
+import { modelFor } from "@/lib/ai/model-map";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { mapAiError } from "@/lib/ai/action-guard";
 import { requireUser } from "@/lib/auth/session";
@@ -123,15 +124,20 @@ export async function generateDashboardProposal(input: {
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "dashboard_gen");
     const user = await requireUser();
+    const choice = modelFor("dashboard_gen");
     const proposal = await runAi(
       { orgId: org.id, userId: user.id, feature: "dashboard_gen" },
       async ({ adapter, apiKey }) => {
-        const { proposal, usage } = await generateProposal(snap, {
+        // Meter the model the ADAPTER ran, not choice.model: the OpenAI/Google
+        // adapters ignore `choice` and run their own fixed model, so a BYO org
+        // would otherwise be billed at Sonnet rates for a Gemini call.
+        const { proposal, usage, model } = await generateProposal(snap, {
           adapter,
           apiKey,
           feedback: parsed.data.feedback,
+          choice,
         });
-        return { result: proposal, usage, model: adapter.defaultModel };
+        return { result: proposal, usage, model };
       },
     );
     const validated = validateProposal(proposal, snap);

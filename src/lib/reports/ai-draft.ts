@@ -1,3 +1,4 @@
+import type { ModelChoice } from "@/lib/ai/model-map";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
@@ -22,13 +23,20 @@ function userPrompt(snapshot: BoardSnapshot): string {
 
 export async function draftReportNarrative(
   snapshot: BoardSnapshot,
-  opts: { adapter: ProviderAdapter; apiKey: string },
-): Promise<{ narrative: ReportNarrative; usage: AiUsageTokens }> {
-  const { data, usage } = await opts.adapter.generateStructured<unknown>({
-    apiKey: opts.apiKey,
-    system: systemPrompt(),
-    user: userPrompt(snapshot),
-    schema: REPORT_NARRATIVE_JSON_SCHEMA,
-  });
-  return { narrative: validateNarrative(data), usage };
+  opts: { adapter: ProviderAdapter; apiKey: string; choice?: ModelChoice },
+): Promise<{
+  narrative: ReportNarrative;
+  usage: AiUsageTokens;
+  model: string;
+}> {
+  const { data, usage, model } = await opts.adapter.generateStructured<unknown>(
+    {
+      apiKey: opts.apiKey,
+      system: systemPrompt(),
+      user: userPrompt(snapshot),
+      schema: REPORT_NARRATIVE_JSON_SCHEMA,
+      choice: opts.choice,
+    },
+  );
+  return { narrative: validateNarrative(data), usage, model };
 }

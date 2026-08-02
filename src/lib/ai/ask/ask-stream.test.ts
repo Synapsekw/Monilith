@@ -21,6 +21,7 @@ vi.mock("@/lib/ai/write/write-tools", () => ({
 }));
 
 import { askPulseStream } from "./ask-stream";
+import { modelFor } from "@/lib/ai/model-map";
 
 type Round = {
   text?: string;
@@ -105,7 +106,12 @@ describe("askPulseStream", () => {
     });
     expect(tokens.join("")).toBe("Hello");
     expect(res.answer).toBe("Hello");
-    expect(res.usage).toEqual({ inputTokens: 5, outputTokens: 2 });
+    expect(res.usage).toEqual({
+      inputTokens: 5,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
     expect(res.boardsConsulted).toEqual([]);
     expect(res.proposedActions).toEqual([]);
   });
@@ -238,5 +244,214 @@ describe("askPulseStream", () => {
       type: "status",
       text: "Consulting 1 board…",
     });
+  });
+
+  it("caches tools+system via a system content block and reports cache usage", async () => {
+    const captured: Record<string, unknown>[] = [];
+    const client = {
+      messages: {
+        stream: (params: Record<string, unknown>) => {
+          captured.push(params);
+          return {
+            on: () => {},
+            finalMessage: async () => ({
+              stop_reason: "end_turn",
+              content: [{ type: "text", text: "done" }],
+              usage: {
+                input_tokens: 100,
+                output_tokens: 20,
+                cache_read_input_tokens: 24_000,
+                cache_creation_input_tokens: 1_500,
+              },
+            }),
+          };
+        },
+      },
+    } as never;
+
+    const { usage } = await askPulseStream({
+      apiKey: "sk-ant-test",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      messages: [{ role: "user", content: "hi" }],
+      system: "You are Ask.",
+      emit: () => {},
+      client,
+    });
+
+    expect(captured[0].model).toBe("claude-sonnet-5");
+    expect(captured[0].system).toEqual([
+      {
+        type: "text",
+        text: "You are Ask.",
+        cache_control: { type: "ephemeral" },
+      },
+    ]);
+    expect(usage.cacheReadTokens).toBe(24_000);
+    expect(usage.cacheWriteTokens).toBe(1_500);
+  });
+
+  it("keeps exactly one message breakpoint across tool rounds", async () => {
+    // Stands alone: don't rely on an earlier test's mockResolvedValue
+    // surviving vi.clearAllMocks() (it clears calls, not implementations).
+    mockExecuteAskTool.mockResolvedValue({ content: "[]", boardId: "b1" });
+    const captured: Record<string, unknown>[] = [];
+    let round = 0;
+    const client = {
+      messages: {
+        stream: (params: Record<string, unknown>) => {
+          captured.push(structuredClone(params));
+          const useTool = round++ < 2;
+          return {
+            on: () => {},
+            finalMessage: async () => ({
+              stop_reason: useTool ? "tool_use" : "end_turn",
+              content: useTool
+                ? [
+                    {
+                      type: "tool_use",
+                      id: `t${round}`,
+                      name: "list_boards",
+                      input: {},
+                    },
+                  ]
+                : [{ type: "text", text: "done" }],
+              usage: { input_tokens: 10, output_tokens: 2 },
+            }),
+          };
+        },
+      },
+    } as never;
+
+    await askPulseStream({
+      apiKey: "sk-ant-test",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      messages: [{ role: "user", content: "hi" }],
+      system: "You are Ask.",
+      emit: () => {},
+      client,
+    });
+
+    // Anthropic rejects more than 4 breakpoints; 1 system + 1 message is the budget.
+    const last = captured[captured.length - 1];
+    const msgs = last.messages as { content: unknown }[];
+    const marked = JSON.stringify(msgs).split('"cache_control"').length - 1;
+    expect(marked).toBe(1);
+  });
+
+  it("carries tools + tool_choice:none on the capped final call, so its prefix still matches the streamed rounds", async () => {
+    // Stands alone, same reasoning as above.
+    mockExecuteAskTool.mockResolvedValue({ content: "[]", boardId: "b1" });
+    let createParams: Record<string, unknown> | undefined;
+    let streamParams: Record<string, unknown> | undefined;
+    const client = {
+      messages: {
+        // Every round hits the tool-use branch, so MAX_ROUNDS (6) is
+        // exhausted and the loop falls through to the capped call.
+        stream: (params: Record<string, unknown>) => {
+          streamParams = params;
+          return {
+            on: () => {},
+            finalMessage: async () => ({
+              stop_reason: "tool_use",
+              content: [
+                { type: "tool_use", id: "t1", name: "list_boards", input: {} },
+              ],
+              usage: { input_tokens: 10, output_tokens: 2 },
+            }),
+          };
+        },
+        create: (params: Record<string, unknown>) => {
+          createParams = params;
+          return Promise.resolve({
+            content: [{ type: "text", text: "capped" }],
+            usage: { input_tokens: 5, output_tokens: 5 },
+          });
+        },
+      },
+    } as never;
+
+    await askPulseStream({
+      apiKey: "sk-ant-test",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      messages: [{ role: "user", content: "hi" }],
+      system: "You are Ask.",
+      emit: () => {},
+      client,
+    });
+
+    // Cached prefix is tools -> system -> messages: omitting tools here would
+    // diverge the prefix at byte zero and turn both breakpoints into 1.25x
+    // cache WRITES instead of reads. PREFIX IDENTITY is the invariant, so
+    // assert the capped call's tools DEEP-EQUAL the streaming rounds' — a
+    // merely non-empty array would sail through a reordered or trimmed list,
+    // which busts the cache just as thoroughly.
+    expect(createParams?.tools).toEqual(streamParams?.tools);
+    expect(createParams?.tool_choice).toEqual({ type: "none" });
+    expect(createParams?.system).toEqual(streamParams?.system);
+    expect(createParams?.system).toEqual([
+      {
+        type: "text",
+        text: "You are Ask.",
+        cache_control: { type: "ephemeral" },
+      },
+    ]);
+    // `thinking` sits in the same cache-invalidation tier as system+messages,
+    // so it must match the streaming rounds too.
+    expect(createParams?.thinking).toEqual(streamParams?.thinking);
+  });
+
+  // Regression guard for the whole Ask loop's request shape. Thinking is
+  // deliberately ON here (a Sonnet-tier model with thinking disabled reaches
+  // for tools noticeably less, which would degrade Ask) — but that only works
+  // if it is stated EXPLICITLY and the budgets leave room for thinking PLUS
+  // response text, which max_tokens caps together.
+  it("states thinking explicitly and budgets for thinking + text on both call shapes", async () => {
+    mockExecuteAskTool.mockResolvedValue({ content: "[]", boardId: "b1" });
+    let createParams: Record<string, unknown> | undefined;
+    let streamParams: Record<string, unknown> | undefined;
+    const client = {
+      messages: {
+        stream: (params: Record<string, unknown>) => {
+          streamParams = params;
+          return {
+            on: () => {},
+            finalMessage: async () => ({
+              stop_reason: "tool_use",
+              content: [
+                { type: "tool_use", id: "t1", name: "list_boards", input: {} },
+              ],
+              usage: { input_tokens: 1, output_tokens: 1 },
+            }),
+          };
+        },
+        create: (params: Record<string, unknown>) => {
+          createParams = params;
+          return Promise.resolve({
+            content: [{ type: "text", text: "capped" }],
+            usage: { input_tokens: 1, output_tokens: 1 },
+          });
+        },
+      },
+    } as never;
+
+    await askPulseStream({
+      apiKey: "sk-ant-test",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      messages: [{ role: "user", content: "hi" }],
+      system: "You are Ask.",
+      emit: () => {},
+      client,
+    });
+
+    const choice = modelFor("ask_pulse");
+    expect(streamParams?.model).toBe(choice.model);
+    expect(streamParams?.thinking).toEqual(choice.thinking);
+    expect(streamParams?.max_tokens).toBe(8192);
+    expect(createParams?.thinking).toEqual(choice.thinking);
+    expect(createParams?.max_tokens).toBe(4096);
   });
 });

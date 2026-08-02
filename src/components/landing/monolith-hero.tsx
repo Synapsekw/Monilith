@@ -30,7 +30,7 @@ export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
       <LandingSections signedIn={signedIn} />
 
       <footer className={styles.footer}>
-        <span>Invitation only</span>
+        <span>Free to start</span>
         <Link href="/updates" className={styles.footerLink}>
           Updates →
         </Link>

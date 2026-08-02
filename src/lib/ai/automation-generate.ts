@@ -1,6 +1,7 @@
 import "server-only";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
+import type { ModelChoice } from "@/lib/ai/model-map";
 import type { Draft } from "@/components/boards/automations/recipes";
 import type { AutomationContext } from "@/lib/ai/automation-context";
 import {
@@ -56,15 +57,16 @@ function buildUserPrompt(prompt: string, ctx: AutomationContext): string {
 export async function generateAutomationDraft(
   prompt: string,
   ctx: AutomationContext,
-  opts: { adapter: ProviderAdapter; apiKey: string },
-): Promise<{ draft: Draft; usage: AiUsageTokens }> {
-  const { data, usage } =
+  opts: { adapter: ProviderAdapter; apiKey: string; choice?: ModelChoice },
+): Promise<{ draft: Draft; usage: AiUsageTokens; model: string }> {
+  const { data, usage, model } =
     await opts.adapter.generateStructured<RawAutomationDraft>({
       apiKey: opts.apiKey,
       system: buildAutomationGenSystemPrompt(),
       user: buildUserPrompt(prompt, ctx),
       schema: AUTOMATION_DRAFT_JSON_SCHEMA,
+      choice: opts.choice,
     });
   // The shape matches Draft closely enough for the caller, which re-validates.
-  return { draft: data as unknown as Draft, usage };
+  return { draft: data as unknown as Draft, usage, model };
 }

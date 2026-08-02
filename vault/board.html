@@ -8,26 +8,26 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-08-01 20:00",
+  "updated": "2026-08-02 07:08",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "The landing sold a Work OS while the product became an agentic one — and two bugs were only visible once the redesign forced them out",
+  "headline": "The promotion landed, the cron chain answers 200 for the first time, and a failing agent is finally visible",
   "chips": [
     {
       "label": "develop",
-      "value": "9a866e69",
-      "note": "== origin · landing rebuilt + proxy fix + debt paydown",
+      "value": "fddd74ca",
+      "note": "== origin · agent run history + phase-1 hardening",
       "tone": "ok"
     },
     {
       "label": "main",
-      "value": "1121796",
-      "note": "#78 LIVE · promotion now also publishes the new landing",
+      "value": "8755f9de",
+      "note": "#79 LIVE · proxy fix + landing + personal agents",
       "tone": "ok"
     },
     {
       "label": "ledger",
-      "value": "118/118",
-      "note": "VERIFIED — files == DEV rows, no drift",
+      "value": "123/124",
+      "note": "IN SYNC — extra DEV row is unmerged parallel work",
       "tone": "ok"
     }
   ],
@@ -39,62 +39,52 @@
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Landing rebuilt around agents across three merges: In active development pill gone, sticky nav carries the only CTAs, fold ends on a board-with-agent-thread window. Wordmark face/weight/tracking untouched — only its scale. 14-card capability wall folded into three columns; six-question FAQ ships as native <details>, no client JS."
+      "text": "PROMOTED. develop -> main merged as 8755f9de (PR #79), publishing the proxy fix, the rebuilt landing and Personal Agents Phase 1. Verified empirically rather than assumed: _health_digest_ping() -> net._http_response = 200, where it read 405 an hour earlier. Five cron integrations that had never worked in production are reachable for the first time."
     },
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Two bugs only visible once the design forced them out: .page set overflow:hidden, which silently defeats position:sticky — the nav had NEVER stuck (measured top:-4000px), harmless until it became the only CTA. Removing the clip then exposed horizontal scroll on mobile: the agent-dock grid lacked min-w-0, so a 720px table sized the column. It had been overflowing all along, clipped and unreachable."
+      "text": "Agent run history shipped — the observability half of Personal Agents. A last-run pill on every roster row from ONE distinct-on RPC over the existing index, plus the last 50 runs on expand. First paint and the roster/gallery/editor toggle are unchanged: expanding is a data fetch, never a navigation."
     },
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Every per-section background removed. A section-level background necessarily draws a boundary, and stacked boundaries are what made the page read as grey slabs. One wash now spans the full scrollable height so the hero light continues past the fold instead of restarting."
+      "text": "Stored status is not display status. The run endpoint claims its fire slot as status=error BEFORE any spend, so a healthy in-flight run is indistinguishable from a failure on status alone. The claim sentinel now renders In progress while fresh and Didn't finish once stale — never Failed. Rendering it verbatim would have cried wolf on every working agent every morning."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "bridge_secret_id was client-writable and RLS structurally could not fix it: user_agents_owner_all is `for all`, so an owner patching their own row satisfies the policy. The containment is a GRANT — table-level INSERT/UPDATE revoked from authenticated, re-granted column by column. It mattered concretely: the vault-cleanup trigger deletes whatever secret id the row names, so a writable column was a route to deleting ANOTHER user's MCP OAuth secret. Pinned by a live-DEV test."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "Three more Phase-1 defects closed in the same migration: agent-name uniqueness is per-org (was global, so the same name in a second org was silently refused), board_scope gained a check constraint matching boardScopeSchema, and the vault-cleanup trigger is re-runnable. Plus the roster's 'of 20 agents' label now reads the real max_agents_per_user (default 3) — it had been promising 17 agents it would refuse to create."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "updateAgent / setAgentEnabled / deleteAgent were untested and now are, including which columns each writes — the new column-level grants make an extra column a hard Postgres failure rather than a silent no-op. 536 files / 3967 tests green."
+    },
+    {
+      "led": "brand",
+      "tag": "NEXT?",
+      "text": "Confirm E5 actually drained. The embed queue's only blocker was the promotion, which has now happened — check the ~380 queued prod rows cleared and that Find similar items returns results. Verify; do not assume."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "The landing CTA model contradicts itself and ships either way: nav says Get started -> /signup, footer says Invitation only, closing band is a waitlist whose email input is INERT (type=button, no handler). Product call, not a design fix — decide before the promotion."
+      "text": "The landing CTA model contradicts itself and is now LIVE: nav says Get started -> /signup, footer says Invitation only, closing band is a waitlist whose email input is INERT. Product call, not a design fix."
     },
     {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Debt audit + paydown shipped in two merges: 3669 -> 3776 tests (+107 net) across seven previously-untested server-action modules, two more orphaned \"use server\" endpoints removed (bulkDeleteItems, bulkPurgeItems — one a bulk HARD DELETE), and two real bugs fixed. 8 parallel subagents, then 2."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "getStatusColumnsForBoard now honours its ActionResult contract in BOTH copies. getBoardStatusColumns throws by design and its comment said the wrapping action should surface it — neither of the two callers had a try/catch, so three client call sites hit Next's error boundary instead of their own error state."
+      "led": "hollow",
+      "tag": "OWED",
+      "text": "digest_secret is provisioned on prod and fingerprint-verified on the DB side, but the Vercel half is UNVERIFIED — a mismatch 401s and leaves no trace, because the route records a blocked row only when the variable is absent, never when it is wrong. First real exercise is the next 07:00 UTC run, which is the first one that can reach its handler at all."
     },
     {
       "led": "hollow",
       "tag": "OWED",
       "text": "An advisory follow-up is a follow-up that does not happen. gotcha-66 closed with 'worth a periodic sweep' — the sweep, one session later, found two more live endpoints. Same shape as the ledger gate's exit-3 warning being ignored twice. The orphan detector and a ledger-staleness check should be GATES, not advice."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "CRLF write-off closed: git had always stored LF, so pinning eol=lf was a zero-content diff, not a 1775-file rewrite. The $-anchored conformance parsers only threw by luck — the siblings would have degraded silently, and a security probe matching nothing still reports green (gotcha-65)."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Both halves of the security boundary gated: anon conformance re-run against PROD (0 of 129 fns reachable, 0 of 53 tables readable) and Tier 2 fixtures covering the authenticated half."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "E5 embeddings remain the PROMOTION BLOCKER: item_embeddings = 0 vs 439 prod items while the changelog announces Find similar items + Ask AI searches by meaning. CORRECTION — 'no secret handling needed' was wrong. _embed_sweep_ping() needs app_url AND ai_pgnet_hmac_secret in Vault; if either is missing it raises a NOTICE and returns, and cron records the job as SUCCEEDED. Verify preconditions, then enqueue, then confirm the queue actually shrinks (Phase A of the 2026-08-01 plan)."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "Prod Vault still missing digest_secret — digest has NEVER fired (digest_runs = 0). The schema half is LIVE, so provisioning is safe: ping _health_digest_ping(), confirm a blocked row appears, then add it. No RESEND_API_KEY in prod, so the first runs send no email regardless."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "Never run /sync-prod data phase without excluding fixtures — a full replace would copy the two Tier 2 fixture accounts, whose passwords are committed to the repo, into PRODUCTION. Schema-only db push is unaffected."
     },
     {
       "led": "hollow",
@@ -107,97 +97,52 @@
       "text": "Ask Monolith write path still unexercised on production."
     },
     {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Ledger gate restored and VERIFIED (118 files == 118 DEV rows, no drift). It was not unconfigured — psqlEnv joined PATH with a hardcoded POSIX colon (Windows splits on semicolon) AND assigned a fresh PATH key while node preserves the OS 'Path' casing, handing the child two path variables. Fixing either alone would not have worked (gotcha-68)."
+      "led": "red",
+      "tag": "CRITICAL",
+      "text": "Never run /sync-prod data phase without excluding fixtures — a full replace would copy the two Tier 2 fixture accounts, whose passwords are committed to the repo, into PRODUCTION. Schema-only db push is unaffected."
     },
     {
-      "led": "brand",
-      "tag": "NEXT?",
-      "text": "Promote develop -> main FIRST. Production runs main, so the proxy fix is not live until promotion and the 380 queued prod rows CANNOT drain beforehand. Promoting also publishes the new landing and makes the semantic-search changelog entries true in the same deploy. Then Report Builder v2 roll-ups + org templates."
+      "led": "red",
+      "tag": "CRITICAL",
+      "text": "The production DEPLOYMENT runs the DEV database (hjqca...). www.monolith.works serves real user data out of DEV; the PROD project (jzsyq...) is mirrored but takes no traffic. A DEV migration reaches real users the moment main is promoted, and inspecting PROD will never explain live behaviour (decision-32)."
     }
   ],
   "worktrees": [
     {
       "led": "amber",
       "branch": "task/ai-cogs",
-      "head": "7cb53e79",
+      "head": "0808ee61",
       "note": "concurrent session — not this one's work"
     }
   ],
   "session": {
-    "id": "2026-08-01-2000-landing-agentic-redesign",
-    "when": "2026-08-01 20:00",
+    "id": "2026-08-02-0708-agent-run-history",
+    "when": "2026-08-02 07:08",
     "bullets": [
-      "A page that reads as a splash screen has no nav, no product above the fold, and a beta badge — all three were true, and none showed up in any gate.",
-      "overflow:hidden on an ancestor silently kills position:sticky. The nav had never stuck; it only mattered once the duplicate hero CTAs were removed.",
-      "Removing a clip exposes what it was hiding: a 720px table had been forcing horizontal overflow on mobile, invisible because it was clipped and unreachable."
+      "A run row reads status=error between claiming its fire slot and finalising, so the honest display status is not the stored one — the sentinel means In progress, not Failed.",
+      "bridge_secret_id was client-writable and no RLS policy could close it: `for all` is satisfied by the owner. Column-level GRANTs are the containment, and only a live-DEV test can see the difference.",
+      "The observability surface was specced in Phase 1 and never built, which is exactly why every gotcha-70 failure mode was silent."
     ]
   },
   "roadmap": [
-    {
-      "label": "0 Setup",
-      "state": "done"
-    },
-    {
-      "label": "1 Auth",
-      "state": "done"
-    },
-    {
-      "label": "2 Boards",
-      "state": "done"
-    },
-    {
-      "label": "3 Views",
-      "state": "done"
-    },
-    {
-      "label": "4 Collab",
-      "state": "done"
-    },
-    {
-      "label": "5 Autom",
-      "state": "done"
-    },
-    {
-      "label": "6 Depth",
-      "state": "prog"
-    },
-    {
-      "label": "7 Asana",
-      "state": "done"
-    },
-    {
-      "label": "8 Dash",
-      "state": "done"
-    },
-    {
-      "label": "9 Perf",
-      "state": "done"
-    },
-    {
-      "label": "RS",
-      "state": "done"
-    },
-    {
-      "label": "MVP-F",
-      "state": "done"
-    },
-    {
-      "label": "Touch",
-      "state": "done"
-    },
-    {
-      "label": "PF",
-      "state": "done"
-    },
-    {
-      "label": "10 AI",
-      "state": "prog"
-    }
+    { "label": "0 Setup", "state": "done" },
+    { "label": "1 Auth", "state": "done" },
+    { "label": "2 Boards", "state": "done" },
+    { "label": "3 Views", "state": "done" },
+    { "label": "4 Collab", "state": "done" },
+    { "label": "5 Autom", "state": "done" },
+    { "label": "6 Depth", "state": "prog" },
+    { "label": "7 Asana", "state": "done" },
+    { "label": "8 Dash", "state": "done" },
+    { "label": "9 Perf", "state": "done" },
+    { "label": "RS", "state": "done" },
+    { "label": "MVP-F", "state": "done" },
+    { "label": "Touch", "state": "done" },
+    { "label": "PF", "state": "done" },
+    { "label": "10 AI", "state": "prog" }
   ]
 }
-</script>
+    </script>
 
 <style>
   /* Keystone Console — committed dark world (matches the app's dark-first identity). */

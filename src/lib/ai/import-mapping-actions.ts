@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
+import { modelFor } from "@/lib/ai/model-map";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   generateImportMapping,
@@ -95,15 +96,18 @@ export async function suggestImportMapping(input: {
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "import_mapping");
     const user = await requireUser();
+    const choice = modelFor("import_mapping");
 
     const raw = await runAi(
       { orgId: org.id, userId: user.id, feature: "import_mapping" },
       async ({ adapter, apiKey }) => {
-        const { suggestions, usage } = await generateImportMapping(payload, {
-          adapter,
-          apiKey,
-        });
-        return { result: suggestions, usage, model: adapter.defaultModel };
+        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
+        // adapters ignore `choice` and run their own fixed model.
+        const { suggestions, usage, model } = await generateImportMapping(
+          payload,
+          { adapter, apiKey, choice },
+        );
+        return { result: suggestions, usage, model };
       },
     );
 

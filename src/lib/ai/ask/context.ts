@@ -58,6 +58,13 @@ export async function summarize(
   const res = await client.create({
     model,
     max_tokens: 512,
+    // MUST be explicit. On Sonnet-tier models, OMITTING `thinking` runs
+    // adaptive thinking at effort "high", and max_tokens caps thinking PLUS
+    // response text. A thinking block would eat this 512-token budget whole:
+    // the response then carries stop_reason "max_tokens" with no text block,
+    // textOf() returns "", and /api/ask persists that empty summary while
+    // advancing summarized_upto — silently dropping the folded turns forever.
+    thinking: { type: "disabled" },
     system:
       "You compress a chat transcript into a compact factual summary. Keep names, ids, decisions. No preamble.",
     messages: [
@@ -88,6 +95,9 @@ export async function generateTitle(
   const res = await client.create({
     model,
     max_tokens: 24,
+    // MUST be explicit — see summarize() above. 24 tokens cannot fit a thinking
+    // block at all, so adaptive thinking here would return no text every time.
+    thinking: { type: "disabled" },
     system:
       "Reply with a 3–6 word title for this chat. No quotes, no punctuation at the end.",
     messages: [{ role: "user", content: firstQuestion }],

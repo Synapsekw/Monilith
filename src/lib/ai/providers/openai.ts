@@ -48,6 +48,9 @@ export const openaiAdapter: ProviderAdapter = {
     });
     return {
       data: JSON.parse(res.choices[0]?.message.content ?? "{}"),
+      // NOT choice.model — this adapter ignores `choice` and always runs MODEL.
+      // Reporting anything else mis-bills a BYO org (see ProviderAdapter docs).
+      model: MODEL,
       usage: {
         inputTokens: res.usage?.prompt_tokens ?? 0,
         outputTokens: res.usage?.completion_tokens ?? 0,
@@ -55,12 +58,12 @@ export const openaiAdapter: ProviderAdapter = {
     };
   },
   async generateProposal({ apiKey, system, user }) {
-    const { data, usage } = await this.generateStructured({
+    const { data, usage, model } = await this.generateStructured({
       apiKey,
       system,
       user,
       schema: PROPOSAL_JSON_SCHEMA,
     });
-    return { proposal: data as DashboardProposal, usage };
+    return { proposal: data as DashboardProposal, usage, model };
   },
 };
