@@ -12,6 +12,8 @@ import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { type AiProvider } from "@/lib/ai/providers/catalog";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { readOrgBillingStatus } from "@/lib/billing/status";
+import { entitlesAi } from "@/lib/billing/entitling";
 
 const NOT_ADMIN = "Only organization admins can change AI settings.";
 
@@ -91,12 +93,34 @@ export async function setAiMode(input: {
       return fail("Add an organization key before switching to it.");
   }
 
+  // `managed` spends OUR platform key, so it is derived from the subscription,
+  // not chosen by the customer. Without this, an org that downgraded (the
+  // webhook sets ai_mode 'off') could re-select "Managed" here and resume
+  // spending against its previous credit pool — free AI, metered to us.
+  if (mode === "managed") {
+    const billing = await readOrgBillingStatus(ctx.orgId);
+    if (!entitlesAi(billing.status))
+      return fail("Managed AI needs an active Pulse subscription.");
+  }
+
+  // Turning AI off must also disarm the ceiling. Leaving a non-zero
+  // monthly_credit_limit behind a disabled mode means any future path that
+  // re-enables managed resumes against the old pool. The unmetered modes
+  // (org_byo, per_user) cost us nothing, so their ceiling is irrelevant and is
+  // left untouched — zeroing it would silently destroy an Enterprise org's
+  // negotiated allowance on a temporary toggle.
+  // One object shape with a conditional key, not a ternary between two shapes:
+  // a ternary infers a union that the generated upsert overload rejects.
+  const patch = {
+    org_id: ctx.orgId,
+    ai_mode: mode,
+    updated_by: ctx.userId,
+    ...(mode === "off" ? { monthly_credit_limit: 0 } : {}),
+  };
+
   const { error } = await svc
     .from("org_ai_settings")
-    .upsert(
-      { org_id: ctx.orgId, ai_mode: mode, updated_by: ctx.userId },
-      { onConflict: "org_id" },
-    );
+    .upsert(patch, { onConflict: "org_id" });
   if (error) return fail("Couldn't update the AI mode. Please try again.");
 
   revalidatePath("/settings");

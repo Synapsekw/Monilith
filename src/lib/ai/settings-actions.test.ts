@@ -44,6 +44,24 @@ vi.mock("@/lib/org/active", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+// Mocked at the module boundary rather than through rlsRpc: readOrgBillingStatus
+// goes through the same RLS client as has_org_role, so sharing that mock would
+// make the admin check and the billing read indistinguishable.
+const readOrgBillingStatus = vi.fn();
+vi.mock("@/lib/billing/status", () => ({
+  readOrgBillingStatus: (...a: unknown[]) => readOrgBillingStatus(...a),
+}));
+const billing = (status: string, tier = "pulse", seats = 4) =>
+  readOrgBillingStatus.mockResolvedValue({
+    tier,
+    status,
+    cadence: "annual",
+    seats,
+    currentPeriodEnd: null,
+    trialEndsAt: null,
+    graceEndsAt: null,
+  });
+
 const validateKey = vi.fn();
 vi.mock("@/lib/ai/providers/registry", () => ({
   getAdapter: () => ({
@@ -129,6 +147,86 @@ describe("org ai settings actions", () => {
       { onConflict: "org_id" },
     );
     expect(res.ok).toBe(true);
+  });
+});
+
+// The self-grant hole: before this guard, an org admin could select "Managed"
+// after a downgrade and resume spending against their previous credit pool —
+// free AI, metered to our platform key. Managed is now derived from the
+// subscription, not chosen by the customer.
+describe("setAiMode — managed is derived from the subscription", () => {
+  it("refuses managed when the org has no entitling subscription", async () => {
+    admin(true);
+    billing("none", "none", 0);
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    const res = await setAiMode({ mode: "managed" });
+    expect(res.ok).toBe(false);
+    expect(svcUpsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses managed while the org is in post-cancellation grace", async () => {
+    admin(true);
+    billing("grace");
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    const res = await setAiMode({ mode: "managed" });
+    expect(res.ok).toBe(false);
+    expect(svcUpsert).not.toHaveBeenCalled();
+  });
+
+  it("allows managed on an active subscription", async () => {
+    admin(true);
+    billing("active");
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    const res = await setAiMode({ mode: "managed" });
+    expect(res.ok).toBe(true);
+    expect(svcUpsert).toHaveBeenCalled();
+  });
+
+  it("allows managed during a trial", async () => {
+    admin(true);
+    billing("trialing", "trial", 1);
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    const res = await setAiMode({ mode: "managed" });
+    expect(res.ok).toBe(true);
+  });
+
+  it("zeroes the credit ceiling when switching to off", async () => {
+    // The ceiling must not be left armed behind a disabled mode — otherwise any
+    // path that re-enables managed resumes against the old pool.
+    admin(true);
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    const res = await setAiMode({ mode: "off" });
+    expect(res.ok).toBe(true);
+    expect(svcUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ ai_mode: "off", monthly_credit_limit: 0 }),
+      { onConflict: "org_id" },
+    );
+  });
+
+  it("leaves the ceiling alone for the unmetered modes", async () => {
+    // org_byo and per_user cost us nothing, so their ceiling is irrelevant.
+    // Zeroing it would silently destroy an Enterprise org's negotiated
+    // allowance on a temporary toggle.
+    admin(true);
+    svcMaybeSingle.mockResolvedValueOnce({
+      data: {
+        ai_mode: "per_user",
+        tier: "enterprise",
+        monthly_credit_limit: 50_000,
+        byo_provider: "anthropic",
+        byo_key_last4: "1234",
+      },
+      error: null,
+    });
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    const res = await setAiMode({ mode: "org_byo" });
+    expect(res.ok).toBe(true);
+    expect(svcUpsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        monthly_credit_limit: expect.anything(),
+      }),
+      { onConflict: "org_id" },
+    );
   });
 });
 
