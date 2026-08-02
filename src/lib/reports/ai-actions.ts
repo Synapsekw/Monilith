@@ -4,6 +4,7 @@ import { resolveActiveOrg } from "@/lib/org/active";
 import { requireUser } from "@/lib/auth/session";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
+import { modelFor } from "@/lib/ai/model-map";
 import { buildBoardSnapshot } from "@/lib/ai/board-snapshot";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { reportBoardAccess, canEditReports } from "@/lib/reports/access";
@@ -33,14 +34,17 @@ export async function draftReportNarrativeAction(input: {
       items: payload.items,
       cellValues: payload.cellValues,
     });
+    const choice = modelFor("report_narrative");
     const narrative = await runAi(
       { orgId: org.id, userId: user.id, feature: "report_narrative" },
       async ({ adapter, apiKey }) => {
-        const { narrative, usage } = await draftReportNarrative(snapshot, {
-          adapter,
-          apiKey,
-        });
-        return { result: narrative, usage, model: adapter.defaultModel };
+        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
+        // adapters ignore `choice` and run their own fixed model.
+        const { narrative, usage, model } = await draftReportNarrative(
+          snapshot,
+          { adapter, apiKey, choice },
+        );
+        return { result: narrative, usage, model };
       },
     );
     return { ok: true, data: narrative };

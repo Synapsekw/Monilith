@@ -6,15 +6,12 @@ import {
   PROPOSAL_JSON_SCHEMA,
   type DashboardProposal,
 } from "@/lib/ai/proposal-schema";
+import { DEFAULT_MODEL_CHOICE } from "@/lib/ai/model-map";
 import { PROVIDER_CATALOG } from "@/lib/ai/providers/catalog";
 import {
   ProviderAuthError,
   type ProviderAdapter,
 } from "@/lib/ai/providers/types";
-
-/** The Anthropic model powering AI dashboard generation and Ask Pulse.
- *  Single source of truth (google/openai adapters keep their own). */
-export const MODEL = "claude-opus-4-8";
 
 export const anthropicAdapter: ProviderAdapter = {
   id: "anthropic",
@@ -25,7 +22,7 @@ export const anthropicAdapter: ProviderAdapter = {
     .trim()
     .startsWith("sk-ant-", "Anthropic keys start with sk-ant-")
     .max(300),
-  defaultModel: MODEL,
+  defaultModel: DEFAULT_MODEL_CHOICE.model,
   supportsTools: true,
   async validateKey(rawKey) {
     const client = new Anthropic({ apiKey: rawKey });
@@ -37,14 +34,17 @@ export const anthropicAdapter: ProviderAdapter = {
       throw e;
     }
   },
-  async generateStructured({ apiKey, system, user, schema }) {
-    const client = new Anthropic({ apiKey });
-    const message = await client.messages.parse({
-      model: MODEL,
+  async generateStructured({ apiKey, system, user, schema, choice, client }) {
+    const c = (client as Anthropic) ?? new Anthropic({ apiKey });
+    const m = choice ?? DEFAULT_MODEL_CHOICE;
+    const message = await c.messages.parse({
+      model: m.model,
       max_tokens: 16000,
-      thinking: { type: "adaptive" },
+      thinking: m.thinking,
       output_config: {
-        effort: "high",
+        // Haiku 4.5 rejects `effort` — omit the key entirely rather than
+        // sending undefined, which the SDK would still serialize.
+        ...(m.effort ? { effort: m.effort } : {}),
         format: jsonSchemaOutputFormat(schema as never),
       },
       system: [
@@ -58,19 +58,24 @@ export const anthropicAdapter: ProviderAdapter = {
       JSON.parse(textBlock && "text" in textBlock ? textBlock.text : "{}");
     return {
       data: parsed,
+      model: m.model,
       usage: {
         inputTokens: message.usage.input_tokens,
         outputTokens: message.usage.output_tokens,
+        cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
       },
     };
   },
-  async generateProposal({ apiKey, system, user }) {
-    const { data, usage } = await this.generateStructured({
+  async generateProposal({ apiKey, system, user, choice, client }) {
+    const { data, usage, model } = await this.generateStructured({
       apiKey,
       system,
       user,
       schema: PROPOSAL_JSON_SCHEMA,
+      choice,
+      client,
     });
-    return { proposal: data as DashboardProposal, usage };
+    return { proposal: data as DashboardProposal, usage, model };
   },
 };

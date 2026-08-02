@@ -57,7 +57,12 @@ type StreamResult = {
   answer: string;
   boardsConsulted: string[];
   proposedActions: unknown[];
-  usage: { inputTokens: number; outputTokens: number };
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  };
 };
 const askPulseStreamMock = vi.fn(
   async ({
@@ -210,6 +215,34 @@ describe("POST /api/ask", () => {
     expect(insertSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         tool_trace: { boardsConsulted: ["b1"], proposedActions: [action] },
+      }),
+    );
+  });
+
+  // Once caching engages, Anthropic's input_tokens is the UNCACHED remainder
+  // only — a 26k-token turn reports ~2k input_tokens + ~24k
+  // cache_read_input_tokens. Dropping the cache fields on the way to the
+  // ledger would under-bill the org by the entire cached prefix.
+  it("forwards cacheReadTokens/cacheWriteTokens from askPulseStream to the metering call", async () => {
+    askPulseStreamMock.mockImplementationOnce(async ({ emit }) => {
+      emit({ type: "token", text: "Hi" });
+      return {
+        answer: "Hi",
+        boardsConsulted: [],
+        proposedActions: [],
+        usage: {
+          inputTokens: 2_000,
+          outputTokens: 50,
+          cacheReadTokens: 24_000,
+          cacheWriteTokens: 1_500,
+        },
+      };
+    });
+    await post();
+    expect(meteredSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cacheReadTokens: 24_000,
+        cacheWriteTokens: 1_500,
       }),
     );
   });

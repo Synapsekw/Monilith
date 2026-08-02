@@ -64,7 +64,12 @@ describe("classifyColumn", () => {
       { itemId: "item-1", optionId: "opt-1" },
       { itemId: "item-2", optionId: null },
     ]);
-    expect(res.usage).toEqual({ inputTokens: 123, outputTokens: 45 });
+    expect(res.usage).toEqual({
+      inputTokens: 123,
+      outputTokens: 45,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
 
     // Exactly one call, and it never hit the network (fake client only).
     expect(parse).toHaveBeenCalledTimes(1);
@@ -99,5 +104,43 @@ describe("classifyColumn", () => {
     expect(res.classifications).toEqual([
       { itemId: "item-1", optionId: "opt-1" },
     ]);
+  });
+
+  it("classifies on haiku with the enabled-thinking shape and no effort", async () => {
+    const captured: Record<string, unknown>[] = [];
+    const client = {
+      messages: {
+        parse: async (params: Record<string, unknown>) => {
+          captured.push(params);
+          return {
+            content: [{ type: "text", text: '{"rows":[]}' }],
+            parsed_output: { rows: [] },
+            usage: {
+              input_tokens: 10,
+              output_tokens: 2,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+          };
+        },
+      },
+    } as never;
+
+    const { usage } = await classifyColumn({
+      apiKey: "sk-ant-test",
+      rows: [],
+      targetOptions: [],
+      client,
+    });
+
+    expect(captured[0].model).toBe("claude-haiku-4-5");
+    expect(captured[0].thinking).toEqual({
+      type: "enabled",
+      budget_tokens: 1024,
+    });
+    expect(
+      (captured[0].output_config as Record<string, unknown>).effort,
+    ).toBeUndefined();
+    expect(usage.cacheReadTokens).toBe(0);
   });
 });

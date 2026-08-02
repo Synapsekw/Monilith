@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import type { AutomationAction } from "@/lib/validations/automations";
 import type { AutomationContext } from "@/lib/ai/automation-context";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
@@ -61,6 +61,8 @@ export type AutopilotResult = {
   /** Human-readable reasons a candidate choice was dropped (never applied). */
   warnings: string[];
   usage: AiUsageTokens;
+  /** The model actually used — reported to runAi so the ledger is truthful. */
+  model: string;
 };
 
 /** `item_id` is required on every autopilot tool (unlike F13, the agent picks
@@ -170,6 +172,7 @@ export async function autopilotRun(args: {
   client?: Anthropic;
 }): Promise<AutopilotResult> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
+  const choice = modelFor("autopilot_run");
   const context = args.agentContext;
   const allow = allowedFor(args.tasks);
   const tools = allow.map((a) => TOOL_DEFS[a]);
@@ -185,8 +188,14 @@ export async function autopilotRun(args: {
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const res = await client.messages.create({
-      model: MODEL,
+      model: choice.model,
       max_tokens: 1024,
+      // MUST be explicit, and deliberately NOT choice.thinking: omitting
+      // `thinking` on a Sonnet-tier model runs adaptive thinking at effort
+      // "high", and max_tokens caps thinking PLUS the tool_use blocks. A
+      // thinking block would consume this 1024-token budget, leaving no
+      // tool_use — an autopilot run that silently does nothing.
+      thinking: { type: "disabled" },
       system,
       tools,
       messages,
@@ -199,7 +208,7 @@ export async function autopilotRun(args: {
     );
     if (res.stop_reason !== "tool_use" || toolBlocks.length === 0) {
       // Model is done (declined / finished) — return what we have.
-      return { actions, warnings, usage };
+      return { actions, warnings, usage, model: choice.model };
     }
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -255,5 +264,5 @@ export async function autopilotRun(args: {
   }
 
   // Exhausted the round cap — return whatever was validated.
-  return { actions, warnings, usage };
+  return { actions, warnings, usage, model: choice.model };
 }

@@ -1,12 +1,14 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { Briefing } from "./briefing";
 
 export type BriefingSummary = {
   summary: string;
   usage: AiUsageTokens;
+  /** The model actually used — reported to runAi so the ledger is truthful. */
+  model: string;
 };
 
 /**
@@ -95,9 +97,17 @@ export async function summariseBriefing(args: {
     }),
   );
 
+  const choice = modelFor("personal_agent_run");
   const res = await client.messages.create({
-    model: MODEL,
+    model: choice.model,
     max_tokens: 512,
+    // MUST be explicit: omitting `thinking` on a Sonnet-tier model runs
+    // adaptive thinking at effort "high", and max_tokens caps thinking PLUS
+    // the response text. Disabled — NOT choice.thinking — because this 512
+    // budget was sized for a no-thinking model and a thinking block would eat
+    // it whole, leaving no text. (The fallbackSummary below would mask that as
+    // a working-but-generic briefing, so it would ship silently.)
+    thinking: { type: "disabled" },
     system: SYSTEM,
     messages: [
       {
@@ -114,5 +124,6 @@ export async function summariseBriefing(args: {
       inputTokens: res.usage.input_tokens,
       outputTokens: res.usage.output_tokens,
     },
+    model: choice.model,
   };
 }

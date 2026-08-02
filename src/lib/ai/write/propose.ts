@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL } from "@/lib/ai/providers/anthropic";
+import { modelFor } from "@/lib/ai/model-map";
 import { ASK_TOOLS, executeAskTool } from "@/lib/ai/ask/tools";
 import {
   WRITE_TOOLS,
@@ -55,8 +55,11 @@ export async function proposeLoop(args: {
   clarification?: string;
   usage: AiUsageTokens;
   messages: Anthropic.MessageParam[];
+  /** The model actually used — reported to runAi so the ledger is truthful. */
+  model: string;
 }> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
+  const choice = modelFor("conversational_action");
   const writer = createWriteToolExecutor({
     orgId: args.orgId,
     workspaceId: args.workspaceId,
@@ -76,8 +79,17 @@ export async function proposeLoop(args: {
   let finalText = "";
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const res = await client.messages.create({
-      model: MODEL,
+      model: choice.model,
       max_tokens: 4096,
+      // MUST be explicit: omitting `thinking` on a Sonnet-tier model runs
+      // adaptive thinking at effort "high", and max_tokens caps thinking PLUS
+      // the tool_use block. Disabled — NOT choice.thinking — because this
+      // 4096 budget was sized for a no-thinking model, the system prompt above
+      // already prescribes the tool sequence step by step (so the "reaches for
+      // tools less with thinking off" effect has little room to bite), and a
+      // turn that produces no tool_use degrades gracefully into a
+      // clarification rather than silently losing work.
+      thinking: { type: "disabled" },
       system,
       tools,
       messages,
@@ -120,5 +132,6 @@ export async function proposeLoop(args: {
     clarification: actions.length === 0 ? finalText || undefined : undefined,
     usage,
     messages,
+    model: choice.model,
   };
 }

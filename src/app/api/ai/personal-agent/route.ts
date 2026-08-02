@@ -7,7 +7,6 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { MODEL } from "@/lib/ai/providers/anthropic";
 import {
   AiDisabledError,
   AiQuotaExceededError,
@@ -281,7 +280,7 @@ export async function POST(req: Request): Promise<Response> {
             instructions: agent.instructions,
             briefing,
           });
-          return { result: r, usage: r.usage, model: MODEL };
+          return { result: r, usage: r.usage, model: r.model };
         },
       );
     } catch (e) {

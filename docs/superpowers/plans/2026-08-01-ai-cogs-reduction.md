@@ -503,21 +503,26 @@ const HAIKU: ModelChoice = {
 /** Anything unmapped: the conservative, highest-quality choice. */
 export const DEFAULT_MODEL_CHOICE: ModelChoice = SONNET;
 
+// Keys are the exact `feature` strings passed to runAi — verified against the
+// call sites, not invented. semantic_index / semantic_query are deliberately
+// absent: they go through runEmbedding, which pins one fixed platform embedding
+// model for corpus consistency and bypasses the adapter entirely.
 const FEATURE_MODELS: Readonly<Record<string, ModelChoice>> = {
   // Tool-use loops — quality-sensitive, Sonnet 5 is near-Opus on agentic work.
-  ask_pulse: SONNET,
-  conversational_action: SONNET,
-  agentic_decide: SONNET,
-  agentic_autopilot: SONNET,
+  ask_pulse: SONNET, // src/app/api/ask/route.ts:168
+  conversational_action: SONNET, // src/lib/ai/write/actions.ts:90
+  automation_ai_step: SONNET, // src/lib/ai/agentic/actions.ts:21
+  autopilot_run: SONNET, // src/app/api/ai/autopilot/route.ts:22
   // Structured generation — moderate difficulty.
-  dashboard_gen: SONNET,
-  board_generate: SONNET,
-  automation_gen: SONNET,
-  import_mapping: SONNET,
-  report_narrative: SONNET,
+  dashboard_gen: SONNET, // src/lib/ai/actions.ts:127
+  board_gen: SONNET, // src/lib/ai/board-actions.ts:60
+  automation_gen: SONNET, // src/lib/ai/automation-gen-actions.ts:62
+  import_mapping: SONNET, // src/lib/ai/import-mapping-actions.ts:100
+  report_narrative: SONNET, // src/lib/reports/ai-actions.ts:37
+  thread_summary: SONNET, // src/lib/ai/summarize/actions.ts:94
   // Short classification / rewrite.
-  item_assist: HAIKU,
-  column_fill: HAIKU,
+  item_assist: HAIKU, // src/lib/ai/item-assist/actions.ts:152
+  column_fill: HAIKU, // src/lib/ai/column-fill/actions.ts:131
 };
 
 export const AI_FEATURES = Object.keys(FEATURE_MODELS);
@@ -977,7 +982,9 @@ const { data, usage } = await resolved.adapter.generateStructured({
 return { result: suggestions, usage, model: choice.model };
 ```
 
-Use `modelFor("dashboard_gen")` in `actions.ts`, `modelFor("board_generate")` in `board-actions.ts`, `modelFor("automation_gen")` in `automation-gen-actions.ts`.
+Use `modelFor("dashboard_gen")` in `actions.ts`, `modelFor("board_gen")` in `board-actions.ts`, `modelFor("automation_gen")` in `automation-gen-actions.ts`.
+
+> **These strings must match the `feature` value the same file passes to `runAi`.** They are the map's keys, and the map is what routes metering to the right price row. `board-actions.ts:60` meters as `board_gen` — not `board_generate`. Read the `feature:` argument in the file you are editing rather than trusting this list.
 
 - [ ] **Step 10: Run the full unit suite**
 

@@ -69,6 +69,36 @@ describe("summarize", () => {
     expect(res.usage).toEqual({ inputTokens: 30, outputTokens: 8 });
     expect(create).toHaveBeenCalledOnce();
   });
+
+  // Regression guard. Omitting `thinking` on a Sonnet-tier model means ADAPTIVE
+  // thinking at effort "high", and max_tokens caps thinking PLUS text. A
+  // thinking block eats this 512-token budget whole, so the response comes back
+  // with stop_reason "max_tokens" and NO text block — textOf() returns "", and
+  // /api/ask persists that empty summary while advancing summarized_upto,
+  // permanently dropping the folded turns with no error anywhere.
+  it("disables thinking — 512 tokens cannot hold a thinking block AND a summary", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "s" }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    await summarize({ create }, "model-x", null, [row("user", "hi", 1)]);
+    const params = create.mock.calls[0][0];
+    expect(params.thinking).toEqual({ type: "disabled" });
+    expect(params.max_tokens).toBe(512);
+  });
+
+  it("returns an empty summary when the model emits no text block", async () => {
+    // The failure shape the guard above prevents, pinned so the blast radius
+    // stays visible: no text block in, empty summary out.
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "thinking", thinking: "" }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const res = await summarize({ create }, "model-x", "prior", [
+      row("user", "hi", 1),
+    ]);
+    expect(res.summary).toBe("");
+  });
 });
 
 describe("generateTitle", () => {
@@ -90,5 +120,19 @@ describe("generateTitle", () => {
       "a".repeat(80),
     );
     expect(fallback.title).toBe("a".repeat(60));
+  });
+
+  // Regression guard — see summarize's. 24 tokens cannot fit a thinking block
+  // at all, so adaptive thinking here would return no text on every call and
+  // every conversation would silently fall back to the question-slice title.
+  it("disables thinking — 24 tokens cannot fit a thinking block", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "text", text: "Title" }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    await generateTitle({ create }, "model-x", "q");
+    const params = create.mock.calls[0][0];
+    expect(params.thinking).toEqual({ type: "disabled" });
+    expect(params.max_tokens).toBe(24);
   });
 });
