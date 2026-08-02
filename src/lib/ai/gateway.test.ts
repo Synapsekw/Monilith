@@ -208,7 +208,7 @@ describe("runAi", () => {
 
   it("passes cache token counts through to record_ai_usage", async () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
-    resolveUserAdapter.mockResolvedValue({
+    resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
     });
@@ -245,7 +245,7 @@ describe("runAi", () => {
 
   it("defaults cache token counts to 0 when the adapter omits them", async () => {
     maybeSingle.mockResolvedValue({ data: null, error: null });
-    resolveUserAdapter.mockResolvedValue({
+    resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
     });

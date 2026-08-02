@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { summariseBriefing } from "./summarise";
+import { modelFor } from "@/lib/ai/model-map";
 import type { Briefing } from "./briefing";
 
 /**
@@ -31,6 +32,9 @@ function paramsOf(client: Anthropic) {
   return call[0] as {
     system: string;
     messages: { role: string; content: string }[];
+    model: string;
+    max_tokens: number;
+    thinking?: { type: string };
   };
 }
 
@@ -94,6 +98,27 @@ describe("summariseBriefing", () => {
     });
     expect(result.summary).toBe("You have 1 overdue item.");
     expect(result.usage).toEqual({ inputTokens: 11, outputTokens: 7 });
+    // Reported to runAi for the ledger — must be the model actually run, not a
+    // constant that drifts from the map.
+    expect(result.model).toBe(modelFor("personal_agent_run").model);
+  });
+
+  it("disables thinking — a 512-token budget leaves no room for it", async () => {
+    const client = textClient("A short summary.");
+    await summariseBriefing({
+      apiKey: "sk-ant-test",
+      instructions: "Be concise.",
+      briefing,
+      client,
+    });
+
+    const params = paramsOf(client);
+    // Omitting `thinking` on a Sonnet-tier model means ADAPTIVE thinking, which
+    // would consume the whole 512-token budget and leave no text — masked by
+    // fallbackSummary into a plausible-looking generic briefing.
+    expect(params.thinking).toEqual({ type: "disabled" });
+    expect(params.max_tokens).toBe(512);
+    expect(params.model).toBe(modelFor("personal_agent_run").model);
   });
 
   it("an item name containing </data> cannot close the data block early (Finding 3)", async () => {

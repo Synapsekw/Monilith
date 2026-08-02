@@ -53,6 +53,7 @@ const FEATURE_MODELS = Object.freeze(
     import_mapping: SONNET,
     report_narrative: SONNET,
     thread_summary: SONNET,
+    personal_agent_run: SONNET,
     // Short classification / rewrite.
     item_assist: HAIKU,
     column_fill: HAIKU,
