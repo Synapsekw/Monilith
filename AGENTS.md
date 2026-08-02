@@ -21,6 +21,19 @@ Monolith is a Next.js 16 (App Router) + Supabase multi-tenant "Work OS". Orienta
 | `docs/`                       | `prd.md`, docs index (`README.md`), bundled `superpowers/`          |
 | `vault/`                      | Dev-memory: `sessions/`, `decisions/` (ADRs), `00-north-star.md`    |
 
+# ⚠️ The production deployment runs the DEV database
+
+`www.monolith.works` (`main` on Vercel) is wired to the **DEVELOPMENT** Supabase project
+`hjqcahbbbdaknbbnfnvl`. The **PROD** project `jzsyqhxynswolgijkktn` is provisioned and kept mirrored,
+but **serves no traffic**. This is deliberate — the cutover happens only when the app is declared
+**feature-complete**. Do not "fix" it.
+
+So: **DEV holds the real, live, user-facing data** — treat it with production care (no destructive
+experiments, no "it's only dev"). A DEV migration reaches real users the moment `main` is promoted,
+and inspecting the PROD project will never explain live behaviour. Say which "production" you mean:
+the _deployment_ (live, on DEV data) or the _database_ (idle). Full note:
+`vault/decisions/2026-08-02-decision-32-production-runs-the-dev-database.md`.
+
 # Engineering invariants (the things agents get wrong)
 
 `CONTRIBUTING.md` is the full reference — these are the non-negotiables to internalize up front:

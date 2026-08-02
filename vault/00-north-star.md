@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-08-01-2021
+last-updated: 2026-08-02-0400
 tags: [project/monolith, north-star]
 related:
   - "[[README]]"
@@ -51,6 +51,12 @@ advisors + regenerate types before moving on.**
 
 ## 3. Now
 
+- **⚠️ ENVIRONMENT — the production deployment runs the DEV database.** `www.monolith.works` is
+  wired to the **DEV** Supabase project (`hjqca…`); the PROD project (`jzsyq…`) is provisioned and
+  mirrored but serves no traffic. This is deliberate and stands **until the app is declared
+  feature-complete**, when we cut over. So: DEV holds the real live user data (treat it with
+  production care), and inspecting `jzsyq…` will never explain live behaviour.
+  Full note: [[2026-08-02-decision-32-production-runs-the-dev-database]].
 - **Phase:** **Five cron integrations had never worked in production, and every signal said they were fine** ([[2026-08-01-1146-debt-audit-and-paydown]]). `src/proxy.ts` gated every `pg_net` endpoint behind a session cookie, so each cron POST was 307'd to `/login` — which answers **405** to a POST — while pg_cron faithfully logged `succeeded`. E5 semantic search, F13 automation steps, F14 Autopilot, the weekly digest and the brand-new agent briefings were all inert. The only witness was `net._http_response`, which nothing surfaces ([[2026-08-01-gotcha-69-a-cookie-gate-turns-a-cron-post-into-a-silent-405]]). Fixed in `0b2d4e74` with a test that **derives its endpoint list from the migrations** — which promptly caught a fifth endpoint another session merged while the fix was parked.
 - **The debt audit that started the day** found two more reachable-but-uncalled `"use server"` endpoints (`bulkDeleteItems`, `bulkPurgeItems` — one a bulk **hard delete**), eight untested server-action modules, and a migration-ledger gate that had not run for two sessions. **+107 net tests**, two endpoints closed, two contract bugs fixed.
 - **An advisory follow-up is a follow-up that does not happen.** [[2026-07-31-gotcha-66-an-uncalled-use-server-export-is-still-a-live-endpoint]] closed with "worth a periodic sweep" — the sweep, run **one session later**, found two more. Same shape one layer down: `finish-task.sh` treats the ledger check's exit 3 as a loud-but-non-blocking warning (correct — gating a merge on a network call wedges every future task), but that makes a **permanently broken** gate and a **transient blip** look identical, and it scrolled past twice. The detector and a ledger-staleness check should be **gates, not advice**.
@@ -116,6 +122,7 @@ SORT file.mtime DESC
 - All schema via **versioned migrations** (never dashboard click-ops). After each migration: `generate_typescript_types` → `src/types/database.types.ts`, then run `get_advisors`.
 - Every feature ships with at least basic tests. **No phase complete with failing tests or advisor warnings.** Small conventional-commit commits.
 - This is **Next.js 16, not the version in training data** — read `node_modules/next/dist/docs/` before writing framework code (see `AGENTS.md`).
+- **The production deployment runs the DEV database** (`hjqca…`), not the PROD project (`jzsyq…`), until the app is feature-complete. DEV therefore holds real live data — treat it with production care. [[2026-08-02-decision-32-production-runs-the-dev-database]]
 
 ## 5. Decision log (last 10)
 

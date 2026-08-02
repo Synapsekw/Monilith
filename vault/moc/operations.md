@@ -9,6 +9,16 @@ related: ["[[00-north-star]]"]
 
 > How Monolith is built, wired, and run. Runbooks for Supabase, MCP, migrations, and deploy.
 
+## ⚠️ Which database is live (read first)
+
+**The production deployment (`www.monolith.works`, `main` on Vercel) talks to the DEVELOPMENT
+Supabase project `hjqcahbbbdaknbbnfnvl`.** The PROD project `jzsyqhxynswolgijkktn` is provisioned
+and kept mirrored by `/sync-prod`, but serves **no traffic**. The cutover happens only when the app
+is declared **feature-complete**. Consequences: DEV holds the real live user data (no destructive
+experiments); a DEV migration reaches real users as soon as `main` is promoted; and inspecting the
+PROD project will never explain live behaviour. Full note:
+[[2026-08-02-decision-32-production-runs-the-dev-database]].
+
 ## Environment & secrets
 
 - `.env.local` (gitignored) — real Supabase URL + anon key + `SUPABASE_SERVICE_ROLE_KEY`. The
