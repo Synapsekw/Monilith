@@ -72,6 +72,43 @@ bug.
 - Follow-up: `scripts/new-migration.sh` (or its template) should mention `PUBLIC_PREFIXES` when the
   migration contains `net.http_post`. The test catches it; a pointer would prevent it.
 
+## Postscript (2026-08-02) — it was three faults stacked, and each hid the next
+
+Promoting the fix did **not** immediately drain the queue. The route was only the outermost layer:
+
+| Layer | Symptom | `net._http_response` |
+| --- | --- | --- |
+| 1. Cookie gate redirected the POST | queue flat, cron `succeeded` | `405` |
+| 2. `app_url` absent from Vault | sweep returned early, no request at all | _(no row)_ |
+| 3. HMAC in Vault ≠ `AI_PGNET_HMAC_SECRET` on Vercel | request rejected, cron `succeeded` | `401` |
+| — fixed — | 50 items per sweep | `200` |
+
+Each fault masked the one beneath it, and **all three logged `succeeded`** in `cron.job_run_details`.
+Only the status code told them apart. After alignment the drain ran clean: 334 → 0 in seven sweeps,
+384 embeddings, zero errors.
+
+**The environment trap that made this far harder than it needed to be.** Per
+[[2026-08-02-decision-32-production-runs-the-dev-database]], the live site runs the **DEV** project
+(`hjqca…`); `jzsyq…` is idle. An agent (me) reasoned from the *variable name* `PROD_SUPABASE_DB_URL`
+instead of checking what the deployment connects to, and consequently: enqueued 380 rows into the
+idle project, provisioned `digest_secret` there, and **unscheduled the live sweep cron**. Worse, the
+idle project's cron posts to `www.monolith.works` — served by an app wired to `hjqca…` — so it
+embedded live items while never clearing its own queue. That cross-database reach is what produced
+the first 50 embeddings and made the symptoms incoherent.
+
+**Rules that follow:**
+
+- **Never infer the environment from a variable name.** Check what the deployed app connects to.
+  `.env.prod.local`'s `PROD_*` keys point at the project that serves **no traffic**.
+- **The secrets that matter live on `hjqca…`**, because that is what signs the calls the live app
+  verifies. Aligning `jzsyq…` achieves nothing.
+- **Only one project should run `pg_net` crons.** Two sets both posting at the same URL means the
+  idle mirror mutates live data with a stale view. All five HTTP-posting crons on `jzsyq…` should be
+  unscheduled until cutover (`embed-sweep` already is).
+- **Shell commands handed to a human must not escape variables that need expanding.** A `'\$S'`
+  wrote the literal string `$S` into a production Vault secret. Any command that writes a secret
+  needs a length guard, so it aborts instead of storing garbage.
+
 ## Related
 
 - `[[2026-08-01-1146-debt-audit-and-paydown]]`
