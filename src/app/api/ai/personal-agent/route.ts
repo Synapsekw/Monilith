@@ -27,19 +27,20 @@ import {
   assertRunAllowedToday,
   AgentCapExceededError,
 } from "@/lib/agents/caps";
+/** Conservative placeholder on the claim row: if the process dies before
+ *  `finalizeRun` runs, the audit trail correctly reads "did not complete"
+ *  rather than falsely "ran". `status` has no fourth ("pending"/"claimed")
+ *  value available — the check constraint is `in ('ran','skipped','error')`
+ *  and adding one is a migration — so this reuses 'error', the only one of
+ *  the three that is truthful before the outcome is known. Defined in
+ *  `run-status.ts` because the run-history UI has to recognise it and NOT
+ *  render it as a hard failure; the two must never drift apart. */
+import { CLAIM_PLACEHOLDER } from "@/lib/agents/run-status";
 
 const FEATURE = "personal_agent_run";
 const SIGNATURE_HEADER = "x-pulse-signature";
 /** Postgres unique_violation — raised by `user_agent_runs_slot_uniq`. */
 const PG_UNIQUE_VIOLATION = "23505";
-/** Conservative placeholder on the claim row: if the process dies before
- *  `finalizeRun` runs, the audit trail correctly reads "did not complete"
- *  rather than falsely "ran". `status` has no fourth ("pending"/"claimed")
- *  value available — the check constraint is `in ('ran','skipped','error')`
- *  and adding one is a migration, out of scope here — so this reuses
- *  'error', the only one of the three that is truthful before the outcome
- *  is known. */
-const CLAIM_PLACEHOLDER = "claimed; result not yet recorded";
 
 const bodySchema = z.object({
   agent_id: z.string().uuid(),

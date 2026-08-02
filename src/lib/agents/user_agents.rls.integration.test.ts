@@ -335,5 +335,76 @@ describe.skipIf(!resolution.ok)(
         .eq("name", `rls-probe-foreign-org ${tag}`);
       expect(check ?? []).toEqual([]);
     });
+
+    // ── Property 6: bridge_secret_id is not client-writable ─────────────
+    //
+    // `user_agents_owner_all` is `for all`, so RLS alone lets the OWNER patch
+    // any column of their own row — including `bridge_secret_id`, which holds
+    // the Vault secret id for their agent's bridged session. The containment is
+    // therefore a GRANT, not a policy: 20260802034242 revoked authenticated's
+    // table-level INSERT/UPDATE and re-granted them column by column, with this
+    // column left out. That distinction is invisible to a policy-only test, and
+    // the consequence is concrete — `user_agents_vault_cleanup` deletes
+    // whatever secret id the row names when the row is deleted, so a writable
+    // column here is a way to delete another user's MCP OAuth secret.
+    it("refuses an owner's UPDATE of bridge_secret_id (column grant, not RLS)", async () => {
+      const { error } = await userA
+        .from("user_agents")
+        .update({ bridge_secret_id: randomUUID() })
+        .eq("id", agentIdA)
+        .select("id");
+      expect(error, "authenticated update of bridge_secret_id").not.toBeNull();
+
+      const { data: check } = await admin
+        .from("user_agents")
+        .select("bridge_secret_id")
+        .eq("id", agentIdA)
+        .single();
+      expect(check?.bridge_secret_id, "must be untouched").toBeNull();
+    });
+
+    it("refuses an INSERT that names bridge_secret_id", async () => {
+      const aId = (await userA.auth.getUser()).data.user?.id;
+      const { data, error } = await userA
+        .from("user_agents")
+        .insert({
+          org_id: ORG_A.orgId,
+          owner_id: aId!,
+          name: `rls-probe-bridge ${tag}`,
+          template_id: "integration-test",
+          instructions: "Should never be written.",
+          enabled: false,
+          bridge_secret_id: randomUUID(),
+        })
+        .select("id");
+      expect(error, "insert naming bridge_secret_id").not.toBeNull();
+      expect(data).toBeNull();
+
+      const { data: check } = await admin
+        .from("user_agents")
+        .select("id")
+        .eq("name", `rls-probe-bridge ${tag}`);
+      expect(check ?? []).toEqual([]);
+    });
+
+    // The columns the app actually writes must STILL be writable — the grant
+    // list is easy to under-specify, and getting it wrong bricks the editor
+    // rather than failing loudly anywhere else.
+    it("still lets the owner update the columns the editor writes", async () => {
+      const { error } = await userA
+        .from("user_agents")
+        .update({
+          name: `rls-probe-renamed ${tag}`,
+          instructions: "Renamed by the grant regression test.",
+          board_scope: { mode: "all" },
+          cadence: "daily",
+          run_at_local_hour: 9,
+          template_id: "integration-test",
+          enabled: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", agentIdA);
+      expect(error, "editor-shaped update must still succeed").toBeNull();
+    });
   },
 );

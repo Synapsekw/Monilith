@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
@@ -10,6 +11,8 @@ import {
   type PersonalAgentSettings,
 } from "./agent-config";
 import { assertCanCreateAgent, AgentCapExceededError } from "./caps";
+import { listAgentRuns, RUN_HISTORY_LIMIT } from "./agents-db";
+import type { AgentRunSummary } from "./run-status";
 
 const SETTINGS_PATH = "/settings/agents";
 const NO_ORG = "No organization.";
@@ -125,4 +128,49 @@ export async function deleteAgent(id: string): Promise<ActionResult> {
   if (error) return fail("Couldn't delete that agent.");
   revalidatePath(SETTINGS_PATH);
   return { ok: true, data: undefined };
+}
+
+/** Clamp a requested page size into [1, RUN_HISTORY_LIMIT]. A bad or oversized
+ *  limit is coerced rather than rejected, so the disclosure always renders
+ *  something — same treatment as `getAutomationRuns`'s `runsLimitSchema`. */
+const runsLimitSchema = z
+  .number()
+  .catch(RUN_HISTORY_LIMIT)
+  .transform((n) => Math.min(RUN_HISTORY_LIMIT, Math.max(1, Math.trunc(n))));
+
+/**
+ * Client-callable READ (the only one in this module) for one agent's run
+ * history — the surface that makes a failing agent visible at all. Deliberately
+ * not part of first paint: the roster renders from its own bounded query and
+ * this fires only when a row is expanded (working agreement #5).
+ *
+ * Returns the shared `ActionResult` shape so the caller can tell a failed read
+ * apart from an empty history — an agent that has never run and an agent whose
+ * history won't load must not look identical.
+ *
+ * `.eq("owner_id", …)` is NOT stacked on top of the agent filter: RLS
+ * (`user_agent_runs_owner_read`) already scopes the table to the caller, so
+ * another person's agent id yields an empty list rather than their runs.
+ */
+export async function getAgentRuns(
+  agentId: string,
+  limit: number = RUN_HISTORY_LIMIT,
+): Promise<ActionResult<AgentRunSummary[]>> {
+  if (!z.string().uuid().safeParse(agentId).success) {
+    return fail("That agent doesn't exist.");
+  }
+  await requireUser();
+  const supabase = await createClient();
+  try {
+    return {
+      ok: true,
+      data: await listAgentRuns(
+        supabase,
+        agentId,
+        runsLimitSchema.parse(limit),
+      ),
+    };
+  } catch {
+    return fail("Couldn't load this agent's runs.");
+  }
 }
