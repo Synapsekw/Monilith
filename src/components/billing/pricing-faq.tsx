@@ -60,7 +60,7 @@ export function PricingFaq() {
       <div className="border-border divide-border/60 divide-y rounded-lg border">
         {FAQ.map((item) => (
           <details key={item.q} className="group px-5 py-4">
-            <summary className="focus-visible:ring-ring flex cursor-pointer items-center justify-between gap-4 text-[15px] font-semibold focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11">
+            <summary className="focus-visible:ring-ring flex cursor-pointer items-center justify-between gap-4 text-base font-semibold focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11">
               {item.q}
               <span
                 className="text-muted-foreground ease-keystone flex-none transition-transform duration-300 group-open:rotate-45"

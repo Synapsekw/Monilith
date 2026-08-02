@@ -96,7 +96,7 @@ const GROUPS: { group: string; rows: Row[] }[] = [
  */
 function Mark({ value }: { value: Cell }) {
   if (typeof value === "string")
-    return <span className="text-[13px]">{value}</span>;
+    return <span className="text-sm">{value}</span>;
   return value ? (
     <>
       <Check className="text-primary mx-auto size-4" aria-hidden="true" />
@@ -155,7 +155,7 @@ export function PricingComparison() {
                   <th
                     scope="colgroup"
                     colSpan={4}
-                    className="text-kicker px-4 py-2 text-left font-mono text-[10px] tracking-[0.12em] uppercase"
+                    className="text-kicker text-3xs px-4 py-2 text-left font-mono tracking-[0.12em] uppercase"
                   >
                     {g.group}
                   </th>
