@@ -15,7 +15,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const STATE_PREFIX = String.raw`(?:hover|focus|focus-visible|active|data-\[[^\]]+\])`;
+const STATE_PREFIX = String.raw`(?:hover|focus|focus-visible|active|data-open|aria-expanded|aria-selected|data-\[[^\]]+\])`;
 const OPAQUE = String.raw`(?:accent|muted|secondary)`;
 const RE = new RegExp(`${STATE_PREFIX}:bg-${OPAQUE}\\b`, "g");
 

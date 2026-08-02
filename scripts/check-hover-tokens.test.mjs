@@ -46,4 +46,17 @@ describe("findOpaqueHoverStates", () => {
       { path: "d.tsx", line: 3, klass: "hover:bg-accent" },
     ]);
   });
+
+  it("catches data-open and aria-expanded prefixes too", () => {
+    const hits = findOpaqueHoverStates([
+      {
+        path: "e.tsx",
+        source: "data-open:bg-accent\naria-expanded:bg-muted",
+      },
+    ]);
+    assert.deepEqual(hits, [
+      { path: "e.tsx", line: 1, klass: "data-open:bg-accent" },
+      { path: "e.tsx", line: 2, klass: "aria-expanded:bg-muted" },
+    ]);
+  });
 });
