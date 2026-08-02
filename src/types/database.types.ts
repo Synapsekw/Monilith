@@ -583,6 +583,77 @@ export type Database = {
           },
         ];
       };
+      billing_discount_codes: {
+        Row: {
+          applies_to_cadence: string;
+          code: string;
+          created_at: string;
+          created_by: string | null;
+          duration: string;
+          duration_in_months: number | null;
+          expires_at: string | null;
+          id: string;
+          max_redemptions: number;
+          note: string | null;
+          percent_off: number;
+          plan_restriction: string | null;
+          redeemed_at: string | null;
+          redeemed_by_org_id: string | null;
+          revoked_at: string | null;
+          stripe_coupon_id: string | null;
+          stripe_promotion_code_id: string | null;
+          times_redeemed: number;
+        };
+        Insert: {
+          applies_to_cadence?: string;
+          code: string;
+          created_at?: string;
+          created_by?: string | null;
+          duration: string;
+          duration_in_months?: number | null;
+          expires_at?: string | null;
+          id?: string;
+          max_redemptions?: number;
+          note?: string | null;
+          percent_off: number;
+          plan_restriction?: string | null;
+          redeemed_at?: string | null;
+          redeemed_by_org_id?: string | null;
+          revoked_at?: string | null;
+          stripe_coupon_id?: string | null;
+          stripe_promotion_code_id?: string | null;
+          times_redeemed?: number;
+        };
+        Update: {
+          applies_to_cadence?: string;
+          code?: string;
+          created_at?: string;
+          created_by?: string | null;
+          duration?: string;
+          duration_in_months?: number | null;
+          expires_at?: string | null;
+          id?: string;
+          max_redemptions?: number;
+          note?: string | null;
+          percent_off?: number;
+          plan_restriction?: string | null;
+          redeemed_at?: string | null;
+          redeemed_by_org_id?: string | null;
+          revoked_at?: string | null;
+          stripe_coupon_id?: string | null;
+          stripe_promotion_code_id?: string | null;
+          times_redeemed?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "billing_discount_codes_redeemed_by_org_id_fkey";
+            columns: ["redeemed_by_org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       board_agent_fires: {
         Row: {
           board_agent_id: string;
@@ -2097,6 +2168,62 @@ export type Database = {
           },
         ];
       };
+      org_billing: {
+        Row: {
+          cadence: string | null;
+          created_at: string;
+          current_period_end: string | null;
+          discount_code: string | null;
+          grace_ends_at: string | null;
+          org_id: string;
+          seats: number;
+          status: string;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          tier: string;
+          trial_ends_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          cadence?: string | null;
+          created_at?: string;
+          current_period_end?: string | null;
+          discount_code?: string | null;
+          grace_ends_at?: string | null;
+          org_id: string;
+          seats?: number;
+          status?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          tier?: string;
+          trial_ends_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          cadence?: string | null;
+          created_at?: string;
+          current_period_end?: string | null;
+          discount_code?: string | null;
+          grace_ends_at?: string | null;
+          org_id?: string;
+          seats?: number;
+          status?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          tier?: string;
+          trial_ends_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_billing_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       org_invitations: {
         Row: {
           accepted_at: string | null;
@@ -3441,6 +3568,18 @@ export type Database = {
           item_name: string;
           status_option_id: string;
           status_settings: Json;
+        }[];
+      };
+      get_org_billing_status: {
+        Args: { p_org: string };
+        Returns: {
+          cadence: string;
+          current_period_end: string;
+          grace_ends_at: string;
+          seats: number;
+          status: string;
+          tier: string;
+          trial_ends_at: string;
         }[];
       };
       get_org_members: {
