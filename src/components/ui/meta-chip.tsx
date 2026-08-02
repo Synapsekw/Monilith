@@ -20,7 +20,7 @@ export function MetaChip({
 }) {
   return (
     <span className={cn("inline-flex items-baseline gap-1 text-xs", className)}>
-      <span className="text-kicker font-mono text-[10px] font-medium tracking-[0.1em] uppercase">
+      <span className="text-kicker text-3xs font-mono font-medium tracking-[0.1em] uppercase">
         {label}
       </span>
       <span

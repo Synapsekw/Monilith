@@ -55,7 +55,7 @@ const ALL_LINKS: NavLink[] = [HOME, ASK, ...PLANNING, ...PERSONAL, TRASH];
 
 function CoarseCaption({ label }: { label: string }) {
   return (
-    <span className="text-muted-foreground max-w-full truncate text-[10px] leading-tight">
+    <span className="text-muted-foreground text-3xs max-w-full truncate leading-tight">
       {label}
     </span>
   );

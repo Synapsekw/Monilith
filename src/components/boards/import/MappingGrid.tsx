@@ -207,13 +207,13 @@ export function MappingGrid({
                         />
                       </div>
                       {missingLabels.length > 0 ? (
-                        <span className="bg-status-blue/15 text-status-blue w-fit rounded-md px-1.5 py-0.5 text-[11px] font-medium">
+                        <span className="bg-status-blue/15 text-status-blue text-2xs w-fit rounded-md px-1.5 py-0.5 font-medium">
                           +{missingLabels.length} new options
                         </span>
                       ) : null}
                       {(invalidCountByColumn.get(col.sourceIndex) ?? 0) > 0 ? (
                         <span
-                          className="bg-status-yellow/15 text-status-yellow w-fit rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+                          className="bg-status-yellow/15 text-status-yellow text-2xs w-fit rounded-md px-1.5 py-0.5 font-medium"
                           title={`These cells can't be parsed as ${effectiveKind} and will import empty`}
                         >
                           {invalidCountByColumn.get(col.sourceIndex)} won&apos;t

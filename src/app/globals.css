@@ -33,6 +33,27 @@
   --shadow-glow-primary: var(--glow-primary);
   --ease-keystone: cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* Wash & inset-card surfaces */
+  --color-content-surface: var(--content-surface);
+  --color-content-edge: var(--content-edge);
+  --shadow-content-lift: var(--content-lift);
+
+  /* Alpha-on-parent interaction states */
+  --color-state-hover: var(--state-hover);
+  --color-state-active: var(--state-active);
+  --color-state-selected: var(--state-selected);
+
+  /* Named motion scale (durations are literal — not aliases) */
+  --duration-instant: 120ms;
+  --duration-fast: 180ms;
+  --duration-standard: 240ms;
+  --duration-arrival: 500ms;
+  --ease-standard: cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* The two missing small type steps */
+  --text-3xs: 0.625rem; /* 10px */
+  --text-2xs: 0.6875rem; /* 11px */
+
   /* Surfaces (brief's semantic names) */
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
@@ -165,6 +186,22 @@
   --ring: var(--brand);
   --glow-primary: 0 0 30px -8px rgba(91, 111, 214, 0.35);
 
+  /* Periwinkle Dusk — light. Chrome only; content stays neutral. */
+  --app-wash: linear-gradient(168deg, #eef0f8 0%, #e6e9f3 46%, #d9dce8 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    rgb(255 255 255 / 65%) 0%,
+    transparent 58%
+  );
+  --content-surface: #ffffff;
+  --content-edge: rgb(0 0 0 / 7%);
+  --content-lift:
+    -1px -1px 0 0 rgb(30 40 90 / 8%), 0 1px 3px 0 rgb(30 40 90 / 8%);
+
+  --state-hover: rgb(0 0 0 / 4%);
+  --state-active: rgb(0 0 0 / 7%);
+  --state-selected: color-mix(in oklab, var(--brand) 12%, transparent);
+
   /* Status / label palette (the one controlled multi-color set) */
   --status-gray: oklch(0.65 0 0);
   --status-blue: oklch(0.62 0.17 250);
@@ -200,13 +237,13 @@
   --elevation-panel: 0 8px 24px -14px rgba(0, 0, 0, 0.18);
   --elevation-card: none;
 
-  --sidebar: #f6f6f8;
+  --sidebar: transparent;
   --sidebar-foreground: #1a1a1f;
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: #f1f1f4;
   --sidebar-accent-foreground: #1a1a1f;
-  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-border: transparent;
   --sidebar-ring: var(--brand);
 }
 
@@ -250,6 +287,22 @@
   --ring: var(--brand);
   --glow-primary: 0 0 36px -6px rgba(255, 255, 255, 0.35);
 
+  /* Periwinkle Dusk — dark. Chrome only; content stays neutral. */
+  --app-wash: linear-gradient(168deg, #212540 0%, #141728 46%, #08090d 100%);
+  --app-bloom: radial-gradient(
+    110% 85% at 8% -6%,
+    color-mix(in oklab, var(--brand) 22%, transparent) 0%,
+    transparent 58%
+  );
+  --content-surface: #0e0e10;
+  --content-edge: rgb(255 255 255 / 8%);
+  --content-lift:
+    inset 0 1px 0 0 rgb(255 255 255 / 5%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+
+  --state-hover: rgb(255 255 255 / 5%);
+  --state-active: rgb(255 255 255 / 9%);
+  --state-selected: color-mix(in oklab, var(--brand) 14%, transparent);
+
   --status-gray: oklch(0.7 0 0);
   --status-blue: oklch(0.66 0.16 250);
   --status-green: oklch(0.74 0.15 150);
@@ -279,13 +332,13 @@
   --chart-cat-5: #fb7185;
   --chart-cat-6: #34d399;
 
-  --sidebar: #161619;
+  --sidebar: transparent;
   --sidebar-foreground: #f4f4f6;
   --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: var(--brand-foreground);
   --sidebar-accent: #1c1c20;
   --sidebar-accent-foreground: #f4f4f6;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-border: transparent;
   --sidebar-ring: var(--brand);
   --elevation-panel: 0 8px 30px -12px rgba(0, 0, 0, 0.7);
   --elevation-card: none;
@@ -303,46 +356,74 @@
     /* Disable the macOS trackpad two-finger swipe → browser back/forward
        gesture. Pulse is an app-like surface with horizontally scrolling boards;
        an accidental horizontal overscroll must not navigate away from the
-       current board. Keyboard/back-button history navigation still works. */
-    overscroll-behavior-x: none;
+       current board. Keyboard/back-button history navigation still works.
+       Both axes: vertical rubber-banding otherwise escapes the app frame and
+       reveals the browser canvas behind the wash. */
+    overscroll-behavior: none;
   }
-  /* Light-mode scrollbar — neutral thumb on the page canvas. */
-  html:not(.dark) * {
-    scrollbar-color: oklch(0.82 0 0) transparent;
+  /* Interactive elements get the pointer cursor. Tailwind's preflight leaves
+       buttons on the default arrow and the product only set this ad hoc in 13
+       files, so most of the app showed a text caret over its own controls. */
+  button:not(:disabled),
+  a[href],
+  summary,
+  label[for],
+  select:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]) {
+    cursor: pointer;
   }
-  html:not(.dark) ::-webkit-scrollbar {
+  /* Page-level scrollers reserve their gutter so a list crossing the overflow
+       threshold does not shift content sideways. Deliberately NOT `*`: on a
+       short dropdown or popover the reserved gutter is permanent dead space in
+       a menu that never overflows, so only the surfaces whose content actually
+       grows opt in. */
+  main,
+  [data-scroll-container] {
+    scrollbar-gutter: stable;
+  }
+
+  /* Thumbs are invisible until the pointer is over the scroller. The 3px
+       transparent border + content-box clip is what makes the thumb read as an
+       inset pill rather than a full-width bar. */
+  ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
-  html:not(.dark) ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
-  html:not(.dark) ::-webkit-scrollbar-thumb {
-    background: oklch(0.82 0 0);
-    border: 2px solid var(--background);
-    border-radius: 6px;
-  }
-  html:not(.dark) ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.72 0 0);
-  }
-  /* Subtle themed scrollbar (ported from the prototype) — track blends into the canvas. */
-  .dark * {
-    scrollbar-color: var(--border) transparent;
-  }
-  .dark ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-  .dark ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-thumb {
     background: transparent;
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+    transition: background-color var(--duration-fast) var(--ease-standard);
   }
-  .dark ::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border: 2px solid var(--background);
-    border-radius: 6px;
+  :hover::-webkit-scrollbar-thumb,
+  :focus-within::-webkit-scrollbar-thumb {
+    background: var(--state-active);
+    background-clip: content-box;
   }
-  .dark ::-webkit-scrollbar-thumb:hover {
-    background: var(--input);
+  :hover::-webkit-scrollbar-thumb:hover {
+    background: var(--border-bright);
+    background-clip: content-box;
+  }
+  /* Firefox has no thumb-hover selector; give it the resting alpha directly. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--state-active) transparent;
+    }
+  }
+  /* The app surface. Scoped to the AppShell root rather than `body` on
+     purpose: the landing route has its own page-wide wash and must not
+     inherit this one. Bloom is listed first so it composites above the ramp. */
+  .app-wash {
+    background-image: var(--app-bloom), var(--app-wash);
+    background-attachment: fixed;
   }
   /* Keystone signature: interactive cards lift + hairline brightens on hover. */
   .card-lift {

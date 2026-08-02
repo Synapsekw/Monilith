@@ -256,7 +256,7 @@ function PickStep({
               "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
               selected
                 ? "border-primary bg-accent text-foreground"
-                : "bg-surface text-muted-foreground hover:bg-accent hover:text-foreground",
+                : "bg-surface text-muted-foreground hover:bg-state-hover hover:text-foreground",
             )}
           >
             <span className="min-w-0 truncate">{b.name}</span>

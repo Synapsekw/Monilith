@@ -179,7 +179,7 @@ export function TimeCard({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div>
           <h1 className="text-lg font-semibold">My Time</h1>
           <p className="text-muted-foreground text-xs">
@@ -243,12 +243,12 @@ export function TimeCard({
               );
               return (
                 <tr key={row.key} className="group">
-                  <td className="bg-background group-hover:bg-accent/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
+                  <td className="bg-background group-hover:bg-state-hover/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
                         {row.label}
                       </p>
-                      <p className="text-muted-foreground truncate text-[11px]">
+                      <p className="text-muted-foreground text-2xs truncate">
                         {row.kind === "item"
                           ? (row.boardName ?? "Item")
                           : "Category"}

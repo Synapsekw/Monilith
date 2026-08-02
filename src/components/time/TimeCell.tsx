@@ -72,7 +72,7 @@ export function TimeCell({
         placeholder="—"
       />
       {timerSecs > 0 ? (
-        <span className="text-muted-foreground mt-0.5 text-[10px] leading-tight">
+        <span className="text-muted-foreground text-3xs mt-0.5 leading-tight">
           incl. {formatHours(timerSecs) || "0"}h tracked
         </span>
       ) : null}

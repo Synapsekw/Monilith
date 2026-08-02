@@ -127,7 +127,7 @@ export function ShareBoardDialog({
                       }
                       disabled={pending}
                       className={cn(
-                        "border-border bg-background text-foreground hover:bg-accent focus-visible:ring-ring/50 focus-visible:border-ring h-9 w-32 appearance-none rounded-md border pr-8 pl-3 text-sm capitalize transition-colors",
+                        "border-border bg-background text-foreground hover:bg-state-hover focus-visible:ring-ring/50 focus-visible:border-ring h-9 w-32 appearance-none rounded-md border pr-8 pl-3 text-sm capitalize transition-colors",
                         "focus-visible:ring-3 focus-visible:outline-none",
                         "disabled:pointer-events-none disabled:opacity-50",
                         current === "none" && "text-muted-foreground",

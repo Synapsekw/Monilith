@@ -32,11 +32,11 @@ export function AppShell({
   commandPalette,
 }: AppShellProps) {
   return (
-    <div className="flex h-svh w-full overflow-hidden">
+    <div className="app-wash flex h-svh w-full overflow-hidden">
       <Sidebar navSlot={sidebarNav} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 px-4">
           <div className="flex items-center gap-1 md:hidden">
             {mobileNav}
             <Brand />
@@ -47,7 +47,9 @@ export function AppShell({
             {headerUser}
           </div>
         </header>
-        <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+        <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 min-h-0 flex-1 overflow-auto rounded-xl border">
+          {children}
+        </main>
       </div>
       {commandPalette}
     </div>

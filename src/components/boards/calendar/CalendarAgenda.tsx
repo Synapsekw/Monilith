@@ -140,11 +140,11 @@ function AgendaDayList({
                   e.currentTarget.getBoundingClientRect(),
                 )
               }
-              className="hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-left pointer-coarse:min-h-11"
+              className="hover:bg-state-hover flex w-full items-center gap-2 rounded px-2 py-1.5 text-left pointer-coarse:min-h-11"
             >
               <span className="flex-1 truncate text-sm">{item.name}</span>
               {isSpan && (
-                <span className="text-muted-foreground bg-surface-muted border-border rounded-sm border px-2 py-0.5 text-[10px]">
+                <span className="text-muted-foreground bg-surface-muted border-border text-3xs rounded-sm border px-2 py-0.5">
                   {fmt(item.range.start)} – {fmt(item.range.end)}
                 </span>
               )}
@@ -166,7 +166,7 @@ function AgendaDayList({
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="text-muted-foreground hover:bg-accent rounded-md px-2 py-0.5 text-left text-xs"
+            className="text-muted-foreground hover:bg-state-hover rounded-md px-2 py-0.5 text-left text-xs"
           >
             +{hiddenCount} more
           </button>

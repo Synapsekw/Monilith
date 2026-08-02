@@ -191,7 +191,7 @@ export function GanttRowItem({
   return (
     <div
       data-testid="gantt-row"
-      className="group hover:bg-accent/5 flex border-b"
+      className="group hover:bg-state-hover/5 flex border-b"
       style={{ height: ROW_H }}
     >
       {/* Sticky name label */}
@@ -239,11 +239,11 @@ export function GanttRowItem({
             <span className="sr-only">{criticalLabel}</span>
           </span>
         )}
-        <span className="text-foreground min-w-0 flex-1 truncate text-[12.5px]">
+        <span className="text-foreground min-w-0 flex-1 truncate text-xs">
           {row.name}
         </span>
         {row.hasChildren && row.childCount ? (
-          <span className="text-muted-foreground ml-1 shrink-0 text-[11px] tabular-nums">
+          <span className="text-muted-foreground text-2xs ml-1 shrink-0 tabular-nums">
             {row.childCount}
           </span>
         ) : null}
@@ -384,7 +384,7 @@ export function GanttRowItem({
             >
               <span
                 className={cn(
-                  "truncate text-[11px] font-medium",
+                  "text-2xs truncate font-medium",
                   color
                     ? "text-[color:var(--pill-fg-light)] dark:text-[color:var(--pill-fg-dark)]"
                     : "text-primary-foreground",

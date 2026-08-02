@@ -134,7 +134,7 @@ export function CapacityEditor({
                     disabled={isPending}
                     onClick={() => toggleDay(d.value)}
                     className={cn(
-                      "focus-visible:ring-ring size-7 rounded-md text-[11px] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                      "focus-visible:ring-ring text-2xs size-7 rounded-md font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
                       active
                         ? "bg-primary text-primary-foreground"
                         : "bg-surface-muted text-muted-foreground hover:text-foreground",

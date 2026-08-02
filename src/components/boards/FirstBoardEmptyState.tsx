@@ -109,7 +109,7 @@ export function FirstBoardEmptyState({
                 disabled={!workspaceId || isPending}
                 onClick={() => createFrom(t.id, t.name)}
                 className={cn(
-                  "bg-surface hover:bg-accent focus-visible:ring-ring group flex flex-col items-start gap-1 rounded-md border p-3 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60",
+                  "bg-surface hover:bg-state-hover focus-visible:ring-ring group flex flex-col items-start gap-1 rounded-md border p-3 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60",
                   loading && "bg-accent",
                 )}
               >

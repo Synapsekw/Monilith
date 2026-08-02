@@ -86,7 +86,7 @@ export function DoneMappingFields({
                 <label
                   key={o.id}
                   className={cn(
-                    "hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                    "hover:bg-state-hover/40 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                     checked && "bg-accent/50",
                   )}
                 >

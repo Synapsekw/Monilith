@@ -51,7 +51,7 @@ export function MemberRowHeader({
     <div className="flex items-center gap-2.5">
       <div
         className={cn(
-          "flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium",
+          "text-2xs flex size-7 shrink-0 items-center justify-center rounded-full font-medium",
           isUnassigned
             ? "border-border text-muted-foreground border border-dashed"
             : "bg-surface-muted text-foreground",
@@ -69,7 +69,7 @@ export function MemberRowHeader({
         >
           {displayName(member)}
         </p>
-        <p className="text-muted-foreground text-[11px] tabular-nums">
+        <p className="text-muted-foreground text-2xs tabular-nums">
           {showVariance ? (
             <>
               {signedHours(varianceSecs(totalActualSecs, totalEffortSecs))}

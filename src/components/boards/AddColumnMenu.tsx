@@ -20,7 +20,7 @@ export function AddColumnMenu({
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Add column"
-          className="text-muted-foreground hover:bg-accent hover:text-foreground flex h-full w-11 shrink-0 items-center justify-center border-l"
+          className="text-muted-foreground hover:bg-state-hover hover:text-foreground flex h-full w-11 shrink-0 items-center justify-center border-l"
         >
           <Plus className="size-4" />
         </button>

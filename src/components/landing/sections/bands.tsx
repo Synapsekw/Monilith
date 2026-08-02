@@ -72,9 +72,7 @@ export function TrustStrip() {
                     className="text-primary size-4 flex-none"
                     aria-hidden="true"
                   />
-                  <span className="text-[13.5px] font-medium">
-                    {item.label}
-                  </span>
+                  <span className="text-sm font-medium">{item.label}</span>
                 </div>
               );
             })}
@@ -112,7 +110,7 @@ export function SecurityBand() {
           <LandingReveal key={title} delayMs={i * 70}>
             <div className="bg-surface/60 border-border hover:border-border-hover h-full rounded-lg border p-5 transition-colors">
               <Kicker index={index}>{title}</Kicker>
-              <p className="text-muted-foreground mt-3 text-[13.5px] leading-relaxed">
+              <p className="text-muted-foreground mt-3 text-sm leading-relaxed">
                 {body}
               </p>
             </div>
@@ -185,7 +183,7 @@ export function CapabilityList() {
               {group.items.map((item) => (
                 <li
                   key={item}
-                  className="border-border/60 flex items-center gap-2.5 border-b py-3 text-[14px]"
+                  className="border-border/60 flex items-center gap-2.5 border-b py-3 text-sm"
                 >
                   <Check
                     className="text-primary size-3.5 flex-none"
@@ -249,14 +247,14 @@ export function FaqBand() {
         {FAQ.map((entry, i) => (
           <LandingReveal key={entry.q} delayMs={i * 50}>
             <details className="bg-surface/60 border-border hover:border-border-hover h-full rounded-lg border px-5 py-4 transition-colors">
-              <summary className="flex cursor-pointer list-none items-start gap-3 text-[15px] font-semibold">
+              <summary className="flex cursor-pointer list-none items-start gap-3 text-base font-semibold">
                 <span
                   className="bg-primary mt-[7px] size-1.5 flex-none rounded-full"
                   aria-hidden="true"
                 />
                 {entry.q}
               </summary>
-              <p className="text-muted-foreground mt-3 pl-[18px] text-[14px] leading-relaxed">
+              <p className="text-muted-foreground mt-3 pl-[18px] text-sm leading-relaxed">
                 {entry.a}
               </p>
             </details>
@@ -280,7 +278,7 @@ export function AccessBand({ signedIn = false }: { signedIn?: boolean }) {
       <Container>
         <LandingReveal className="mx-auto max-w-[640px] text-center">
           <Kicker>{signedIn ? "Your workspace" : "Get started"}</Kicker>
-          <h2 className="mt-4 mb-4 text-3xl leading-[1.06] font-extrabold tracking-tight sm:text-4xl md:text-[46px]">
+          <h2 className="mt-4 mb-4 text-3xl leading-[1.06] font-extrabold tracking-tight sm:text-4xl md:text-5xl">
             {signedIn ? "Jump back in." : "Bring your team and its agents."}
           </h2>
           <p className="text-muted-foreground text-base leading-relaxed sm:text-lg">
@@ -296,7 +294,7 @@ export function AccessBand({ signedIn = false }: { signedIn?: boolean }) {
           <div className="mt-8">
             <Link
               href={signedIn ? "/boards" : "/signup"}
-              className="bg-primary text-primary-foreground shadow-glow-primary ease-keystone inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-bold transition-[filter] duration-300 hover:brightness-110"
+              className="bg-primary text-primary-foreground shadow-glow-primary ease-keystone inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-bold transition-[filter] duration-300 hover:brightness-110"
             >
               {signedIn ? "Open Monolith" : "Create your workspace"}
               <ArrowRight className="size-4" />

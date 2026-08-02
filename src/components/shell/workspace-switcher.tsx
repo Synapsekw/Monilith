@@ -94,7 +94,7 @@ export function WorkspaceSwitcher({
               onSelect={() => switchTo(w.id)}
               className="gap-2"
             >
-              <span className="bg-primary text-primary-foreground flex size-5 items-center justify-center rounded text-[10px] font-semibold">
+              <span className="bg-primary text-primary-foreground text-3xs flex size-5 items-center justify-center rounded font-semibold">
                 {w.name.charAt(0).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1 truncate">{w.name}</span>

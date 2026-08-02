@@ -17,7 +17,7 @@ export function WorkloadGridSkeleton() {
     >
       <div
         data-testid="skeleton-toolbar"
-        className="flex items-center justify-between gap-3 border-b px-4 py-3"
+        className="flex items-center justify-between gap-3 px-4 py-3"
       >
         <div className="flex flex-col gap-1">
           <Skeleton className="h-5 w-28" />

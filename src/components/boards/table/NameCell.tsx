@@ -148,7 +148,7 @@ export const NameCell = memo(function NameCell({
         type="button"
         aria-label={`Open ${item.name}`}
         onClick={() => openItemPanel(item.id)}
-        className="hover:bg-accent text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11 pointer-coarse:opacity-100"
+        className="hover:bg-state-hover text-muted-foreground hover:text-foreground focus-visible:ring-ring grid size-7 shrink-0 place-items-center rounded-md opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:size-11 pointer-coarse:opacity-100"
       >
         <Maximize2 className="size-3.5" />
       </button>

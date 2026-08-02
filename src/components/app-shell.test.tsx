@@ -45,3 +45,28 @@ describe("AppShell frame", () => {
     expect(brandLinks[0]).toHaveAttribute("href", "/landing");
   });
 });
+
+describe("surface model", () => {
+  it("paints the wash on the shell root, not on body", () => {
+    const { container } = renderShell();
+    const root = container.firstElementChild as HTMLElement;
+    expect(root).toHaveClass("app-wash");
+    expect(root).toHaveClass("h-svh");
+  });
+
+  it("renders main as the one inset opaque card", () => {
+    renderShell();
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("bg-content-surface");
+    expect(main).toHaveClass("rounded-xl");
+    expect(main).toHaveClass("border-content-edge");
+    expect(main).toHaveClass("shadow-content-lift");
+  });
+
+  it("leaves the header transparent — separation is the gutter, not a line", () => {
+    renderShell();
+    const header = screen.getByRole("banner");
+    expect(header.className).not.toMatch(/\bborder-b\b/);
+    expect(header.className).not.toMatch(/\bbg-/);
+  });
+});

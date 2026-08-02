@@ -26,7 +26,7 @@ export default async function PortfoliosIndex() {
             <li key={p.id}>
               <Link
                 href={`/portfolios/${p.id}`}
-                className="hover:bg-accent/40 block px-4 py-3 text-sm font-medium"
+                className="hover:bg-state-hover/40 block px-4 py-3 text-sm font-medium"
               >
                 {p.name}
               </Link>

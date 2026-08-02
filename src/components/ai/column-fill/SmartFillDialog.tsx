@@ -122,7 +122,7 @@ export function SmartFillDialog({
             </div>
 
             <fieldset className="flex flex-col gap-1">
-              <legend className="text-kicker mb-1.5 font-mono text-[10.5px] font-medium tracking-[0.12em] uppercase">
+              <legend className="text-kicker text-3xs mb-1.5 font-mono font-medium tracking-[0.12em] uppercase">
                 Fill into
               </legend>
               {pickable.length === 0 ? (

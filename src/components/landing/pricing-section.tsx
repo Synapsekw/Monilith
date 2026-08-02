@@ -52,7 +52,7 @@ export function LandingPricingSection() {
                       </>
                     )}
                   </div>
-                  <p className="text-muted-foreground mt-2.5 text-[13.5px] leading-relaxed">
+                  <p className="text-muted-foreground mt-2.5 text-sm leading-relaxed">
                     {tier.tagline}
                   </p>
                 </div>

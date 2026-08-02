@@ -41,7 +41,7 @@ export default async function ReportsListPage({
           {reports.map((r) => (
             <li
               key={r.id}
-              className="group hover:bg-accent flex items-center gap-3 px-3 py-2.5 transition-colors"
+              className="group hover:bg-state-hover flex items-center gap-3 px-3 py-2.5 transition-colors"
             >
               <Link
                 href={`/boards/${boardId}/reports/${r.id}`}

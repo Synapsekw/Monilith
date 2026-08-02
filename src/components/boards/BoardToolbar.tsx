@@ -72,7 +72,7 @@ function OptionRow({
       aria-selected={selected}
       onClick={onClick}
       className={cn(
-        "hover:bg-accent focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
+        "hover:bg-state-hover focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
         selected && "bg-accent",
       )}
     >

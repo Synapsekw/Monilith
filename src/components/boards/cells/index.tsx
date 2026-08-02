@@ -99,7 +99,7 @@ function MemberAvatar({
   avatarUrl: string | null;
 }) {
   return (
-    <span className="bg-surface-muted flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-medium">
+    <span className="bg-surface-muted text-3xs flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full font-medium">
       {avatarUrl ? (
         <Image
           src={avatarUrl}
@@ -179,7 +179,7 @@ export function DateCell({
   // Keystone: dates read as mono, uppercase, wide-tracked metadata.
   if (!overdue)
     return (
-      <span className="text-muted-foreground font-mono text-[11px] tracking-wide uppercase">
+      <span className="text-muted-foreground text-2xs font-mono tracking-wide uppercase">
         {formatted}
       </span>
     );
@@ -189,7 +189,7 @@ export function DateCell({
     <span
       aria-label="Overdue"
       title="Overdue"
-      className="bg-status-red/10 text-status-red -mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5 font-mono text-[11px] tracking-wide uppercase"
+      className="bg-status-red/10 text-status-red text-2xs -mx-1.5 -my-0.5 rounded-sm px-1.5 py-0.5 font-mono tracking-wide uppercase"
     >
       {formatted}
     </span>

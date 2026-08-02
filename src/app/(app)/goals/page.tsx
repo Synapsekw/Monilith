@@ -25,7 +25,7 @@ export default async function GoalsIndex() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-6 py-3">
+      <div className="flex items-center justify-between px-6 py-3">
         <div>
           <Kicker>PLANNING</Kicker>
           <h1 className="text-lg font-semibold">Goals</h1>

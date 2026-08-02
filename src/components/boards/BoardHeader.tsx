@@ -128,7 +128,7 @@ export function BoardHeader({
   }
 
   return (
-    <header className="border-border flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-6 py-2">
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-6 py-2">
       {/* Title — compact, editable in place (stable h-7 line box). */}
       <div className="flex min-w-0 items-center gap-2">
         {editing && !isViewer ? (
@@ -148,17 +148,17 @@ export function BoardHeader({
               }
             }}
             aria-label="Board name"
-            className="h-7 w-56 text-[15px] font-bold"
+            className="h-7 w-56 text-base font-bold"
           />
         ) : isViewer ? (
-          <h1 className="flex h-7 items-center truncate text-[15px] font-bold">
+          <h1 className="flex h-7 items-center truncate text-base font-bold">
             {boardName}
           </h1>
         ) : (
           <button
             type="button"
             onClick={openRename}
-            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone flex h-7 items-center truncate rounded-sm text-left text-[15px] font-bold transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            className="hover:text-muted-foreground focus-visible:ring-ring ease-keystone flex h-7 items-center truncate rounded-sm text-left text-base font-bold transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             {boardName}
           </button>

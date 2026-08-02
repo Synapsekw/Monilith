@@ -70,7 +70,7 @@ export function PricingTierCard({
 
       <ul className="mt-6 mb-8 flex flex-1 flex-col gap-2.5">
         {tier.features.map((f) => (
-          <li key={f} className="flex items-start gap-2.5 text-[13.5px]">
+          <li key={f} className="flex items-start gap-2.5 text-sm">
             <Check
               className="text-primary mt-0.5 size-4 flex-none"
               aria-hidden="true"

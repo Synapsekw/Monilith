@@ -25,7 +25,7 @@ export function UnscheduledSection({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="text-muted-foreground hover:bg-accent flex w-full items-center gap-2 px-6 py-2 text-sm font-medium transition-colors"
+        className="text-muted-foreground hover:bg-state-hover flex w-full items-center gap-2 px-6 py-2 text-sm font-medium transition-colors"
       >
         <span>Unscheduled ({rows.length})</span>
         <ChevronRight
@@ -41,7 +41,7 @@ export function UnscheduledSection({
               onClick={(e) =>
                 onItemTap(row.itemId, e.currentTarget.getBoundingClientRect())
               }
-              className="text-foreground hover:bg-accent focus-visible:ring-ring block w-full truncate rounded-md px-1 py-0.5 text-left text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11"
+              className="text-foreground hover:bg-state-hover focus-visible:ring-ring block w-full truncate rounded-md px-1 py-0.5 text-left text-sm focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-11"
             >
               {row.name}
             </button>
