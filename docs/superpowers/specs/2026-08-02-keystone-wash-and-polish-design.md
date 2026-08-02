@@ -1,7 +1,7 @@
 # Keystone wash & polish — design
 
 - **Date:** 2026-08-02
-- **Status:** draft (design), pending approval
+- **Status:** approved (design) 2026-08-02 · plan: `docs/superpowers/plans/2026-08-02-keystone-wash-and-polish.md`
 - **Direction chosen:** **B · Periwinkle Dusk** (of A Graphite / B Periwinkle / C Kiln — see "Directions considered")
 - **Depends on:** nothing. Pure presentation layer — no schema, no server actions, no new data.
 - **Blocks:** nothing. Every other in-flight feature keeps building against the same component APIs.
