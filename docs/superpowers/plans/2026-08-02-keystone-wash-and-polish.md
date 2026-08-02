@@ -398,9 +398,13 @@ select:not(:disabled),
 Replace the four light-mode rules (~line 309-327) and four dark-mode rules (~line 328-346) with:
 
 ```css
-/* Scroll containers reserve their gutter so a list crossing the overflow
-     threshold does not shift content sideways. */
-* {
+/* Page-level scrollers reserve their gutter so a list crossing the overflow
+     threshold does not shift content sideways. Deliberately NOT `*`: on a
+     short dropdown or popover the reserved gutter is permanent dead space in
+     a menu that never overflows, so only the surfaces whose content actually
+     grows opt in. */
+main,
+[data-scroll-container] {
   scrollbar-gutter: stable;
 }
 
