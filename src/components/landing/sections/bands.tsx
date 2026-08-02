@@ -229,7 +229,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "How do I get in?",
-    a: "Access is invite-only while we onboard in waves. Request access below and we'll send an invite when your wave opens.",
+    a: "Sign up and create your workspace — there's no waitlist and no invite to wait for. You'll be in as soon as you've confirmed your email.",
   },
 ];
 
@@ -273,50 +273,40 @@ export function FaqBand() {
 
 export function AccessBand({ signedIn = false }: { signedIn?: boolean }) {
   return (
-    <section id="waitlist" className="py-24 md:py-32">
+    // `id="get-started"` (was `waitlist`): the section is a signup CTA now, and
+    // nothing links to the old anchor — the nav only targets #agents, #features
+    // and #views.
+    <section id="get-started" className="py-24 md:py-32">
       <Container>
         <LandingReveal className="mx-auto max-w-[640px] text-center">
-          <Kicker>{signedIn ? "Your workspace" : "Request access"}</Kicker>
+          <Kicker>{signedIn ? "Your workspace" : "Get started"}</Kicker>
           <h2 className="mt-4 mb-4 text-3xl leading-[1.06] font-extrabold tracking-tight sm:text-4xl md:text-[46px]">
             {signedIn ? "Jump back in." : "Bring your team and its agents."}
           </h2>
           <p className="text-muted-foreground text-base leading-relaxed sm:text-lg">
             {signedIn
               ? "Everything your team ships, on one surface. Pick up right where you left off."
-              : "We're onboarding teams in small batches. Add your email and we'll send an invite when your wave opens."}
+              : "Create your workspace, invite your team, and put your first agent to work. No waitlist."}
           </p>
 
-          {signedIn ? (
-            <div className="mt-8">
-              <Link
-                href="/boards"
-                className="bg-primary text-primary-foreground shadow-glow-primary ease-keystone inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-bold transition-[filter] duration-300 hover:brightness-110"
-              >
-                Open Monolith
-                <ArrowRight className="size-4" />
-              </Link>
-            </div>
-          ) : (
-            <div className="mx-auto mt-8 flex max-w-[480px] flex-wrap justify-center gap-3">
-              <input
-                type="email"
-                aria-label="Email address"
-                placeholder="you@company.com"
-                className="text-foreground placeholder:text-kicker border-border bg-foreground/[0.04] focus:border-border-bright min-w-[220px] flex-1 rounded-full border px-5 py-3.5 text-[15px] transition-colors outline-none"
-              />
-              <button
-                type="button"
-                className="bg-primary text-primary-foreground shadow-glow-primary ease-keystone rounded-full px-6 py-3.5 text-[15px] font-bold whitespace-nowrap transition-[filter] duration-300 hover:brightness-110"
-              >
-                Request access
-              </button>
-            </div>
-          )}
+          {/* Both states are now a real <Link>. The logged-out branch used to be
+              an email input beside a `type="button"` with no handler — it
+              collected nothing and went nowhere, which is the one thing a
+              closing CTA must never do. Signup is open, so it points at it. */}
+          <div className="mt-8">
+            <Link
+              href={signedIn ? "/boards" : "/signup"}
+              className="bg-primary text-primary-foreground shadow-glow-primary ease-keystone inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-bold transition-[filter] duration-300 hover:brightness-110"
+            >
+              {signedIn ? "Open Monolith" : "Create your workspace"}
+              <ArrowRight className="size-4" />
+            </Link>
+          </div>
 
           <div className="text-kicker mt-4 font-mono text-xs tracking-[0.04em]">
             {signedIn
-              ? "Invite-only. Rolling out in waves."
-              : "No spam. We onboard in small batches."}
+              ? "Everything in one place."
+              : "Free to start. No credit card."}
           </div>
         </LandingReveal>
       </Container>

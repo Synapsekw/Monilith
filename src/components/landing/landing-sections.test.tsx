@@ -38,11 +38,36 @@ describe("LandingSections", () => {
     expect(screen.getByText("Named agents · rolling out")).toBeInTheDocument();
   });
 
-  it("logged out: the waitlist CTA is a Request access control", () => {
+  // Signup is open — there is no waitlist. The closing CTA must be a real link
+  // to /signup, never the inert email-input-plus-`type="button"` it used to be:
+  // a closing CTA that goes nowhere is the one failure this band cannot have.
+  it("logged out: the closing CTA links to signup, with no dead controls", () => {
     render(<LandingSections />);
+    const cta = screen.getByRole("link", { name: /create your workspace/i });
+    expect(cta).toHaveAttribute("href", "/signup");
     expect(
-      screen.getByRole("button", { name: "Request access" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /request access/i }),
+    ).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("logged in: the closing CTA goes to the boards instead", () => {
+    render(<LandingSections signedIn />);
+    expect(
+      screen.getByRole("link", { name: /open monolith/i }),
+    ).toHaveAttribute("href", "/boards");
+  });
+
+  // Said in both places a visitor looks: the closing CTA and the "How do I get
+  // in?" FAQ answer. The old copy promised invite waves in both.
+  it("tells visitors there is no waitlist, in the CTA and the FAQ", () => {
+    render(<LandingSections />);
+    expect(screen.getAllByText(/no waitlist/i)).toHaveLength(2);
+    expect(
+      screen.queryByText(
+        /invite-only|onboard(ing)? in (small )?(batches|waves)/i,
+      ),
+    ).toBeNull();
   });
 
   it("answers the questions a visitor actually has", () => {

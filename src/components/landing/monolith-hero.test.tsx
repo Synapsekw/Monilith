@@ -59,7 +59,8 @@ describe("MonolithHero", () => {
 
   it("links to the public /updates page from the footer", () => {
     render(<MonolithHero />);
-    expect(screen.getByText("Invitation only")).toBeInTheDocument();
+    // Signup is open, so the footer no longer says "Invitation only".
+    expect(screen.getByText("Free to start")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /updates →/i })).toHaveAttribute(
       "href",
       "/updates",
