@@ -28,6 +28,11 @@ export function LandingNav({ signedIn = false }: { signedIn?: boolean }) {
           <a href="#agents">Agents</a>
           <a href="#features">Product</a>
           <a href="#views">Views</a>
+          {/* In-page anchor, not a <Link>: the teaser lives on this route, and a
+              router navigation would re-run every query in the page (gotcha-09).
+              The full comparison at /pricing is a real route, linked from the
+              teaser's CTA and the footer. */}
+          <a href="#pricing">Pricing</a>
           <Link href="/updates">Updates</Link>
         </nav>
 

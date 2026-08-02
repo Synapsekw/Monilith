@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MonolithScene } from "./monolith-scene";
 import { LandingNav } from "./landing-nav";
 import { LandingSections } from "./landing-sections";
+import { LandingPricingSection } from "./pricing-section";
 import { AgentRoster, BoardWithAgentDock } from "./landing-agent-mocks";
 import styles from "./monolith-hero.module.css";
 
@@ -28,9 +29,13 @@ export function MonolithHero({ signedIn = false }: { signedIn?: boolean }) {
       <LandingNav signedIn={signedIn} />
       <MonolithScene roster={<AgentRoster />} proof={<BoardWithAgentDock />} />
       <LandingSections signedIn={signedIn} />
+      <LandingPricingSection />
 
       <footer className={styles.footer}>
         <span>Free to start</span>
+        <Link href="/pricing" className={styles.footerLink}>
+          Pricing
+        </Link>
         <Link href="/updates" className={styles.footerLink}>
           Updates →
         </Link>
