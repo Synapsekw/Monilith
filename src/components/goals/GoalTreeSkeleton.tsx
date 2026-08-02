@@ -15,7 +15,7 @@ export function GoalTreeSkeleton() {
     >
       <div
         data-testid="skeleton-header"
-        className="flex items-center justify-between border-b px-6 py-3"
+        className="flex items-center justify-between px-6 py-3"
       >
         <div className="flex flex-col gap-1">
           <Skeleton className="h-5 w-24" />

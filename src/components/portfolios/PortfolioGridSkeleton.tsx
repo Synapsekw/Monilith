@@ -12,7 +12,7 @@ export function PortfolioGridSkeleton() {
       aria-label="Loading portfolio"
       className="flex h-full flex-col"
     >
-      <div className="border-b px-4 py-3">
+      <div className="px-4 py-3">
         <Skeleton className="h-5 w-40" />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">

@@ -27,7 +27,7 @@ export default async function PortfolioPage({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b px-4 py-3">
+      <div className="px-4 py-3">
         <Kicker>PLANNING</Kicker>
         <h1 className="text-base font-semibold">{result.portfolio.name}</h1>
       </div>

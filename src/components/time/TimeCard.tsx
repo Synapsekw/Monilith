@@ -179,7 +179,7 @@ export function TimeCard({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div>
           <h1 className="text-lg font-semibold">My Time</h1>
           <p className="text-muted-foreground text-xs">

@@ -242,7 +242,7 @@ export function WorkloadGrid({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div>
           <Kicker>PLANNING</Kicker>
           <h1 className="text-lg font-semibold">Workload</h1>

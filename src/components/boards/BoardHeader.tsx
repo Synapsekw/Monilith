@@ -128,7 +128,7 @@ export function BoardHeader({
   }
 
   return (
-    <header className="border-border flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-6 py-2">
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 px-6 py-2">
       {/* Title — compact, editable in place (stable h-7 line box). */}
       <div className="flex min-w-0 items-center gap-2">
         {editing && !isViewer ? (
