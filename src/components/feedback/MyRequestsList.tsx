@@ -97,7 +97,7 @@ export function MyRequestsList({ load }: Props) {
               </span>
               <span
                 className={cn(
-                  "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                  "text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-medium",
                   statusToneClasses(meta.color, "solid"),
                 )}
               >
@@ -105,10 +105,10 @@ export function MyRequestsList({ load }: Props) {
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="bg-muted/60 text-muted-foreground rounded-sm px-1 py-px text-[10px] font-medium">
+              <span className="bg-muted/60 text-muted-foreground text-3xs rounded-sm px-1 py-px font-medium">
                 {KIND_LABEL[item.kind] ?? item.kind}
               </span>
-              <span className="text-muted-foreground text-[10px]">
+              <span className="text-muted-foreground text-3xs">
                 {new Date(item.created_at).toLocaleDateString(undefined, {
                   month: "short",
                   day: "numeric",

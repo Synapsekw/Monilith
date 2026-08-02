@@ -106,8 +106,8 @@ export const SWITCHER_ROWS: BoardRow[] = [
 /* -------------------------------------------------------------------------- */
 
 const AVATAR_SIZE = {
-  sm: "size-[22px] text-[9px]",
-  md: "size-[26px] text-[10px]",
+  sm: "size-[22px] text-3xs",
+  md: "size-[26px] text-3xs",
   lg: "size-10 text-sm",
 } as const;
 
@@ -139,7 +139,7 @@ function OwnerCell({ person }: { person: Person }) {
   return (
     <div className="flex items-center gap-2 whitespace-nowrap">
       <Avatar person={person} />
-      <span className="text-muted-foreground text-[13px]">{person.name}</span>
+      <span className="text-muted-foreground text-sm">{person.name}</span>
     </div>
   );
 }
@@ -153,7 +153,7 @@ export function ProgressBar({ value }: { value: number }) {
           style={{ width: `${value}%` }}
         />
       </div>
-      <span className="text-muted-foreground w-8 text-right font-mono text-[11px]">
+      <span className="text-muted-foreground text-2xs w-8 text-right font-mono">
         {value}%
       </span>
     </div>
@@ -188,11 +188,11 @@ export function WindowFrame({
           <i className="bg-foreground/15 block size-[11px] rounded-full" />
           <i className="bg-foreground/15 block size-[11px] rounded-full" />
         </div>
-        <div className="text-muted-foreground truncate font-mono text-[11px] tracking-[0.08em]">
+        <div className="text-muted-foreground text-2xs truncate font-mono tracking-[0.08em]">
           {title}
         </div>
         {chip ? (
-          <div className="text-kicker border-border ml-auto flex-none rounded-sm border px-2.5 py-1 font-mono text-[10px] tracking-[0.1em]">
+          <div className="text-kicker border-border text-3xs ml-auto flex-none rounded-sm border px-2.5 py-1 font-mono tracking-[0.1em]">
             {chip}
           </div>
         ) : null}
@@ -223,7 +223,7 @@ function Pill({ label, color }: { label: string; color: StatusColor }) {
 export function BoardTableMock({ rows }: { rows: BoardRow[] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] border-collapse text-[13.5px]">
+      <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr>
             {[
@@ -236,7 +236,7 @@ export function BoardTableMock({ rows }: { rows: BoardRow[] }) {
             ].map((h) => (
               <th
                 key={h}
-                className="text-kicker border-border border-b px-4 py-3.5 text-left font-mono text-[10px] font-medium tracking-[0.1em] whitespace-nowrap uppercase"
+                className="text-kicker border-border text-3xs border-b px-4 py-3.5 text-left font-mono font-medium tracking-[0.1em] whitespace-nowrap uppercase"
               >
                 {h}
               </th>
@@ -265,7 +265,7 @@ export function BoardTableMock({ rows }: { rows: BoardRow[] }) {
               <td className="px-4 py-3.5 align-middle">
                 <Pill label={row.priority.label} color={row.priority.color} />
               </td>
-              <td className="text-muted-foreground px-4 py-3.5 align-middle font-mono text-[11.5px] whitespace-nowrap">
+              <td className="text-muted-foreground text-2xs px-4 py-3.5 align-middle font-mono whitespace-nowrap">
                 {row.timeline}
               </td>
               <td className="px-4 py-3.5 align-middle">
@@ -346,7 +346,7 @@ export function KanbanMock({
           className="bg-surface-muted border-border rounded-lg border p-3.5"
         >
           <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[13px] font-bold">
+            <div className="flex items-center gap-2 text-sm font-bold">
               <span
                 className={cn(
                   "block size-2 rounded-full",
@@ -356,7 +356,7 @@ export function KanbanMock({
               />
               {col.name}
             </div>
-            <span className="text-kicker bg-surface border-border rounded-sm border px-2 py-0.5 font-mono text-[11px]">
+            <span className="text-kicker bg-surface border-border text-2xs rounded-sm border px-2 py-0.5 font-mono">
               {col.cards.length}
             </span>
           </div>
@@ -366,7 +366,7 @@ export function KanbanMock({
                 key={card.task}
                 className="bg-surface border-border hover:border-border-hover rounded-lg border p-3.5 transition-colors"
               >
-                <div className="mb-3 text-[13.5px] leading-snug font-semibold">
+                <div className="mb-3 text-sm leading-snug font-semibold">
                   {card.task}
                 </div>
                 <div className="flex items-center justify-between">
@@ -411,7 +411,7 @@ export function CalendarMock() {
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div
             key={d}
-            className="text-kicker pb-1 text-center font-mono text-[9px] tracking-[0.08em] uppercase"
+            className="text-kicker text-3xs pb-1 text-center font-mono tracking-[0.08em] uppercase"
           >
             {d}
           </div>
@@ -421,11 +421,13 @@ export function CalendarMock() {
             key={cell.day}
             className="bg-surface-muted border-border relative aspect-[1/0.72] overflow-hidden rounded-lg border p-2"
           >
-            <div className="text-kicker font-mono text-[10px]">{cell.day}</div>
+            <div className="text-kicker text-3xs font-mono font-medium">
+              {cell.day}
+            </div>
             {cell.event ? (
               <div
                 className={cn(
-                  "mt-1.5 hidden truncate rounded-sm px-1.5 py-1 text-[10px] font-semibold sm:block",
+                  "text-3xs mt-1.5 hidden truncate rounded-sm px-1.5 py-1 font-semibold sm:block",
                   statusToneClasses(cell.event.color, "soft"),
                 )}
               >
@@ -481,7 +483,7 @@ const GANTT_BARS: GanttBar[] = [
 export function TimelineMock() {
   return (
     <div className="p-5">
-      <div className="text-kicker mb-3 ml-[164px] hidden grid-cols-6 font-mono text-[9px] tracking-[0.06em] sm:grid">
+      <div className="text-kicker text-3xs mb-3 ml-[164px] hidden grid-cols-6 font-mono tracking-[0.06em] sm:grid">
         {["Jul 1", "Jul 8", "Jul 15", "Jul 22", "Jul 29", "Aug 5"].map((t) => (
           <span key={t}>{t}</span>
         ))}
@@ -492,13 +494,13 @@ export function TimelineMock() {
             key={bar.label}
             className="grid grid-cols-[100px_1fr] items-center gap-3.5 sm:grid-cols-[150px_1fr]"
           >
-            <div className="text-muted-foreground truncate text-[12.5px] font-semibold">
+            <div className="text-muted-foreground truncate text-xs font-semibold">
               {bar.label}
             </div>
             <div className="bg-foreground/[0.04] relative h-6 overflow-hidden rounded-sm">
               <div
                 className={cn(
-                  "absolute top-1 flex h-4 items-center overflow-hidden rounded-sm px-2 font-mono text-[10px] font-bold whitespace-nowrap",
+                  "text-3xs absolute top-1 flex h-4 items-center overflow-hidden rounded-sm px-2 font-mono font-bold whitespace-nowrap",
                   statusToneClasses(bar.color, "solid"),
                 )}
                 style={{ left: `${bar.left}%`, width: `${bar.width}%` }}

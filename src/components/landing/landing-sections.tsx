@@ -208,7 +208,7 @@ export function LandingSections({ signedIn = false }: { signedIn?: boolean }) {
             />
             <div className="text-left">
               <div className="text-sm font-bold">Danijel Jovanovic</div>
-              <div className="text-muted-foreground text-[12.5px]">
+              <div className="text-muted-foreground text-xs">
                 Founder, Monolith
               </div>
             </div>

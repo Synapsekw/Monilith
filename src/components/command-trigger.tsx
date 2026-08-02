@@ -16,7 +16,7 @@ export function CommandTrigger() {
     >
       <Search className="size-4" />
       <span className="hidden sm:inline">Search…</span>
-      <kbd className="bg-muted ml-2 hidden rounded border px-1.5 font-mono text-[10px] sm:inline">
+      <kbd className="bg-muted text-3xs ml-2 hidden rounded border px-1.5 font-mono sm:inline">
         ⌘K
       </kbd>
     </Button>

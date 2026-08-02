@@ -23,7 +23,7 @@ import {
 /** Marks capability that is real but not yet generally available. */
 export function RollingOut({ children }: { children: ReactNode }) {
   return (
-    <span className="border-border text-kicker inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.12em] uppercase">
+    <span className="border-border text-kicker text-3xs inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono tracking-[0.12em] uppercase">
       <span
         aria-hidden="true"
         className="bg-primary size-1.5 flex-none rounded-full"
@@ -37,7 +37,7 @@ export function RollingOut({ children }: { children: ReactNode }) {
 /** The `AGENT` chip that distinguishes an agent author from a human one. */
 export function AgentBadge() {
   return (
-    <span className="border-border text-kicker flex-none rounded-sm border px-1.5 py-px font-mono text-[9px] tracking-[0.12em]">
+    <span className="border-border text-kicker text-3xs flex-none rounded-sm border px-1.5 py-px font-mono tracking-[0.12em]">
       AGENT
     </span>
   );
@@ -59,7 +59,7 @@ export function AgentAvatar({
     <span
       aria-hidden="true"
       className={cn(
-        "bg-primary/15 text-primary ring-primary/40 inline-flex size-[26px] flex-none items-center justify-center rounded-full text-[10px] font-bold ring-1",
+        "bg-primary/15 text-primary ring-primary/40 text-3xs inline-flex size-[26px] flex-none items-center justify-center rounded-full font-bold ring-1",
         className,
       )}
     >
@@ -104,10 +104,10 @@ export function AgentThreadMock({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-border flex items-center gap-2.5 border-b px-4 py-3">
-        <span className="text-kicker flex-none font-mono text-[10px] tracking-[0.12em]">
+        <span className="text-kicker text-3xs flex-none font-mono tracking-[0.12em]">
           THREAD
         </span>
-        <span className="truncate text-[13px] font-semibold">
+        <span className="truncate text-sm font-semibold">
           Redesign billing flow
         </span>
       </div>
@@ -116,10 +116,10 @@ export function AgentThreadMock({ compact = false }: { compact?: boolean }) {
         <div className="flex gap-2.5">
           <Avatar person={PEOPLE.sofia} />
           <div className="min-w-0">
-            <div className="text-muted-foreground mb-1 text-[11px]">
+            <div className="text-muted-foreground text-2xs mb-1">
               {PEOPLE.sofia.name}
             </div>
-            <div className="text-[13px] leading-relaxed">
+            <div className="text-sm leading-relaxed">
               <Mention>Triage</Mention> what&apos;s actually blocking this?
             </div>
           </div>
@@ -128,23 +128,23 @@ export function AgentThreadMock({ compact = false }: { compact?: boolean }) {
         <div className="flex gap-2.5">
           <AgentAvatar initials="TR" />
           <div className="min-w-0">
-            <div className="text-muted-foreground mb-1 flex items-center gap-2 text-[11px]">
+            <div className="text-muted-foreground text-2xs mb-1 flex items-center gap-2">
               Triage
               <AgentBadge />
             </div>
-            <div className="text-[13px] leading-relaxed">
+            <div className="text-sm leading-relaxed">
               Two dependencies are late:{" "}
               <b className="font-bold">Ship realtime presence</b>
               {" (Theo, 54%) and the Stripe webhook spike. "}
               I&apos;ve drafted the unblocking plan.
             </div>
             <div className="border-border bg-surface-muted mt-2.5 inline-flex items-center gap-2 rounded-sm border px-2.5 py-1.5">
-              <span className="text-primary font-mono text-[10px]">PDF</span>
-              <span className="text-muted-foreground text-[12px]">
+              <span className="text-primary text-3xs font-mono">PDF</span>
+              <span className="text-muted-foreground text-xs">
                 Billing-unblock-plan.pdf
               </span>
             </div>
-            <div className="text-kicker mt-1.5 font-mono text-[10px] tracking-[0.1em]">
+            <div className="text-kicker text-3xs mt-1.5 font-mono tracking-[0.1em]">
               ATTACHED TO THIS TASK
             </div>
           </div>
@@ -154,11 +154,11 @@ export function AgentThreadMock({ compact = false }: { compact?: boolean }) {
           <div className="flex gap-2.5">
             <AgentAvatar initials="MB" />
             <div className="min-w-0">
-              <div className="text-muted-foreground mb-1 flex items-center gap-2 text-[11px]">
+              <div className="text-muted-foreground text-2xs mb-1 flex items-center gap-2">
                 Morning Brief
                 <AgentBadge />
               </div>
-              <div className="text-[13px] leading-relaxed">
+              <div className="text-sm leading-relaxed">
                 Added to tomorrow&apos;s 7:00 digest for the three owners.
               </div>
             </div>
@@ -167,7 +167,7 @@ export function AgentThreadMock({ compact = false }: { compact?: boolean }) {
       </div>
 
       <div className="border-border border-t px-4 py-3">
-        <div className="border-border text-muted-foreground rounded-sm border px-3 py-2 text-[12.5px]">
+        <div className="border-border text-muted-foreground rounded-sm border px-3 py-2 text-xs">
           Ask an agent…
         </div>
       </div>
@@ -212,16 +212,16 @@ export function MorningBriefMock() {
         <AgentAvatar initials="MB" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold">Morning Brief</span>
+            <span className="text-sm font-semibold">Morning Brief</span>
             <AgentBadge />
           </div>
-          <div className="text-muted-foreground text-[11.5px]">
+          <div className="text-muted-foreground text-2xs">
             to Dana K. · 7:00
           </div>
         </div>
       </div>
 
-      <p className="mb-4 text-[14.5px] leading-relaxed">
+      <p className="mb-4 text-sm leading-relaxed">
         Good morning — <b className="font-bold">three items</b> need you today.
       </p>
 
@@ -233,7 +233,7 @@ export function MorningBriefMock() {
           >
             <span
               className={cn(
-                "inline-flex flex-none items-center gap-1.5 rounded-sm px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap",
+                "text-2xs inline-flex flex-none items-center gap-1.5 rounded-sm px-2.5 py-1 font-semibold whitespace-nowrap",
                 statusToneClasses(line.color, "soft"),
               )}
             >
@@ -244,10 +244,10 @@ export function MorningBriefMock() {
               {line.label}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[13.5px] font-semibold">
+              <span className="block truncate text-sm font-semibold">
                 {line.task}
               </span>
-              <span className="text-muted-foreground block text-[11.5px]">
+              <span className="text-muted-foreground text-2xs block">
                 {line.meta}
               </span>
             </span>
@@ -255,7 +255,7 @@ export function MorningBriefMock() {
         ))}
       </ul>
 
-      <div className="text-kicker mt-4 font-mono text-[10px] tracking-[0.1em] uppercase">
+      <div className="text-kicker text-3xs mt-4 font-mono tracking-[0.1em] uppercase">
         Sent every weekday · unsubscribe any time
       </div>
     </div>
@@ -306,12 +306,12 @@ export function AgentRoster({ className }: { className?: string }) {
           <AgentAvatar initials={agent.initials} />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-[13px] font-semibold">
+              <span className="truncate text-sm font-semibold">
                 {agent.name}
               </span>
               <AgentBadge />
             </div>
-            <div className="text-muted-foreground mt-0.5 text-[11.5px] leading-snug">
+            <div className="text-muted-foreground text-2xs mt-0.5 leading-snug">
               {agent.role}
             </div>
           </div>
