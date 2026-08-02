@@ -65,6 +65,18 @@ describe("proxy()", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
+  it("lets an anonymous visitor reach /pricing without a login redirect", async () => {
+    // Belt and braces with the matcher exclusion below: the exclusion is the
+    // performance path (CDN-served, zero proxy invocation), PUBLIC_ROUTES is the
+    // correctness backstop if the matcher is ever narrowed. An unregistered
+    // public route 307s to /login (gotcha-12).
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    const res = await proxy(req("/pricing"));
+
+    expect(res.headers.get("location")).toBeNull();
+  });
+
   it("redirects an anonymous visitor on a protected route to /login?next=", async () => {
     getClaims.mockResolvedValue({ data: null, error: null });
 
@@ -220,6 +232,7 @@ describe("proxy matcher", () => {
     expect(matcher.test("/login")).toBe(false);
     expect(matcher.test("/signup")).toBe(false);
     expect(matcher.test("/updates")).toBe(false);
+    expect(matcher.test("/pricing")).toBe(false);
   });
 
   it("skips the web manifest so it never redirects to /login (installability)", () => {

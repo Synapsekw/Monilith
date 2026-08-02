@@ -13,7 +13,7 @@ function settingsRow(mode: string, limit = 0) {
   maybeSingle.mockResolvedValue({
     data: {
       ai_mode: mode,
-      tier: "pro",
+      tier: "pulse",
       monthly_credit_limit: limit,
       byo_provider: null,
       byo_key_last4: null,
@@ -54,7 +54,7 @@ describe("entitlement", () => {
     rpc.mockResolvedValueOnce({ data: "100", error: null });
     expect(await getAiEntitlement("org-1")).toEqual({
       mode: "managed",
-      tier: "pro",
+      tier: "pulse",
       creditsLimit: 500,
       creditsUsed: 100,
       creditsRemaining: 400,

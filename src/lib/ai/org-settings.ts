@@ -15,9 +15,19 @@ export type OrgAiSettings = {
   maxAgentRunsPerUserPerDay: number;
 };
 
-/** A missing org_ai_settings row means the shipped default: members' own keys. */
+/**
+ * What an org with no `org_ai_settings` row gets.
+ *
+ * `off` since Phase 10 E6: under managed-only billing an org that has not
+ * subscribed has no AI. This was `per_user` until 2026-08-02, when
+ * `20260802133040_org_ai_settings_backfill` wrote an explicit `per_user` row for
+ * all 22 then-existing orgs — changing this constant alone would have silently
+ * disabled AI for every one of them, because none had a row. Only genuinely new
+ * orgs land here now, and they reach AI through a subscription (or, until
+ * checkout ships, through `setOrgAiPlan` in the platform console).
+ */
 export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = {
-  mode: "per_user",
+  mode: "off",
   tier: "none",
   monthlyCreditLimit: 0,
   byoProvider: null,

@@ -17,8 +17,9 @@ const AUTH_ROUTES = ["/login", "/signup", "/auth", "/forgot-password"];
 // static MONOLITH landing for logged-out visitors (the proxy redirects an
 // authenticated hit on `/` to /home below); `/landing` is the always-on splash
 // the nav logo points to; `/updates` is the public changelog linked from the
-// landing footer.
-const PUBLIC_ROUTES = ["/", "/landing", "/updates"];
+// landing footer; `/pricing` is the public price list linked from the nav,
+// the landing teaser and the footer.
+const PUBLIC_ROUTES = ["/", "/landing", "/updates", "/pricing"];
 // Prefix-matched routes that are NEVER authenticated by a session cookie, so a
 // cookie-based gate can only break them. `/.well-known/oauth-*` is public
 // metadata by RFC 8414 / RFC 9728; `/api/oauth/*` is the OAuth 2.1 authorization
@@ -171,6 +172,6 @@ export const config = {
     // install prompt. `/` stays matched (the authed → /home redirect above needs
     // the resolved identity); so does `/auth/*` (the OAuth callback needs
     // session-refresh cookies).
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|login|signup|updates|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|otf|map)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|login|signup|updates|pricing|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff|woff2|ttf|otf|map)$).*)",
   ],
 };

@@ -35,9 +35,15 @@ export type PlatformUserTargetInput = z.infer<typeof platformUserTargetSchema>;
 
 // Platform: grant an org's AI allowance (tier + monthly credit ceiling). This is
 // the operator-controlled entitlement only — `ai_mode` stays with the org admin.
+//
+// The vocabulary is the billing design's, not a free label: `core` = no AI,
+// `pulse` = the metered AI tier, `trial` = the 14-day grant, `enterprise` =
+// admin-set ceiling. `none` remains for an org with no plan at all. It must stay
+// in lockstep with `org_billing.tier`'s check constraint and with the TIERS
+// array in OrgAiPlanForm. Replaced `starter`/`pro`, which no org ever held.
 export const setOrgAiPlanSchema = z.object({
   orgId: z.string().uuid(),
-  tier: z.enum(["none", "starter", "pro", "enterprise"]),
+  tier: z.enum(["none", "core", "pulse", "trial", "enterprise"]),
   monthlyCreditLimit: z.number().int().min(0).max(1_000_000),
 });
 export type SetOrgAiPlanInput = z.infer<typeof setOrgAiPlanSchema>;
