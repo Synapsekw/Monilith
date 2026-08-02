@@ -34,6 +34,7 @@
   --ease-keystone: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Wash & inset-card surfaces */
+  --color-content-surface: var(--content-surface);
   --color-content-edge: var(--content-edge);
   --shadow-content-lift: var(--content-lift);
 
@@ -192,6 +193,7 @@
     rgb(255 255 255 / 65%) 0%,
     transparent 58%
   );
+  --content-surface: #ffffff;
   --content-edge: rgb(0 0 0 / 7%);
   --content-lift:
     -1px -1px 0 0 rgb(30 40 90 / 8%), 0 1px 3px 0 rgb(30 40 90 / 8%);
@@ -292,6 +294,7 @@
     color-mix(in oklab, var(--brand) 22%, transparent) 0%,
     transparent 58%
   );
+  --content-surface: #0e0e10;
   --content-edge: rgb(255 255 255 / 8%);
   --content-lift:
     inset 0 1px 0 0 rgb(255 255 255 / 5%), 0 8px 24px -12px rgb(0 0 0 / 60%);

@@ -19,6 +19,7 @@ function tokensIn(selector: string): Set<string> {
 const NEW_TOKENS = [
   "--app-wash",
   "--app-bloom",
+  "--content-surface",
   "--content-edge",
   "--content-lift",
   "--state-hover",
@@ -60,6 +61,7 @@ describe("Keystone token contract", () => {
       "--color-state-hover:",
       "--color-state-active:",
       "--color-state-selected:",
+      "--color-content-surface:",
       "--color-content-edge:",
       "--shadow-content-lift:",
       "--text-2xs:",
