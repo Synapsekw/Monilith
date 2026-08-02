@@ -15,10 +15,19 @@ function clientReturning(row: unknown, error: unknown = null) {
 describe("readOrgAiSettings", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("missing row resolves to the per_user default", async () => {
+  it("missing row resolves to the default", async () => {
     const settings = await readOrgAiSettings(clientReturning(null), "org-1");
     expect(settings).toEqual(DEFAULT_ORG_AI_SETTINGS);
-    expect(settings.mode).toBe("per_user");
+  });
+
+  it("defaults a row-less org to no AI, not to per-user keys", () => {
+    // The fallback is what an org with no org_ai_settings row gets. Under
+    // managed-only billing that must be 'off': a brand-new org has not bought
+    // anything, and 'per_user' would hand it a working AI surface for free.
+    // Every org that existed before this change got an explicit 'per_user' row
+    // written by 20260802133040_org_ai_settings_backfill, so nobody was moved.
+    expect(DEFAULT_ORG_AI_SETTINGS.mode).toBe("off");
+    expect(DEFAULT_ORG_AI_SETTINGS.monthlyCreditLimit).toBe(0);
   });
 
   it("maps a row to the settings shape", async () => {

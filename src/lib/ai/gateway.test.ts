@@ -54,6 +54,19 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     });
   });
 
+  it("missing row → AiDisabledError (an org with no settings has not bought AI)", async () => {
+    // Until 2026-08-02 a missing row meant `per_user` — a brand-new org got a
+    // working AI surface for free. Under managed-only billing the fallback is
+    // `off`. Every org predating the change received an explicit `per_user` row
+    // from 20260802133040_org_ai_settings_backfill, so this path is reached only
+    // by genuinely new orgs.
+    maybeSingle.mockResolvedValue({ data: null, error: null });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
+      name: "AiDisabledError",
+    });
+  });
+
   it("managed → anthropic adapter + env key; missing env key → AiNotConfiguredError", async () => {
     settingsRow("managed");
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
@@ -107,8 +120,8 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     expect((caught as { name?: string })?.name).not.toBe("ByoKeyMissingError");
   });
 
-  it("per_user (and missing row) → resolveUserAdapterById passthrough, keyed on the SUPPLIED userId", async () => {
-    maybeSingle.mockResolvedValue({ data: null, error: null });
+  it("per_user → resolveUserAdapterById passthrough, keyed on the SUPPLIED userId", async () => {
+    settingsRow("per_user");
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
@@ -123,7 +136,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
   });
 
   it("per_user with no key on file → PersonalAiKeyMissingError (a per-user config state runAi callers can catch, not a raw crash)", async () => {
-    maybeSingle.mockResolvedValue({ data: null, error: null });
+    settingsRow("per_user");
     const { AiNotConfiguredError, PersonalAiKeyMissingError } =
       await import("@/lib/ai/errors");
     resolveUserAdapterById.mockRejectedValue(new PersonalAiKeyMissingError());
@@ -152,7 +165,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
 
 describe("runAi", () => {
   it("invokes fn with the resolved adapter and records a ledger row", async () => {
-    maybeSingle.mockResolvedValue({ data: null, error: null });
+    settingsRow("per_user");
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
@@ -190,7 +203,7 @@ describe("runAi", () => {
   });
 
   it("a failed ledger write does not fail the call", async () => {
-    maybeSingle.mockResolvedValue({ data: null, error: null });
+    settingsRow("per_user");
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
@@ -207,7 +220,7 @@ describe("runAi", () => {
   });
 
   it("passes cache token counts through to record_ai_usage", async () => {
-    maybeSingle.mockResolvedValue({ data: null, error: null });
+    settingsRow("per_user");
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
@@ -244,7 +257,7 @@ describe("runAi", () => {
   });
 
   it("defaults cache token counts to 0 when the adapter omits them", async () => {
-    maybeSingle.mockResolvedValue({ data: null, error: null });
+    settingsRow("per_user");
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
