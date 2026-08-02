@@ -722,8 +722,9 @@ Create `scripts/check-hover-tokens.mjs`:
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const STATE_PREFIX = String.raw`(?:hover|focus|focus-visible|active|data-\[[^\]]+\])`;
+const STATE_PREFIX = String.raw`(?:hover|focus|focus-visible|active|data-open|aria-expanded|aria-selected|data-\[[^\]]+\])`;
 const OPAQUE = String.raw`(?:accent|muted|secondary)`;
 const RE = new RegExp(`${STATE_PREFIX}:bg-${OPAQUE}\\b`, "g");
 
@@ -749,7 +750,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = process.cwd();
   const files = walk(join(root, "src")).map((path) => ({
     path: relative(root, path),
@@ -1001,6 +1002,7 @@ Create `scripts/check-px-text.mjs`:
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** Decorative exceptions — path, plus why it is exempt. */
 export const ALLOWLIST = [
@@ -1036,7 +1038,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = process.cwd();
   const files = walk(join(root, "src")).map((path) => ({
     path: relative(root, path).replace(/\\/g, "/"),
