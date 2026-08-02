@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - **Tailwind v4 token registration is mandatory.** A raw custom property in `:root`/`.dark` produces **no** utility class. Colors must also be declared in `@theme inline` under `--color-*`, shadows under `--shadow-*`, font sizes in `@theme` under `--text-*`. Adding a token without its `@theme` entry is the single most likely failure in this plan.
-- **`--background` keeps its exact current values** — `#0e0e10` (dark) / `#ffffff` (light). It changes _meaning_ (page → content card), never value. Do not edit it.
+- **`--background` is not edited, and is NOT the content card.** Its real values are `#0e0e10` (dark) / `#f6f6f8` (light) — the light one is a warm grey, not white. The approved preview's content card is **white** in light and `#0e0e10` in dark, and no existing token carries that pair (`--surface` is `#ffffff`/`#161619` — right in light, too light in dark). So the card gets its own token, `--content-surface`. Leave `--background` alone; the 29 files using `bg-background` keep their current meaning.
 - **The content card stays neutral.** Only chrome is tinted. Never apply `--app-wash` to `<main>` or to any content surface.
 - **The wash is scoped to the app shell, NOT `body`.** The marketing/landing route is an explicit non-goal and already has its own page-wide wash; painting `body` would leak into it. (This supersedes the spec's "`body` paints the wash" line — same architecture, correct scope.)
 - **Both themes, every time.** Every token added to `.dark` gets a `:root` counterpart in the same commit. Task 1's parity test enforces this.
@@ -114,6 +114,7 @@ function tokensIn(selector: string): Set<string> {
 const NEW_TOKENS = [
   "--app-wash",
   "--app-bloom",
+  "--content-surface",
   "--content-edge",
   "--content-lift",
   "--state-hover",
@@ -155,6 +156,7 @@ describe("Keystone token contract", () => {
       "--color-state-hover:",
       "--color-state-active:",
       "--color-state-selected:",
+      "--color-content-surface:",
       "--color-content-edge:",
       "--shadow-content-lift:",
       "--text-2xs:",
@@ -191,6 +193,7 @@ In `src/app/globals.css`, inside the existing `@theme inline { … }` block, aft
 
 ```css
 /* Wash & inset-card surfaces */
+--color-content-surface: var(--content-surface);
 --color-content-edge: var(--content-edge);
 --shadow-content-lift: var(--content-lift);
 
@@ -223,6 +226,7 @@ In `:root`, immediately after `--glow-primary: …;` (~line 166):
   rgb(255 255 255 / 65%) 0%,
   transparent 58%
 );
+--content-surface: #ffffff;
 --content-edge: rgb(0 0 0 / 7%);
 --content-lift:
   -1px -1px 0 0 rgb(30 40 90 / 8%), 0 1px 3px 0 rgb(30 40 90 / 8%);
@@ -244,6 +248,7 @@ In `.dark`, immediately after `--glow-primary: …;` (~line 251):
   color-mix(in oklab, var(--brand) 22%, transparent) 0%,
   transparent 58%
 );
+--content-surface: #0e0e10;
 --content-edge: rgb(255 255 255 / 8%);
 --content-lift:
   inset 0 1px 0 0 rgb(255 255 255 / 5%), 0 8px 24px -12px rgb(0 0 0 / 60%);
@@ -497,7 +502,7 @@ describe("surface model", () => {
   it("renders main as the one inset opaque card", () => {
     renderShell();
     const main = screen.getByRole("main");
-    expect(main).toHaveClass("bg-background");
+    expect(main).toHaveClass("bg-content-surface");
     expect(main).toHaveClass("rounded-xl");
     expect(main).toHaveClass("border-content-edge");
     expect(main).toHaveClass("shadow-content-lift");
@@ -565,7 +570,7 @@ Replace the JSX body of `AppShell` (`src/components/app-shell.tsx:35-51`):
         {headerUser}
       </div>
     </header>
-    <main className="bg-background border-content-edge shadow-content-lift mr-2 mb-2 ml-1 min-h-0 flex-1 overflow-auto rounded-xl border">
+    <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 min-h-0 flex-1 overflow-auto rounded-xl border">
       {children}
     </main>
   </div>
