@@ -25,7 +25,7 @@ describe("readOrgAiSettings", () => {
     const settings = await readOrgAiSettings(
       clientReturning({
         ai_mode: "managed",
-        tier: "pro",
+        tier: "pulse",
         monthly_credit_limit: 500,
         byo_provider: null,
         byo_key_last4: null,
@@ -36,7 +36,7 @@ describe("readOrgAiSettings", () => {
     );
     expect(settings).toEqual({
       mode: "managed",
-      tier: "pro",
+      tier: "pulse",
       monthlyCreditLimit: 500,
       byoProvider: null,
       byoKeyLast4: null,
