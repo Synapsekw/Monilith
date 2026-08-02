@@ -69,7 +69,7 @@ export function CapacityCell({
         <span className="text-xs leading-tight font-medium">
           {signedHours(delta)}
         </span>
-        <span className="text-muted-foreground text-[10px] leading-tight">
+        <span className="text-muted-foreground text-3xs leading-tight">
           {signedPct(pct)}
         </span>
       </div>
@@ -107,11 +107,11 @@ export function CapacityCell({
         {hours(primarySecs)}
       </span>
       {metric === "both" ? (
-        <span className="text-muted-foreground text-[10px] leading-tight">
+        <span className="text-muted-foreground text-3xs leading-tight">
           act {hours(actualSecs)}
         </span>
       ) : displayState === "none" ? null : (
-        <span className="text-muted-foreground text-[10px] leading-tight">
+        <span className="text-muted-foreground text-3xs leading-tight">
           / {hours(capacitySecs)}
         </span>
       )}

@@ -93,14 +93,14 @@ describe("StatusPill", () => {
 
   it("lets dense call sites override geometry via className", () => {
     render(
-      <StatusPill color="blue" className="px-1.5 text-[10px]">
+      <StatusPill color="blue" className="px-1.5 text-3xs">
         Triaged
       </StatusPill>,
     );
     const pill = screen.getByText("Triaged");
     expect(pill.className).toContain("px-1.5");
     expect(pill.className).not.toContain("px-2.5");
-    expect(pill.className).toContain("text-[10px]");
+    expect(pill.className).toContain("text-3xs");
     expect(pill.className).not.toContain("text-xs");
   });
 });
