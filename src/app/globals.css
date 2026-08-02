@@ -418,6 +418,13 @@
       scrollbar-color: var(--state-active) transparent;
     }
   }
+  /* The app surface. Scoped to the AppShell root rather than `body` on
+     purpose: the landing route has its own page-wide wash and must not
+     inherit this one. Bloom is listed first so it composites above the ramp. */
+  .app-wash {
+    background-image: var(--app-bloom), var(--app-wash);
+    background-attachment: fixed;
+  }
   /* Keystone signature: interactive cards lift + hairline brightens on hover. */
   .card-lift {
     transition:
