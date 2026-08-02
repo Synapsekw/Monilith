@@ -8,7 +8,11 @@
 
 **Tech Stack:** Next.js 16 App Router (RSC + Server Actions), Supabase Postgres + RLS, Zod, Vitest, Tailwind v4 + shadcn primitives (Monolith Keystone tokens).
 
-**Source spec:** `docs/superpowers/specs/2026-08-01-billing-and-monetization-design.md` — units **A** and **D** of its execution DAG (batch 1). Units B, C, E, F, G, H are deliberately out of scope; they need at minimum a Stripe test-mode key to be verifiable and get their own plan.
+**Source spec:** `docs/superpowers/specs/2026-08-01-billing-and-monetization-design.md` — units **A** and **D** of its execution DAG (batch 1). Units B, C, E, F, G, H get their own plan.
+
+**Why batch 1 alone, stated accurately.** Not because the rest is unbuildable. A superseded plan, `2026-07-12-e6-billing-platform.md`, demonstrates the whole Stripe sync and webhook path is buildable and unit-testable with **no Stripe credentials** — optional env vars, an injected client, signatures forged with `stripe.webhooks.generateTestHeaderString`. Only _end-to-end_ verification waits on the account. The reason to stop at batch 1 is risk isolation: Task 4 changes the AI-mode default for a deployment serving real users, and that deserves to land and be verified on its own rather than inside a session that also introduces a payment processor.
+
+**Prior art to harvest, not re-derive.** When the Stripe track is planned, lift Tasks 1, 4 and 6 from `docs/superpowers/plans/2026-07-12-e6-billing-platform.md` (Stripe client + env, `applyStripeEvent`, webhook route). That plan is superseded on schema and commercial model — it predates tiers, the trial, discount codes and the pricing page, and names its tables `org_subscriptions` / `stripe_webhook_events` — but its Stripe mechanics are sound and were never built.
 
 ## Global Constraints
 
@@ -2495,4 +2499,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ## Out of scope — the next plan
 
-Units **B** (Stripe client, checkout, portal), **C** (webhook + seat sync), **E** (`<UpgradePrompt>`, `<CreditMeter>`, shell entitlement prop-drilling), **F** (`/settings/billing` + `/checkout/return`), **G** (admin discount codes), **H** (`/admin/billing`). All need at minimum a Stripe test-mode key. `billing_discount_codes` exists after this plan but has no writer and no UI — that is Unit G, and the table shipping early is deliberate so Unit G is a pure application change.
+Units **B** (Stripe client, checkout, portal), **C** (webhook + seat sync), **E** (`<UpgradePrompt>`, `<CreditMeter>`, shell entitlement prop-drilling), **F** (`/settings/billing` + `/checkout/return`), **G** (admin discount codes), **H** (`/admin/billing`). All are buildable without Stripe credentials (see the note under **Source spec**); only end-to-end verification against Stripe test mode waits on the account.
+
+`billing_discount_codes` exists after this plan but has no writer and no UI — that is Unit G, and the table shipping early is deliberate so Unit G is a pure application change.
+
+**Unrelated but unhomed:** the superseded July plan carried a second track, **F17 — an AI usage dashboard and an AI-written weekly digest narrative** (`ai_usage_summary`, `digest_runs.narrative`). It is unbuilt, has no successor spec, and is not part of the August billing design. It needs its own decision rather than quietly vanishing with the supersession.

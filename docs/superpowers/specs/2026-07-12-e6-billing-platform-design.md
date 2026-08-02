@@ -1,8 +1,38 @@
 # E6 — Billing & Platform (Phase 10 Batch 2) — Design Spec
 
+> ## ⚠️ SUPERSEDED (2026-08-02) — do not build from this document
+>
+> The commercial design here is replaced by
+> **`docs/superpowers/specs/2026-08-01-billing-and-monetization-design.md`**, which was
+> written three weeks later without reference to this file and reaches different
+> conclusions. Where they disagree, the August spec wins:
+>
+> |                        | this spec (Jul 12)                           | August 1 spec                                                                              |
+> | ---------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+> | Tables                 | `org_subscriptions`, `stripe_webhook_events` | `org_billing`, `billing_discount_codes`                                                    |
+> | Tiers                  | catalog-driven, unpriced                     | Core $10 / Pulse $24, 500 credits/seat/mo                                                  |
+> | Missing from this spec | —                                            | 14-day card-gated trial, discount codes, public `/pricing`, the `setAiMode` self-grant fix |
+>
+> **Nothing here was ever built** — verified 2026-08-02 against both the repo and the live
+> DEV database: no `src/lib/billing`, no `stripe` dependency, no matching tables.
+>
+> **Two things in here are still worth keeping**, which is why the file is retained rather
+> than deleted:
+>
+> 1. **The Stripe mechanics in the paired plan** (`../plans/2026-07-12-e6-billing-platform.md`)
+>    — Tasks 1, 4 and 6 — are sound and should be harvested when the Stripe track is
+>    planned, not re-derived. In particular they show the whole webhook/sync path is
+>    buildable and unit-testable **without any Stripe credentials** (optional env vars,
+>    injected client, `stripe.webhooks.generateTestHeaderString`). Only end-to-end
+>    verification is blocked on the account.
+> 2. **The F17 track — AI usage dashboard + AI-written weekly digest narrative — has no
+>    successor.** The August spec does not mention it. It is unbuilt, unplanned, and
+>    currently tracked nowhere else. Decide its fate separately; do not let it disappear
+>    with this supersession.
+
 **Date:** 2026-07-12
 **Slug:** `e6-billing-platform`
-**Status:** Spec drafted (scoping subagent), pending review
+**Status:** **SUPERSEDED 2026-08-02** by `2026-08-01-billing-and-monetization-design.md` (was: spec drafted, pending review)
 **Epic:** Phase 10 · E6 (parallel batch after E1)
 **Depends on:** E1 (foundation) — merged on `develop` (`org_ai_settings`, `ai_usage`, gateway `resolveAiAdapter`/`runAi`, `getAiEntitlement`/`requireAiEntitlement`, `digest_runs` weekly digest).
 **Scope docs:** `docs/superpowers/specs/2026-07-05-ai-platform-phase-10-scope.md`, ADR `vault/decisions/2026-07-05-decision-26-ai-platform-dual-billing.md`.

@@ -1,5 +1,29 @@
 # E6 — Billing & Platform Implementation Plan
 
+> ## ⚠️ SUPERSEDED (2026-08-02) — do not execute this plan
+>
+> Its spec (`../specs/2026-07-12-e6-billing-platform-design.md`) was superseded by
+> `../specs/2026-08-01-billing-and-monetization-design.md`. The active plan is
+> **`2026-08-02-billing-batch1-schema-and-pricing.md`**, which uses different table
+> names (`org_billing` / `billing_discount_codes`, not `org_subscriptions` /
+> `stripe_webhook_events`) and adds tiers, a trial, discount codes and a public
+> pricing page that this plan has no concept of.
+>
+> **Nothing here was ever built.** Verified 2026-08-02 against the repo and live DEV:
+> no `src/lib/stripe`, no `stripe` dependency, no matching tables or columns.
+>
+> **Retained deliberately, for two reasons:**
+>
+> - **Harvest Tasks 1, 4 and 6** (Stripe client + env, `applyStripeEvent`, webhook route)
+>   when the Stripe track is planned. They are sound, and they demonstrate the point the
+>   north-star gets wrong: the sync and webhook path is fully buildable and testable with
+>   **no Stripe credentials** — every env var optional, the client injected, signatures
+>   forged with `stripe.webhooks.generateTestHeaderString`. Only end-to-end verification
+>   waits on the account.
+> - **Track B (Tasks 8–13) — F17 usage dashboard + AI weekly-digest narrative — has no
+>   successor spec.** It is unbuilt and tracked nowhere else. It needs its own decision;
+>   it is not part of the August billing design.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. UI tasks additionally require the `pulse-ui` + `frontend-design` skills.
 
 **Goal:** Add Stripe self-serve subscriptions that drive the existing E1 entitlement (F16) and an AI-usage dashboard + AI-written weekly-digest narrative (F17), without changing the E1 gateway/entitlement read contract.
