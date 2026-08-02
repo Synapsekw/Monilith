@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { BoardScope } from "./agent-config";
+import type { AgentRunLike, AgentRunSummary } from "./run-status";
 
 /**
  * Access seam for the personal-agent family (`user_agents`, `user_agent_runs`).
@@ -60,6 +61,70 @@ export async function findUserAgentRun(
     .maybeSingle();
   if (error) throw new Error(`findUserAgentRun: ${error.message}`);
   return (data as { id: string } | null) ?? null;
+}
+
+/** Hard ceiling on the run-history read (spec: "the last 50 runs"). */
+export const RUN_HISTORY_LIMIT = 50;
+
+/**
+ * Bounded run history for ONE agent, newest first. `.eq("user_agent_id", …)`
+ * plus `created_at desc` is exactly `user_agent_runs_history_idx`, so this stays
+ * an index scan as the table grows (working agreement #5). Called with the
+ * REQUEST-scoped client: `user_agent_runs_owner_read` is the access boundary,
+ * and the explicit agent filter is the index prefix, not the security check.
+ */
+export async function listAgentRuns(
+  client: Client,
+  agentId: string,
+  limit: number,
+): Promise<AgentRunSummary[]> {
+  const { data, error } = await client
+    .from("user_agent_runs")
+    .select(
+      "id, status, error, fire_date, fire_hour, input_tokens, output_tokens, created_at",
+    )
+    .eq("user_agent_id", agentId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`listAgentRuns: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    status: r.status,
+    error: r.error,
+    createdAt: r.created_at,
+    fireDate: r.fire_date,
+    fireHour: r.fire_hour,
+    inputTokens: r.input_tokens,
+    outputTokens: r.output_tokens,
+  }));
+}
+
+/**
+ * The most recent run per agent for the calling user, as a lookup keyed by
+ * agent id — one round trip for the whole roster's last-run status.
+ *
+ * `get_my_agent_last_runs` is a SECURITY INVOKER `distinct on` over the same
+ * history index (20260802034242), so this is bounded by the caller's agent
+ * count rather than their run count. Its generated return type declares every
+ * column non-null (supabase codegen does that for every `returns table`), but
+ * `user_agent_runs.error` is genuinely nullable — a successful run stores NULL
+ * — so `error` is widened back to `string | null` here rather than letting the
+ * lie propagate into the display layer, which branches on it.
+ */
+export async function getMyAgentLastRuns(
+  client: Client,
+): Promise<Record<string, AgentRunLike>> {
+  const { data, error } = await client.rpc("get_my_agent_last_runs");
+  if (error) throw new Error(`getMyAgentLastRuns: ${error.message}`);
+  const byAgent: Record<string, AgentRunLike> = {};
+  for (const row of data ?? []) {
+    byAgent[row.user_agent_id] = {
+      status: row.status,
+      error: (row.error as string | null) ?? null,
+      createdAt: row.created_at,
+    };
+  }
+  return byAgent;
 }
 
 export async function setAgentBridgeSecret(

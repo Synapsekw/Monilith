@@ -268,5 +268,52 @@ describe.skipIf(!resolution.ok)(
         "row must still exist",
       ).toEqual([runId]);
     });
+
+    // ── Property: get_my_agent_last_runs is bounded by the CALLER's RLS ──
+    //
+    // 20260802034242 added this SECURITY INVOKER `distinct on` RPC to back the
+    // roster's last-run status pills. Its body filters on
+    // `owner_id = auth.uid()`, but that predicate is there to pick the index —
+    // the actual boundary is `user_agent_runs_owner_read` applying to the
+    // caller. If the function were ever changed to SECURITY DEFINER, the body
+    // would still look correct while returning every user's runs to everyone,
+    // so both directions are pinned here against the live database.
+    it("returns the owner's own most recent run through the RPC", async () => {
+      const { data, error } = await userA.rpc("get_my_agent_last_runs");
+      expect(error).toBeNull();
+      const mine = (data ?? []).filter((r) => r.user_agent_id === agentId);
+      expect(mine).toHaveLength(1);
+      expect(mine[0]?.status).toBe("ran");
+    });
+
+    it("never returns another user's runs through the RPC", async () => {
+      const { data, error } = await userB.rpc("get_my_agent_last_runs");
+      expect(error).toBeNull();
+      expect(
+        (data ?? []).filter((r) => r.user_agent_id === agentId),
+        "fixture B must not see fixture A's run",
+      ).toEqual([]);
+    });
+
+    it("returns at most one row per agent (distinct on), the newest", async () => {
+      // A second, LATER run for the same agent — the RPC must collapse to it,
+      // not return both. Different fire slot so the idempotency index allows it.
+      const { error: seedErr } = await admin.from("user_agent_runs").insert({
+        user_agent_id: agentId,
+        org_id: ORG_A.orgId,
+        owner_id: (await userA.auth.getUser()).data.user!.id,
+        fire_date: FIRE_DATE,
+        fire_hour: FIRE_HOUR + 2,
+        status: "skipped",
+        error: "newer run",
+      });
+      expect(seedErr).toBeNull();
+
+      const { data, error } = await userA.rpc("get_my_agent_last_runs");
+      expect(error).toBeNull();
+      const mine = (data ?? []).filter((r) => r.user_agent_id === agentId);
+      expect(mine, "one row per agent").toHaveLength(1);
+      expect(mine[0]?.status, "the NEWEST run wins").toBe("skipped");
+    });
   },
 );

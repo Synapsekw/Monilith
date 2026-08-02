@@ -8,6 +8,7 @@ import type {
   AgentTemplate,
   PersonalAgentSettings,
 } from "@/lib/agents/agent-config";
+import type { AgentRunLike } from "@/lib/agents/run-status";
 import { AgentRoster, type RosterAgent } from "@/components/agents/AgentRoster";
 import { TemplateGallery } from "@/components/agents/TemplateGallery";
 import { AgentEditor, type AgentRecord } from "@/components/agents/AgentEditor";
@@ -27,7 +28,22 @@ type EditorContext =
  * page). Mutations (`createAgent`/`updateAgent`/`setAgentEnabled`/
  * `deleteAgent`) go through the Server Actions in `src/lib/agents/actions.ts`.
  */
-export function AgentsSection({ agents: initial }: { agents: AgentRecord[] }) {
+export function AgentsSection({
+  agents: initial,
+  lastRuns = {},
+  maxAgents,
+}: {
+  agents: AgentRecord[];
+  /** Most recent run per agent id, read once by the server component. Absent
+   *  keys mean "never ran", which is why this is a plain lookup and not part of
+   *  `AgentRecord` — the editor's shape has no business carrying run data. */
+  lastRuns?: Record<string, AgentRunLike>;
+  /** `org_ai_settings.max_agents_per_user` — the cap the server ACTUALLY
+   *  enforces in `assertCanCreateAgent`. Passed in rather than hardcoded: this
+   *  label read "of 20" (the column's check-constraint ceiling) while the real
+   *  default is 3, so the page promised 17 agents it would refuse to create. */
+  maxAgents: number;
+}) {
   const [agents, setAgents] = useState<AgentRecord[]>(initial);
   const [view, setView] = useState<View>("roster");
   const [editorContext, setEditorContext] = useState<EditorContext | null>(
@@ -43,9 +59,11 @@ export function AgentsSection({ agents: initial }: { agents: AgentRecord[] }) {
     cadence: a.cadence,
     runAtLocalHour: a.runAtLocalHour,
     enabled: a.enabled,
-    // Run history is deliberately not part of first paint (working agreement
-    // #5) — it loads on expand, which this settings roster doesn't offer yet.
-    lastRunStatus: null,
+    // Last-run status IS first paint — it's the signal that an agent is
+    // failing, and hiding it behind an expand is what made every gotcha-70
+    // failure mode silent. The full history behind it is what defers
+    // (working agreement #5): `AgentRunHistory` fetches only on expand.
+    lastRun: lastRuns[a.id] ?? null,
   }));
 
   function handleToggle(id: string, enabled: boolean) {
@@ -139,8 +157,13 @@ export function AgentsSection({ agents: initial }: { agents: AgentRecord[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
+        {/* The count is INFORMATIONAL only — the button stays enabled at the
+            cap on purpose. `caps.ts` is explicit that the cap is enforced
+            server-side and "the UI shows the limit, it does not enforce it";
+            disabling here would trade a readable message from
+            `assertCanCreateAgent` for a dead control with no explanation. */}
         <p className="text-muted-foreground text-sm">
-          {agents.length} of 20 agents
+          {agents.length} of {maxAgents} {maxAgents === 1 ? "agent" : "agents"}
         </p>
         <Button type="button" size="sm" onClick={openGallery}>
           <Plus aria-hidden className="size-4" />

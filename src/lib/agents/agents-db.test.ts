@@ -5,6 +5,8 @@ import {
   setAgentBridgeSecret,
   countAgentsForOwner,
   countRunsToday,
+  listAgentRuns,
+  getMyAgentLastRuns,
 } from "./agents-db";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +81,28 @@ function clientForCount(
   const select = vi.fn(() => chain);
   const from = vi.fn(() => ({ select }));
   return { client: { from } as never, calls, select };
+}
+
+/** select().eq().order().limit() — listAgentRuns. `.limit()` is the thenable. */
+function clientForRunHistory(data: unknown, error: unknown = null) {
+  const calls: EqCall[] = [];
+  const order = vi.fn();
+  const limit = vi.fn();
+  const chain = makeEqChain(1, calls, () => ({
+    order: order.mockImplementation((col: string, opts: unknown) => {
+      void col;
+      void opts;
+      return {
+        limit: limit.mockImplementation((n: number) => {
+          void n;
+          return Promise.resolve({ data, error });
+        }),
+      };
+    }),
+  }));
+  const select = vi.fn(() => chain);
+  const from = vi.fn(() => ({ select }));
+  return { client: { from } as never, calls, select, order, limit, from };
 }
 
 describe("findUserAgentRun", () => {
@@ -224,5 +248,133 @@ describe("countRunsToday", () => {
     await expect(
       countRunsToday(client as never, "org-1", "user-1", "2026-08-01"),
     ).rejects.toThrow("countRunsToday: boom");
+  });
+});
+
+describe("listAgentRuns", () => {
+  const dbRow = {
+    id: "run-1",
+    status: "ran",
+    error: null,
+    fire_date: "2026-08-01",
+    fire_hour: 7,
+    input_tokens: 1200,
+    output_tokens: 300,
+    created_at: "2026-08-01T07:00:04.000Z",
+  };
+
+  it("maps snake_case rows to the camelCase display shape", async () => {
+    const { client } = clientForRunHistory([dbRow]);
+    await expect(
+      listAgentRuns(client as never, "agent-1", 50),
+    ).resolves.toEqual([
+      {
+        id: "run-1",
+        status: "ran",
+        error: null,
+        createdAt: "2026-08-01T07:00:04.000Z",
+        fireDate: "2026-08-01",
+        fireHour: 7,
+        inputTokens: 1200,
+        outputTokens: 300,
+      },
+    ]);
+  });
+
+  // The read has to stay on user_agent_runs_history_idx as the table grows:
+  // filter the agent, order created_at DESC, cap the rows (working agreement
+  // #5). A regression that dropped the ordering or the cap would still return
+  // plausible-looking data.
+  it("reads the bounded history over the index: agent filter, created_at desc, capped", async () => {
+    const { client, calls, order, limit } = clientForRunHistory([]);
+    await listAgentRuns(client as never, "agent-1", 50);
+    expect(calls).toEqual([["user_agent_id", "agent-1"]]);
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(limit).toHaveBeenCalledWith(50);
+  });
+
+  it("passes the caller's limit through rather than a hardcoded one", async () => {
+    const { client, limit } = clientForRunHistory([]);
+    await listAgentRuns(client as never, "agent-1", 7);
+    expect(limit).toHaveBeenCalledWith(7);
+  });
+
+  it("returns an empty list when an agent has never run", async () => {
+    const { client } = clientForRunHistory(null);
+    await expect(
+      listAgentRuns(client as never, "agent-1", 50),
+    ).resolves.toEqual([]);
+  });
+
+  it("throws on a DB error so the caller can show a load failure, not an empty history", async () => {
+    const { client } = clientForRunHistory(null, { message: "boom" });
+    await expect(listAgentRuns(client as never, "agent-1", 50)).rejects.toThrow(
+      "listAgentRuns: boom",
+    );
+  });
+});
+
+describe("getMyAgentLastRuns", () => {
+  function clientForRpc(data: unknown, error: unknown = null) {
+    const rpc = vi.fn().mockResolvedValue({ data, error });
+    return { client: { rpc } as never, rpc };
+  }
+
+  it("keys the most recent run by agent id", async () => {
+    const { client, rpc } = clientForRpc([
+      {
+        user_agent_id: "agent-1",
+        status: "ran",
+        error: null,
+        created_at: "2026-08-01T07:00:04.000Z",
+      },
+      {
+        user_agent_id: "agent-2",
+        status: "skipped",
+        error: "no key",
+        created_at: "2026-08-01T08:00:01.000Z",
+      },
+    ]);
+    await expect(getMyAgentLastRuns(client as never)).resolves.toEqual({
+      "agent-1": {
+        status: "ran",
+        error: null,
+        createdAt: "2026-08-01T07:00:04.000Z",
+      },
+      "agent-2": {
+        status: "skipped",
+        error: "no key",
+        createdAt: "2026-08-01T08:00:01.000Z",
+      },
+    });
+    expect(rpc).toHaveBeenCalledWith("get_my_agent_last_runs");
+  });
+
+  // Supabase codegen types every `returns table` column as non-null, but a
+  // successful run stores error = NULL. The display layer branches on that
+  // exact value, so it must arrive as null, not undefined.
+  it("preserves a null error rather than dropping it", async () => {
+    const { client } = clientForRpc([
+      {
+        user_agent_id: "agent-1",
+        status: "ran",
+        error: null,
+        created_at: "2026-08-01T07:00:04.000Z",
+      },
+    ]);
+    const byAgent = await getMyAgentLastRuns(client as never);
+    expect(byAgent["agent-1"].error).toBeNull();
+  });
+
+  it("returns an empty lookup when nothing has run yet", async () => {
+    const { client } = clientForRpc(null);
+    await expect(getMyAgentLastRuns(client as never)).resolves.toEqual({});
+  });
+
+  it("throws on a DB error", async () => {
+    const { client } = clientForRpc(null, { message: "boom" });
+    await expect(getMyAgentLastRuns(client as never)).rejects.toThrow(
+      "getMyAgentLastRuns: boom",
+    );
   });
 });
