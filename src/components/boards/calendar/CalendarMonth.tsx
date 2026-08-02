@@ -242,7 +242,7 @@ function DayMorePopover({
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground hover:bg-accent w-full rounded px-1 text-left text-[10px]"
+            className="text-muted-foreground hover:bg-state-hover w-full rounded px-1 text-left text-[10px]"
           >
             +{hidden.length} more
           </button>
@@ -259,7 +259,7 @@ function DayMorePopover({
                       e.currentTarget.getBoundingClientRect(),
                     )
                   }
-                  className="hover:bg-accent w-full truncate rounded px-2 py-1 text-left text-sm pointer-coarse:min-h-11"
+                  className="hover:bg-state-hover w-full truncate rounded px-2 py-1 text-left text-sm pointer-coarse:min-h-11"
                 >
                   {iv.name}
                 </button>

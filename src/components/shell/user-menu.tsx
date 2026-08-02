@@ -30,14 +30,14 @@ export function UserMenu({ user }: { user: AppShellUser }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label="Open user menu"
-        className="border-border hover:border-border-bright hover:bg-accent focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        className="border-border hover:border-border-bright hover:bg-state-hover focus-visible:ring-ring flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none"
       >
         {/* Supabase public avatar URL: rendered via Radix Avatar (a raw <img>,
             not routed through the next/image optimizer) with an initials
             fallback. First paint comes from the session (no client fetch). */}
         <Avatar className="size-8 border-0">
           {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-          <AvatarFallback className="hover:bg-accent text-sm font-medium">
+          <AvatarFallback className="hover:bg-state-hover text-sm font-medium">
             {initialFor(user)}
           </AvatarFallback>
         </Avatar>

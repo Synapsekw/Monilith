@@ -105,7 +105,7 @@ export function PortfolioGrid({
                     "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
                     sort === k
                       ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                      : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
                   )}
                 >
                   {SORT_LABEL[k]}
@@ -146,7 +146,7 @@ export function PortfolioGrid({
             {sorted.map((row) => (
               <tr
                 key={row.id}
-                className="hover:bg-accent/30 border-t transition-colors"
+                className="hover:bg-state-hover/30 border-t transition-colors"
               >
                 <td className="px-3 py-2">
                   <Link

@@ -61,7 +61,7 @@ export function NotificationsBell({ userId }: { userId: string }) {
     <Popover>
       <PopoverTrigger
         aria-label="Notifications"
-        className="hover:bg-accent focus-visible:ring-ring relative grid size-9 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
+        className="hover:bg-state-hover focus-visible:ring-ring relative grid size-9 place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
       >
         <Bell className="size-4" />
         {badge > 0 && (

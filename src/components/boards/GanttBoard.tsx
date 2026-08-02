@@ -601,7 +601,7 @@ export function GanttBoard({
                 "rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors pointer-coarse:min-h-11 pointer-coarse:px-3",
                 zoom === z
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent",
+                  : "text-muted-foreground hover:bg-state-hover",
               )}
             >
               {z}

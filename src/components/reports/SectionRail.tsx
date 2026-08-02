@@ -46,7 +46,7 @@ export function SectionRail({
       {config.blocks.map((b, i) => (
         <li
           key={i}
-          className="group hover:bg-accent flex items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors"
+          className="group hover:bg-state-hover flex items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors"
         >
           <input
             id={`section-toggle-${i}`}

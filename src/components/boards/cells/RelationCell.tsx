@@ -115,7 +115,7 @@ export function RelationCell({
       disabled={readOnly}
       className={cn(
         "flex h-full w-full items-center gap-1.5 overflow-hidden rounded px-1 text-left",
-        "hover:bg-accent focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+        "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
         "disabled:pointer-events-none",
       )}
     >

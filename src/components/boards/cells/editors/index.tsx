@@ -382,7 +382,7 @@ export function PeopleEditor({
               aria-selected={isSelected}
               onClick={() => toggle(m.userId)}
               className={cn(
-                "hover:bg-accent focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                "hover:bg-state-hover focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
                 isSelected && "bg-accent",
               )}
             >

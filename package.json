@@ -12,7 +12,7 @@
     "build": "next build",
     "build:analyze": "next experimental-analyze",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint && node scripts/check-hover-tokens.mjs",
     "typecheck": "tsc --noEmit",
     "db:types": "supabase gen types typescript --linked --schema public | prettier --parser typescript > src/types/database.types.ts",
     "db:ledger-check": "node scripts/check-migration-ledger.mjs",

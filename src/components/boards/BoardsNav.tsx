@@ -59,7 +59,7 @@ function PlainBoardRow({
         "group/row flex items-center rounded-md pr-1 transition-colors",
         isActive
           ? "bg-primary/80 text-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+          : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
       )}
     >
       <span className="size-6 shrink-0" aria-hidden />
@@ -137,7 +137,7 @@ export function BoardsNav({
                     "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
                     b.id === activeBoardId
                       ? "bg-primary/80 text-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
                   )}
                 >
                   <span className="shrink-0">{b.name.charAt(0)}</span>
@@ -161,7 +161,7 @@ export function BoardsNav({
                     "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
                     b.id === activeBoardId
                       ? "bg-primary/80 text-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
                   )}
                 >
                   <span className="shrink-0">{b.name.charAt(0)}</span>
@@ -213,7 +213,7 @@ export function BoardsNav({
                 "flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors",
                 b.id === activeBoardId
                   ? "bg-primary/80 text-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
               )}
             >
               <span className="min-w-0 flex-1 truncate">{b.name}</span>

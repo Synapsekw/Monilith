@@ -633,7 +633,7 @@ export function BoardTableInner({
             type="button"
             aria-label="Dismiss error"
             onClick={() => setColumnError(null)}
-            className="text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 shrink-0 items-center justify-center rounded-md"
+            className="text-muted-foreground hover:text-foreground hover:bg-state-hover flex size-6 shrink-0 items-center justify-center rounded-md"
           >
             <X className="size-3.5" />
           </button>

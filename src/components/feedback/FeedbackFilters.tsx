@@ -103,7 +103,7 @@ export function FeedbackFilters({ rows }: { rows: Row[] }) {
       "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
       active
         ? "bg-primary/15 text-primary border-primary/30"
-        : "bg-surface text-muted-foreground hover:bg-accent hover:text-foreground",
+        : "bg-surface text-muted-foreground hover:bg-state-hover hover:text-foreground",
     );
 
   return (

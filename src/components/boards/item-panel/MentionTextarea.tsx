@@ -72,7 +72,7 @@ export function MentionTextarea({
             <li key={m.userId}>
               <button
                 type="button"
-                className="hover:bg-accent w-full px-3 py-1.5 text-left text-sm"
+                className="hover:bg-state-hover w-full px-3 py-1.5 text-left text-sm"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   choose(m);

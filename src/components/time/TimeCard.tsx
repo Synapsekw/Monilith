@@ -243,7 +243,7 @@ export function TimeCard({
               );
               return (
                 <tr key={row.key} className="group">
-                  <td className="bg-background group-hover:bg-accent/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
+                  <td className="bg-background group-hover:bg-state-hover/20 sticky left-0 z-10 w-64 min-w-64 border-r border-b px-4 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
                         {row.label}

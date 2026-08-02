@@ -85,7 +85,7 @@ export function FilterBuilder({
               className={
                 value.combinator === c
                   ? "bg-primary text-primary-foreground px-2.5 py-1"
-                  : "hover:bg-accent px-2.5 py-1"
+                  : "hover:bg-state-hover px-2.5 py-1"
               }
               onClick={() => update({ combinator: c })}
             >

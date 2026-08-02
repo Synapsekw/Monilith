@@ -196,7 +196,7 @@ export function FooterCell({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="hover:bg-accent/60 flex min-w-0 items-center justify-between gap-1 px-3 text-left transition-colors focus-visible:outline-none">
+      <DropdownMenuTrigger className="hover:bg-state-hover/60 flex min-w-0 items-center justify-between gap-1 px-3 text-left transition-colors focus-visible:outline-none">
         {body}
         <ChevronDown className="text-muted-foreground/60 size-3 shrink-0" />
       </DropdownMenuTrigger>

@@ -74,7 +74,7 @@ export function TimeTrackingCell(props: TimeTrackingCellProps) {
             aria-label="Open time tracking"
             className={cn(
               "flex items-center gap-1 rounded px-1 py-0.5 text-sm transition-colors",
-              "hover:bg-accent focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+              "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
               isEmpty && "text-muted-foreground/40",
               !isEmpty && "text-foreground",
             )}
@@ -463,7 +463,7 @@ function DatePickerButton({
           aria-label={ariaLabel}
           className={cn(
             "border-input flex h-6 w-28 items-center gap-1 rounded-md border px-1.5 text-xs pointer-coarse:h-11",
-            "hover:bg-accent focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
+            "hover:bg-state-hover focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
           )}
         >
           <CalendarIcon className="text-muted-foreground size-3.5 shrink-0" />

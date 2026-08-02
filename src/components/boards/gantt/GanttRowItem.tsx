@@ -191,7 +191,7 @@ export function GanttRowItem({
   return (
     <div
       data-testid="gantt-row"
-      className="group hover:bg-accent/5 flex border-b"
+      className="group hover:bg-state-hover/5 flex border-b"
       style={{ height: ROW_H }}
     >
       {/* Sticky name label */}

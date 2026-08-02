@@ -55,7 +55,7 @@ export function RelationPicker({
                 onClick={() => onToggle(c.id)}
                 className={cn(
                   "flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm",
-                  "hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+                  "hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none",
                 )}
               >
                 <span
