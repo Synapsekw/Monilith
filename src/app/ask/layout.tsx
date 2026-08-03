@@ -29,6 +29,17 @@ import { ThemeToggle } from "@/components/theme-toggle";
  * the 10px `MessageList` legitimately reserves. `[scrollbar-gutter:auto]` opts
  * this one out; the real scroller keeps the stable gutter.
  *
+ * The rail's *geometry* mirrors `src/components/sidebar.tsx` for the same
+ * reason: the owner navigates between `/ask` and the rest of the app, so any
+ * difference in width or gutter reads as the wordmark jumping sideways. Hence
+ * `w-60` and the shell's `min-h-14 gap-1 px-3 py-2` brand row, with the rail's
+ * own rows on the same `px-3` column. The brand row copies the shell's `min-h`
+ * floor rather than a fixed `h-14`: with only the ~24px wordmark inside, the
+ * floor is what makes it resolve to the same 56px as the `h-14` header beside
+ * it, so wordmark and theme toggle sit on one baseline. `/ask` copies the
+ * *expanded* state only — it deliberately has no collapse affordance, and the
+ * shell's `w-14` state is driven by shell-only store state.
+ *
  * The frame is static (prerendered into the Cache Components shell); the rail's
  * per-user data and the page's thread both stream behind Suspense. Auth is
  * guarded by `requireUser()` inside the rail data component.
@@ -36,19 +47,19 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export default function AskLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-wash flex h-svh w-full overflow-hidden">
-      <aside className="flex w-64 shrink-0 flex-col">
-        <div className="flex h-14 shrink-0 items-center gap-2 px-4">
+      <aside className="flex w-60 shrink-0 flex-col">
+        <div className="flex min-h-14 shrink-0 items-center gap-1 px-3 py-2">
           <Brand />
         </div>
         <Link
           href="/my-work"
-          className="text-muted-foreground hover:text-foreground flex items-center gap-2 px-4 py-3 text-sm transition-colors"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-3 text-sm transition-colors"
         >
           <ArrowLeft className="size-4" /> Back to Monolith
         </Link>
         <Suspense
           fallback={
-            <div className="text-muted-foreground px-4 py-3 text-xs">
+            <div className="text-muted-foreground px-3 py-3 text-xs">
               Loading conversations…
             </div>
           }

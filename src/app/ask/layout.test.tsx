@@ -3,9 +3,14 @@ import { render, screen, within } from "@testing-library/react";
 import AskLayout from "./layout";
 
 // The rail is an async RSC behind `requireUser()`. Stub it — this test is about
-// the frame's surface model, not the rail's data.
+// the frame's surface model, not the rail's data. `railState.suspend` lets one
+// test hold the stub in flight so the Suspense fallback actually renders.
+const railState = vi.hoisted(() => ({ suspend: false }));
 vi.mock("@/components/ai/ask/AskRailData", () => ({
-  AskRailData: () => <div>RAIL_DATA</div>,
+  AskRailData: () => {
+    if (railState.suspend) throw new Promise<void>(() => {});
+    return <div>RAIL_DATA</div>;
+  },
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -100,5 +105,72 @@ describe("AskLayout surface model", () => {
     expect(
       screen.getByRole("link", { name: /back to monolith/i }),
     ).toHaveAttribute("href", "/my-work");
+  });
+});
+
+/**
+ * The owner navigates between `/ask` and the rest of the app, so the two rails
+ * are read as one rail that changed contents — not two rails. Any difference in
+ * width or gutter shows up as the wordmark jumping sideways on navigation. The
+ * reference is `src/components/sidebar.tsx`: `w-60` expanded, brand row
+ * `flex min-h-14 gap-1 px-3 py-2`, nav column `px-2` + `px-3` rows.
+ *
+ * `/ask` deliberately has no collapse affordance, so it copies the geometry of
+ * the shell's *expanded* state only — never the `w-14` collapsed one.
+ */
+describe("AskLayout rail geometry matches the app shell", () => {
+  function railOf(container: HTMLElement) {
+    return container.querySelector("aside") as HTMLElement;
+  }
+
+  it("gives the rail the shell sidebar's expanded width", () => {
+    const { container } = render(<AskLayout>chat</AskLayout>);
+    const classes = railOf(container).className.split(/\s+/);
+    expect(classes).toContain("w-60");
+    expect(classes).not.toContain("w-64");
+  });
+
+  /**
+   * The shell sizes its brand row with `min-h-14 py-2`, not a hard `h-14`: the
+   * tallest thing in it is a `size-8` collapse button (32px + 16px padding =
+   * 48px), so the floor is what actually produces the 56px band. `/ask` has no
+   * button — just the ~24px wordmark — so the floor is doing all the work here
+   * and the row still resolves to exactly the 56px of the `h-14` header beside
+   * it. Copy the floor, not the fixed height, so the two rails stay one box.
+   */
+  it("puts the brand row on the shell's brand-row box", () => {
+    const { container } = render(<AskLayout>chat</AskLayout>);
+    const brandRow = railOf(container).firstElementChild as HTMLElement;
+    const classes = brandRow.className.split(/\s+/);
+    expect(classes).toContain("min-h-14");
+    expect(classes).toContain("px-3");
+    expect(classes).toContain("py-2");
+    expect(classes).toContain("gap-1");
+    expect(classes).toContain("items-center");
+    expect(classes).toContain("shrink-0");
+    expect(classes).not.toContain("h-14");
+    expect(classes).not.toContain("px-4");
+    expect(classes).not.toContain("gap-2");
+  });
+
+  it("aligns the back link with the rail's content column", () => {
+    render(<AskLayout>chat</AskLayout>);
+    const back = screen.getByRole("link", { name: /back to monolith/i });
+    const classes = back.className.split(/\s+/);
+    expect(classes).toContain("px-3");
+    expect(classes).not.toContain("px-4");
+  });
+
+  it("keeps the rail's loading fallback on that same column", () => {
+    railState.suspend = true;
+    try {
+      render(<AskLayout>chat</AskLayout>);
+      const fallback = screen.getByText(/loading conversations/i);
+      const classes = fallback.className.split(/\s+/);
+      expect(classes).toContain("px-3");
+      expect(classes).not.toContain("px-4");
+    } finally {
+      railState.suspend = false;
+    }
   });
 });
