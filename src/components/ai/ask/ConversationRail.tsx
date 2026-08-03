@@ -186,9 +186,13 @@ export function ConversationRail({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="px-2 py-2">
+        {/* `bg-transparent`: the rail is transparent atmosphere on the wash, and
+            the `outline` variant's light-mode `bg-background` would punch a
+            full-width opaque rectangle out of the gradient. Scoped here, not in
+            the variant — `outline` is correct as-is on the content card. */}
         <Button
           variant="outline"
-          className="w-full justify-start gap-2"
+          className="w-full justify-start gap-2 bg-transparent"
           onClick={() => router.push("/ask")}
         >
           <Plus className="size-4" /> New chat
