@@ -8,14 +8,14 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-08-02 15:00",
+  "updated": "2026-08-03 10:49",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "Run history and open signup are live in production, and E5 semantic search is finally drained — 384 embeddings, queue zero",
+  "headline": "The Keystone-wash promotion blocker is closed — all five defects fixed, plus four more the review and the visual walk found. develop is promotable for the first time since the wash landed",
   "chips": [
     {
       "label": "develop",
-      "value": "34839115",
-      "note": "== origin · ahead of main by E6 billing batch 1 (36 files)",
+      "value": "c8f730d",
+      "note": "== origin · ahead of main by E6 batch 1 + Keystone wash + follow-ups",
       "tone": "ok"
     },
     {
@@ -25,9 +25,9 @@
       "tone": "ok"
     },
     {
-      "label": "ledger",
-      "value": "126/126",
-      "note": "IN SYNC — both MCP stamp drifts reconciled",
+      "label": "gates",
+      "value": "4119",
+      "note": "typecheck/lint/test/build green at merge",
       "tone": "ok"
     }
   ],
@@ -36,6 +36,21 @@
     "total": 15
   },
   "gates": [
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "Keystone wash follow-ups CLOSED (c8f730d, 43 files, 11 commits). All five defects fixed: /ask on the shell surface model, --chrome-fill for resting fills, --muted-foreground to AA, 23 real scrollers on the gutter, --scrollbar-thumb in both the webkit and Firefox paths. The findings document was wrong in eight places and its OWN proposed AA fix computed to 4.19:1 at the declared 22% bloom peak — still failing. globals.contrast.test.ts now parses the stylesheet and COMPUTES the ratio instead of asserting a number."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "The visual pass finally happened, and it earned its keep. The whole-branch review found two composition defects per-task reviews could not (an outline button painting an opaque slab on the new gradient, a dead 10px gutter). The owner walk then found two more: /ask had NO header band so no wash across the top, and its rail was w-64 px-4 against the shell w-60 px-3 — it also had no theme control at all. Nine defects from a five-defect document."
+    },
+    {
+      "led": "brand",
+      "tag": "NEXT?",
+      "text": "PROMOTE. develop -> main is unblocked for the first time since the wash landed, carrying E6 billing batch 1 + the Keystone wash + its follow-ups. Run /promote."
+    },
     {
       "led": "green",
       "tag": "DONE",
@@ -119,33 +134,78 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-02-0708-agent-run-history",
-    "when": "2026-08-02 07:08",
+    "id": "2026-08-03-1049-keystone-wash-followups-closed",
+    "when": "2026-08-03 10:49",
     "bullets": [
-      "A run row reads status=error between claiming its fire slot and finalising, so the honest display status is not the stored one — the sentinel means In progress, not Failed.",
-      "bridge_secret_id was client-writable and no RLS policy could close it: `for all` is satisfied by the owner. Column-level GRANTs are the containment, and only a live-DEV test can see the difference.",
-      "The observability surface was specced in Phase 1 and never built, which is exactly why every gotcha-70 failure mode was silent."
+      "A findings document is a hypothesis: its AA fix computed to 4.19:1 at the real bloom peak. A contrast number nobody recomputed is a number nobody checked — the test now parses the stylesheet and derives it.",
+      "A class list is not a layout. /ask copied AppShell main exactly (mr-2 mb-2 ml-1, no mt-*) without the transparent h-14 header that supplies the top space, so the gradient never appeared. Only a human looking at the screen caught it.",
+      "Third decorative guard in a row: a /g regex reused with .test() advances lastIndex and silently drops matches (gotcha-72). The durable defence is a non-vacuous-matcher assertion, not another prove-it-fails drill."
     ]
   },
   "roadmap": [
-    { "label": "0 Setup", "state": "done" },
-    { "label": "1 Auth", "state": "done" },
-    { "label": "2 Boards", "state": "done" },
-    { "label": "3 Views", "state": "done" },
-    { "label": "4 Collab", "state": "done" },
-    { "label": "5 Autom", "state": "done" },
-    { "label": "6 Depth", "state": "prog" },
-    { "label": "7 Asana", "state": "done" },
-    { "label": "8 Dash", "state": "done" },
-    { "label": "9 Perf", "state": "done" },
-    { "label": "RS", "state": "done" },
-    { "label": "MVP-F", "state": "done" },
-    { "label": "Touch", "state": "done" },
-    { "label": "PF", "state": "done" },
-    { "label": "10 AI", "state": "prog" }
+    {
+      "label": "0 Setup",
+      "state": "done"
+    },
+    {
+      "label": "1 Auth",
+      "state": "done"
+    },
+    {
+      "label": "2 Boards",
+      "state": "done"
+    },
+    {
+      "label": "3 Views",
+      "state": "done"
+    },
+    {
+      "label": "4 Collab",
+      "state": "done"
+    },
+    {
+      "label": "5 Autom",
+      "state": "done"
+    },
+    {
+      "label": "6 Depth",
+      "state": "prog"
+    },
+    {
+      "label": "7 Asana",
+      "state": "done"
+    },
+    {
+      "label": "8 Dash",
+      "state": "done"
+    },
+    {
+      "label": "9 Perf",
+      "state": "done"
+    },
+    {
+      "label": "RS",
+      "state": "done"
+    },
+    {
+      "label": "MVP-F",
+      "state": "done"
+    },
+    {
+      "label": "Touch",
+      "state": "done"
+    },
+    {
+      "label": "PF",
+      "state": "done"
+    },
+    {
+      "label": "10 AI",
+      "state": "prog"
+    }
   ]
 }
-    </script>
+</script>
 
 <style>
   /* Keystone Console — committed dark world (matches the app's dark-first identity). */
