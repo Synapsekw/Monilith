@@ -16,7 +16,11 @@ import { Brand } from "@/components/brand/brand";
  * with no divider, and `<main>` is the single inset opaque card on the same
  * `mr-2 mb-2 ml-1` gutter. `<main>` stays `overflow-hidden`, not `auto`:
  * `/ask` delegates scrolling to `MessageList`, and a card-level scroller would
- * stack a second scrollbar on the same axis.
+ * stack a second scrollbar on the same axis. Because it IS a scroll container
+ * though, globals.css's `main { scrollbar-gutter: stable }` would reserve 10px
+ * inside the card's right border that can never hold a scrollbar — on top of
+ * the 10px `MessageList` legitimately reserves. `[scrollbar-gutter:auto]` opts
+ * this one out; the real scroller keeps the stable gutter.
  *
  * The frame is static (prerendered into the Cache Components shell); the rail's
  * per-user data and the page's thread both stream behind Suspense. Auth is
@@ -45,7 +49,7 @@ export default function AskLayout({ children }: { children: React.ReactNode }) {
           <AskRailData />
         </Suspense>
       </aside>
-      <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border">
+      <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:auto] flex-col overflow-hidden rounded-xl border">
         <Suspense fallback={null}>{children}</Suspense>
       </main>
     </div>

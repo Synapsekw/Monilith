@@ -44,6 +44,24 @@ describe("AskLayout surface model", () => {
     expect(main).toHaveClass("shadow-content-lift");
   });
 
+  /**
+   * `globals.css` reserves a stable scrollbar gutter for `main,
+   * [data-scroll-container]`, and `::-webkit-scrollbar { width: 10px }` forces
+   * classic, space-taking scrollbars. `scrollbar-gutter: stable` applies to any
+   * scroll container — `overflow: hidden` included — so the moment this `<main>`
+   * became `overflow-hidden` it started reserving 10px that can never hold a
+   * scrollbar, stacked on top of the 10px `MessageList` correctly reserves as
+   * the real scroller. Opting out here (not dropping `overflow-hidden`, which
+   * is what stops a second scrollbar stacking on the same axis) is the fix.
+   * Don't "clean up" this utility.
+   */
+  it("opts main out of the stable gutter it can never use", () => {
+    render(<AskLayout>chat</AskLayout>);
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("overflow-hidden");
+    expect(main).toHaveClass("[scrollbar-gutter:auto]");
+  });
+
   it("still renders the brand, the back link and the rail slot", () => {
     render(<AskLayout>CHAT_CHILDREN</AskLayout>);
     expect(screen.getByText("RAIL_DATA")).toBeInTheDocument();
