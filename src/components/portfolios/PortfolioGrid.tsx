@@ -117,7 +117,7 @@ export function PortfolioGrid({
         <AddBoardDialog portfolioId={portfolioId} boards={addableBoards} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-sm">
           <thead className="text-muted-foreground bg-card sticky top-0 z-10 text-left text-xs">
             <tr className="border-b">

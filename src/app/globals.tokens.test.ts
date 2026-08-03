@@ -97,7 +97,14 @@ describe("base-layer polish", () => {
     expect(CSS).not.toContain("overscroll-behavior-x: none");
   });
 
-  it("reserves the scrollbar gutter so lists do not shift at the overflow threshold", () => {
-    expect(CSS).toContain("scrollbar-gutter: stable");
+  it("reserves the gutter for main AND the opt-in hook — not for everything", () => {
+    // A substring check for "scrollbar-gutter: stable" passes even if the
+    // selector is reverted to `*`, which is what hid follow-up #4. Assert the
+    // selector list itself.
+    expect(CSS).toMatch(
+      /\bmain,\s*\[data-scroll-container\]\s*\{\s*scrollbar-gutter:\s*stable;/,
+    );
+    // `*` would put a permanent 10px dead strip in every dropdown and popover.
+    expect(CSS).not.toMatch(/^\s*\*\s*\{\s*scrollbar-gutter/m);
   });
 });

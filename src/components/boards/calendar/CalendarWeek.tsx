@@ -45,7 +45,10 @@ export function CalendarWeek({
   const laneCount = placed.reduce((m, p) => Math.max(m, p.lane + 1), 0);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3">
+    <div
+      data-scroll-container
+      className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-3"
+    >
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-t-md border">
         {days.map((iso, i) => (
           <div

@@ -70,7 +70,10 @@ export function CalendarAgenda({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+    <div
+      data-scroll-container
+      className="min-h-0 flex-1 overflow-auto px-4 py-3"
+    >
       <div className="overflow-hidden rounded-md border">
         {groups.map((group) => (
           <div

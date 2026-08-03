@@ -643,6 +643,7 @@ export function BoardTableInner({
       <div
         ref={scrollContainerRef}
         data-testid="board-scroll"
+        data-scroll-container
         data-scrolledx={scrolledX}
         onScroll={(e) => {
           const next = e.currentTarget.scrollLeft > 0;

@@ -90,7 +90,7 @@ export function MessageList({
   const proposalStates = resolveProposalStates(messages);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div data-scroll-container className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-6">
         {empty ? (
           <div className="mt-[12vh] flex flex-col items-center gap-3 text-center">

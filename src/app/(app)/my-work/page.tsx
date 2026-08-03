@@ -24,7 +24,7 @@ export default async function MyWorkPage() {
           </p>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <MyWorkList groups={groups} today={today} />
       </div>
     </div>

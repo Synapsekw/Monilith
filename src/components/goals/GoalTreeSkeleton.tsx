@@ -23,7 +23,7 @@ export function GoalTreeSkeleton() {
         </div>
         <Skeleton className="h-8 w-28" />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-sm">
           <thead className="bg-card sticky top-0 z-10 text-left text-xs">
             <tr className="border-b">

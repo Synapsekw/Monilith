@@ -199,7 +199,10 @@ export function ConversationRail({
         <Kicker>Recent</Kicker>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <nav
+        data-scroll-container
+        className="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
+      >
         {conversations.length === 0 ? (
           <p className="text-muted-foreground px-3 py-2 text-xs">
             No conversations yet.
