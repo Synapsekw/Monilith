@@ -26,6 +26,7 @@ const NEW_TOKENS = [
   "--state-active",
   "--state-selected",
   "--chrome-fill",
+  "--scrollbar-thumb",
 ];
 
 /**
@@ -106,5 +107,20 @@ describe("base-layer polish", () => {
     );
     // `*` would put a permanent 10px dead strip in every dropdown and popover.
     expect(CSS).not.toMatch(/^\s*\*\s*\{\s*scrollbar-gutter/m);
+  });
+
+  it("gives the scrollbar thumb its own token, not the interaction fill", () => {
+    // --state-active is the PRESSED fill for rows, menu items and buttons.
+    // Reusing it here means "make the scrollbar visible" and "make the pressed
+    // state stronger" are the same knob — see follow-up #5.
+    expect(CSS).toMatch(
+      /:hover::-webkit-scrollbar-thumb,\s*:focus-within::-webkit-scrollbar-thumb\s*\{\s*background:\s*var\(--scrollbar-thumb\);/,
+    );
+    // Firefox has no thumb-hover selector, so its fallback is the ONLY value
+    // it ever gets. Missing this is how the fix half-lands.
+    expect(CSS).toMatch(
+      /scrollbar-color:\s*var\(--scrollbar-thumb\)\s+transparent;/,
+    );
+    expect(CSS).not.toMatch(/scrollbar-color:\s*var\(--state-active\)/);
   });
 });

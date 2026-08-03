@@ -218,6 +218,13 @@
      card, where they are still correct. */
   --chrome-fill: rgb(0 0 0 / 5%);
 
+  /* The hover-revealed scrollbar thumb. Its OWN token rather than
+     --state-active: that token is also the pressed interaction fill, and the
+     thumb needs roughly double the alpha to be findable on the white content
+     card (7% composites to #ededed — 1.17:1, invisible). Hovering the thumb
+     still escalates to --border-bright. */
+  --scrollbar-thumb: rgb(0 0 0 / 16%);
+
   /* Status / label palette (the one controlled multi-color set) */
   --status-gray: oklch(0.65 0 0);
   --status-blue: oklch(0.62 0.17 250);
@@ -319,6 +326,7 @@
   --state-active: rgb(255 255 255 / 9%);
   --state-selected: color-mix(in oklab, var(--brand) 14%, transparent);
   --chrome-fill: rgb(255 255 255 / 6%);
+  --scrollbar-thumb: rgb(255 255 255 / 12%);
 
   --status-gray: oklch(0.7 0 0);
   --status-blue: oklch(0.66 0.16 250);
@@ -421,7 +429,7 @@
   }
   :hover::-webkit-scrollbar-thumb,
   :focus-within::-webkit-scrollbar-thumb {
-    background: var(--state-active);
+    background: var(--scrollbar-thumb);
     background-clip: content-box;
   }
   :hover::-webkit-scrollbar-thumb:hover {
@@ -432,7 +440,7 @@
   @supports not selector(::-webkit-scrollbar) {
     * {
       scrollbar-width: thin;
-      scrollbar-color: var(--state-active) transparent;
+      scrollbar-color: var(--scrollbar-thumb) transparent;
     }
   }
   /* The app surface. Scoped to the AppShell root rather than `body` on
