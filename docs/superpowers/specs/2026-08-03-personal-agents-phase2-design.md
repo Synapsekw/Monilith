@@ -147,6 +147,11 @@ Three properties make this safe by construction:
    `visibility`, which the existing `ai_conversations_update_own` policy already permits. Sharing
    grants reading, never authorship.
 
+**Consequence for `/ask`, accepted:** its rail filters on `user_id` only, so board threads you own
+will now also appear there. That is deliberate — a thread is your conversation regardless of where
+you started it, and filtering board threads out would make one vanish the moment you navigated
+away from its board. `listConversations` is left unchanged and the behaviour is pinned by a test.
+
 **Disclosure accepted and stated:** a shared thread exposes its agent's **name** to board members
 who do not own that agent. Names are user-authored ("Morning Brief"), not secret, and
 `instructions` never leaves the server. Recorded here so it is a decision rather than a review
@@ -213,16 +218,28 @@ colours, hairlines brighten rather than thicken, `shadow-card` is `none`.
 
 ## Streaming and the route
 
-`/api/ask` gains three optional body fields: `conversationId` (already present), `boardId`,
-`agentId`. Nothing forks — one `askPulseStream` serves all combinations.
+**The request body is unchanged — still `{ conversationId }`.** The board and the agent are read
+**off the conversation row**, not accepted from the client. Nothing forks: one `askPulseStream`
+serves all combinations.
 
-- **`agentId` is verified server-side against `user_agents.owner_id`.** A mismatch **fails closed**
-  with an error, never a silent fallback to plain Ask — a silent fallback would let a probe
-  distinguish "exists but is not yours" from "does not exist".
-- The agent's `instructions` are injected as delimited data in the system prompt. The text is
+> **Refined during planning.** An earlier revision of this section had the route accept `boardId`
+> and `agentId` as body fields and verify ownership per turn. Reading them off the row is strictly
+> safer — the ownership check happens **once**, when the thread is created (`createConversation`
+> resolves the agent through the owner-scoped `user_agents` RLS, so a foreign id reads back null
+> and fails closed) — and it leaves no client-supplied id for the streaming path to validate at
+> all.
+
+- **The route rejects a turn on a conversation the caller does not own (403).** A shared board
+  thread is readable by every member of that board, so "the row came back" no longer implies "it is
+  mine". A turn appends to the thread and spends the **owner's** budget; without this gate, read
+  access to a shared thread would be a licence to bill its owner.
+- The agent's `instructions` are injected as delimited data in the system prompt, with a closing
+  delimiter smuggled into the text stripped so the block cannot be closed early. The text is
   already length-capped at write time by Phase 1, and **never reaches the client**: the switcher
   sends an id and renders a name.
-- With `boardId` present the board is seeded into context up front, so the model skips the
+- An `agent_id` that reads back null — a deletion racing a turn — **degrades to plain Ask** rather
+  than failing a turn whose history is still worth continuing.
+- With `board_id` set, the board is seeded into context up front, so the model skips the
   `list_boards` → `get_board_overview` round-trip it otherwise needs to resolve "which board".
   This is the dock's substantive advantage over `/ask`.
 
@@ -287,8 +304,10 @@ bidirectionally, proving both what the new policy allows and what it still forbi
 7. `ai_messages` mirrors every case above.
 
 **Unit** — persona injection keeps `instructions` in the data position (asserted against the built
-prompt, not a comment); a foreign `agentId` fails closed; thread-list grouping and the 5-thread
-cap; dock state read after mount.
+prompt, not a comment) and survives a smuggled closing delimiter; a foreign `agentId` fails closed
+at thread creation; a turn on someone else's thread is refused with 403; a dock turn meters as
+`ask_pulse`, never against `max_agent_runs_per_user_per_day`; thread-list grouping and the
+5-thread cap; dock state read after mount.
 
 **Idempotency** — two runs of one fire slot produce exactly one conversation and one email.
 
