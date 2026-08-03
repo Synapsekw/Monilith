@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { AskRailData } from "@/components/ai/ask/AskRailData";
 import { Brand } from "@/components/brand/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Layout B for the full-page Ask AI surface. `/ask` lives OUTSIDE the `(app)`
@@ -11,26 +12,54 @@ import { Brand } from "@/components/brand/brand";
  * conversation rail *in place of* that nav. So this layout owns the whole frame
  * — matching the repo precedent that `admin`/`home` also stay outside `(app)`.
  *
+ * It owns the frame, but not a bespoke surface model: it mirrors `AppShell`
+ * exactly — the wash paints on the root, the rail is transparent atmosphere
+ * with no divider, and `<main>` is the single inset opaque card on the same
+ * `mr-2 mb-2 ml-1` gutter. That gutter has no `mt-*` because, as in the shell,
+ * the transparent `h-14` header above it supplies the top inset: that band IS
+ * where the wash reads across the top of the page. Without it the card starts
+ * at y=0 and everything right of the rail is opaque from the very top edge.
+ * `/ask` replaces the app nav, so the band carries only `<ThemeToggle />` (the
+ * page's one theme control) — not the ⌘K trigger or the account menu, which
+ * belong to the shell. `<main>` stays `overflow-hidden`, not `auto`:
+ * `/ask` delegates scrolling to `MessageList`, and a card-level scroller would
+ * stack a second scrollbar on the same axis. Because it IS a scroll container
+ * though, globals.css's `main { scrollbar-gutter: stable }` would reserve 10px
+ * inside the card's right border that can never hold a scrollbar — on top of
+ * the 10px `MessageList` legitimately reserves. `[scrollbar-gutter:auto]` opts
+ * this one out; the real scroller keeps the stable gutter.
+ *
+ * The rail's *geometry* mirrors `src/components/sidebar.tsx` for the same
+ * reason: the owner navigates between `/ask` and the rest of the app, so any
+ * difference in width or gutter reads as the wordmark jumping sideways. Hence
+ * `w-60` and the shell's `min-h-14 gap-1 px-3 py-2` brand row, with the rail's
+ * own rows on the same `px-3` column. The brand row copies the shell's `min-h`
+ * floor rather than a fixed `h-14`: with only the ~24px wordmark inside, the
+ * floor is what makes it resolve to the same 56px as the `h-14` header beside
+ * it, so wordmark and theme toggle sit on one baseline. `/ask` copies the
+ * *expanded* state only — it deliberately has no collapse affordance, and the
+ * shell's `w-14` state is driven by shell-only store state.
+ *
  * The frame is static (prerendered into the Cache Components shell); the rail's
  * per-user data and the page's thread both stream behind Suspense. Auth is
  * guarded by `requireUser()` inside the rail data component.
  */
 export default function AskLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-svh w-full overflow-hidden">
-      <aside className="bg-sidebar flex w-64 shrink-0 flex-col border-r">
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+    <div className="app-wash flex h-svh w-full overflow-hidden">
+      <aside className="flex w-60 shrink-0 flex-col">
+        <div className="flex min-h-14 shrink-0 items-center gap-1 px-3 py-2">
           <Brand />
         </div>
         <Link
           href="/my-work"
-          className="text-muted-foreground hover:text-foreground flex items-center gap-2 px-4 py-3 text-sm transition-colors"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-2 px-3 py-3 text-sm transition-colors"
         >
           <ArrowLeft className="size-4" /> Back to Monolith
         </Link>
         <Suspense
           fallback={
-            <div className="text-muted-foreground px-4 py-3 text-xs">
+            <div className="text-muted-foreground px-3 py-3 text-xs">
               Loading conversations…
             </div>
           }
@@ -38,9 +67,14 @@ export default function AskLayout({ children }: { children: React.ReactNode }) {
           <AskRailData />
         </Suspense>
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col">
-        <Suspense fallback={null}>{children}</Suspense>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-end gap-2 px-4">
+          <ThemeToggle />
+        </header>
+        <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:auto] flex-col overflow-hidden rounded-xl border">
+          <Suspense fallback={null}>{children}</Suspense>
+        </main>
+      </div>
     </div>
   );
 }

@@ -31,4 +31,13 @@ describe("OrgSwitcher", () => {
     await userEvent.click(screen.getByText("Beta"));
     expect(setActiveOrg).toHaveBeenCalledWith("b");
   });
+
+  it("gives the trigger an alpha-on-parent fill, not an opaque patch", () => {
+    render(<OrgSwitcher orgs={orgs} activeOrgId="a" />);
+    const trigger = screen.getByRole("button", {
+      name: /switch organization/i,
+    });
+    expect(trigger.className).toContain("bg-chrome-fill");
+    expect(trigger.className).not.toMatch(/\bbg-surface-muted\b/);
+  });
 });

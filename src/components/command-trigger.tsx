@@ -12,11 +12,11 @@ export function CommandTrigger() {
       variant="outline"
       size="sm"
       onClick={() => setOpen(true)}
-      className="text-muted-foreground gap-2"
+      className="text-muted-foreground gap-2 bg-transparent"
     >
       <Search className="size-4" />
       <span className="hidden sm:inline">Search…</span>
-      <kbd className="bg-muted text-3xs ml-2 hidden rounded border px-1.5 font-mono sm:inline">
+      <kbd className="bg-chrome-fill text-3xs ml-2 hidden rounded border px-1.5 font-mono sm:inline">
         ⌘K
       </kbd>
     </Button>

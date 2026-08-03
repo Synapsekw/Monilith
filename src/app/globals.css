@@ -42,6 +42,7 @@
   --color-state-hover: var(--state-hover);
   --color-state-active: var(--state-active);
   --color-state-selected: var(--state-selected);
+  --color-chrome-fill: var(--chrome-fill);
 
   /* Named motion scale (durations are literal — not aliases) */
   --duration-instant: 120ms;
@@ -174,7 +175,13 @@
   --secondary: #f1f1f4;
   --secondary-foreground: #1a1a1f;
   --muted: #f1f1f4;
-  --muted-foreground: #6b6b72;
+  /* Tuned against the WASH, not against --background: the sidebar's muted nav
+     labels sit on the gradient's dark end (light) and under the brand bloom
+     (dark), which is where the old #6b6b72 / #9a9aa2 fell to 3.87:1 and
+     3.54:1. Worst case is now 4.85:1 light / 4.70:1 dark at the bloom's full
+     22%. Both moves are AWAY from their background, so every other pairing in
+     the app gains contrast — see globals.contrast.test.ts. */
+  --muted-foreground: #5c5c63;
   --kicker: #9a9aa2;
   --accent: #f1f1f4;
   --accent-foreground: #1a1a1f;
@@ -201,6 +208,22 @@
   --state-hover: rgb(0 0 0 / 4%);
   --state-active: rgb(0 0 0 / 7%);
   --state-selected: color-mix(in oklab, var(--brand) 12%, transparent);
+
+  /* Resting fill for chrome that sits ON the wash — switcher chips, the ⌘K
+     kbd, and the shell's first-paint skeletons. Alpha-on-parent so the
+     gradient reads through instead of being punched out by a rectangular
+     patch. Deliberately NOT --state-active: that is the pressed interaction
+     fill and must stay free to be strengthened on its own. `--muted` /
+     `--surface-muted` keep their identity as opaque fills on the content
+     card, where they are still correct. */
+  --chrome-fill: rgb(0 0 0 / 5%);
+
+  /* The hover-revealed scrollbar thumb. Its OWN token rather than
+     --state-active: that token is also the pressed interaction fill, and the
+     thumb needs roughly double the alpha to be findable on the white content
+     card (7% composites to #ededed — 1.17:1, invisible). Hovering the thumb
+     still escalates to --border-bright. */
+  --scrollbar-thumb: rgb(0 0 0 / 16%);
 
   /* Status / label palette (the one controlled multi-color set) */
   --status-gray: oklch(0.65 0 0);
@@ -275,7 +298,7 @@
   --secondary: #26262c;
   --secondary-foreground: #f4f4f6;
   --muted: #1c1c20;
-  --muted-foreground: #9a9aa2;
+  --muted-foreground: #b2b2ba;
   --kicker: #6b6b72;
   --accent: #1c1c20;
   --accent-foreground: #f4f4f6;
@@ -302,6 +325,8 @@
   --state-hover: rgb(255 255 255 / 5%);
   --state-active: rgb(255 255 255 / 9%);
   --state-selected: color-mix(in oklab, var(--brand) 14%, transparent);
+  --chrome-fill: rgb(255 255 255 / 6%);
+  --scrollbar-thumb: rgb(255 255 255 / 12%);
 
   --status-gray: oklch(0.7 0 0);
   --status-blue: oklch(0.66 0.16 250);
@@ -404,7 +429,7 @@
   }
   :hover::-webkit-scrollbar-thumb,
   :focus-within::-webkit-scrollbar-thumb {
-    background: var(--state-active);
+    background: var(--scrollbar-thumb);
     background-clip: content-box;
   }
   :hover::-webkit-scrollbar-thumb:hover {
@@ -415,7 +440,7 @@
   @supports not selector(::-webkit-scrollbar) {
     * {
       scrollbar-width: thin;
-      scrollbar-color: var(--state-active) transparent;
+      scrollbar-color: var(--scrollbar-thumb) transparent;
     }
   }
   /* The app surface. Scoped to the AppShell root rather than `body` on

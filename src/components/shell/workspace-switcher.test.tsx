@@ -47,4 +47,11 @@ describe("WorkspaceSwitcher", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: /growth/i }));
     expect(vi.mocked(setActiveWorkspace)).toHaveBeenCalledWith("w2");
   });
+
+  it("gives the trigger an alpha-on-parent fill, not an opaque patch", () => {
+    renderSwitcher("w1");
+    const trigger = screen.getByRole("button", { name: /switch workspace/i });
+    expect(trigger.className).toContain("bg-chrome-fill");
+    expect(trigger.className).not.toMatch(/\bbg-surface-muted\b/);
+  });
 });

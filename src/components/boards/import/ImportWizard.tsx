@@ -321,7 +321,10 @@ export function ImportWizard({
           <StepIndicator step={step} />
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div
+          data-scroll-container
+          className="min-h-0 flex-1 overflow-y-auto px-6 py-4"
+        >
           {step === 1 ? (
             <UploadStep busy={busy} error={error} onFile={handleFile} />
           ) : null}

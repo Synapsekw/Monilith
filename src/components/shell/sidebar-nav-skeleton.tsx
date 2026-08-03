@@ -13,7 +13,7 @@ export function SidebarNavSkeleton() {
       className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 py-2"
     >
       {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-7 w-full" />
+        <Skeleton key={i} variant="chrome" className="h-7 w-full" />
       ))}
     </div>
   );

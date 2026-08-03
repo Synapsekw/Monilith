@@ -336,7 +336,7 @@ export function WorkloadGrid({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-20">
             <tr>

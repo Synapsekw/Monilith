@@ -681,7 +681,11 @@ export function GanttBoard({
         sensors={sensors}
         onDragEnd={handleDragEnd}
       >
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
+        <div
+          data-scroll-container
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-auto"
+        >
           <div className="inline-block min-w-full">
             {/* Sticky header row */}
             <div className="bg-background sticky top-0 z-20 flex border-b">

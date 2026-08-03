@@ -138,7 +138,10 @@ function WidgetConfigSheetForm({
 
   return (
     <>
-      <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto py-4 md:grid-cols-[1fr_1.1fr]">
+      <div
+        data-scroll-container
+        className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto py-4 md:grid-cols-[1fr_1.1fr]"
+      >
         <WidgetConfigForm boards={boards} value={draft} onChange={setDraft} />
         <div className="flex flex-col gap-2">
           <Kicker>Live preview</Kicker>

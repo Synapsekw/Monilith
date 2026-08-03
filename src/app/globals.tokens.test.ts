@@ -25,6 +25,8 @@ const NEW_TOKENS = [
   "--state-hover",
   "--state-active",
   "--state-selected",
+  "--chrome-fill",
+  "--scrollbar-thumb",
 ];
 
 /**
@@ -61,6 +63,7 @@ describe("Keystone token contract", () => {
       "--color-state-hover:",
       "--color-state-active:",
       "--color-state-selected:",
+      "--color-chrome-fill:",
       "--color-content-surface:",
       "--color-content-edge:",
       "--shadow-content-lift:",
@@ -95,7 +98,29 @@ describe("base-layer polish", () => {
     expect(CSS).not.toContain("overscroll-behavior-x: none");
   });
 
-  it("reserves the scrollbar gutter so lists do not shift at the overflow threshold", () => {
-    expect(CSS).toContain("scrollbar-gutter: stable");
+  it("reserves the gutter for main AND the opt-in hook — not for everything", () => {
+    // A substring check for "scrollbar-gutter: stable" passes even if the
+    // selector is reverted to `*`, which is what hid follow-up #4. Assert the
+    // selector list itself.
+    expect(CSS).toMatch(
+      /\bmain,\s*\[data-scroll-container\]\s*\{\s*scrollbar-gutter:\s*stable;/,
+    );
+    // `*` would put a permanent 10px dead strip in every dropdown and popover.
+    expect(CSS).not.toMatch(/^\s*\*\s*\{\s*scrollbar-gutter/m);
+  });
+
+  it("gives the scrollbar thumb its own token, not the interaction fill", () => {
+    // --state-active is the PRESSED fill for rows, menu items and buttons.
+    // Reusing it here means "make the scrollbar visible" and "make the pressed
+    // state stronger" are the same knob — see follow-up #5.
+    expect(CSS).toMatch(
+      /:hover::-webkit-scrollbar-thumb,\s*:focus-within::-webkit-scrollbar-thumb\s*\{\s*background:\s*var\(--scrollbar-thumb\);/,
+    );
+    // Firefox has no thumb-hover selector, so its fallback is the ONLY value
+    // it ever gets. Missing this is how the fix half-lands.
+    expect(CSS).toMatch(
+      /scrollbar-color:\s*var\(--scrollbar-thumb\)\s+transparent;/,
+    );
+    expect(CSS).not.toMatch(/scrollbar-color:\s*var\(--state-active\)/);
   });
 });

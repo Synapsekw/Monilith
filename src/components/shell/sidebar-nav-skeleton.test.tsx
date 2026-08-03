@@ -12,4 +12,15 @@ describe("SidebarNavSkeleton", () => {
       region.querySelectorAll(".animate-pulse").length,
     ).toBeGreaterThanOrEqual(4);
   });
+
+  it("uses the chrome fill — it paints directly on the wash", () => {
+    render(<SidebarNavSkeleton />);
+    const region = screen.getByRole("status", { name: /loading navigation/i });
+    const bars = region.querySelectorAll(".animate-pulse");
+    expect(bars.length).toBeGreaterThanOrEqual(4);
+    for (const bar of bars) {
+      expect(bar).toHaveClass("bg-chrome-fill");
+      expect(bar.className).not.toMatch(/\bbg-muted\b/);
+    }
+  });
 });
