@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import AskLayout from "./layout";
 
 // The rail is an async RSC behind `requireUser()`. Stub it — this test is about
@@ -33,6 +33,37 @@ describe("AskLayout surface model", () => {
     expect(aside.className).not.toMatch(/\bbg-sidebar\b/);
     expect(aside.className).not.toMatch(/\bbg-surface\b/);
     expect(aside.className).not.toMatch(/\bborder-r\b/);
+  });
+
+  /**
+   * The wash reads across the top of every other page because `AppShell` puts a
+   * transparent `h-14` header above `<main>` — `<main>` carries no top margin,
+   * so that band IS the gradient's top edge. Without it `/ask` starts the opaque
+   * card at y=0 and the wash never appears above the fold.
+   */
+  it("reserves a transparent header band above main so the wash reads across the top", () => {
+    render(<AskLayout>chat</AskLayout>);
+    const header = screen.getByRole("banner");
+    expect(header).toHaveClass("h-14");
+    expect(header).toHaveClass("shrink-0");
+    expect(header.className).not.toMatch(/\bbg-/);
+    expect(header.className).not.toMatch(/\bborder-b\b/);
+
+    // The band sits above the card, in the same right-hand column.
+    const main = screen.getByRole("main");
+    expect(header.parentElement).toBe(main.parentElement);
+    expect(
+      header.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(main.className).not.toMatch(/\bmt-/);
+  });
+
+  it("puts the theme control in that band — /ask's only way to switch themes", () => {
+    render(<AskLayout>chat</AskLayout>);
+    const header = screen.getByRole("banner");
+    expect(
+      within(header).getByRole("button", { name: /toggle theme/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders main as the one inset opaque card", () => {

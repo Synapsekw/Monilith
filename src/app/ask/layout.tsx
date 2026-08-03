@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { AskRailData } from "@/components/ai/ask/AskRailData";
 import { Brand } from "@/components/brand/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Layout B for the full-page Ask AI surface. `/ask` lives OUTSIDE the `(app)`
@@ -14,7 +15,13 @@ import { Brand } from "@/components/brand/brand";
  * It owns the frame, but not a bespoke surface model: it mirrors `AppShell`
  * exactly — the wash paints on the root, the rail is transparent atmosphere
  * with no divider, and `<main>` is the single inset opaque card on the same
- * `mr-2 mb-2 ml-1` gutter. `<main>` stays `overflow-hidden`, not `auto`:
+ * `mr-2 mb-2 ml-1` gutter. That gutter has no `mt-*` because, as in the shell,
+ * the transparent `h-14` header above it supplies the top inset: that band IS
+ * where the wash reads across the top of the page. Without it the card starts
+ * at y=0 and everything right of the rail is opaque from the very top edge.
+ * `/ask` replaces the app nav, so the band carries only `<ThemeToggle />` (the
+ * page's one theme control) — not the ⌘K trigger or the account menu, which
+ * belong to the shell. `<main>` stays `overflow-hidden`, not `auto`:
  * `/ask` delegates scrolling to `MessageList`, and a card-level scroller would
  * stack a second scrollbar on the same axis. Because it IS a scroll container
  * though, globals.css's `main { scrollbar-gutter: stable }` would reserve 10px
@@ -49,9 +56,14 @@ export default function AskLayout({ children }: { children: React.ReactNode }) {
           <AskRailData />
         </Suspense>
       </aside>
-      <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:auto] flex-col overflow-hidden rounded-xl border">
-        <Suspense fallback={null}>{children}</Suspense>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-end gap-2 px-4">
+          <ThemeToggle />
+        </header>
+        <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:auto] flex-col overflow-hidden rounded-xl border">
+          <Suspense fallback={null}>{children}</Suspense>
+        </main>
+      </div>
     </div>
   );
 }
