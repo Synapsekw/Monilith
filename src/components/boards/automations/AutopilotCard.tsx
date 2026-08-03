@@ -152,7 +152,7 @@ export function AutopilotCard({ boardId }: { boardId: string }) {
           />
           <span
             className={cn(
-              "text-[11px] font-medium",
+              "text-2xs font-medium",
               form.enabled ? "text-primary" : "text-muted-foreground",
             )}
           >
@@ -186,7 +186,7 @@ export function AutopilotCard({ boardId }: { boardId: string }) {
             >
               <span
                 className={cn(
-                  "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] border text-[10px]",
+                  "text-3xs mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
                   on
                     ? "bg-primary text-primary-foreground border-transparent"
                     : "border-border-bright",

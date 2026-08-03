@@ -104,7 +104,7 @@ export function ArchivedBoardsSection({ boards }: { boards: ArchivedBoard[] }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="hover:bg-accent flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors"
+        className="hover:bg-state-hover flex w-full items-center gap-2 rounded-md px-3 py-2 text-left transition-colors"
       >
         {open ? (
           <ChevronDown className="text-muted-foreground size-4 shrink-0" />

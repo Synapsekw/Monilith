@@ -123,7 +123,7 @@ export function ItemPanel({
             Details
           </Kicker>
           <div className="flex items-center justify-between gap-3">
-            <SheetTitle className="text-[17px] font-extrabold">
+            <SheetTitle className="text-lg font-extrabold">
               {itemName}
             </SheetTitle>
             <ItemViewersBar itemId={itemId} />
@@ -169,7 +169,7 @@ export function ItemPanel({
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div data-scroll-container className="flex-1 overflow-y-auto">
           {/* Keyed by tab so each switch re-mounts the wrapper and plays the
               150ms fade (reduced-motion handled globally in globals.css). */}
           <div key={tab} className="animate-fadein">

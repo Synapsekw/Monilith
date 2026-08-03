@@ -15,7 +15,7 @@ export function GoalTreeSkeleton() {
     >
       <div
         data-testid="skeleton-header"
-        className="flex items-center justify-between border-b px-6 py-3"
+        className="flex items-center justify-between px-6 py-3"
       >
         <div className="flex flex-col gap-1">
           <Skeleton className="h-5 w-24" />
@@ -23,7 +23,7 @@ export function GoalTreeSkeleton() {
         </div>
         <Skeleton className="h-8 w-28" />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-sm">
           <thead className="bg-card sticky top-0 z-10 text-left text-xs">
             <tr className="border-b">

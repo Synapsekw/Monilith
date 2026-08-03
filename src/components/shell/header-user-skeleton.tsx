@@ -9,8 +9,8 @@ export function HeaderUserSkeleton() {
       aria-label="Loading account"
       className="flex items-center gap-2"
     >
-      <Skeleton className="size-8" />
-      <Skeleton className="size-8 rounded-full" />
+      <Skeleton variant="chrome" className="size-8" />
+      <Skeleton variant="chrome" className="size-8 rounded-full" />
     </div>
   );
 }

@@ -10,7 +10,9 @@ import { cn } from "@/lib/utils";
 const SELECT_CLASS =
   "border-input bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30";
 
-const TIERS = ["none", "starter", "pro", "enterprise"] as const;
+// Must match setOrgAiPlanSchema's enum exactly — a value here that the schema
+// rejects surfaces as a generic "Invalid input" with no clue which field.
+const TIERS = ["none", "core", "pulse", "trial", "enterprise"] as const;
 
 /**
  * Platform-admin control for an org's AI entitlement (tier + monthly credit

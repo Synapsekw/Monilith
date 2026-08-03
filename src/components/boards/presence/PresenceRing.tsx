@@ -49,7 +49,7 @@ export const PresenceRing = memo(function PresenceRing({
     >
       {others.length > 1 ? (
         <span
-          className="absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full text-[10px] font-semibold text-white tabular-nums shadow-sm"
+          className="text-3xs absolute -top-2 -right-2 flex size-4 items-center justify-center rounded-full font-semibold text-white tabular-nums shadow-sm"
           style={{ backgroundColor: first.color }}
         >
           {others.length}

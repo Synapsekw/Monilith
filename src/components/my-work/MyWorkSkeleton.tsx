@@ -21,14 +21,14 @@ export function MyWorkSkeleton() {
     >
       <div
         data-testid="skeleton-header"
-        className="flex items-center justify-between border-b px-6 py-3"
+        className="flex items-center justify-between px-6 py-3"
       >
         <div className="flex flex-col gap-1">
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-3 w-64" />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="flex flex-col gap-8">
             {SECTION_ROWS.map((rows, s) => (

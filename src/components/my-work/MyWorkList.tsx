@@ -22,7 +22,7 @@ function Row({ item, today }: { item: MyWorkItem; today: string }) {
     <li>
       <Link
         href={`/boards/${item.boardId}?item=${item.itemId}`}
-        className="hover:bg-accent/50 flex items-center gap-3 px-4 py-2.5 transition-colors"
+        className="hover:bg-state-hover/50 flex items-center gap-3 px-4 py-2.5 transition-colors"
       >
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{item.itemName}</p>

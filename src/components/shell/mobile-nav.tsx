@@ -46,7 +46,10 @@ export function MobileNav(props: NavData) {
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Brand />
         </SheetHeader>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div
+          data-scroll-container
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+        >
           <SidebarNav {...props} forceExpanded />
         </div>
       </SheetContent>

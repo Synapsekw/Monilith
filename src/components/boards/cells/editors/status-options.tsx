@@ -13,7 +13,7 @@ export function ClearOptionButton({ onClear }: { onClear: () => void }) {
     <button
       type="button"
       onClick={onClear}
-      className="text-muted-foreground hover:bg-accent focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
+      className="text-muted-foreground hover:bg-state-hover focus-visible:ring-ring inline-flex items-center justify-center rounded-md px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none pointer-coarse:h-11"
     >
       Clear
     </button>

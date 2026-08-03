@@ -73,7 +73,7 @@ export function ThreadSummary({
         {summary && !isPending ? (
           <div className="bg-surface-muted border-border animate-fadein rounded-lg border p-3.5 text-sm">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-kicker font-mono text-[9.5px] tracking-wide uppercase">
+              <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
                 Thread summary
               </span>
               <Button type="button" variant="ghost" size="sm" onClick={dismiss}>

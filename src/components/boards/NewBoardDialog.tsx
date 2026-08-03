@@ -133,7 +133,7 @@ export function NewBoardDialog({
                     "flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-colors",
                     selected
                       ? "border-primary bg-accent"
-                      : "border-border hover:bg-accent/50",
+                      : "border-border hover:bg-state-hover/50",
                   )}
                 >
                   <span className="flex items-center gap-2 text-sm font-medium">

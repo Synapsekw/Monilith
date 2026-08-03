@@ -70,7 +70,7 @@ export function Composer({
       </form>
       {/* Says WHY it's shut. A dead composer with no explanation is what makes
           a slow turn look broken. */}
-      <p className="text-kicker mx-auto mt-1.5 max-w-3xl px-1 font-mono text-[11px] tracking-[0.12em] uppercase">
+      <p className="text-kicker text-2xs mx-auto mt-1.5 max-w-3xl px-1 font-mono tracking-[0.12em] uppercase">
         {disabled ? "Working — one question at a time" : "⌘↵ to send"}
       </p>
     </div>

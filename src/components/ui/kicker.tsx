@@ -20,7 +20,7 @@ export function Kicker({
   return (
     <span
       className={cn(
-        "text-kicker font-mono text-[11px] font-medium tracking-[0.12em] uppercase",
+        "text-kicker text-2xs font-mono font-medium tracking-[0.12em] uppercase",
         className,
       )}
     >

@@ -106,7 +106,7 @@ export function MembersTable({
                       }
                       onChange={(e) => changeRole(m, e.target.value as Role)}
                       className={cn(
-                        "border-border bg-background text-foreground hover:bg-accent hover:border-border-hover focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-2 py-1 text-xs capitalize transition-colors",
+                        "border-border bg-background text-foreground hover:bg-state-hover hover:border-border-hover focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-2 py-1 text-xs capitalize transition-colors",
                         "focus-visible:ring-3 focus-visible:outline-none",
                         "disabled:pointer-events-none disabled:opacity-50",
                       )}

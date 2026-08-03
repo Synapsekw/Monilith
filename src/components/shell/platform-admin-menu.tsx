@@ -65,7 +65,7 @@ export function PlatformAdminMenu({
         <DropdownMenuLabel className="flex items-center gap-2">
           <Shield className="size-3.5" />
           Platform admin
-          <span className="bg-primary/15 text-primary ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider">
+          <span className="bg-primary/15 text-primary text-3xs ml-auto rounded px-1.5 py-0.5 font-bold tracking-wider">
             SUPER
           </span>
         </DropdownMenuLabel>
@@ -76,7 +76,7 @@ export function PlatformAdminMenu({
               <l.icon className="size-4" />
               {l.label}
               {l.href === "/admin/feedback" && newCount > 0 ? (
-                <span className="bg-primary/15 text-primary ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold tabular-nums">
+                <span className="bg-primary/15 text-primary text-3xs ml-auto rounded px-1.5 py-0.5 font-bold tabular-nums">
                   {newCount}
                 </span>
               ) : null}

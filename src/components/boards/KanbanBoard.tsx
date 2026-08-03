@@ -437,7 +437,11 @@ function KanbanColumnView({
       </header>
 
       {/* Virtualized card scroll area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-2">
+      <div
+        data-scroll-container
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-2"
+      >
         {/* Sizer div — sets the total scrollable height for the virtualizer */}
         <div
           className="relative"

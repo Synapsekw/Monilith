@@ -51,7 +51,7 @@ import { NavSection } from "@/components/shell/nav-section";
  */
 function CoarseCaption({ label }: { label: string }) {
   return (
-    <span className="text-muted-foreground max-w-full truncate text-[10px] leading-tight normal-case">
+    <span className="text-muted-foreground text-3xs max-w-full truncate leading-tight normal-case">
       {label}
     </span>
   );
@@ -115,7 +115,7 @@ export function DashboardsNav({
               <Link
                 href="/dashboards"
                 aria-label="Dashboards"
-                className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
+                className="text-muted-foreground hover:bg-state-hover hover:text-foreground flex size-9 max-w-full flex-col items-center justify-center gap-0.5 rounded-md transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:px-1 pointer-coarse:py-1.5"
               >
                 <LayoutGrid className="size-4 shrink-0" />
                 {coarse ? <CoarseCaption label="Dashboards" /> : null}
@@ -139,7 +139,7 @@ export function DashboardsNav({
                         "flex size-9 max-w-full flex-col items-center justify-center rounded-md text-sm font-medium uppercase transition-colors pointer-coarse:size-auto pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:gap-0.5 pointer-coarse:px-1 pointer-coarse:py-1.5",
                         d.id === activeDashboardId
                           ? "bg-primary/80 text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                          : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
                       )}
                     >
                       <span className="shrink-0">{d.name.charAt(0)}</span>
@@ -196,7 +196,7 @@ export function DashboardsNav({
                   "group flex items-center rounded-md pr-1 transition-colors",
                   d.id === activeDashboardId
                     ? "bg-primary/80 text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
                 )}
               >
                 <Link

@@ -56,7 +56,7 @@ export function NotificationsList({
           <button
             type="button"
             onClick={() => onOpen(n)}
-            className="hover:bg-accent/60 focus-visible:ring-ring flex w-full items-start gap-2 border-b px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+            className="hover:bg-state-hover/60 focus-visible:ring-ring flex w-full items-start gap-2 border-b px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
           >
             {/* Always render the dot slot (transparent when read) so row text
                 aligns regardless of read state. */}

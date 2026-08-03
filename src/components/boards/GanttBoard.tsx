@@ -601,7 +601,7 @@ export function GanttBoard({
                 "rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors pointer-coarse:min-h-11 pointer-coarse:px-3",
                 zoom === z
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent",
+                  : "text-muted-foreground hover:bg-state-hover",
               )}
             >
               {z}
@@ -681,7 +681,11 @@ export function GanttBoard({
         sensors={sensors}
         onDragEnd={handleDragEnd}
       >
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
+        <div
+          data-scroll-container
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-auto"
+        >
           <div className="inline-block min-w-full">
             {/* Sticky header row */}
             <div className="bg-background sticky top-0 z-20 flex border-b">
@@ -698,7 +702,7 @@ export function GanttBoard({
                 {headerTicks.map((tick) => (
                   <div
                     key={tick.dayOffset}
-                    className="text-muted-foreground absolute top-0 h-full border-l pt-2 pl-1.5 text-[11px] whitespace-nowrap"
+                    className="text-muted-foreground text-2xs absolute top-0 h-full border-l pt-2 pl-1.5 whitespace-nowrap"
                     style={{ left: tick.dayOffset * dayW }}
                   >
                     {tick.label}

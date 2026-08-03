@@ -45,7 +45,7 @@ export function DayActualsPopover({
         className="min-w-48 p-2"
         aria-label={`${memberName} — actuals for week of ${weekLabel}`}
       >
-        <p className="text-muted-foreground mb-1 px-1 text-[11px] font-medium">
+        <p className="text-muted-foreground text-2xs mb-1 px-1 font-medium">
           {memberName} · week of {weekLabel}
         </p>
         {days.length === 0 ? (

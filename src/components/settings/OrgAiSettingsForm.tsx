@@ -132,7 +132,7 @@ export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
         {MODES.map((m) => (
           <label
             key={m.id}
-            className="hover:bg-accent flex cursor-pointer items-start gap-3 rounded-md px-2 py-2"
+            className="hover:bg-state-hover flex cursor-pointer items-start gap-3 rounded-md px-2 py-2"
           >
             <input
               type="radio"

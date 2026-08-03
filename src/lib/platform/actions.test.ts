@@ -122,7 +122,7 @@ describe("setOrgAiPlan", () => {
     isPlatformAdmin.mockResolvedValue(false);
     const r = await setOrgAiPlan({
       orgId: orgUuid,
-      tier: "pro",
+      tier: "pulse",
       monthlyCreditLimit: 5000,
     });
     expect(r.ok).toBe(false);
@@ -132,14 +132,14 @@ describe("setOrgAiPlan", () => {
   it("upserts the entitlements for a platform admin (mode untouched)", async () => {
     const r = await setOrgAiPlan({
       orgId: orgUuid,
-      tier: "pro",
+      tier: "pulse",
       monthlyCreditLimit: 5000,
     });
     expect(r.ok).toBe(true);
     expect(svcUpsert).toHaveBeenCalledWith(
       {
         org_id: orgUuid,
-        tier: "pro",
+        tier: "pulse",
         monthly_credit_limit: 5000,
         updated_by: actor,
       },

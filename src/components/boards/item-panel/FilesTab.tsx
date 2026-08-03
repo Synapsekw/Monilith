@@ -69,7 +69,7 @@ export function FilesTab({
       }}
     >
       <div className="flex items-center justify-between">
-        <span className="text-kicker font-mono text-[10px] tracking-wide uppercase">
+        <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
           {attachments.length} file{attachments.length === 1 ? "" : "s"} ·{" "}
           {formatSize(totalBytes)}
         </span>

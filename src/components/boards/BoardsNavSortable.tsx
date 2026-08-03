@@ -50,7 +50,7 @@ function SortableBoardRow({
         isDragging && "relative z-20 shadow-lg",
         isActive
           ? "bg-primary/80 text-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+          : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
       )}
     >
       <button

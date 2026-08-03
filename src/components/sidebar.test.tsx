@@ -58,4 +58,11 @@ describe("Sidebar frame", () => {
     const toggle = screen.getByRole("button", { name: /collapse sidebar/i });
     expect(toggle.className).toContain("pointer-coarse:size-11");
   });
+
+  it("paints nothing — it shows the wash through", () => {
+    const { container } = render(<Sidebar navSlot={<div>NAV</div>} />);
+    const aside = container.querySelector("aside") as HTMLElement;
+    expect(aside.className).not.toMatch(/\bbg-sidebar\b/);
+    expect(aside.className).not.toMatch(/\bborder-r\b/);
+  });
 });

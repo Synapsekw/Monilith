@@ -10,4 +10,15 @@ describe("HeaderUserSkeleton", () => {
     const avatar = region.querySelector(".rounded-full");
     expect(avatar).not.toBeNull();
   });
+
+  it("uses the chrome fill — it paints directly on the wash", () => {
+    render(<HeaderUserSkeleton />);
+    const region = screen.getByRole("status", { name: /loading account/i });
+    const bars = region.querySelectorAll(".animate-pulse");
+    expect(bars).toHaveLength(2);
+    for (const bar of bars) {
+      expect(bar).toHaveClass("bg-chrome-fill");
+      expect(bar.className).not.toMatch(/\bbg-muted\b/);
+    }
+  });
 });

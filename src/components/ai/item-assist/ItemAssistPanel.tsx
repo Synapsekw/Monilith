@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 type Phase = "idle" | "loading" | "review" | "applying";
 
 const SELECT_CLASS = cn(
-  "border-border bg-background text-foreground hover:bg-accent hover:border-border-hover",
+  "border-border bg-background text-foreground hover:bg-state-hover hover:border-border-hover",
   "focus-visible:ring-ring/50 focus-visible:border-ring h-7 min-w-0 flex-1 truncate rounded-md",
   "border px-2 text-xs transition-colors focus-visible:ring-3 focus-visible:outline-none",
   "disabled:pointer-events-none disabled:opacity-50",

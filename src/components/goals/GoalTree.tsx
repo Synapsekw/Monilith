@@ -83,7 +83,7 @@ function GoalRow({
   const isOpen = expanded.has(node.id);
   return (
     <>
-      <tr className="hover:bg-accent/30 border-t transition-colors">
+      <tr className="hover:bg-state-hover/30 border-t transition-colors">
         <td className="px-3 py-2">
           <div
             className="flex items-center gap-1"
@@ -187,7 +187,7 @@ export function GoalTree({ tree }: { tree: GoalNode[] }) {
                 "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
                 sort === k
                   ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                  : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
               )}
             >
               {SORT_LABEL[k]}
@@ -196,7 +196,7 @@ export function GoalTree({ tree }: { tree: GoalNode[] }) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-sm">
           <thead className="text-muted-foreground bg-card sticky top-0 z-10 text-left text-xs">
             <tr className="border-b">

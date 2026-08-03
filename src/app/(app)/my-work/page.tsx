@@ -15,7 +15,7 @@ export default async function MyWorkPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-6 py-3">
+      <div className="flex items-center justify-between px-6 py-3">
         <div>
           <h1 className="text-lg font-semibold">My Work</h1>
           <p className="text-muted-foreground text-xs">
@@ -24,7 +24,7 @@ export default async function MyWorkPage() {
           </p>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <MyWorkList groups={groups} today={today} />
       </div>
     </div>

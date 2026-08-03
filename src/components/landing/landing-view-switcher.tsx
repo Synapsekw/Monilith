@@ -47,7 +47,7 @@ export function LandingViewSwitcher() {
               aria-selected={isActive}
               onClick={() => setView(v.id)}
               className={cn(
-                "ease-keystone rounded-full px-5 py-2 text-[13.5px] font-semibold transition-all duration-200",
+                "ease-keystone rounded-full px-5 py-2 text-sm font-semibold transition-all duration-200",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground",

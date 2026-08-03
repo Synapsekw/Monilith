@@ -88,7 +88,7 @@ export function EventBar({
   };
 
   const common = cn(
-    "relative flex h-[18px] min-w-0 cursor-grab items-center gap-1.5 text-[11px] font-medium",
+    "relative flex h-[18px] min-w-0 cursor-grab items-center gap-1.5 text-2xs font-medium",
     "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
     isDragging && "opacity-50",
     roundLeft ? "rounded-l-sm" : "rounded-l-none",

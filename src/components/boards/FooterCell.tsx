@@ -179,7 +179,7 @@ export function FooterCell({
   const body = (
     <span className="flex min-w-0 items-center gap-1.5 truncate">
       {label && result.kind !== "empty" && (
-        <span className="text-kicker shrink-0 font-mono text-[10px] tracking-wide uppercase">
+        <span className="text-kicker text-3xs shrink-0 font-mono tracking-wide uppercase">
           {label}
         </span>
       )}
@@ -196,7 +196,7 @@ export function FooterCell({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="hover:bg-accent/60 flex min-w-0 items-center justify-between gap-1 px-3 text-left transition-colors focus-visible:outline-none">
+      <DropdownMenuTrigger className="hover:bg-state-hover/60 flex min-w-0 items-center justify-between gap-1 px-3 text-left transition-colors focus-visible:outline-none">
         {body}
         <ChevronDown className="text-muted-foreground/60 size-3 shrink-0" />
       </DropdownMenuTrigger>

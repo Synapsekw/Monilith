@@ -285,7 +285,7 @@ function ColumnValuePopover({
                 key={c.id}
                 type="button"
                 onClick={() => setActiveId(c.id)}
-                className="hover:bg-accent focus-visible:ring-ring truncate rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                className="hover:bg-state-hover focus-visible:ring-ring truncate rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
                 {c.name}
               </button>
@@ -330,7 +330,7 @@ function PeopleAssignList({
               aria-selected={isSelected}
               onClick={() => toggle(m.userId)}
               className={cn(
-                "hover:bg-accent focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                "hover:bg-state-hover focus-visible:ring-ring flex items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none",
                 isSelected && "bg-accent",
               )}
             >

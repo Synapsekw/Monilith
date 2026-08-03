@@ -5,6 +5,7 @@ import {
   inviteMemberSchema,
   revokeInviteSchema,
   platformUserTargetSchema,
+  setOrgAiPlanSchema,
 } from "./admin";
 
 const uuid = "11111111-1111-4111-8111-111111111111";
@@ -60,5 +61,29 @@ describe("admin validations", () => {
     expect(platformUserTargetSchema.safeParse({ userId: uuid }).success).toBe(
       true,
     );
+  });
+});
+
+describe("setOrgAiPlanSchema tier vocabulary", () => {
+  it("accepts every billing tier", () => {
+    for (const tier of ["none", "core", "pulse", "trial", "enterprise"]) {
+      const r = setOrgAiPlanSchema.safeParse({
+        orgId: uuid,
+        tier,
+        monthlyCreditLimit: 500,
+      });
+      expect(r.success, `${tier} should parse`).toBe(true);
+    }
+  });
+
+  it("rejects the retired pre-billing tiers", () => {
+    for (const tier of ["starter", "pro"]) {
+      const r = setOrgAiPlanSchema.safeParse({
+        orgId: uuid,
+        tier,
+        monthlyCreditLimit: 500,
+      });
+      expect(r.success, `${tier} should be rejected`).toBe(false);
+    }
   });
 });

@@ -89,7 +89,7 @@ export function WorkspaceNavItem({
   }
 
   return (
-    <div className="group/ws hover:bg-accent flex items-center gap-1 rounded-md px-3 py-1.5">
+    <div className="group/ws hover:bg-state-hover flex items-center gap-1 rounded-md px-3 py-1.5">
       <span className="text-muted-foreground truncate text-sm">
         {workspace.name}
       </span>

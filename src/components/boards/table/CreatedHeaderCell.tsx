@@ -13,7 +13,7 @@ export function CreatedHeaderCell({
   return (
     <div className="text-kicker flex items-center gap-1.5 border-l px-3">
       <Icon className="size-3.5" />
-      <span className="truncate font-mono text-[10.5px] font-medium tracking-[0.12em] uppercase">
+      <span className="text-3xs truncate font-mono font-medium tracking-[0.12em] uppercase">
         {label}
       </span>
     </div>

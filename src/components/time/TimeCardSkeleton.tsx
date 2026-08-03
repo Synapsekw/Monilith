@@ -18,7 +18,7 @@ export function TimeCardSkeleton() {
     >
       <div
         data-testid="skeleton-toolbar"
-        className="flex items-center justify-between gap-3 border-b px-4 py-3"
+        className="flex items-center justify-between gap-3 px-4 py-3"
       >
         <div className="flex flex-col gap-1">
           <Skeleton className="h-5 w-32" />
@@ -30,7 +30,7 @@ export function TimeCardSkeleton() {
           <Skeleton className="size-8" />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead className="bg-card sticky top-0 z-20 text-xs">
             <tr>

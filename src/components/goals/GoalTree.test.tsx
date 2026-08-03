@@ -48,6 +48,6 @@ test("row expand and open controls carry the branded focus ring", () => {
 test("data rows transition their hover background", () => {
   render(<GoalTree tree={[parent]} />);
   const row = screen.getByRole("button", { name: "Parent goal" }).closest("tr");
-  expect(row!.className).toContain("hover:bg-accent/30");
+  expect(row!.className).toContain("hover:bg-state-hover/30");
   expect(row!.className).toContain("transition-colors");
 });

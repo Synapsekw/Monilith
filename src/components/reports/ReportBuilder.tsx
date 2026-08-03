@@ -137,7 +137,10 @@ export function ReportBuilder({
 
   return (
     <div className="grid h-full grid-cols-[320px_1fr]">
-      <div className="flex flex-col gap-4 overflow-auto border-r p-4">
+      <div
+        data-scroll-container
+        className="flex flex-col gap-4 overflow-auto border-r p-4"
+      >
         <section className="bg-surface rounded-lg border p-3">
           <Kicker className="mb-2 block">Sections</Kicker>
           <SectionRail config={config} onChange={setConfig} />

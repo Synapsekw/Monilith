@@ -8,38 +8,63 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-08-02 07:08",
+  "updated": "2026-08-03 10:49",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "The promotion landed, the cron chain answers 200 for the first time, and a failing agent is finally visible",
+  "headline": "The Keystone-wash promotion blocker is closed — all five defects fixed, plus four more the review and the visual walk found. develop is promotable for the first time since the wash landed",
   "chips": [
     {
       "label": "develop",
-      "value": "fddd74ca",
-      "note": "== origin · agent run history + phase-1 hardening",
+      "value": "c8f730d",
+      "note": "== origin · ahead of main by E6 batch 1 + Keystone wash + follow-ups",
       "tone": "ok"
     },
     {
       "label": "main",
-      "value": "8755f9de",
-      "note": "#79 LIVE · proxy fix + landing + personal agents",
+      "value": "7d98230c",
+      "note": "#80 LIVE · run history + open signup + DEV-db warning",
       "tone": "ok"
     },
     {
-      "label": "ledger",
-      "value": "123/124",
-      "note": "IN SYNC — extra DEV row is unmerged parallel work",
+      "label": "gates",
+      "value": "4119",
+      "note": "typecheck/lint/test/build green at merge",
       "tone": "ok"
     }
   ],
   "progress": {
-    "done": 14,
+    "done": 13,
     "total": 15
   },
   "gates": [
     {
       "led": "green",
       "tag": "DONE",
-      "text": "PROMOTED. develop -> main merged as 8755f9de (PR #79), publishing the proxy fix, the rebuilt landing and Personal Agents Phase 1. Verified empirically rather than assumed: _health_digest_ping() -> net._http_response = 200, where it read 405 an hour earlier. Five cron integrations that had never worked in production are reachable for the first time."
+      "text": "Keystone wash follow-ups CLOSED (c8f730d, 43 files, 11 commits). All five defects fixed: /ask on the shell surface model, --chrome-fill for resting fills, --muted-foreground to AA, 23 real scrollers on the gutter, --scrollbar-thumb in both the webkit and Firefox paths. The findings document was wrong in eight places and its OWN proposed AA fix computed to 4.19:1 at the declared 22% bloom peak — still failing. globals.contrast.test.ts now parses the stylesheet and COMPUTES the ratio instead of asserting a number."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "The visual pass finally happened, and it earned its keep. The whole-branch review found two composition defects per-task reviews could not (an outline button painting an opaque slab on the new gradient, a dead 10px gutter). The owner walk then found two more: /ask had NO header band so no wash across the top, and its rail was w-64 px-4 against the shell w-60 px-3 — it also had no theme control at all. Nine defects from a five-defect document."
+    },
+    {
+      "led": "brand",
+      "tag": "NEXT?",
+      "text": "PROMOTE. develop -> main is unblocked for the first time since the wash landed, carrying E6 billing batch 1 + the Keystone wash + its follow-ups. Run /promote."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "PROMOTED (second time today). develop -> main merged as 7d98230c (PR #80), publishing agent run history, the Phase-1 hardening migration, open signup and the DEV-database warning. Verified by FETCHING the live page, not by trusting the deploy status: www.monolith.works serves 'Create your workspace' and 'Free to start', with no trace of 'Request access' or 'Invitation only'. The squash divergence was healed with a -s ours back-merge (d4f1b139) whose tree is byte-identical, so origin/main is an ancestor of origin/develop again."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "E5 CONFIRMED DRAINED — verified on the LIVE database (hjqca...), not the idle mirror: queue 0, 384 embeddings, all item-backed, seven clean sweeps of 50. Semantic search returns results in production for the first time. The earlier work targeted jzsyq..., whose 380-row queue was irrelevant because it serves no traffic."
+    },
+    {
+      "led": "green",
+      "tag": "DONE",
+      "text": "The waitlist is gone — signup is open, and the contradiction is closed. The closing band is a single /signup link (id=get-started), the inert email input and handler-less 'Request access' button are deleted, the FAQ says there is no waitlist and the footer reads 'Free to start'. This SUPERSEDES the earlier note that recorded the mixed model as deliberately accepted; that note was written from a review of the promoted page and the owner's call is signup-only."
     },
     {
       "led": "green",
@@ -62,24 +87,24 @@
       "text": "Three more Phase-1 defects closed in the same migration: agent-name uniqueness is per-org (was global, so the same name in a second org was silently refused), board_scope gained a check constraint matching boardScopeSchema, and the vault-cleanup trigger is re-runnable. Plus the roster's 'of 20 agents' label now reads the real max_agents_per_user (default 3) — it had been promising 17 agents it would refuse to create."
     },
     {
+      "led": "brand",
+      "tag": "NEXT?",
+      "text": "Report Builder v2 roll-ups + org templates is the critical path. One migration drops reports.board_id NOT NULL — after which the single-board assumption has to be unwound across access checks, payload fetch, shaping, routing and roughly 1.4k lines of tests. Personal Agents Phase 2 (thread dock, @mentionable agents, propose-writes, per-agent identities) is specced and unscheduled."
+    },
+    {
       "led": "green",
       "tag": "DONE",
-      "text": "updateAgent / setAgentEnabled / deleteAgent were untested and now are, including which columns each writes — the new column-level grants make an extra column a hard Postgres failure rather than a silent no-op. 536 files / 3967 tests green."
+      "text": "E6 billing batch 1 landed on develop (34839115) from a concurrent session — org_billing + billing_discount_codes, subscription state mapped to AI entitlement, a row-less org defaulting to no AI after backfill, and the public pricing page + landing teaser. Both tables are proven to deny an authenticated tenant. Its migration hit the same MCP stamp drift (20260802132352 applied for file 20260802132258) and was reconciled — the ledger is back to 126 files = 126 rows. NOT YET PROMOTED: this is the whole of develop's lead over main."
     },
     {
       "led": "brand",
       "tag": "NEXT?",
-      "text": "Confirm E5 actually drained. The embed queue's only blocker was the promotion, which has now happened — check the ~380 queued prod rows cleared and that Find similar items returns results. Verify; do not assume."
+      "text": "Stripe itself is still blocked on your credentials — batch 1 is schema, entitlement mapping and public pricing only, with no payment path behind it."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "The landing CTA model contradicts itself and is now LIVE: nav says Get started -> /signup, footer says Invitation only, closing band is a waitlist whose email input is INERT. Product call, not a design fix."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "digest_secret is provisioned on prod and fingerprint-verified on the DB side, but the Vercel half is UNVERIFIED — a mismatch 401s and leaves no trace, because the route records a blocked row only when the variable is absent, never when it is wrong. First real exercise is the next 07:00 UTC run, which is the first one that can reach its handler at all."
+      "text": "digest_secret is provisioned on the live DB and fingerprint-verified there, but the VERCEL half is still unverified — a mismatch 401s and leaves no trace, because the route records a blocked row only when the variable is ABSENT, never when it is wrong. First real exercise is the next 07:00 UTC run, the first one that can reach its handler at all. Prod has no RESEND_API_KEY, so a run recorded as `ran` with no email in your inbox is expected, not a fault — and run history is now the place to read it."
     },
     {
       "led": "hollow",
@@ -104,45 +129,83 @@
     {
       "led": "red",
       "tag": "CRITICAL",
-      "text": "The production DEPLOYMENT runs the DEV database (hjqca...). www.monolith.works serves real user data out of DEV; the PROD project (jzsyq...) is mirrored but takes no traffic. A DEV migration reaches real users the moment main is promoted, and inspecting PROD will never explain live behaviour (decision-32)."
+      "text": "The production DEPLOYMENT runs the DEV database (hjqca...). www.monolith.works serves real user data out of DEV; the PROD project (jzsyq...) is mirrored but takes no traffic. A DEV migration reaches real users the moment main is promoted, and inspecting PROD will never explain live behaviour (decision-32). Now recorded in AGENTS.md as well, so a fresh agent reads it before touching anything."
     }
   ],
-  "worktrees": [
-    {
-      "led": "amber",
-      "branch": "task/ai-cogs",
-      "head": "0808ee61",
-      "note": "concurrent session — not this one's work"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-08-02-0708-agent-run-history",
-    "when": "2026-08-02 07:08",
+    "id": "2026-08-03-1049-keystone-wash-followups-closed",
+    "when": "2026-08-03 10:49",
     "bullets": [
-      "A run row reads status=error between claiming its fire slot and finalising, so the honest display status is not the stored one — the sentinel means In progress, not Failed.",
-      "bridge_secret_id was client-writable and no RLS policy could close it: `for all` is satisfied by the owner. Column-level GRANTs are the containment, and only a live-DEV test can see the difference.",
-      "The observability surface was specced in Phase 1 and never built, which is exactly why every gotcha-70 failure mode was silent."
+      "A findings document is a hypothesis: its AA fix computed to 4.19:1 at the real bloom peak. A contrast number nobody recomputed is a number nobody checked — the test now parses the stylesheet and derives it.",
+      "A class list is not a layout. /ask copied AppShell main exactly (mr-2 mb-2 ml-1, no mt-*) without the transparent h-14 header that supplies the top space, so the gradient never appeared. Only a human looking at the screen caught it.",
+      "Third decorative guard in a row: a /g regex reused with .test() advances lastIndex and silently drops matches (gotcha-72). The durable defence is a non-vacuous-matcher assertion, not another prove-it-fails drill."
     ]
   },
   "roadmap": [
-    { "label": "0 Setup", "state": "done" },
-    { "label": "1 Auth", "state": "done" },
-    { "label": "2 Boards", "state": "done" },
-    { "label": "3 Views", "state": "done" },
-    { "label": "4 Collab", "state": "done" },
-    { "label": "5 Autom", "state": "done" },
-    { "label": "6 Depth", "state": "prog" },
-    { "label": "7 Asana", "state": "done" },
-    { "label": "8 Dash", "state": "done" },
-    { "label": "9 Perf", "state": "done" },
-    { "label": "RS", "state": "done" },
-    { "label": "MVP-F", "state": "done" },
-    { "label": "Touch", "state": "done" },
-    { "label": "PF", "state": "done" },
-    { "label": "10 AI", "state": "prog" }
+    {
+      "label": "0 Setup",
+      "state": "done"
+    },
+    {
+      "label": "1 Auth",
+      "state": "done"
+    },
+    {
+      "label": "2 Boards",
+      "state": "done"
+    },
+    {
+      "label": "3 Views",
+      "state": "done"
+    },
+    {
+      "label": "4 Collab",
+      "state": "done"
+    },
+    {
+      "label": "5 Autom",
+      "state": "done"
+    },
+    {
+      "label": "6 Depth",
+      "state": "prog"
+    },
+    {
+      "label": "7 Asana",
+      "state": "done"
+    },
+    {
+      "label": "8 Dash",
+      "state": "done"
+    },
+    {
+      "label": "9 Perf",
+      "state": "done"
+    },
+    {
+      "label": "RS",
+      "state": "done"
+    },
+    {
+      "label": "MVP-F",
+      "state": "done"
+    },
+    {
+      "label": "Touch",
+      "state": "done"
+    },
+    {
+      "label": "PF",
+      "state": "done"
+    },
+    {
+      "label": "10 AI",
+      "state": "prog"
+    }
   ]
 }
-    </script>
+</script>
 
 <style>
   /* Keystone Console — committed dark world (matches the app's dark-first identity). */

@@ -57,7 +57,7 @@ export default async function BoardsIndex() {
               <li key={board.id} className={i > 0 ? "border-t" : undefined}>
                 <Link
                   href={`/boards/${board.id}`}
-                  className="hover:bg-accent flex items-center rounded-md px-3 py-2 text-sm transition-colors"
+                  className="hover:bg-state-hover flex items-center rounded-md px-3 py-2 text-sm transition-colors"
                 >
                   <span className="min-w-0 flex-1 truncate">{board.name}</span>
                 </Link>
@@ -70,7 +70,7 @@ export default async function BoardsIndex() {
               >
                 <Link
                   href={`/boards/${board.id}`}
-                  className="hover:bg-accent flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
+                  className="hover:bg-state-hover flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
                 >
                   <span className="min-w-0 flex-1 truncate">{board.name}</span>
                   <span className="text-muted-foreground text-xs">Shared</span>

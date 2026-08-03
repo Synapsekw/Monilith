@@ -83,7 +83,7 @@ function FilterSelect({
         <button
           type="button"
           aria-label={label}
-          className="hover:bg-accent/50 focus-visible:ring-ring text-foreground inline-flex h-7 max-w-40 items-center gap-1 truncate rounded border px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className="hover:bg-state-hover/50 focus-visible:ring-ring text-foreground inline-flex h-7 max-w-40 items-center gap-1 truncate rounded border px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           {current ? current.label : allLabel}
         </button>
@@ -104,7 +104,7 @@ function FilterSelect({
             setOpen(false);
           }}
           className={cn(
-            "hover:bg-accent focus-visible:ring-ring rounded px-2 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none",
+            "hover:bg-state-hover focus-visible:ring-ring rounded px-2 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none",
             value === null && "bg-accent",
           )}
         >
@@ -121,7 +121,7 @@ function FilterSelect({
               setOpen(false);
             }}
             className={cn(
-              "hover:bg-accent focus-visible:ring-ring truncate rounded px-2 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none",
+              "hover:bg-state-hover focus-visible:ring-ring truncate rounded px-2 py-1 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none",
               value === o.value && "bg-accent",
             )}
           >
@@ -242,7 +242,7 @@ export function WorkloadGrid({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div>
           <Kicker>PLANNING</Kicker>
           <h1 className="text-lg font-semibold">Workload</h1>
@@ -297,7 +297,7 @@ export function WorkloadGrid({
                     "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
                     metric === m
                       ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                      : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
                   )}
                 >
                   {METRIC_LABEL[m]}
@@ -318,7 +318,7 @@ export function WorkloadGrid({
                     "focus-visible:ring-ring rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
                     sort === k
                       ? "bg-accent text-foreground"
-                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                      : "text-muted-foreground hover:bg-state-hover/50 hover:text-foreground",
                   )}
                 >
                   {SORT_LABEL[k]}
@@ -336,7 +336,7 @@ export function WorkloadGrid({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-20">
             <tr>
@@ -369,7 +369,7 @@ export function WorkloadGrid({
                 <tr key={row.userId ?? "__unassigned"} className="group">
                   <td
                     className={cn(
-                      "bg-background group-hover:bg-accent/20 sticky left-0 z-10 w-56 min-w-56 border-r border-b px-4 py-2",
+                      "bg-background group-hover:bg-state-hover/20 sticky left-0 z-10 w-56 min-w-56 border-r border-b px-4 py-2",
                       isUnassigned && "bg-surface-muted/40",
                     )}
                   >
