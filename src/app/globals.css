@@ -42,6 +42,7 @@
   --color-state-hover: var(--state-hover);
   --color-state-active: var(--state-active);
   --color-state-selected: var(--state-selected);
+  --color-chrome-fill: var(--chrome-fill);
 
   /* Named motion scale (durations are literal — not aliases) */
   --duration-instant: 120ms;
@@ -202,6 +203,15 @@
   --state-active: rgb(0 0 0 / 7%);
   --state-selected: color-mix(in oklab, var(--brand) 12%, transparent);
 
+  /* Resting fill for chrome that sits ON the wash — switcher chips, the ⌘K
+     kbd, and the shell's first-paint skeletons. Alpha-on-parent so the
+     gradient reads through instead of being punched out by a rectangular
+     patch. Deliberately NOT --state-active: that is the pressed interaction
+     fill and must stay free to be strengthened on its own. `--muted` /
+     `--surface-muted` keep their identity as opaque fills on the content
+     card, where they are still correct. */
+  --chrome-fill: rgb(0 0 0 / 5%);
+
   /* Status / label palette (the one controlled multi-color set) */
   --status-gray: oklch(0.65 0 0);
   --status-blue: oklch(0.62 0.17 250);
@@ -302,6 +312,7 @@
   --state-hover: rgb(255 255 255 / 5%);
   --state-active: rgb(255 255 255 / 9%);
   --state-selected: color-mix(in oklab, var(--brand) 14%, transparent);
+  --chrome-fill: rgb(255 255 255 / 6%);
 
   --status-gray: oklch(0.7 0 0);
   --status-blue: oklch(0.66 0.16 250);

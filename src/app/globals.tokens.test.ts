@@ -25,6 +25,7 @@ const NEW_TOKENS = [
   "--state-hover",
   "--state-active",
   "--state-selected",
+  "--chrome-fill",
 ];
 
 /**
@@ -61,6 +62,7 @@ describe("Keystone token contract", () => {
       "--color-state-hover:",
       "--color-state-active:",
       "--color-state-selected:",
+      "--color-chrome-fill:",
       "--color-content-surface:",
       "--color-content-edge:",
       "--shadow-content-lift:",
