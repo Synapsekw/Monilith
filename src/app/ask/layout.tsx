@@ -11,15 +11,22 @@ import { Brand } from "@/components/brand/brand";
  * conversation rail *in place of* that nav. So this layout owns the whole frame
  * — matching the repo precedent that `admin`/`home` also stay outside `(app)`.
  *
+ * It owns the frame, but not a bespoke surface model: it mirrors `AppShell`
+ * exactly — the wash paints on the root, the rail is transparent atmosphere
+ * with no divider, and `<main>` is the single inset opaque card on the same
+ * `mr-2 mb-2 ml-1` gutter. `<main>` stays `overflow-hidden`, not `auto`:
+ * `/ask` delegates scrolling to `MessageList`, and a card-level scroller would
+ * stack a second scrollbar on the same axis.
+ *
  * The frame is static (prerendered into the Cache Components shell); the rail's
  * per-user data and the page's thread both stream behind Suspense. Auth is
  * guarded by `requireUser()` inside the rail data component.
  */
 export default function AskLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-svh w-full overflow-hidden">
-      <aside className="bg-sidebar flex w-64 shrink-0 flex-col border-r">
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+    <div className="app-wash flex h-svh w-full overflow-hidden">
+      <aside className="flex w-64 shrink-0 flex-col">
+        <div className="flex h-14 shrink-0 items-center gap-2 px-4">
           <Brand />
         </div>
         <Link
@@ -38,7 +45,7 @@ export default function AskLayout({ children }: { children: React.ReactNode }) {
           <AskRailData />
         </Suspense>
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="bg-content-surface border-content-edge shadow-content-lift mr-2 mb-2 ml-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border">
         <Suspense fallback={null}>{children}</Suspense>
       </main>
     </div>
