@@ -182,12 +182,15 @@ git commit -m "docs(plan): record the dev drift audit for board-thread org coupl
 
 #### Audit log
 
-| Date       | Project                    | total | boardless | docked | orphan | **drifted** |
-| ---------- | -------------------------- | ----- | --------- | ------ | ------ | ----------- |
-| 2026-08-04 | DEV `hjqcahbbbdaknbbnfnvl` | 12    | 8         | 4      | 0      | **0**       |
+| Date             | Project                    | total | boardless | docked | orphan | **drifted** |
+| ---------------- | -------------------------- | ----- | --------- | ------ | ------ | ----------- |
+| 2026-08-04 spec  | DEV `hjqcahbbbdaknbbnfnvl` | 12    | 8         | 4      | 0      | **0**       |
+| 2026-08-04 build | DEV `hjqcahbbbdaknbbnfnvl` | 12    | 8         | 4      | 0      | **0**       |
 
-`server_version_num = 170006` (PostgreSQL 17.6). `REMEDIATION_NEEDED: no` — as measured at spec
-time. **Re-run steps 1–2 at the start of Task 4** and update this table; the value that governs the
+`server_version_num = 170006` (PostgreSQL 17.6), re-verified at build time. The step-2 offending-row
+listing returned **zero rows** on both runs. `REMEDIATION_NEEDED: no`.
+
+**Re-run steps 1–2 at the start of Task 4** and update this table; the value that governs the
 migration is the one measured immediately before it is applied.
 
 ---
