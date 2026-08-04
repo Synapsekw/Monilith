@@ -22,9 +22,13 @@ vi.mock("@/lib/digest/token", () => ({
   unsubscribeSignature: (_secret: string, uid: string) => `sig-${uid}`,
 }));
 
+const { renderHtmlMock, renderTextMock } = vi.hoisted(() => ({
+  renderHtmlMock: vi.fn((_input: Record<string, unknown>) => "<p>html</p>"),
+  renderTextMock: vi.fn((_input: Record<string, unknown>) => "text"),
+}));
 vi.mock("./briefing-render", () => ({
-  renderBriefingHtml: () => "<p>html</p>",
-  renderBriefingText: () => "text",
+  renderBriefingHtml: renderHtmlMock,
+  renderBriefingText: renderTextMock,
 }));
 
 const fetchMock = vi.fn();
@@ -99,6 +103,8 @@ beforeEach(() => {
   notificationInserts.length = 0;
   fetchMock.mockReset();
   fetchMock.mockResolvedValue({ ok: true, text: async () => "" });
+  renderHtmlMock.mockClear();
+  renderTextMock.mockClear();
 });
 
 describe("sendBriefingEmail", () => {
@@ -216,5 +222,52 @@ describe("sendBriefingEmail", () => {
     await expect(
       sendBriefingEmail(svc, { agent, briefing, summary: "sum" }),
     ).rejects.toThrow("insert boom");
+  });
+
+  it("builds the thread deep link from APP_BASE_URL + the thread id only, when a thread id is given", async () => {
+    const svc = fakeClient();
+
+    const result = await sendBriefingEmail(svc, {
+      agent,
+      briefing,
+      summary: "sum",
+      threadId: "conv-123",
+    });
+
+    expect(result).toEqual({ emailed: true });
+    expect(renderHtmlMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadUrl: "https://app.example.com/ask/conv-123",
+      }),
+    );
+    expect(renderTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadUrl: "https://app.example.com/ask/conv-123",
+      }),
+    );
+  });
+
+  it("sends the identical email minus the thread link when there is no thread id", async () => {
+    const svc = fakeClient();
+
+    const result = await sendBriefingEmail(svc, {
+      agent,
+      briefing,
+      summary: "sum",
+      threadId: null,
+    });
+
+    expect(result).toEqual({ emailed: true });
+    const htmlArgs = renderHtmlMock.mock.calls[0][0] as Record<string, unknown>;
+    const textArgs = renderTextMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(htmlArgs.threadUrl).toBeUndefined();
+    expect(textArgs.threadUrl).toBeUndefined();
+    // Everything else about the call is unchanged.
+    expect(htmlArgs).toMatchObject({
+      agentName: agent.name,
+      briefing,
+      appBaseUrl: "https://app.example.com",
+      summary: "sum",
+    });
   });
 });

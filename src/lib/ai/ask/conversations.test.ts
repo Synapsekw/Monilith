@@ -39,6 +39,33 @@ describe("listConversations", () => {
 
     await expect(listConversations("u")).rejects.toThrow("listConversations");
   });
+
+  it("lists a board thread in the rail alongside plain /ask threads", async () => {
+    // Deliberate: a board thread is still the user's own conversation. The rail
+    // filters on user_id and nothing else, so scoping a thread to a board does
+    // not hide it from /ask. Do not add a `.is("board_id", null)` filter here.
+    const limit = vi.fn().mockResolvedValue({
+      data: [
+        { id: "c1", title: "Plain ask", updated_at: "2026-08-03T10:00:00Z" },
+        {
+          id: "c2",
+          title: "About the roadmap",
+          updated_at: "2026-08-03T09:00:00Z",
+        },
+      ],
+      error: null,
+    });
+    const order = vi.fn().mockReturnValue({ limit });
+    const eq = vi.fn().mockReturnValue({ order });
+    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+
+    const rows = await listConversations("user-1");
+
+    expect(rows).toHaveLength(2);
+    // The only scoping filter is user_id — no board_id filter is applied.
+    expect(eq).toHaveBeenCalledTimes(1);
+    expect(eq).toHaveBeenCalledWith("user_id", "user-1");
+  });
 });
 
 describe("getMessages", () => {

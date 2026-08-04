@@ -24,9 +24,14 @@ import type { UserAgentRow } from "./agents-db";
  */
 export async function sendBriefingEmail(
   svc: SupabaseClient<Database>,
-  args: { agent: UserAgentRow; briefing: Briefing; summary: string },
+  args: {
+    agent: UserAgentRow;
+    briefing: Briefing;
+    summary: string;
+    threadId?: string | null;
+  },
 ): Promise<{ emailed: boolean }> {
-  const { agent, briefing, summary } = args;
+  const { agent, briefing, summary, threadId } = args;
   const { RESEND_API_KEY, DIGEST_SECRET, APP_BASE_URL, DIGEST_FROM_EMAIL } =
     getServerEnv();
 
@@ -52,11 +57,16 @@ export async function sendBriefingEmail(
     const unsubscribeUrl =
       `${APP_BASE_URL}/api/digest/unsubscribe?uid=${agent.owner_id}` +
       `&kind=briefing&sig=${unsubscribeSignature(DIGEST_SECRET as string, agent.owner_id)}`;
+    // SECURITY: same rule as unsubscribeUrl — this is APP_BASE_URL plus a uuid
+    // and nothing else. Never interpolate agent.name, instructions, or item
+    // text into a URL that briefing-render.ts does not HTML-escape.
+    const threadUrl = threadId ? `${APP_BASE_URL}/ask/${threadId}` : undefined;
     const input = {
       agentName: agent.name,
       briefing,
       appBaseUrl: APP_BASE_URL as string,
       unsubscribeUrl,
+      threadUrl,
       summary,
     };
     const from =

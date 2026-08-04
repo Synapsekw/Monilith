@@ -2,16 +2,27 @@
 -- DEV-ONLY. NOT A MIGRATION. Never run this against production.
 -- ===========================================================================
 --
--- Creates the two PERMANENT Tier-2 fixture identities that
--- src/lib/supabase/tenant-isolation.fixtures.test.ts signs in as.
+-- Creates the PERMANENT Tier-2 fixture identities that
+-- src/lib/supabase/tenant-isolation.fixtures.test.ts and
+-- src/lib/ai/ask/board-threads.fixtures.test.ts sign in as.
+--
+-- A and B own one org each and share nothing — that disjointness is the premise
+-- of every cross-tenant isolation assertion. C ("gamma") is deliberately the
+-- opposite: a second, NON-OWNING member of A's org, granted one of A's boards.
+-- public.can_read_board() requires ACTIVE ORG MEMBERSHIP *and*
+-- creator-or-board-member, so the board-thread widening cannot be proven by A or
+-- B at all — no principal in another org can ever satisfy it. C exists solely so
+-- "a board member CAN read a shared thread" is a real assertion rather than a
+-- vacuous one. C owns nothing and holds no elevated role.
 --
 -- It lives in `supabase/fixtures/`, NOT `supabase/migrations/`, on purpose:
 -- `supabase db push` and `/sync-prod` read `migrations/` only, so this file can
 -- never be carried to PROD by the normal promotion path. Production must never
--- grow a pair of accounts whose password is committed to the repo. The
--- companion migration (`*_seed_tier2_tenant_fixtures.sql`) only ATTACHES rows
--- to accounts that already exist, so it is a clean no-op wherever these two are
--- absent — the same pattern as 20260619210000_seed_platform_admin_info.sql.
+-- grow accounts whose password is committed to the repo. The companion
+-- migrations (`*_seed_tier2_tenant_fixtures.sql`,
+-- `*_seed_tier2_board_thread_fixtures.sql`) only ATTACH rows to accounts that
+-- already exist, so they are a clean no-op wherever these three are absent —
+-- the same pattern as 20260619210000_seed_platform_admin_info.sql.
 --
 -- Run it once, by hand, against DEV (supabase-dev MCP `execute_sql`), then apply
 -- the seed migration. Idempotent: re-running is a no-op.
@@ -54,6 +65,18 @@ values
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{"full_name":"Tier-2 Fixture B"}'::jsonb,
     now(), now()
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    'aaaa0000-0000-4000-8000-0000000000c1',
+    'authenticated', 'authenticated',
+    'pulse-tier2-fixture-c@example.com',
+    extensions.crypt('Tier2-Fixture-Read-Only-2026!', extensions.gen_salt('bf')),
+    now(),
+    '', '', '', '',
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"full_name":"Tier-2 Fixture C"}'::jsonb,
+    now(), now()
   )
 on conflict (id) do nothing;
 
@@ -65,7 +88,8 @@ update auth.users
        email_change = coalesce(email_change, '')
  where email in (
    'pulse-tier2-fixture-a@example.com',
-   'pulse-tier2-fixture-b@example.com'
+   'pulse-tier2-fixture-b@example.com',
+   'pulse-tier2-fixture-c@example.com'
  );
 
 -- GoTrue expects a matching `email` identity row alongside the user.
@@ -83,7 +107,8 @@ select
 from auth.users u
 where u.email in (
   'pulse-tier2-fixture-a@example.com',
-  'pulse-tier2-fixture-b@example.com'
+  'pulse-tier2-fixture-b@example.com',
+  'pulse-tier2-fixture-c@example.com'
 )
   and not exists (
     select 1 from auth.identities i

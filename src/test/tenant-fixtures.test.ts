@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { allowsTier2Fixtures } from "@/lib/supabase/project-refs";
 import { selectPurgeableUserIds } from "@/test/global-teardown";
 import {
+  TIER2_BOARD_MEMBER_FIXTURE,
+  TIER2_BOARD_THREAD_FIXTURE,
   TIER2_FIXTURE_EMAILS,
   TIER2_FIXTURE_MESSAGE_COUNTS,
   TIER2_FIXTURE_TENANTS,
@@ -84,8 +86,14 @@ describe("the fixture identities are internally consistent", () => {
   });
 
   it("exposes every fixture email for the teardown exemption", () => {
+    // Gamma is NOT a tenant — it deliberately shares Alpha's org — but it is
+    // just as permanent, so the age-based purge must exempt it too or the
+    // board-thread suite loses its only non-owning reader 30 minutes in.
     expect([...TIER2_FIXTURE_EMAILS].sort()).toEqual(
-      TIER2_FIXTURE_TENANTS.map((t) => t.email).sort(),
+      [
+        ...TIER2_FIXTURE_TENANTS.map((t) => t.email),
+        TIER2_BOARD_MEMBER_FIXTURE.email,
+      ].sort(),
     );
   });
 
@@ -156,8 +164,10 @@ describe("the seed migration and the TypeScript identities cannot drift", () => 
   });
 
   it("spells every fixture UUID and email that the suite asserts on", () => {
+    // TENANT emails only — gamma is seeded by the board-thread migration below,
+    // not this one, so pinning it here would be pinning the wrong file.
     const expected = [
-      ...TIER2_FIXTURE_EMAILS,
+      ...TIER2_FIXTURE_TENANTS.map((t) => t.email),
       TIER2_PROPOSAL_MESSAGE_ID,
       ...TIER2_FIXTURE_TENANTS.flatMap((t) => [
         t.orgId,
@@ -186,6 +196,106 @@ describe("the seed migration and the TypeScript identities cannot drift", () => 
   });
 });
 
+describe("the board-thread seed and the TypeScript identities cannot drift", () => {
+  // Same pinning contract as above, for the corpus that proves the board-thread
+  // RLS widening (src/lib/ai/ask/board-threads.fixtures.test.ts). A silent
+  // divergence would make "a non-owner sees nothing" pass against rows that do
+  // not exist — which is precisely the failure mode this whole tier exists to
+  // avoid.
+  const migrationsDir = resolve(process.cwd(), "supabase/migrations");
+  const seedFile = readdirSync(migrationsDir).find((f) =>
+    f.endsWith("_seed_tier2_board_thread_fixtures.sql"),
+  );
+  const seedSql = seedFile
+    ? readFileSync(join(migrationsDir, seedFile), "utf8")
+    : "";
+
+  it("ships a board-thread seed migration", () => {
+    expect(
+      seedFile,
+      "expected a *_seed_tier2_board_thread_fixtures.sql migration",
+    ).toBeDefined();
+  });
+
+  it("spells every board-thread UUID and the gamma address", () => {
+    const F = TIER2_BOARD_THREAD_FIXTURE;
+    const expected = [
+      TIER2_BOARD_MEMBER_FIXTURE.email,
+      F.orgId,
+      F.sharedBoardId,
+      F.sharedConversationId,
+      F.sharedConversationTitle,
+      ...F.sharedMessageIds,
+      F.offBoardId,
+      F.offBoardConversationId,
+      F.offBoardConversationTitle,
+      F.offBoardMessageId,
+    ];
+    const missing = expected.filter((token) => !seedSql.includes(token));
+    expect(missing).toEqual([]);
+  });
+
+  it("seeds the docked-but-unshared discriminator row", () => {
+    // It lives in its own migration (minted after the review that caught the
+    // gap), so look across the whole migrations dir rather than one file.
+    const F = TIER2_BOARD_THREAD_FIXTURE;
+    const allSql = readdirSync(migrationsDir)
+      .filter((f) => f.endsWith(".sql"))
+      .map((f) => readFileSync(join(migrationsDir, f), "utf8"))
+      .join("\n");
+    for (const token of [
+      F.dockedPrivateConversationId,
+      F.dockedPrivateConversationTitle,
+      F.dockedPrivateMessageId,
+    ]) {
+      expect(allSql, `no migration seeds ${token}`).toContain(token);
+    }
+  });
+
+  it("makes the discriminator differ from the shared thread in ONE column only", () => {
+    // Same board as the readable thread, opposite visibility. Move it to
+    // another board and the `visibility = 'board'` conjunct goes back to being
+    // untested — which is exactly the gap this row was added to close.
+    const F = TIER2_BOARD_THREAD_FIXTURE;
+    expect(F.dockedPrivateConversationId).not.toBe(F.sharedConversationId);
+    expect(F.dockedPrivateConversationId).not.toBe(F.offBoardConversationId);
+  });
+
+  it("shares the two board threads and hangs each off a DIFFERENT board", () => {
+    // The pair is the experiment: same org, same owner, same visibility, one
+    // board gamma holds and one it does not. Collapse them onto one board and
+    // the off-board negative silently stops testing anything.
+    const F = TIER2_BOARD_THREAD_FIXTURE;
+    expect(F.sharedBoardId).not.toBe(F.offBoardId);
+    expect(F.sharedConversationId).not.toBe(F.offBoardConversationId);
+    expect(seedSql).toContain("'board'");
+  });
+
+  it("never creates an auth user (no-ops off DEV, like its sibling)", () => {
+    expect(seedSql).not.toMatch(/insert\s+into\s+auth\.users/i);
+    expect(seedSql).toMatch(/from\s+auth\.users/i);
+  });
+
+  it("is purely additive — no update, delete or truncate against live data", () => {
+    // It extends the permanent fixture on a database that holds real
+    // user-facing data (decision-32). Inserts with `on conflict do nothing`
+    // only; anything else has no business in a seed.
+    expect(seedSql).not.toMatch(/^\s*(update|delete|truncate|drop)\s/im);
+    expect(seedSql).toMatch(/on conflict/i);
+  });
+
+  it("keeps gamma out of the two-tenant array it would contradict", () => {
+    // TIER2_FIXTURE_TENANTS' premise is two tenants that share NOTHING; gamma's
+    // premise is sharing Alpha's org. Merging them would quietly invalidate
+    // every cross-tenant isolation assertion in the sibling suite.
+    const emails = TIER2_FIXTURE_TENANTS.map((t) => t.email);
+    expect(emails).not.toContain(TIER2_BOARD_MEMBER_FIXTURE.email);
+    expect(TIER2_BOARD_THREAD_FIXTURE.orgId).toBe(
+      TIER2_FIXTURE_TENANTS[0].orgId,
+    );
+  });
+});
+
 // Drop whole-line comments (line comments, block openers, JSDoc continuations)
 // so the safety scan below is about what the tier DOES, not what its prose
 // mentions — both files necessarily explain which key they refuse to hold.
@@ -207,6 +317,7 @@ function codeOnly(source: string): string {
 
 describe("safety properties of the Tier-2 suite", () => {
   const sources = [
+    "src/lib/ai/ask/board-threads.fixtures.test.ts",
     "src/lib/supabase/tenant-isolation.fixtures.test.ts",
     "src/test/tenant-fixtures.ts",
   ].map((p) => codeOnly(readFileSync(resolve(process.cwd(), p), "utf8")));

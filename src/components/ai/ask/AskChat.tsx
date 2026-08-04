@@ -49,13 +49,34 @@ import { Composer } from "./Composer";
  * automatic `recoverConversation` read — the hard refresh that fixed it, minus
  * the refresh — and, if the turn genuinely hasn't landed yet, a notice the user
  * can retry from.
+ *
+ * SURFACE-AGNOSTIC. `/ask` owns a whole route, so it rewrites the URL and
+ * refreshes the rail; the board dock owns a panel inside someone else's page,
+ * where both of those are wrong. The two hardcoded behaviours are therefore
+ * injectable (`onStarted`, `onTurnComplete`) and default to the `/ask` ones.
  */
 export function AskChat({
   conversationId,
   initialMessages,
+  boardId,
+  agentId,
+  onStarted,
+  onTurnComplete,
 }: {
   conversationId: string | null;
   initialMessages: UIMessage[];
+  /** Board this thread belongs to. Set by the dock; absent on /ask. */
+  boardId?: string;
+  /** Persona for a NEW thread. Ignored once the thread exists — `/api/ask`
+   *  reads the persona off the conversation row, not off the client, so it is
+   *  deliberately NOT sent per turn. */
+  agentId?: string;
+  /** Called with the new id instead of rewriting the URL to /ask/<id>. */
+  onStarted?: (conversationId: string) => void;
+  /** Called instead of router.refresh() when a turn completes. The dock uses
+   *  this to update its own thread list; refreshing would re-run the board's
+   *  server query for data the client already has (gotcha-09). */
+  onTurnComplete?: () => void;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<UIMessage[]>(initialMessages);
@@ -102,7 +123,10 @@ export function AskChat({
     if (res.ok && res.data.messages.at(-1)?.role === "assistant") {
       setMessages(res.data.messages);
       setDropState("recovered");
-      router.refresh(); // the turn may have auto-titled the thread
+      // The turn may have auto-titled the thread. Same substitution as `done`:
+      // a surface that owns its own list updates it itself.
+      if (onTurnComplete) onTurnComplete();
+      else router.refresh();
     } else {
       setDropState("unrecovered");
     }
@@ -129,7 +153,11 @@ export function AskChat({
       setStatus(null);
 
       if (!convId) {
-        const res = await createConversation({ firstMessage: text });
+        const res = await createConversation({
+          firstMessage: text,
+          ...(boardId ? { boardId } : {}),
+          ...(agentId ? { agentId } : {}),
+        });
         if (!res.ok) {
           setStreamText(null);
           setStatus(res.error);
@@ -137,8 +165,9 @@ export function AskChat({
         }
         convId = res.data.conversationId;
         setActiveId(convId);
+        if (onStarted) onStarted(convId);
         // Client nav — no RSC refetch (working agreement #5).
-        window.history.pushState(null, "", `/ask/${convId}`);
+        else window.history.pushState(null, "", `/ask/${convId}`);
       } else {
         const res = await appendUserMessage({
           conversationId: convId,
@@ -183,7 +212,8 @@ export function AskChat({
           ]);
           setStreamText(null);
           setStatus(null);
-          router.refresh(); // refresh rail (titles) once, after completion
+          if (onTurnComplete) onTurnComplete();
+          else router.refresh(); // refresh rail (titles) once, after completion
         }
       });
 
