@@ -121,7 +121,9 @@ describe("executeAction — move_item", () => {
       itemId: "i-qysea",
       groupId: "g-software",
     });
-    expect(res).toEqual({ ok: true, itemId: "i-qysea" });
+    // No itemId: QuickAction reads an ok-result carrying one as "Created —
+    // open it from the board", which is the wrong sentence for a move.
+    expect(res).toEqual({ ok: true });
   });
 
   it("surfaces moveItem's refusal verbatim rather than a generic failure", async () => {

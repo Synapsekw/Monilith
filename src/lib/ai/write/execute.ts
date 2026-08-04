@@ -86,17 +86,22 @@ export async function executeAction(
       itemId: action.itemId,
       groupId: action.groupId,
     });
-    return r.ok
-      ? { ok: true, itemId: action.itemId }
-      : { ok: false, error: r.error };
+    // No `itemId` on success: the UI reads that as "a row was CREATED — open it
+    // from the board", which is wrong for a move. Nothing consumes a move's id.
+    return r.ok ? { ok: true } : { ok: false, error: r.error };
   }
-  // set_item_fields
-  const fieldErrors = await applyFields(
-    action.boardId,
-    action.itemId,
-    action.fields,
-  );
-  return fieldErrors.length
-    ? { ok: false, error: fieldErrors.join("; ") }
-    : { ok: true, itemId: action.itemId };
+  if (action.kind === "set_item_fields") {
+    const fieldErrors = await applyFields(
+      action.boardId,
+      action.itemId,
+      action.fields,
+    );
+    return fieldErrors.length
+      ? { ok: false, error: fieldErrors.join("; ") }
+      : { ok: true, itemId: action.itemId };
+  }
+  // Every verb is handled above. A fifth one fails to COMPILE here rather than
+  // silently falling into another verb's branch.
+  const _exhaustive: never = action;
+  return _exhaustive;
 }
