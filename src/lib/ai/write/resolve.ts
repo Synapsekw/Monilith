@@ -101,6 +101,53 @@ export function resolveSetItemFields(
   };
 }
 
+/**
+ * Validate a proposed move and describe it for the confirm card.
+ *
+ * Every refusal here is a message the model relays to the user, so each says
+ * what is wrong rather than just that something is. The cross-board case is
+ * called out by name: it is the one a user is most likely to attempt, and
+ * "isn't on this board" alone reads like a bug rather than a boundary.
+ *
+ * These checks duplicate `moveItem`'s own guards deliberately. moveItem is the
+ * enforcement (it runs after the user confirms, under RLS); this is the
+ * PREVIEW — catching it here means the user never sees a confirm card for a
+ * move that cannot happen.
+ */
+export function resolveMoveItem(
+  payload: BoardPayload,
+  action: Extract<ProposedAction, { kind: "move_item" }>,
+): Resolved {
+  const item = payload.items.find((i) => i.id === action.itemId);
+  if (!item) return { kind: "error", error: "That item isn't on this board." };
+  if (item.parent_id !== null)
+    return { kind: "error", error: "Subitems can't be moved between groups." };
+
+  const target = payload.groups.find((g) => g.id === action.groupId);
+  if (!target)
+    return {
+      kind: "error",
+      error:
+        "That group isn't on this board. Moving an item between boards isn't supported.",
+    };
+
+  const from = payload.groups.find((g) => g.id === item.group_id);
+  if (target.id === item.group_id)
+    return {
+      kind: "error",
+      error: `${item.name} is already in ${from?.name ?? "that group"}.`,
+    };
+
+  return {
+    kind: "ok",
+    action: {
+      ...action,
+      summary: `Move "${item.name}" from ${from?.name ?? "its group"} to ${target.name}`,
+      warnings: [],
+    },
+  };
+}
+
 export function resolveCreateGroup(
   payload: BoardPayload,
   action: Extract<ProposedAction, { kind: "create_group" }>,

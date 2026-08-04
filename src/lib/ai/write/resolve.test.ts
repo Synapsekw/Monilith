@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { BoardPayload } from "@/lib/boards/queries";
-import { pickFieldColumns, resolveCreateItem } from "./resolve";
+import {
+  pickFieldColumns,
+  resolveCreateItem,
+  resolveMoveItem,
+} from "./resolve";
 
 // Minimal board payload shape the resolver reads (mirror getBoardPayload's return).
 const payload = {
@@ -76,5 +80,100 @@ describe("resolveCreateItem", () => {
       name: "X",
     });
     expect(v.kind).toBe("error");
+  });
+});
+
+// Two groups and one top-level item — the shape a move needs. Same idiom as
+// the module-level `payload` above; kept separate so the existing cases that
+// rely on `items: []` and a single group are untouched.
+const movePayload = {
+  board: { id: "b1", name: "Roadmap" },
+  groups: [
+    { id: "g-backlog", name: "Backlog" },
+    { id: "g-software", name: "Software" },
+  ],
+  columns: [],
+  items: [
+    { id: "i-qysea", name: "QYSEA", group_id: "g-backlog", parent_id: null },
+  ],
+  cellValues: [],
+} as unknown as BoardPayload;
+
+describe("resolveMoveItem", () => {
+  it("summarises the move with both group names", () => {
+    const r = resolveMoveItem(movePayload, {
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-qysea",
+      groupId: "g-software",
+    });
+    expect(r.kind).toBe("ok");
+    if (r.kind !== "ok") return;
+    expect(r.action.summary).toBe('Move "QYSEA" from Backlog to Software');
+    expect(r.action.warnings).toEqual([]);
+  });
+
+  it("refuses an item that is not on this board", () => {
+    const r = resolveMoveItem(movePayload, {
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-elsewhere",
+      groupId: "g-software",
+    });
+    expect(r).toEqual({
+      kind: "error",
+      error: "That item isn't on this board.",
+    });
+  });
+
+  it("refuses a group that is not on this board — the cross-board guard", () => {
+    const r = resolveMoveItem(movePayload, {
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-qysea",
+      groupId: "g-on-another-board",
+    });
+    expect(r).toEqual({
+      kind: "error",
+      error:
+        "That group isn't on this board. Moving an item between boards isn't supported.",
+    });
+  });
+
+  it("refuses a subitem, matching what moveItem itself enforces", () => {
+    const withSub = {
+      ...movePayload,
+      items: [
+        {
+          id: "i-sub",
+          name: "Sub",
+          group_id: "g-backlog",
+          parent_id: "i-qysea",
+        },
+      ],
+    } as unknown as BoardPayload;
+    const r = resolveMoveItem(withSub, {
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-sub",
+      groupId: "g-software",
+    });
+    expect(r).toEqual({
+      kind: "error",
+      error: "Subitems can't be moved between groups.",
+    });
+  });
+
+  it("refuses a move to the group the item is already in", () => {
+    const r = resolveMoveItem(movePayload, {
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-qysea",
+      groupId: "g-backlog",
+    });
+    expect(r).toEqual({
+      kind: "error",
+      error: "QYSEA is already in Backlog.",
+    });
   });
 });
