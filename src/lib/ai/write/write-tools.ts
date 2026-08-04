@@ -30,7 +30,7 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "propose_create_item",
     description:
-      "Propose creating a task/item in a group. Does NOT create it — the user confirms first. Resolve board_id/group_id via list_boards + get_board_overview and owner userIds via list_board_members before calling.",
+      "Propose creating a task/item in a group. Does NOT create it — the user confirms first. Resolve board_id via list_boards, group_id from the `groups` array returned by get_board_overview, and owner userIds via list_board_members before calling.",
     input_schema: {
       type: "object",
       properties: {
@@ -76,7 +76,7 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "propose_move_item",
     description:
-      "Propose moving an existing item to a different group on the SAME board. Does NOT write — the user confirms first. Resolve item_id and group_id via get_board_overview before calling. Moving an item to another board is not supported.",
+      "Propose moving an existing item to a different group on the SAME board. Does NOT write — the user confirms first. Resolve group_id from the `groups` array returned by get_board_overview, and item_id via semantic_search_items (which returns item ids). Moving an item to another board is not supported.",
     input_schema: {
       type: "object",
       properties: {

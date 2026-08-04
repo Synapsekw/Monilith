@@ -5,6 +5,7 @@ import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
 const snapshot: BoardSnapshot = {
   board: { id: "b1", name: "Board" },
   rowCount: 2,
+  groups: [{ id: "g1", name: "Backlog" }],
   columns: [],
   columnStats: {},
   meta: { rowCount: 2, columnCount: 0, estimatedTokens: 10 },

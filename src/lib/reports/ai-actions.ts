@@ -30,6 +30,7 @@ export async function draftReportNarrativeAction(input: {
     if (!payload) return fail("Board not found.");
     const snapshot = buildBoardSnapshot({
       board: { id: payload.board.id, name: payload.board.name },
+      groups: payload.groups,
       columns: payload.columns,
       items: payload.items,
       cellValues: payload.cellValues,

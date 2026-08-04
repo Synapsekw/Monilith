@@ -79,6 +79,7 @@ export async function getBoardSnapshotSummary(input: {
 
   const snap = buildBoardSnapshot({
     board: { id: payload.board.id, name: payload.board.name },
+    groups: payload.groups,
     columns: payload.columns,
     items: payload.items,
     cellValues: payload.cellValues,
@@ -110,6 +111,7 @@ export async function generateDashboardProposal(input: {
 
   const snap = buildBoardSnapshot({
     board: { id: payload.board.id, name: payload.board.name },
+    groups: payload.groups,
     columns: payload.columns,
     items: payload.items,
     cellValues: payload.cellValues,

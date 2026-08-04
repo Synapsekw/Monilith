@@ -62,6 +62,7 @@ describe("PROPOSAL_JSON_SCHEMA", () => {
 const snap: BoardSnapshot = {
   board: { id: "b1", name: "Sprint" },
   rowCount: 10,
+  groups: [{ id: "g1", name: "Backlog" }],
   columns: [
     { id: "c-status", name: "Status", kind: "status", options: [] },
     { id: "c-pts", name: "Points", kind: "numbers" },

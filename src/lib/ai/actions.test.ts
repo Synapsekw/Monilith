@@ -80,6 +80,7 @@ function payload(
 ) {
   return {
     board: { id: BOARD_ID, name: "Sprint Board" },
+    groups: [{ id: "grp-1", name: "Backlog" }],
     columns: [
       {
         id: STATUS_COL,
