@@ -186,12 +186,53 @@ git commit -m "docs(plan): record the dev drift audit for board-thread org coupl
 | ---------------- | -------------------------- | ----- | --------- | ------ | ------ | ----------- |
 | 2026-08-04 spec  | DEV `hjqcahbbbdaknbbnfnvl` | 12    | 8         | 4      | 0      | **0**       |
 | 2026-08-04 build | DEV `hjqcahbbbdaknbbnfnvl` | 12    | 8         | 4      | 0      | **0**       |
+| 2026-08-04 apply | DEV `hjqcahbbbdaknbbnfnvl` | 12    | 8         | 4      | 0      | **0**       |
 
 `server_version_num = 170006` (PostgreSQL 17.6), re-verified at build time. The step-2 offending-row
-listing returned **zero rows** on both runs. `REMEDIATION_NEEDED: no`.
+listing returned **zero rows** on every run. `REMEDIATION_NEEDED: no` — the migration ships the
+constraint alone, with no repair statement against a live table.
 
-**Re-run steps 1–2 at the start of Task 4** and update this table; the value that governs the
-migration is the one measured immediately before it is applied.
+The `apply` row is the governing measurement: it was taken immediately before `apply_migration`, and
+the constraint was added VALIDATED on the strength of it.
+
+#### Apply log
+
+- Applied as `20260804144223_board_thread_org_coupling`.
+- **gotcha-55 fired, as budgeted.** `apply_migration` stamped its own version `20260804144702`
+  against the committed file's `20260804144223`. The ledger `name` column did preserve the full
+  stamped filename, which made the repair a pure relabel: identity verified by diffing the ledger's
+  `statements` against the committed file (byte-identical), then relabelled. Note that
+  `reconcile-migration-version.sh`'s printed `STEP 2` guesses `name = 'board_thread_org_coupling'`,
+  but the row's actual name was the full filename — the script warns about this, and the `WHERE` was
+  adjusted accordingly. Verification returned exactly one row at `20260804144223`.
+- `pnpm db:ledger-check` → exit 0, `131 files, 131 DEV ledger rows`.
+- Constraint verified live: `ai_conversations_board_org_fkey` is
+  `FOREIGN KEY (board_id, org_id) REFERENCES boards(id, org_id) ON DELETE SET NULL (board_id)`,
+  `boards_id_org_key` is `UNIQUE (id, org_id)`, and `ai_conversations_board_id_fkey` is **absent**.
+
+#### Index decision (Task 4 step 9)
+
+No advisors tool is exposed on the `supabase-dev` MCP, so the lint was replicated in SQL instead. By
+the strict definition (an FK is covered when some index's _leading_ columns equal the FK's column
+list) `ai_conversations_board_org_fkey` reads as uncovered — but so do the pre-existing
+`ai_conversations_org_id_fkey` and `ai_conversations_workspace_id_fkey` on the same table, so this is
+a standing state the repo already accepts, not a regression this change introduces.
+
+The substantive question — is the delete-side RI probe served? — was settled by evidence rather than
+by the lint's shape rule:
+
+```
+set local enable_seqscan = off;
+explain (costs off) select 1 from public.ai_conversations
+where board_id = $1 and org_id = $2;
+
+  Index Scan using ai_conversations_board_updated_idx on ai_conversations
+    Index Cond: (board_id = $1)
+    Filter: (org_id = $2)
+```
+
+The existing partial index is usable for the probe exactly as the spec predicted (`board_id = $1`
+implies the index's own `where board_id is not null` predicate). **No index was added.**
 
 ---
 
