@@ -254,7 +254,7 @@ export async function moveItem(input: {
   itemId: string;
   groupId: string;
   position?: number;
-}): Promise<ActionResult> {
+}): Promise<ActionResult<{ item: Tables<"items">; subitemIds: string[] }>> {
   const parsed = moveItemSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -298,7 +298,9 @@ export async function moveItem(input: {
     .from("items")
     .update({ group_id: parsed.data.groupId, position })
     .eq("id", parsed.data.itemId)
-    .select("id")
+    // The whole row, not just the id: PostgREST returns it in the SAME request,
+    // so the caller can patch a mounted board without a refetch (gotcha-13).
+    .select("*")
     .maybeSingle();
   if (error) return fail(error.message);
   // A viewer can READ the board (both guards above pass) but not write it: the
@@ -308,11 +310,20 @@ export async function moveItem(input: {
   if (!moved) return fail("You don't have permission to move this item.");
 
   // Keep subitems co-located with their parent (their denormalized group_id
-  // must match). RLS-scoped; best-effort — the parent already moved.
-  await supabase
+  // must match). RLS-scoped; best-effort — the parent already moved. The
+  // returned ids let the caller patch a mounted board without a refetch; a
+  // failure here costs the caller nothing beyond a stale subitem row.
+  const { data: movedSubitems } = await supabase
     .from("items")
     .update({ group_id: parsed.data.groupId })
-    .eq("parent_id", parsed.data.itemId);
+    .eq("parent_id", parsed.data.itemId)
+    .select("id");
 
-  return { ok: true, data: undefined };
+  return {
+    ok: true,
+    data: {
+      item: moved,
+      subitemIds: (movedSubitems ?? []).map((s) => s.id),
+    },
+  };
 }

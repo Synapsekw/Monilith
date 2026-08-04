@@ -558,64 +558,80 @@ import { moveItem } from "./actions";
 
 const GROUP = "55555555-5555-4555-8555-555555555555";
 
+const MOVED_SUB = "77777777-7777-4777-8777-777777777777";
+
 /**
  * The move UPDATE is awaited two ways: the item's own update reads the row back
- * (`.select("id").maybeSingle()`) so an RLS-blocked write can't pass as success,
- * while the subitem fan-out just awaits the builder. One thenable with a
- * `select` branch serves both. `row: null` = the RLS-hidden write (0 rows, no error).
+ * (`.select("*").maybeSingle()`) so an RLS-blocked write can't pass as success,
+ * while the subitem fan-out awaits `.select("id")` for the ids it moved. One
+ * thenable whose `select()` is BOTH awaitable and `.maybeSingle()`-able serves
+ * both. `row: null` = the RLS-hidden write (0 rows, no error).
  */
-const moveUpdateResult = (row: { id: string } | null) =>
+const moveUpdateResult = (
+  row: Record<string, unknown> | null,
+  subitems: { id: string }[] = [],
+) =>
   Object.assign(Promise.resolve({ error: null }), {
-    select: () => ({ maybeSingle: async () => ({ data: row, error: null }) }),
+    select: () =>
+      Object.assign(Promise.resolve({ data: subitems, error: null }), {
+        maybeSingle: async () => ({ data: row, error: null }),
+      }),
   });
 
-describe("moveItem", () => {
-  it("uses the provided position instead of appending", async () => {
-    const update = vi.fn(() => ({ eq: () => moveUpdateResult({ id: ITEM }) }));
-    from.mockImplementation((table: string) => {
-      if (table === "items")
-        return {
-          select: (cols: string) => {
-            if (cols === "board_id, parent_id")
-              return {
-                eq: () => ({
-                  maybeSingle: async () => ({
-                    data: { board_id: BOARD, parent_id: null },
-                    error: null,
-                  }),
-                }),
-              };
-            // last top-level item in target group: select("position")...maybeSingle()
+/** The reads every moveItem case makes before the UPDATE: the item is top-level
+ *  on BOARD, the target group is on the same board, and that group's last
+ *  top-level row sits at position 2 (so an append lands at midpoint(2, null)). */
+function mockMoveTables(update: ReturnType<typeof vi.fn>) {
+  from.mockImplementation((table: string) => {
+    if (table === "items")
+      return {
+        select: (cols: string) => {
+          if (cols === "board_id, parent_id")
             return {
               eq: () => ({
-                is: () => ({
-                  order: () => ({
-                    limit: () => ({
-                      maybeSingle: async () => ({
-                        data: { position: 2 },
-                        error: null,
-                      }),
+                maybeSingle: async () => ({
+                  data: { board_id: BOARD, parent_id: null },
+                  error: null,
+                }),
+              }),
+            };
+          // last top-level item in target group: select("position")...maybeSingle()
+          return {
+            eq: () => ({
+              is: () => ({
+                order: () => ({
+                  limit: () => ({
+                    maybeSingle: async () => ({
+                      data: { position: 2 },
+                      error: null,
                     }),
                   }),
                 }),
               }),
-            };
-          },
-          update,
-        } as never;
-      if (table === "groups")
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: { board_id: BOARD },
-                error: null,
-              }),
+            }),
+          };
+        },
+        update,
+      } as never;
+    if (table === "groups")
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: { board_id: BOARD },
+              error: null,
             }),
           }),
-        } as never;
-      return {} as never;
-    });
+        }),
+      } as never;
+    return {} as never;
+  });
+}
+
+describe("moveItem", () => {
+  it("uses the provided position instead of appending", async () => {
+    const update = vi.fn(() => ({ eq: () => moveUpdateResult({ id: ITEM }) }));
+    mockMoveTables(update);
 
     const res = await moveItem({
       itemId: ITEM,
@@ -632,49 +648,7 @@ describe("moveItem", () => {
   it("still appends when position is omitted", async () => {
     // last top-level item in target group has position 2 → append = midpoint(2, null) = 3
     const update = vi.fn(() => ({ eq: () => moveUpdateResult({ id: ITEM }) }));
-    from.mockImplementation((table: string) => {
-      if (table === "items")
-        return {
-          select: (cols: string) => {
-            if (cols === "board_id, parent_id")
-              return {
-                eq: () => ({
-                  maybeSingle: async () => ({
-                    data: { board_id: BOARD, parent_id: null },
-                    error: null,
-                  }),
-                }),
-              };
-            return {
-              eq: () => ({
-                is: () => ({
-                  order: () => ({
-                    limit: () => ({
-                      maybeSingle: async () => ({
-                        data: { position: 2 },
-                        error: null,
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            };
-          },
-          update,
-        } as never;
-      if (table === "groups")
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: { board_id: BOARD },
-                error: null,
-              }),
-            }),
-          }),
-        } as never;
-      return {} as never;
-    });
+    mockMoveTables(update);
 
     const res = await moveItem({ itemId: ITEM, groupId: GROUP });
 
@@ -684,55 +658,49 @@ describe("moveItem", () => {
     );
   });
 
+  it("returns the moved row and the ids of the subitems dragged along", async () => {
+    // The caller needs the authoritative post-move row (and the subitems whose
+    // denormalized group_id came with it) to patch a mounted board without a
+    // refetch. Both come back from UPDATEs already being issued.
+    const update = vi.fn(() => ({
+      eq: () =>
+        moveUpdateResult({ id: ITEM, group_id: GROUP, position: 3 }, [
+          { id: MOVED_SUB },
+        ]),
+    }));
+    mockMoveTables(update);
+
+    const res = await moveItem({ itemId: ITEM, groupId: GROUP });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.item.id).toBe(ITEM);
+    expect(res.data.item.group_id).toBe(GROUP);
+    expect(res.data.subitemIds).toEqual([MOVED_SUB]);
+  });
+
+  it("reports no subitems when the fan-out returns nothing", async () => {
+    // Best-effort by design: the parent already moved, so a subitem UPDATE that
+    // returns nothing must still be a successful move with an empty id list.
+    const update = vi.fn(() => ({
+      eq: () => moveUpdateResult({ id: ITEM, group_id: GROUP }),
+    }));
+    mockMoveTables(update);
+
+    const res = await moveItem({ itemId: ITEM, groupId: GROUP });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.subitemIds).toEqual([]);
+  });
+
   it("fails instead of reporting success when RLS silently blocks the update", async () => {
     // A viewer can READ the board (so both pre-checks pass) but cannot update
     // items: the UPDATE matches zero rows and returns NO error. Without reading
     // the row back, the AI thread would say "Done" for a move that never
     // happened — and drag-and-drop would fail just as silently.
     const update = vi.fn(() => ({ eq: () => moveUpdateResult(null) }));
-    from.mockImplementation((table: string) => {
-      if (table === "items")
-        return {
-          select: (cols: string) => {
-            if (cols === "board_id, parent_id")
-              return {
-                eq: () => ({
-                  maybeSingle: async () => ({
-                    data: { board_id: BOARD, parent_id: null },
-                    error: null,
-                  }),
-                }),
-              };
-            return {
-              eq: () => ({
-                is: () => ({
-                  order: () => ({
-                    limit: () => ({
-                      maybeSingle: async () => ({
-                        data: { position: 2 },
-                        error: null,
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            };
-          },
-          update,
-        } as never;
-      if (table === "groups")
-        return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: { board_id: BOARD },
-                error: null,
-              }),
-            }),
-          }),
-        } as never;
-      return {} as never;
-    });
+    mockMoveTables(update);
 
     const res = await moveItem({ itemId: ITEM, groupId: GROUP });
 
