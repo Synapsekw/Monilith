@@ -3,9 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/boards/queries", () => ({
   getBoardPayload: vi.fn(async () => ({
     board: { id: "b1", name: "Roadmap" },
-    groups: [{ id: "g1", name: "Backlog" }],
+    groups: [
+      { id: "g1", name: "Backlog" },
+      { id: "g-software", name: "Software" },
+    ],
     columns: [{ id: "c-due", name: "Due", kind: "date" }],
-    items: [],
+    items: [{ id: "i-qysea", name: "QYSEA", group_id: "g1", parent_id: null }],
     cellValues: [],
   })),
 }));
@@ -16,7 +19,7 @@ vi.mock("@/lib/org/queries-cached", () => ({
   ]),
 }));
 
-import { createWriteToolExecutor } from "./write-tools";
+import { createWriteToolExecutor, WRITE_TOOLS } from "./write-tools";
 
 describe("createWriteToolExecutor", () => {
   it("propose_create_item records a ValidatedAction and never mutates", async () => {
@@ -65,6 +68,61 @@ describe("createWriteToolExecutor", () => {
       due_date: "Friday",
     });
     expect(res.content).toContain("error");
+    expect(exec.collected()).toHaveLength(0);
+  });
+});
+
+describe("propose_move_item", () => {
+  it("is offered to the model with board, item and group required", () => {
+    const tool = WRITE_TOOLS.find((t) => t.name === "propose_move_item");
+    expect(tool).toBeDefined();
+    expect(tool!.input_schema.required).toEqual([
+      "board_id",
+      "item_id",
+      "group_id",
+    ]);
+    // The description must say it does not write — the model relies on this to
+    // explain the confirm step to the user.
+    expect(tool!.description).toMatch(/does not write|user confirms/i);
+  });
+
+  it("records a proposal and returns the preview without mutating", async () => {
+    const exec = createWriteToolExecutor({ orgId: "o1", workspaceId: "w1" });
+    const res = await exec.execute("propose_move_item", {
+      board_id: "b1",
+      item_id: "i-qysea",
+      group_id: "g-software",
+    });
+    expect(JSON.parse(res.content)).toEqual({
+      preview: 'Move "QYSEA" from Backlog to Software',
+      warnings: [],
+    });
+    expect(exec.collected()).toHaveLength(1);
+    expect(exec.collected()[0]).toMatchObject({
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-qysea",
+      groupId: "g-software",
+    });
+  });
+
+  it("surfaces the resolver's refusal and records nothing", async () => {
+    const exec = createWriteToolExecutor({ orgId: "o1", workspaceId: "w1" });
+    const res = await exec.execute("propose_move_item", {
+      board_id: "b1",
+      item_id: "i-qysea",
+      group_id: "g-on-another-board",
+    });
+    expect(JSON.parse(res.content).error).toMatch(
+      /couldn't find that group on this board/,
+    );
+    expect(exec.collected()).toHaveLength(0);
+  });
+
+  it("rejects malformed args", async () => {
+    const exec = createWriteToolExecutor({ orgId: "o1", workspaceId: "w1" });
+    const res = await exec.execute("propose_move_item", { board_id: "b1" });
+    expect(JSON.parse(res.content)).toEqual({ error: "invalid tool input" });
     expect(exec.collected()).toHaveLength(0);
   });
 });

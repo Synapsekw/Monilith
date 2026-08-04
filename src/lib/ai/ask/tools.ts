@@ -45,7 +45,7 @@ export const ASK_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_board_overview",
     description:
-      "Get a board's schema and aggregate statistics (row count, column definitions, fill rates, distributions, numeric/date ranges) — no raw item rows. Use this to understand a board's shape before querying items.",
+      "Get a board's schema and aggregate statistics (row count, group ids and names, column definitions, fill rates, distributions, numeric/date ranges) — no raw item rows. Use this to understand a board's shape before querying items, and to resolve a group's name to its id.",
     input_schema: {
       type: "object",
       properties: {
@@ -122,6 +122,7 @@ async function runGetBoardOverview(
   if (!payload) return errorResult("board not found");
   const snapshot = buildBoardSnapshot({
     board: payload.board,
+    groups: payload.groups,
     columns: payload.columns,
     items: payload.items,
     cellValues: payload.cellValues,

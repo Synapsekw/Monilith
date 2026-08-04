@@ -1,8 +1,13 @@
 import { optionSchema } from "@/lib/validations/boards";
 
 type RawColumn = { id: string; name: string; kind: string; settings: unknown };
+type RawGroup = { id: string; name: string };
 type RawItem = { id: string };
 type RawCell = { item_id: string; column_id: string; value: unknown };
+
+/** A board's sections, id + name only — the ids the AI write loop needs to
+ *  name a destination group, with none of the rows that live in them. */
+export type SnapshotGroup = { id: string; name: string };
 
 export type SnapshotColumn = {
   id: string;
@@ -22,6 +27,7 @@ export type ColumnStats = {
 export type BoardSnapshot = {
   board: { id: string; name: string };
   rowCount: number;
+  groups: SnapshotGroup[];
   columns: SnapshotColumn[];
   columnStats: Record<string, ColumnStats>;
   meta: { rowCount: number; columnCount: number; estimatedTokens: number };
@@ -58,11 +64,13 @@ function isFilled(kind: string, v: unknown): boolean {
 
 export function buildBoardSnapshot(input: {
   board: { id: string; name: string };
+  /** Board order preserved as given (getBoardPayload orders by position). */
+  groups: RawGroup[];
   columns: RawColumn[];
   items: RawItem[];
   cellValues: RawCell[];
 }): BoardSnapshot {
-  const { board, columns, items, cellValues } = input;
+  const { board, groups, columns, items, cellValues } = input;
   const rowCount = items.length;
 
   // index cells by column
@@ -158,6 +166,9 @@ export function buildBoardSnapshot(input: {
   const snapshot: Omit<BoardSnapshot, "meta"> = {
     board: { id: board.id, name: board.name },
     rowCount,
+    // Names and ids only — the payload stays bounded by group COUNT, and no
+    // per-item scan is needed to build it.
+    groups: groups.map((g) => ({ id: g.id, name: g.name })),
     columns: snapColumns,
     columnStats,
   };

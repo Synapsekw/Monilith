@@ -133,6 +133,44 @@ describe("QuickAction", () => {
     expect(screen.getByText(/Which board\?/)).toBeInTheDocument();
   });
 
+  it("says Done, not Created, for an approved move", async () => {
+    // A move returns { ok: true } with no itemId precisely so this reads
+    // "Done." — "Created — open it from the board" would describe a new row.
+    proposeActions.mockResolvedValue({
+      ok: true,
+      data: {
+        actions: [
+          {
+            kind: "move_item",
+            boardId: "b1",
+            itemId: "i-qysea",
+            groupId: "g-software",
+            summary: 'Move "QYSEA" from Backlog to Software',
+            warnings: [],
+          },
+        ],
+      },
+    });
+    executeActions.mockResolvedValue({
+      ok: true,
+      data: { results: [{ ok: true }] },
+    });
+
+    render(<QuickAction onClose={() => {}} />);
+    await userEvent.type(
+      screen.getByLabelText(/command/i),
+      "move QYSEA to Software",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^run$/i }));
+    expect(
+      await screen.findByText(/Move "QYSEA" from Backlog to Software/),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+    expect(await screen.findByText(/^Done\.$/)).toBeInTheDocument();
+    expect(screen.queryByText(/created/i)).not.toBeInTheDocument();
+  });
+
   it("surfaces a failed proposal as an alert", async () => {
     proposeActions.mockResolvedValue({
       ok: false,
