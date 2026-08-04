@@ -23,7 +23,17 @@ function makeClient(opts: {
   columnMissing?: boolean;
 }): Ctx {
   let touchedAuth = false;
-  const upsert = vi.fn().mockResolvedValue({ error: null });
+  // PostgREST returns the written row in the SAME request: `.select("*").single()`
+  // on the upsert. The stub echoes the payload back, plus the column the DB
+  // stamps, so callers can assert on what actually landed.
+  const upsert = vi.fn((row: Record<string, unknown>) => ({
+    select: () => ({
+      single: async () => ({
+        data: { ...row, updated_at: "2026-08-04T00:00:00.000Z" },
+        error: null,
+      }),
+    }),
+  }));
   const notify = vi.fn().mockResolvedValue({ error: opts.notifyError ?? null });
   const read = (table: string) =>
     table === "columns"
@@ -70,7 +80,7 @@ describe("upsertCellCore", () => {
     const ctx = makeClient({ kind: "people", prior: { userIds: [A] } });
     const res = await call(ctx, { userIds: [A, B, ACTOR] });
 
-    expect(res).toEqual({ ok: true, data: undefined });
+    expect(res.ok).toBe(true);
     expect(ctx.upsert).toHaveBeenCalledTimes(1);
     expect(ctx.notify).toHaveBeenCalledTimes(1);
     expect(ctx.notify).toHaveBeenCalledWith([
@@ -89,7 +99,7 @@ describe("upsertCellCore", () => {
     const ctx = makeClient({ kind: "people", prior: { userIds: [A] } });
     const res = await call(ctx, { userIds: [A] });
 
-    expect(res).toEqual({ ok: true, data: undefined });
+    expect(res.ok).toBe(true);
     expect(ctx.notify).not.toHaveBeenCalled();
   });
 
@@ -97,7 +107,7 @@ describe("upsertCellCore", () => {
     const ctx = makeClient({ kind: "text" });
     const res = await call(ctx, { text: "hi" });
 
-    expect(res).toEqual({ ok: true, data: undefined });
+    expect(res.ok).toBe(true);
     expect(ctx.notify).not.toHaveBeenCalled();
     expect(ctx.authTouched()).toBe(false);
   });
@@ -107,7 +117,7 @@ describe("upsertCellCore", () => {
     const ctx = makeClient({ kind: "people" });
     const res = await call(ctx, { userIds: [A] }, null);
 
-    expect(res).toEqual({ ok: true, data: undefined });
+    expect(res.ok).toBe(true);
     expect(ctx.notify).not.toHaveBeenCalled();
     expect(spy).toHaveBeenCalledWith(
       "[notifications] assigned fan-out failed",
@@ -123,7 +133,7 @@ describe("upsertCellCore", () => {
     });
     const res = await call(ctx, { userIds: [A] });
 
-    expect(res).toEqual({ ok: true, data: undefined });
+    expect(res.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith(
       "[notifications] assigned fan-out failed",
       expect.objectContaining({
@@ -132,6 +142,29 @@ describe("upsertCellCore", () => {
         error: "insert denied",
       }),
     );
+  });
+
+  it("returns the written cell row", async () => {
+    // The caller needs the authoritative row to patch a mounted board without
+    // a refetch — the same contract createItem/createColumn already honour.
+    const ctx = makeClient({ kind: "date" });
+    const res = await call(ctx, { date: "2026-08-10" });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.cell.item_id).toBe(ITEM);
+    expect(res.data.cell.column_id).toBe(COL);
+    expect(res.data.cell.value).toEqual({ date: "2026-08-10" });
+    expect(res.data.cell.board_id).toBe("board");
+  });
+
+  it("fails when the upsert returns no row (an RLS-hidden write)", async () => {
+    const ctx = makeClient({ kind: "date" });
+    ctx.upsert.mockReturnValueOnce({
+      select: () => ({ single: async () => ({ data: null, error: null }) }),
+    });
+    const res = await call(ctx, { date: "2026-08-10" });
+    expect(res.ok).toBe(false);
   });
 
   it("guards: missing column, cross-board item, invalid value", async () => {

@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { executeAction } from "@/lib/ai/write/execute";
 import type { ValidatedAction, ExecutionResult } from "@/lib/ai/write/schema";
+// Type-only: this is a `"use server"` module, where a non-async export fails
+// only at `pnpm build`. BoardEffect lives in a plain module both sides import.
+import type { BoardEffect } from "@/lib/ai/write/effects";
 import { parseToolTrace, type AskToolTrace } from "./tool-trace";
 // Canonical shared result type — never re-declare locally (AGENTS.md invariant).
 import { fail, type ActionResult } from "@/lib/actions/result";
@@ -17,11 +20,15 @@ const idsSchema = z.object({
 });
 
 /** The appended outcome turn, handed straight back so the client can push it
- *  into the transcript without a refetch (0 RSC navigations). */
+ *  into the transcript without a refetch (0 RSC navigations). `effects` is
+ *  TRANSIENT — it is deliberately absent from `trace`, which is persisted into
+ *  ai_messages.tool_trace and read back on every thread open. Rows in there
+ *  would bloat the thread and replay STALE state onto the board later. */
 export type ProposalOutcome = {
   messageId: string;
   content: string;
   trace: AskToolTrace;
+  effects: BoardEffect[];
 };
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -84,6 +91,7 @@ async function insertOutcome(
   conversationId: string,
   content: string,
   trace: AskToolTrace,
+  effects: BoardEffect[],
 ): Promise<ActionResult<ProposalOutcome>> {
   const ins = await supabase
     .from("ai_messages")
@@ -93,13 +101,16 @@ async function insertOutcome(
       content,
       // The generated column type is the opaque `Json`; the shape is guaranteed
       // by askToolTraceSchema, so this cast is a serialization detail, not a
-      // loosening of types.
+      // loosening of types. `effects` is NOT part of it, by design.
       tool_trace: trace as unknown as Json,
     })
     .select("id")
     .single();
   if (ins.error || !ins.data) return fail("Couldn't record the result.");
-  return { ok: true, data: { messageId: ins.data.id, content, trace } };
+  return {
+    ok: true,
+    data: { messageId: ins.data.id, content, trace, effects },
+  };
 }
 
 /** Deterministic outcome copy — no extra model call, no extra tokens. */
@@ -146,15 +157,23 @@ export async function applyAskProposal(input: {
     const loaded = await loadProposal(supabase, conversationId, messageId);
     if (!loaded.ok) return fail(loaded.error);
 
+    // `results` is persisted in the trace; `effects` are the rows the writes
+    // produced, returned transiently so the client can render them with NO
+    // extra round-trip. Bounded by parseToolTrace's ≤10 action cap.
     const results: ExecutionResult[] = [];
-    for (const action of loaded.actions)
-      results.push(await executeAction(action));
+    const effects: BoardEffect[] = [];
+    for (const action of loaded.actions) {
+      const { result, effect } = await executeAction(action);
+      results.push(result);
+      if (effect) effects.push(effect);
+    }
 
     return await insertOutcome(
       supabase,
       conversationId,
       outcomeContent(loaded.actions, results),
       { resolvesProposal: messageId, outcome: "applied", results },
+      effects,
     );
   } catch {
     return fail("Couldn't apply that action. Please try again.");
@@ -186,6 +205,8 @@ export async function cancelAskProposal(input: {
       conversationId,
       "Cancelled — nothing was changed.",
       { resolvesProposal: messageId, outcome: "cancelled" },
+      // A cancel changes nothing, so it carries no effects.
+      [],
     );
   } catch {
     return fail("Couldn't cancel that. Please try again.");

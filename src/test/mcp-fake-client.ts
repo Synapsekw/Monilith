@@ -5,7 +5,9 @@
  *   - `.rpc(fn, args)`                                            (create_item)
  *   - `.from(t).select(…).eq(…).maybeSingle()`                    (column + item reads)
  *   - `.from("items").update(…).eq(…).select(…).maybeSingle()`    (rename)
- *   - `.from("cell_values").upsert(row, options)`                 (cell write)
+ *   - `.from("cell_values").upsert(row, opts).select("*").single()` (cell write —
+ *     the core reads the written row back in the SAME request so a caller can
+ *     patch a mounted board without a refetch)
  *
  * A structural fake of just those is safe and keeps the `as never` cast in one
  * place. Lives in `src/test/` beside `integration-auth.ts` / `integration-env.ts`
@@ -125,9 +127,18 @@ export function makeFakeClient(spec: FakeClientSpec = {}): {
       }),
       upsert: (row: unknown, options: unknown) => {
         calls.upserts.push({ row, options });
-        return Promise.resolve(
-          dequeue(spec.upsert, { error: null }, upsertWrites++),
-        );
+        const result = dequeue(spec.upsert, { error: null }, upsertWrites++);
+        // `.select("*").single()`: the row echoes back on success, and a failed
+        // write returns no row — which is what the core turns into `fail`.
+        return {
+          select: () => ({
+            single: () =>
+              Promise.resolve({
+                data: result.error ? null : row,
+                error: result.error,
+              }),
+          }),
+        };
       },
       insert: (rows: unknown) => {
         calls.notifications.push(rows);

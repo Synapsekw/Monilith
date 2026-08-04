@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cellValueSchema } from "@/lib/validations/boards";
 import { fail, type ActionResult } from "@/lib/actions/result";
-import type { Database, Json } from "@/types/database.types";
+import type { Database, Json, Tables } from "@/types/database.types";
 
 /** What a cell write needs, already parsed by the caller's own Zod boundary. */
 export type UpsertCellCoreInput = {
@@ -32,7 +32,7 @@ export async function upsertCellCore(
   supabase: SupabaseClient<Database>,
   input: UpsertCellCoreInput,
   actorId: string | null,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ cell: Tables<"cell_values"> }>> {
   // Derive org_id/board_id + kind from the parent column (RLS-scoped read).
   const { data: column, error: colErr } = await supabase
     .from("columns")
@@ -70,17 +70,24 @@ export async function upsertCellCore(
       (prior?.value as { userIds?: string[] } | null)?.userIds ?? [];
   }
 
-  const { error } = await supabase.from("cell_values").upsert(
-    {
-      org_id: column.org_id,
-      board_id: column.board_id,
-      item_id: input.itemId,
-      column_id: input.columnId,
-      value: valueParsed.data as Json,
-    },
-    { onConflict: "item_id,column_id" },
-  );
-  if (error) return fail(error.message);
+  const { data: cell, error } = await supabase
+    .from("cell_values")
+    .upsert(
+      {
+        org_id: column.org_id,
+        board_id: column.board_id,
+        item_id: input.itemId,
+        column_id: input.columnId,
+        value: valueParsed.data as Json,
+      },
+      { onConflict: "item_id,column_id" },
+    )
+    // Returned in the SAME request — no extra round-trip. The caller needs the
+    // authoritative row to patch a mounted board without a refetch.
+    .select("*")
+    .single();
+  if (error || !cell)
+    return fail(error?.message ?? "Could not write the cell.");
 
   if (column.kind === "people") {
     const next = (valueParsed.data as { userIds?: string[] }).userIds ?? [];
@@ -116,5 +123,5 @@ export async function upsertCellCore(
         });
     }
   }
-  return { ok: true, data: undefined };
+  return { ok: true, data: { cell } };
 }

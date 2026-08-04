@@ -6,6 +6,9 @@ import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement, getAiEntitlement } from "@/lib/ai/entitlement";
 import { proposeLoop } from "./propose";
 import { executeAction } from "./execute";
+// Type-only: this is a `"use server"` module, where a non-async export fails
+// only at `pnpm build`. BoardEffect lives in a plain module both sides import.
+import type { BoardEffect } from "./effects";
 import {
   validatedActionSchema,
   aiConversationHistorySchema,
@@ -123,7 +126,9 @@ export async function proposeActions(input: {
  */
 export async function executeActions(input: {
   actions: unknown[];
-}): Promise<ActionResult<{ results: ExecutionResult[] }>> {
+}): Promise<
+  ActionResult<{ results: ExecutionResult[]; effects: BoardEffect[] }>
+> {
   const parsed = z
     .array(validatedActionSchema)
     .min(1)
@@ -139,9 +144,17 @@ export async function executeActions(input: {
     if (ent.mode === "off")
       return fail("AI is turned off for your organization.");
 
+    // `results` is what the thread records; `effects` are the rows the writes
+    // produced, handed straight back so the acting client can render its own
+    // change with NO extra round-trip. Bounded by the ≤10 action cap above.
     const results: ExecutionResult[] = [];
-    for (const action of parsed.data) results.push(await executeAction(action));
-    return { ok: true, data: { results } };
+    const effects: BoardEffect[] = [];
+    for (const action of parsed.data) {
+      const { result, effect } = await executeAction(action);
+      results.push(result);
+      if (effect) effects.push(effect);
+    }
+    return { ok: true, data: { results, effects } };
   } catch {
     return fail("Couldn't apply that action. Please try again.");
   }
