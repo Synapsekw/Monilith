@@ -1,14 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { createItem, createGroup, upsertCell } = vi.hoisted(() => ({
+const { createItem, createGroup, upsertCell, moveItem } = vi.hoisted(() => ({
   createItem: vi.fn(async () => ({
     ok: true,
     data: { item: { id: "i9", board_id: "b1" } },
   })),
   createGroup: vi.fn(async () => ({ ok: true, data: { group: { id: "g9" } } })),
   upsertCell: vi.fn(async () => ({ ok: true, data: undefined })),
+  moveItem: vi.fn(async () => ({ ok: true, data: undefined })),
 }));
-vi.mock("@/lib/boards/actions/item", () => ({ createItem }));
+vi.mock("@/lib/boards/actions/item", () => ({ createItem, moveItem }));
 vi.mock("@/lib/boards/actions/group", () => ({ createGroup }));
 vi.mock("@/lib/boards/actions/cell", () => ({ upsertCell }));
 vi.mock("@/lib/boards/queries", () => ({
@@ -30,6 +31,7 @@ beforeEach(() => {
   createItem.mockClear();
   createGroup.mockClear();
   upsertCell.mockClear();
+  moveItem.mockClear();
 });
 
 describe("executeAction", () => {
@@ -101,5 +103,59 @@ describe("executeAction", () => {
       boardId: "b1",
       name: "Backlog",
     });
+  });
+});
+
+describe("executeAction — move_item", () => {
+  it("delegates to moveItem with no position, so the item appends to the target group", async () => {
+    moveItem.mockResolvedValueOnce({ ok: true, data: undefined });
+    const res = await executeAction({
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-qysea",
+      groupId: "g-software",
+      summary: 'Move "QYSEA" from Backlog to Software',
+      warnings: [],
+    });
+    expect(moveItem).toHaveBeenCalledWith({
+      itemId: "i-qysea",
+      groupId: "g-software",
+    });
+    expect(res).toEqual({ ok: true, itemId: "i-qysea" });
+  });
+
+  it("surfaces moveItem's refusal verbatim rather than a generic failure", async () => {
+    // moveItem is the enforcement: it re-checks the board under RLS after the
+    // user confirms, so its error is the one that matters and must not be
+    // swallowed or reworded.
+    moveItem.mockResolvedValueOnce({
+      ok: false,
+      error: "Group belongs to a different board.",
+    } as never);
+    const res = await executeAction({
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-qysea",
+      groupId: "g-elsewhere",
+      summary: "Move …",
+      warnings: [],
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "Group belongs to a different board.",
+    });
+  });
+
+  it("never touches the cell writer — a move changes no field values", async () => {
+    moveItem.mockResolvedValueOnce({ ok: true, data: undefined });
+    await executeAction({
+      kind: "move_item",
+      boardId: "b1",
+      itemId: "i-qysea",
+      groupId: "g-software",
+      summary: "Move …",
+      warnings: [],
+    });
+    expect(upsertCell).not.toHaveBeenCalled();
   });
 });

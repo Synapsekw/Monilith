@@ -1,6 +1,6 @@
 import "server-only";
 import { getBoardPayload } from "@/lib/boards/queries";
-import { createItem } from "@/lib/boards/actions/item";
+import { createItem, moveItem } from "@/lib/boards/actions/item";
 import { createGroup } from "@/lib/boards/actions/group";
 import { upsertCell } from "@/lib/boards/actions/cell";
 import { pickFieldColumns } from "./resolve";
@@ -76,6 +76,19 @@ export async function executeAction(
     return fieldErrors.length
       ? { ok: false, error: fieldErrors.join("; ") }
       : { ok: true, itemId };
+  }
+  if (action.kind === "move_item") {
+    // moveItem owns the guards that matter after confirmation: it refuses
+    // subitems, refuses a group on another board, and appends to the end of
+    // the target group. Omitting `position` is what selects that append —
+    // there is no drag-drop cursor here to honour.
+    const r = await moveItem({
+      itemId: action.itemId,
+      groupId: action.groupId,
+    });
+    return r.ok
+      ? { ok: true, itemId: action.itemId }
+      : { ok: false, error: r.error };
   }
   // set_item_fields
   const fieldErrors = await applyFields(
