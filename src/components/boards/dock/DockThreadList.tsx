@@ -167,7 +167,12 @@ export function DockThreadList({
       owned={t.user_id === currentUserId}
       busy={sharingId === t.id}
       onSelect={onSelect}
-      onToggleShare={onToggleShare}
+      // Ownership is not enough: the shared-read policy begins with `board_id
+      // is not null`, so sharing a BOARDLESS thread (a scheduled briefing, and
+      // every row in the "From your agents" group) can never make it readable —
+      // it would only print a "Shared" chip that lies. `setThreadVisibility`
+      // refuses it server-side too; this keeps the affordance honest.
+      onToggleShare={t.board_id ? onToggleShare : undefined}
     />
   );
 

@@ -2,12 +2,26 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database.types";
 
+/**
+ * `board_id` is carried even though `listBoardThreads` already filters on it:
+ * the two groups share one row component, and without it the list cannot tell a
+ * docked thread from a boardless briefing — so it would offer the share toggle
+ * on a thread the shared-read policy can never match (its first conjunct is
+ * `board_id is not null`).
+ */
 export type BoardThreadRow = Pick<
   Database["public"]["Tables"]["ai_conversations"]["Row"],
-  "id" | "title" | "updated_at" | "agent_id" | "visibility" | "user_id"
+  | "id"
+  | "title"
+  | "updated_at"
+  | "agent_id"
+  | "board_id"
+  | "visibility"
+  | "user_id"
 >;
 
-const COLUMNS = "id, title, updated_at, agent_id, visibility, user_id";
+const COLUMNS =
+  "id, title, updated_at, agent_id, board_id, visibility, user_id";
 
 /** Bounded hot-path reads (working agreement #5). 50 threads is far past what a
  *  dock can show without scrolling; the cap exists so the read stays constant

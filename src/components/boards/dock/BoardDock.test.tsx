@@ -75,6 +75,9 @@ const thread = (over: Record<string, unknown> = {}) => ({
   title: "About the roadmap",
   updated_at: "2026-08-03T10:00:00Z",
   agent_id: null,
+  // Docked to the board this dock is rendered for — which is what makes the
+  // share toggle available at all (a boardless thread cannot be shared).
+  board_id: "b1",
   visibility: "private",
   user_id: "me",
   ...over,

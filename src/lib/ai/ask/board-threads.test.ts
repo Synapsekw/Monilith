@@ -56,6 +56,14 @@ describe("listBoardThreads", () => {
     expect(BOARD_THREADS_LIMIT).toBe(50);
   });
 
+  it("selects board_id, which is what tells the dock a thread can be shared", async () => {
+    const chain = builder([]);
+    from.mockReturnValue(chain);
+    await listBoardThreads("board-1");
+    const [columns] = (chain.calls.select?.[0] ?? []) as string[];
+    expect(columns).toContain("board_id");
+  });
+
   it("does NOT filter by user_id — RLS decides, so shared threads stay visible", async () => {
     const chain = builder([]);
     from.mockReturnValue(chain);
@@ -77,5 +85,8 @@ describe("listAgentThreads", () => {
     expect(chain.calls.not).toContainEqual(["agent_id", "is", null]);
     expect(chain.calls.limit).toEqual([[AGENT_THREADS_LIMIT]]);
     expect(AGENT_THREADS_LIMIT).toBe(5);
+    // Same column set as the board read: one row shape feeds one row component.
+    const [columns] = (chain.calls.select?.[0] ?? []) as string[];
+    expect(columns).toContain("board_id");
   });
 });
