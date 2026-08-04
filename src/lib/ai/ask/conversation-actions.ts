@@ -39,6 +39,9 @@ async function ownedAgentId(agentId: string): Promise<string | null> {
   return data?.id ?? null;
 }
 
+/** A board the caller may read, together with the org it lives in. */
+type ReadableBoard = { id: string; orgId: string };
+
 /**
  * Resolve a board the CALLER can read, or null.
  *
@@ -47,21 +50,26 @@ async function ownedAgentId(agentId: string): Promise<string | null> {
  * `can_read_board()` evaluates — so an RLS-scoped read through the user client
  * fails closed identically, and the check and the query are one statement. Same
  * shape as `ownedAgentId` above, and for the same reason: a uuid-SHAPED board id
- * is not a board the caller may write to. Nothing downstream closes this —
- * `ai_conversations` has no trigger and no CHECK coupling `board_id` to
- * `org_id`, and the insert policy validates only `user_id` and the caller's own
- * `org_id` — so a trusted `boardId` would let any authenticated user place a
- * titled, attacker-authored thread into a foreign board's dock by sharing it
- * afterwards.
+ * is not a board the caller may write to — otherwise a trusted `boardId` would
+ * let any authenticated user place a titled, attacker-authored thread into a
+ * foreign board's dock by sharing it afterwards.
+ *
+ * `org_id` rides along on the SAME single-row lookup — no extra round-trip — so
+ * the caller can check that the board's org is the org this request is acting
+ * as. Since 2026-08-04 the database enforces that coupling too:
+ * `ai_conversations_board_org_fkey` is a composite FK `(board_id, org_id) ->
+ * boards (id, org_id)`, so a mismatched pair is refused by Postgres even if this
+ * guard is ever bypassed. The guard exists to make the refusal a sentence rather
+ * than a SQLSTATE; the constraint is the invariant.
  */
-async function readableBoardId(boardId: string): Promise<string | null> {
+async function readableBoard(boardId: string): Promise<ReadableBoard | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("boards")
-    .select("id")
+    .select("id, org_id")
     .eq("id", boardId)
     .maybeSingle();
-  return data?.id ?? null;
+  return data ? { id: data.id, orgId: data.org_id } : null;
 }
 
 /**
@@ -82,14 +90,14 @@ export async function createConversation(input: {
   const parsed = messageSchema.safeParse(input.firstMessage);
   if (!parsed.success) return fail("Message must be 1–4000 characters.");
 
-  let boardId: string | null = null;
+  let board: ReadableBoard | null = null;
   if (input.boardId !== undefined) {
     const b = idSchema.safeParse(input.boardId);
     if (!b.success) return fail("Invalid board.");
-    boardId = await readableBoardId(b.data);
+    board = await readableBoard(b.data);
     // Fails CLOSED, and with one message for both "not yours" and "not there" —
     // distinguishing them would make this a board-membership oracle.
-    if (!boardId) return fail("Board not found.");
+    if (!board) return fail("Board not found.");
   }
 
   let agentId: string | null = null;
@@ -105,6 +113,22 @@ export async function createConversation(input: {
   const user = await requireUser();
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
+
+  // The thread's org attribution must be the board's org. Reachable only for a
+  // board the caller has already proven they may read, so naming the mismatch
+  // leaks nothing readableBoard did not already concede.
+  //
+  // Deliberately NOT "derive org_id from the board instead": /api/ask/route.ts
+  // independently resolves resolveActiveOrg() for requireAiEntitlement() and for
+  // usage recording on EVERY turn, so deriving here would stamp the thread org A
+  // while every turn in it is billed to org B — an attribution drift traded for a
+  // billing drift.
+  if (board && board.orgId !== org.id) {
+    return fail(
+      "This board is in a different organization. Switch to it to chat here.",
+    );
+  }
+
   const workspaceId = await getActiveWorkspaceId(
     await listWorkspacesCached(org.id),
   );
@@ -117,7 +141,7 @@ export async function createConversation(input: {
       user_id: user.id,
       workspace_id: workspaceId || null,
       title: "New chat",
-      board_id: boardId,
+      board_id: board?.id ?? null,
       agent_id: agentId,
       // `visibility` is deliberately omitted: the column default 'private' is
       // what makes the widened SELECT policy unable to match a fresh row.
@@ -136,7 +160,7 @@ export async function createConversation(input: {
   // A board thread never revalidates: /ask does not list it in this surface's
   // flow, and revalidating the BOARD path would re-run getBoardPayload on every
   // send — the exact refetch working agreement #5 forbids (gotcha-09).
-  if (!boardId) revalidatePath("/ask");
+  if (!board) revalidatePath("/ask");
   return { ok: true, data: { conversationId: conv.data.id } };
 }
 
