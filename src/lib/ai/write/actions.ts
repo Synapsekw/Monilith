@@ -140,7 +140,8 @@ export async function executeActions(input: {
       return fail("AI is turned off for your organization.");
 
     const results: ExecutionResult[] = [];
-    for (const action of parsed.data) results.push(await executeAction(action));
+    for (const action of parsed.data)
+      results.push((await executeAction(action)).result);
     return { ok: true, data: { results } };
   } catch {
     return fail("Couldn't apply that action. Please try again.");

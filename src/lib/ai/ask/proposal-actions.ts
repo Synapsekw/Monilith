@@ -148,7 +148,7 @@ export async function applyAskProposal(input: {
 
     const results: ExecutionResult[] = [];
     for (const action of loaded.actions)
-      results.push(await executeAction(action));
+      results.push((await executeAction(action)).result);
 
     return await insertOutcome(
       supabase,

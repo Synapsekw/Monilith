@@ -58,7 +58,15 @@ beforeEach(() => {
   });
   mockPriorLimit.mockResolvedValue({ data: [], error: null });
   mockInsertSingle.mockResolvedValue({ data: { id: "o1" }, error: null });
-  mockExecuteAction.mockResolvedValue({ ok: true, itemId: "i1" });
+  mockExecuteAction.mockResolvedValue({
+    result: { ok: true, itemId: "i1" },
+    effect: {
+      kind: "item_created",
+      boardId: "b1",
+      item: { id: "i1", board_id: "b1", group_id: "g1" },
+      cells: [],
+    },
+  });
 });
 
 describe("applyAskProposal", () => {
@@ -141,8 +149,8 @@ describe("applyAskProposal", () => {
 
   it("records a failed execution instead of claiming success", async () => {
     mockExecuteAction.mockResolvedValue({
-      ok: false,
-      error: "No date column.",
+      result: { ok: false, error: "No date column." },
+      effect: null,
     });
     const res = await applyAskProposal({
       conversationId: CONV,

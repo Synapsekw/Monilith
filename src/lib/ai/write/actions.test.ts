@@ -41,8 +41,17 @@ vi.mock("./propose", () => ({
     messages: GROWN_TRANSCRIPT,
   })),
 }));
+// executeAction now returns the persisted result AND the transient board effect
+// beside it — the rows the write produced, which never enter tool_trace.
 const { executeAction } = vi.hoisted(() => ({
-  executeAction: vi.fn(async () => ({ ok: true })),
+  executeAction: vi.fn(async () => ({
+    result: { ok: true },
+    effect: {
+      kind: "group_created",
+      boardId: "b1",
+      group: { id: "g9", board_id: "b1" },
+    },
+  })),
 }));
 vi.mock("./execute", () => ({ executeAction }));
 
