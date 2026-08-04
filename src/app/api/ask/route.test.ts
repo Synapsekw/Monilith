@@ -69,6 +69,7 @@ const askPulseStreamMock = vi.fn(
     emit,
   }: {
     emit: (e: { type: string; text: string }) => void;
+    system: string;
   }): Promise<StreamResult> => {
     emit({ type: "token", text: "Hi" });
     return {
@@ -82,7 +83,10 @@ const askPulseStreamMock = vi.fn(
 vi.mock("@/lib/ai/ask/ask-stream", () => ({
   askPulseStream: (a: unknown) =>
     askPulseStreamMock(
-      a as { emit: (e: { type: string; text: string }) => void },
+      a as {
+        emit: (e: { type: string; text: string }) => void;
+        system: string;
+      },
     ),
 }));
 vi.mock("@/lib/profile/queries-cached", () => ({
@@ -114,24 +118,90 @@ vi.mock("@/lib/ai/ask/context", async (importActual) => {
 const single = vi.fn(async () => ({ data: { id: "a1" }, error: null }));
 const insertSpy = vi.fn(() => ({ select: () => ({ single }) }));
 const updateSpy = vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) }));
+
+const USER_ID = "u1"; // matches the requireUser mock above.
+
+type ConversationRow = {
+  summary: string | null;
+  summarized_upto: string | null;
+  board_id: string | null;
+  agent_id: string | null;
+  user_id: string;
+};
+const defaultConversationRow = (): ConversationRow => ({
+  summary: null,
+  summarized_upto: null,
+  board_id: null,
+  agent_id: null,
+  user_id: USER_ID,
+});
+let conversationRow: { data: ConversationRow | null; error: unknown } = {
+  data: defaultConversationRow(),
+  error: null,
+};
+let agentRow: {
+  data: { name: string; instructions: string } | null;
+  error: unknown;
+} = { data: null, error: null };
+let boardRow: { data: { id: string; name: string } | null; error: unknown } = {
+  data: null,
+  error: null,
+};
+
+/** Overrides the conversation row `ai_conversations` reads back for the next
+ *  POST. `user_id` defaults to the caller so existing tests keep passing the
+ *  owner gate without having to know it exists. */
+function mockConversationRow(overrides: Partial<ConversationRow>) {
+  conversationRow = {
+    data: { ...defaultConversationRow(), ...overrides },
+    error: null,
+  };
+}
+/** Overrides the `user_agents` row the route reads back for `agent_id`. Pass
+ *  `null` to simulate a dangling/unreadable agent id. */
+function mockAgentRow(row: { name: string; instructions: string } | null) {
+  agentRow = { data: row, error: null };
+}
+
+// Table-routed, because the route now reads three different tables through the
+// same client: ai_conversations (owner gate + persona/board ids), boards and
+// user_agents (persona/board lookups, via maybeSingle so a missing row is not
+// an error), and ai_messages (the assistant insert).
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          single: vi.fn(async () => ({
-            data: { summary: null, summarized_upto: null },
-            error: null,
-          })),
-        }),
-      }),
-      insert: insertSpy,
-      update: updateSpy,
-    }),
+    from: (table: string) => {
+      if (table === "ai_conversations") {
+        return {
+          select: () => ({
+            eq: () => ({ single: vi.fn(async () => conversationRow) }),
+          }),
+          update: updateSpy,
+        };
+      }
+      if (table === "ai_messages") {
+        return { insert: insertSpy };
+      }
+      if (table === "boards") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: vi.fn(async () => boardRow) }),
+          }),
+        };
+      }
+      if (table === "user_agents") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: vi.fn(async () => agentRow) }),
+          }),
+        };
+      }
+      throw new Error(`unmocked table in test double: ${table}`);
+    },
   })),
 }));
 
 import { POST } from "./route";
+import { runAi } from "@/lib/ai/gateway";
 import { OPENING_STATUS } from "@/lib/ai/ask/stream-protocol";
 
 const CONV_ID = "11111111-1111-4111-8111-111111111111";
@@ -144,6 +214,9 @@ const makeReq = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   afterTasks.length = 0;
+  conversationRow = { data: defaultConversationRow(), error: null };
+  agentRow = { data: null, error: null };
+  boardRow = { data: null, error: null };
 });
 
 describe("POST /api/ask", () => {
@@ -348,5 +421,64 @@ describe("POST /api/ask · client disconnect", () => {
   it("hands the turn to after() so the platform keeps the invocation alive", async () => {
     await (await POST(makeReq())).text();
     expect(afterTasks).toHaveLength(1);
+  });
+});
+
+// Task 4: the conversation row — not the request body — is now the source of
+// the board and agent ids for a turn, so ownership and persona composition are
+// asserted against `ai_conversations`, `boards` and `user_agents` reads.
+describe("POST /api/ask · ownership, persona, and board scope", () => {
+  const BOARD_ID = "board-1";
+  const AGENT_ID = "agent-1";
+  const SOMEONE_ELSE_ID = "u2";
+
+  it("refuses a turn on a conversation the caller does not own", async () => {
+    // A board member can READ a shared thread, but a turn spends the OWNER's
+    // tokens and appends to their thread. Without this gate, read access to a
+    // shared thread would be a licence to bill its owner.
+    mockConversationRow({
+      board_id: BOARD_ID,
+      agent_id: null,
+      user_id: SOMEONE_ELSE_ID,
+    });
+    const res = await POST(makeReq());
+    expect(res.status).toBe(403);
+    expect(runAi).not.toHaveBeenCalled();
+  });
+
+  it("composes the agent persona into the system prompt for an agent thread", async () => {
+    mockConversationRow({ board_id: null, agent_id: AGENT_ID });
+    mockAgentRow({ name: "Morning Brief", instructions: "Focus on blockers." });
+    // The persona is composed before the turn's async work runs; draining the
+    // body is what synchronizes the test with that turn, same as the other
+    // assertions on askPulseStreamMock's calls in this file.
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).toContain("<agent_instructions>");
+    expect(system).toContain("Focus on blockers.");
+  });
+
+  it("meters a dock turn as ask_pulse, never against the agent run cap", async () => {
+    // max_agent_runs_per_user_per_day bounds UNATTENDED spend. Charging
+    // conversation against it would let an afternoon of chat silently cancel
+    // tomorrow's briefing.
+    mockConversationRow({ board_id: BOARD_ID, agent_id: AGENT_ID });
+    mockAgentRow({ name: "Morning Brief", instructions: "Focus on blockers." });
+    await (await POST(makeReq())).text();
+    expect(runAi).toHaveBeenCalledWith(
+      expect.objectContaining({ feature: "ask_pulse" }),
+      expect.any(Function),
+    );
+  });
+
+  it("ignores an agent the caller cannot read and still runs the turn", async () => {
+    // agent_id survives a deletion race as a dangling value only until the FK's
+    // ON DELETE SET NULL lands. A row we cannot read must degrade to plain Ask,
+    // not fail the turn — the thread's history is still worth continuing.
+    mockConversationRow({ board_id: null, agent_id: AGENT_ID });
+    mockAgentRow(null);
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).not.toContain("<agent_instructions>");
   });
 });
