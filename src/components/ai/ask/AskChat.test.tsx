@@ -36,6 +36,9 @@ const applyAskProposal = vi.fn<ProposalCall>(async () => ({
       outcome: "applied" as const,
       results: [{ ok: true as const, itemId: "i1" }],
     },
+    // Transient rows the write produced — folded into the board cache, never
+    // persisted into tool_trace.
+    effects: [{ kind: "item_moved" as const, boardId: "b1" }],
   },
 }));
 const cancelAskProposal = vi.fn<ProposalCall>(async () => ({
@@ -44,6 +47,7 @@ const cancelAskProposal = vi.fn<ProposalCall>(async () => ({
     messageId: "o2",
     content: "Cancelled — nothing was changed.",
     trace: { resolvesProposal: "a1", outcome: "cancelled" as const },
+    effects: [],
   },
 }));
 vi.mock("@/lib/ai/ask/proposal-actions", () => ({
@@ -53,6 +57,13 @@ vi.mock("@/lib/ai/ask/proposal-actions", () => ({
 const send = vi.fn();
 vi.mock("./use-ask-stream", () => ({
   useAskStream: () => ({ streaming: false, send }),
+}));
+// Mocked so the assertion needs no seeded board cache — what matters here is
+// that the approve path hands the server's effects to the one hook that folds
+// them into ["board", boardId].
+const applyEffects = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/boards/use-ai-effects", () => ({
+  useApplyBoardEffects: () => applyEffects,
 }));
 
 import { AskChat } from "./AskChat";
@@ -187,6 +198,64 @@ describe("AskChat", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+  });
+});
+
+/** Drive a turn that ends at a confirm card, then hand back the rendered card. */
+async function renderProposal() {
+  send.mockImplementation(
+    async (_id: string, onEvent: (e: Record<string, unknown>) => void) => {
+      onEvent({ type: "proposal", actions: [ACTION] });
+      onEvent({
+        type: "done",
+        conversationId: "c1",
+        assistantMessageId: "a1",
+        boardsConsulted: ["b1"],
+      });
+    },
+  );
+  render(<AskChat conversationId={null} initialMessages={[]} />);
+  ask("create Ship v2 in Backlog");
+  await waitFor(() =>
+    expect(screen.getByText(ACTION.summary)).toBeInTheDocument(),
+  );
+}
+
+// The last mile: an approved write must appear on the board behind the dock
+// with no reload, no router.refresh (gotcha-09) and no invalidateQueries.
+describe("AskChat — rendering an approved write on the board", () => {
+  it("applies the returned board effects when a proposal is approved", async () => {
+    await renderProposal();
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() =>
+      expect(applyEffects).toHaveBeenCalledWith([
+        expect.objectContaining({ kind: "item_moved", boardId: "b1" }),
+      ]),
+    );
+  });
+
+  it("applies nothing when a proposal is cancelled", async () => {
+    await renderProposal();
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    await waitFor(() => expect(applyEffects).toHaveBeenCalledWith([]));
+  });
+
+  it("applies no effects when the approve itself failed", async () => {
+    applyAskProposal.mockResolvedValueOnce({
+      ok: false,
+      error: "This proposal was already resolved.",
+    } as never);
+    await renderProposal();
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/this proposal was already resolved/i),
+      ).toBeInTheDocument(),
+    );
+    expect(applyEffects).not.toHaveBeenCalled();
   });
 });
 

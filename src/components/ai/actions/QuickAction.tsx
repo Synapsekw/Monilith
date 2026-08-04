@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Kicker } from "@/components/ui/kicker";
 import { proposeActions, executeActions } from "@/lib/ai/write/actions";
+import { useApplyBoardEffects } from "@/lib/boards/use-ai-effects";
 import { ActionConfirmCard, type ConfirmState } from "./ActionConfirmCard";
 import type {
   ValidatedAction,
@@ -48,6 +49,9 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
   const [state, setState] = useState<ConfirmState>("idle");
   const [note, setNote] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Renders an approved write on a mounted board with no round-trip. ⌘K opens
+  // over any page, so this is a silent no-op wherever no board cache exists.
+  const applyBoardEffects = useApplyBoardEffects();
   const boxRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -98,6 +102,9 @@ export function QuickAction({ onClose }: { onClose: () => void }) {
         return;
       }
       const failed = res.data.results.find((r) => !r.ok);
+      // BEFORE the failure branch on purpose: a create whose field write failed
+      // still created the row, so the board must show what actually landed.
+      applyBoardEffects(res.data.effects);
       if (failed && !failed.ok) {
         setState("error");
         setNote(failed.error);

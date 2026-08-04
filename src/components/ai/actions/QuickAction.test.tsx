@@ -7,12 +7,20 @@ const { proposeActions, executeActions } = vi.hoisted(() => ({
   executeActions: vi.fn(),
 }));
 vi.mock("@/lib/ai/write/actions", () => ({ proposeActions, executeActions }));
+// Mocked so the assertion needs no seeded board cache — what matters here is
+// that ⌘K's approve path hands the server's effects to the one hook that folds
+// them into ["board", boardId].
+const applyEffects = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/boards/use-ai-effects", () => ({
+  useApplyBoardEffects: () => applyEffects,
+}));
 
 import { QuickAction } from "./QuickAction";
 
 beforeEach(() => {
   proposeActions.mockReset();
   executeActions.mockReset();
+  applyEffects.mockReset();
 });
 
 describe("QuickAction", () => {
@@ -169,6 +177,91 @@ describe("QuickAction", () => {
     await userEvent.click(screen.getByRole("button", { name: /approve/i }));
     expect(await screen.findByText(/^Done\.$/)).toBeInTheDocument();
     expect(screen.queryByText(/created/i)).not.toBeInTheDocument();
+  });
+
+  it("folds the returned board effects into the board cache on approve", async () => {
+    proposeActions.mockResolvedValue({
+      ok: true,
+      data: {
+        actions: [
+          {
+            kind: "move_item",
+            boardId: "b1",
+            itemId: "i-qysea",
+            groupId: "g-software",
+            summary: 'Move "QYSEA" from Backlog to Software',
+            warnings: [],
+          },
+        ],
+      },
+    });
+    executeActions.mockResolvedValue({
+      ok: true,
+      data: {
+        results: [{ ok: true }],
+        effects: [{ kind: "item_moved", boardId: "b1", subitemIds: [] }],
+      },
+    });
+
+    render(<QuickAction onClose={() => {}} />);
+    await userEvent.type(
+      screen.getByLabelText(/command/i),
+      "move QYSEA to Software",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^run$/i }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /approve/i }),
+    );
+
+    expect(applyEffects).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: "item_moved", boardId: "b1" }),
+    ]);
+  });
+
+  it("still renders what landed when one action of the batch failed", async () => {
+    // A create whose field write failed still created the row — the effect
+    // rides along with the error, so the board must show it.
+    proposeActions.mockResolvedValue({
+      ok: true,
+      data: {
+        actions: [
+          {
+            kind: "create_item",
+            boardId: "b1",
+            groupId: "g1",
+            name: "Ship v2",
+            summary: 'Create task "Ship v2" in Backlog',
+            warnings: [],
+          },
+        ],
+      },
+    });
+    executeActions.mockResolvedValue({
+      ok: true,
+      data: {
+        results: [{ ok: false, error: "date: No date column." }],
+        effects: [
+          {
+            kind: "item_created",
+            boardId: "b1",
+            item: { id: "i9" },
+            cells: [],
+          },
+        ],
+      },
+    });
+
+    render(<QuickAction onClose={() => {}} />);
+    await userEvent.type(screen.getByLabelText(/command/i), "create Ship v2");
+    await userEvent.click(screen.getByRole("button", { name: /^run$/i }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /approve/i }),
+    );
+
+    expect(await screen.findByText(/no date column/i)).toBeInTheDocument();
+    expect(applyEffects).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: "item_created" }),
+    ]);
   });
 
   it("surfaces a failed proposal as an alert", async () => {
