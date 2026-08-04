@@ -104,8 +104,16 @@ export function useDockState(boardId: string) {
   };
 }
 
-/** Tailwind's `md` breakpoint (48rem), expressed as "below it". */
-const NARROW = "(max-width: 47.99rem)";
+/**
+ * The exact NEGATION of Tailwind's `md` breakpoint.
+ *
+ * Written as `not all and (min-width: …)` rather than a hand-converted
+ * `(max-width: 47.99rem)`, because the hand-converted bound leaves a hairline
+ * band — 47.99rem to 48rem — that is neither `md:` nor "narrow". An open dock
+ * inside that band would render neither surface, and the collapsed trigger that
+ * could reopen it is gone too. A negation cannot have a gap.
+ */
+const NARROW = "not all and (min-width: 48rem)";
 
 function subscribe(callback: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
@@ -115,6 +123,8 @@ function subscribe(callback: () => void): () => void {
 }
 
 function getSnapshot(): boolean {
+  // No matchMedia means no evidence of a phone — assume the wide layout, which
+  // is also what the server assumes.
   if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia(NARROW).matches;
 }

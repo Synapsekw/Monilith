@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,7 @@ import {
 import { AskChat } from "@/components/ai/ask/AskChat";
 import type { UIMessage } from "@/components/ai/ask/MessageList";
 import type { BoardThreadRow } from "@/lib/ai/ask/board-threads";
+import { setThreadVisibility } from "@/lib/ai/ask/conversation-actions";
 import { loadDockThreads, loadThreadMessages } from "./dock-actions";
 import { AgentSwitcher, type DockAgent } from "./AgentSwitcher";
 import { DockThreadList } from "./DockThreadList";
@@ -49,6 +50,17 @@ function syncThreadParam(conversationId: string | null) {
   );
 }
 
+/**
+ * What went wrong, and what retrying it would mean. Carrying the kind is what
+ * lets "Try again" re-run the read that actually failed rather than always
+ * re-running the list.
+ */
+type Failure =
+  | { kind: "threads"; message: string }
+  | { kind: "thread"; conversationId: string; message: string }
+  | { kind: "share"; message: string }
+  | null;
+
 type DockBodyProps = {
   agents: DockAgent[];
   agentNames: Record<string, string>;
@@ -61,18 +73,24 @@ type DockBodyProps = {
   /** Omitted inside the Sheet, which brings its own close affordance. */
   onClose?: () => void;
   error: string | null;
-  onRetry: () => void;
+  /** Absent when the failure has nothing to retry (an optimistic write that
+   *  already rolled itself back). */
+  onRetry?: () => void;
   loading: boolean;
   boardThreads: BoardThreadRow[];
   agentThreads: BoardThreadRow[];
   activeId: string | null;
   currentUserId: string;
   onSelectThread: (id: string) => void;
+  onToggleShare: (thread: BoardThreadRow) => void;
+  sharingId: string | null;
   threadLoading: boolean;
   readOnly: boolean;
   boardId: string;
   messages: UIMessage[];
   agentId: string | null;
+  /** Identity of the CHAT INSTANCE, not of the conversation — see `chatKey`. */
+  chatKey: string;
   onStarted: (conversationId: string) => void;
   onTurnComplete: () => void;
 };
@@ -100,11 +118,14 @@ function DockBody({
   activeId,
   currentUserId,
   onSelectThread,
+  onToggleShare,
+  sharingId,
   threadLoading,
   readOnly,
   boardId,
   messages,
   agentId,
+  chatKey,
   onStarted,
   onTurnComplete,
 }: DockBodyProps) {
@@ -142,9 +163,11 @@ function DockBody({
       {error && (
         <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1.5">
           <p className="text-destructive min-w-0 flex-1 text-xs">{error}</p>
-          <Button variant="ghost" size="xs" onClick={onRetry}>
-            Try again
-          </Button>
+          {onRetry && (
+            <Button variant="ghost" size="xs" onClick={onRetry}>
+              Try again
+            </Button>
+          )}
         </div>
       )}
 
@@ -164,7 +187,9 @@ function DockBody({
             activeId={activeId}
             currentUserId={currentUserId}
             agentNames={agentNames}
+            sharingId={sharingId}
             onSelect={onSelectThread}
+            onToggleShare={onToggleShare}
           />
         )}
       </div>
@@ -188,10 +213,18 @@ function DockBody({
           </p>
         ) : (
           <AskChat
-            // Remount per thread so AskChat's internal state never leaks across
-            // conversations. Mounted only once its messages are in hand —
-            // `initialMessages` is read at mount and never again.
-            key={activeId ?? `new-${agentId ?? "ask"}`}
+            // Keyed on the CHAT INSTANCE, never on `activeId`.
+            //
+            // AskChat calls `onStarted` the moment createConversation resolves
+            // — BEFORE the stream opens — so `activeId` flips from null to the
+            // new id in the middle of a live turn. Keying on it would unmount
+            // the running chat and mount a fresh one with `initialMessages`
+            // still `[]`, and since that prop is snapshotted at mount with no
+            // re-sync, the user's question and the streaming answer would be
+            // gone for good. The instance id changes only where a reset is
+            // actually wanted: selecting a thread, starting a new one, or
+            // switching persona.
+            key={chatKey}
             conversationId={activeId}
             initialMessages={messages}
             boardId={boardId}
@@ -236,15 +269,25 @@ export function BoardDock({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [agentId, setAgentId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure>(null);
   const [loading, setLoading] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
+  const [sharingId, setSharingId] = useState<string | null>(null);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
+  /**
+   * Identity of the mounted chat, deliberately NOT `activeId`. Bumped only
+   * where a fresh chat is genuinely wanted; adopting a just-minted conversation
+   * id mid-turn must not remount (see the `key` in DockBody).
+   */
+  const [chatInstance, setChatInstance] = useState(0);
   const loaded = useRef(false);
   /** The next turn is a first turn, which auto-titles the thread server-side. */
   const untitled = useRef(false);
   /** Guards against an older thread's messages landing after a newer click. */
   const selectToken = useRef(0);
+  /** A `?thread=` link not yet honoured. Survives a failed load, so the retry
+   *  still lands on the thread the user was sent to. */
+  const deepLinkPending = useRef(true);
 
   const agentNames = Object.fromEntries(agents.map((a) => [a.id, a.name]));
 
@@ -253,64 +296,123 @@ export function BoardDock({
     setActiveId(id);
     setMessages([]);
     setThreadLoading(true);
-    setError(null);
+    setFailure(null);
+    setChatInstance((n) => n + 1);
     untitled.current = false;
+    deepLinkPending.current = false;
     syncThreadParam(id);
-    const res = await loadThreadMessages({ conversationId: id });
-    if (selectToken.current !== token) return;
-    setThreadLoading(false);
-    if (res.ok) setMessages(res.data.messages);
-    else setError(res.error);
+    try {
+      const res = await loadThreadMessages({ conversationId: id });
+      if (selectToken.current !== token) return;
+      setThreadLoading(false);
+      if (res.ok) setMessages(res.data.messages);
+      else
+        setFailure({ kind: "thread", conversationId: id, message: res.error });
+    } catch {
+      // A REJECTION, not an `ok: false`: a dropped connection, a 500, or a
+      // deploy that moved the action id. Without this the skeleton below stays
+      // on screen forever and the failure surfaces only as an unhandled
+      // rejection in the console.
+      if (selectToken.current !== token) return;
+      setThreadLoading(false);
+      setFailure({
+        kind: "thread",
+        conversationId: id,
+        message: "Couldn't open this thread.",
+      });
+    }
   }, []);
 
-  const fetchThreads = useCallback(async () => {
+  /**
+   * Read the thread list. The ONLY fetch path — the open click, a restored-open
+   * dock, the retry button and the first-turn re-read all come through here.
+   */
+  const loadThreads = useCallback(async () => {
     setLoading(true);
-    setError(null);
-    const res = await loadDockThreads({ boardId });
-    setLoading(false);
-    if (!res.ok) {
-      // Let a retry happen: a failed load must not leave the dock permanently
-      // empty with no way back.
+    setFailure(null);
+    let data: { board: BoardThreadRow[]; agent: BoardThreadRow[] };
+    try {
+      const res = await loadDockThreads({ boardId });
+      setLoading(false);
+      if (!res.ok) {
+        // Let a retry happen: a failed load must not leave the dock
+        // permanently empty with no way back.
+        loaded.current = false;
+        setFailure({ kind: "threads", message: res.error });
+        return;
+      }
+      data = res.data;
+    } catch {
+      setLoading(false);
       loaded.current = false;
-      setError(res.error);
+      setFailure({ kind: "threads", message: "Couldn't load threads." });
       return;
     }
-    setBoardThreads(res.data.board);
-    setAgentThreads(res.data.agent);
-    return res.data;
-  }, [boardId]);
+    setBoardThreads(data.board);
+    setAgentThreads(data.agent);
 
-  const openDock = useCallback(() => {
-    setOpen(true);
-    if (loaded.current) return;
+    // Honour a `?thread=` deep link once, and only for a thread this user can
+    // actually see — the list is already RLS-scoped, so membership is simply
+    // "is it in the rows we got back". Left pending on failure so the retry
+    // still honours it; cleared here so the first-turn re-read does not yank
+    // the user back to it.
+    if (!deepLinkPending.current) return;
+    deepLinkPending.current = false;
+    const wanted = new URLSearchParams(window.location.search).get("thread");
+    if (!wanted) return;
+    if ([...data.board, ...data.agent].some((t) => t.id === wanted)) {
+      void selectThread(wanted);
+    }
+  }, [boardId, selectThread]);
+
+  /**
+   * Load on OPEN — whether the user just clicked, or the dock came back open
+   * from `localStorage` on a later visit to this board.
+   *
+   * The click handler used to own this, so a remembered-open dock rendered with
+   * empty arrays and told the user "No threads yet" over a board that had
+   * threads, and silently dropped any `?thread=` link. The collapsed-costs-
+   * nothing guarantee is unchanged: `open` is false, so this returns before the
+   * fetch.
+   */
+  useEffect(() => {
+    if (!open || loaded.current) return;
     loaded.current = true;
-    void fetchThreads().then((data) => {
-      if (!data) return;
-      // Honour a `?thread=` deep link once, and only for a thread this user can
-      // actually see — the list is already RLS-scoped, so membership is simply
-      // "is it in the rows we got back".
-      const wanted = new URLSearchParams(window.location.search).get("thread");
-      if (!wanted) return;
-      const known = [...data.board, ...data.agent].some((t) => t.id === wanted);
-      if (known) void selectThread(wanted);
-    });
-  }, [fetchThreads, selectThread, setOpen]);
+    void loadThreads();
+  }, [open, loadThreads]);
 
   const retry = useCallback(() => {
+    // Retry what actually failed. Re-running the list read after a THREAD read
+    // failed would clear the message and change nothing the user asked for.
+    if (failure?.kind === "thread") {
+      void selectThread(failure.conversationId);
+      return;
+    }
     loaded.current = true;
-    void fetchThreads();
-  }, [fetchThreads]);
+    void loadThreads();
+  }, [failure, loadThreads, selectThread]);
 
   const startNew = useCallback(() => {
     selectToken.current++;
     setActiveId(null);
     setMessages([]);
     setThreadLoading(false);
+    setChatInstance((n) => n + 1);
     untitled.current = false;
+    deepLinkPending.current = false;
     syncThreadParam(null);
   }, []);
 
+  /** Switching persona applies to the NEXT thread, so the composer starts over. */
+  const changeAgent = useCallback((next: string | null) => {
+    setAgentId(next);
+    setChatInstance((n) => n + 1);
+  }, []);
+
   const onStarted = useCallback((id: string) => {
+    // Adopt the id WITHOUT bumping `chatInstance`: this fires mid-turn, before
+    // the stream opens, and remounting here would throw away the question and
+    // the answer arriving behind it.
     setActiveId(id);
     untitled.current = true;
     syncThreadParam(id);
@@ -323,7 +425,7 @@ export function BoardDock({
     // server query (gotcha-09).
     if (untitled.current) {
       untitled.current = false;
-      void fetchThreads();
+      void loadThreads();
       return;
     }
     setBoardThreads((prev) => {
@@ -331,7 +433,44 @@ export function BoardDock({
       if (!hit) return prev;
       return [hit, ...prev.filter((t) => t.id !== activeId)];
     });
-  }, [activeId, fetchThreads]);
+  }, [activeId, loadThreads]);
+
+  /**
+   * Put a thread on the board, or take it back.
+   *
+   * Optimistic: the row flips immediately and reverts if the action refuses.
+   * RLS scopes the update to the owner, so a failure here is a real failure,
+   * not a permission surprise — the affordance is already owner-only.
+   */
+  const toggleShare = useCallback(async (thread: BoardThreadRow) => {
+    const next = thread.visibility === "board" ? "private" : "board";
+    const apply = (visibility: string) => (rows: BoardThreadRow[]) =>
+      rows.map((t) => (t.id === thread.id ? { ...t, visibility } : t));
+    setSharingId(thread.id);
+    setFailure(null);
+    setBoardThreads(apply(next));
+    setAgentThreads(apply(next));
+    try {
+      const res = await setThreadVisibility({
+        conversationId: thread.id,
+        visibility: next,
+      });
+      if (!res.ok) {
+        setBoardThreads(apply(thread.visibility));
+        setAgentThreads(apply(thread.visibility));
+        setFailure({ kind: "share", message: res.error });
+      }
+    } catch {
+      setBoardThreads(apply(thread.visibility));
+      setAgentThreads(apply(thread.visibility));
+      setFailure({
+        kind: "share",
+        message: "Couldn't change who can see this thread.",
+      });
+    } finally {
+      setSharingId(null);
+    }
+  }, []);
 
   const shownWidth = dragWidth ?? width;
 
@@ -369,7 +508,9 @@ export function BoardDock({
           size="icon"
           aria-label="Open agent dock"
           className="bg-surface border-border shadow-panel md:border-transparent md:bg-transparent md:shadow-none"
-          onClick={openDock}
+          // Opening is just state. The fetch hangs off `open` in an effect, so
+          // the click and a dock restored open from storage take one path.
+          onClick={() => setOpen(true)}
         >
           <PanelRightOpen className="size-4" />
         </Button>
@@ -396,21 +537,26 @@ export function BoardDock({
         : null
       : agentId,
     switcherLocked: activeId !== null,
-    onAgentChange: setAgentId,
+    onAgentChange: changeAgent,
     onNew: startNew,
-    error,
-    onRetry: retry,
+    error: failure?.message ?? null,
+    // An optimistic share that rolled itself back has nothing to re-run — the
+    // thread is already showing its true visibility again.
+    onRetry: failure && failure.kind !== "share" ? retry : undefined,
     loading,
     boardThreads,
     agentThreads,
     activeId,
     currentUserId,
     onSelectThread: (id: string) => void selectThread(id),
+    onToggleShare: (t: BoardThreadRow) => void toggleShare(t),
+    sharingId,
     threadLoading,
     readOnly: Boolean(activeThread && activeThread.user_id !== currentUserId),
     boardId,
     messages,
     agentId,
+    chatKey: `chat-${chatInstance}`,
     onStarted,
     onTurnComplete,
   };
@@ -437,7 +583,10 @@ export function BoardDock({
   return (
     <aside
       aria-label="Agent dock"
-      className="relative hidden min-w-0 shrink-0 flex-col border-l md:flex"
+      // No `hidden md:flex`: `narrow` has already decided this is the wide
+      // surface, and a second, independently-computed breakpoint here is what
+      // opens a band where neither surface renders.
+      className="relative flex min-w-0 shrink-0 flex-col border-l"
       style={{ width: shownWidth }}
     >
       {/* Hairlines brighten rather than thicken: the grip is invisible until you

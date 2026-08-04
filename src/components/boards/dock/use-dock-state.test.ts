@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { createElement } from "react";
+import { render, renderHook, act } from "@testing-library/react";
 import {
   useDockState,
   clampDockWidth,
@@ -9,20 +10,42 @@ import {
 
 beforeEach(() => window.localStorage.clear());
 
+/** Every value the hook has ever returned, oldest first. `renderHook` only
+ *  exposes the LATEST one, which is exactly the render this constraint is not
+ *  about. */
+function recordRenders(boardId: string) {
+  const seen: { open: boolean; width: number; hydrated: boolean }[] = [];
+  function Probe() {
+    const s = useDockState(boardId);
+    seen.push({ open: s.open, width: s.width, hydrated: s.hydrated });
+    return null;
+  }
+  render(createElement(Probe));
+  return seen;
+}
+
 describe("useDockState", () => {
-  it("renders CLOSED on the first pass even when storage says open", () => {
+  it("commits its FIRST render closed, even when storage says open", () => {
     window.localStorage.setItem(
       "monolith.dock.board-1",
       JSON.stringify({ open: true, width: 380 }),
     );
-    const { result } = renderHook(() => useDockState("board-1"));
-    // Reading storage during render would make the server and client disagree
-    // and produce a hydration mismatch (gotcha-50). The remembered state is
-    // applied in an effect, so the first committed render is always closed —
-    // by the time the hook reports `hydrated`, that effect has run.
-    expect(result.current.hydrated).toBe(true);
-    expect(result.current.open).toBe(true);
-    expect(result.current.width).toBe(380);
+    const seen = recordRenders("board-1");
+
+    // THE constraint (gotcha-50): a hook that seeded useState from
+    // localStorage during render would emit `open: true` on render 0, and the
+    // server — which has no localStorage — would have emitted `false`. That
+    // disagreement is the hydration mismatch. Asserting only the settled value
+    // (as an earlier version of this test did) passes either way, which makes
+    // it no guard at all.
+    expect(seen[0]).toEqual({
+      open: false,
+      width: DOCK_MIN_WIDTH,
+      hydrated: false,
+    });
+    // The remembered state arrives afterwards, from the effect.
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen.at(-1)).toEqual({ open: true, width: 380, hydrated: true });
   });
 
   it("persists open state per board", () => {

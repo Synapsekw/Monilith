@@ -47,10 +47,77 @@ describe("DockThreadList", () => {
     expect(screen.getByText(/shared/i)).toBeInTheDocument();
   });
 
-  it("does not mark your OWN shared thread as someone else's", () => {
+  it("offers the share toggle only on threads the caller owns", () => {
+    const onToggleShare = vi.fn();
+    render(
+      <DockThreadList
+        boardThreads={[
+          row({ id: "mine", title: "Mine", user_id: "me" }),
+          row({
+            id: "theirs",
+            title: "Theirs",
+            user_id: "someone-else",
+            visibility: "board",
+          }),
+        ]}
+        agentThreads={[]}
+        activeId={null}
+        currentUserId="me"
+        agentNames={{}}
+        onSelect={() => {}}
+        onToggleShare={onToggleShare}
+      />,
+    );
+    // RLS scopes the update to the owner regardless; this is the affordance,
+    // and offering a control that always fails is worse than not offering it.
+    expect(
+      screen.getByRole("button", { name: /share "mine" with this board/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /"theirs"/i })).toBeNull();
+  });
+
+  it("names the share toggle after what pressing it does", async () => {
+    const onToggleShare = vi.fn();
+    const shared = row({ user_id: "me", visibility: "board" });
+    render(
+      <DockThreadList
+        boardThreads={[shared]}
+        agentThreads={[]}
+        activeId={null}
+        currentUserId="me"
+        agentNames={{}}
+        onSelect={() => {}}
+        onToggleShare={onToggleShare}
+      />,
+    );
+    // Already on the board, so the action available is taking it back.
+    const toggle = screen.getByRole("button", {
+      name: /make "thread" private/i,
+    });
+    await userEvent.click(toggle);
+    expect(onToggleShare).toHaveBeenCalledWith(shared);
+  });
+
+  it("marks a board-visible thread as Shared whoever owns it", () => {
     render(
       <DockThreadList
         boardThreads={[row({ user_id: "me", visibility: "board" })]}
+        agentThreads={[]}
+        activeId={null}
+        currentUserId="me"
+        agentNames={{}}
+        onSelect={() => {}}
+      />,
+    );
+    // "Shared" states a fact about the thread — everyone on this board can
+    // read it — not a fact about who owns it.
+    expect(screen.getByText(/shared/i)).toBeInTheDocument();
+  });
+
+  it("does not mark a private thread as shared", () => {
+    render(
+      <DockThreadList
+        boardThreads={[row({ user_id: "me", visibility: "private" })]}
         agentThreads={[]}
         activeId={null}
         currentUserId="me"

@@ -101,7 +101,10 @@ describe("page-region scrollers reserve the scrollbar gutter", () => {
       join(SRC, "app", "(app)", "boards", "[boardId]", "page.tsx"),
       "utf8",
     );
-    expect(src).toMatch(/min-w-0/);
+    // Matched inside a `className` specifically. A bare /min-w-0/ over the
+    // whole file is satisfied by the JSX comment that EXPLAINS the class, so
+    // deleting the class itself would have kept this test green.
+    expect(src).toMatch(/className="[^"]*\bmin-w-0\b[^"]*"/);
   });
 
   it("keeps every skeleton in lockstep with the component it mirrors", () => {
