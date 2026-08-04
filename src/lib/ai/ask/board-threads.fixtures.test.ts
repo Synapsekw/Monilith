@@ -188,6 +188,31 @@ describe.skipIf(!resolution.ok)(
         );
       });
 
+      it("carries a thread DOCKED to gamma's board but left unshared", async () => {
+        // The discriminator for the `visibility = 'board'` conjunct. It must
+        // exist and be exactly (sharedBoardId, 'private') or the two assertions
+        // that depend on it become vacuous.
+        const { data, error } = await alpha.client
+          .from("ai_conversations")
+          .select("id, board_id, visibility, title")
+          .eq("id", F.dockedPrivateConversationId);
+        expect(error).toBeNull();
+        expect(data).toEqual([
+          {
+            id: F.dockedPrivateConversationId,
+            board_id: F.sharedBoardId,
+            visibility: "private",
+            title: F.dockedPrivateConversationTitle,
+          },
+        ]);
+
+        const messages = await alpha.client
+          .from("ai_messages")
+          .select("id")
+          .eq("conversation_id", F.dockedPrivateConversationId);
+        expect(messages.data ?? []).toEqual([{ id: F.dockedPrivateMessageId }]);
+      });
+
       it("keeps the pre-existing /ask thread private and boardless", async () => {
         // The regression subject. If the seed ever flipped these columns, the
         // headline assertion below would be testing the wrong row.
@@ -289,6 +314,66 @@ describe.skipIf(!resolution.ok)(
     });
 
     // -----------------------------------------------------------------------
+    // 2b. THE `visibility = 'board'` CONJUNCT — the only block that can see it.
+    // -----------------------------------------------------------------------
+    // Every other case in this file is refused by `board_id is not null` or by
+    // can_read_board(); verified on DEV, the shipped predicate and the same
+    // predicate with the visibility conjunct DELETED agree on all of them. This
+    // pair is the sole discriminator: the row differs from the readable thread
+    // in case 2 by exactly one column.
+    //
+    // It is also the row class the dock creates by default — `visibility` is
+    // NOT NULL DEFAULT 'private' with nothing coupling it to `board_id`, so a
+    // thread docked to a board and not yet shared holds private content behind
+    // this conjunct alone.
+    describe("a thread docked to a board but NOT shared stays owner-only", () => {
+      it("hides the docked-but-unshared thread from a member of that very board", async () => {
+        const { data, error } = await gamma.client
+          .from("ai_conversations")
+          .select("id")
+          .eq("id", F.dockedPrivateConversationId);
+        expect(error).toBeNull();
+        expect(
+          data ?? [],
+          "UNSHARED BOARD-DOCKED HISTORY HAS LEAKED — the visibility='board' " +
+            "conjunct is not being enforced on ai_conversations",
+        ).toEqual([]);
+      });
+
+      it("hides its turns from that same board member", async () => {
+        const { data, error } = await gamma.client
+          .from("ai_messages")
+          .select("id")
+          .eq("conversation_id", F.dockedPrivateConversationId);
+        expect(error).toBeNull();
+        expect(
+          data ?? [],
+          "UNSHARED BOARD-DOCKED MESSAGES HAVE LEAKED — the visibility='board' " +
+            "conjunct is not being enforced on ai_messages",
+        ).toEqual([]);
+      });
+
+      it("differs from the readable shared thread in exactly one column", async () => {
+        // Pins the discriminator itself. If a future seed edit ever moved this
+        // row to another board, or shared it, the two assertions above would
+        // start passing for the ordinary reason and silently stop testing the
+        // conjunct.
+        const { data } = await alpha.client
+          .from("ai_conversations")
+          .select("id, org_id, user_id, board_id, visibility")
+          .in("id", [F.sharedConversationId, F.dockedPrivateConversationId]);
+        const shared = data!.find((c) => c.id === F.sharedConversationId)!;
+        const docked = data!.find(
+          (c) => c.id === F.dockedPrivateConversationId,
+        )!;
+        expect(docked.org_id).toBe(shared.org_id);
+        expect(docked.user_id).toBe(shared.user_id);
+        expect(docked.board_id).toBe(shared.board_id);
+        expect(docked.visibility).not.toBe(shared.visibility);
+      });
+    });
+
+    // -----------------------------------------------------------------------
     // 3. Same org, wrong board — the conjunct that is easy to get wrong.
     // -----------------------------------------------------------------------
     describe("a same-org user who is not on the board cannot read the thread", () => {
@@ -351,8 +436,16 @@ describe.skipIf(!resolution.ok)(
           .select("id");
         expect(error).toBeNull();
         const ids = (data ?? []).map((c) => c.id);
+        // Positive control FIRST: an empty result would satisfy every
+        // `not.toContain` below, so a broken session or a future RLS regression
+        // on beta's OWN rows would turn this case green while proving nothing.
+        expect(
+          ids,
+          "beta cannot see its own thread — this case is vacuous",
+        ).toContain(BETA.conversationId);
         expect(ids).not.toContain(F.sharedConversationId);
         expect(ids).not.toContain(F.offBoardConversationId);
+        expect(ids).not.toContain(F.dockedPrivateConversationId);
         expect(ids).not.toContain(ALPHA.conversationId);
       });
     });

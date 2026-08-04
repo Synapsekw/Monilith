@@ -142,6 +142,16 @@ export const TIER2_BOARD_MEMBER_FIXTURE = {
  *
  * The private counterpart is the pre-existing `ALPHA.conversationId`, which
  * keeps `board_id = null` / `visibility = 'private'` — the regression subject.
+ *
+ * `dockedPrivateConversationId` is the row that makes the `visibility = 'board'`
+ * conjunct visible to the suite at all. It sits on `sharedBoardId` — the board
+ * gamma DOES hold — and differs from the readable `sharedConversationId` in
+ * exactly one column. Without it, `board_id is not null` and `can_read_board()`
+ * between them refuse every other row in the corpus, so deleting the visibility
+ * check from either policy would change nothing observable. It is also the row
+ * class the feature produces most: `visibility` is NOT NULL DEFAULT 'private'
+ * and nothing couples it to `board_id`, so a thread docked to a board and not
+ * yet shared lands here BY DEFAULT, holding private conversation content.
  */
 export const TIER2_BOARD_THREAD_FIXTURE = {
   orgId: "aaaa0000-0000-4000-8000-000000000001",
@@ -153,6 +163,13 @@ export const TIER2_BOARD_THREAD_FIXTURE = {
     "aaaa0000-0000-4000-8000-000000000009",
     "aaaa0000-0000-4000-8000-00000000000a",
   ],
+  /**
+   * Docked to `sharedBoardId` but NOT shared: `visibility = 'private'`. The sole
+   * discriminator for the second conjunct of both new policies.
+   */
+  dockedPrivateConversationId: "aaaa0000-0000-4000-8000-00000000000e",
+  dockedPrivateConversationTitle: "Alpha docked unshared thread",
+  dockedPrivateMessageId: "aaaa0000-0000-4000-8000-00000000000f",
   /** Alpha Off-Limits Board — same org, gamma is NOT a board member. */
   offBoardId: "aaaa0000-0000-4000-8000-00000000000b",
   offBoardName: "Alpha Off-Limits Board",

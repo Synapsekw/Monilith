@@ -235,6 +235,32 @@ describe("the board-thread seed and the TypeScript identities cannot drift", () 
     expect(missing).toEqual([]);
   });
 
+  it("seeds the docked-but-unshared discriminator row", () => {
+    // It lives in its own migration (minted after the review that caught the
+    // gap), so look across the whole migrations dir rather than one file.
+    const F = TIER2_BOARD_THREAD_FIXTURE;
+    const allSql = readdirSync(migrationsDir)
+      .filter((f) => f.endsWith(".sql"))
+      .map((f) => readFileSync(join(migrationsDir, f), "utf8"))
+      .join("\n");
+    for (const token of [
+      F.dockedPrivateConversationId,
+      F.dockedPrivateConversationTitle,
+      F.dockedPrivateMessageId,
+    ]) {
+      expect(allSql, `no migration seeds ${token}`).toContain(token);
+    }
+  });
+
+  it("makes the discriminator differ from the shared thread in ONE column only", () => {
+    // Same board as the readable thread, opposite visibility. Move it to
+    // another board and the `visibility = 'board'` conjunct goes back to being
+    // untested — which is exactly the gap this row was added to close.
+    const F = TIER2_BOARD_THREAD_FIXTURE;
+    expect(F.dockedPrivateConversationId).not.toBe(F.sharedConversationId);
+    expect(F.dockedPrivateConversationId).not.toBe(F.offBoardConversationId);
+  });
+
   it("shares the two board threads and hangs each off a DIFFERENT board", () => {
     // The pair is the experiment: same org, same owner, same visibility, one
     // board gamma holds and one it does not. Collapse them onto one board and
