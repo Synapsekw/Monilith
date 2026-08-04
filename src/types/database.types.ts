@@ -113,11 +113,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "ai_conversations_board_id_fkey";
-            columns: ["board_id"];
+            foreignKeyName: "ai_conversations_board_org_fkey";
+            columns: ["board_id", "org_id"];
             isOneToOne: false;
             referencedRelation: "boards";
-            referencedColumns: ["id"];
+            referencedColumns: ["id", "org_id"];
           },
           {
             foreignKeyName: "ai_conversations_org_id_fkey";
