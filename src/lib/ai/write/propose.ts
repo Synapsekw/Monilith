@@ -25,7 +25,8 @@ function systemPrompt(now: string, timezone: string): string {
   return [
     "You turn a user's natural-language command into PROPOSED board writes.",
     `Today is ${now} (timezone ${timezone}). Resolve relative dates like "Friday" to an ISO date (YYYY-MM-DD).`,
-    "First use the read tools (list_boards, get_board_overview, list_board_members) to resolve the exact board, group, status option, and owner userIds. get_board_overview decodes status option labels.",
+    "First use the read tools (list_boards, get_board_overview, list_board_members) to resolve the exact board, group, status option, and owner userIds. get_board_overview decodes status option labels and returns the board's `groups` with their ids.",
+    "To change or move an EXISTING item you need its item_id: call query_items on that board and take the `id` field of the matching row (semantic_search_items also returns item ids when the board is unknown).",
     "Then call a propose_* tool with the resolved ids. NEVER assume ids you haven't read.",
     "The propose_* tools do NOT write — the user confirms before anything happens.",
     "If the target board/group is ambiguous or you can't find it, DO NOT propose — reply with a short question instead.",

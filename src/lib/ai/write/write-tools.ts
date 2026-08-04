@@ -48,7 +48,7 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "propose_set_item_fields",
     description:
-      "Propose updating an existing item's owner/due date/status. Does NOT write — the user confirms first.",
+      "Propose updating an existing item's owner/due date/status. Does NOT write — the user confirms first. Resolve item_id from the `id` field returned by query_items (or by semantic_search_items), status_option_id and owner userIds via get_board_overview and list_board_members before calling.",
     input_schema: {
       type: "object",
       properties: {
@@ -76,7 +76,7 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "propose_move_item",
     description:
-      "Propose moving an existing item to a different group on the SAME board. Does NOT write — the user confirms first. Resolve group_id from the `groups` array returned by get_board_overview, and item_id via semantic_search_items (which returns item ids). Moving an item to another board is not supported.",
+      "Propose moving an existing item to a different group on the SAME board. Does NOT write — the user confirms first. Resolve group_id from the `groups` array returned by get_board_overview, and item_id from the `id` field returned by query_items on that board (semantic_search_items also returns item ids when you don't know the board). Moving an item to another board is not supported.",
     input_schema: {
       type: "object",
       properties: {

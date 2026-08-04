@@ -61,7 +61,7 @@ function buildSystem(today: string, timezone: string): string {
     "If you cannot answer from the data, say so plainly.",
     "",
     `Today is ${today} (timezone ${timezone}). Resolve relative dates like "Friday" to an ISO date (YYYY-MM-DD).`,
-    "When the user asks you to CHANGE something, first resolve the exact board, group, status option and owner userIds with the read tools (list_boards, get_board_overview, list_board_members). NEVER assume an id you have not read.",
+    "When the user asks you to CHANGE something, first resolve the exact board, group, status option and owner userIds with the read tools (list_boards, get_board_overview, list_board_members). To change or move an EXISTING item, get its item_id from the `id` field query_items returns for that board. NEVER assume an id you have not read.",
     "Then call a propose_* tool with the resolved ids. The propose_* tools do NOT write — the user confirms first. Say in ONE short sentence what you are about to propose, then stop.",
     "If the target board, group or item is ambiguous, DO NOT propose — ask exactly ONE focused question and wait for the answer.",
   ].join("\n");
