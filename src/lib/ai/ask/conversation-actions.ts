@@ -19,18 +19,61 @@ import { type ActionResult, fail } from "@/lib/actions/result";
 const messageSchema = z.string().trim().min(1).max(4000);
 const titleSchema = z.string().trim().min(1).max(120);
 const idSchema = z.string().uuid();
+const visibilitySchema = z.enum(["private", "board"]);
+
+/**
+ * Resolve an agent the CALLER owns, or null.
+ *
+ * `user_agents` is owner-scoped by RLS, so a foreign or non-existent id reads
+ * back as null through the user client — the check and the query are the same
+ * statement. Never accept an agent id on trust: the persona it selects becomes
+ * part of the system prompt.
+ */
+async function ownedAgentId(agentId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("user_agents")
+    .select("id")
+    .eq("id", agentId)
+    .maybeSingle();
+  return data?.id ?? null;
+}
 
 /**
  * Start a new conversation: insert the thread + its first user message, and
  * return the new id. Org/workspace are resolved server-side via the org switcher
  * (resolveActiveOrg) — never trusted from the client, and never getUserOrgs()[0]
  * which would scope a multi-org user to the wrong tenant.
+ *
+ * `boardId`/`agentId` are optional: `/ask` calls this with neither and keeps
+ * behaving exactly as before (plain thread, revalidates `/ask`). The board
+ * dock passes both to open a thread scoped to that board and agent.
  */
 export async function createConversation(input: {
   firstMessage: string;
+  boardId?: string;
+  agentId?: string;
 }): Promise<ActionResult<{ conversationId: string }>> {
   const parsed = messageSchema.safeParse(input.firstMessage);
   if (!parsed.success) return fail("Message must be 1–4000 characters.");
+
+  let boardId: string | null = null;
+  if (input.boardId !== undefined) {
+    const b = idSchema.safeParse(input.boardId);
+    if (!b.success) return fail("Invalid board.");
+    boardId = b.data;
+  }
+
+  let agentId: string | null = null;
+  if (input.agentId !== undefined) {
+    const a = idSchema.safeParse(input.agentId);
+    if (!a.success) return fail("Invalid agent.");
+    agentId = await ownedAgentId(a.data);
+    // Fails CLOSED, and with one message for both "not yours" and "not there" —
+    // distinguishing them would make this a membership oracle.
+    if (!agentId) return fail("Agent not found.");
+  }
+
   const user = await requireUser();
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
@@ -46,6 +89,10 @@ export async function createConversation(input: {
       user_id: user.id,
       workspace_id: workspaceId || null,
       title: "New chat",
+      board_id: boardId,
+      agent_id: agentId,
+      // `visibility` is deliberately omitted: the column default 'private' is
+      // what makes the widened SELECT policy unable to match a fresh row.
     })
     .select("id")
     .single();
@@ -58,8 +105,35 @@ export async function createConversation(input: {
   });
   if (msg.error) return fail("Couldn't save your message.");
 
-  revalidatePath("/ask");
+  // A board thread never revalidates: /ask does not list it in this surface's
+  // flow, and revalidating the BOARD path would re-run getBoardPayload on every
+  // send — the exact refetch working agreement #5 forbids (gotcha-09).
+  if (!boardId) revalidatePath("/ask");
   return { ok: true, data: { conversationId: conv.data.id } };
+}
+
+/**
+ * Share a thread with its board, or take it back. RLS scopes the update to the
+ * owner, so a board member cannot flip someone else's thread.
+ */
+export async function setThreadVisibility(input: {
+  conversationId: string;
+  visibility: "private" | "board";
+}): Promise<ActionResult<{ visibility: string }>> {
+  const id = idSchema.safeParse(input.conversationId);
+  const vis = visibilitySchema.safeParse(input.visibility);
+  if (!id.success) return fail("Invalid conversation.");
+  if (!vis.success) return fail("Invalid visibility.");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_conversations")
+    .update({ visibility: vis.data })
+    .eq("id", id.data)
+    .select("id")
+    .single();
+  if (error || !data) return fail("Couldn't change who can see this thread.");
+  return { ok: true, data: { visibility: vis.data } };
 }
 
 /** Append a follow-up user message to an existing conversation. */

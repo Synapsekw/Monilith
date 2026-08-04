@@ -23,11 +23,18 @@ const insertConv = vi.fn();
 const insertMsg = vi.fn();
 const updateConv = vi.fn();
 const deleteConv = vi.fn();
+const maybeSingleAgent = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     from: (t: string) => {
       if (t === "ai_conversations")
         return { insert: insertConv, update: updateConv, delete: deleteConv };
+      if (t === "user_agents")
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: maybeSingleAgent }),
+          }),
+        };
       return { insert: insertMsg };
     },
   })),
@@ -39,12 +46,14 @@ vi.mock("./conversations", async (importOriginal) => ({
   getMessages: (id: string) => getMessages(id),
 }));
 
+import { revalidatePath } from "next/cache";
 import {
   createConversation,
   appendUserMessage,
   renameConversation,
   deleteConversation,
   recoverConversation,
+  setThreadVisibility,
 } from "./conversation-actions";
 
 beforeEach(() => {
@@ -53,6 +62,8 @@ beforeEach(() => {
   updateConv.mockReset();
   deleteConv.mockReset();
   getMessages.mockReset();
+  maybeSingleAgent.mockReset();
+  vi.mocked(revalidatePath).mockReset();
 });
 
 describe("createConversation", () => {
@@ -191,5 +202,64 @@ describe("deleteConversation", () => {
       conversationId: "11111111-1111-4111-8111-111111111111",
     });
     expect(res).toEqual({ ok: true, data: {} });
+  });
+});
+
+describe("createConversation — board threads", () => {
+  const BOARD_ID = "22222222-2222-4222-8222-222222222222";
+  const AGENT_ID = "33333333-3333-4333-8333-333333333333";
+  const FOREIGN_AGENT_ID = "44444444-4444-4444-8444-444444444444";
+
+  beforeEach(() => {
+    insertConv.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "c9" }, error: null }),
+      }),
+    });
+    insertMsg.mockResolvedValue({ error: null });
+  });
+
+  it("rejects an agentId the caller does not own", async () => {
+    // user_agents is owner-scoped by RLS, so a foreign id reads back as null.
+    maybeSingleAgent.mockResolvedValue({ data: null, error: null });
+    const res = await createConversation({
+      firstMessage: "hi",
+      boardId: BOARD_ID,
+      agentId: FOREIGN_AGENT_ID,
+    });
+    expect(res).toEqual({ ok: false, error: "Agent not found." });
+    expect(insertConv).not.toHaveBeenCalled();
+  });
+
+  it("stores board_id and agent_id, and defaults visibility to private", async () => {
+    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
+    const res = await createConversation({
+      firstMessage: "what is overdue?",
+      boardId: BOARD_ID,
+      agentId: AGENT_ID,
+    });
+    expect(res.ok).toBe(true);
+    expect(insertConv).toHaveBeenCalledWith(
+      expect.objectContaining({ board_id: BOARD_ID, agent_id: AGENT_ID }),
+    );
+    // Not passed explicitly — the column default is the guarantee.
+    const inserted = insertConv.mock.calls[0][0];
+    expect(inserted).not.toHaveProperty("visibility");
+  });
+
+  it("does not revalidate /ask for a board thread", async () => {
+    maybeSingleAgent.mockResolvedValue({ data: { id: AGENT_ID }, error: null });
+    await createConversation({ firstMessage: "hi", boardId: BOARD_ID });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("setThreadVisibility", () => {
+  it("rejects a value outside the two known states", async () => {
+    const res = await setThreadVisibility({
+      conversationId: "11111111-1111-4111-8111-111111111111",
+      visibility: "public" as never,
+    });
+    expect(res).toEqual({ ok: false, error: "Invalid visibility." });
   });
 });
