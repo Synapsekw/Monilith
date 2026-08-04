@@ -92,6 +92,18 @@ describe("page-region scrollers reserve the scrollbar gutter", () => {
     expect(findUnguardedScrollers(files)).toEqual([]);
   });
 
+  it("gives the board column min-w-0 so the dock cannot scroll the page", () => {
+    // The dock narrows the board's column. A flex child's default min-width is
+    // `auto`, so the board table's own min-width would win and push the PAGE
+    // sideways rather than its own scroller — the exact shift this whole file
+    // exists to prevent, arriving through layout instead of through a gutter.
+    const src = readFileSync(
+      join(SRC, "app", "(app)", "boards", "[boardId]", "page.tsx"),
+      "utf8",
+    );
+    expect(src).toMatch(/min-w-0/);
+  });
+
   it("keeps every skeleton in lockstep with the component it mirrors", () => {
     // A gutter on the content but not on its loading fallback turns the fix
     // into the layout shift it exists to prevent.
