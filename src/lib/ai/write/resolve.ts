@@ -70,7 +70,15 @@ export function resolveCreateItem(
 ): Resolved {
   const group = payload.groups.find((g) => g.id === action.groupId);
   if (!group)
-    return { kind: "error", error: "That group isn't on this board." };
+    return {
+      kind: "error",
+      // getBoardPayload excludes archived groups, so a target missing here may
+      // be archived rather than absent — don't assert a cause the resolver
+      // can't tell apart. Same fix as resolveMoveItem below, which said this
+      // first; create was left behind.
+      error:
+        "I couldn't find that group on this board — it may have been archived.",
+    };
   const { parts, warnings } = fieldSummary(payload, members, action.fields);
   const suffix = parts.length ? ` · ${parts.join(" · ")}` : "";
   return {
