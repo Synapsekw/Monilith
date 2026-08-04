@@ -554,7 +554,15 @@ Because Task 1 leaves `execute.ts` non-exhaustive until Task 3 lands, **Task 2's
 1. Pull `develop`. Open a board that has at least two groups and one top-level item.
 2. Open the agent dock (or `/ask`) and say: **"move &lt;item&gt; to &lt;other group&gt;"**.
 3. Expect a **confirm card** reading `Move "&lt;item&gt;" from &lt;group&gt; to &lt;other group&gt;` — and confirm nothing has moved yet.
-4. Approve. The item appears at the **bottom** of the target group; its updates, files and activity are intact.
+4. Approve, then **reload the board**. The item appears at the **bottom** of the target group; its updates, files and activity are intact.
+
+   > The reload is required, and is not specific to moves: no action in
+   > `src/lib/boards/actions/item.ts` calls `revalidatePath`, and the dock
+   > deliberately suppresses `router.refresh()` so an approved turn does not
+   > re-run the board's queries. All four write verbs behave this way. Making an
+   > approved write visible in place is a real gap, but a systemic one — it needs
+   > its own decision rather than a fix smuggled into this feature.
+
 5. Ask to move it to the group it is already in. Expect a plain refusal, not a card.
 6. Ask to move it to a group on a **different** board. Expect a refusal saying cross-board moves aren't supported — and no card.
 7. Ask to move a **subitem**. Expect a refusal.
