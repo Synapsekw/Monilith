@@ -46,18 +46,28 @@ vi.mock("@/lib/supabase/service", () => ({
     from(table: string) {
       if (table !== "user_agent_runs") return {};
       return {
-        insert: async (row: RunPatch) => {
-          if (forceClaimConflict) {
-            return {
-              error: {
-                code: "23505",
-                message:
-                  'duplicate key value violates unique constraint "user_agent_runs_slot_uniq"',
-              },
-            };
-          }
-          runInserts.push(row);
-          return { error: null };
+        // claimRun (route.ts) chains `.insert(row).select("id").single()` to
+        // get the claimed row's id back — mirror that shape here rather than
+        // the old bare `await insert(row)`. On a simulated 23505 the insert
+        // is never actually written, so runInserts stays untouched, matching
+        // the "no-op via the claim backstop" test's `toHaveLength(0)`.
+        insert: (row: RunPatch) => {
+          if (!forceClaimConflict) runInserts.push(row);
+          return {
+            select: () => ({
+              single: async () =>
+                forceClaimConflict
+                  ? {
+                      data: null,
+                      error: {
+                        code: "23505",
+                        message:
+                          'duplicate key value violates unique constraint "user_agent_runs_slot_uniq"',
+                      },
+                    }
+                  : { data: { id: "run-1" }, error: null },
+            }),
+          };
         },
         update(patch: RunPatch) {
           const key: RunPatch = {};
