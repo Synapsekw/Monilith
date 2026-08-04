@@ -143,8 +143,51 @@ describe("executeActions", () => {
         },
       ],
     });
-    expect(res).toEqual({ ok: true, data: { results: [{ ok: true }] } });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.results).toEqual([{ ok: true }]);
     expect(executeAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the board effects alongside the persisted results", async () => {
+    const res = await executeActions({
+      actions: [
+        {
+          kind: "create_group",
+          boardId: "b1",
+          name: "Doing",
+          summary: "s",
+          warnings: [],
+        },
+      ],
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.results).toEqual([{ ok: true }]);
+    expect(res.data.effects).toHaveLength(1);
+    expect(res.data.effects[0]?.kind).toBe("group_created");
+  });
+
+  it("drops the null effect of an action that produced no rows", async () => {
+    executeAction.mockResolvedValueOnce({
+      result: { ok: false, error: "nope" },
+      effect: null,
+    } as never);
+    const res = await executeActions({
+      actions: [
+        {
+          kind: "create_group",
+          boardId: "b1",
+          name: "Doing",
+          summary: "s",
+          warnings: [],
+        },
+      ],
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.results).toEqual([{ ok: false, error: "nope" }]);
+    expect(res.data.effects).toEqual([]);
   });
 
   it("refuses to execute when the org has AI turned off", async () => {
