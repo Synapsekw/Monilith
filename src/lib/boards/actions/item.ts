@@ -294,11 +294,18 @@ export async function moveItem(input: {
     position = midpoint(last?.position ?? null, null);
   }
 
-  const { error } = await supabase
+  const { data: moved, error } = await supabase
     .from("items")
     .update({ group_id: parsed.data.groupId, position })
-    .eq("id", parsed.data.itemId);
+    .eq("id", parsed.data.itemId)
+    .select("id")
+    .maybeSingle();
   if (error) return fail(error.message);
+  // A viewer can READ the board (both guards above pass) but not write it: the
+  // UPDATE then matches zero rows and returns null data with NO error. Read the
+  // row back so that silent no-op can't be reported as a successful move —
+  // same treatment renameItem gives its own RLS-hidden case.
+  if (!moved) return fail("You don't have permission to move this item.");
 
   // Keep subitems co-located with their parent (their denormalized group_id
   // must match). RLS-scoped; best-effort — the parent already moved.

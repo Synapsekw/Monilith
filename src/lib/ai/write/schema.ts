@@ -33,6 +33,12 @@ export const proposedActionSchema = z.discriminatedUnion("kind", [
     boardId: z.string(),
     name: z.string().min(1).max(255),
   }),
+  z.object({
+    kind: z.literal("move_item"),
+    boardId: z.string(),
+    itemId: z.string(),
+    groupId: z.string(),
+  }),
 ]);
 export type ProposedAction = z.infer<typeof proposedActionSchema>;
 
@@ -60,6 +66,13 @@ export const validatedActionSchema = z.discriminatedUnion("kind", [
     kind: z.literal("create_group"),
     boardId: z.string(),
     name: z.string().min(1).max(255),
+    ...validatedExtras,
+  }),
+  z.object({
+    kind: z.literal("move_item"),
+    boardId: z.string(),
+    itemId: z.string(),
+    groupId: z.string(),
     ...validatedExtras,
   }),
 ]);

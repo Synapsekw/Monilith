@@ -60,44 +60,77 @@ export type Database = {
       };
       ai_conversations: {
         Row: {
+          agent_id: string | null;
+          board_id: string | null;
           created_at: string;
           id: string;
           org_id: string;
+          run_id: string | null;
           summarized_upto: string | null;
           summary: string | null;
           title: string;
           updated_at: string;
           user_id: string;
+          visibility: string;
           workspace_id: string | null;
         };
         Insert: {
+          agent_id?: string | null;
+          board_id?: string | null;
           created_at?: string;
           id?: string;
           org_id: string;
+          run_id?: string | null;
           summarized_upto?: string | null;
           summary?: string | null;
           title?: string;
           updated_at?: string;
           user_id: string;
+          visibility?: string;
           workspace_id?: string | null;
         };
         Update: {
+          agent_id?: string | null;
+          board_id?: string | null;
           created_at?: string;
           id?: string;
           org_id?: string;
+          run_id?: string | null;
           summarized_upto?: string | null;
           summary?: string | null;
           title?: string;
           updated_at?: string;
           user_id?: string;
+          visibility?: string;
           workspace_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "ai_conversations_agent_id_fkey";
+            columns: ["agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "ai_conversations_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_conversations_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agent_runs";
             referencedColumns: ["id"];
           },
           {

@@ -16,6 +16,14 @@ export type BriefingEmailInput = {
   briefing: Briefing;
   appBaseUrl: string;
   unsubscribeUrl: string;
+  /**
+   * Deep link to the thread this briefing was posted into, or undefined when
+   * the write failed and there is nothing to link to. SECURITY: built
+   * upstream (send.ts) from APP_BASE_URL plus a uuid and nothing else — not
+   * HTML-escaped here for the same reason unsubscribeUrl isn't: nothing
+   * user-editable ever reaches it.
+   */
+  threadUrl?: string;
   /** The model's prose summary of the briefing. */
   summary: string;
 };
@@ -32,7 +40,14 @@ function escapeHtml(s: string): string {
 const cellStyle = "padding:6px 12px;font-size:13px;color:#333;";
 
 export function renderBriefingHtml(input: BriefingEmailInput): string {
-  const { agentName, briefing, appBaseUrl, unsubscribeUrl, summary } = input;
+  const {
+    agentName,
+    briefing,
+    appBaseUrl,
+    unsubscribeUrl,
+    threadUrl,
+    summary,
+  } = input;
 
   const sections = briefing.groups
     .map((g) => {
@@ -58,14 +73,14 @@ export function renderBriefingHtml(input: BriefingEmailInput): string {
   <p style="font-size:14px;color:#333;line-height:1.5;">${escapeHtml(summary)}</p>
   ${briefing.groups.length > 0 ? sections : empty}
   <p style="margin-top:28px;font-size:12px;color:#888;">
-    <a href="${appBaseUrl}/my-work" style="color:#5b6fd6;">Open My Work</a>
+    ${threadUrl ? `<a href="${threadUrl}" style="color:#5b6fd6;">Open this briefing</a>\n    &middot; ` : ""}<a href="${appBaseUrl}/my-work" style="color:#5b6fd6;">Open My Work</a>
     &middot; <a href="${unsubscribeUrl}" style="color:#888;">Unsubscribe from briefings</a>
   </p>
 </div>`;
 }
 
 export function renderBriefingText(input: BriefingEmailInput): string {
-  const { agentName, briefing, unsubscribeUrl, summary } = input;
+  const { agentName, briefing, unsubscribeUrl, threadUrl, summary } = input;
   const lines: string[] = [
     `${agentName} — briefing for ${briefing.today}`,
     "",
@@ -82,6 +97,9 @@ export function renderBriefingText(input: BriefingEmailInput): string {
       }
       lines.push("");
     }
+  }
+  if (threadUrl) {
+    lines.push(`Open this briefing: ${threadUrl}`);
   }
   lines.push(`Unsubscribe: ${unsubscribeUrl}`);
   return lines.join("\n");

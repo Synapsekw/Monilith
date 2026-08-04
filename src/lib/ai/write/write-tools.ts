@@ -8,6 +8,7 @@ import {
   resolveCreateItem,
   resolveSetItemFields,
   resolveCreateGroup,
+  resolveMoveItem,
   type Member,
 } from "./resolve";
 
@@ -29,7 +30,7 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
   {
     name: "propose_create_item",
     description:
-      "Propose creating a task/item in a group. Does NOT create it — the user confirms first. Resolve board_id/group_id via list_boards + get_board_overview and owner userIds via list_board_members before calling.",
+      "Propose creating a task/item in a group. Does NOT create it — the user confirms first. Resolve board_id via list_boards, group_id from the `groups` array returned by get_board_overview, and owner userIds via list_board_members before calling.",
     input_schema: {
       type: "object",
       properties: {
@@ -72,6 +73,24 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "propose_move_item",
+    description:
+      "Propose moving an existing item to a different group on the SAME board. Does NOT write — the user confirms first. Resolve group_id from the `groups` array returned by get_board_overview, and item_id via semantic_search_items (which returns item ids). Moving an item to another board is not supported.",
+    input_schema: {
+      type: "object",
+      properties: {
+        board_id: { type: "string" },
+        item_id: { type: "string" },
+        group_id: {
+          type: "string",
+          description: "UUID of the destination group, on the same board.",
+        },
+      },
+      required: ["board_id", "item_id", "group_id"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 const err = (message: string) => ({
@@ -95,6 +114,11 @@ const setFieldsArgs = z.object({
   status_option_id: z.string().optional(),
 });
 const createGroupArgs = z.object({ board_id: z.string(), name: z.string() });
+const moveItemArgs = z.object({
+  board_id: z.string(),
+  item_id: z.string(),
+  group_id: z.string(),
+});
 
 async function membersFor(orgId: string): Promise<Member[]> {
   const rows = await listOrgMembersCached(orgId);
@@ -201,6 +225,34 @@ export function createWriteToolExecutor(ctx: {
           boardId: a.data.board_id,
           name: a.data.name,
         });
+        if (r.kind === "error") return err(r.error);
+        collected.push(r.action);
+        return {
+          content: JSON.stringify({
+            preview: r.action.summary,
+            warnings: r.action.warnings,
+          }),
+        };
+      }
+
+      if (name === "propose_move_item") {
+        const a = moveItemArgs.safeParse(input);
+        if (!a.success) return err("invalid tool input");
+        const parsed = proposedActionSchema.safeParse({
+          kind: "move_item",
+          boardId: a.data.board_id,
+          itemId: a.data.item_id,
+          groupId: a.data.group_id,
+        });
+        if (!parsed.success)
+          return err(parsed.error.issues[0]?.message ?? "invalid");
+        const payload = await getBoardPayload(a.data.board_id);
+        if (!payload) return err("board not found");
+        // No `members` argument — a move touches no people column.
+        const r = resolveMoveItem(
+          payload,
+          parsed.data as Extract<typeof parsed.data, { kind: "move_item" }>,
+        );
         if (r.kind === "error") return err(r.error);
         collected.push(r.action);
         return {

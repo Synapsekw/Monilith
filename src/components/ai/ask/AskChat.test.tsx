@@ -190,6 +190,100 @@ describe("AskChat", () => {
   });
 });
 
+// The board dock reuses this exact component. Two of its behaviours belong to
+// `/ask` and are wrong inside a panel on someone else's page: rewriting the URL
+// to /ask/<id>, and router.refresh() — which on the board page re-runs
+// getBoardPayload plus two more reads to redisplay data the client already
+// holds (gotcha-09).
+describe("AskChat — surface-agnostic (board dock)", () => {
+  const BOARD_ID = "11111111-1111-4111-8111-111111111111";
+  const AGENT_ID = "22222222-2222-4222-8222-222222222222";
+
+  it("does not rewrite the URL to /ask when a surface supplies onStarted", async () => {
+    const onStarted = vi.fn();
+    const pushState = vi.spyOn(window.history, "pushState");
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        boardId={BOARD_ID}
+        onStarted={onStarted}
+      />,
+    );
+    ask("what is overdue?");
+
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith("c1"));
+    expect(pushState).not.toHaveBeenCalled();
+  });
+
+  it("does not router.refresh() after a turn when a surface supplies onTurnComplete", async () => {
+    const onTurnComplete = vi.fn();
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[]}
+        boardId={BOARD_ID}
+        onTurnComplete={onTurnComplete}
+      />,
+    );
+    ask();
+
+    await waitFor(() => expect(onTurnComplete).toHaveBeenCalledTimes(1));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  // The `done` handler is not the only refresh site — drop-recovery has one
+  // too, and a dock that substituted only the first would still refetch the
+  // whole board every time a flaky stream recovered.
+  it("routes a RECOVERED turn through onTurnComplete as well", async () => {
+    severedStream();
+    recoverConversation.mockResolvedValue({
+      ok: true,
+      data: { messages: [USER_ROW, ANSWER_ROW] },
+    });
+    const onTurnComplete = vi.fn();
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[]}
+        boardId={BOARD_ID}
+        onTurnComplete={onTurnComplete}
+      />,
+    );
+    ask();
+
+    await waitFor(() =>
+      expect(screen.getByText(ANSWER_ROW.content)).toBeInTheDocument(),
+    );
+    expect(onTurnComplete).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("passes boardId and agentId to createConversation", async () => {
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        boardId={BOARD_ID}
+        agentId={AGENT_ID}
+        onStarted={() => {}}
+      />,
+    );
+    ask("hello");
+
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "hello",
+        boardId: BOARD_ID,
+        agentId: AGENT_ID,
+      }),
+    );
+    // The persona is a CREATE-time argument only: /api/ask reads it off the
+    // conversation row, so it must never ride along per turn.
+    expect(send).toHaveBeenCalledWith("c1", expect.any(Function));
+  });
+});
+
 /** Hold the conversation-minting server action open, so the test can inspect the
  *  window BETWEEN "user hit send" and "the stream opened" — the window in which
  *  `streaming` is still false and the composer used to be wide open. */

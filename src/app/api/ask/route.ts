@@ -9,6 +9,7 @@ import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
 import { ProviderNotCapableError } from "@/lib/ai/errors";
 import { createClient } from "@/lib/supabase/server";
+import { composePersona, composeBoardScope } from "@/lib/ai/ask/persona";
 import { getMessages } from "@/lib/ai/ask/conversations";
 import { askPulseStream } from "@/lib/ai/ask/ask-stream";
 import {
@@ -101,11 +102,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No workspace." }, { status: 400 });
 
   const timezone = (await getUserTimeZoneCached(user.id)) ?? "UTC";
-  const system = buildSystem(todayIn(timezone), timezone);
 
   const conv = await supabase
     .from("ai_conversations")
-    .select("summary, summarized_upto")
+    .select("summary, summarized_upto, board_id, agent_id, user_id")
     .eq("id", conversationId)
     .single();
   if (conv.error || !conv.data)
@@ -113,6 +113,38 @@ export async function POST(req: Request) {
       { error: "Conversation not found." },
       { status: 404 },
     );
+
+  // A shared board thread is READABLE by every member of that board, so "the row
+  // came back" no longer implies "it is mine". A turn appends to the thread and
+  // spends the owner's budget, so only the owner may take one.
+  if (conv.data.user_id !== user.id)
+    return NextResponse.json(
+      { error: "Not your conversation." },
+      { status: 403 },
+    );
+
+  // Persona + board scope. Both reads go through the USER client, so RLS decides
+  // what is visible; a row that reads back null degrades to plain Ask rather than
+  // failing a turn whose history is still worth continuing.
+  let system = buildSystem(todayIn(timezone), timezone);
+
+  if (conv.data.board_id) {
+    const { data: board } = await supabase
+      .from("boards")
+      .select("id, name")
+      .eq("id", conv.data.board_id)
+      .maybeSingle();
+    system = composeBoardScope(system, board ?? null);
+  }
+
+  if (conv.data.agent_id) {
+    const { data: agent } = await supabase
+      .from("user_agents")
+      .select("name, instructions")
+      .eq("id", conv.data.agent_id)
+      .maybeSingle();
+    system = composePersona(system, agent ?? null);
+  }
 
   // The response body is a pure OBSERVER of the turn, never its host
   // (gotcha-62). It owns a controller that `emit` writes to while a reader is

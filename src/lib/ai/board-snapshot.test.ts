@@ -17,6 +17,10 @@ const columns = [
   { id: "c-pts", name: "Points", kind: "numbers", settings: {} },
   { id: "c-notes", name: "Notes", kind: "text", settings: {} },
 ] as const;
+const groups = [
+  { id: "g-backlog", name: "Backlog" },
+  { id: "g-software", name: "Software" },
+];
 const items = [{ id: "i1" }, { id: "i2" }, { id: "i3" }];
 const cellValues = [
   { item_id: "i1", column_id: "c-status", value: { optionId: "o-todo" } },
@@ -30,6 +34,7 @@ const cellValues = [
 describe("buildBoardSnapshot", () => {
   const snap = buildBoardSnapshot({
     board,
+    groups,
     columns: columns as never,
     items,
     cellValues,
@@ -44,6 +49,20 @@ describe("buildBoardSnapshot", () => {
       { id: "o-todo", label: "To Do" },
       { id: "o-done", label: "Done" },
     ]);
+  });
+
+  it("exposes group ids and names in board order, and nothing else", () => {
+    // The AI write loop resolves a move's destination group_id from here — a
+    // snapshot without ids leaves the model no way to name a target group.
+    expect(snap.groups).toEqual([
+      { id: "g-backlog", name: "Backlog" },
+      { id: "g-software", name: "Software" },
+    ]);
+  });
+
+  it("keeps groups bounded — no item lists or counts ride along", () => {
+    for (const g of snap.groups)
+      expect(Object.keys(g).sort()).toEqual(["id", "name"]);
   });
 
   it("computes status distribution from cell values, never exposing rows", () => {

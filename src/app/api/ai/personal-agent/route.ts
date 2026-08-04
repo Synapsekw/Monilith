@@ -22,6 +22,7 @@ import {
   type BriefingSummary,
 } from "@/lib/agents/summarise";
 import { sendBriefingEmail } from "@/lib/agents/send";
+import { writeBriefingThread } from "@/lib/agents/briefing-thread";
 import {
   assertRunAllowedToday,
   AgentCapExceededError,
@@ -68,19 +69,26 @@ type RunKey = {
 async function claimRun(
   svc: SupabaseClient<Database>,
   key: RunKey,
-): Promise<"claimed" | "already_claimed"> {
-  const { error } = await svc.from("user_agent_runs").insert({
-    user_agent_id: key.user_agent_id,
-    org_id: key.org_id,
-    owner_id: key.owner_id,
-    fire_date: key.fire_date,
-    fire_hour: key.fire_hour,
-    status: "error",
-    error: CLAIM_PLACEHOLDER,
-  });
-  if (!error) return "claimed";
-  if (error.code === PG_UNIQUE_VIOLATION) return "already_claimed";
-  throw new Error(`claimRun: ${error.message}`);
+): Promise<
+  { outcome: "claimed"; runId: string } | { outcome: "already_claimed" }
+> {
+  const { data, error } = await svc
+    .from("user_agent_runs")
+    .insert({
+      user_agent_id: key.user_agent_id,
+      org_id: key.org_id,
+      owner_id: key.owner_id,
+      fire_date: key.fire_date,
+      fire_hour: key.fire_hour,
+      status: "error",
+      error: CLAIM_PLACEHOLDER,
+    })
+    .select("id")
+    .single();
+  if (!error && data) return { outcome: "claimed", runId: data.id };
+  if (error?.code === PG_UNIQUE_VIOLATION)
+    return { outcome: "already_claimed" };
+  throw new Error(`claimRun: ${error?.message ?? "no row returned"}`);
 }
 
 /** Update the already-claimed row to its final status. Keyed on the same
@@ -198,7 +206,7 @@ export async function POST(req: Request): Promise<Response> {
   };
 
   // 4. Claim the slot BEFORE any token spend or email (Finding 1).
-  let claim: "claimed" | "already_claimed";
+  let claim: Awaited<ReturnType<typeof claimRun>>;
   try {
     claim = await claimRun(svc, key);
   } catch (e) {
@@ -214,7 +222,7 @@ export async function POST(req: Request): Promise<Response> {
     });
     return NextResponse.json({ error: "agent run failed" }, { status: 500 });
   }
-  if (claim === "already_claimed") {
+  if (claim.outcome === "already_claimed") {
     // Another delivery of this exact fire slot already won the claim — do
     // nothing further. This is the case a redelivery landing concurrently
     // with an in-flight run relies on: no second summarise call, no second
@@ -310,10 +318,23 @@ export async function POST(req: Request): Promise<Response> {
       throw e;
     }
 
+    // Thread BEFORE email, so the email can link to it. Never gates the run: a
+    // failed write returns null and the email simply omits the link.
+    const threadId = await writeBriefingThread(ownerClient, {
+      orgId: agent.org_id,
+      ownerId: agent.owner_id,
+      agentId: agent.id,
+      agentName: agent.name,
+      runId: claim.runId,
+      fireDate,
+      summary: result.summary,
+    });
+
     await sendBriefingEmail(svc, {
       agent,
       briefing,
       summary: result.summary,
+      threadId,
     });
 
     // 8. Finalize the single audit row for this fire (Finding 2: never let

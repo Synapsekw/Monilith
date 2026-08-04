@@ -1,6 +1,6 @@
 import "server-only";
 import { getBoardPayload } from "@/lib/boards/queries";
-import { createItem } from "@/lib/boards/actions/item";
+import { createItem, moveItem } from "@/lib/boards/actions/item";
 import { createGroup } from "@/lib/boards/actions/group";
 import { upsertCell } from "@/lib/boards/actions/cell";
 import { pickFieldColumns } from "./resolve";
@@ -77,13 +77,31 @@ export async function executeAction(
       ? { ok: false, error: fieldErrors.join("; ") }
       : { ok: true, itemId };
   }
-  // set_item_fields
-  const fieldErrors = await applyFields(
-    action.boardId,
-    action.itemId,
-    action.fields,
-  );
-  return fieldErrors.length
-    ? { ok: false, error: fieldErrors.join("; ") }
-    : { ok: true, itemId: action.itemId };
+  if (action.kind === "move_item") {
+    // moveItem owns the guards that matter after confirmation: it refuses
+    // subitems, refuses a group on another board, and appends to the end of
+    // the target group. Omitting `position` is what selects that append —
+    // there is no drag-drop cursor here to honour.
+    const r = await moveItem({
+      itemId: action.itemId,
+      groupId: action.groupId,
+    });
+    // No `itemId` on success: the UI reads that as "a row was CREATED — open it
+    // from the board", which is wrong for a move. Nothing consumes a move's id.
+    return r.ok ? { ok: true } : { ok: false, error: r.error };
+  }
+  if (action.kind === "set_item_fields") {
+    const fieldErrors = await applyFields(
+      action.boardId,
+      action.itemId,
+      action.fields,
+    );
+    return fieldErrors.length
+      ? { ok: false, error: fieldErrors.join("; ") }
+      : { ok: true, itemId: action.itemId };
+  }
+  // Every verb is handled above. A fifth one fails to COMPILE here rather than
+  // silently falling into another verb's branch.
+  const _exhaustive: never = action;
+  return _exhaustive;
 }

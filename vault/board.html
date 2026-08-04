@@ -8,14 +8,14 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-08-03 10:49",
+  "updated": "2026-08-04 14:43",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "The Keystone-wash promotion blocker is closed — all five defects fixed, plus four more the review and the visual walk found. develop is promotable for the first time since the wash landed",
+  "headline": "Personal Agents Phase 2 shipped — the board thread dock — plus a fourth AI write verb that would have shipped dead. Two cross-task defects only the whole-branch review could see.",
   "chips": [
     {
       "label": "develop",
-      "value": "c8f730d",
-      "note": "== origin · ahead of main by E6 batch 1 + Keystone wash + follow-ups",
+      "value": "2b186ce4",
+      "note": "== origin · ahead of main by E6 batch 1 + wash + dock + move verb",
       "tone": "ok"
     },
     {
@@ -26,8 +26,14 @@
     },
     {
       "label": "gates",
-      "value": "4119",
-      "note": "typecheck/lint/test/build green at merge",
+      "value": "4209",
+      "note": "typecheck/lint/test/build green · tier-2 RLS runs on live DEV",
+      "tone": "ok"
+    },
+    {
+      "label": "ledger",
+      "value": "130/130",
+      "note": "in sync after 4 migrations · apply_migration drifted 4 of 4",
       "tone": "ok"
     }
   ],
@@ -39,82 +45,42 @@
     {
       "led": "green",
       "tag": "DONE",
-      "text": "Keystone wash follow-ups CLOSED (c8f730d, 43 files, 11 commits). All five defects fixed: /ask on the shell surface model, --chrome-fill for resting fills, --muted-foreground to AA, 23 real scrollers on the gutter, --scrollbar-thumb in both the webkit and Firefox paths. The findings document was wrong in eight places and its OWN proposed AA fix computed to 4.19:1 at the declared 22% bloom peak — still failing. globals.contrast.test.ts now parses the stylesheet and COMPUTES the ratio instead of asserting a number."
+      "text": "Board thread dock SHIPPED (f454e20d, 42 files). Board-scoped agent conversations, private by default and shareable to the board; zero requests until opened. Two additive SELECT-only policies on ai_conversations. Reverses decision-27 — recorded as decision-33."
     },
     {
       "led": "green",
       "tag": "DONE",
-      "text": "The visual pass finally happened, and it earned its keep. The whole-branch review found two composition defects per-task reviews could not (an outline button painting an opaque slab on the new gradient, a dead 10px gutter). The owner walk then found two more: /ask had NO header band so no wash across the top, and its rail was w-64 px-4 against the shell w-60 px-3 — it also had no theme control at all. Nine defects from a five-defect document."
+      "text": "propose_move_item SHIPPED (2b186ce4). The AI can move an item between groups — a gap found by using the dock the hour it landed."
     },
     {
-      "led": "brand",
-      "tag": "NEXT?",
-      "text": "PROMOTE. develop -> main is unblocked for the first time since the wash landed, carrying E6 billing batch 1 + the Keystone wash + its follow-ups. Run /promote."
+      "led": "red",
+      "tag": "CRITICAL",
+      "text": "CAUGHT PRE-MERGE: createConversation trusted a client-supplied boardId while resolving agentId through RLS twelve lines above. Any authenticated user knowing a board uuid could plant unattributed content into another tenant dock. Six scoped reviews each saw a diff correct in isolation; only the whole-branch review asked who may WRITE board_id."
     },
     {
-      "led": "green",
-      "tag": "DONE",
-      "text": "PROMOTED (second time today). develop -> main merged as 7d98230c (PR #80), publishing agent run history, the Phase-1 hardening migration, open signup and the DEV-database warning. Verified by FETCHING the live page, not by trusting the deploy status: www.monolith.works serves 'Create your workspace' and 'Free to start', with no trace of 'Request access' or 'Invitation only'. The squash divergence was healed with a -s ours back-merge (d4f1b139) whose tree is byte-identical, so origin/main is an ancestor of origin/develop again."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "E5 CONFIRMED DRAINED — verified on the LIVE database (hjqca...), not the idle mirror: queue 0, 384 embeddings, all item-backed, seven clean sweeps of 50. Semantic search returns results in production for the first time. The earlier work targeted jzsyq..., whose 380-row queue was irrelevant because it serves no traffic."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "The waitlist is gone — signup is open, and the contradiction is closed. The closing band is a single /signup link (id=get-started), the inert email input and handler-less 'Request access' button are deleted, the FAQ says there is no waitlist and the footer reads 'Free to start'. This SUPERSEDES the earlier note that recorded the mixed model as deliberately accepted; that note was written from a review of the promoted page and the owner's call is signup-only."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Agent run history shipped — the observability half of Personal Agents. A last-run pill on every roster row from ONE distinct-on RPC over the existing index, plus the last 50 runs on expand. First paint and the roster/gallery/editor toggle are unchanged: expanding is a data fetch, never a navigation."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Stored status is not display status. The run endpoint claims its fire slot as status=error BEFORE any spend, so a healthy in-flight run is indistinguishable from a failure on status alone. The claim sentinel now renders In progress while fresh and Didn't finish once stale — never Failed. Rendering it verbatim would have cried wolf on every working agent every morning."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "bridge_secret_id was client-writable and RLS structurally could not fix it: user_agents_owner_all is `for all`, so an owner patching their own row satisfies the policy. The containment is a GRANT — table-level INSERT/UPDATE revoked from authenticated, re-granted column by column. It mattered concretely: the vault-cleanup trigger deletes whatever secret id the row names, so a writable column was a route to deleting ANOTHER user's MCP OAuth secret. Pinned by a live-DEV test."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Three more Phase-1 defects closed in the same migration: agent-name uniqueness is per-org (was global, so the same name in a second org was silently refused), board_scope gained a check constraint matching boardScopeSchema, and the vault-cleanup trigger is re-runnable. Plus the roster's 'of 20 agents' label now reads the real max_agents_per_user (default 3) — it had been promising 17 agents it would refuse to create."
-    },
-    {
-      "led": "brand",
-      "tag": "NEXT?",
-      "text": "Report Builder v2 roll-ups + org templates is the critical path. One migration drops reports.board_id NOT NULL — after which the single-board assumption has to be unwound across access checks, payload fetch, shaping, routing and roughly 1.4k lines of tests. Personal Agents Phase 2 (thread dock, @mentionable agents, propose-writes, per-agent identities) is specced and unscheduled."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "E6 billing batch 1 landed on develop (34839115) from a concurrent session — org_billing + billing_discount_codes, subscription state mapped to AI entitlement, a row-less org defaulting to no AI after backfill, and the public pricing page + landing teaser. Both tables are proven to deny an authenticated tenant. Its migration hit the same MCP stamp drift (20260802132352 applied for file 20260802132258) and was reconciled — the ledger is back to 126 files = 126 rows. NOT YET PROMOTED: this is the whole of develop's lead over main."
-    },
-    {
-      "led": "brand",
-      "tag": "NEXT?",
-      "text": "Stripe itself is still blocked on your credentials — batch 1 is schema, entitlement mapping and public pricing only, with no payment path behind it."
+      "led": "red",
+      "tag": "CRITICAL",
+      "text": "CAUGHT PRE-MERGE: propose_move_item could never have been invoked. Its description told the model to get group_id from get_board_overview, whose snapshot had no groups. Three approving reviews and 4205 green tests could not see it — the defect lived between the code and the sentence telling a model how to reach it."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "digest_secret is provisioned on the live DB and fingerprint-verified there, but the VERCEL half is still unverified — a mismatch 401s and leaves no trace, because the route records a blocked row only when the variable is ABSENT, never when it is wrong. First real exercise is the next 07:00 UTC run, the first one that can reach its handler at all. Prod has no RESEND_API_KEY, so a run recorded as `ran` with no email in your inbox is expected, not a fault — and run history is now the place to read it."
+      "text": "An approved AI write is invisible until you reload the board. Systemic across all four verbs: no item action calls revalidatePath and the dock suppresses router.refresh by design. Highest-value follow-up — it undercuts every write the assistant can make."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "An advisory follow-up is a follow-up that does not happen. gotcha-66 closed with 'worth a periodic sweep' — the sweep, one session later, found two more live endpoints. Same shape as the ledger gate's exit-3 warning being ignored twice. The orphan detector and a ledger-staleness check should be GATES, not advice."
+      "text": "semantic_search_items is the SOLE source of item ids for the AI write path, entitlement-gated and empty on error. Single point of failure for move_item AND the long-shipped set_item_fields."
+    },
+    {
+      "led": "amber",
+      "tag": "NEXT?",
+      "text": "PROMOTE. develop carries E6 billing batch 1, the Keystone wash, the agent dock and the move verb. Then Report Builder v2 roll-ups, or the Stripe track (not blocked on creds)."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "/promote should print the trailer-vs-commit diff (git log main..develop vs its Changelog: trailers). The CI drift check proves generated.ts MATCHES history — it can never see a trailer that was never written, so it is green precisely when the changelog is wrong (gotcha-64)."
+      "text": "digest_secret is provisioned on the live DB and fingerprint-verified there, but the VERCEL half is still unverified — a mismatch 401s and leaves no trace, because the route records a blocked row only when the variable is ABSENT, never when it is wrong. Prod has no RESEND_API_KEY, so a run recorded as `ran` with no email is expected, not a fault."
     },
     {
       "led": "hollow",
@@ -129,17 +95,17 @@
     {
       "led": "red",
       "tag": "CRITICAL",
-      "text": "The production DEPLOYMENT runs the DEV database (hjqca...). www.monolith.works serves real user data out of DEV; the PROD project (jzsyq...) is mirrored but takes no traffic. A DEV migration reaches real users the moment main is promoted, and inspecting PROD will never explain live behaviour (decision-32). Now recorded in AGENTS.md as well, so a fresh agent reads it before touching anything."
+      "text": "The production DEPLOYMENT runs the DEV database (hjqca...). www.monolith.works serves real user data out of DEV; the PROD project (jzsyq...) is mirrored but takes no traffic. A DEV migration reaches real users the moment main is promoted, and inspecting PROD will never explain live behaviour (decision-32)."
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-03-1049-keystone-wash-followups-closed",
-    "when": "2026-08-03 10:49",
+    "id": "2026-08-04-1443-board-dock-and-ai-move-verb",
+    "when": "2026-08-04 14:43",
     "bullets": [
-      "A findings document is a hypothesis: its AA fix computed to 4.19:1 at the real bloom peak. A contrast number nobody recomputed is a number nobody checked — the test now parses the stylesheet and derives it.",
-      "A class list is not a layout. /ask copied AppShell main exactly (mr-2 mb-2 ml-1, no mt-*) without the transparent h-14 header that supplies the top space, so the gradient never appeared. Only a human looking at the screen caught it.",
-      "Third decorative guard in a row: a /g regex reused with .test() advances lastIndex and silently drops matches (gotcha-72). The durable defence is a non-vacuous-matcher assertion, not another prove-it-fails drill."
+      "A tool description is untested surface: a verb passed three reviews and four gates while being impossible to call, because no read tool emitted the id its own description promised.",
+      "The spec named its own mitigation, and that mitigation had never executed — all ~70 tier-1 suites self-skip. Rewritten on tier 2, where it actually runs against DEV.",
+      "The rewritten RLS proof was STILL blind: with no (board_id set, visibility private) row, deleting the visibility conjunct left every test green while leaking unshared docked threads."
     ]
   },
   "roadmap": [

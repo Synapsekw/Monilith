@@ -6,6 +6,7 @@ import type { ProviderAdapter } from "@/lib/ai/providers/types";
 const snap: BoardSnapshot = {
   board: { id: "b1", name: "Sprint" },
   rowCount: 5,
+  groups: [{ id: "g1", name: "Backlog" }],
   columns: [{ id: "c-status", name: "Status", kind: "status", options: [] }],
   columnStats: { "c-status": { fillRate: 1, distinctCount: 2 } },
   meta: { rowCount: 5, columnCount: 1, estimatedTokens: 50 },

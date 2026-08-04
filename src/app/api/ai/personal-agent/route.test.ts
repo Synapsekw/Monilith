@@ -46,18 +46,28 @@ vi.mock("@/lib/supabase/service", () => ({
     from(table: string) {
       if (table !== "user_agent_runs") return {};
       return {
-        insert: async (row: RunPatch) => {
-          if (forceClaimConflict) {
-            return {
-              error: {
-                code: "23505",
-                message:
-                  'duplicate key value violates unique constraint "user_agent_runs_slot_uniq"',
-              },
-            };
-          }
-          runInserts.push(row);
-          return { error: null };
+        // claimRun (route.ts) chains `.insert(row).select("id").single()` to
+        // get the claimed row's id back — mirror that shape here rather than
+        // the old bare `await insert(row)`. On a simulated 23505 the insert
+        // is never actually written, so runInserts stays untouched, matching
+        // the "no-op via the claim backstop" test's `toHaveLength(0)`.
+        insert: (row: RunPatch) => {
+          if (!forceClaimConflict) runInserts.push(row);
+          return {
+            select: () => ({
+              single: async () =>
+                forceClaimConflict
+                  ? {
+                      data: null,
+                      error: {
+                        code: "23505",
+                        message:
+                          'duplicate key value violates unique constraint "user_agent_runs_slot_uniq"',
+                      },
+                    }
+                  : { data: { id: "run-1" }, error: null },
+            }),
+          };
         },
         update(patch: RunPatch) {
           const key: RunPatch = {};
@@ -101,7 +111,48 @@ vi.mock("@/lib/agents/caps", async (importOriginal) => {
   };
 });
 
-const getAgentOwnerClient = vi.fn(async () => ({}) as never);
+// ── owner-client mock ───────────────────────────────────────────────────
+// `writeBriefingThread` writes through the OWNER client, so this double has to
+// be chainable: `.insert(row).select("id").single()` for the conversation and a
+// bare awaited `.insert(row)` for the message. Returning `{}` here — as this
+// file used to — made every route test hit `owner.from is not a function`,
+// which writeBriefingThread's own outer catch swallowed into a null threadId.
+// The thread-write seam was therefore never exercised by the route, and nothing
+// could assert that `sendBriefingEmail` receives the id.
+type OwnerRow = Record<string, unknown>;
+const ownerConversationInsert = vi.fn();
+const ownerMessageInsert = vi.fn();
+let forceThreadInsertError: { code?: string; message: string } | null = null;
+
+function ownerClientDouble() {
+  return {
+    from(table: string) {
+      if (table === "ai_conversations") {
+        return {
+          insert: (row: OwnerRow) => {
+            ownerConversationInsert(row);
+            return {
+              select: () => ({
+                single: async () =>
+                  forceThreadInsertError
+                    ? { data: null, error: forceThreadInsertError }
+                    : { data: { id: "conv-1" }, error: null },
+              }),
+            };
+          },
+        };
+      }
+      return {
+        insert: async (row: OwnerRow) => {
+          ownerMessageInsert(row);
+          return { error: null };
+        },
+      };
+    },
+  };
+}
+
+const getAgentOwnerClient = vi.fn(async () => ownerClientDouble() as never);
 vi.mock("@/lib/agents/owner-client", () => ({
   getAgentOwnerClient: (...a: unknown[]) => getAgentOwnerClient(...(a as [])),
 }));
@@ -190,6 +241,9 @@ beforeEach(() => {
   assertRunAllowedToday.mockReset();
   assertRunAllowedToday.mockResolvedValue(undefined);
   getAgentOwnerClient.mockClear();
+  ownerConversationInsert.mockReset();
+  ownerMessageInsert.mockReset();
+  forceThreadInsertError = null;
   buildBriefing.mockReset();
   buildBriefing.mockResolvedValue(fakeBriefing);
   summariseBriefing.mockReset();
@@ -408,6 +462,64 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({ status: "error" });
     expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // ── I2: the seam between the thread write and the email ────────────────
+  // briefing-thread.test.ts and send.test.ts each cover their own half; this is
+  // the only place that proves the id crosses between them.
+  it("writes the briefing thread through the owner client and hands its id to the email", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    expect(ownerConversationInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        org_id: ORG,
+        user_id: OWNER,
+        agent_id: AGENT_ID,
+        // The run's id from the claim — the idempotency key that stops a
+        // redelivered fire slot minting a second thread.
+        run_id: "run-1",
+        // A briefing spans every board its owner can see, so it belongs to none.
+        board_id: null,
+      }),
+    );
+    // The summary is the thread's first (assistant) turn.
+    expect(ownerMessageInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversation_id: "conv-1",
+        role: "assistant",
+        content: "You have 1 overdue item.",
+      }),
+    );
+    expect(sendBriefingEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ threadId: "conv-1" }),
+    );
+    // Order matters: the email carries a link to the thread, so the thread has
+    // to exist before it is sent.
+    expect(ownerConversationInsert.mock.invocationCallOrder[0]).toBeLessThan(
+      sendBriefingEmail.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("still emails — with no thread link — when the thread write fails", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    forceThreadInsertError = { message: "insert refused" };
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(post(slot));
+
+    // A nice-to-have write must never cost the owner their briefing.
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(sendBriefingEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ threadId: null }),
+    );
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "ran" });
+    errSpy.mockRestore();
   });
 
   // ── error path still finalizes, and reports the real HTTP outcome ──────

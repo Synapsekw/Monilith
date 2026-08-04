@@ -107,9 +107,82 @@ export const TIER2_PROPOSAL_MESSAGE_ID = "aaaa0000-0000-4000-8000-000000000007";
  *  AFTER its refused-write probes, so a write that leaked through is caught. */
 export const TIER2_FIXTURE_MESSAGE_COUNTS = { a: 2, b: 1 } as const;
 
+// ---------------------------------------------------------------------------
+// Board-thread fixtures (Phase 2 board dock)
+// ---------------------------------------------------------------------------
+//
+// The two tenants above share NOTHING, which is exactly what makes them useless
+// for the board-thread widening: `public.can_read_board()` demands ACTIVE ORG
+// MEMBERSHIP *and* creator-or-board-member, so a reader in a different org can
+// never satisfy it. Proving "a board member CAN read a shared thread" therefore
+// needs a THIRD principal — a second, non-owning member of the Alpha org.
+//
+// GAMMA is that principal. It is deliberately NOT a member of
+// TIER2_FIXTURE_TENANTS: that array's own unit test asserts "exactly two tenants
+// that share nothing", and gamma's whole purpose is to SHARE Alpha's org. It
+// owns nothing, holds no elevated role, and reaches nothing outside Alpha.
+export const TIER2_BOARD_MEMBER_FIXTURE = {
+  label: "gamma",
+  email: "pulse-tier2-fixture-c@example.com",
+  userId: "aaaa0000-0000-4000-8000-0000000000c1",
+  fullName: "Tier-2 Fixture C",
+} as const;
+
+/**
+ * The board-scoped Ask Pulse threads, all inside the Alpha org.
+ *
+ * Two boards, because "shared to a board" has two distinct negatives:
+ *   - `sharedBoardId` (the pre-existing Alpha fixture board) — gamma IS granted
+ *     it via `board_members`, so gamma must SEE the thread shared to it.
+ *   - `offBoardId` (a second Alpha board) — gamma is an active member of the
+ *     same ORG but is neither its creator nor a board member, so gamma must NOT
+ *     see the thread shared to it. That is the assertion that separates
+ *     can_read_board()'s board check from its org check; without it, "gamma can
+ *     read a board thread" would be indistinguishable from "any org member can".
+ *
+ * The private counterpart is the pre-existing `ALPHA.conversationId`, which
+ * keeps `board_id = null` / `visibility = 'private'` — the regression subject.
+ *
+ * `dockedPrivateConversationId` is the row that makes the `visibility = 'board'`
+ * conjunct visible to the suite at all. It sits on `sharedBoardId` — the board
+ * gamma DOES hold — and differs from the readable `sharedConversationId` in
+ * exactly one column. Without it, `board_id is not null` and `can_read_board()`
+ * between them refuse every other row in the corpus, so deleting the visibility
+ * check from either policy would change nothing observable. It is also the row
+ * class the feature produces most: `visibility` is NOT NULL DEFAULT 'private'
+ * and nothing couples it to `board_id`, so a thread docked to a board and not
+ * yet shared lands here BY DEFAULT, holding private conversation content.
+ */
+export const TIER2_BOARD_THREAD_FIXTURE = {
+  orgId: "aaaa0000-0000-4000-8000-000000000001",
+  /** Alpha Fixture Board — gamma is a board member here. */
+  sharedBoardId: "aaaa0000-0000-4000-8000-000000000003",
+  sharedConversationId: "aaaa0000-0000-4000-8000-000000000008",
+  sharedConversationTitle: "Alpha shared board thread",
+  sharedMessageIds: [
+    "aaaa0000-0000-4000-8000-000000000009",
+    "aaaa0000-0000-4000-8000-00000000000a",
+  ],
+  /**
+   * Docked to `sharedBoardId` but NOT shared: `visibility = 'private'`. The sole
+   * discriminator for the second conjunct of both new policies.
+   */
+  dockedPrivateConversationId: "aaaa0000-0000-4000-8000-00000000000e",
+  dockedPrivateConversationTitle: "Alpha docked unshared thread",
+  dockedPrivateMessageId: "aaaa0000-0000-4000-8000-00000000000f",
+  /** Alpha Off-Limits Board — same org, gamma is NOT a board member. */
+  offBoardId: "aaaa0000-0000-4000-8000-00000000000b",
+  offBoardName: "Alpha Off-Limits Board",
+  offBoardConversationId: "aaaa0000-0000-4000-8000-00000000000c",
+  offBoardConversationTitle: "Alpha off-limits board thread",
+  offBoardMessageId: "aaaa0000-0000-4000-8000-00000000000d",
+} as const;
+
 /** Every permanent fixture address, for the teardown purge exemption. */
-export const TIER2_FIXTURE_EMAILS: readonly string[] =
-  TIER2_FIXTURE_TENANTS.map((tenant) => tenant.email);
+export const TIER2_FIXTURE_EMAILS: readonly string[] = [
+  ...TIER2_FIXTURE_TENANTS.map((tenant) => tenant.email),
+  TIER2_BOARD_MEMBER_FIXTURE.email,
+];
 
 const FIXTURE_EMAIL_SET = new Set(
   TIER2_FIXTURE_EMAILS.map((email) => email.toLowerCase()),
