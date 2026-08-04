@@ -49,7 +49,11 @@ describe("upsertCell people-cell assignment fan-out", () => {
   it("notifies only the newly-added member, excluding the actor", async () => {
     sessionGetUser.mockResolvedValue({ id: USER });
     const notifInsert = vi.fn().mockResolvedValue({ error: null });
-    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const upsert = vi.fn((row: Record<string, unknown>) => ({
+      select: () => ({
+        single: async () => ({ data: row, error: null }),
+      }),
+    }));
     from.mockImplementation((table: string) => {
       if (table === "columns")
         return {
@@ -98,7 +102,7 @@ describe("upsertCell people-cell assignment fan-out", () => {
       value: { userIds: [A, B, USER] },
     });
 
-    expect(res).toEqual({ ok: true, data: undefined });
+    expect(res.ok).toBe(true);
     expect(upsert).toHaveBeenCalledTimes(1);
     // New contract: a cell edit is the hottest board mutation and must NOT
     // revalidate the board RSC — the mounted client hydrates once and is kept
@@ -125,7 +129,11 @@ describe("upsertCell people-cell assignment fan-out", () => {
     const notifInsert = vi
       .fn()
       .mockResolvedValue({ error: { message: "insert denied" } });
-    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const upsert = vi.fn((row: Record<string, unknown>) => ({
+      select: () => ({
+        single: async () => ({ data: row, error: null }),
+      }),
+    }));
     from.mockImplementation((table: string) => {
       if (table === "columns")
         return {
@@ -170,7 +178,7 @@ describe("upsertCell people-cell assignment fan-out", () => {
       value: { userIds: [A] },
     });
 
-    expect(res).toEqual({ ok: true, data: undefined }); // primary write not failed
+    expect(res.ok).toBe(true); // primary write not failed
     expect(spy).toHaveBeenCalledWith(
       "[notifications] assigned fan-out failed",
       expect.objectContaining({

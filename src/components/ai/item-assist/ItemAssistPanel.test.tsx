@@ -118,7 +118,7 @@ describe("ItemAssistPanel", () => {
       ok: true,
       data: { proposal: { description: "A crisp draft." }, warnings: [] },
     });
-    mockUpsertCell.mockResolvedValue({ ok: true, data: undefined });
+    mockUpsertCell.mockResolvedValue({ ok: true, data: { cell: {} as never } });
     const user = userEvent.setup();
     renderPanel();
 
@@ -204,7 +204,7 @@ describe("ItemAssistPanel", () => {
         warnings: [],
       },
     });
-    mockUpsertCell.mockResolvedValue({ ok: true, data: undefined });
+    mockUpsertCell.mockResolvedValue({ ok: true, data: { cell: {} as never } });
     const user = userEvent.setup();
     renderPanel();
 
@@ -233,7 +233,7 @@ describe("ItemAssistPanel", () => {
         warnings: [],
       },
     });
-    mockUpsertCell.mockResolvedValue({ ok: true, data: undefined });
+    mockUpsertCell.mockResolvedValue({ ok: true, data: { cell: {} as never } });
     const user = userEvent.setup();
     renderPanel();
 

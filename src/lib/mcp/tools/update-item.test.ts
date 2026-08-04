@@ -38,7 +38,11 @@ describe("updateItemHandler", () => {
         }),
         upsert: (row: unknown) => {
           upserted.push(row);
-          return Promise.resolve({ error: null });
+          return {
+            select: () => ({
+              single: () => Promise.resolve({ data: row, error: null }),
+            }),
+          };
         },
       }),
     };
@@ -73,7 +77,11 @@ describe("updateItemHandler", () => {
         }),
         upsert: (row: unknown) => {
           upserted.push(row);
-          return Promise.resolve({ error: null });
+          return {
+            select: () => ({
+              single: () => Promise.resolve({ data: row, error: null }),
+            }),
+          };
         },
       }),
     };
