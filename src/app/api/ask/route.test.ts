@@ -162,6 +162,11 @@ function mockConversationRow(overrides: Partial<ConversationRow>) {
 function mockAgentRow(row: { name: string; instructions: string } | null) {
   agentRow = { data: row, error: null };
 }
+/** Overrides the `boards` row the route reads back for `board_id`. Pass
+ *  `null` to simulate an RLS-invisible or dangling board id. */
+function mockBoardRow(row: { id: string; name: string } | null) {
+  boardRow = { data: row, error: null };
+}
 
 // Table-routed, because the route now reads three different tables through the
 // same client: ai_conversations (owner gate + persona/board ids), boards and
@@ -456,6 +461,19 @@ describe("POST /api/ask · ownership, persona, and board scope", () => {
     const system = askPulseStreamMock.mock.calls[0][0].system as string;
     expect(system).toContain("<agent_instructions>");
     expect(system).toContain("Focus on blockers.");
+  });
+
+  it("composes the board scope into the system prompt for a board thread", async () => {
+    // This wiring (route.ts, the `if (conv.data.board_id)` branch) had zero
+    // coverage before: no test set `boardRow` or asserted on the composed
+    // system prompt, so the branch could be deleted and every test here would
+    // still pass.
+    mockConversationRow({ board_id: BOARD_ID, agent_id: null });
+    mockBoardRow({ id: BOARD_ID, name: "Roadmap" });
+    await (await POST(makeReq())).text();
+    const system = askPulseStreamMock.mock.calls[0][0].system as string;
+    expect(system).toContain(BOARD_ID);
+    expect(system).toContain("Roadmap");
   });
 
   it("meters a dock turn as ask_pulse, never against the agent run cap", async () => {
