@@ -32,6 +32,8 @@ const input = {
   summary: "One item is overdue.",
 };
 
+const threadUrl = "https://app.example.com/ask/conv-1";
+
 describe("renderBriefingHtml", () => {
   it("escapes user-provided item names", () => {
     const html = renderBriefingHtml(input);
@@ -48,6 +50,34 @@ describe("renderBriefingHtml", () => {
   it("includes the model summary", () => {
     expect(renderBriefingHtml(input)).toContain("One item is overdue.");
   });
+
+  it("omits the thread link entirely when no threadUrl is given", () => {
+    const html = renderBriefingHtml(input);
+    expect(html).not.toContain("Open this briefing");
+  });
+
+  it("renders an 'Open this briefing' link, before 'Open My Work' and separated by &middot;, when a threadUrl is given", () => {
+    const html = renderBriefingHtml({ ...input, threadUrl });
+
+    const linkHtml = `<a href="${threadUrl}" style="color:#5b6fd6;">Open this briefing</a>`;
+    expect(html).toContain(linkHtml);
+
+    // Placement: thread link, then a &middot; separator, then "Open My Work".
+    const threadIdx = html.indexOf(linkHtml);
+    const separatorIdx = html.indexOf("&middot;", threadIdx);
+    const myWorkIdx = html.indexOf("Open My Work", separatorIdx);
+    expect(threadIdx).toBeGreaterThan(-1);
+    expect(separatorIdx).toBeGreaterThan(threadIdx);
+    expect(myWorkIdx).toBeGreaterThan(separatorIdx);
+  });
+
+  it("adding a threadUrl changes nothing else — removing the inserted link recovers the no-link output exactly", () => {
+    const withLink = renderBriefingHtml({ ...input, threadUrl });
+    const withoutLink = renderBriefingHtml(input);
+    const inserted = `<a href="${threadUrl}" style="color:#5b6fd6;">Open this briefing</a>\n    &middot; `;
+
+    expect(withLink.replace(inserted, "")).toBe(withoutLink);
+  });
 });
 
 describe("renderBriefingText", () => {
@@ -56,5 +86,28 @@ describe("renderBriefingText", () => {
     expect(text).toContain("Overdue");
     expect(text).toContain("Sprint 24");
     expect(text).not.toContain("<td");
+  });
+
+  it("omits the thread link line entirely when no threadUrl is given", () => {
+    const text = renderBriefingText(input);
+    expect(text).not.toContain("Open this briefing");
+  });
+
+  it("adds an 'Open this briefing: <url>' line directly before the Unsubscribe line when a threadUrl is given", () => {
+    const text = renderBriefingText({ ...input, threadUrl });
+    const lines = text.split("\n");
+
+    const unsubscribeIdx = lines.findIndex((l) => l.startsWith("Unsubscribe:"));
+    expect(unsubscribeIdx).toBeGreaterThan(0);
+    expect(lines[unsubscribeIdx - 1]).toBe(`Open this briefing: ${threadUrl}`);
+  });
+
+  it("adding a threadUrl changes nothing else — removing the inserted line recovers the no-link output exactly", () => {
+    const withLink = renderBriefingText({ ...input, threadUrl });
+    const withoutLink = renderBriefingText(input);
+
+    expect(withLink.replace(`Open this briefing: ${threadUrl}\n`, "")).toBe(
+      withoutLink,
+    );
   });
 });
