@@ -229,6 +229,7 @@ describe("executeAskTool: query_items", () => {
     const parsed = JSON.parse(result.content);
     expect(parsed).toEqual([
       {
+        id: "i0",
         name: "Item 0",
         group: "To Do",
         values: {
@@ -237,6 +238,28 @@ describe("executeAskTool: query_items", () => {
         },
       },
     ]);
+  });
+
+  // The write verbs (propose_move_item, propose_set_item_fields) require an
+  // item_id. Before this, semantic_search_items was the only tool that emitted
+  // one — entitlement-gated and dependent on the embedding sweep, so a
+  // single point of failure. See gotcha 73.
+  it("emits each item's id on every row so write verbs can address it", async () => {
+    getBoardPayload.mockResolvedValue(payload);
+
+    const result = await executeAskTool(
+      "query_items",
+      { board_id: "11111111-1111-4111-8111-111111111111", limit: 5 },
+      ctx,
+    );
+
+    const parsed = JSON.parse(result.content) as { id?: unknown }[];
+    expect(parsed.map((row) => row.id)).toEqual(["i0", "i1", "i2", "i3", "i4"]);
+  });
+
+  it("advertises the id in its tool description (what the model reads)", () => {
+    const tool = ASK_TOOLS.find((t) => t.name === "query_items");
+    expect(tool?.description).toContain("id");
   });
 });
 
