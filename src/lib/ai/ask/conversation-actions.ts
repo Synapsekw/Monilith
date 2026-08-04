@@ -40,6 +40,31 @@ async function ownedAgentId(agentId: string): Promise<string | null> {
 }
 
 /**
+ * Resolve a board the CALLER can read, or null.
+ *
+ * `boards`' SELECT policy is `is_org_member(org_id) AND (created_by =
+ * auth.uid() OR is_board_member(id))` — exactly the predicate
+ * `can_read_board()` evaluates — so an RLS-scoped read through the user client
+ * fails closed identically, and the check and the query are one statement. Same
+ * shape as `ownedAgentId` above, and for the same reason: a uuid-SHAPED board id
+ * is not a board the caller may write to. Nothing downstream closes this —
+ * `ai_conversations` has no trigger and no CHECK coupling `board_id` to
+ * `org_id`, and the insert policy validates only `user_id` and the caller's own
+ * `org_id` — so a trusted `boardId` would let any authenticated user place a
+ * titled, attacker-authored thread into a foreign board's dock by sharing it
+ * afterwards.
+ */
+async function readableBoardId(boardId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("boards")
+    .select("id")
+    .eq("id", boardId)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
+/**
  * Start a new conversation: insert the thread + its first user message, and
  * return the new id. Org/workspace are resolved server-side via the org switcher
  * (resolveActiveOrg) — never trusted from the client, and never getUserOrgs()[0]
@@ -61,7 +86,10 @@ export async function createConversation(input: {
   if (input.boardId !== undefined) {
     const b = idSchema.safeParse(input.boardId);
     if (!b.success) return fail("Invalid board.");
-    boardId = b.data;
+    boardId = await readableBoardId(b.data);
+    // Fails CLOSED, and with one message for both "not yours" and "not there" —
+    // distinguishing them would make this a board-membership oracle.
+    if (!boardId) return fail("Board not found.");
   }
 
   let agentId: string | null = null;
@@ -115,6 +143,15 @@ export async function createConversation(input: {
 /**
  * Share a thread with its board, or take it back. RLS scopes the update to the
  * owner, so a board member cannot flip someone else's thread.
+ *
+ * A thread with no `board_id` can never be shared: the shared-read policy's
+ * FIRST conjunct is `board_id is not null`, so `visibility = 'board'` on a
+ * boardless thread (a scheduled briefing, or any plain `/ask` thread) is a lie —
+ * it paints a "Shared" chip on something no board member can read. It is also a
+ * trap: were a later slice to let an owner attach an existing thread to a board,
+ * that thread would arrive already carrying `visibility='board'` and become
+ * readable the instant `board_id` is set. Refusing here keeps the affordance and
+ * the invariant in agreement.
  */
 export async function setThreadVisibility(input: {
   conversationId: string;
@@ -126,6 +163,20 @@ export async function setThreadVisibility(input: {
   if (!vis.success) return fail("Invalid visibility.");
 
   const supabase = await createClient();
+
+  // Only the WIDENING direction needs the check — taking a thread back is always
+  // safe, and must keep working even on a row whose board has since gone away.
+  if (vis.data === "board") {
+    const { data: row } = await supabase
+      .from("ai_conversations")
+      .select("board_id")
+      .eq("id", id.data)
+      .maybeSingle();
+    if (!row?.board_id) {
+      return fail("This thread isn't on a board, so it can't be shared here.");
+    }
+  }
+
   const { data, error } = await supabase
     .from("ai_conversations")
     .update({ visibility: vis.data })
