@@ -97,7 +97,10 @@ fi
 
 cat <<EOF
 Ledger repair for: supabase/migrations/$FILEBASE
-  DEV ledger row:  version $APPLIED  →  $FILE_VERSION  (name: $NAME)
+  DEV ledger row:  version $APPLIED  →  $FILE_VERSION   (file slug: $NAME)
+  The ledger's own \`name\` column is left as-is — it legitimately holds either
+  '$NAME' (applied by the CLI) or '${APPLIED}_$NAME' (applied by the MCP), and
+  pnpm db:ledger-check compares versions, not names.
 
 Run each step on DEV via the supabase-dev MCP execute_sql. This is
 metadata-only — it edits supabase_migrations.schema_migrations, no schema
@@ -112,11 +115,22 @@ FROM supabase_migrations.schema_migrations
 WHERE version = '$APPLIED';
 
 -- STEP 2 — relabel the DEV ledger row to the committed file's version.
+-- Keyed on version ALONE, which is the primary key, and STEP 1 has already
+-- proven this row is the right one. Do NOT add "AND name = …": the ledger's
+-- name column has two legitimate forms — '<slug>' for rows applied by the
+-- Supabase CLI (db push) and '<version>_<slug>' for rows applied by the MCP
+-- apply_migration — and this repair only ever runs against the MCP kind. The
+-- old predicate derived the CLI form, so it matched ZERO rows, changed
+-- nothing, and still exited 0 (gotcha-75).
+-- RETURNING is the durable defence: an empty result set is a visibly failed
+-- repair. A bare UPDATE that matches nothing looks identical to one that
+-- worked.
 UPDATE supabase_migrations.schema_migrations
 SET version = '$FILE_VERSION'
-WHERE version = '$APPLIED' AND name = '$NAME';
--- (if STEP 1 showed the row under a different name — MCP applies record the
---  name passed to apply_migration — adjust the WHERE's name to that value.)
+WHERE version = '$APPLIED'
+RETURNING version, name;
+-- EXPECT: exactly one row, version $FILE_VERSION. NO ROWS = nothing was
+-- repaired — re-run STEP 1 and find where the row actually is before retrying.
 
 -- STEP 3 — verify: expect EXACTLY ONE row, version $FILE_VERSION.
 -- Two rows means a row for the file version already existed — investigate
@@ -124,4 +138,9 @@ WHERE version = '$APPLIED' AND name = '$NAME';
 SELECT version, name
 FROM supabase_migrations.schema_migrations
 WHERE version IN ('$APPLIED', '$FILE_VERSION');
+
+-- STEP 4 — MANDATORY. The ledger check is the only thing that caught the
+-- silent no-op; STEP 3 above passes on a half-done repair too if you misread
+-- it. Run in the repo:
+--   pnpm db:ledger-check     # expect: ✓ migration ledger in sync
 EOF

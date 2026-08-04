@@ -8,6 +8,7 @@ import {
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { getUser } from "@/lib/auth/session";
 import { upsertCellCore } from "./cell-core";
+import type { Tables } from "@/types/database.types";
 
 /**
  * Upsert a single cell value (Server Action). A thin cookie-client wrapper: it
@@ -25,7 +26,7 @@ export async function upsertCell(input: {
   itemId: string;
   columnId: string;
   value: unknown;
-}): Promise<ActionResult> {
+}): Promise<ActionResult<{ cell: Tables<"cell_values"> }>> {
   const parsed = upsertCellSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");

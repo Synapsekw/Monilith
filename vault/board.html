@@ -5,173 +5,152 @@
   RULE: refreshes edit ONLY the #board-data JSON island below. Markup/CSS/JS change
   only on explicit user request (bump "schema" when they do).
 -->
-<script type="application/json" id="board-data">
-{
-  "schema": 1,
-  "updated": "2026-08-04 14:43",
-  "kicker": "MONOLITH / NORTH STAR",
-  "headline": "Personal Agents Phase 2 shipped — the board thread dock — plus a fourth AI write verb that would have shipped dead. Two cross-task defects only the whole-branch review could see.",
-  "chips": [
-    {
-      "label": "develop",
-      "value": "2b186ce4",
-      "note": "== origin · ahead of main by E6 batch 1 + wash + dock + move verb",
-      "tone": "ok"
-    },
-    {
-      "label": "main",
-      "value": "7d98230c",
-      "note": "#80 LIVE · run history + open signup + DEV-db warning",
-      "tone": "ok"
-    },
-    {
-      "label": "gates",
-      "value": "4209",
-      "note": "typecheck/lint/test/build green · tier-2 RLS runs on live DEV",
-      "tone": "ok"
-    },
-    {
-      "label": "ledger",
-      "value": "130/130",
-      "note": "in sync after 4 migrations · apply_migration drifted 4 of 4",
-      "tone": "ok"
-    }
-  ],
-  "progress": {
-    "done": 13,
-    "total": 15
+<script type="application/json" id="board-data">{
+ "schema": 1,
+ "updated": "2026-08-04 19:07",
+ "kicker": "MONOLITH / NORTH STAR",
+ "headline": "Promoted to production, then closed the three follow-ups that made the AI write path actually usable: a verb you could not reach, a thread that could drift org, and a write you could not see.",
+ "chips": [
+  {
+   "label": "develop",
+   "value": "e84e34ee",
+   "note": "== origin · ahead of main by the three AI-write follow-ups",
+   "tone": "ok"
   },
-  "gates": [
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "Board thread dock SHIPPED (f454e20d, 42 files). Board-scoped agent conversations, private by default and shareable to the board; zero requests until opened. Two additive SELECT-only policies on ai_conversations. Reverses decision-27 — recorded as decision-33."
-    },
-    {
-      "led": "green",
-      "tag": "DONE",
-      "text": "propose_move_item SHIPPED (2b186ce4). The AI can move an item between groups — a gap found by using the dock the hour it landed."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "CAUGHT PRE-MERGE: createConversation trusted a client-supplied boardId while resolving agentId through RLS twelve lines above. Any authenticated user knowing a board uuid could plant unattributed content into another tenant dock. Six scoped reviews each saw a diff correct in isolation; only the whole-branch review asked who may WRITE board_id."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "CAUGHT PRE-MERGE: propose_move_item could never have been invoked. Its description told the model to get group_id from get_board_overview, whose snapshot had no groups. Three approving reviews and 4205 green tests could not see it — the defect lived between the code and the sentence telling a model how to reach it."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "An approved AI write is invisible until you reload the board. Systemic across all four verbs: no item action calls revalidatePath and the dock suppresses router.refresh by design. Highest-value follow-up — it undercuts every write the assistant can make."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "semantic_search_items is the SOLE source of item ids for the AI write path, entitlement-gated and empty on error. Single point of failure for move_item AND the long-shipped set_item_fields."
-    },
-    {
-      "led": "amber",
-      "tag": "NEXT?",
-      "text": "PROMOTE. develop carries E6 billing batch 1, the Keystone wash, the agent dock and the move verb. Then Report Builder v2 roll-ups, or the Stripe track (not blocked on creds)."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "digest_secret is provisioned on the live DB and fingerprint-verified there, but the VERCEL half is still unverified — a mismatch 401s and leaves no trace, because the route records a blocked row only when the variable is ABSENT, never when it is wrong. Prod has no RESEND_API_KEY, so a run recorded as `ran` with no email is expected, not a fault."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "Ask Monolith write path still unexercised on production."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "Never run /sync-prod data phase without excluding fixtures — a full replace would copy the two Tier 2 fixture accounts, whose passwords are committed to the repo, into PRODUCTION. Schema-only db push is unaffected."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "The production DEPLOYMENT runs the DEV database (hjqca...). www.monolith.works serves real user data out of DEV; the PROD project (jzsyq...) is mirrored but takes no traffic. A DEV migration reaches real users the moment main is promoted, and inspecting PROD will never explain live behaviour (decision-32)."
-    }
-  ],
-  "worktrees": [],
-  "session": {
-    "id": "2026-08-04-1443-board-dock-and-ai-move-verb",
-    "when": "2026-08-04 14:43",
-    "bullets": [
-      "A tool description is untested surface: a verb passed three reviews and four gates while being impossible to call, because no read tool emitted the id its own description promised.",
-      "The spec named its own mitigation, and that mitigation had never executed — all ~70 tier-1 suites self-skip. Rewritten on tier 2, where it actually runs against DEV.",
-      "The rewritten RLS proof was STILL blind: with no (board_id set, visibility private) row, deleting the visibility conjunct left every test green while leaking unshared docked threads."
-    ]
+  {
+   "label": "main",
+   "value": "bfc238d3",
+   "note": "#83 LIVE · board dock + propose_move_item · verified 200",
+   "tone": "ok"
   },
-  "roadmap": [
-    {
-      "label": "0 Setup",
-      "state": "done"
-    },
-    {
-      "label": "1 Auth",
-      "state": "done"
-    },
-    {
-      "label": "2 Boards",
-      "state": "done"
-    },
-    {
-      "label": "3 Views",
-      "state": "done"
-    },
-    {
-      "label": "4 Collab",
-      "state": "done"
-    },
-    {
-      "label": "5 Autom",
-      "state": "done"
-    },
-    {
-      "label": "6 Depth",
-      "state": "prog"
-    },
-    {
-      "label": "7 Asana",
-      "state": "done"
-    },
-    {
-      "label": "8 Dash",
-      "state": "done"
-    },
-    {
-      "label": "9 Perf",
-      "state": "done"
-    },
-    {
-      "label": "RS",
-      "state": "done"
-    },
-    {
-      "label": "MVP-F",
-      "state": "done"
-    },
-    {
-      "label": "Touch",
-      "state": "done"
-    },
-    {
-      "label": "PF",
-      "state": "done"
-    },
-    {
-      "label": "10 AI",
-      "state": "prog"
-    }
+  {
+   "label": "gates",
+   "value": "4329",
+   "note": "typecheck/lint/test/build green · tier-2 suites run on live DEV",
+   "tone": "ok"
+  },
+  {
+   "label": "ledger",
+   "value": "131/131",
+   "note": "in sync · apply_migration has now drifted 5 of 5",
+   "tone": "ok"
+  }
+ ],
+ "progress": {
+  "done": 14,
+  "total": 15
+ },
+ "gates": [
+  {
+   "led": "green",
+   "tag": "SHIPPED",
+   "text": "Promotion #83 to main (bfc238d3, 31 commits). Board agent-thread dock + propose_move_item are live. Verified by fetching the page, not by trusting the deploy status. Squash divergence healed with -s ours."
+  },
+  {
+   "led": "green",
+   "tag": "DONE",
+   "text": "query_items now emits item ids (1645b694). The verb shipped yesterday was dead in practice - its only id source was semantic search, which is entitlement-gated and returns [] on error. Guarded by id-sources.test.ts, which runs each named read tool's REAL handler and asserts the id reaches the model."
+  },
+  {
+   "led": "green",
+   "tag": "DONE",
+   "text": "A docked thread is coupled to its board's org (b3dd8a44, decision-34). Composite FK with the PG15+ column-list ON DELETE SET NULL (board_id) - the bare form would null the NOT NULL org_id and break purgeBoard. Reachable with no attack: the board page never reconciles the active-org cookie."
+  },
+  {
+   "led": "green",
+   "tag": "DONE",
+   "text": "An approved AI write renders without a reload (e84e34ee). revalidatePath was never the missing piece - the board hydrates once and never refetches, so its absence was deliberate. executeAction now returns a transient BoardEffect folded into the client cache. Zero new round-trips."
+  },
+  {
+   "led": "red",
+   "tag": "TOOLING",
+   "text": "reconcile-migration-version.sh matches ZERO rows and reports success - its WHERE uses the slug, the ledger stores the full stamped filename. On the critical path of every migration now that apply_migration mis-stamps 5 of 5. Only db:ledger-check caught it. See gotcha-75."
+  },
+  {
+   "led": "red",
+   "tag": "TOOLING",
+   "text": "finish-task.sh has two faults: its rm -f of session drafts runs before the clean-tree check, so a COMMITTED draft breaks it for every session in the repo; and it can exit 0 leaving an orphaned vitest running against live DEV."
+  },
+  {
+   "led": "hollow",
+   "tag": "NEXT",
+   "text": "Promote again, then Report Builder v2 (critical path) or the E6 Stripe track, which is not blocked on credentials. Four stale remote task branches want inspecting before deletion."
+  }
+ ],
+ "worktrees": [],
+ "session": {
+  "id": "2026-08-04-1907-promote-and-ai-write-followups",
+  "when": "2026-08-04 19:07",
+  "bullets": [
+   "A shipped verb is not a reachable verb: propose_move_item was dead on arrival because query_items dropped the item id it had in hand, leaving semantic search as the only source.",
+   "revalidatePath was never the missing piece - the board hydrates once and never refetches, so its absence in item.ts was deliberate, not an oversight.",
+   "A repair that matches zero rows reports success: reconcile-migration-version.sh updates nothing and exits 0. Only db:ledger-check caught it.",
+   "Every branch was reviewed OPEN before merge - which is how three wrong plan steps were caught, including schema regexes matching migration prose instead of DDL."
   ]
-}
-</script>
+ },
+ "roadmap": [
+  {
+   "label": "0 Setup",
+   "state": "done"
+  },
+  {
+   "label": "1 Auth",
+   "state": "done"
+  },
+  {
+   "label": "2 Boards",
+   "state": "done"
+  },
+  {
+   "label": "3 Views",
+   "state": "done"
+  },
+  {
+   "label": "4 Collab",
+   "state": "done"
+  },
+  {
+   "label": "5 Autom",
+   "state": "done"
+  },
+  {
+   "label": "6 Depth",
+   "state": "prog"
+  },
+  {
+   "label": "7 Asana",
+   "state": "done"
+  },
+  {
+   "label": "8 Dash",
+   "state": "done"
+  },
+  {
+   "label": "9 Perf",
+   "state": "done"
+  },
+  {
+   "label": "RS",
+   "state": "done"
+  },
+  {
+   "label": "MVP-F",
+   "state": "done"
+  },
+  {
+   "label": "Touch",
+   "state": "done"
+  },
+  {
+   "label": "PF",
+   "state": "done"
+  },
+  {
+   "label": "10 AI",
+   "state": "prog"
+  }
+ ]
+}</script>
 
 <style>
   /* Keystone Console — committed dark world (matches the app's dark-first identity). */

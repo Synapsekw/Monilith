@@ -57,7 +57,7 @@ export const ASK_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "query_items",
-    description: `List up to ${QUERY_ITEMS_MAX} items on a board with their group and column values.`,
+    description: `List up to ${QUERY_ITEMS_MAX} items on a board. Returns id, name, group name and column values per item. The \`id\` is the item's uuid — use it as the item_id required by the write tools (propose_move_item, propose_set_item_fields). Prefer this over semantic_search_items when you already know the board.`,
     input_schema: {
       type: "object",
       properties: {
@@ -158,6 +158,11 @@ async function runQueryItems(
       if (columnName) values[columnName] = cell.value;
     }
     return {
+      // The item's uuid — the only non-semantic source of an `item_id` for the
+      // write verbs (propose_move_item, propose_set_item_fields). Emitting it
+      // costs nothing here; without it the write path depends entirely on
+      // semantic_search_items. See gotcha 73.
+      id: item.id,
       name: item.name,
       group: groupNameById.get(item.group_id) ?? null,
       values,

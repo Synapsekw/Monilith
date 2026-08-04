@@ -37,7 +37,11 @@ export type BulkOutcome = {
  */
 async function runBulk(
   itemIds: string[],
-  perItem: (itemId: string) => Promise<ActionResult>,
+  // `ActionResult<unknown>`, not `ActionResult<void>`: the per-item actions are
+  // free to return what they wrote (moveItem returns its row, upsertCell its
+  // cell) and a bulk run reads only ok/error — pinning the payload to `void`
+  // would make widening any single-item action a compile error here.
+  perItem: (itemId: string) => Promise<ActionResult<unknown>>,
 ): Promise<BulkOutcome> {
   const succeeded: string[] = [];
   const failed: { itemId: string; error: string }[] = [];

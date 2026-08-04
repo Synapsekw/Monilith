@@ -235,8 +235,11 @@ describe("createConversation — board threads", () => {
     });
     insertMsg.mockResolvedValue({ error: null });
     // `boards` is RLS-scoped to what the caller can read, so the default here is
-    // "the caller is on this board".
-    maybeSingleBoard.mockResolvedValue({ data: { id: BOARD_ID }, error: null });
+    // "the caller is on this board, and it is in the org they are acting as".
+    maybeSingleBoard.mockResolvedValue({
+      data: { id: BOARD_ID, org_id: "org1" },
+      error: null,
+    });
   });
 
   it("rejects an agentId the caller does not own", async () => {
@@ -315,6 +318,67 @@ describe("createConversation — board threads", () => {
     });
     expect(res.ok).toBe(false);
     expect(insertConv).not.toHaveBeenCalled();
+  });
+
+  // ── the board's org IS the thread's org ──────────────────────────────────
+  const OTHER_ORG_ID = "77777777-7777-4777-8777-777777777777";
+
+  it("refuses a board that lives in a different org than the active one", async () => {
+    // Reachable with no attack: the board page does not reconcile the
+    // pulse_active_org cookie, so a multi-org user viewing org A's board with
+    // the cookie on org B lands here. The DB constraint refuses this row; this
+    // guard is what turns a SQLSTATE into a sentence.
+    maybeSingleBoard.mockResolvedValue({
+      data: { id: BOARD_ID, org_id: OTHER_ORG_ID },
+      error: null,
+    });
+    const res = await createConversation({
+      firstMessage: "hi",
+      boardId: BOARD_ID,
+    });
+    expect(res).toEqual({
+      ok: false,
+      error:
+        "This board is in a different organization. Switch to it to chat here.",
+    });
+    expect(insertConv).not.toHaveBeenCalled();
+    expect(insertMsg).not.toHaveBeenCalled();
+  });
+
+  it("still answers 'Board not found.' for an unreadable board, org or no org", async () => {
+    // Ordering: the unreadable-board check runs FIRST and keeps its single
+    // ambiguous message. If the org mismatch were reported for a board the
+    // caller cannot read, the pair would become a membership oracle.
+    maybeSingleBoard.mockResolvedValue({ data: null, error: null });
+    const res = await createConversation({
+      firstMessage: "hi",
+      boardId: FOREIGN_BOARD_ID,
+    });
+    expect(res).toEqual({ ok: false, error: "Board not found." });
+  });
+
+  it("accepts a board in the active org and stamps that org on the thread", async () => {
+    maybeSingleBoard.mockResolvedValue({
+      data: { id: BOARD_ID, org_id: "org1" },
+      error: null,
+    });
+    const res = await createConversation({
+      firstMessage: "hi",
+      boardId: BOARD_ID,
+    });
+    expect(res.ok).toBe(true);
+    expect(insertConv).toHaveBeenCalledWith(
+      expect.objectContaining({ org_id: "org1", board_id: BOARD_ID }),
+    );
+  });
+
+  it("does not read boards at all when no boardId is given", async () => {
+    // /ask must keep behaving exactly as before: no board read, no org
+    // comparison, and it still revalidates.
+    const res = await createConversation({ firstMessage: "hi" });
+    expect(res.ok).toBe(true);
+    expect(maybeSingleBoard).not.toHaveBeenCalled();
+    expect(revalidatePath).toHaveBeenCalledWith("/ask");
   });
 });
 

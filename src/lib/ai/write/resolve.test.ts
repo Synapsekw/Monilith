@@ -81,6 +81,23 @@ describe("resolveCreateItem", () => {
     });
     expect(v.kind).toBe("error");
   });
+
+  it("does not assert the group is absent when it may just be archived", () => {
+    const v = resolveCreateItem(payload, members, {
+      kind: "create_item",
+      boardId: "b1",
+      groupId: "g-archived",
+      name: "X",
+    });
+    expect(v).toEqual({
+      kind: "error",
+      // getBoardPayload filters archived groups out, so "isn't on this board"
+      // is a claim the resolver cannot support — the same inaccuracy already
+      // fixed for the move path below.
+      error:
+        "I couldn't find that group on this board — it may have been archived.",
+    });
+  });
 });
 
 // Two groups and one top-level item — the shape a move needs. Same idiom as

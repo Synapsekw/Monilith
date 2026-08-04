@@ -58,7 +58,15 @@ beforeEach(() => {
   });
   mockPriorLimit.mockResolvedValue({ data: [], error: null });
   mockInsertSingle.mockResolvedValue({ data: { id: "o1" }, error: null });
-  mockExecuteAction.mockResolvedValue({ ok: true, itemId: "i1" });
+  mockExecuteAction.mockResolvedValue({
+    result: { ok: true, itemId: "i1" },
+    effect: {
+      kind: "item_created",
+      boardId: "b1",
+      item: { id: "i1", board_id: "b1", group_id: "g1" },
+      cells: [],
+    },
+  });
 });
 
 describe("applyAskProposal", () => {
@@ -139,10 +147,44 @@ describe("applyAskProposal", () => {
     }
   });
 
+  it("hands the effects back on the outcome without persisting them", async () => {
+    const res = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.effects).toHaveLength(1);
+    expect(res.data.effects[0]?.kind).toBe("item_created");
+    // The persisted trace carries results ONLY — never rows. tool_trace is read
+    // back on every thread open, so a row in there would replay stale state.
+    expect(res.data.trace).not.toHaveProperty("effects");
+    expect(JSON.stringify(res.data.trace)).not.toContain("item_created");
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool_trace: expect.not.objectContaining({ effects: expect.anything() }),
+      }),
+    );
+  });
+
+  it("carries no effects when nothing produced rows", async () => {
+    mockExecuteAction.mockResolvedValue({
+      result: { ok: false, error: "No date column." },
+      effect: null,
+    });
+    const res = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.effects).toEqual([]);
+  });
+
   it("records a failed execution instead of claiming success", async () => {
     mockExecuteAction.mockResolvedValue({
-      ok: false,
-      error: "No date column.",
+      result: { ok: false, error: "No date column." },
+      effect: null,
     });
     const res = await applyAskProposal({
       conversationId: CONV,
@@ -167,6 +209,8 @@ describe("cancelAskProposal", () => {
       messageId: MSG,
     });
     expect(mockExecuteAction).not.toHaveBeenCalled();
+    // A cancel changes nothing, so it carries no effects.
+    if (res.ok) expect(res.data.effects).toEqual([]);
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         content: "Cancelled — nothing was changed.",

@@ -36,7 +36,10 @@ MAIN="$(cd "$(dirname "$(git rev-parse --git-common-dir)")" && pwd)"
 
 # Stop-hook session drafts are generated noise — clear them BEFORE the clean-tree
 # check so they never block a finish (they were being rm'd by hand every session).
-rm -f "$WT"/vault/sessions/_draft-*.md
+# UNTRACKED ones only: this used to be a naked `rm -f …/_draft-*.md`, which also
+# deleted a *committed* draft and so dirtied the tree, failing the clean-tree
+# check immediately below — for every session in the repo (023b4676).
+"$WT/scripts/clear-untracked-drafts.sh" "$WT"
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "error: you have uncommitted changes — commit them before finishing." >&2
@@ -52,8 +55,22 @@ fi
 # each finisher rebases onto — and gates against — the previous finisher's merge.
 GATE_LOCK="$(cd "$(git rev-parse --git-common-dir)" && pwd)/finish-task-gate.lock"
 GATE_LOCK_HELD=""
-release_gate_lock() { [ -n "$GATE_LOCK_HELD" ] && rm -rf "$GATE_LOCK"; return 0; }
-trap release_gate_lock EXIT
+# `pnpm test` can leave vitest workers alive after the runner returns — this
+# script would then finish with an invisible process still writing against the
+# LIVE dev project. Sweep them, scoped to this worktree's node_modules so a
+# sibling worktree's concurrent run is never touched.
+#
+# The trap covers the ABNORMAL exits (gate failure, ^C, rebase conflict). It
+# cannot cover the success path: step 5 removes the worktree, taking the sweep
+# script with it — so the success path sweeps explicitly, right after the gates
+# and while $WT still exists.
+SWEEP="$WT/scripts/sweep-orphaned-vitest.sh"
+on_exit() {
+  [ -n "$GATE_LOCK_HELD" ] && rm -rf "$GATE_LOCK"
+  [ -x "$SWEEP" ] && "$SWEEP" "$WT"
+  return 0
+}
+trap on_exit EXIT
 
 echo "→ acquiring machine-wide gate lock (serialized finishes — gotcha-54)…"
 WAITED=0
@@ -170,6 +187,12 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+
+# The gates are done with the worktree's node_modules — anything vitest still
+# has running here outlived its runner. Sweep before the merge, while $WT (and
+# therefore the sweep script) still exists; the EXIT trap only covers the paths
+# that never reach this line.
+"$SWEEP" "$WT"
 
 # Author-email assertion: Vercel only deploys commits authored as
 # info@synapse-solutions.ai (verified on Synapsekw) — any other email makes it

@@ -12,6 +12,7 @@ import {
   cancelAskProposal,
 } from "@/lib/ai/ask/proposal-actions";
 import { PROPOSAL_FALLBACK_ANSWER } from "@/lib/ai/ask/stream-protocol";
+import { useApplyBoardEffects } from "@/lib/boards/use-ai-effects";
 import type { ValidatedAction } from "@/lib/ai/write/schema";
 import { useAskStream } from "./use-ask-stream";
 import { MessageList, type UIMessage } from "./MessageList";
@@ -90,6 +91,10 @@ export function AskChat({
   const [dropState, setDropState] = useState<DropState>("none");
   const [, startTransition] = useTransition();
   const { streaming, send } = useAskStream();
+  // Renders an approved write on a mounted board with no round-trip. A no-op
+  // on /ask (no board cache) and for a board the user isn't viewing, so it
+  // needs no guard here.
+  const applyBoardEffects = useApplyBoardEffects();
 
   /**
    * ONE turn at a time, owned HERE rather than by the network layer.
@@ -240,6 +245,7 @@ export function AskChat({
         setStatus(res.error);
         return;
       }
+      applyBoardEffects(res.data.effects);
       setMessages((m) => [
         ...m,
         {
