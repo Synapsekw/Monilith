@@ -126,7 +126,7 @@ describe("resolveMoveItem", () => {
     });
   });
 
-  it("refuses a group that is not on this board — the cross-board guard", () => {
+  it("refuses an unfindable target group without blaming cross-board alone", () => {
     const r = resolveMoveItem(movePayload, {
       kind: "move_item",
       boardId: "b1",
@@ -135,8 +135,11 @@ describe("resolveMoveItem", () => {
     });
     expect(r).toEqual({
       kind: "error",
+      // An archived group is filtered out of the payload too, so the message
+      // must not claim cross-board as the only cause — while still saying a
+      // cross-board move is unsupported.
       error:
-        "That group isn't on this board. Moving an item between boards isn't supported.",
+        "I couldn't find that group on this board — it may have been archived. Moving an item to a different board isn't supported.",
     });
   });
 
@@ -173,7 +176,9 @@ describe("resolveMoveItem", () => {
     });
     expect(r).toEqual({
       kind: "error",
-      error: "QYSEA is already in Backlog.",
+      // Quoted, like every neighbouring message — an item whose NAME is a
+      // sentence fragment would otherwise render ambiguously.
+      error: '"QYSEA" is already in Backlog.',
     });
   });
 });

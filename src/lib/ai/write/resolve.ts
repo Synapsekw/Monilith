@@ -127,15 +127,20 @@ export function resolveMoveItem(
   if (!target)
     return {
       kind: "error",
+      // The payload excludes archived groups, so a target that is missing here
+      // may be archived rather than on another board — don't assert either as
+      // the cause, while still stating the cross-board boundary.
       error:
-        "That group isn't on this board. Moving an item between boards isn't supported.",
+        "I couldn't find that group on this board — it may have been archived. Moving an item to a different board isn't supported.",
     };
 
   const from = payload.groups.find((g) => g.id === item.group_id);
   if (target.id === item.group_id)
     return {
       kind: "error",
-      error: `${item.name} is already in ${from?.name ?? "that group"}.`,
+      // Quoted like every neighbouring message: an item named e.g.
+      // "is already in Backlog" would otherwise read as an ambiguous sentence.
+      error: `"${item.name}" is already in ${from?.name ?? "that group"}.`,
     };
 
   return {

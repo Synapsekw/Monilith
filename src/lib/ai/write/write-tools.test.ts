@@ -113,7 +113,9 @@ describe("propose_move_item", () => {
       item_id: "i-qysea",
       group_id: "g-on-another-board",
     });
-    expect(JSON.parse(res.content).error).toMatch(/isn't on this board/);
+    expect(JSON.parse(res.content).error).toMatch(
+      /couldn't find that group on this board/,
+    );
     expect(exec.collected()).toHaveLength(0);
   });
 
