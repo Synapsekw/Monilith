@@ -558,11 +558,20 @@ import { moveItem } from "./actions";
 
 const GROUP = "55555555-5555-4555-8555-555555555555";
 
+/**
+ * The move UPDATE is awaited two ways: the item's own update reads the row back
+ * (`.select("id").maybeSingle()`) so an RLS-blocked write can't pass as success,
+ * while the subitem fan-out just awaits the builder. One thenable with a
+ * `select` branch serves both. `row: null` = the RLS-hidden write (0 rows, no error).
+ */
+const moveUpdateResult = (row: { id: string } | null) =>
+  Object.assign(Promise.resolve({ error: null }), {
+    select: () => ({ maybeSingle: async () => ({ data: row, error: null }) }),
+  });
+
 describe("moveItem", () => {
   it("uses the provided position instead of appending", async () => {
-    const update = vi.fn(() => ({
-      eq: () => Promise.resolve({ error: null }),
-    }));
+    const update = vi.fn(() => ({ eq: () => moveUpdateResult({ id: ITEM }) }));
     from.mockImplementation((table: string) => {
       if (table === "items")
         return {
@@ -622,9 +631,7 @@ describe("moveItem", () => {
 
   it("still appends when position is omitted", async () => {
     // last top-level item in target group has position 2 → append = midpoint(2, null) = 3
-    const update = vi.fn(() => ({
-      eq: () => Promise.resolve({ error: null }),
-    }));
+    const update = vi.fn(() => ({ eq: () => moveUpdateResult({ id: ITEM }) }));
     from.mockImplementation((table: string) => {
       if (table === "items")
         return {
@@ -675,6 +682,65 @@ describe("moveItem", () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ group_id: GROUP, position: 3 }),
     );
+  });
+
+  it("fails instead of reporting success when RLS silently blocks the update", async () => {
+    // A viewer can READ the board (so both pre-checks pass) but cannot update
+    // items: the UPDATE matches zero rows and returns NO error. Without reading
+    // the row back, the AI thread would say "Done" for a move that never
+    // happened — and drag-and-drop would fail just as silently.
+    const update = vi.fn(() => ({ eq: () => moveUpdateResult(null) }));
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: (cols: string) => {
+            if (cols === "board_id, parent_id")
+              return {
+                eq: () => ({
+                  maybeSingle: async () => ({
+                    data: { board_id: BOARD, parent_id: null },
+                    error: null,
+                  }),
+                }),
+              };
+            return {
+              eq: () => ({
+                is: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({
+                        data: { position: 2 },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          },
+          update,
+        } as never;
+      if (table === "groups")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { board_id: BOARD },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      return {} as never;
+    });
+
+    const res = await moveItem({ itemId: ITEM, groupId: GROUP });
+
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toMatch(/permission/i);
+    // the subitem fan-out must not run once the parent move was refused
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });
 
