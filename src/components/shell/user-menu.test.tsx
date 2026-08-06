@@ -2,14 +2,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UserMenu } from "./user-menu";
-import { signOut } from "@/app/auth/actions";
 
-vi.mock("@/app/auth/actions", () => ({ signOut: vi.fn() }));
-
-const { wipeOfflineData } = vi.hoisted(() => ({
-  wipeOfflineData: vi.fn().mockResolvedValue(undefined),
+// UserMenu is a Server Component; SignOutForm (the "use client" leaf that
+// wires wipeOfflineData + signOut, see sign-out-form.test.tsx) is mocked out
+// here so this file only exercises the server-safe parts of the menu.
+vi.mock("./sign-out-form", () => ({
+  SignOutForm: () => <button type="button">Sign out</button>,
 }));
-vi.mock("@/lib/offline/wipe", () => ({ wipeOfflineData }));
 
 // Radix Avatar only mounts <AvatarImage> once its internal probe image reports
 // "loaded"; jsdom never fires image load events, so force a resolved image so
@@ -75,22 +74,16 @@ describe("UserMenu", () => {
     ).toHaveTextContent("A");
   });
 
-  it("wipes offline data before signing out", async () => {
+  it("renders the sign-out control in the menu", async () => {
     render(<UserMenu user={{ email: "a@b.co", full_name: "Ada" }} />);
     await userEvent.click(
       screen.getByRole("button", { name: /open user menu/i }),
     );
-    await userEvent.click(screen.getByRole("button", { name: /sign out/i }));
-
-    expect(wipeOfflineData).toHaveBeenCalledTimes(1);
-    expect(signOut).toHaveBeenCalledTimes(1);
-
-    // Ordering is the substance of this test: a Server Action can't reach
-    // IndexedDB or the Cache API, so the wipe MUST complete before signOut()
-    // fires (and redirects away). Asserting call counts alone would pass
-    // even if the wipe ran after the redirect.
-    const wipeOrder = wipeOfflineData.mock.invocationCallOrder[0];
-    const signOutOrder = vi.mocked(signOut).mock.invocationCallOrder[0];
-    expect(wipeOrder).toBeLessThan(signOutOrder);
+    // The wipe-before-signOut ordering guarantee is asserted against the
+    // real SignOutForm in sign-out-form.test.tsx; this only checks UserMenu
+    // wires the control in.
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
+    ).toBeInTheDocument();
   });
 });

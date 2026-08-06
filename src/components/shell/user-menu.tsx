@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
-import { signOut } from "@/app/auth/actions";
-import { wipeOfflineData } from "@/lib/offline/wipe";
+import { SignOutForm } from "@/components/shell/sign-out-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -54,20 +53,7 @@ export function UserMenu({ user }: { user: AppShellUser }) {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild variant="destructive">
-          <form
-            action={async () => {
-              // Must run before the action redirects: a Server Action cannot
-              // reach IndexedDB or the Cache API, so this is the only point
-              // at which the signed-out user's boards can be removed from
-              // disk.
-              await wipeOfflineData();
-              await signOut();
-            }}
-          >
-            <button type="submit" className="w-full text-left">
-              Sign out
-            </button>
-          </form>
+          <SignOutForm />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
