@@ -72,8 +72,10 @@ Two layers: one refactored, one new.
 
 ### 3.1 Layer 1 — client-injected cores
 
-Each query module gains a `…Core(supabase, ctx)` export holding the current body, where `ctx` is
-`{ userId, orgId }` passed explicitly. The existing exported name survives as a wrapper, so every
+Each query module gains a `…Core(supabase, ctx)` export holding the current body, where `ctx`
+carries only the context that module actually needs, passed explicitly. My Work needs neither a
+userId nor an orgId (its RPC is SECURITY INVOKER and RLS-scoped per caller); time reads need
+`userId`; workload, goals and portfolios need `orgId`. The existing exported name survives as a wrapper, so every
 RSC page is untouched:
 
 ```ts
@@ -162,8 +164,8 @@ The org list comes from the RLS-scoped membership read on the bridged client (th
 
 | Tool                          | Args                                                        | Returns                                                                    |
 | ----------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `list_organizations`          | —                                                           | `[{ id, name, role }]`                                                     |
-| `get_my_work`                 | `orgId?`                                                    | `[{ bucket, items: [{ id, name, boardId, boardName, dueDate, status }] }]` |
+| `list_organizations`          | —                                                           | `[{ id, name, timezone }]`                                                 |
+| `get_my_work`                 | —                                                           | `[{ bucket, items: [{ id, name, boardId, boardName, dueDate, status }] }]` |
 | `get_workload`                | `orgId?`, `from?`, `to?`                                    | `[{ userId, name, allocatedSecs, capacitySecs, itemCount }]`               |
 | `list_time_allocations`       | `orgId?`, `from`, `to`                                      | `[{ date, itemId, itemName, category, secs, note }]`                       |
 | `get_time_summary`            | `orgId?`, `from`, `to`, `groupBy: item\|category\|day`      | `[{ key, label, totalSecs }]`                                              |
@@ -176,7 +178,7 @@ The org list comes from the RLS-scoped membership read on the bridged client (th
 | `list_portfolios`             | `orgId?`                                                    | `[{ id, name, boardCount }]`                                               |
 | `get_portfolio`               | `portfolioId`                                               | `[{ boardId, boardName, total, byStatus }]`                                |
 | `list_reports`                | `boardId`                                                   | `[{ id, name, createdAt }]`                                                |
-| `get_report`                  | `reportId`                                                  | `{ id, name, boardId, sections: [{ title, kind, data }] }`                 |
+| `get_report`                  | `reportId`                                                  | `{ id, name, boardId, updatedAt, blocks: [{ type, title }] }`              |
 
 Notes:
 
@@ -193,12 +195,15 @@ Notes:
 - **`list_time_allocations` returns flat rows**, not the `TimeCardData` week/cell structure. The
   `weekStart` / `days` / `cells` scaffolding exists for the grid UI and is noise to an agent.
 - **`get_dashboard` omits layout and palette** for the same reason.
-- **`get_report` returns resolved sections, not the raw config blob.** Each section carries its
-  title, its kind (per `src/lib/reports/shape.ts`) and its already-resolved data from
-  `src/lib/reports/chart-data.ts` — so the agent reads a report's _contents_, not a rendering
-  recipe it would have to interpret. HTML/PDF export stays out of scope (§10).
-- **`get_widget_data`** reuses the existing widget resolution
-  (`queries-cached.ts` aggregation/completion/health paths) and its caps rather than inventing new ones.
+- **`get_report` returns the report's structure, not resolved data.** `shapeReport`, `computeKpis`
+  and `computeChartSeries` (`src/lib/reports/{shape,chart-data}.ts`) all take a full `BoardPayload`
+  — every cell value, attachment and time entry on the board. Resolving a report inside a tool
+  would be an unbounded read, violating §5. The tool returns the ordered blocks the report is built
+  from; resolved report data moves to Spec 2, which can build a bounded report-data core. HTML/PDF
+  export stays out of scope either way (§10).
+- **`get_widget_data`** reuses `resolveWidgetSlot` (`src/lib/dashboards/actions.ts`), which already
+  takes the Supabase client as a parameter — so it needs a module move out of the `"use server"`
+  file, not a rewrite. Its caps come from the widget's own configuration.
 
 ## 5. Performance and data-fetching budget
 
@@ -321,6 +326,7 @@ The critical path is **U0 → U4 (or any tool unit) → U8**. U0 is the wall-clo
   spec extracts.
 - Any `time_entries` (timer) write verb.
 - Deleting or updating time allocations from MCP (`deleteTimeAllocation` is not exposed).
+- Resolved report data (KPIs, chart series) — needs a bounded report-data core; see §4.
 - Report generation, PDF/HTML export, or AI report drafting via MCP.
 - Board/item tool changes. The existing seven are untouched.
 - New OAuth scopes. Scopes are still `[]`; the settings table remains the consent surface.
