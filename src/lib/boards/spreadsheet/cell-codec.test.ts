@@ -665,6 +665,54 @@ describe("textToCell date — ambiguity is surfaced, not guessed", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// textToCell "text" — undo the CSV formula-injection guard on import (fix #2)
+// ---------------------------------------------------------------------------
+describe("textToCell text — CSV formula-guard round trip", () => {
+  it("round-trips a Markdown bullet: export-guarded string re-imports clean", () => {
+    // guardCsvCell (export-workbook.ts) would turn "- item" into "'- item"
+    // because CSV_FORMULA_LEAD_RE matches a leading "-". Simulate that guard
+    // and assert textToCell undoes exactly it.
+    expect(textToCell("text", "'- item", [])).toEqual({ text: "- item" });
+    expect(textToCell("text", "'- ship billing", [])).toEqual({
+      text: "- ship billing",
+    });
+  });
+
+  it.each(["=", "+", "@"])(
+    "strips the guard quote for the other formula-lead character %s",
+    (lead) => {
+      expect(textToCell("text", `'${lead}SUM(A1)`, [])).toEqual({
+        text: `${lead}SUM(A1)`,
+      });
+    },
+  );
+
+  it("leaves a genuine leading apostrophe followed by an ordinary letter untouched", () => {
+    expect(textToCell("text", "'twas the night", [])).toEqual({
+      text: "'twas the night",
+    });
+  });
+
+  it("leaves an apostrophe not followed by a formula-lead character untouched", () => {
+    expect(textToCell("text", "'hello", [])).toEqual({ text: "'hello" });
+    expect(textToCell("text", "'123", [])).toEqual({ text: "'123" });
+  });
+
+  it("does not add or remove quotes on plain text with no leading apostrophe", () => {
+    expect(textToCell("text", "just some text", [])).toEqual({
+      text: "just some text",
+    });
+  });
+
+  it("only unquotes when the guard's own trigger character follows the quote", () => {
+    // A leading quote immediately followed by ANOTHER quote (not a
+    // formula-lead character) is never something the export guard produces,
+    // so it must be left alone rather than speculatively stripped.
+    expect(textToCell("text", "''- item", [])).toEqual({ text: "''- item" });
+  });
+});
+
 describe("priority codec", () => {
   it("exports stored levels as labels", () => {
     expect(cellToText("priority", { level: "critical" }, null)).toBe(
