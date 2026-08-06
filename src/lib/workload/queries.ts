@@ -1,11 +1,14 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import { getActiveOrgId } from "@/lib/org/active";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { listReadableBoardsCached } from "@/lib/portfolios/queries-cached";
-import { serverToday } from "@/lib/workload/rollup";
+import { serverToday, isoWeekday } from "@/lib/workload/rollup";
 import { EFFORT_FALLBACK } from "@/lib/workload/types";
+import type { OrgMemberProfile } from "@/lib/mcp/org-scope";
 import type {
   MemberCapacity,
   OrgWorkloadDefaults,
@@ -171,4 +174,115 @@ export async function getWorkloadPageData(override?: {
     weeksFwd,
     weekStartsOn,
   };
+}
+
+export type WorkloadSummaryRow = {
+  userId: string;
+  name: string | null;
+  allocatedSecs: number;
+  itemCount: number;
+  capacitySecs: number;
+};
+
+/**
+ * Per-member planned load over a window, for the MCP surface.
+ *
+ * Deliberately NOT an extraction of `getWorkloadPageData`: that ships raw rows
+ * plus board/workspace metadata so the grid recomputes client-side with zero
+ * round-trips (AGENTS.md §5) — the right shape for a UI, the wrong shape for an
+ * agent. This folds the same `workload_rollup` RPC into one row per member.
+ *
+ * Capacity uses the member's own row when present, else the org default, else
+ * EFFORT_FALLBACK — the same precedence the page applies.
+ */
+export async function getWorkloadSummaryCore(
+  supabase: SupabaseClient<Database>,
+  args: {
+    orgId: string;
+    from: string;
+    to: string;
+    members: OrgMemberProfile[];
+  },
+): Promise<WorkloadSummaryRow[]> {
+  const [rollupRes, capacityRes, defaultsRes] = await Promise.all([
+    supabase.rpc("workload_rollup", { p_from: args.from, p_to: args.to }),
+    supabase
+      .from("member_capacity")
+      .select("user_id, hours_per_day, working_days")
+      .eq("org_id", args.orgId),
+    supabase
+      .from("org_workload_settings")
+      .select("default_hours_per_day, default_working_days")
+      .eq("org_id", args.orgId)
+      .maybeSingle(),
+  ]);
+
+  const defaultHours = Number(
+    defaultsRes.data?.default_hours_per_day ?? EFFORT_FALLBACK.hoursPerDay,
+  );
+  const defaultDays = (
+    defaultsRes.data?.default_working_days ?? EFFORT_FALLBACK.workingDays
+  ).map(Number);
+
+  const capacity = new Map<
+    string,
+    { hoursPerDay: number; workingDays: number[] }
+  >();
+  for (const c of capacityRes.data ?? [])
+    capacity.set(c.user_id, {
+      hoursPerDay: Number(c.hours_per_day),
+      workingDays: (c.working_days ?? []).map(Number),
+    });
+
+  const workingDaysInWindow = countWorkingDays(args.from, args.to, defaultDays);
+
+  const totals = new Map<string, { secs: number; items: number }>();
+  for (const r of rollupRes.data ?? []) {
+    if (!r.user_id) continue;
+    const t = totals.get(r.user_id) ?? { secs: 0, items: 0 };
+    t.secs += r.estimate_secs == null ? 0 : Number(r.estimate_secs);
+    t.items += 1;
+    totals.set(r.user_id, t);
+  }
+
+  return args.members.map((m) => {
+    const t = totals.get(m.userId) ?? { secs: 0, items: 0 };
+    const cap = capacity.get(m.userId);
+    const hoursPerDay = cap?.hoursPerDay ?? defaultHours;
+    const days = cap
+      ? countWorkingDays(args.from, args.to, cap.workingDays)
+      : workingDaysInWindow;
+    return {
+      userId: m.userId,
+      name: m.fullName,
+      allocatedSecs: t.secs,
+      itemCount: t.items,
+      capacitySecs: Math.round(hoursPerDay * 3600 * days),
+    };
+  });
+}
+
+/**
+ * Working days in `[from, to]` (inclusive) whose stored weekday — ISO
+ * convention 1=Mon … 7=Sun, per `EFFORT_FALLBACK.workingDays` in
+ * `./types.ts` — is in `workingDays`. Delegates the day-of-week conversion to
+ * `isoWeekday` (`./rollup.ts`) rather than re-deriving it, so this can't drift
+ * from the convention the rest of the workload feature already uses.
+ */
+function countWorkingDays(
+  from: string,
+  to: string,
+  workingDays: number[],
+): number {
+  const allowed = new Set(workingDays);
+  let count = 0;
+  for (
+    let t = Date.parse(`${from}T00:00:00Z`);
+    t <= Date.parse(`${to}T00:00:00Z`);
+    t += DAY
+  ) {
+    const iso = new Date(t).toISOString().slice(0, 10);
+    if (allowed.has(isoWeekday(iso))) count++;
+  }
+  return count;
 }

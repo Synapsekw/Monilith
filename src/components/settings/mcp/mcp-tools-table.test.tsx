@@ -1,31 +1,106 @@
+import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
-import { McpToolsTable } from "./mcp-tools-table";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { McpToolsTable, MCP_TOOLS_TABLE_ROWS } from "./mcp-tools-table";
+import { registerTools } from "@/lib/mcp/tools/register";
+
+/**
+ * Structural stub of the one `McpServer` method every `register…Tool` helper
+ * calls. `registerTools` never touches anything else on `server`, so this is
+ * enough to drive the REAL registration code path without a live SDK server.
+ */
+interface RegisterToolStub {
+  registerTool: (name: string, config: unknown, cb: unknown) => unknown;
+}
+
+/** A fake `AuthInfo` shaped like what `resolveMcpAuth` produces — see
+ * `src/lib/mcp/context.ts`. `registerTools` calls `mcpActorId(auth)` eagerly,
+ * which throws unless `extra.userId` is a non-empty string; nothing else in
+ * `extra` is read during registration (`getClient` is a closure nothing here
+ * invokes). */
+const fakeAuth: AuthInfo = {
+  token: "test-token",
+  clientId: "test-client",
+  scopes: [],
+  extra: {
+    userId: "00000000-0000-0000-0000-000000000000",
+    tokenRowId: "00000000-0000-0000-0000-000000000001",
+    bridgeSecretId: "00000000-0000-0000-0000-000000000002",
+  },
+};
+
+/**
+ * Runs the REAL `registerTools` against a recording stub and returns every
+ * name it registered, in registration order. This is the derivation the sync
+ * test relies on — it fails if a tool is registered without a table row (or
+ * vice versa), because it reads the actual registration call, not a second
+ * hand-maintained list that could drift in lockstep with the table.
+ */
+function deriveRegisteredToolNames(): string[] {
+  const names: string[] = [];
+  const stubServer: RegisterToolStub = {
+    registerTool: (name) => {
+      names.push(name);
+      return undefined;
+    },
+  };
+  registerTools(stubServer as unknown as McpServer, fakeAuth);
+  return names;
+}
 
 describe("McpToolsTable", () => {
-  it("lists all seven registered tools", () => {
-    render(<McpToolsTable />);
-    for (const name of [
-      "list_boards",
-      "get_board",
-      "list_items",
-      "search_items",
-      "get_item",
+  it("lists exactly the registered tools — no more, no fewer", () => {
+    // This table is the user's ONLY account of what a connected client may do.
+    // A tool registered without a row here understates the access being granted.
+    const registered = deriveRegisteredToolNames();
+    expect([...MCP_TOOLS_TABLE_ROWS.map((r) => r.name)].sort()).toEqual(
+      [...registered].sort(),
+    );
+  });
+
+  it("marks exactly the three write tools as writes", () => {
+    const writes = MCP_TOOLS_TABLE_ROWS.filter((r) => r.access === "write").map(
+      (r) => r.name,
+    );
+    expect(writes.sort()).toEqual([
       "create_item",
+      "log_time_allocation",
       "update_item",
-    ]) {
+    ]);
+  });
+
+  it("renders every tool name", () => {
+    render(<McpToolsTable />);
+    for (const name of deriveRegisteredToolNames()) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
   });
 
-  it("marks exactly two tools as write access and five as read", () => {
+  it("discloses the one destructive capability instead of claiming none exists", () => {
     render(<McpToolsTable />);
-    expect(screen.getAllByText("Write")).toHaveLength(2);
-    expect(screen.getAllByText("Read")).toHaveLength(5);
-  });
 
-  it("states that no tool can delete", () => {
-    render(<McpToolsTable />);
-    expect(screen.getByText(/cannot delete/i)).toBeInTheDocument();
+    // The blanket "cannot delete anything" claim this replaced was FALSE:
+    // `upsert_time_allocation` with `p_duration_secs = 0` runs a
+    // `delete from public.time_allocations` (migration 20260806060855), and
+    // log_time_allocation's Zod accepts `secs: 0`. The consent screen is the
+    // user's only account of what they are granting, so it must name that.
+    expect(
+      screen.getByText(
+        /only thing a connected client can erase is your logged time/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/0 seconds clears it/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/no other delete tool exists on the server/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/cannot delete anything/i)).toBeNull();
+
+    // …and it must agree with the row two lines above it, which already says
+    // "0 clears it" — trailer and table can no longer contradict each other.
+    const row = MCP_TOOLS_TABLE_ROWS.find(
+      (r) => r.name === "log_time_allocation",
+    );
+    expect(row?.what).toMatch(/0 clears it/);
   });
 });

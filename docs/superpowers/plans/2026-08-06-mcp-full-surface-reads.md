@@ -2257,6 +2257,16 @@ vi.mock("@/lib/mcp/org-scope", () => ({
 const core = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/portfolios/queries", () => ({ getPortfolioRowsCore: core }));
 
+function clientWithHead(head: unknown) {
+  return {
+    from: () => ({
+      select: () => ({
+        eq: () => ({ maybeSingle: async () => ({ data: head, error: null }) }),
+      }),
+    }),
+  };
+}
+
 describe("getPortfolioHandler", () => {
   it("projects rollup rows without UI placement fields", async () => {
     core.mockResolvedValue({
@@ -2274,10 +2284,14 @@ describe("getPortfolioHandler", () => {
       ],
     });
 
-    const getClient = vi.fn(async () => ({}) as never);
+    const getClient = vi.fn(
+      async () => clientWithHead({ id: "p1", org_id: "o1" }) as never,
+    );
     const result = await getPortfolioHandler(getClient, { portfolioId: "p1" });
 
     expect(getClient).toHaveBeenCalledTimes(1);
+    // The rollup RPC runs exactly once — the head read is a separate cheap query.
+    expect(core).toHaveBeenCalledTimes(1);
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.name).toBe("Q1 delivery");
     expect(parsed.boards[0]).toEqual({
@@ -2291,12 +2305,14 @@ describe("getPortfolioHandler", () => {
     });
   });
 
-  it("errors when the portfolio is not visible", async () => {
-    core.mockResolvedValue(null);
-    const result = await getPortfolioHandler(async () => ({}) as never, {
-      portfolioId: "missing",
-    });
+  it("errors when the portfolio is not visible, without running the rollup", async () => {
+    core.mockClear();
+    const result = await getPortfolioHandler(
+      async () => clientWithHead(null) as never,
+      { portfolioId: "missing" },
+    );
     expect(result.isError).toBe(true);
+    expect(core).not.toHaveBeenCalled();
   });
 });
 ```
@@ -2397,14 +2413,18 @@ export async function getPortfolioHandler(
   try {
     const todayIso = serverToday(Date.now());
 
-    // First pass with an empty owner map to learn the portfolio's org (RLS has
-    // already vetted visibility), then a second pass with real owners. The org
-    // id comes off a row read through the BRIDGED client, which is what makes
-    // the member read entitled.
-    const head = await getPortfolioRowsCore(supabase, args.portfolioId, {
-      owners: new Map(),
-      todayIso,
-    });
+    // Cheap indexed head read FIRST, purely to learn the org — the rollup RPC
+    // must run exactly once. (An earlier draft called the core twice, once with
+    // an empty owner map; that doubled the rollup for nothing.) The org id comes
+    // off a row read through the BRIDGED client, which is what makes the
+    // subsequent member read entitled.
+    const { data: head, error: headErr } = await supabase
+      .from("portfolios")
+      .select("id, org_id")
+      .eq("id", args.portfolioId)
+      .maybeSingle();
+    if (headErr)
+      throw new Error(`Failed to load portfolio: ${headErr.message}`);
     if (!head)
       return {
         content: [
@@ -2413,21 +2433,24 @@ export async function getPortfolioHandler(
         isError: true,
       };
 
-    const members = await listOrgMemberProfiles(
-      supabase,
-      head.portfolio.org_id,
-    );
+    const members = await listOrgMemberProfiles(supabase, head.org_id);
     const owners = new Map<string, RowOwner>(
       members.map((m) => [
         m.userId,
         { userId: m.userId, fullName: m.fullName, avatarUrl: m.avatarUrl },
       ]),
     );
-    const full = await getPortfolioRowsCore(supabase, args.portfolioId, {
+    const result = await getPortfolioRowsCore(supabase, args.portfolioId, {
       owners,
       todayIso,
     });
-    const result = full ?? head;
+    if (!result)
+      return {
+        content: [
+          { type: "text", text: `Portfolio ${args.portfolioId} not found.` },
+        ],
+        isError: true,
+      };
 
     return {
       content: [

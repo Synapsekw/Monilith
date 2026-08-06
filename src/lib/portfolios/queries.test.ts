@@ -34,9 +34,62 @@ import {
   getPortfolio,
   getPortfolioRows,
   listPortfolios,
+  listPortfoliosCore,
   PORTFOLIO_LIMIT,
 } from "./queries";
 import { createClient } from "@/lib/supabase/server";
+
+/** Two portfolios in two DIFFERENT orgs. A single-org fixture cannot tell a
+ *  real filter apart from no filter at all. */
+const P_A = { id: "p-a", name: "Acme Q1", org_id: "org-a" };
+const P_B = { id: "p-b", name: "Globex Q1", org_id: "org-b" };
+
+/** A client whose `portfolios` read HONOURS an `.eq("org_id", …)` the way the
+ *  real database would, and records whether one was applied. */
+function portfoliosClient(rows: (typeof P_A)[]) {
+  const eqCalls: [string, string][] = [];
+  const build = (filtered: (typeof P_A)[]) => {
+    const chain = {
+      eq: (column: string, value: string) => {
+        eqCalls.push([column, value]);
+        return build(filtered.filter((r) => r.org_id === value));
+      },
+      order: () => chain,
+      limit: () =>
+        Promise.resolve({
+          data: filtered.map((r) => ({ id: r.id, name: r.name })),
+          error: null,
+        }),
+    };
+    return chain;
+  };
+  return {
+    eqCalls,
+    client: { from: () => ({ select: () => build(rows) }) } as never,
+  };
+}
+
+describe("listPortfoliosCore org scoping", () => {
+  it("restricts the rows to the requested org", async () => {
+    const { client, eqCalls } = portfoliosClient([P_A, P_B]);
+    const rows = await listPortfoliosCore(client, { orgId: "org-a" });
+
+    expect(eqCalls).toEqual([["org_id", "org-a"]]);
+    // Not merely "accepted": org B's portfolio is GONE from the result.
+    expect(rows).toEqual([{ id: "p-a", name: "Acme Q1" }]);
+  });
+
+  it("applies no org filter when orgId is omitted — the RSC path is unchanged", async () => {
+    const { client, eqCalls } = portfoliosClient([P_A, P_B]);
+    const rows = await listPortfoliosCore(client);
+
+    expect(eqCalls).toEqual([]);
+    expect(rows).toEqual([
+      { id: "p-a", name: "Acme Q1" },
+      { id: "p-b", name: "Globex Q1" },
+    ]);
+  });
+});
 
 describe("listPortfolios", () => {
   it("is bounded", async () => {

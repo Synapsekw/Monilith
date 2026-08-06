@@ -1,4 +1,6 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import { optionSchema, type ColumnOption } from "@/lib/validations/boards";
@@ -25,24 +27,35 @@ function parseOptions(settings: unknown): ColumnOption[] {
 }
 
 /**
+ * Client-injected core. Takes the client as a parameter so both the RSC path
+ * (cookie-bound) and the MCP path (OAuth-bridged) share ONE implementation —
+ * the `upsertCellCore` precedent. The RPC is SECURITY INVOKER, so RLS scopes
+ * rows to the caller and no userId/orgId argument is needed.
+ *
  * Every item assigned to the current user across every board they can read,
  * enriched with board name, group, status and due date — in ONE round-trip.
  * The four serial TypeScript phases now live in public.get_my_work_items
  * (SECURITY INVOKER — every table still RLS-filtered by the caller; see the
  * migration). Status-option resolution stays here, behind the Zod optionSchema
  * boundary, from the raw settings jsonb the RPC returns per row.
+ *
+ * Returns a discriminated result rather than swallowing RPC errors into `[]`:
+ * the MCP path needs to tell a genuine failure apart from "no assigned items"
+ * (surfaced as `isError: true` in `getMyWorkHandler`). The cookie-bound
+ * `getMyWorkItems()` wrapper below maps `ok: false` back to `[]` so `/my-work`
+ * behaviour is unchanged.
  */
-export async function getMyWorkItems(): Promise<MyWorkItem[]> {
-  const user = await getUser();
-  if (!user) return [];
-  const supabase = await createClient();
-
+export async function getMyWorkItemsCore(
+  supabase: SupabaseClient<Database>,
+  limit: number = MY_WORK_ITEM_LIMIT,
+): Promise<{ ok: true; items: MyWorkItem[] } | { ok: false; error: string }> {
   const { data, error } = await supabase.rpc("get_my_work_items", {
-    p_limit: MY_WORK_ITEM_LIMIT,
+    p_limit: limit,
   });
-  if (error || !data) return [];
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: true, items: [] };
 
-  return data.map((r) => {
+  const items = data.map((r) => {
     let status: MyWorkStatus | null = null;
     if (r.status_option_id && r.status_settings) {
       const opt = parseOptions(r.status_settings).find(
@@ -60,6 +73,16 @@ export async function getMyWorkItems(): Promise<MyWorkItem[]> {
       dueDate: r.due_date,
     };
   });
+  return { ok: true, items };
+}
+
+/** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
+export async function getMyWorkItems(): Promise<MyWorkItem[]> {
+  const user = await getUser();
+  if (!user) return [];
+  const supabase = await createClient();
+  const result = await getMyWorkItemsCore(supabase);
+  return result.ok ? result.items : [];
 }
 
 /**

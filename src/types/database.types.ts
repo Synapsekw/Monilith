@@ -3913,6 +3913,18 @@ export type Database = {
         Args: { p_board_id: string; p_user_id: string };
         Returns: undefined;
       };
+      upsert_time_allocation: {
+        Args: {
+          p_board_id?: string;
+          p_category?: string;
+          p_duration_secs: number;
+          p_item_id?: string;
+          p_note?: string;
+          p_org_id: string;
+          p_work_date: string;
+        };
+        Returns: number;
+      };
       user_delete_reassign_authorship: {
         Args: { p_user_id: string };
         Returns: Json;
