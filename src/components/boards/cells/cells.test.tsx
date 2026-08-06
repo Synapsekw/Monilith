@@ -91,6 +91,29 @@ describe("cell renderers (read-only, 2a)", () => {
     expect(container.textContent).toBe("");
   });
 
+  it("TextCell strips markdown syntax from the collapsed view", () => {
+    render(<TextCell value={{ text: "**Q3 goals**" }} settings={{}} />);
+    expect(screen.getByText("Q3 goals")).toBeInTheDocument();
+    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
+  });
+
+  it("TextCell flattens a multi-line value to one line", () => {
+    const { container } = render(
+      <TextCell
+        value={{ text: "**Q3 goals**\n- ship billing" }}
+        settings={{}}
+      />,
+    );
+    expect(container.textContent).toBe("Q3 goals ship billing");
+  });
+
+  it("TextCell exposes the full stripped text as a title for hover", () => {
+    const { container } = render(
+      <TextCell value={{ text: "- a\n- b" }} settings={{}} />,
+    );
+    expect(container.querySelector("span")).toHaveAttribute("title", "a b");
+  });
+
   it("StatusCell shows the matching option label", () => {
     render(<StatusCell value={{ optionId: "o1" }} settings={statusSettings} />);
     expect(screen.getByText("Done")).toBeInTheDocument();

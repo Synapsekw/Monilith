@@ -4,6 +4,7 @@ import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { effectivePriority } from "@/lib/boards/priority";
 import { percentBandColor } from "@/lib/boards/percent-color";
+import { stripMarkdown } from "@/lib/boards/markdown";
 import { cn } from "@/lib/utils";
 import { ColorChip } from "@/components/ui/color-chip";
 import { CurrencyAmount } from "@/components/boards/CurrencyAmount";
@@ -11,13 +12,23 @@ import type { EditorMember } from "./editors";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
+/**
+ * Collapsed text cell. Text columns hold Markdown (see LongTextEditor), so the
+ * resting view strips the syntax and flattens to one line — this renderer also
+ * backs Kanban cards, the Calendar agenda, Mirror and Rollup cells.
+ */
 export function TextCell({
   value,
 }: {
   value: { text: string } | null;
   settings: Settings;
 }) {
-  return <span className="truncate text-sm">{value?.text ?? ""}</span>;
+  const text = stripMarkdown(value?.text ?? "");
+  return (
+    <span className="truncate text-sm" title={text || undefined}>
+      {text}
+    </span>
+  );
 }
 
 function optionById(settings: Settings, id: string | null) {
