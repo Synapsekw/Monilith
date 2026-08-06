@@ -21,6 +21,8 @@ import { registerListDashboardsTool } from "./list-dashboards";
 import { registerGetDashboardTool } from "./get-dashboard";
 import { registerGetWidgetDataTool } from "./get-widget-data";
 import { registerGetWorkloadTool } from "./get-workload";
+import { registerListReportsTool } from "./list-reports";
+import { registerGetReportTool } from "./get-report";
 
 /** Registers every MCP tool onto the server instance, closing over the request's auth. */
 export function registerTools(server: McpServer, auth: AuthInfo): void {
@@ -46,4 +48,6 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
   registerGetDashboardTool(server, getClient);
   registerGetWidgetDataTool(server, getClient);
   registerGetWorkloadTool(server, getClient);
+  registerListReportsTool(server, getClient);
+  registerGetReportTool(server, getClient);
 }
