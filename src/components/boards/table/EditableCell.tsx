@@ -177,6 +177,7 @@ export const EditableCell = memo(function EditableCell({
           settings={settings}
           members={members}
           dependents={dependents}
+          columnName={column.name}
           onCommit={(v) => {
             setCell({ itemId: item.id, columnId: column.id, value: v });
             setEditing(null);

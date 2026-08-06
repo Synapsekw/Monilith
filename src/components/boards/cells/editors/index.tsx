@@ -30,6 +30,7 @@ import {
   effectivePriority,
 } from "@/lib/boards/priority";
 import { DirhamSign } from "@/components/boards/CurrencyAmount";
+import { LongTextEditor } from "./LongTextEditor";
 
 type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 
@@ -103,25 +104,6 @@ function PopoverSurface({
         {children}
       </PopoverContent>
     </Popover>
-  );
-}
-
-export function TextEditor({
-  value,
-  onCommit,
-  onCancel,
-}: EditorProps<{ text: string }>) {
-  const [text, setText] = useState(value?.text ?? "");
-  const onKey = useCommitKeys(() => onCommit({ text }), onCancel);
-  return (
-    <Input
-      autoFocus
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onKeyDown={onKey}
-      onBlur={() => onCommit({ text })}
-      className="h-8"
-    />
   );
 }
 
@@ -645,6 +627,7 @@ export function CellEditor({
   onCancel,
   onClear,
   dependents,
+  columnName,
 }: {
   kind: string;
   value: unknown;
@@ -655,16 +638,18 @@ export function CellEditor({
   onClear?: () => void;
   /** Priority cells only: direct dependents of the item — see @/lib/boards/priority. */
   dependents?: number;
+  /** Shown in the LongTextEditor panel header so the user knows which field they're editing. */
+  columnName?: string;
 }) {
   switch (kind) {
     case "text":
       return (
-        <TextEditor
+        <LongTextEditor
           value={value as { text: string } | null}
           settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
-          onClear={onClear}
+          columnName={columnName}
         />
       );
     case "numbers":
