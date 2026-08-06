@@ -1041,7 +1041,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Verify no other suite regressed on the stripping change**
 
-`TextCell` backs five surfaces, so run everything that renders it:
+`TextCell` backs three surfaces, so run everything that renders it:
 
 ```bash
 pnpm vitest run src/components/boards
@@ -1241,7 +1241,7 @@ This rebases onto the latest `develop`, re-runs all four gates against the merge
 | §3.1 `stripMarkdown` / `applyMarkdown` / `parseMarkdown`, fast path, four `applyMarkdown` cases, nine closed actions | Task 1                                                                                                        |
 | §3.2 `MarkdownPreview`, no `dangerouslySetInnerHTML`, `isHttpUrl` gating                                             | Task 1 (gating at parse time) + Task 2 (renderer + grep check)                                                |
 | §3.3 Anchored panel, sizing, layout, keyboard/save table, `Esc` departure from `useCommitKeys`                       | Task 3                                                                                                        |
-| §3.4 `TextCell` stripping across five surfaces                                                                       | Task 4                                                                                                        |
+| §3.4 `TextCell` stripping across three surfaces                                                                      | Task 4                                                                                                        |
 | §4 Non-goals: no row growth, no item-panel editing, no new column kind                                               | Honoured — no task touches row height, `ItemPanel`, or `column-kinds.ts`                                      |
 | §5 Performance budget: 0 round-trips on open/type, 1 on close                                                        | Honoured — no task adds a query or Server Action; Task 5 reuses the existing `setCell` path in `EditableCell` |
 | §6 Testing table                                                                                                     | Tasks 1-5; all four named files covered                                                                       |
