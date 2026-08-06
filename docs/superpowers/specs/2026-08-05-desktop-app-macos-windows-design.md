@@ -124,9 +124,9 @@ client component as `initialData`, which `useBoardCache` seeds into TanStack Que
 
 **1 — Persist the query cache.** Add `@tanstack/react-query-persist-client` with an **async
 IndexedDB persister**. The default `localStorage` persister is unusable here: a board payload will
-exceed the 5MB origin quota. Persistence is **allowlisted by query key** — `board`, and nothing
-else in v1. AI streams, widget previews, and agent run history are explicitly not persisted. The
-persister is throttled and capped with a `maxAge` of 7 days.
+exceed the 5MB origin quota. Persistence is **allowlisted by query key** — `boardSnapshot`, and
+nothing else in v1. AI streams, widget previews, notifications and agent run history are explicitly
+not persisted. The store is namespaced by user id and capped with a `maxAge` of 7 days.
 
 **2 — Service worker.** Registered **after load, on idle**, so it never competes with hydration.
 
@@ -144,9 +144,12 @@ This is the load-bearing choice: **an additional entry route, not a rewiring of 
 online path is untouched, which is what keeps the blast radius small and honours working agreement
 #5's "in-page state must not refetch server data."
 
-**4 — One intrusive change.** `useBoardCache(boardId, initialData)` must accept an optional
-`initialData` and fall back to the persisted entry, failing cleanly when neither exists. That is
-the only edit to existing board internals.
+**4 — No change to `useBoardCache`.** The spec originally called for making its `initialData`
+optional. Planning found that insufficient _and_ unnecessary: `BoardCache` carries no `views`, which
+`BoardViews` reads to resolve the active view, so the persisted entry must be the **full set of
+render props**, not the board cache. Storing those under a `boardSnapshot` key makes
+prop-completeness true by construction and leaves the online board cache untouched — a strictly
+smaller blast radius than the original plan.
 
 **5 — Reconnect healing already exists.** `use-board-cache.ts` documents that its `queryFn` exists
 precisely so the realtime hook's `invalidateQueries` — fired when the channel re-subscribes after a
@@ -170,8 +173,10 @@ modules, 8 of them under `src/lib/boards/mutations/`. Each `mutationFn` opens wi
 returning `fail("You're offline — reconnect to make changes.")`. Sixteen files is bounded and
 greppable.
 
-**A conformance test makes it durable.** The existing `--project conformance` suite gains a check
-that every `useMutation` in `src/` routes through `assertOnline`. This is the `id-sources.test.ts`
+**A static-analysis test makes it durable.** A test asserts that every `useMutation` in `src/`
+routes through `assertOnline`. It belongs in the **`unit`** project, not `conformance`: in this repo
+`conformance` means read-only probes against a live project, and a source-reading guard there would
+be a category error. This is the `id-sources.test.ts`
 pattern: the rule is enforced by a test, not by review diligence. It must build its matcher without
 reusing a global regex across `.test()` calls — that is
 [[2026-08-03-gotcha-72-a-global-regex-with-test-makes-a-guard-silently-blind]], which has already
@@ -263,8 +268,9 @@ refetch.
 
 ## Testing (working agreement #4 — written and executed)
 
-**Conformance** (`--project conformance`) — every `useMutation` in `src/` routes through
-`assertOnline`. The durable defence; must avoid the global-regex trap of gotcha-72.
+**Static-analysis guard** (`--project unit`) — every `useMutation` in `src/` routes through
+`assertOnline`, and every declared `mutationFn` is one the matcher recognises. The durable defence;
+must avoid the global-regex trap of gotcha-72.
 
 **Unit** — `assertOnline` rejects offline and passes online; the persister allowlist stores `board`
 and refuses a non-allowlisted key; sign-out wipes IndexedDB and SW caches; the entitlement grace
