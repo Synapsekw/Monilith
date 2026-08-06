@@ -141,6 +141,59 @@ async function waitForOfflineSnapshot(
   );
 }
 
+/**
+ * Every board id currently present in the persisted record.
+ *
+ * Uses the same never-create discipline as `waitForOfflineSnapshot`:
+ * `indexedDB.databases()` first, and the database is only opened once it
+ * already exists, so this probe can never trigger (or abort) a version change
+ * and destroy the store it is inspecting.
+ */
+async function readPersistedBoardIds(
+  page: Page,
+  idbKey: string,
+): Promise<string[]> {
+  return await page.evaluate(async (k) => {
+    const databases = await indexedDB.databases();
+    if (!databases.some((d) => d.name === "keyval-store")) return [];
+    return await new Promise<string[]>((resolve) => {
+      const req = indexedDB.open("keyval-store");
+      req.onerror = () => resolve([]);
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("keyval")) {
+          db.close();
+          return resolve([]);
+        }
+        const getReq = db
+          .transaction("keyval", "readonly")
+          .objectStore("keyval")
+          .get(k);
+        getReq.onerror = () => {
+          db.close();
+          resolve([]);
+        };
+        getReq.onsuccess = () => {
+          const persisted = getReq.result as
+            | { clientState?: { queries?: Array<{ queryKey: unknown }> } }
+            | undefined;
+          const ids = (persisted?.clientState?.queries ?? [])
+            .map((q) => q.queryKey)
+            .filter(
+              (key): key is [string, string] =>
+                Array.isArray(key) &&
+                key[0] === "boardSnapshot" &&
+                typeof key[1] === "string",
+            )
+            .map((key) => key[1]);
+          db.close();
+          resolve(ids);
+        };
+      };
+    });
+  }, idbKey);
+}
+
 test.describe("offline read-only boards", () => {
   test.skip(
     !hasSecrets,
@@ -234,18 +287,72 @@ test.describe("offline read-only boards", () => {
     }
     await waitForOfflineSnapshot(page, `monolith-offline:${userId}`, boardId);
 
-    // ── 5. Go offline, reload the visited board ──────────────────────────────
+    // ── 4b. A SECOND board, then an online reload ───────────────────────────
+    //
+    // Both halves of this matter, and neither was covered before:
+    //
+    //   * TWO boards. The persisted record holds one entry per user, and
+    //     `persistQueryClientSave` dehydrates the CURRENT QueryClient and
+    //     overwrites the whole thing. With only one board ever cached, a save
+    //     that drops every OTHER board is indistinguishable from a correct one.
+    //   * A reload BETWEEN them. A full page load starts a fresh QueryClient
+    //     containing only the board being loaded, so the first save after any
+    //     reload is exactly the moment the other boards were being destroyed.
+    //     Measured before the fix: [Alpha, Beta] -> reload -> [Beta].
+    //
+    // So: cache A, cache B, reload, and require BOTH to still be there.
+    const secondName = unique("SecondBoard");
+    // "New board" is not on a board page; go to the app root first (which
+    // redirects an authenticated user to their last board / boards index).
+    await page.goto("/");
+    await page.getByRole("button", { name: "New board" }).click();
+    await page.getByLabel(/board name/i).fill(secondName);
+    const beforeCreate = page.url();
+    await page.getByRole("button", { name: /create board/i }).click();
+    // NOT waitForURL(/\/boards\/<uuid>/): "/" already redirected us onto a
+    // board, so that pattern matches immediately and would capture the WRONG
+    // board's URL. Wait for the URL to actually change.
+    await page.waitForFunction(
+      (b) =>
+        location.href !== b &&
+        /\/boards\/[0-9a-f-]{36}$/.test(location.pathname),
+      beforeCreate,
+      { timeout: 60_000 },
+    );
+    const secondUrl = page.url();
+    const secondId = secondUrl.match(/\/boards\/([0-9a-f-]{36})/)?.[1];
+    if (!secondId) {
+      throw new Error(`Could not extract a board id from ${secondUrl}`);
+    }
+    await expect(page.getByText("Group 1").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await waitForOfflineSnapshot(page, `monolith-offline:${userId}`, secondId);
+
+    // The reload that used to destroy the first board's snapshot.
+    await page.reload();
+    await expect(page.getByText("Group 1").first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await waitForOfflineSnapshot(page, `monolith-offline:${userId}`, secondId);
+
+    // BOTH boards must still be persisted after that reload.
+    const cachedIds = await readPersistedBoardIds(
+      page,
+      `monolith-offline:${userId}`,
+    );
+    expect(cachedIds).toContain(secondId);
+    expect(cachedIds).toContain(boardId);
+
+    // ── 5. Go offline while still on the REAL app shell ─────────────────────
     await context.setOffline(true);
     // `context.setOffline` is a CDP call; wait for the renderer to actually
-    // observe the flip before reloading, rather than assuming the two are
-    // synchronous. Otherwise a reload can race a still-open connection and
+    // observe the flip before navigating, rather than assuming the two are
+    // synchronous. Otherwise a navigation can race a still-open connection and
     // get a half-streamed online response instead of exercising the SW's
     // offline fallback at all.
     await page.waitForFunction(() => !navigator.onLine);
-    await page.reload();
 
-    // The offline banner appears...
-    //
     // Filtered by text rather than a bare `getByRole("status")`: the rendered
     // board mounts dnd-kit, which injects its own empty `role="status"` live
     // regions (`#DndLiveRegion-*`), so the bare locator is a strict-mode
@@ -255,10 +362,40 @@ test.describe("offline read-only boards", () => {
     const offlineBanner = page
       .getByRole("status")
       .filter({ hasText: /offline/i });
+
+    // ── 5a. The OTHER cached board reads offline ────────────────────────────
+    //
+    // This is defect 1's regression. `persistQueryClientSave` overwrites the
+    // whole persisted record with a dehydrate of the CURRENT QueryClient, and a
+    // full page load starts a fresh client holding only the board being loaded
+    // — so the reload in step 4b used to destroy the FIRST board's snapshot.
+    // Measured before the fix: [first, second] -> reload -> [second], and this
+    // navigation then reported "isn't available offline" for a board that had
+    // demonstrably been opened while online.
+    //
+    // Deliberately a document navigation rather than an in-app link click. The
+    // click path is real and is fixed (OfflineNavigationGuard), but it cannot be
+    // asserted deterministically here: once the network drops, the live app
+    // shell can crash into its error boundary on a lazily-imported chunk that
+    // was never precached, and the sidebar anchor stops existing. That recovery
+    // path and the click interception are both covered by unit tests
+    // (OfflineNavigationGuard.test.tsx, error-fallback.test.tsx); what this spec
+    // pins is the user-visible outcome: a previously opened board is readable
+    // with no network.
+    await page.goto(boardUrl);
+    await expect(offlineBanner).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Group 1").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/isn't available offline/i)).not.toBeVisible();
+    await expect(page.getByLabel("Add item")).toHaveCount(0);
+
+    // ── 5b. A reload of that board still works (document navigation) ────────
+    await page.reload();
     await expect(offlineBanner).toBeVisible({ timeout: 15_000 });
     // ...and the board still renders, from the persisted snapshot — not a
     // blank page and not the generic "isn't available offline" fallback.
-    await expect(page.getByText("Group 1")).toBeVisible();
+    await expect(page.getByText("Group 1").first()).toBeVisible();
     await expect(page.getByText(/isn't available offline/i)).not.toBeVisible();
 
     // And it renders read-only: OfflineBoard.tsx passes `access="viewer"`,
