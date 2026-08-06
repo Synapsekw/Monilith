@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { OfflineBoard } from "@/components/offline/OfflineBoard";
 import { OfflineBanner } from "@/components/offline/OfflineBanner";
 import { LAST_USER_KEY } from "@/lib/offline/constants";
+import { boardIdFromPath } from "@/lib/boards/last-board";
 
 type Resolved = {
   ready: boolean;
@@ -25,9 +26,15 @@ export default function OfflinePage() {
   });
 
   useEffect(() => {
-    const match = /^\/boards\/([0-9a-f-]{36})/.exec(window.location.pathname);
+    // Reuse the proxy's own last-visited-board validator (`boardIdFromPath`)
+    // instead of a second, looser regex: it requires the real 8-4-4-4-12 UUID
+    // grouping (not just "36 characters from {hex, hyphen} in any
+    // arrangement") and is anchored to the end of the path, so a longer path
+    // like `/boards/<id>/reports` — or a malformed id — can't slip a bad or
+    // unintended boardId downstream.
+    const boardId = boardIdFromPath(window.location.pathname);
     const userId = window.localStorage.getItem(LAST_USER_KEY);
-    const target = match && userId ? { boardId: match[1], userId } : null;
+    const target = boardId && userId ? { boardId, userId } : null;
     // `location`/`localStorage` are external systems only readable post-mount
     // (no URL during prerender) — same one-shot-read exemption as
     // `useReducedMotion` / `use-dock-state` (react-hooks/set-state-in-effect).

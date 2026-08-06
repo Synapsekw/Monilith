@@ -33,7 +33,16 @@ export function OfflineBoard({
       queryClient: qc,
       ...persistOptionsFor(userId),
     })
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        // Recoverable and already user-visible (falls through to the same
+        // "isn't available offline" copy as a never-cached board below), but
+        // that copy can't distinguish "never cached" from "restore failed" —
+        // this is the diagnostic trail for the latter.
+        console.warn(
+          "[offline] failed to restore persisted query cache",
+          error,
+        );
+      })
       .then(() => {
         if (!cancelled) setRestored(true);
       });
