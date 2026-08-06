@@ -110,6 +110,64 @@ describe("resolveActivity", () => {
     expect(d).toMatchObject({ kind: "cell_changed", to: "Hello" });
   });
 
+  it("strips Markdown syntax from a text cell change", () => {
+    const txtCol = {
+      ...COL,
+      id: "col-t",
+      kind: "text",
+      name: "Notes",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({
+        column_id: "col-t",
+        new_value: { text: "**bold** and _italic_\n- a bullet" },
+      }),
+      [txtCol],
+      [],
+    );
+    expect(d).toMatchObject({
+      kind: "cell_changed",
+      to: "bold and italic a bullet",
+    });
+  });
+
+  it("truncates a long text cell change with an ellipsis, never the raw value", () => {
+    const txtCol = {
+      ...COL,
+      id: "col-t",
+      kind: "text",
+      name: "Notes",
+    } as unknown as Tables<"columns">;
+    const longValue = "word ".repeat(4000).trim(); // ~20,000 chars, board's cap
+    const d = resolveActivity(
+      row({ column_id: "col-t", new_value: { text: longValue } }),
+      [txtCol],
+      [],
+    );
+    expect(d.kind).toBe("cell_changed");
+    if (d.kind !== "cell_changed") throw new Error("unreachable");
+    expect(typeof d.to).toBe("string");
+    const to = d.to as string;
+    expect(to.length).toBeLessThan(130);
+    expect(to.endsWith("…")).toBe(true);
+    expect(to).not.toBe(longValue);
+  });
+
+  it("resolves an empty/whitespace-only text cell change to null", () => {
+    const txtCol = {
+      ...COL,
+      id: "col-t",
+      kind: "text",
+      name: "Notes",
+    } as unknown as Tables<"columns">;
+    const d = resolveActivity(
+      row({ column_id: "col-t", new_value: { text: "   " } }),
+      [txtCol],
+      [],
+    );
+    expect(d).toMatchObject({ kind: "cell_changed", to: null });
+  });
+
   it("resolves a number cell to a string, including 0", () => {
     const numCol = {
       ...COL,

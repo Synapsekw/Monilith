@@ -1,5 +1,6 @@
 import type { Tables } from "@/types/database.types";
 import { formatDuration } from "@/lib/boards/time-format";
+import { stripMarkdown } from "@/lib/boards/markdown";
 
 export type ActivityRow = Tables<"item_activities">;
 export type Column = Tables<"columns">;
@@ -23,6 +24,25 @@ export type ActivityDescriptor =
     };
 
 type StatusOption = { id: string; label: string; color: string };
+
+// Text columns hold Markdown up to 20,000 characters (see
+// src/lib/boards/markdown.ts). This descriptor is consumed by two renderers
+// that both need a short, syntax-free preview rather than the raw value:
+// ActivityRow (renders `from`/`to` TWICE per row — a single long edit would
+// otherwise dominate the whole feed) and the AI item-summary transcript
+// builder (src/lib/ai/summarize/summarize.ts), which would otherwise burn
+// tokens on raw `**`/`-` syntax. Stripping + truncating once here, at the
+// resolver, fixes both call sites instead of relying on each view to remember
+// to do it — a CSS clamp in just ActivityRow would still ship the full
+// 20,000-character string into the DOM and leave the AI transcript unbounded.
+const CELL_TEXT_PREVIEW_MAX = 120;
+
+function previewText(text: string): string {
+  const stripped = stripMarkdown(text);
+  return stripped.length > CELL_TEXT_PREVIEW_MAX
+    ? `${stripped.slice(0, CELL_TEXT_PREVIEW_MAX).trimEnd()}…`
+    : stripped;
+}
 
 function describeCell(
   kind: Column["kind"] | "unknown",
@@ -64,7 +84,9 @@ function describeCell(
     }
     case "text": {
       const v = value as { text?: string };
-      return v.text ?? null;
+      if (!v.text) return null;
+      const preview = previewText(v.text);
+      return preview.length > 0 ? preview : null;
     }
     case "numbers": {
       const v = value as { n?: number };
