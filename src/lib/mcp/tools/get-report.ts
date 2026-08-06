@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getReportCore } from "@/lib/reports/queries";
+import { canReadBoard } from "./board-access";
 import type { GetClient, ToolResult } from "./shared";
 
 export async function getReportHandler(
@@ -10,7 +11,13 @@ export async function getReportHandler(
   const supabase = await getClient();
   try {
     const report = await getReportCore(supabase, args.reportId);
-    if (!report)
+    // `reports` RLS is only `is_org_member(org_id)`; the board the report is
+    // built over is narrower. Without this precheck an org member who cannot
+    // open a private board could still read its report's name, timestamp, and
+    // every block's type and chart title. The unreadable-board answer is the
+    // SAME string as a genuinely missing report, so the refusal itself never
+    // discloses that the report exists.
+    if (!report || !(await canReadBoard(supabase, report.boardId)))
       return {
         content: [{ type: "text", text: `Report ${args.reportId} not found.` }],
         isError: true,

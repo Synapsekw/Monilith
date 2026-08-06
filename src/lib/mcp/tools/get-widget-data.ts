@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveWidgetSlot } from "@/lib/dashboards/widget-slot-core";
+import { canReadBoard } from "./board-access";
 import type { GetClient, ToolResult } from "./shared";
 
 export async function getWidgetDataHandler(
@@ -32,22 +33,14 @@ export async function getWidgetDataHandler(
     // read aggregated counts over a board they cannot open. A null board read
     // returns the same not-found shape as a missing widget, so the tool never
     // discloses whether the board exists vs. is merely unreadable.
-    if (widget.source_board_id) {
-      const { data: board, error: boardErr } = await supabase
-        .from("boards")
-        .select("id")
-        .eq("id", widget.source_board_id)
-        .maybeSingle();
-      if (boardErr)
-        throw new Error(`Failed to load board: ${boardErr.message}`);
-      if (!board)
-        return {
-          content: [
-            { type: "text", text: `Widget ${args.widgetId} not found.` },
-          ],
-          isError: true,
-        };
-    }
+    if (
+      widget.source_board_id &&
+      !(await canReadBoard(supabase, widget.source_board_id))
+    )
+      return {
+        content: [{ type: "text", text: `Widget ${args.widgetId} not found.` }],
+        isError: true,
+      };
 
     const slot = await resolveWidgetSlot(supabase, args.widgetId, widget);
     if (!slot.ok)

@@ -7,8 +7,55 @@ vi.mock("@/lib/reports/queries", () => ({
   listReportsCore: core,
 }));
 
+/** A client that answers ONLY the `boards` readability probe, asserting the
+ *  table, projection and filter it is asked for. */
+function boardProbeClient(readable: boolean, boardId = "b1") {
+  const maybeSingle = vi.fn(async () => ({
+    data: readable ? { id: boardId } : null,
+    error: null,
+  }));
+  const from = vi.fn((table: string) => {
+    expect(table).toBe("boards");
+    return {
+      select: (columns: string) => {
+        expect(columns).toBe("id");
+        return {
+          eq: (column: string, value: string) => {
+            expect(column).toBe("id");
+            expect(value).toBe(boardId);
+            return { maybeSingle };
+          },
+        };
+      },
+    };
+  });
+  return { client: { from } as never, from, maybeSingle };
+}
+
 describe("listReportsHandler", () => {
+  it("refuses a board the caller cannot read, without reaching the core", async () => {
+    // `reports` RLS is only `is_org_member(org_id)` while `boards` read
+    // additionally requires creator-or-board-member. Without this precheck an
+    // org member could enumerate every report name and id on a private board.
+    core.mockReset();
+    const { client, from, maybeSingle } = boardProbeClient(false);
+    const getClient = vi.fn(async () => client);
+
+    const result = await listReportsHandler(getClient, { boardId: "b1" });
+
+    expect(getClient).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith("boards");
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
+    // The reports read never happens at all — nothing to leak.
+    expect(core).not.toHaveBeenCalled();
+    expect(result.isError).toBe(true);
+    // Same wording list_items uses, so "unreadable" and "nonexistent" are
+    // indistinguishable to the caller.
+    expect(result.content[0].text).toBe("Board not found.");
+  });
+
   it("returns report summaries for a board", async () => {
+    core.mockReset();
     core.mockResolvedValue([
       {
         id: "r1",
@@ -48,12 +95,15 @@ describe("listReportsHandler", () => {
         },
       },
     ]);
-    const getClient = vi.fn(async () => ({}) as never);
+    const { client, maybeSingle } = boardProbeClient(true);
+    const getClient = vi.fn(async () => client);
 
     const result = await listReportsHandler(getClient, { boardId: "b1" });
 
     expect(getClient).toHaveBeenCalledTimes(1);
     expect(core).toHaveBeenCalledTimes(1);
+    // Exactly one board probe — never one per report.
+    expect(maybeSingle).toHaveBeenCalledTimes(1);
     expect(JSON.parse(result.content[0].text)).toEqual([
       {
         id: "r1",
@@ -75,7 +125,8 @@ describe("listReportsHandler", () => {
   it("surfaces a core failure as an error result without a partial call", async () => {
     core.mockReset();
     core.mockRejectedValue(new Error("db unavailable"));
-    const getClient = vi.fn(async () => ({}) as never);
+    const { client } = boardProbeClient(true);
+    const getClient = vi.fn(async () => client);
 
     const result = await listReportsHandler(getClient, { boardId: "b1" });
 

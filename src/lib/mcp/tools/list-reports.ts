@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listReportsCore, REPORTS_LIMIT } from "@/lib/reports/queries";
+import { canReadBoard } from "./board-access";
 import type { GetClient, ToolResult } from "./shared";
 
 export async function listReportsHandler(
@@ -9,6 +10,17 @@ export async function listReportsHandler(
 ): Promise<ToolResult> {
   const supabase = await getClient();
   try {
+    // `reports` RLS is only `is_org_member(org_id)`, so listing by board id
+    // would hand an org member the name and id of every report on a private
+    // board they cannot open. Gate on the board FIRST — the same "Board not
+    // found." wording list_items uses, so an unreadable board is
+    // indistinguishable from a nonexistent one.
+    if (!(await canReadBoard(supabase, args.boardId)))
+      return {
+        content: [{ type: "text", text: "Board not found." }],
+        isError: true,
+      };
+
     const reports = await listReportsCore(supabase, args.boardId);
     return {
       content: [
