@@ -902,11 +902,11 @@ useCommitKeys, because a discarded paragraph is real lost work."
 
 ### Design notes for the implementer
 
-`TextCell` is the single renderer behind the table, Kanban cards, the Calendar agenda, Mirror cells and Rollup cells, so this one edit fixes Markdown legibility on all five surfaces.
+`TextCell` is the single renderer behind the table, Mirror cells and Rollup cells, so this one edit fixes Markdown legibility on all three surfaces.
 
 Add `title={stripped}` so the full single-line text is available on hover, since the cell truncates.
 
-The schema cap is a one-token change but it is load-bearing: it applies to the AI `set_item_fields` write path and spreadsheet paste as well as the editor, which is exactly the point.
+The schema cap is a one-token change and applies to the cell editor and the MCP `create_item` / `update_item` text writes. Spreadsheet import writes via RPC and is not covered by this cap.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1004,7 +1004,7 @@ import { stripMarkdown } from "@/lib/boards/markdown";
 /**
  * Collapsed text cell. Text columns hold Markdown (see LongTextEditor), so the
  * resting view strips the syntax and flattens to one line — this renderer also
- * backs Kanban cards, the Calendar agenda, Mirror and Rollup cells.
+ * backs Mirror and Rollup cells.
  */
 export function TextCell({
   value,
@@ -1025,8 +1025,9 @@ export function TextCell({
 
 ```ts
 // Text cells hold Markdown in this one string (see the LongTextEditor panel).
-// The cap bounds jsonb growth from large pastes and applies to every write
-// path — the editor, spreadsheet paste, and the AI set_item_fields verb.
+// The cap bounds jsonb growth on the paths that validate through this schema —
+// the cell editor and the MCP create_item / update_item text writes. Spreadsheet
+// import writes via RPC and is not covered by this cap.
 export const textValueSchema = z.object({ text: z.string().max(20_000) });
 ```
 
@@ -1040,7 +1041,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Verify no other suite regressed on the stripping change**
 
-`TextCell` backs five surfaces, so run everything that renders it:
+`TextCell` backs three surfaces, so run everything that renders it:
 
 ```bash
 pnpm vitest run src/components/boards
@@ -1240,7 +1241,7 @@ This rebases onto the latest `develop`, re-runs all four gates against the merge
 | §3.1 `stripMarkdown` / `applyMarkdown` / `parseMarkdown`, fast path, four `applyMarkdown` cases, nine closed actions | Task 1                                                                                                        |
 | §3.2 `MarkdownPreview`, no `dangerouslySetInnerHTML`, `isHttpUrl` gating                                             | Task 1 (gating at parse time) + Task 2 (renderer + grep check)                                                |
 | §3.3 Anchored panel, sizing, layout, keyboard/save table, `Esc` departure from `useCommitKeys`                       | Task 3                                                                                                        |
-| §3.4 `TextCell` stripping across five surfaces                                                                       | Task 4                                                                                                        |
+| §3.4 `TextCell` stripping across three surfaces                                                                      | Task 4                                                                                                        |
 | §4 Non-goals: no row growth, no item-panel editing, no new column kind                                               | Honoured — no task touches row height, `ItemPanel`, or `column-kinds.ts`                                      |
 | §5 Performance budget: 0 round-trips on open/type, 1 on close                                                        | Honoured — no task adds a query or Server Action; Task 5 reuses the existing `setCell` path in `EditableCell` |
 | §6 Testing table                                                                                                     | Tasks 1-5; all four named files covered                                                                       |

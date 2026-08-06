@@ -12,7 +12,6 @@ import {
   PercentEditor,
   RatingEditor,
   StatusEditor,
-  TextEditor,
 } from "./index";
 
 const statusSettings = {
@@ -22,39 +21,39 @@ const statusSettings = {
   ],
 };
 
-describe("TextEditor", () => {
-  it("seeds the current value and commits on Enter", async () => {
-    const onCommit = vi.fn();
-    const onCancel = vi.fn();
+describe("CellEditor routes text cells to the long-text panel", () => {
+  it("renders the panel with tabs and a toolbar, not a single-line input", () => {
     render(
-      <TextEditor
+      <CellEditor
+        kind="text"
         value={{ text: "old" }}
         settings={{}}
-        onCommit={onCommit}
-        onCancel={onCancel}
+        onCommit={vi.fn()}
+        onCancel={vi.fn()}
+        columnName="Notes"
       />,
     );
-    const input = screen.getByRole("textbox");
-    expect(input).toHaveValue("old");
-    await userEvent.clear(input);
-    await userEvent.type(input, "new{Enter}");
-    expect(onCommit).toHaveBeenCalledWith({ text: "new" });
+    expect(screen.getByRole("tab", { name: /write/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^bold$/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox").tagName).toBe("TEXTAREA");
   });
 
-  it("cancels on Escape without committing", async () => {
+  it("commits the edited text through onCommit", async () => {
     const onCommit = vi.fn();
-    const onCancel = vi.fn();
     render(
-      <TextEditor
+      <CellEditor
+        kind="text"
         value={{ text: "old" }}
         settings={{}}
         onCommit={onCommit}
-        onCancel={onCancel}
+        onCancel={vi.fn()}
+        columnName="Notes"
       />,
     );
-    await userEvent.type(screen.getByRole("textbox"), "x{Escape}");
-    expect(onCancel).toHaveBeenCalled();
-    expect(onCommit).not.toHaveBeenCalled();
+    const ta = screen.getByRole("textbox");
+    await userEvent.click(ta);
+    await userEvent.type(ta, "er{Escape}");
+    expect(onCommit).toHaveBeenCalledWith({ text: "older" });
   });
 });
 

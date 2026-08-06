@@ -141,7 +141,16 @@ export function columnSettingsSchema(kind: ColumnKind) {
 // --- per-kind cell values ---
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected an ISO date");
 
-export const textValueSchema = z.object({ text: z.string() });
+// Text cells hold Markdown in this one string (see the LongTextEditor panel).
+// The cap bounds jsonb growth on the paths that validate through this schema —
+// the cell editor and the MCP create_item / update_item text writes. Spreadsheet
+// import writes via RPC and is not covered by this cap. Consequence: a cell
+// value that arrived over the cap through that path can never be saved again
+// through the LongTextEditor panel — every edit is rejected by this schema
+// and rolled back with a generic toast until the text is brought back under
+// 20,000 characters some other way. Deliberate, owner-approved deferral as of
+// the 2026-08-06 pre-merge review; not fixed in this branch.
+export const textValueSchema = z.object({ text: z.string().max(20_000) });
 export const statusValueSchema = z.object({
   optionId: z.string().nullable(),
 });
