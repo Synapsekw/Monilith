@@ -107,3 +107,50 @@ describe("approveConsent", () => {
     expect(getOauthClient).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * A CLI client (Hermes, and any RFC 8252 native client) registers ONE loopback
+ * callback but binds a fresh ephemeral port on every login, so the port it
+ * presents at consent time is almost never the one on file.
+ */
+describe("approveConsent — RFC 8252 §7.3 loopback clients", () => {
+  const REGISTERED_LOOPBACK = "http://127.0.0.1:38559/callback";
+
+  beforeEach(() => {
+    getOauthClient.mockResolvedValue({ redirect_uris: [REGISTERED_LOOPBACK] });
+  });
+
+  it("issues a code for a different ephemeral port on the same loopback callback", async () => {
+    const presented = "http://127.0.0.1:45011/callback";
+    await approveConsent(form({ redirect_uri: presented }));
+
+    // The code records the PRESENTED uri, not the registered one: the token
+    // endpoint compares exactly against this, and the client will send back the
+    // port it is actually listening on.
+    expect(createAuthorizationCode).toHaveBeenCalledWith(
+      expect.objectContaining({ redirectUri: presented }),
+    );
+    const target = new URL(redirect.mock.calls[0][0] as string);
+    expect(target.port).toBe("45011");
+    expect(target.searchParams.get("code")).toBe("the-code");
+  });
+
+  it("still refuses a different PATH on the loopback interface", async () => {
+    await expect(
+      approveConsent(form({ redirect_uri: "http://127.0.0.1:45011/evil" })),
+    ).rejects.toThrow(/Unknown client or redirect_uri/);
+    expect(createAuthorizationCode).not.toHaveBeenCalled();
+  });
+
+  it("does not extend port flexibility to a non-loopback host", async () => {
+    getOauthClient.mockResolvedValue({
+      redirect_uris: ["https://client.example.com:443/callback"],
+    });
+    await expect(
+      approveConsent(
+        form({ redirect_uri: "https://client.example.com:8443/callback" }),
+      ),
+    ).rejects.toThrow(/Unknown client or redirect_uri/);
+    expect(createAuthorizationCode).not.toHaveBeenCalled();
+  });
+});
