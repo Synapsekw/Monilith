@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 
 /** The validated shape both callers pass — the output of
  *  `upsertTimeAllocationSchema` in `src/lib/validations/time.ts`. */
@@ -20,36 +21,41 @@ export type UpsertTimeAllocationInput = {
  * precedent (gotcha-60: the MCP write path silently diverging is what this
  * shape exists to prevent).
  *
- * `userId` is passed in, never read from `supabase.auth`: the RSC path already
- * knows it, and an auth lookup on a bridged client costs a GoTrue round-trip
- * per write. RLS still enforces `user_id = auth.uid()`, so a mismatched id
- * fails closed.
+ * Goes through the `upsert_time_allocation` RPC rather than
+ * `.upsert(…, { onConflict })`, and NOT as an optimization: the table's two
+ * unique indexes are PARTIAL, Postgres can only infer a partial unique index
+ * when the ON CONFLICT arbiter repeats its WHERE predicate, and PostgREST's
+ * `on_conflict=` parameter cannot express one. Every `.upsert()` here failed at
+ * plan time with 42P10 — see migration 20260806060855.
  *
- * The unique partial indexes drive the upsert: exactly one of itemId/category
- * is set, and that choice selects the conflict target.
+ * `ctx.userId` is NOT sent: the RPC derives the row's user from `auth.uid()`
+ * itself, which makes writing another user's time structurally impossible. It
+ * stays in the signature because callers pass an identity they already know and
+ * a future divergence should be a type error, not a silent mis-attribution.
+ *
+ * `durationSecs: 0` clears the cell (the RPC deletes the row and returns null),
+ * matching `upsertTimeAllocationSchema`'s "clear the cell to remove time" and
+ * the `deleteTimeAllocation` action. The `/time` path never reaches it — its
+ * Zod schema rejects `hours <= 0` before the call.
  */
 export async function upsertTimeAllocationCore(
   supabase: SupabaseClient<Database>,
   input: UpsertTimeAllocationInput,
   ctx: { userId: string; orgId: string },
 ): Promise<ActionResult<{ durationSecs: number }>> {
-  const onConflict = input.itemId
-    ? "user_id,work_date,item_id"
-    : "user_id,work_date,category";
-
-  const { error } = await supabase.from("time_allocations").upsert(
-    {
-      org_id: ctx.orgId,
-      user_id: ctx.userId,
-      work_date: input.workDate,
-      item_id: input.itemId ?? null,
-      board_id: input.itemId ? (input.boardId ?? null) : null,
-      category: input.category ?? null,
-      duration_secs: input.durationSecs,
-      note: input.note ?? null,
-    },
-    { onConflict },
-  );
+  const { data, error } = await typedRpc(supabase, "upsert_time_allocation", {
+    p_org_id: ctx.orgId,
+    p_work_date: input.workDate,
+    p_duration_secs: input.durationSecs,
+    p_item_id: input.itemId ?? null,
+    // A category row carries no board (constraint
+    // time_allocations_category_no_board); on the item path a null lets the RPC
+    // derive it from the item.
+    p_board_id: input.itemId ? (input.boardId ?? null) : null,
+    p_category: input.category ?? null,
+    p_note: input.note ?? null,
+  });
   if (error) return fail(error.message);
-  return { ok: true, data: { durationSecs: input.durationSecs } };
+  // null = the row was cleared; report 0 stored seconds.
+  return { ok: true, data: { durationSecs: data ?? 0 } };
 }
