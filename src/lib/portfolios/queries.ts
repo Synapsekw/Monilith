@@ -9,24 +9,35 @@ import type {
   RowOwner,
 } from "@/lib/portfolios/types";
 import type { Tables } from "@/types/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 
 /** Hot-path cap (AGENTS.md: bounded reads over indexed columns). Truncates
  * silently at the cap — raise alongside pagination if an org ever approaches it. */
 export const PORTFOLIO_LIMIT = 200;
 
-export async function listPortfolios(): Promise<
-  { id: string; name: string }[]
-> {
-  const supabase = await createClient();
+/** Client-injected core. */
+export async function listPortfoliosCore(
+  supabase: SupabaseClient<Database>,
+  limit: number = PORTFOLIO_LIMIT,
+): Promise<{ id: string; name: string }[]> {
   const { data, error } = await supabase
     .from("portfolios")
     .select("id, name")
     .order("created_at", { ascending: true })
-    .limit(PORTFOLIO_LIMIT);
+    .limit(limit);
   // A DB failure is not "no portfolios": throw so the portfolios error
   // boundary renders instead of a silently-empty list.
   if (error) throw new Error(`Failed to load portfolios: ${error.message}`);
   return data ?? [];
+}
+
+/** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
+export async function listPortfolios(): Promise<
+  { id: string; name: string }[]
+> {
+  const supabase = await createClient();
+  return listPortfoliosCore(supabase);
 }
 
 export async function getPortfolio(
@@ -66,20 +77,14 @@ export type PortfolioRowsResult = {
   rows: PortfolioRow[];
 };
 
-/** One-pass read for the grid: portfolio + placements + rollup + owners.
- *
- * The three portfolioId-keyed reads fire in ONE Promise.all: RLS returns
- * empty/null rows for the not-found/not-visible case, so starting placements/
- * rollup before the existence check is safe — they're discarded on the (cold)
- * 404 path, and the hot path loses a full await stage. */
-export async function getPortfolioRows(
+/** Client-injected core: portfolio + placements + rollup, merged with owners. */
+export async function getPortfolioRowsCore(
+  supabase: SupabaseClient<Database>,
   portfolioId: string,
+  ctx: { owners: Map<string, RowOwner>; todayIso: string },
 ): Promise<PortfolioRowsResult | null> {
-  const supabase = await createClient();
-  const today = serverToday(Date.now());
-
-  const [portfolio, placementsRes, rollupRes] = await Promise.all([
-    getPortfolio(portfolioId),
+  const [portfolioRes, placementsRes, rollupRes] = await Promise.all([
+    supabase.from("portfolios").select("*").eq("id", portfolioId).maybeSingle(),
     supabase
       .from("portfolio_boards")
       .select("*")
@@ -87,13 +92,12 @@ export async function getPortfolioRows(
       .order("position", { ascending: true }),
     supabase.rpc("portfolio_rollup", {
       p_portfolio_id: portfolioId,
-      p_today: today,
+      p_today: ctx.todayIso,
     }),
   ]);
-  // A silently-empty grid (`.data ?? []` below) is indistinguishable from a
-  // portfolio with no boards. Fail loudly; the portfolios error boundary
-  // offers retry. Checked before the not-found return: a DB failure is a DB
-  // failure even on the cold 404 path.
+
+  if (portfolioRes.error)
+    throw new Error(`Failed to load portfolio: ${portfolioRes.error.message}`);
   if (placementsRes.error)
     throw new Error(
       `Failed to load portfolio placements: ${placementsRes.error.message}`,
@@ -102,7 +106,7 @@ export async function getPortfolioRows(
     throw new Error(
       `Failed to load portfolio rollup: ${rollupRes.error.message}`,
     );
-  if (!portfolio) return null;
+  if (!portfolioRes.data) return null;
 
   const placements = (placementsRes.data ?? []).map(toPlacement);
   const rollups: RollupRow[] = (rollupRes.data ?? []).map((r) => ({
@@ -115,15 +119,34 @@ export async function getPortfolioRows(
     overdueItems: Number(r.overdue_items),
   }));
 
-  const members = await listOrgMembersCached(portfolio.org_id);
+  return {
+    portfolio: portfolioRes.data,
+    rows: mergeRows(placements, rollups, ctx.owners, ctx.todayIso),
+  };
+}
+
+/** Cookie-bound wrapper — the RSC entry point. Signature unchanged.
+ *
+ * The owner map needs the portfolio's org, so the head row is read first here
+ * (the core re-reads it inside its Promise.all — one extra bounded PK read on
+ * the RSC path, in exchange for the core owning ALL of its own queries). */
+export async function getPortfolioRows(
+  portfolioId: string,
+): Promise<PortfolioRowsResult | null> {
+  const supabase = await createClient();
+  const todayIso = serverToday(Date.now());
+
+  const head = await getPortfolio(portfolioId);
+  if (!head) return null;
+
+  const members = await listOrgMembersCached(head.org_id);
   const owners = new Map<string, RowOwner>(
     members.map((m) => [
       m.userId,
       { userId: m.userId, fullName: m.fullName, avatarUrl: m.avatarUrl },
     ]),
   );
-
-  return { portfolio, rows: mergeRows(placements, rollups, owners, today) };
+  return getPortfolioRowsCore(supabase, portfolioId, { owners, todayIso });
 }
 
 export type StatusColumn = {

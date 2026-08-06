@@ -15,6 +15,8 @@ import { registerGetTimeSummaryTool } from "./get-time-summary";
 import { registerLogTimeAllocationTool } from "./log-time-allocation";
 import { registerListGoalsTool } from "./list-goals";
 import { registerGetGoalTool } from "./get-goal";
+import { registerListPortfoliosTool } from "./list-portfolios";
+import { registerGetPortfolioTool } from "./get-portfolio";
 
 /** Registers every MCP tool onto the server instance, closing over the request's auth. */
 export function registerTools(server: McpServer, auth: AuthInfo): void {
@@ -34,4 +36,6 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
   registerLogTimeAllocationTool(server, getClient, actorId);
   registerListGoalsTool(server, getClient);
   registerGetGoalTool(server, getClient);
+  registerListPortfoliosTool(server, getClient);
+  registerGetPortfolioTool(server, getClient);
 }
