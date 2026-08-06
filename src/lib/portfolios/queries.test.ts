@@ -116,15 +116,7 @@ function rowsClient(over: {
 }
 
 describe("getPortfolioRows", () => {
-  it("resolves the org via a head read first, then fires placements and rollup concurrently", async () => {
-    // Task 6 (mcp-full-surface): getPortfolioRowsCore takes `owners` as a ctx
-    // param instead of resolving them internally (MCP must stay off the
-    // service client `listOrgMembersCached` uses), so the RSC wrapper now
-    // needs org_id BEFORE it can build the owner map and call the core. That
-    // replaces the old single-Promise.all waterfall collapse with a cheap
-    // sequential head read up front — see the comment on getPortfolioRows in
-    // queries.ts. This test asserts the new order instead of the old
-    // single-stage concurrency.
+  it("fires portfolio, placements, and rollup concurrently (single stage before members)", async () => {
     const order: string[] = [];
     // The portfolio read (maybeSingle) resolves on a deferred promise;
     // placements/rollup must have been INITIATED before it resolves.
@@ -169,16 +161,8 @@ describe("getPortfolioRows", () => {
         "start:portfolio_rollup",
       ]),
     );
-    // The head read (org lookup, gated in this test) must complete before
-    // placements/rollup are even started — they're inside the core, which is
-    // only invoked once the owner map is built from head.org_id.
-    const firstPortfolio = order.indexOf("portfolio");
-    expect(firstPortfolio).toBeGreaterThanOrEqual(0);
-    expect(order.indexOf("start:portfolio_boards")).toBeGreaterThan(
-      firstPortfolio,
-    );
-    expect(order.indexOf("start:portfolio_rollup")).toBeGreaterThan(
-      firstPortfolio,
+    expect(order.indexOf("start:portfolio_rollup")).toBeLessThan(
+      order.indexOf("portfolio"),
     );
     expect(result?.portfolio.id).toBe("p1");
   });

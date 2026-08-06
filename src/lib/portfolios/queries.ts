@@ -77,13 +77,26 @@ export type PortfolioRowsResult = {
   rows: PortfolioRow[];
 };
 
-/** Client-injected core: portfolio + placements + rollup, merged with owners. */
+/** Client-injected core: portfolio + placements + rollup, merged with owners.
+ *
+ * `ctx.owners` accepts a `Map` OR a `Promise<Map>` so a caller that needs an
+ * async lookup (the RSC wrapper resolves org membership from the head row)
+ * can pass that lookup as the 4th `Promise.all` slot instead of awaiting it
+ * up front — the owner resolution then runs CONCURRENTLY with the
+ * portfolio/placements/rollup reads instead of gating them behind a
+ * sequential stage. A caller that already has the map (the MCP tool, which
+ * must resolve owners before it can decide whether to run the rollup at all)
+ * just passes the resolved `Map`; `Promise.all` accepts a plain value in that
+ * slot same as a promise. */
 export async function getPortfolioRowsCore(
   supabase: SupabaseClient<Database>,
   portfolioId: string,
-  ctx: { owners: Map<string, RowOwner>; todayIso: string },
+  ctx: {
+    owners: Map<string, RowOwner> | Promise<Map<string, RowOwner>>;
+    todayIso: string;
+  },
 ): Promise<PortfolioRowsResult | null> {
-  const [portfolioRes, placementsRes, rollupRes] = await Promise.all([
+  const [portfolioRes, placementsRes, rollupRes, owners] = await Promise.all([
     supabase.from("portfolios").select("*").eq("id", portfolioId).maybeSingle(),
     supabase
       .from("portfolio_boards")
@@ -94,6 +107,7 @@ export async function getPortfolioRowsCore(
       p_portfolio_id: portfolioId,
       p_today: ctx.todayIso,
     }),
+    ctx.owners,
   ]);
 
   if (portfolioRes.error)
@@ -121,31 +135,34 @@ export async function getPortfolioRowsCore(
 
   return {
     portfolio: portfolioRes.data,
-    rows: mergeRows(placements, rollups, ctx.owners, ctx.todayIso),
+    rows: mergeRows(placements, rollups, owners, ctx.todayIso),
   };
 }
 
 /** Cookie-bound wrapper — the RSC entry point. Signature unchanged.
  *
- * The owner map needs the portfolio's org, so the head row is read first here
- * (the core re-reads it inside its Promise.all — one extra bounded PK read on
- * the RSC path, in exchange for the core owning ALL of its own queries). */
+ * The owner map needs the portfolio's org, so this chains `getPortfolio` →
+ * `listOrgMembersCached` into a single promise and hands it to the core as
+ * the 4th `Promise.all` slot — it resolves CONCURRENTLY with the
+ * portfolio/placements/rollup reads (preserving the `c2be916f` waterfall
+ * collapse) rather than gating them behind a sequential head read. */
 export async function getPortfolioRows(
   portfolioId: string,
 ): Promise<PortfolioRowsResult | null> {
   const supabase = await createClient();
   const todayIso = serverToday(Date.now());
 
-  const head = await getPortfolio(portfolioId);
-  if (!head) return null;
+  const owners = getPortfolio(portfolioId).then(async (head) => {
+    if (!head) return new Map<string, RowOwner>();
+    const members = await listOrgMembersCached(head.org_id);
+    return new Map<string, RowOwner>(
+      members.map((m) => [
+        m.userId,
+        { userId: m.userId, fullName: m.fullName, avatarUrl: m.avatarUrl },
+      ]),
+    );
+  });
 
-  const members = await listOrgMembersCached(head.org_id);
-  const owners = new Map<string, RowOwner>(
-    members.map((m) => [
-      m.userId,
-      { userId: m.userId, fullName: m.fullName, avatarUrl: m.avatarUrl },
-    ]),
-  );
   return getPortfolioRowsCore(supabase, portfolioId, { owners, todayIso });
 }
 

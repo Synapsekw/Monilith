@@ -43,7 +43,12 @@ describe("getPortfolioHandler", () => {
     const result = await getPortfolioHandler(getClient, { portfolioId: "p1" });
 
     expect(getClient).toHaveBeenCalledTimes(1);
-    // The rollup RPC runs exactly once — the head read is a separate cheap query.
+    // `getPortfolioRowsCore` (the only place that calls the `portfolio_rollup`
+    // RPC) is invoked exactly once here — the head read above is a separate,
+    // cheap indexed query that never touches the core. This test mocks the
+    // core, so it proves the core is called once, not that the RPC itself ran
+    // once inside it; that invariant is covered by `getPortfolioRowsCore`'s
+    // own tests in queries.test.ts.
     expect(core).toHaveBeenCalledTimes(1);
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.name).toBe("Q1 delivery");
