@@ -48,15 +48,18 @@ self.addEventListener("fetch", (event) => {
   // Content-hashed build assets: cache-first.
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(
-      caches.match(request).then(
-        (hit) =>
-          hit ||
-          fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy));
-            return res;
-          }),
-      ),
+      caches.match(request).then((hit) => {
+        if (hit) return hit;
+        return fetch(request).then((res) => {
+          const copy = res.clone();
+          // The browser can suspend this worker the instant respondWith's
+          // promise settles, so the cache write must be handed to
+          // waitUntil — otherwise a freshly fetched asset can be dropped
+          // before it's ever cached, silently defeating cache-first.
+          event.waitUntil(caches.open(CACHE).then((c) => c.put(request, copy)));
+          return res;
+        });
+      }),
     );
     return;
   }
