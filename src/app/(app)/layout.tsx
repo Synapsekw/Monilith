@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
+import { ServiceWorkerRegistrar } from "@/components/offline/ServiceWorkerRegistrar";
 import { Toaster } from "@/components/ui/sonner";
 
 /**
@@ -36,6 +37,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <>
       <AuthenticatedShell>{children}</AuthenticatedShell>
       <Toaster />
+      <ServiceWorkerRegistrar />
     </>
   );
 }
