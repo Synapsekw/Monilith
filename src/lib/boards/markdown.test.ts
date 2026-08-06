@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Inline } from "./markdown";
 import { applyMarkdown, parseMarkdown, stripMarkdown } from "./markdown";
 
 describe("stripMarkdown", () => {
@@ -62,13 +63,56 @@ describe("stripMarkdown", () => {
     ])("strips %s", (input, expected) => {
       expect(stripMarkdown(input)).toBe(expected);
     });
+  });
 
-    // Nested emphasis (`**bold *italic* text**`) is a `parseMarkdown`-only
-    // regression, covered below in the `parseMarkdown` suite — stripMarkdown's
-    // `BOLD_RE` (unlike `parseBold`) requires bold content to contain no `*`
-    // at all, so it never matches a bold span with nested italic in the
-    // first place; that is a pre-existing, out-of-scope characteristic of
-    // the collapsed-cell strip path, not something this fix touches.
+  // Regression: `BOLD_RE` used to require bold content to contain no `*` at
+  // all ([^*]+), so a bold span with nested italic never matched — the
+  // whole "**bold *italic* text**" construct fell straight through to the
+  // collapsed cell unstripped, even though the Preview (parseMarkdown,
+  // which fixed the equivalent bug in parseBold during an earlier review
+  // round) rendered it correctly formatted. Fixed by bringing BOLD_RE in
+  // line with parseBold's lazy, doubled-marker-excluding pattern.
+  describe("nested emphasis", () => {
+    it("strips bold containing nested italic", () => {
+      expect(stripMarkdown("**bold *italic* text**")).toBe("bold italic text");
+    });
+
+    it("strips strikethrough containing nested italic", () => {
+      expect(stripMarkdown("~~struck *and italic*~~")).toBe(
+        "struck and italic",
+      );
+    });
+
+    // The collapsed cell and the Preview must never disagree about what
+    // counts as Markdown syntax — parseMarkdown fully removes all syntax
+    // markers when rendering, so if stripMarkdown and a from-scratch strip
+    // of parseMarkdown's own text nodes match, the two views agree.
+    it("agrees with parseMarkdown's rendered text on nested emphasis", () => {
+      const md = "**bold *italic* text**";
+      const flattenInline = (nodes: Inline[]): string =>
+        nodes
+          .map((n) =>
+            n.type === "text" || n.type === "code"
+              ? n.value
+              : flattenInline(n.children),
+          )
+          .join("");
+      const rendered = parseMarkdown(md)
+        .map((b) =>
+          b.type === "bulletList" || b.type === "numberedList"
+            ? b.items.map(flattenInline).join(" ")
+            : flattenInline(b.children),
+        )
+        .join(" ");
+      expect(stripMarkdown(md)).toBe(rendered);
+    });
+
+    it("still leaves plain-text asterisks/underscores unchanged (FIX 3 not reopened)", () => {
+      expect(stripMarkdown("user_id and order_id")).toBe(
+        "user_id and order_id",
+      );
+      expect(stripMarkdown("5 * 3 = 15 * 2")).toBe("5 * 3 = 15 * 2");
+    });
   });
 });
 

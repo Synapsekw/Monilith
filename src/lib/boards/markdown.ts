@@ -63,7 +63,16 @@ const MARKDOWN_SNIFF = /[*_~`>[\]#\n-]/;
 const NUMBERED_LIST_SNIFF = /^\d+\.\s/m;
 
 const LINE_PREFIX_RE = /^(?:#{1,3}[ \t]+|[-*][ \t]+|\d+\.[ \t]+|>[ \t]+)/gm;
-const BOLD_RE = /\*\*([^*]+)\*\*/g;
+// Lazy match up to the NEAREST closing `**`, not `[^*]+` (no asterisks at
+// all) — the same fix `parseBold` already needed (see its comment below).
+// `[^*]+` cannot span content that itself contains `*` for nested italic
+// (`**bold *italic* text**`), so it never matches at all and the whole
+// bold span — including its nested emphasis markers — falls straight
+// through to the collapsed cell unstripped. `stripMarkdown` and
+// `parseMarkdown` must agree on what is Markdown syntax; this keeps them
+// in sync for nested emphasis the same way `isValidEmphasis` does for
+// intraword delimiters.
+const BOLD_RE = /\*\*((?:(?!\*\*)[\s\S])+?)\*\*/g;
 const STRIKE_RE = /~~([^~]+)~~/g;
 const CODE_RE = /`([^`]+)`/g;
 // Italic: single `*` or `_` around non-empty, non-`*`/`_` content. Validity
