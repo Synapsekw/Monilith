@@ -906,7 +906,7 @@ useCommitKeys, because a discarded paragraph is real lost work."
 
 Add `title={stripped}` so the full single-line text is available on hover, since the cell truncates.
 
-The schema cap is a one-token change but it is load-bearing: it applies to the AI `set_item_fields` write path and spreadsheet paste as well as the editor, which is exactly the point.
+The schema cap is a one-token change and applies to the cell editor and the MCP `create_item` / `update_item` text writes. Spreadsheet import writes via RPC and is not covered by this cap.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1004,7 +1004,7 @@ import { stripMarkdown } from "@/lib/boards/markdown";
 /**
  * Collapsed text cell. Text columns hold Markdown (see LongTextEditor), so the
  * resting view strips the syntax and flattens to one line — this renderer also
- * backs Kanban cards, the Calendar agenda, Mirror and Rollup cells.
+ * backs Mirror and Rollup cells.
  */
 export function TextCell({
   value,
@@ -1025,8 +1025,9 @@ export function TextCell({
 
 ```ts
 // Text cells hold Markdown in this one string (see the LongTextEditor panel).
-// The cap bounds jsonb growth from large pastes and applies to every write
-// path — the editor, spreadsheet paste, and the AI set_item_fields verb.
+// The cap bounds jsonb growth on the paths that validate through this schema —
+// the cell editor and the MCP create_item / update_item text writes. Spreadsheet
+// import writes via RPC and is not covered by this cap.
 export const textValueSchema = z.object({ text: z.string().max(20_000) });
 ```
 
