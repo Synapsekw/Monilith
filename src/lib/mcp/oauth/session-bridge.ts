@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import {
   createClient,
   type Session,
@@ -34,6 +35,33 @@ type BridgeSecretPayload = {
 
 /** A small buffer so we refresh slightly before GoTrue would reject the token. */
 const ACCESS_TOKEN_REFRESH_BUFFER_MS = 60_000;
+
+/**
+ * The Vault secret name for a bridge, which MUST be unique per secret — never
+ * per user.
+ *
+ * `vault.secrets.name` carries a UNIQUE index (`secrets_name_idx`) and
+ * `oauth_bridge_rotate_secret` inserts through `vault.create_secret(p_secret,
+ * p_name, …)`, so a name derived only from the user id lets the FIRST bridge a
+ * user ever mints squat that name permanently. Every later mint for the same
+ * user then died with
+ *
+ *   duplicate key value violates unique constraint "secrets_name_idx"
+ *
+ * surfacing as a bare HTTP 500 from POST /api/oauth/token — i.e. a user who had
+ * connected one MCP client could never connect a second, and a user with a
+ * personal agent (src/lib/agents/owner-client.ts mints through this same
+ * function) could not connect an MCP client at all.
+ *
+ * Two clients must NOT share one bridge anyway: each holds its own GoTrue
+ * session, and collapsing them onto one Vault row would make each client's
+ * refresh rotate the other's token out from under it. So one secret per mint,
+ * with the user id kept as a prefix purely so secrets stay greppable per user
+ * during ops.
+ */
+function bridgeSecretName(userId: string): string {
+  return `mcp_bridge:${userId}:${randomUUID()}`;
+}
 
 function payloadFromSession(session: Session): BridgeSecretPayload {
   const accessExpiresAt = session.expires_at
@@ -88,7 +116,7 @@ export async function mintBridgeSecret(userId: string): Promise<string> {
     {
       p_old_secret_id: null,
       p_secret: JSON.stringify(payloadFromSession(sessionData.session)),
-      p_name: `mcp_bridge:${userId}`,
+      p_name: bridgeSecretName(userId),
     },
   );
   if (rpcErr || !secretId)
@@ -166,7 +194,11 @@ export async function getBridgedClient(
     {
       p_old_secret_id: bridgeSecretId,
       p_secret: JSON.stringify(payloadFromSession(refreshed.session)),
-      p_name: `mcp_bridge:${refreshed.session.user.id}`,
+      // A fresh unique name, not the old one: the rpc DELETEs p_old_secret_id
+      // before inserting, but that only frees THIS bridge's name — a sibling
+      // bridge for the same user still holds its own row, so a per-user name
+      // would collide here exactly as it did on mint.
+      p_name: bridgeSecretName(refreshed.session.user.id),
     },
   );
   if (rotErr || !newSecretId)
