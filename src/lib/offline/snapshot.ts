@@ -44,6 +44,10 @@ export function useBoardSnapshot(
   // the latest snapshot by the time the persistence effect below reads it.
   const snapshotRef = useRef(snapshot);
   useEffect(() => {
+    // Intentionally unthrottled — no dependency array. This must run after
+    // every render so the ref never lags a render behind; adding deps here
+    // to "optimize" it would let the persistence effect below read a stale
+    // snapshot on the very render where boardId/initialViewId change.
     snapshotRef.current = snapshot;
   });
 
