@@ -64,7 +64,15 @@ export async function loadGoalTree(
     ]),
   );
   return {
-    nodes: await getGoalsTreeCore(supabase, { owners, nowMs: Date.now() }),
+    // `orgId` is passed, not merely validated: `goals` RLS is org-membership,
+    // so without it a two-org caller who asked about org A also gets org B's
+    // goals — reported as A's, and with `ownerName: null` because `owners`
+    // only holds A's members.
+    nodes: await getGoalsTreeCore(supabase, {
+      owners,
+      nowMs: Date.now(),
+      orgId: scope.org.id,
+    }),
   };
 }
 

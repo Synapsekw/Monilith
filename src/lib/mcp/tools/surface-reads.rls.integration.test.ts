@@ -416,10 +416,13 @@ describe.skipIf(!integrationTargetReady())(
     //   window; there is no single seeded row to assert on without also
     //   seeding capacity data, and the foreign-orgId case is already proven
     //   in cross-org-access.rls.integration.test.ts.
-    // - list_portfolios / get_portfolio and get_my_work take no orgId at all
-    //   — portfolio visibility and assignment scoping need their own
-    //   dedicated seed (a portfolio-board link / a people-cell assignment)
-    //   that doesn't fit this file's org-vs-org shape.
+    // - get_portfolio and get_my_work take no orgId at all — portfolio
+    //   visibility and assignment scoping need their own dedicated seed (a
+    //   portfolio-board link / a people-cell assignment) that doesn't fit this
+    //   file's org-vs-org shape. list_portfolios DOES take an orgId, and its
+    //   foreign-org refusal is proven in
+    //   cross-org-access.rls.integration.test.ts alongside the other
+    //   org-scoped tools.
     // - list_reports / get_report and get_widget_data build on boards and
     //   dashboards already proven above; they would duplicate the same RLS
     //   boundary without exercising a new code path.

@@ -16,23 +16,31 @@ import type { Database } from "@/types/database.types";
  * silently at the cap — raise alongside pagination if an org ever approaches it. */
 export const PORTFOLIO_LIMIT = 200;
 
-/** Client-injected core. */
+/** Client-injected core.
+ *
+ * `opts.orgId` is OPTIONAL and genuinely filters. `portfolios` RLS is
+ * org-membership, so a multi-org user's read spans every org they belong to; a
+ * caller that asked about one org (MCP's `list_portfolios(orgId)`) must not get
+ * another org's portfolios folded into the answer. Omitting it preserves the
+ * RSC behaviour exactly — `/portfolios` lists across all orgs today. */
 export async function listPortfoliosCore(
   supabase: SupabaseClient<Database>,
-  limit: number = PORTFOLIO_LIMIT,
+  opts: { orgId?: string; limit?: number } = {},
 ): Promise<{ id: string; name: string }[]> {
-  const { data, error } = await supabase
-    .from("portfolios")
-    .select("id, name")
+  const base = supabase.from("portfolios").select("id, name");
+  const scoped = opts.orgId ? base.eq("org_id", opts.orgId) : base;
+  const { data, error } = await scoped
     .order("created_at", { ascending: true })
-    .limit(limit);
+    .limit(opts.limit ?? PORTFOLIO_LIMIT);
   // A DB failure is not "no portfolios": throw so the portfolios error
   // boundary renders instead of a silently-empty list.
   if (error) throw new Error(`Failed to load portfolios: ${error.message}`);
   return data ?? [];
 }
 
-/** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
+/** Cookie-bound wrapper — the RSC entry point. Signature unchanged, and it
+ * passes no `orgId`: `/portfolios` lists every portfolio the user can see,
+ * across orgs, exactly as before. */
 export async function listPortfolios(): Promise<
   { id: string; name: string }[]
 > {

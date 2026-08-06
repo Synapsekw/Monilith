@@ -1,5 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listPortfoliosHandler } from "./list-portfolios";
+
+vi.mock("@/lib/mcp/org-scope", () => ({
+  resolveOrgForTool: vi.fn(async (_c: unknown, requested?: string) =>
+    requested === "o-foreign"
+      ? { error: "You are not a member of organization o-foreign." }
+      : { org: { id: "o1", name: "Acme", timezone: "UTC" } },
+  ),
+}));
 
 const core = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/portfolios/queries", () => ({
@@ -8,6 +16,38 @@ vi.mock("@/lib/portfolios/queries", () => ({
 }));
 
 describe("listPortfoliosHandler", () => {
+  beforeEach(() => {
+    core.mockReset();
+  });
+
+  it("passes the RESOLVED org id down to the core, not just validating it", async () => {
+    // Validating membership without scoping the query is the I3 defect: RLS
+    // returns every org the caller belongs to, so a two-org user asking about
+    // Acme would get the other client's portfolios reported as Acme's.
+    core.mockResolvedValue([]);
+    const result = await listPortfoliosHandler(async () => ({}) as never, {
+      orgId: "o1",
+    });
+
+    expect(core).toHaveBeenCalledTimes(1);
+    expect(core).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: "o1" }),
+    );
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("surfaces a foreign orgId as an error without reaching the core", async () => {
+    const getClient = vi.fn(async () => ({}) as never);
+    const result = await listPortfoliosHandler(getClient, {
+      orgId: "o-foreign",
+    });
+
+    expect(getClient).toHaveBeenCalledTimes(1);
+    expect(result.isError).toBe(true);
+    expect(core).not.toHaveBeenCalled();
+  });
+
   it("returns board counts for TWO portfolios from ONE grouped query", async () => {
     core.mockResolvedValue([
       { id: "p1", name: "Q1 delivery" },

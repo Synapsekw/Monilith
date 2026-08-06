@@ -46,6 +46,15 @@ describe("listGoalsHandler", () => {
     const result = await listGoalsHandler(getClient, {});
 
     expect(getClient).toHaveBeenCalledTimes(1);
+    // The resolved org is passed DOWN, not merely validated — `goals` RLS is
+    // org-membership, so an unscoped read would interleave every other org the
+    // caller belongs to (with ownerName: null, since `owners` only holds this
+    // org's members). Pinned here because the core is mocked; that the filter
+    // actually restricts rows is pinned in src/lib/goals/queries.test.ts.
+    expect(tree).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orgId: "o1" }),
+    );
     expect(JSON.parse(result.content[0].text)).toEqual([
       {
         id: "g1",

@@ -97,25 +97,42 @@ export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
   return new Map(members.map((m) => [m.userId, m]));
 }
 
+const GOAL_COLUMNS =
+  "id, parent_goal_id, name, description, owner_id, workspace_id, progress_mode, status, start_value, current_value, target_value, unit, percent, start_date, due_date, position";
+
 /**
  * Client-injected core: goals SELECT + goals_rollup() RPC → assembled tree.
- * `owners` is a PARAMETER because the RSC path resolves it from the active-org
- * cookie via the service-client cache, while MCP resolves it over the bridged
- * client (spec §3.2: no service client on the MCP path).
+ *
+ * `ctx.owners` is a PARAMETER because the RSC path resolves it from the
+ * active-org cookie via the service-client cache, while MCP resolves it over
+ * the bridged client (spec §3.2: no service client on the MCP path). It accepts
+ * a `Map` OR a `Promise<Map>` so a caller whose lookup is asynchronous (the RSC
+ * wrapper) hands the lookup in as a `Promise.all` slot and gets it resolved
+ * CONCURRENTLY with the goals/rollup reads, rather than gating them behind it —
+ * the same shape `getPortfolioRowsCore` uses, for the same reason.
+ *
+ * `ctx.orgId` is OPTIONAL and genuinely filters. `goals` RLS is org-membership,
+ * so a two-org user's read returns BOTH orgs' goals; a caller that asked about
+ * one org (MCP's `list_goals(orgId)`) would otherwise get the other org's goals
+ * interleaved, with `ownerName: null` because the owner map only holds the
+ * asked-for org. Omitting it preserves the RSC behaviour exactly — `/goals`
+ * shows every org's goals today and must keep doing so.
  */
 export async function getGoalsTreeCore(
   supabase: SupabaseClient<Database>,
-  ctx: { owners: Map<string, RowOwner>; nowMs: number },
+  ctx: {
+    owners: Map<string, RowOwner> | Promise<Map<string, RowOwner>>;
+    nowMs: number;
+    orgId?: string;
+  },
 ): Promise<GoalNode[]> {
-  const [{ data: goals }, { data: aggs }] = await Promise.all([
-    supabase
-      .from("goals")
-      .select(
-        "id, parent_goal_id, name, description, owner_id, workspace_id, progress_mode, status, start_value, current_value, target_value, unit, percent, start_date, due_date, position",
-      )
-      .order("position")
-      .limit(GOALS_LIMIT),
+  const base = supabase.from("goals").select(GOAL_COLUMNS);
+  const scoped = ctx.orgId ? base.eq("org_id", ctx.orgId) : base;
+
+  const [{ data: goals }, { data: aggs }, owners] = await Promise.all([
+    scoped.order("position").limit(GOALS_LIMIT),
     supabase.rpc("goals_rollup"),
+    ctx.owners,
   ]);
 
   const rows: GoalRow[] = (goals ?? []).map((g) => toGoalRow(g as GoalDbRow));
@@ -125,15 +142,20 @@ export async function getGoalsTreeCore(
     total: Number(a.total_items),
     done: Number(a.done_items),
   }));
-  return buildGoalTree(rows, boardAggs, ctx.owners, serverToday(ctx.nowMs));
+  return buildGoalTree(rows, boardAggs, owners, serverToday(ctx.nowMs));
 }
 
-/** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
+/** Cookie-bound wrapper — the RSC entry point. Signature unchanged.
+ *
+ * `getGoalOwners()` is handed over UNAWAITED so it resolves as the core's third
+ * `Promise.all` slot: the owner lookup (a `listOrgMembersCached` miss is a real
+ * round-trip) overlaps the goals + rollup reads instead of preceding them.
+ * `createClient()` is awaited first because it is process-local, not I/O.
+ *
+ * No `orgId` is passed — deliberately. `/goals` shows goals across every org
+ * the user belongs to, and that behaviour is unchanged. */
 export async function getGoalsTree(): Promise<GoalNode[]> {
   const nowMs = Date.now();
-  const [supabase, owners] = await Promise.all([
-    createClient(),
-    getGoalOwners(),
-  ]);
-  return getGoalsTreeCore(supabase, { owners, nowMs });
+  const supabase = await createClient();
+  return getGoalsTreeCore(supabase, { owners: getGoalOwners(), nowMs });
 }

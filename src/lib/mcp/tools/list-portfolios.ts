@@ -1,13 +1,24 @@
+import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listPortfoliosCore, PORTFOLIO_LIMIT } from "@/lib/portfolios/queries";
+import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
 
 export async function listPortfoliosHandler(
   getClient: GetClient,
+  args: { orgId?: string } = {},
 ): Promise<ToolResult> {
   const supabase = await getClient();
+  const scope = await resolveOrgForTool(supabase, args.orgId);
+  if ("error" in scope)
+    return { content: [{ type: "text", text: scope.error }], isError: true };
+
   try {
-    const portfolios = await listPortfoliosCore(supabase);
+    // The resolved org is passed DOWN, not just validated — see
+    // listPortfoliosCore. Every other org-scoped tool resolves the same way.
+    const portfolios = await listPortfoliosCore(supabase, {
+      orgId: scope.org.id,
+    });
     if (portfolios.length === 0)
       return { content: [{ type: "text", text: "[]" }] };
 
@@ -55,9 +66,9 @@ export function registerListPortfoliosTool(
     "list_portfolios",
     {
       title: "List portfolios",
-      description: `Portfolios visible to the connected user, with how many boards each contains. Returns at most ${PORTFOLIO_LIMIT}.`,
-      inputSchema: {},
+      description: `Portfolios visible to the connected user in one organization, with how many boards each contains. Returns at most ${PORTFOLIO_LIMIT}.`,
+      inputSchema: { orgId: z.string().uuid().optional() },
     },
-    async () => listPortfoliosHandler(getClient),
+    async (args) => listPortfoliosHandler(getClient, args),
   );
 }

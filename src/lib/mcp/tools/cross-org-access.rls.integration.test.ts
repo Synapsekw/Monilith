@@ -10,6 +10,7 @@ import { listBoardsHandler } from "./list-boards";
 import { listGoalsHandler } from "./list-goals";
 import { getGoalHandler } from "./get-goal";
 import { listDashboardsHandler } from "./list-dashboards";
+import { listPortfoliosHandler } from "./list-portfolios";
 import { getWorkloadHandler } from "./get-workload";
 import { logTimeAllocationHandler } from "./log-time-allocation";
 import type { GetClient } from "./shared";
@@ -186,6 +187,10 @@ describe.skipIf(!integrationTargetReady())(
       {
         name: "list_dashboards",
         run: (orgId) => listDashboardsHandler(getClientB, { orgId }),
+      },
+      {
+        name: "list_portfolios",
+        run: (orgId) => listPortfoliosHandler(getClientB, { orgId }),
       },
       {
         name: "get_workload",
