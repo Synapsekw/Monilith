@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import { onlineManager } from "@tanstack/react-query";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { OFFLINE_MESSAGE } from "./constants";
 import { assertOnline, isOnline, useOnlineStatus } from "./online-status";
 
@@ -49,15 +49,16 @@ describe("useOnlineStatus", () => {
   });
 
   it("unsubscribes on unmount (no update after unmount)", () => {
-    const { result, unmount } = renderHook(() => useOnlineStatus());
-    expect(result.current).toBe(true);
+    const unsubscribe = vi.fn();
+    const subscribeSpy = vi
+      .spyOn(onlineManager, "subscribe")
+      .mockImplementation(() => unsubscribe);
 
+    const { unmount } = renderHook(() => useOnlineStatus());
+    expect(unsubscribe).not.toHaveBeenCalled();
     unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
 
-    // After unmount, setOnline should not trigger a state update
-    // If it did, this would throw an error in strict mode
-    act(() => onlineManager.setOnline(false));
-    act(() => onlineManager.setOnline(true));
-    // No error means unsubscribe worked correctly
+    subscribeSpy.mockRestore();
   });
 });
