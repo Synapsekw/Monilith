@@ -38,17 +38,24 @@ function parseOptions(settings: unknown): ColumnOption[] {
  * (SECURITY INVOKER — every table still RLS-filtered by the caller; see the
  * migration). Status-option resolution stays here, behind the Zod optionSchema
  * boundary, from the raw settings jsonb the RPC returns per row.
+ *
+ * Returns a discriminated result rather than swallowing RPC errors into `[]`:
+ * the MCP path needs to tell a genuine failure apart from "no assigned items"
+ * (surfaced as `isError: true` in `getMyWorkHandler`). The cookie-bound
+ * `getMyWorkItems()` wrapper below maps `ok: false` back to `[]` so `/my-work`
+ * behaviour is unchanged.
  */
 export async function getMyWorkItemsCore(
   supabase: SupabaseClient<Database>,
   limit: number = MY_WORK_ITEM_LIMIT,
-): Promise<MyWorkItem[]> {
+): Promise<{ ok: true; items: MyWorkItem[] } | { ok: false; error: string }> {
   const { data, error } = await supabase.rpc("get_my_work_items", {
     p_limit: limit,
   });
-  if (error || !data) return [];
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: true, items: [] };
 
-  return data.map((r) => {
+  const items = data.map((r) => {
     let status: MyWorkStatus | null = null;
     if (r.status_option_id && r.status_settings) {
       const opt = parseOptions(r.status_settings).find(
@@ -66,6 +73,7 @@ export async function getMyWorkItemsCore(
       dueDate: r.due_date,
     };
   });
+  return { ok: true, items };
 }
 
 /** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
@@ -73,7 +81,8 @@ export async function getMyWorkItems(): Promise<MyWorkItem[]> {
   const user = await getUser();
   if (!user) return [];
   const supabase = await createClient();
-  return getMyWorkItemsCore(supabase);
+  const result = await getMyWorkItemsCore(supabase);
+  return result.ok ? result.items : [];
 }
 
 /**

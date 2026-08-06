@@ -12,7 +12,11 @@ export async function getMyWorkHandler(
   getClient: GetClient,
 ): Promise<ToolResult> {
   const supabase = await getClient();
-  const items = await getMyWorkItemsCore(supabase, MY_WORK_TOOL_LIMIT);
+  const result = await getMyWorkItemsCore(supabase, MY_WORK_TOOL_LIMIT);
+  if (!result.ok) {
+    return { content: [{ type: "text", text: result.error }], isError: true };
+  }
+  const items = result.items;
   const today = serverToday(Date.now());
 
   // Projection drops status.color — a UI token with no meaning to an agent.
