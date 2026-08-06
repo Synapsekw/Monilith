@@ -189,6 +189,40 @@ describe("BoardTable add group", () => {
   });
 });
 
+describe("BoardTable read-only access", () => {
+  // Proves the wiring, not just the leaf components: the board's own
+  // `canEdit = access !== "viewer"` must reach AddItemRow / AddGroupRow. This is
+  // what an offline board renders (OfflineBoard passes access="viewer").
+  function renderBoardAs(access: "owner" | "viewer") {
+    const qc = new QueryClient();
+    return render(
+      <QueryClientProvider client={qc}>
+        <BoardTable
+          payload={payloadFixture()}
+          selectedViewId="v1"
+          access={access}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("shows the add-item and add-group affordances to editors", () => {
+    renderBoardAs("owner");
+    expect(screen.getByLabelText("Add item")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add group" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the add-item and add-group affordances from viewers", () => {
+    renderBoardAs("viewer");
+    expect(screen.queryByLabelText("Add item")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add group" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("BoardTable group menu", () => {
   it("sets a group color from the palette", async () => {
     updateGroupColor.mockResolvedValue({ ok: true, data: undefined });

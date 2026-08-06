@@ -8,10 +8,18 @@ export function AddItemRow({
   groupId,
   controls,
   nameWidth,
+  canEdit,
 }: {
   groupId: string;
   controls: CellControls;
   nameWidth: number;
+  /**
+   * Board-level edit permission (`access !== "viewer"`, derived once in
+   * {@link BoardTableInner}). Viewers — including every offline board, which
+   * renders with `access="viewer"` — get NO add affordance at all rather than a
+   * disabled one: an input they can never commit is noise, not information.
+   */
+  canEdit: boolean;
 }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +44,10 @@ export function AddItemRow({
       );
     });
   }
+
+  // After the hooks (rules-of-hooks): the hook order is identical for viewers
+  // and editors, only the output differs.
+  if (!canEdit) return null;
 
   return (
     <div

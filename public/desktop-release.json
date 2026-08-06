@@ -1,0 +1,5 @@
+{
+  "minSupportedShell": "1.0.0",
+  "latestShell": "1.0.0",
+  "notes": "Read by the Monolith desktop shell at boot. A shell older than minSupportedShell blocks with an update prompt. Static and public by design: it carries no user data and must be reachable before sign-in."
+}

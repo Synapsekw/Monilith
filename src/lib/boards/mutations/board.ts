@@ -9,6 +9,7 @@ import type {
   RenameBoardVars,
   ResizeNameColumnVars,
 } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** Board-row mutations: rename + name-column resize (singleton board fields). */
 export function useBoardRowMutations(ctx: BoardMutationCtx) {
@@ -17,6 +18,7 @@ export function useBoardRowMutations(ctx: BoardMutationCtx) {
   const renameBoardMutation = useMutation<unknown, Error, RenameBoardVars, Ctx>(
     {
       mutationFn: async (vars) => {
+        assertOnline();
         const res = await renameBoard({ boardId, name: vars.name });
         if (!res.ok) throw new Error(res.error);
         return res;
@@ -42,6 +44,7 @@ export function useBoardRowMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await resizeNameColumn({ boardId, width: vars.width });
       if (!res.ok) throw new Error(res.error);
       return res;

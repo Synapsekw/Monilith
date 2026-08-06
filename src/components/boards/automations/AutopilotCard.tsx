@@ -21,6 +21,7 @@ import {
   type AutopilotTask,
   type BoardAgentSettings,
 } from "@/lib/ai/agentic/autopilot-config";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** The three housekeeping tasks a board agent can run (spec §4.3). Each maps to
  *  exactly one reversible action the confined applier is allowed to take. */
@@ -80,6 +81,7 @@ export function AutopilotCard({ boardId }: { boardId: string }) {
 
   const save = useMutation({
     mutationFn: async (settings: BoardAgentSettings) => {
+      assertOnline();
       const res = await saveBoardAutopilot({ boardId, settings });
       if (!res.ok) throw new Error(res.error);
       return settings;

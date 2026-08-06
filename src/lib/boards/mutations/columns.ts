@@ -21,6 +21,7 @@ import {
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { stripOption, type BoardMutationCtx, type Ctx } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** Column mutations: add/rename/settings/resize/reorder/delete + option removal. */
 export function useColumnMutations(ctx: BoardMutationCtx) {
@@ -33,6 +34,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await createColumn({
         boardId,
         kind: vars.kind,
@@ -58,6 +60,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await renameColumn(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -82,6 +85,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await updateColumnSettings(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -108,6 +112,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await removeColumnOption(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -162,6 +167,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await resizeColumn(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -186,6 +192,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await reorderColumn(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -212,6 +219,7 @@ export function useColumnMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await deleteColumn(vars);
       if (!res.ok) throw new Error(res.error);
       return res;

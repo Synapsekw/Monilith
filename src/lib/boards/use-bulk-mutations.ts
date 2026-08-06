@@ -18,6 +18,7 @@ import {
 } from "@/lib/boards/cache";
 import { boardKey } from "@/lib/boards/use-board-cache";
 import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /**
  * Bulk (multi-item) board mutations for the Table view's floating action bar.
@@ -63,6 +64,7 @@ export function useBulkMutations(boardId: string) {
     { itemIds: string[] }
   >({
     mutationFn: async ({ itemIds }) => {
+      assertOnline();
       const res = await bulkRestoreItems({ itemIds });
       if (!res.ok) throw new Error(res.error);
       return res.data;
@@ -88,6 +90,7 @@ export function useBulkMutations(boardId: string) {
     { itemIds: string[] }
   >({
     mutationFn: async ({ itemIds }) => {
+      assertOnline();
       const res = await bulkArchiveItems({ itemIds });
       if (!res.ok) throw new Error(res.error);
       return res.data;
@@ -130,6 +133,7 @@ export function useBulkMutations(boardId: string) {
     { itemIds: string[]; groupId: string }
   >({
     mutationFn: async ({ itemIds, groupId }) => {
+      assertOnline();
       const res = await bulkMoveItems({ itemIds, groupId });
       if (!res.ok) throw new Error(res.error);
       return res.data;
@@ -161,6 +165,7 @@ export function useBulkMutations(boardId: string) {
     }
   >({
     mutationFn: async ({ itemIds, columnId, value }) => {
+      assertOnline();
       const res = await bulkSetCell({ itemIds, columnId, value });
       if (!res.ok) throw new Error(res.error);
       return res.data;

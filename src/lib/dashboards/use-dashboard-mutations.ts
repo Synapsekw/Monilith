@@ -21,6 +21,7 @@ import {
 } from "@/lib/dashboards/cache";
 import { dashboardKey } from "@/lib/dashboards/use-dashboard-cache";
 import { showMutationError } from "@/lib/ui/mutation-toast";
+import { assertOnline } from "@/lib/offline/online-status";
 
 export function useDashboardMutations(dashboardId: string) {
   const qc = useQueryClient();
@@ -33,6 +34,7 @@ export function useDashboardMutations(dashboardId: string) {
       title: string;
       config: Record<string, unknown>;
     }) => {
+      assertOnline();
       const res = await createWidget({ dashboardId, ...vars });
       if (!res.ok) throw new Error(res.error);
       return res.data.widget as CacheWidget;
@@ -51,6 +53,7 @@ export function useDashboardMutations(dashboardId: string) {
       sourceBoardId?: string;
       config?: Record<string, unknown>;
     }) => {
+      assertOnline();
       const res = await updateWidgetConfig(vars);
       if (!res.ok) throw new Error(res.error);
       return res.data.widget as CacheWidget;
@@ -69,6 +72,7 @@ export function useDashboardMutations(dashboardId: string) {
     { previous?: DashboardCache }
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await deleteWidget(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -93,6 +97,7 @@ export function useDashboardMutations(dashboardId: string) {
     { previous?: DashboardCache }
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await renameDashboard({ dashboardId, name: vars.name });
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -123,6 +128,7 @@ export function useDashboardMutations(dashboardId: string) {
     { previous?: DashboardCache }
   >({
     mutationFn: async (layouts) => {
+      assertOnline();
       const res = await saveLayout({ dashboardId, layouts });
       if (!res.ok) throw new Error(res.error);
       return res.data;

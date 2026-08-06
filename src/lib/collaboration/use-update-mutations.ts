@@ -17,6 +17,7 @@ import {
   itemActivityKey,
   itemUpdatesKey,
 } from "@/lib/collaboration/use-item-collab";
+import { assertOnline } from "@/lib/offline/online-status";
 
 type Ctx = { previous?: UpdatesCache; optimisticId?: string };
 
@@ -35,6 +36,7 @@ export function useUpdateMutations(
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await addUpdate({
         itemId,
         text: vars.text,
@@ -91,6 +93,7 @@ export function useUpdateMutations(
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await editUpdate({
         updateId: vars.update.id,
         text: vars.text,
@@ -120,6 +123,7 @@ export function useUpdateMutations(
 
   const remove = useMutation<void, Error, { updateId: string }, Ctx>({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await deleteUpdate({ updateId: vars.updateId });
       if (!res.ok) throw new Error(res.error);
     },

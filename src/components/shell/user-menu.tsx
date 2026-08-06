@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
-import { signOut } from "@/app/auth/actions";
+import { SignOutForm } from "@/components/shell/sign-out-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -53,11 +53,7 @@ export function UserMenu({ user }: { user: AppShellUser }) {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild variant="destructive">
-          <form action={signOut}>
-            <button type="submit" className="w-full text-left">
-              Sign out
-            </button>
-          </form>
+          <SignOutForm />
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

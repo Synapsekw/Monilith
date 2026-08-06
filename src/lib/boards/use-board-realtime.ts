@@ -22,9 +22,15 @@ export function useBoardRealtime(
   boardId: string,
   opts?: {
     onRemoteChange?: (e: { targetId: string; valueChanged: boolean }) => void;
+    // Set false to skip opening the Supabase realtime channel entirely — the
+    // offline read-only render (`/offline`) has no network by definition, so
+    // there is nothing to subscribe to. Defaults to true so every existing
+    // (online) call site is unaffected. See offline-render-context.tsx.
+    enabled?: boolean;
   },
 ) {
   const qc = useQueryClient();
+  const enabled = opts?.enabled ?? true;
   // Keep latest callback in a ref so a new identity each render does NOT
   // resubscribe the channel (effect deps stay [boardId, qc]).
   const cbRef = useRef(opts?.onRemoteChange);
@@ -33,6 +39,7 @@ export function useBoardRealtime(
   });
 
   useEffect(() => {
+    if (!enabled) return;
     const supabase = createClient();
     const filter = `board_id=eq.${boardId}`;
     const key = boardKey(boardId);
@@ -121,5 +128,5 @@ export function useBoardRealtime(
       buffer.length = 0;
       supabase.removeChannel(channel);
     };
-  }, [boardId, qc]);
+  }, [boardId, qc, enabled]);
 }
