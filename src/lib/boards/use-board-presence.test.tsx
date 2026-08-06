@@ -20,6 +20,7 @@ vi.mock("./presence-channel", () => ({
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { createBoardPresenceChannel } from "./presence-channel";
 import { useBoardPresence } from "./use-board-presence";
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -70,5 +71,23 @@ describe("useBoardPresence", () => {
         }),
       ),
     );
+  });
+
+  it("does not open a presence channel when enabled is false", () => {
+    // The offline read-only render (`/offline`) has no network by
+    // definition — proves the fix for the cross-cutting defect where
+    // BoardViews unconditionally opened Supabase channels even offline.
+    renderHook(
+      () =>
+        useBoardPresence(
+          "board-1",
+          { userId: "u1", name: "Dani", avatarUrl: null },
+          { enabled: false },
+        ),
+      { wrapper },
+    );
+
+    expect(createBoardPresenceChannel).not.toHaveBeenCalled();
+    expect(subscribeMock).not.toHaveBeenCalled();
   });
 });
