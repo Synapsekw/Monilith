@@ -4,9 +4,12 @@ import { StatusPill } from "@/components/ui/status-pill";
  * The tools a connected client can call.
  *
  * Kept in sync with `src/lib/mcp/tools/register.ts` BY TEST
- * (`mcp-tools-table.test.tsx` compares this list against `MCP_TOOL_NAMES`).
- * This is the user's only account of what they are granting, so a registered
- * tool missing here understates the access being approved.
+ * (`mcp-tools-table.test.tsx` runs the REAL `registerTools` against a stub
+ * server that records every `registerTool(name, …)` call, then compares the
+ * recorded names against this list) — not by a second hand-maintained list,
+ * which could drift in step with this one and still pass. This is the user's
+ * only account of what they are granting, so a registered tool missing here
+ * understates the access being approved.
  */
 export const MCP_TOOLS_TABLE_ROWS = [
   { name: "list_boards", access: "read", what: "List the boards you can see." },
