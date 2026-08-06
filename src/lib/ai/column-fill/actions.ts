@@ -7,6 +7,7 @@ import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { classifyColumn as classifyColumnWithAi } from "@/lib/ai/column-fill/classify";
 import { validateClassifications } from "@/lib/ai/column-fill/validate";
 import {
+  CLASSIFY_TEXT_CHAR_BUDGET,
   COLUMN_FILL_MAX,
   type Classification,
   type ClassifyRow,
@@ -17,6 +18,7 @@ import { mapAiError } from "@/lib/ai/action-guard";
 import { createClient } from "@/lib/supabase/server";
 import { bulkSetCell, type BulkOutcome } from "@/lib/boards/bulk-actions";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { stripMarkdown } from "@/lib/boards/markdown";
 
 const classifyColumnSchema = z.object({
   boardId: z.string().uuid(),
@@ -108,8 +110,20 @@ export async function classifyColumn(input: {
     for (const row of cellRows ?? []) {
       const text = (row.value as { text?: unknown } | null)?.text;
       if (typeof text === "string" && text.trim().length > 0) {
-        rows.push({ itemId: row.item_id, text });
-        textByItemId.set(row.item_id, text);
+        // Strip Markdown syntax first — the classifier wants the prose, not
+        // `**`/`-`/etc — then cap to the per-row budget so a handful of
+        // long-form descriptions can't blow up the prompt (see
+        // CLASSIFY_TEXT_CHAR_BUDGET above). The preview's `sourceText` is
+        // built from this same truncated/stripped value below, not the raw
+        // cell text, so the reviewer sees exactly what the model classified
+        // against — never a value that implies the model read more than it
+        // did.
+        const stripped = stripMarkdown(text).slice(
+          0,
+          CLASSIFY_TEXT_CHAR_BUDGET,
+        );
+        rows.push({ itemId: row.item_id, text: stripped });
+        textByItemId.set(row.item_id, stripped);
       }
     }
     if (rows.length === 0)

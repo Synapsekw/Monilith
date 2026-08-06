@@ -13,6 +13,7 @@ import {
   RatingEditor,
   StatusEditor,
 } from "./index";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const statusSettings = {
   options: [
@@ -24,14 +25,16 @@ const statusSettings = {
 describe("CellEditor routes text cells to the long-text panel", () => {
   it("renders the panel with tabs and a toolbar, not a single-line input", () => {
     render(
-      <CellEditor
-        kind="text"
-        value={{ text: "old" }}
-        settings={{}}
-        onCommit={vi.fn()}
-        onCancel={vi.fn()}
-        columnName="Notes"
-      />,
+      <TooltipProvider>
+        <CellEditor
+          kind="text"
+          value={{ text: "old" }}
+          settings={{}}
+          onCommit={vi.fn()}
+          onCancel={vi.fn()}
+          columnName="Notes"
+        />
+      </TooltipProvider>,
     );
     expect(screen.getByRole("tab", { name: /write/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^bold$/i })).toBeInTheDocument();
@@ -41,14 +44,16 @@ describe("CellEditor routes text cells to the long-text panel", () => {
   it("commits the edited text through onCommit", async () => {
     const onCommit = vi.fn();
     render(
-      <CellEditor
-        kind="text"
-        value={{ text: "old" }}
-        settings={{}}
-        onCommit={onCommit}
-        onCancel={vi.fn()}
-        columnName="Notes"
-      />,
+      <TooltipProvider>
+        <CellEditor
+          kind="text"
+          value={{ text: "old" }}
+          settings={{}}
+          onCommit={onCommit}
+          onCancel={vi.fn()}
+          columnName="Notes"
+        />
+      </TooltipProvider>,
     );
     const ta = screen.getByRole("textbox");
     await userEvent.click(ta);

@@ -2,6 +2,19 @@
  *  `validateClassifications` re-enforces this against raw model output. */
 export const COLUMN_FILL_MAX = 200;
 
+/**
+ * Per-row prompt budget for Smart Fill classification. Text columns can hold
+ * up to 20,000 characters (see `CHAR_CAP` in `LongTextEditor.tsx` /
+ * `textValueSchema`), and a classify call reads up to `COLUMN_FILL_MAX` (200)
+ * rows in one batch — unbounded, that's up to 4,000,000 characters in a
+ * single `runAi` call, easily enough to hard-fail the request rather than
+ * just degrade. Classification only needs enough prose to place a row into
+ * one of a handful of target options, which a few sentences settles — 500
+ * characters of stripped text is generous for that signal while keeping a
+ * full 200-row batch well within any model's context window.
+ */
+export const CLASSIFY_TEXT_CHAR_BUDGET = 500;
+
 export type ClassifyRow = { itemId: string; text: string };
 export type TargetOption = { id: string; label: string };
 /** `optionId: null` means no confident match — never force a guess. */

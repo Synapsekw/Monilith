@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   Bold,
   Code,
@@ -24,6 +24,11 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,9 +46,11 @@ const TOOLBAR_ACTIONS: {
   action: MarkdownAction;
   label: string;
   icon: LucideIcon;
+  /** Keyboard shortcut shown in the tooltip — only bold/italic have one. */
+  shortcut?: string;
 }[] = [
-  { action: "bold", label: "Bold", icon: Bold },
-  { action: "italic", label: "Italic", icon: Italic },
+  { action: "bold", label: "Bold", icon: Bold, shortcut: "⌘B" },
+  { action: "italic", label: "Italic", icon: Italic, shortcut: "⌘I" },
   { action: "strikethrough", label: "Strikethrough", icon: Strikethrough },
   { action: "heading", label: "Heading", icon: Heading2 },
   { action: "bulletList", label: "Bullet list", icon: List },
@@ -55,7 +62,6 @@ const TOOLBAR_ACTIONS: {
 
 type LongTextEditorProps = {
   value: { text: string } | null;
-  settings: Record<string, unknown>;
   onCommit: (value: { text: string }) => void;
   onCancel: () => void;
   /** Shown in the panel header so the user knows which field they're editing. */
@@ -90,6 +96,27 @@ export function LongTextEditor({
   const [text, setText] = useState(initial);
   const [tab, setTab] = useState<"write" | "preview">("write");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // WAI-ARIA APG tabs pattern plumbing. There is only ever ONE tabpanel in
+  // the DOM at a time — the Preview tab unmounts the textarea and the Write
+  // tab unmounts the preview (see the component doc comment) — so both tabs
+  // share the same `aria-controls` target; the panel's `aria-labelledby`
+  // is what actually tracks which tab currently "owns" it.
+  const panelId = useId();
+  const writeTabId = `${panelId}-write-tab`;
+  const previewTabId = `${panelId}-preview-tab`;
+  const writeTabRef = useRef<HTMLButtonElement>(null);
+  const previewTabRef = useRef<HTMLButtonElement>(null);
+
+  // Roving tabindex + Left/Right arrow switching (APG "automatic activation"
+  // tabs pattern). Only two tabs exist, so either arrow key just toggles.
+  function handleTabKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const next = tab === "write" ? "preview" : "write";
+    setTab(next);
+    (next === "write" ? writeTabRef : previewTabRef).current?.focus();
+  }
 
   // Mirrors of the latest render's text/callbacks/initial value, read from
   // the unmount effect below. A `useEffect` cleanup with an empty deps array
@@ -255,10 +282,15 @@ export function LongTextEditor({
             className="bg-surface-muted flex items-center gap-0.5 rounded-sm p-0.5"
           >
             <button
+              ref={writeTabRef}
               type="button"
+              id={writeTabId}
               role="tab"
               aria-selected={tab === "write"}
+              aria-controls={panelId}
+              tabIndex={tab === "write" ? 0 : -1}
               onClick={() => setTab("write")}
+              onKeyDown={handleTabKeyDown}
               className={cn(
                 "rounded-sm px-2 py-1 text-xs font-medium transition-colors",
                 tab === "write"
@@ -269,10 +301,15 @@ export function LongTextEditor({
               Write
             </button>
             <button
+              ref={previewTabRef}
               type="button"
+              id={previewTabId}
               role="tab"
               aria-selected={tab === "preview"}
+              aria-controls={panelId}
+              tabIndex={tab === "preview" ? 0 : -1}
               onClick={() => setTab("preview")}
+              onKeyDown={handleTabKeyDown}
               className={cn(
                 "rounded-sm px-2 py-1 text-xs font-medium transition-colors",
                 tab === "preview"
@@ -296,17 +333,24 @@ export function LongTextEditor({
 
         <div className="px-3 py-2">
           {tab === "write" ? (
-            <Textarea
-              ref={textareaRef}
-              autoFocus
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              aria-invalid={isOverCap}
-              className="max-h-[min(24rem,var(--radix-popover-content-available-height))] min-h-[12rem] resize-none overflow-y-auto"
-            />
+            <div id={panelId} role="tabpanel" aria-labelledby={writeTabId}>
+              <Textarea
+                ref={textareaRef}
+                autoFocus
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                aria-invalid={isOverCap}
+                className="max-h-[min(24rem,var(--radix-popover-content-available-height))] min-h-[12rem] resize-none overflow-y-auto"
+              />
+            </div>
           ) : (
-            <div className="max-h-[min(24rem,var(--radix-popover-content-available-height))] min-h-[12rem] overflow-y-auto py-1">
+            <div
+              id={panelId}
+              role="tabpanel"
+              aria-labelledby={previewTabId}
+              className="max-h-[min(24rem,var(--radix-popover-content-available-height))] min-h-[12rem] overflow-y-auto py-1"
+            >
               <MarkdownPreview markdown={text} />
             </div>
           )}
@@ -314,25 +358,31 @@ export function LongTextEditor({
 
         <div className="flex items-center justify-between gap-2 border-t px-2 py-1.5">
           <div className="flex items-center gap-0.5">
-            {TOOLBAR_ACTIONS.map(({ action, label, icon: Icon }) => (
-              <Button
-                key={action}
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={label}
-                // The Preview tab unmounts the textarea, so every action
-                // here would silently no-op (`runAction` bails when the ref
-                // is null) — disable rather than let nine dead buttons sit
-                // there looking clickable.
-                disabled={tab === "preview"}
-                // Toolbar clicks must not blur the textarea — a blur would
-                // collapse the selection applyMarkdown needs to act on.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => runAction(action)}
-              >
-                <Icon />
-              </Button>
+            {TOOLBAR_ACTIONS.map(({ action, label, icon: Icon, shortcut }) => (
+              <Tooltip key={action}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={label}
+                    // The Preview tab unmounts the textarea, so every action
+                    // here would silently no-op (`runAction` bails when the ref
+                    // is null) — disable rather than let nine dead buttons sit
+                    // there looking clickable.
+                    disabled={tab === "preview"}
+                    // Toolbar clicks must not blur the textarea — a blur would
+                    // collapse the selection applyMarkdown needs to act on.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => runAction(action)}
+                  >
+                    <Icon />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {shortcut ? `${label} (${shortcut})` : label}
+                </TooltipContent>
+              </Tooltip>
             ))}
           </div>
           {isOverCap ? (

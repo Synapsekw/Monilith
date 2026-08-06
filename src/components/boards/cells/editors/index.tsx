@@ -643,10 +643,11 @@ export function CellEditor({
 }) {
   switch (kind) {
     case "text":
+      // LongTextEditor takes no `settings` — text cells have none of the
+      // per-column config (options, currency, …) other kinds read here.
       return (
         <LongTextEditor
           value={value as { text: string } | null}
-          settings={settings}
           onCommit={onCommit}
           onCancel={onCancel}
           columnName={columnName}

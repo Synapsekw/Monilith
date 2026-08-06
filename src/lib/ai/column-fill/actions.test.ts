@@ -226,6 +226,57 @@ describe("classifyColumn action", () => {
     );
   });
 
+  // FIX 4: text columns can hold up to 20,000 characters, and up to
+  // COLUMN_FILL_MAX (200) rows go into one classify call — uncapped, a
+  // handful of long descriptions could blow the prompt up to millions of
+  // characters. Each row's text must be stripped of Markdown syntax and
+  // capped to CLASSIFY_TEXT_CHAR_BUDGET before it reaches classifyColumn.
+  it("caps a long row's text to the per-row classify budget", async () => {
+    const { CLASSIFY_TEXT_CHAR_BUDGET } =
+      await import("@/lib/ai/column-fill/schema");
+    const longText = "x".repeat(20_000);
+    CELLS_RESULT = {
+      data: [{ item_id: ITEM_1, value: { text: longText } }],
+      error: null,
+    };
+    const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
+    await classifyColumn({
+      boardId: BOARD_ID,
+      sourceColumnId: SOURCE_COLUMN_ID,
+      targetColumnId: TARGET_COLUMN_ID,
+    });
+    expect(classifyColumnWithAi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rows: [{ itemId: ITEM_1, text: "x".repeat(CLASSIFY_TEXT_CHAR_BUDGET) }],
+      }),
+    );
+  });
+
+  it("strips Markdown syntax from a row's text before classifying and previewing", async () => {
+    const { stripMarkdown } = await import("@/lib/boards/markdown");
+    const raw = "**Needs** review\n- soon";
+    CELLS_RESULT = {
+      data: [{ item_id: ITEM_1, value: { text: raw } }],
+      error: null,
+    };
+    const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
+    const res = await classifyColumn({
+      boardId: BOARD_ID,
+      sourceColumnId: SOURCE_COLUMN_ID,
+      targetColumnId: TARGET_COLUMN_ID,
+    });
+    const expected = stripMarkdown(raw);
+    expect(classifyColumnWithAi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rows: [{ itemId: ITEM_1, text: expected }],
+      }),
+    );
+    // The preview's sourceText mirrors what the model actually classified
+    // against (the stripped/truncated value), not the raw stored Markdown.
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.preview[0]?.sourceText).toBe(expected);
+  });
+
   it("returns the preview joined to item names on the happy path", async () => {
     const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
     const res = await classifyColumn({
