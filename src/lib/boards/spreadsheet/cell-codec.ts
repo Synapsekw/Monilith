@@ -4,30 +4,39 @@ import { isHttpUrl } from "@/lib/validations/boards";
 import type { Json } from "@/types/database.types";
 
 /**
- * Same lead-character set the CSV export guard (`CSV_FORMULA_LEAD_RE` in
- * `export-workbook.ts`) defuses with a leading `'`. Duplicated (not
- * imported) because export-workbook is exceljs-facing while this module is
- * pure/import-facing — kept in sync deliberately; if the export guard's
- * character set changes, this must change with it.
+ * Leading characters that make a spreadsheet app interpret a CSV cell as a
+ * formula (formula injection): `= + - @` and the tab / carriage-return
+ * control chars. See OWASP "CSV Injection".
+ *
+ * Single source of truth for BOTH sides of the CSV formula-guard round trip:
+ * `export-workbook.ts`'s `guardCsvCell` prefixes a `'` to any string cell
+ * whose text starts with one of these characters (defined here and imported
+ * there — export-workbook already imports from this module, so this is the
+ * one-way dependency direction); `unquoteCsvFormulaGuard` below undoes
+ * exactly that prefix on import. The two sides MUST use the same character
+ * class — if the export guard is ever hardened with a new character while
+ * this one doesn't change too, imports silently stop undoing the quote for
+ * that character and cells accumulate a stray `'` on every round trip. A
+ * shared constant, not a comment, is what keeps that from happening.
  */
-const FORMULA_LEAD_RE = /^[=+\-@\t\r]/;
+export const CSV_FORMULA_LEAD_RE = /^[=+\-@\t\r]/;
 
 /**
  * Undo the CSV formula-injection guard's leading `'` on import — and
  * nothing else. `guardCsvCell` in export-workbook.ts prefixes a `'` to any
- * string cell whose text starts with a formula-trigger character (`=+-@`,
- * tab, CR) so a spreadsheet app shows it as literal text. Without this
- * inverse, exporting a board and re-importing it corrupts every Markdown
- * bullet/heading (`- item` → `'- item`) and compounds on repeated
- * round-trips. Only strips the quote when what FOLLOWS it is itself a
- * formula-lead character — so a genuine leading apostrophe the user typed
- * (`'twas the night`) is left completely untouched, since `t` is not a
- * formula-lead character.
+ * string cell whose text starts with a formula-trigger character (see
+ * `CSV_FORMULA_LEAD_RE` above) so a spreadsheet app shows it as literal
+ * text. Without this inverse, exporting a board and re-importing it
+ * corrupts every Markdown bullet/heading (`- item` → `'- item`) and
+ * compounds on repeated round-trips. Only strips the quote when what
+ * FOLLOWS it is itself a formula-lead character — so a genuine leading
+ * apostrophe the user typed (`'twas the night`) is left completely
+ * untouched, since `t` is not a formula-lead character.
  */
 function unquoteCsvFormulaGuard(text: string): string {
   if (text[0] !== "'") return text;
   const rest = text.slice(1);
-  return FORMULA_LEAD_RE.test(rest) ? rest : text;
+  return CSV_FORMULA_LEAD_RE.test(rest) ? rest : text;
 }
 
 /**
