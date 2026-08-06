@@ -118,6 +118,23 @@ const BULLET_PREFIX_RE = /^-\s/;
 // Matches a leading quote marker.
 const QUOTE_PREFIX_RE = /^>\s/;
 
+// `before.endsWith(mark)` alone is ambiguous for the italic mark `*`: it
+// also matches when `before` actually ends with a `**` (bold) pair, since
+// `**` ends with `*`. That would make italic-toggling text already wrapped
+// in `**bold**` strip one asterisk off the bold marker instead of nesting
+// italic inside it. Guard the single-`*` case by requiring the boundary NOT
+// be a doubled marker.
+function endsWithLoneMark(s: string, mark: string): boolean {
+  if (!s.endsWith(mark)) return false;
+  if (mark === "*") return !s.endsWith("**");
+  return true;
+}
+function startsWithLoneMark(s: string, mark: string): boolean {
+  if (!s.startsWith(mark)) return false;
+  if (mark === "*") return !s.startsWith("**");
+  return true;
+}
+
 function applyWrap(
   text: string,
   selStart: number,
@@ -128,8 +145,8 @@ function applyWrap(
   const selected = text.slice(selStart, selEnd);
   const after = text.slice(selEnd);
 
-  const hasBefore = before.endsWith(mark);
-  const hasAfter = after.startsWith(mark);
+  const hasBefore = endsWithLoneMark(before, mark);
+  const hasAfter = startsWithLoneMark(after, mark);
 
   if (selected.length > 0 && hasBefore && hasAfter) {
     // Toggle off: remove the marks immediately outside the selection.
@@ -297,6 +314,9 @@ type LineKind =
 function classifyLine(line: string): LineKind {
   const headingMatch = /^(#{1,3})\s+(.*)$/.exec(line);
   if (headingMatch) {
+    // The `#{1,3}` group bounds the match to 1-3 characters, so `.length`
+    // can only ever be 1, 2, or 3 — TypeScript just can't derive that from
+    // a regex literal, so the narrowing cast is unavoidable here.
     const level = headingMatch[1].length as 1 | 2 | 3;
     return { kind: "heading", level, content: headingMatch[2] };
   }
@@ -379,10 +399,17 @@ function parseLinks(text: string): Inline[] {
   return nodes;
 }
 
+// Lazy match up to the NEAREST closing `**`, not `[^*]+` (no asterisks at
+// all). The latter would refuse to match "**bold *italic* text**" at all —
+// its content contains single stars for nested italic — and the whole
+// construct would fall through to the italic scanner, shredding it into
+// stray literal "*" text nodes. Matching lazily up to the next `**` lets
+// the content (which may contain single `*` markers) recurse through the
+// remaining precedence chain (strikethrough, then italic) instead.
 function parseBold(text: string): Inline[] {
   const nodes: Inline[] = [];
   let rest = text;
-  const re = /\*\*([^*]+)\*\*/;
+  const re = /\*\*((?:(?!\*\*)[\s\S])+?)\*\*/;
   for (;;) {
     const match = re.exec(rest);
     if (!match || match.index === undefined) {
@@ -455,7 +482,7 @@ export function parseMarkdown(md: string): Block[] {
     if (line.kind === "bullet") {
       const items: Inline[][] = [];
       while (i < lines.length && lines[i].kind === "bullet") {
-        items.push(parseInline((lines[i] as { content: string }).content));
+        items.push(parseInline(lines[i].content));
         i++;
       }
       blocks.push({ type: "bulletList", items });
@@ -465,7 +492,7 @@ export function parseMarkdown(md: string): Block[] {
     if (line.kind === "numbered") {
       const items: Inline[][] = [];
       while (i < lines.length && lines[i].kind === "numbered") {
-        items.push(parseInline((lines[i] as { content: string }).content));
+        items.push(parseInline(lines[i].content));
         i++;
       }
       blocks.push({ type: "numberedList", items });
@@ -477,7 +504,7 @@ export function parseMarkdown(md: string): Block[] {
       // space (mirrors how the other block types coalesce their lines).
       const contents: string[] = [];
       while (i < lines.length && lines[i].kind === "quote") {
-        contents.push((lines[i] as { content: string }).content);
+        contents.push(lines[i].content);
         i++;
       }
       blocks.push({ type: "quote", children: parseInline(contents.join(" ")) });
@@ -508,7 +535,7 @@ export function parseMarkdown(md: string): Block[] {
       lines[i].kind === "paragraph" &&
       lines[i].content.length > 0
     ) {
-      contents.push((lines[i] as { content: string }).content);
+      contents.push(lines[i].content);
       i++;
     }
     blocks.push({

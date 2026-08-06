@@ -85,6 +85,17 @@ describe("applyMarkdown — wrap actions", () => {
       selEnd: 3,
     });
   });
+
+  // Regression: italic-toggling a selection already wrapped in `**bold**`
+  // must nest italic marks inside the bold pair, not treat one `*` of the
+  // `**` as an (unrelated) italic delimiter and strip it.
+  it("nests italic inside existing bold marks instead of corrupting them", () => {
+    expect(applyMarkdown("**bold**", 2, 6, "italic")).toEqual({
+      text: "***bold***",
+      selStart: 3,
+      selEnd: 7,
+    });
+  });
 });
 
 describe("applyMarkdown — line-prefix actions", () => {
@@ -153,6 +164,27 @@ describe("parseMarkdown", () => {
           { type: "text", value: "a " },
           { type: "bold", children: [{ type: "text", value: "b" }] },
           { type: "text", value: " c" },
+        ],
+      },
+    ]);
+  });
+
+  // Regression: bold content containing a nested italic span must not be
+  // shredded into stray literal "*" text nodes — it should parse as a bold
+  // node whose children nest an italic node in the middle.
+  it("parses italic nested inside bold", () => {
+    expect(parseMarkdown("**bold *italic* text**")).toEqual([
+      {
+        type: "paragraph",
+        children: [
+          {
+            type: "bold",
+            children: [
+              { type: "text", value: "bold " },
+              { type: "italic", children: [{ type: "text", value: "italic" }] },
+              { type: "text", value: " text" },
+            ],
+          },
         ],
       },
     ]);
