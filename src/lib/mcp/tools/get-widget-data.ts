@@ -23,6 +23,32 @@ export async function getWidgetDataHandler(
         isError: true,
       };
 
+    // The widget row is org-scoped (any org member can see it), but the board
+    // it aggregates over is narrower — creator or an explicit board_members
+    // row (`can_read_board`). `resolveWidgetSlot` trusts `source_board_id` for
+    // chart/list kinds too, but the aggregate family (number/battery/
+    // completion/health) resolves on the SERVICE client (queries-cached.ts),
+    // which bypasses RLS entirely. Without this precheck, an org member could
+    // read aggregated counts over a board they cannot open. A null board read
+    // returns the same not-found shape as a missing widget, so the tool never
+    // discloses whether the board exists vs. is merely unreadable.
+    if (widget.source_board_id) {
+      const { data: board, error: boardErr } = await supabase
+        .from("boards")
+        .select("id")
+        .eq("id", widget.source_board_id)
+        .maybeSingle();
+      if (boardErr)
+        throw new Error(`Failed to load board: ${boardErr.message}`);
+      if (!board)
+        return {
+          content: [
+            { type: "text", text: `Widget ${args.widgetId} not found.` },
+          ],
+          isError: true,
+        };
+    }
+
     const slot = await resolveWidgetSlot(supabase, args.widgetId, widget);
     if (!slot.ok)
       return { content: [{ type: "text", text: slot.error }], isError: true };
