@@ -194,6 +194,27 @@ self.addEventListener("fetch", (event) => {
   // Navigations: network-first with a short timeout, falling back to the
   // offline shell. Never cache the real document.
   if (request.mode === "navigate") {
+    // Known-offline short circuit, BEFORE attempting the network.
+    //
+    // `fetch(request)` is not a reliable test of connectivity: it is served from
+    // the browser's HTTP cache when it can be. A reload forces revalidation and
+    // so fails offline, but a fresh navigation to a route whose shell is
+    // cacheable (every Partial Prerender route here) is answered from cache
+    // while genuinely offline — the race below "succeeds", and the fallback that
+    // is this worker's entire purpose never runs. Measured: navigating offline
+    // to a never-opened board returned the real app shell with live sidebar data
+    // and "Board not found", instead of the offline shell.
+    //
+    // `navigator.onLine === false` is conclusive (`true` is not, which is why it
+    // is only used to skip the attempt, never to declare us online). It also
+    // removes a pointless NAV_TIMEOUT_MS stall on every offline navigation.
+    if (!self.navigator.onLine) {
+      event.respondWith(
+        caches.match(OFFLINE_URL).then((hit) => hit || Response.error()),
+      );
+      return;
+    }
+
     event.respondWith(
       Promise.race([fetch(request), timeout(NAV_TIMEOUT_MS)])
         .then((res) => {

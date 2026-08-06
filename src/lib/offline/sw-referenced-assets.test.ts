@@ -116,6 +116,17 @@ describe("public/sw.js invariants", () => {
     expect(putIndex).toBeGreaterThan(assetsIndex);
   });
 
+  it("short-circuits a navigation when the worker knows it is offline", () => {
+    // `fetch()` is served from the browser's HTTP cache when it can be, so a
+    // network-first race is not a test of connectivity: a fresh navigation to a
+    // cacheable (Partial Prerender) route is answered from cache while offline
+    // and the fallback never runs. The offline check must come BEFORE the race.
+    const guardIndex = SW_SOURCE.indexOf("self.navigator.onLine");
+    const raceIndex = SW_SOURCE.indexOf("Promise.race([fetch(request)");
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(raceIndex).toBeGreaterThan(guardIndex);
+  });
+
   it("refuses to cache a redirected offline document", () => {
     // `/offline` sits behind the proxy's auth gate; an expired session answers
     // 307 → /login, and a redirected response is illegal to serve for a

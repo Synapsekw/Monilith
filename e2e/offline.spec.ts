@@ -245,9 +245,17 @@ test.describe("offline read-only boards", () => {
     await page.reload();
 
     // The offline banner appears...
-    await expect(page.getByRole("status")).toContainText(/offline/i, {
-      timeout: 15_000,
-    });
+    //
+    // Filtered by text rather than a bare `getByRole("status")`: the rendered
+    // board mounts dnd-kit, which injects its own empty `role="status"` live
+    // regions (`#DndLiveRegion-*`), so the bare locator is a strict-mode
+    // violation the moment the board actually renders — i.e. exactly when this
+    // test is passing. The filter targets the banner specifically instead of
+    // relaxing what is asserted.
+    const offlineBanner = page
+      .getByRole("status")
+      .filter({ hasText: /offline/i });
+    await expect(offlineBanner).toBeVisible({ timeout: 15_000 });
     // ...and the board still renders, from the persisted snapshot — not a
     // blank page and not the generic "isn't available offline" fallback.
     await expect(page.getByText("Group 1")).toBeVisible();
@@ -263,12 +271,22 @@ test.describe("offline read-only boards", () => {
 
     // ── 6. A board never opened is honest about it ───────────────────────────
     await page.goto("/boards/00000000-0000-4000-8000-000000000000");
-    await expect(page.getByText(/isn't available offline/i)).toBeVisible();
+    // 15s like this spec's other offline assertions, not the 5s default: this
+    // is a COLD navigation served by the worker — React boots, the grace check
+    // resolves and the persisted client is restored from IndexedDB before the
+    // copy can render. Verified rendering correctly with time to spare; the
+    // default was simply tighter than the work involved.
+    await expect(page.getByText(/isn't available offline/i)).toBeVisible({
+      timeout: 15_000,
+    });
 
     // ── 7. Reconnect: the banner clears, the visited board still renders ────
     await context.setOffline(false);
     await page.goto(boardUrl);
-    await expect(page.getByRole("status")).toHaveCount(0);
+    // Same filtered locator as above — the online board still mounts dnd-kit's
+    // `role="status"` live regions, so what must be gone is the BANNER, not
+    // every status element on the page.
+    await expect(offlineBanner).toHaveCount(0);
     await expect(page.getByText("Group 1")).toBeVisible();
   });
 });
