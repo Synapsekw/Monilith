@@ -722,6 +722,7 @@ export function BoardTableInner({
             </DndContext>
           )}
           <AddGroupRow
+            canEdit={canEdit}
             onAdd={() =>
               // Naive count-based default name — user lands in rename mode, so a
               // collision after manual renames is cosmetic and immediately editable.

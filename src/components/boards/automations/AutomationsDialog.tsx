@@ -52,6 +52,7 @@ import {
   recipePercentSetsCompleted,
   type Draft,
 } from "@/components/boards/automations/recipes";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** The completeness vocabulary shared with the overdue tint (spec §1). */
 const DONE_LABEL = /done|complete/i;
@@ -211,6 +212,7 @@ export function AutomationsDialog({
 
   const create = useMutation({
     mutationFn: async (draft: Draft) => {
+      assertOnline();
       const res = await createAutomation({ boardId, ...draft });
       if (!res.ok) throw new Error(res.error);
       return res.data;
@@ -228,6 +230,7 @@ export function AutomationsDialog({
   // write path, unchanged.
   const generate = useMutation({
     mutationFn: async (prompt: string) => {
+      assertOnline();
       const res = await generateAutomationDraft({ boardId, prompt });
       if (!res.ok) throw new Error(res.error);
       return res.data;
@@ -241,6 +244,7 @@ export function AutomationsDialog({
 
   const toggle = useMutation({
     mutationFn: async (vars: { id: string; enabled: boolean }) => {
+      assertOnline();
       const res = await updateAutomation(vars);
       if (!res.ok) throw new Error(res.error);
     },
@@ -265,6 +269,7 @@ export function AutomationsDialog({
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+      assertOnline();
       const res = await deleteAutomation({ id });
       if (!res.ok) throw new Error(res.error);
     },

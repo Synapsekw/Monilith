@@ -15,6 +15,7 @@ import type {
   Ctx,
   SetCellVars,
 } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** Cell-value mutations: optimistic single-cell writes with targeted rollback. */
 export function useCellMutations(ctx: BoardMutationCtx) {
@@ -22,6 +23,7 @@ export function useCellMutations(ctx: BoardMutationCtx) {
 
   const setCellMutation = useMutation<unknown, Error, SetCellVars, Ctx>({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await upsertCell(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -60,6 +62,7 @@ export function useCellMutations(ctx: BoardMutationCtx) {
 
   const clearCellMutation = useMutation<unknown, Error, ClearCellVars, Ctx>({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await clearCell(vars);
       if (!res.ok) throw new Error(res.error);
       return res;

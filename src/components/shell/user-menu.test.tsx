@@ -3,7 +3,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UserMenu } from "./user-menu";
 
-vi.mock("@/app/auth/actions", () => ({ signOut: vi.fn() }));
+// UserMenu is a Server Component; SignOutForm (the "use client" leaf that
+// wires wipeOfflineData + signOut, see sign-out-form.test.tsx) is mocked out
+// here so this file only exercises the server-safe parts of the menu.
+vi.mock("./sign-out-form", () => ({
+  SignOutForm: () => <button type="button">Sign out</button>,
+}));
 
 // Radix Avatar only mounts <AvatarImage> once its internal probe image reports
 // "loaded"; jsdom never fires image load events, so force a resolved image so
@@ -67,5 +72,18 @@ describe("UserMenu", () => {
     expect(
       screen.getByRole("button", { name: /open user menu/i }),
     ).toHaveTextContent("A");
+  });
+
+  it("renders the sign-out control in the menu", async () => {
+    render(<UserMenu user={{ email: "a@b.co", full_name: "Ada" }} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /open user menu/i }),
+    );
+    // The wipe-before-signOut ordering guarantee is asserted against the
+    // real SignOutForm in sign-out-form.test.tsx; this only checks UserMenu
+    // wires the control in.
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
+    ).toBeInTheDocument();
   });
 });

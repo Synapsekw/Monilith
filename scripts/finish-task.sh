@@ -8,7 +8,8 @@
 #   2. refreshes develop and rebases task/<name> onto it (auto-integration)
 #   3. runs typecheck / lint / test / build AGAINST the integrated state
 #   4. merges task/<name> directly into develop and pushes
-#   5. removes the worktree and deletes the branch
+#   5. installs in the MAIN checkout if the merge changed dependencies
+#   6. removes the worktree and deletes the branch
 #
 # Why integrate before gating: develop moves while you work (other sessions
 # merge; the main checkout itself gains doc/vault commits). Gating the task tip
@@ -212,11 +213,44 @@ fi
 #    conflict-free and keeps the merge-commit convention. Retry the push once if
 #    origin advanced again in the gap.
 echo "→ merging $BRANCH into develop…"
+DEVELOP_BEFORE_MERGE="$(git -C "$MAIN" rev-parse HEAD)"
 git -C "$MAIN" merge --no-ff "$BRANCH" -m "Merge $BRANCH into develop"
 if ! git -C "$MAIN" push origin develop; then
   echo "→ push rejected (origin moved) — re-syncing develop and retrying once…"
   git -C "$MAIN" -c rebase.autoStash=true pull --rebase origin develop
   git -C "$MAIN" push origin develop
+fi
+
+# 6. Install into the MAIN checkout when this merge changed dependencies.
+#
+# The gates in step 4 ran inside the WORKTREE, against the worktree's own
+# node_modules (start-task.sh installs there). So a task that adds a dependency
+# merges perfectly green and then leaves the main checkout — and any dev server
+# already running from it — resolving against a node_modules that predates the
+# merge. The symptom is a build error that reads like a code bug:
+#
+#   Module not found: Can't resolve 'idb-keyval'
+#
+# even though package.json and pnpm-lock.yaml are both correct on develop. That
+# is a real trap, hit by task/offline-read-only; the fix is always just an
+# install, so do it here instead of leaving it to be rediscovered.
+#
+# Never fatal: the merge and push have already happened by this point, and
+# aborting would strand the worktree and branch. A failure is reported loudly
+# with the one command that fixes it.
+DEP_CHANGES="$(git -C "$MAIN" diff --name-only "$DEVELOP_BEFORE_MERGE" HEAD -- package.json pnpm-lock.yaml)"
+if [ -n "$DEP_CHANGES" ]; then
+  echo "→ this merge changed dependencies — installing in $MAIN…"
+  if (cd "$MAIN" && pnpm install --frozen-lockfile); then
+    DEPS_INSTALLED=1
+  else
+    DEPS_INSTALLED=0
+    echo "  warning: pnpm install failed in $MAIN. The merge itself is fine —" >&2
+    echo "           run it yourself before building:" >&2
+    echo "             (cd \"$MAIN\" && pnpm install)" >&2
+  fi
+else
+  DEPS_INSTALLED=
 fi
 
 echo "→ cleaning up worktree + branch…"
@@ -226,6 +260,13 @@ git -C "$MAIN" branch -d "$BRANCH"
 echo ""
 echo "✓ done: $BRANCH rebased onto develop, gated, merged, pushed, worktree removed, branch deleted."
 echo "  your shell is in a folder that no longer exists — cd \"$MAIN\""
+if [ "${DEPS_INSTALLED:-}" = "1" ]; then
+  echo ""
+  echo "  DEPENDENCIES CHANGED and were installed in the main checkout."
+  echo "  Any dev server already running from $MAIN is still using the OLD"
+  echo "  node_modules — restart it (Ctrl-C, then 'pnpm dev') or it will keep"
+  echo "  failing with 'Module not found'."
+fi
 echo ""
 echo "  NEXT (closure): give the user a numbered 'How to test this' walkthrough"
 echo "  — in your closing message AND the /wrapup session note. If nothing is"

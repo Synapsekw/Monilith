@@ -3,9 +3,20 @@ import { join } from "node:path";
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { useEffect, useState, type ComponentType } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { BoardViews } from "@/components/boards/BoardViews";
 import type { BoardPayload } from "@/lib/boards/queries";
+
+// `useBoardSnapshot` (offline persistence) calls `useQueryClient()`, so
+// `BoardViews` now needs a provider above it — mirrors the wrapper pattern in
+// AutopilotCard.test.tsx / use-board-realtime.test.tsx. A fresh QueryClient
+// per render keeps each test's cache isolated (no state leaking across
+// cases, no order-dependent passes).
+function wrap(ui: ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
 
 // Drive the active view purely from the URL search params (the client-side
 // switch path) — no server refetch is involved.
@@ -38,6 +49,12 @@ vi.mock("next/dynamic", () => ({
 vi.mock("@/lib/boards/use-board-cache", () => ({ useBoardCache: vi.fn() }));
 vi.mock("@/lib/boards/use-board-realtime", () => ({
   useBoardRealtime: vi.fn(),
+}));
+// Offline persistence subscribes the real QueryClient to idb-keyval, which
+// needs a real IndexedDB — unavailable in jsdom and out of scope for this
+// routing test anyway (same reasoning as the cache/realtime stubs above).
+vi.mock("@/components/offline/OfflinePersistence", () => ({
+  OfflinePersistence: () => null,
 }));
 // Presence opens its own realtime channel + reads the Query client; out of scope
 // for this routing test, so stub it to an empty roster (same spirit as the
@@ -100,7 +117,7 @@ const payload = {
 describe("BoardViews", () => {
   it("renders the table view when the URL selects a table view", () => {
     viewParam = "v1";
-    render(
+    wrap(
       <BoardViews
         payload={payload}
         members={[]}
@@ -116,7 +133,7 @@ describe("BoardViews", () => {
 
   it("renders the kanban view when the URL selects a kanban view", async () => {
     viewParam = "v2";
-    render(
+    wrap(
       <BoardViews
         payload={payload}
         members={[]}
@@ -132,7 +149,7 @@ describe("BoardViews", () => {
 
   it("falls back to initialViewId when the URL has no view param", async () => {
     viewParam = null;
-    render(
+    wrap(
       <BoardViews
         payload={payload}
         members={[]}
@@ -147,7 +164,7 @@ describe("BoardViews", () => {
 
   it("renders the calendar view when the URL selects a calendar view", async () => {
     viewParam = "v3";
-    render(
+    wrap(
       <BoardViews
         payload={payload}
         members={[]}
@@ -166,7 +183,7 @@ describe("BoardViews", () => {
 
   it("renders the gantt view when the URL selects a timeline view", async () => {
     viewParam = "v4";
-    render(
+    wrap(
       <BoardViews
         payload={payload}
         members={[]}

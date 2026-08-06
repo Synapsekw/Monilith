@@ -77,6 +77,19 @@ describe("proxy()", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
+  it("lets an anonymous client reach /desktop-release.json without a login redirect", async () => {
+    // The macOS desktop shell reads this contract at boot, BEFORE sign-in, to
+    // decide whether it is too old to run. The matcher's static-file exemption
+    // covers `.js`/`.css`/… but NOT `.json`, so this route reaches the proxy and
+    // would 307 to /login without its PUBLIC_ROUTES entry — handing every shell
+    // an HTML login page where it expects JSON.
+    getClaims.mockResolvedValue({ data: null, error: null });
+
+    const res = await proxy(req("/desktop-release.json"));
+
+    expect(res.headers.get("location")).toBeNull();
+  });
+
   it("redirects an anonymous visitor on a protected route to /login?next=", async () => {
     getClaims.mockResolvedValue({ data: null, error: null });
 

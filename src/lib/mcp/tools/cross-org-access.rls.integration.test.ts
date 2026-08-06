@@ -7,6 +7,14 @@ import { createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/types/database.types";
 import { listBoardsHandler } from "./list-boards";
+import { listGoalsHandler } from "./list-goals";
+import { getGoalHandler } from "./get-goal";
+import { listDashboardsHandler } from "./list-dashboards";
+import { listPortfoliosHandler } from "./list-portfolios";
+import { getWorkloadHandler } from "./get-workload";
+import { logTimeAllocationHandler } from "./log-time-allocation";
+import type { GetClient } from "./shared";
+import { runTeardownSteps } from "@/test/teardown-steps";
 
 loadIntegrationEnv();
 
@@ -69,5 +77,142 @@ describe.skipIf(!integrationTargetReady())(
       expect(boards).toEqual([]);
       void orgBUserId;
     }, 30_000);
+  },
+);
+
+describe.skipIf(!integrationTargetReady())(
+  "org-scoped tools reject a foreign orgId",
+  () => {
+    let admin: ReturnType<typeof createClient<Database>>;
+    let userAId: string;
+    let userBId: string;
+    let orgAId: string;
+    let getClientB: GetClient;
+
+    // Same deferred-import reasoning as the describe block above.
+    let mintBridgeSecret: typeof import("@/lib/mcp/oauth/session-bridge").mintBridgeSecret;
+    let getBridgedClient: typeof import("@/lib/mcp/oauth/session-bridge").getBridgedClient;
+
+    beforeAll(async () => {
+      ({ mintBridgeSecret, getBridgedClient } =
+        await import("@/lib/mcp/oauth/session-bridge"));
+      admin = createClient<Database>(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const a = await admin.auth.admin.createUser({
+        email: `mcp-scope-a-${randomUUID()}@example.com`,
+        password: "Test-Password-123!",
+        email_confirm: true,
+      });
+      const b = await admin.auth.admin.createUser({
+        email: `mcp-scope-b-${randomUUID()}@example.com`,
+        password: "Test-Password-123!",
+        email_confirm: true,
+      });
+      userAId = a.data.user!.id;
+      userBId = b.data.user!.id;
+
+      // Only user A gets a real organization — user B stays org-less, exactly
+      // like orgBUserId above, so "not a member" is true by construction, not
+      // by a bug in the test's own setup.
+      const secretA = await mintBridgeSecret(userAId);
+      const { client: clientA } = await getBridgedClient(secretA);
+      const { data: org, error: orgErr } = await clientA.rpc(
+        "create_organization",
+        {
+          p_name: "MCP Scope Org A",
+          p_slug: `mcp-scope-a-${randomUUID().slice(0, 8)}`,
+        },
+      );
+      if (orgErr || !org)
+        throw new Error(`create_organization failed: ${orgErr?.message}`);
+      orgAId = (org as { id: string }).id;
+
+      const secretB = await mintBridgeSecret(userBId);
+      getClientB = async () => (await getBridgedClient(secretB)).client;
+    }, 60_000);
+
+    afterAll(async () => {
+      // Deleting the org first cascades workspaces/boards/goals/dashboards/
+      // time_allocations owned by it (all `org_id ... on delete cascade`), so
+      // by the time we delete the owning user no row anywhere still
+      // references them — `organizations.created_by` is deliberately
+      // NOT NULL / NO ACTION (2026-07-25 account-deletion-fks migration) and
+      // would otherwise block deleteUser outright. `runTeardownSteps` keeps
+      // this order while still attempting every step even if an earlier one
+      // fails, so a broken delete can't strand the rest.
+      await runTeardownSteps([
+        {
+          label: `delete organization ${orgAId}`,
+          run: async () => {
+            const { error } = await admin
+              .from("organizations")
+              .delete()
+              .eq("id", orgAId);
+            return { error };
+          },
+        },
+        {
+          label: `delete user ${userAId}`,
+          run: async () => {
+            const { error } = await admin.auth.admin.deleteUser(userAId);
+            return { error };
+          },
+        },
+        {
+          label: `delete user ${userBId}`,
+          run: async () => {
+            const { error } = await admin.auth.admin.deleteUser(userBId);
+            return { error };
+          },
+        },
+      ]);
+    }, 60_000);
+
+    const cases: {
+      name: string;
+      run: (orgId: string) => Promise<{ isError?: boolean }>;
+    }[] = [
+      {
+        name: "list_goals",
+        run: (orgId) => listGoalsHandler(getClientB, { orgId }),
+      },
+      {
+        name: "get_goal",
+        // The org check runs before any goal lookup, so a placeholder goalId
+        // never gets reached.
+        run: (orgId) =>
+          getGoalHandler(getClientB, { goalId: randomUUID(), orgId }),
+      },
+      {
+        name: "list_dashboards",
+        run: (orgId) => listDashboardsHandler(getClientB, { orgId }),
+      },
+      {
+        name: "list_portfolios",
+        run: (orgId) => listPortfoliosHandler(getClientB, { orgId }),
+      },
+      {
+        name: "get_workload",
+        run: (orgId) => getWorkloadHandler(getClientB, { orgId }),
+      },
+      {
+        name: "log_time_allocation",
+        run: (orgId) =>
+          logTimeAllocationHandler(getClientB, userBId, {
+            orgId,
+            date: "2026-01-05",
+            category: "Admin",
+            secs: 900,
+          }),
+      },
+    ];
+
+    for (const c of cases) {
+      it(`${c.name} refuses org A when called as user B`, async () => {
+        const result = await c.run(orgAId);
+        expect(result.isError).toBe(true);
+      }, 30_000);
+    }
   },
 );

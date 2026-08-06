@@ -17,11 +17,13 @@ const channel = {
     return channel;
   },
 };
+const channelSpy = vi.fn(() => channel);
+const createClientSpy = vi.fn(() => ({
+  channel: channelSpy,
+  removeChannel: vi.fn(),
+}));
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
-    channel: () => channel,
-    removeChannel: vi.fn(),
-  }),
+  createClient: () => createClientSpy(),
 }));
 
 import { useBoardRealtime } from "./use-board-realtime";
@@ -32,6 +34,8 @@ describe("useBoardRealtime coalescing", () => {
     vi.useFakeTimers();
     handlers.clear();
     statusCb = undefined;
+    channelSpy.mockClear();
+    createClientSpy.mockClear();
   });
   afterEach(() => vi.useRealTimers());
 
@@ -88,6 +92,20 @@ describe("useBoardRealtime coalescing", () => {
     const cache = qc.getQueryData(boardKey("b1")) as { cellValues: unknown[] };
     expect(cache.cellValues).toHaveLength(2);
     expect(onRemoteChange).toHaveBeenCalledTimes(2); // one flash per changed cell
+  });
+
+  it("does not open a realtime channel when enabled is false", () => {
+    // The offline read-only render (`/offline`) has no network by
+    // definition — proves the fix for the cross-cutting defect where
+    // BoardViews unconditionally opened Supabase channels even offline.
+    const qc = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    renderHook(() => useBoardRealtime("b1", { enabled: false }), { wrapper });
+
+    expect(createClientSpy).not.toHaveBeenCalled();
+    expect(channelSpy).not.toHaveBeenCalled();
   });
 });
 

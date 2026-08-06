@@ -388,3 +388,27 @@ describe("priority column kind", () => {
     expect(cellValueSchema("priority")).toBe(priorityValueSchema);
   });
 });
+
+describe("textValueSchema cap", () => {
+  it("accepts a value at exactly the cap", () => {
+    expect(
+      textValueSchema.safeParse({ text: "x".repeat(20_000) }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a value one character over the cap", () => {
+    expect(
+      textValueSchema.safeParse({ text: "x".repeat(20_001) }).success,
+    ).toBe(false);
+  });
+
+  it("still accepts an empty string", () => {
+    expect(textValueSchema.safeParse({ text: "" }).success).toBe(true);
+  });
+
+  it("still accepts multi-line markdown", () => {
+    expect(textValueSchema.safeParse({ text: "**a**\n- b\n- c" }).success).toBe(
+      true,
+    );
+  });
+});

@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { BoardTable } from "@/components/boards/BoardTable";
 import { ItemPanel } from "@/components/boards/item-panel/ItemPanel";
 import { PresenceFlashMessage } from "@/components/boards/presence/PresenceFlashMessage";
+import { OfflinePersistence } from "@/components/offline/OfflinePersistence";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import type { BoardCache } from "@/lib/boards/cache";
@@ -16,6 +17,8 @@ import {
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { useIsOfflineRender } from "@/lib/offline/offline-render-context";
+import { useBoardSnapshot } from "@/lib/offline/snapshot";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { useBoardPresence } from "@/lib/boards/use-board-presence";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
@@ -91,20 +94,36 @@ export function BoardViews({
 }) {
   useBoardCache(payload.board.id, payload as unknown as BoardCache);
 
+  // True only when this tree is the `/offline` route's replay of a cached
+  // board (see offline-render-context.tsx). Gates the pieces below that are
+  // only correct when there is a network: the snapshot write, persistence
+  // subscription, and the realtime/presence channels.
+  const isOfflineRender = useIsOfflineRender();
+
+  // Record what this board needs to re-render with no network. `currentUserId`
+  // is already a prop here, so persistence needs no layout change and no extra
+  // read to learn who is signed in.
+  useBoardSnapshot({ payload, members, initialViewId, currentUserId });
+
   const selfMember = members.find((m) => m.userId === currentUserId);
   const self = {
     userId: currentUserId,
     name: selfMember?.fullName ?? selfMember?.email ?? "Someone",
     avatarUrl: selfMember?.avatarUrl ?? null,
   };
-  const presence = useBoardPresence(payload.board.id, self);
+  const presence = useBoardPresence(payload.board.id, self, {
+    enabled: !isOfflineRender,
+  });
 
   // Last-write-wins flash: when a remote change lands on the cell the local user
   // currently has focused, briefly highlight it and surface an attributed
   // message. The realtime channel feeds `onRemoteChange`; `flashTargetId` flows
   // into the presence context so `FlashHighlight` can pick it up per-cell.
   const flash = useLwwFlash(presence);
-  useBoardRealtime(payload.board.id, { onRemoteChange: flash.onRemoteChange });
+  useBoardRealtime(payload.board.id, {
+    onRemoteChange: flash.onRemoteChange,
+    enabled: !isOfflineRender,
+  });
 
   const presenceValue: BoardPresenceContextValue = {
     ...presence,
@@ -190,6 +209,7 @@ export function BoardViews({
 
   return (
     <BoardPresenceProvider value={presenceValue}>
+      <OfflinePersistence userId={currentUserId} />
       {view}
       <PresenceFlashMessage message={flash.lastMessage} />
       <ItemPanel

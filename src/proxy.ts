@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
 import { boardIdFromPath, LAST_BOARD_COOKIE } from "@/lib/boards/last-board";
+import { DESKTOP_RELEASE_PATH } from "@/lib/desktop/release-contract";
 import { loginPath, NEXT_PATH_HEADER } from "@/lib/auth/next-path";
 import type { Database } from "@/types/database.types";
 
@@ -19,7 +20,23 @@ const AUTH_ROUTES = ["/login", "/signup", "/auth", "/forgot-password"];
 // the nav logo points to; `/updates` is the public changelog linked from the
 // landing footer; `/pricing` is the public price list linked from the nav,
 // the landing teaser and the footer.
-const PUBLIC_ROUTES = ["/", "/landing", "/updates", "/pricing"];
+// `DESKTOP_RELEASE_PATH` (`/desktop-release.json`) is the version contract the
+// macOS desktop shell reads at boot to decide whether it is too old to run —
+// BEFORE anyone has signed in. It must be listed here explicitly: the matcher
+// below exempts static files by extension (`.js`, `.css`, `.svg`, …) but
+// `.json` is deliberately NOT in that list, so without this entry the proxy
+// 307s it to /login and every desktop shell receives an HTML login page where
+// it expects JSON. Exact-match rather than adding `json` to the extension
+// exemption, which would silently make any future `*.json` route public. It
+// carries no user data. Imported rather than retyped so the allowlist and the
+// contract cannot drift — see `src/lib/desktop/README.md`.
+const PUBLIC_ROUTES = [
+  "/",
+  "/landing",
+  "/updates",
+  "/pricing",
+  DESKTOP_RELEASE_PATH,
+];
 // Prefix-matched routes that are NEVER authenticated by a session cookie, so a
 // cookie-based gate can only break them. `/.well-known/oauth-*` is public
 // metadata by RFC 8414 / RFC 9728; `/api/oauth/*` is the OAuth 2.1 authorization

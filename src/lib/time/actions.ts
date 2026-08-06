@@ -14,17 +14,21 @@ import {
   deleteTimeAllocationSchema,
 } from "@/lib/validations/time";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { upsertTimeAllocationCore } from "@/lib/time/allocation-core";
 
 /** Upsert one card cell (self-only). The unique partial index drives the
  * upsert: (user_id, work_date, item_id) or (user_id, work_date, category).
- * RLS guarantees user_id = auth.uid(); we set it explicitly from the session. */
+ * RLS guarantees user_id = auth.uid(); we set it explicitly from the session.
+ *
+ * Thin cookie-binding wrapper: the actual write lives in
+ * `upsertTimeAllocationCore` (`@/lib/time/allocation-core`), shared with the
+ * MCP `log_time_allocation` tool so both paths produce identical writes. */
 export async function upsertTimeAllocation(
   input: z.input<typeof upsertTimeAllocationSchema>,
 ): Promise<ActionResult<{ durationSecs: number }>> {
   const parsed = upsertTimeAllocationSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const d = parsed.data;
 
   const orgId = await getActiveOrgId();
   if (!orgId) return fail("No organization.");
@@ -35,30 +39,17 @@ export async function upsertTimeAllocation(
   } = await supabase.auth.getUser();
   if (!user) return fail("Not authenticated.");
 
-  const onConflict = d.itemId
-    ? "user_id,work_date,item_id"
-    : "user_id,work_date,category";
-
-  const { error } = await supabase.from("time_allocations").upsert(
-    {
-      org_id: orgId,
-      user_id: user.id,
-      work_date: d.workDate,
-      item_id: d.itemId ?? null,
-      board_id: d.itemId ? (d.boardId ?? null) : null,
-      category: d.category ?? null,
-      duration_secs: d.durationSecs,
-      note: d.note ?? null,
-    },
-    { onConflict },
-  );
-  if (error) return fail(error.message);
+  const res = await upsertTimeAllocationCore(supabase, parsed.data, {
+    userId: user.id,
+    orgId,
+  });
+  if (!res.ok) return res;
 
   // NO revalidatePath("/time"): the card reconciles the written seconds into a
   // durable local overlay and coalesces one trailing router.refresh() per edit
   // burst. /workload is server-derived and has no such overlay, so keep it.
   revalidatePath("/workload");
-  return { ok: true, data: { durationSecs: d.durationSecs } };
+  return res;
 }
 
 /** Server-action wrapper around the server-only item search so the client

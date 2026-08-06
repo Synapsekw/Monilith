@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
+import { ServiceWorkerRegistrar } from "@/components/offline/ServiceWorkerRegistrar";
+import { OfflineNavigationGuard } from "@/components/offline/OfflineNavigationGuard";
 import { Toaster } from "@/components/ui/sonner";
 
 /**
@@ -36,6 +38,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <>
       <AuthenticatedShell>{children}</AuthenticatedShell>
       <Toaster />
+      <ServiceWorkerRegistrar />
+      {/* Sends offline link clicks through a real document navigation so the
+          service worker's navigate fallback can serve the cached board. Mounted
+          beside the registrar because both belong to the same offline story and
+          both must survive section navigation. */}
+      <OfflineNavigationGuard />
     </>
   );
 }

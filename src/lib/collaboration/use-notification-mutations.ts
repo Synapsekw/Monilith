@@ -11,6 +11,7 @@ import {
   type NotificationsCache,
 } from "@/lib/collaboration/notifications-cache";
 import { notificationsKey } from "@/lib/collaboration/use-notifications";
+import { assertOnline } from "@/lib/offline/online-status";
 
 type Ctx = { previous?: NotificationsCache };
 
@@ -20,6 +21,7 @@ export function useNotificationMutations(userId: string) {
 
   const readOne = useMutation<void, Error, { id: string }, Ctx>({
     mutationFn: async (v) => {
+      assertOnline();
       const res = await markNotificationRead({ notificationId: v.id });
       if (!res.ok) throw new Error(res.error);
     },
@@ -38,6 +40,7 @@ export function useNotificationMutations(userId: string) {
 
   const readAll = useMutation<void, Error, void, Ctx>({
     mutationFn: async () => {
+      assertOnline();
       const res = await markAllNotificationsRead();
       if (!res.ok) throw new Error(res.error);
     },

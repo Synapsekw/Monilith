@@ -20,6 +20,7 @@ import type {
   RemoveDependencyVars,
   SetRelationVars,
 } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** Dependency + relation-link mutations. */
 export function useRelationMutations(ctx: BoardMutationCtx) {
@@ -33,6 +34,7 @@ export function useRelationMutations(ctx: BoardMutationCtx) {
    */
   const addDependencyMutation = useMutation<void, Error, AddDependencyVars>({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await createDependency(vars);
       if (!res.ok) throw new Error(res.error);
     },
@@ -49,6 +51,7 @@ export function useRelationMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await deleteDependency(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -83,6 +86,7 @@ export function useRelationMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await setRelationLinks({
         itemId: vars.itemId,
         columnId: vars.columnId,
