@@ -35,18 +35,32 @@ export function ListWidget({ widget }: { widget: CacheWidget }) {
   // which hits the identical problem in the PDF table and — because that
   // table's columns are caller-chosen and can't be evenly pre-sized — solves
   // it the other way, by bounding the source string instead). `table-fixed` +
-  // a `<colgroup>` giving every column an equal, definite percentage width is
-  // what makes `truncate` actually able to compute an overflow here.
-  const colCount = data.columns.length + 1;
-  const colWidth = `${100 / colCount}%`;
+  // a `<colgroup>` giving every column a definite percentage width is what
+  // makes `truncate` actually able to compute an overflow here.
+  //
+  // Widths are WEIGHTED, not equal: the Item/name column is the primary
+  // column and — being a free-text name rather than a short status/date/
+  // number value — is almost always the longest string on the row, so an
+  // equal split let a mostly-empty Status/Owner column crowd it into a hard
+  // truncate. NAME_WEIGHT:VALUE_WEIGHT = 2:1 gives the name column exactly
+  // double a value column's share, whatever the value-column count is (2 of
+  // 3 "shares" at zero value columns down to a vanishingly small-but-still-
+  // 2x share at many) — a proportional floor rather than a fixed px/% one,
+  // so it never inverts (name < value) and never goes stale as columns are
+  // added or removed.
+  const NAME_WEIGHT = 2;
+  const VALUE_WEIGHT = 1;
+  const totalWeight = NAME_WEIGHT + data.columns.length * VALUE_WEIGHT;
+  const nameColWidth = `${(NAME_WEIGHT / totalWeight) * 100}%`;
+  const valueColWidth = `${(VALUE_WEIGHT / totalWeight) * 100}%`;
 
   return (
     <div className="h-full overflow-auto">
       <table className="w-full table-fixed text-sm">
         <colgroup>
-          <col style={{ width: colWidth }} />
+          <col style={{ width: nameColWidth }} />
           {data.columns.map((c) => (
-            <col key={c.id} style={{ width: colWidth }} />
+            <col key={c.id} style={{ width: valueColWidth }} />
           ))}
         </colgroup>
         <thead className="text-muted-foreground bg-card sticky top-0 border-b text-left text-xs">

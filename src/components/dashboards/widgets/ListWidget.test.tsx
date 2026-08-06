@@ -123,6 +123,48 @@ describe("ListWidget long text cell", () => {
     }
   });
 
+  it("weights the name column wider than a value column — not an equal split", () => {
+    // Regression guard: equal widths (100/colCount each) squeeze the
+    // usually-longest column (the item name) down to the same share as a
+    // short, mostly-empty Status/Owner/Date column. The name column must get
+    // a strictly larger, definite share.
+    const multiColRows: WidgetRows = {
+      columns: [
+        { id: "col-status", name: "Status", kind: "status", options: [] },
+        { id: "col-owner", name: "Owner", kind: "people", options: [] },
+        { id: "col-due", name: "Due", kind: "date", options: [] },
+      ],
+      rows: [
+        {
+          itemId: "item-1",
+          name: "Ship it",
+          cells: {},
+        },
+      ],
+    };
+    useWidgetRows.mockReturnValue({
+      data: multiColRows,
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ListWidget widget={widget} />);
+
+    const cols = screen.getByRole("table").querySelectorAll("colgroup col");
+    expect(cols).toHaveLength(4); // name + 3 value columns
+    const widths = [...cols].map((c) =>
+      parseFloat((c as HTMLElement).style.width),
+    );
+    const [nameWidth, ...valueWidths] = widths;
+    for (const w of valueWidths) {
+      expect(nameWidth).toBeGreaterThan(w);
+    }
+    // Every column still has a definite (non-zero, non-auto) width, and all
+    // value columns split the remainder evenly.
+    expect(nameWidth).toBeGreaterThan(0);
+    expect(new Set(valueWidths.map((w) => w.toFixed(6))).size).toBe(1);
+  });
+
   it("bounds the actual character count of a very long cell (not just visual clipping)", () => {
     // The DOM/tooltip payload must be bounded regardless of what CSS does —
     // `title` is a native tooltip that shows the FULL string on hover no
