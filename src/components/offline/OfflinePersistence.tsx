@@ -24,11 +24,28 @@ export function OfflinePersistence({ userId }: { userId: string }) {
 
   useEffect(() => {
     rememberIdentity(userId);
-    void enforceOfflineGrace(Date.now());
-    return persistQueryClientSubscribe({
-      queryClient,
-      ...persistOptionsFor(userId),
+
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
+    // The subscription must not start until the grace check resolves: if it
+    // decides to wipe, a subscription established beforehand would just
+    // repersist fresh snapshots into the IndexedDB store that was just
+    // cleared. `cancelled` guards the case where this component unmounts
+    // before the promise settles — subscribing after unmount would leak a
+    // subscription with nothing to ever call its cleanup.
+    void enforceOfflineGrace(Date.now()).then((permitted) => {
+      if (cancelled || !permitted) return;
+      unsubscribe = persistQueryClientSubscribe({
+        queryClient,
+        ...persistOptionsFor(userId),
+      });
     });
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [queryClient, userId]);
 
   return null;

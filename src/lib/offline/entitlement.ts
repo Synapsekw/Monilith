@@ -24,6 +24,11 @@ export function isWithinGrace(
 ): boolean {
   if (!entitlement) return false;
   if (entitlement.status !== "active") return false;
+  // A checkedAt after `now` is impossible for a real check (clock skew) or a
+  // tampered localStorage value. Reject it rather than let `now - checkedAt`
+  // go negative, which would satisfy `<= OFFLINE_WINDOW_MS` for ANY future
+  // date and grant unbounded offline access.
+  if (entitlement.checkedAt > now) return false;
   return now - entitlement.checkedAt <= OFFLINE_WINDOW_MS;
 }
 

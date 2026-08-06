@@ -25,6 +25,27 @@ describe("isWithinGrace", () => {
     ).toBe(false);
   });
 
+  it("accepts exactly the boundary — checkedAt === now - OFFLINE_WINDOW_MS (inclusive, pinned deliberately)", () => {
+    const checkedAt = NOW - OFFLINE_WINDOW_MS;
+    expect(
+      isWithinGrace({ plan: "pro", status: "active", checkedAt }, NOW),
+    ).toBe(true);
+  });
+
+  it("rejects a slightly-future checkedAt (clock skew)", () => {
+    const checkedAt = NOW + 60_000;
+    expect(
+      isWithinGrace({ plan: "pro", status: "active", checkedAt }, NOW),
+    ).toBe(false);
+  });
+
+  it("rejects a far-future checkedAt (tampered localStorage) rather than granting unbounded access", () => {
+    const checkedAt = NOW + 100 * OFFLINE_WINDOW_MS;
+    expect(
+      isWithinGrace({ plan: "pro", status: "active", checkedAt }, NOW),
+    ).toBe(false);
+  });
+
   it("rejects a non-active status even when freshly checked", () => {
     expect(
       isWithinGrace({ plan: "pro", status: "canceled", checkedAt: NOW }, NOW),
