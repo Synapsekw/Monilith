@@ -34,18 +34,40 @@ export async function POST(req: Request) {
     if (!verifyPkce(parsed.data.code_verifier, codeRow.code_challenge)) {
       return NextResponse.json({ error: "invalid_grant" }, { status: 400 });
     }
-    const bridgeSecretId = await mintBridgeSecret(codeRow.user_id);
-    const tokens = await issueTokenPair({
-      clientId: parsed.data.client_id,
-      userId: codeRow.user_id,
-      bridgeSecretId,
-    });
-    return NextResponse.json({
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-      token_type: "bearer",
-      expires_in: tokens.expiresIn,
-    });
+    // Bridge minting reaches GoTrue and Vault, so it can fail for reasons the
+    // client cannot fix (rate limits, a Vault constraint). Uncaught, Next
+    // answered a bare 500 with an EMPTY body: the MCP client reported only
+    // "500, no token" and the real cause was visible nowhere but the platform
+    // logs. RFC 6749 §5.2 has a registered code for exactly this, so return the
+    // JSON envelope every other branch here uses and log the cause server-side.
+    try {
+      const bridgeSecretId = await mintBridgeSecret(codeRow.user_id);
+      const tokens = await issueTokenPair({
+        clientId: parsed.data.client_id,
+        userId: codeRow.user_id,
+        bridgeSecretId,
+      });
+      return NextResponse.json({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        token_type: "bearer",
+        expires_in: tokens.expiresIn,
+      });
+    } catch (e) {
+      console.error("[oauth/token] code redemption failed:", {
+        clientId: parsed.data.client_id,
+        userId: codeRow.user_id,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return NextResponse.json(
+        {
+          error: "server_error",
+          error_description:
+            "Could not complete the token exchange. Please retry the authorization.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   // refresh_token grant
