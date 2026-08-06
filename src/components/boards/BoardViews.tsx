@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { BoardTable } from "@/components/boards/BoardTable";
 import { ItemPanel } from "@/components/boards/item-panel/ItemPanel";
 import { PresenceFlashMessage } from "@/components/boards/presence/PresenceFlashMessage";
+import { OfflinePersistence } from "@/components/offline/OfflinePersistence";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardAccess, HeaderGrant } from "@/components/boards/BoardHeader";
 import type { BoardCache } from "@/lib/boards/cache";
@@ -16,6 +17,7 @@ import {
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { useBoardSnapshot } from "@/lib/offline/snapshot";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { useBoardPresence } from "@/lib/boards/use-board-presence";
 import { useBoardRealtime } from "@/lib/boards/use-board-realtime";
@@ -90,6 +92,11 @@ export function BoardViews({
   grants: HeaderGrant[];
 }) {
   useBoardCache(payload.board.id, payload as unknown as BoardCache);
+
+  // Record what this board needs to re-render with no network. `currentUserId`
+  // is already a prop here, so persistence needs no layout change and no extra
+  // read to learn who is signed in.
+  useBoardSnapshot({ payload, members, initialViewId, currentUserId });
 
   const selfMember = members.find((m) => m.userId === currentUserId);
   const self = {
@@ -190,6 +197,7 @@ export function BoardViews({
 
   return (
     <BoardPresenceProvider value={presenceValue}>
+      <OfflinePersistence userId={currentUserId} />
       {view}
       <PresenceFlashMessage message={flash.lastMessage} />
       <ItemPanel

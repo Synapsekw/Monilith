@@ -1,0 +1,35 @@
+"use client";
+
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { persistQueryClientSubscribe } from "@tanstack/react-query-persist-client";
+import {
+  enforceOfflineGrace,
+  rememberIdentity,
+} from "@/lib/offline/entitlement";
+import { persistOptionsFor } from "@/lib/offline/persister";
+
+/**
+ * Attaches the persister to the LIVE QueryClient without restructuring the
+ * provider tree.
+ *
+ * Subscribe-only, by design: it never calls `persistQueryClientRestore`.
+ * Restoring here would hydrate a disk snapshot over a board the server just
+ * seeded via `initialData`, replacing fresh data with older data on every
+ * online load. Restoration happens only on the `/offline` route, which is the
+ * one place there is no fresher source.
+ */
+export function OfflinePersistence({ userId }: { userId: string }) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    rememberIdentity(userId);
+    void enforceOfflineGrace(Date.now());
+    return persistQueryClientSubscribe({
+      queryClient,
+      ...persistOptionsFor(userId),
+    });
+  }, [queryClient, userId]);
+
+  return null;
+}
