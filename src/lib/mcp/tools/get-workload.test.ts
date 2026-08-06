@@ -89,6 +89,27 @@ describe("getWorkloadHandler", () => {
     expect(payload.from <= payload.to).toBe(true);
   });
 
+  it.each([
+    ["only from", { from: "2026-01-05" }],
+    ["only to", { to: "2026-01-09" }],
+  ])(
+    "rejects %s, naming the requirement, without touching the client or the core",
+    async (_label, args) => {
+      // Silently substituting the default 28-day window here would answer a
+      // question the caller never asked — exactly the confidently-wrong answer
+      // range.ts exists to prevent.
+      const getClient = vi.fn(async () => ({}) as never);
+      const result = await getWorkloadHandler(getClient, args);
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/both `from` and `to`/);
+      // Guarded BEFORE getClient(): a malformed call charges neither the rate
+      // limit nor a bridge-secret rotation.
+      expect(getClient).not.toHaveBeenCalled();
+      expect(core).not.toHaveBeenCalled();
+    },
+  );
+
   it("rejects an over-long range without touching the client or the core", async () => {
     const getClient = vi.fn(async () => ({}) as never);
     const result = await getWorkloadHandler(getClient, {

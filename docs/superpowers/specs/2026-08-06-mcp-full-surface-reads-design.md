@@ -170,7 +170,7 @@ The org list comes from the RLS-scoped membership read on the bridged client (th
 | `get_my_work`                 | —                                                           | `[{ bucket, items: [{ id, name, boardId, boardName, dueDate, status }] }]` |
 | `get_workload`                | `orgId?`, `from?`, `to?`                                    | `[{ userId, name, allocatedSecs, capacitySecs, itemCount }]`               |
 | `list_time_allocations`       | `orgId?`, `from`, `to`                                      | `[{ date, itemId, itemName, category, secs, note }]`                       |
-| `get_time_summary`            | `orgId?`, `from`, `to`, `groupBy: item\|category\|day`      | `[{ key, label, totalSecs }]`                                              |
+| `get_time_summary`            | `orgId?`, `from`, `to`, `groupBy: item\|category\|day`      | `{ buckets: [{ key, label, totalSecs }], ungroupedSecs }`                  |
 | `log_time_allocation` **(w)** | `orgId?`, `date`, `itemId?` \| `category?`, `secs`, `note?` | `{ date, secs }`                                                           |
 | `list_dashboards`             | `orgId?`                                                    | `[{ id, name, widgetCount }]`                                              |
 | `get_dashboard`               | `dashboardId`                                               | `[{ widgetId, title, type, boardIds, summary }]`                           |

@@ -21,6 +21,22 @@ export async function getWorkloadHandler(
   getClient: GetClient,
   args: { orgId?: string; from?: string; to?: string },
 ): Promise<ToolResult> {
+  // Exactly ONE of from/to is a malformed call, not a request for the default
+  // window: silently answering about an unrelated 28-day window is the
+  // confidently-wrong-answer failure `range.ts` exists to prevent. Both or
+  // neither. Guarded BEFORE getClient(), like the range check below, so a
+  // malformed call charges neither the rate limit nor a bridge-secret rotation.
+  if ((args.from === undefined) !== (args.to === undefined))
+    return {
+      content: [
+        {
+          type: "text",
+          text: "Pass both `from` and `to`, or neither. One alone is not enough to build a window.",
+        },
+      ],
+      isError: true,
+    };
+
   const window =
     args.from && args.to ? { from: args.from, to: args.to } : defaultWindow();
 

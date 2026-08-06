@@ -25,13 +25,25 @@ vi.mock("@/lib/time/queries", () => ({
         secs: 1800,
         note: null,
       },
+      // Category-logged time in the SAME window: an allocation carries either
+      // an item or a category, never both, so `groupBy: "item"` excludes this
+      // row entirely. It must still be accounted for.
+      {
+        date: "2026-01-03",
+        itemId: null,
+        itemName: null,
+        boardId: null,
+        category: "Admin",
+        secs: 3600,
+        note: null,
+      },
     ],
     truncated: false,
   })),
 }));
 
 describe("getTimeSummaryHandler", () => {
-  it("folds rows into totals for the requested grouping", async () => {
+  it("folds rows into totals AND surfaces the time the grouping excluded", async () => {
     const getClient = vi.fn(async () => ({}) as never);
     const result = await getTimeSummaryHandler(getClient, "u1", {
       from: "2026-01-01",
@@ -40,9 +52,31 @@ describe("getTimeSummaryHandler", () => {
     });
 
     expect(getClient).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(result.content[0].text)).toEqual([
-      { key: "i1", label: "API", totalSecs: 5400 },
-    ]);
+    // A bare bucket array here would let the agent report "you logged 1h30"
+    // for a window that actually holds 2h30 — the same confidently-partial
+    // total the row-cap guard below refuses to produce.
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      buckets: [{ key: "i1", label: "API", totalSecs: 5400 }],
+      ungroupedSecs: 3600,
+    });
+  });
+
+  it("reports zero excluded time when the grouping excludes nothing", async () => {
+    const getClient = vi.fn(async () => ({}) as never);
+    const result = await getTimeSummaryHandler(getClient, "u1", {
+      from: "2026-01-01",
+      to: "2026-01-31",
+      groupBy: "day",
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.ungroupedSecs).toBe(0);
+    expect(
+      parsed.buckets.reduce(
+        (n: number, b: { totalSecs: number }) => n + b.totalSecs,
+        0,
+      ),
+    ).toBe(9000);
   });
 
   it("rejects an over-long range without touching the client", async () => {
