@@ -1,3 +1,4 @@
+import { StrictMode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -36,6 +37,90 @@ describe("LongTextEditor — panel", () => {
       "aria-selected",
       "true",
     );
+  });
+});
+
+// React StrictMode double-invokes effects on mount (setup → cleanup → setup),
+// and the App Router runs in StrictMode in dev whenever next.config.ts leaves
+// `reactStrictMode` unset — which it does. The unmount-commit effect therefore
+// fires its cleanup once immediately after mount, before the user can type.
+// If that cleanup calls back into the parent, `EditableCell` clears its editing
+// state and the panel closes the instant it opens: clicking a text cell appears
+// to do nothing at all. These tests pin the panel against that.
+describe("LongTextEditor — StrictMode (the dev default)", () => {
+  function strictSetup(text = "old") {
+    const onCommit = vi.fn();
+    const onCancel = vi.fn();
+    const result = render(
+      <StrictMode>
+        <LongTextEditor
+          value={{ text }}
+          settings={{}}
+          onCommit={onCommit}
+          onCancel={onCancel}
+          columnName="Description"
+        />
+      </StrictMode>,
+    );
+    return { onCommit, onCancel, unmount: result.unmount };
+  }
+
+  it("stays open on mount and calls neither callback", () => {
+    const { onCommit, onCancel } = strictSetup();
+    expect(screen.getByRole("textbox")).toHaveValue("old");
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("still commits a real edit on unmount", () => {
+    const { onCommit, onCancel, unmount } = strictSetup();
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "a real paragraph" },
+    });
+    unmount();
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith({ text: "a real paragraph" });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("does not write when unmounted with the value untouched", () => {
+    const { onCommit, unmount } = strictSetup();
+    unmount();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  // The reported bug, end to end: EditableCell holds `editing` state, renders
+  // this panel while it is set, and clears it from BOTH callbacks. Any callback
+  // fired during StrictMode's post-mount cleanup therefore unmounts the panel
+  // immediately — the user clicks a text cell and nothing appears to happen.
+  // This harness reproduces exactly that wiring.
+  it("survives a click when the parent clears editing state on either callback", async () => {
+    function Harness() {
+      const [editing, setEditing] = useState(false);
+      if (!editing)
+        return (
+          <button type="button" onClick={() => setEditing(true)}>
+            open cell
+          </button>
+        );
+      return (
+        <LongTextEditor
+          value={{ text: "old" }}
+          settings={{}}
+          onCommit={() => setEditing(false)}
+          onCancel={() => setEditing(false)}
+          columnName="Description"
+        />
+      );
+    }
+    render(
+      <StrictMode>
+        <Harness />
+      </StrictMode>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /open cell/i }));
+    expect(screen.getByRole("textbox")).toHaveValue("old");
+    expect(screen.getByRole("tab", { name: /write/i })).toBeInTheDocument();
   });
 });
 
@@ -114,19 +199,30 @@ describe("LongTextEditor — save semantics", () => {
     expect(onCommit).toHaveBeenCalledWith({ text: "older" });
   });
 
-  // Combined FIX 1 / FIX 4 edge case: a cell that arrived over the cap
-  // through the spreadsheet-import bypass (see textValueSchema's comment)
-  // can't be safely committed on an implicit unmount either. It must still
-  // resolve via onCancel rather than doing nothing — otherwise the parent's
-  // editing state is left pointing at this cell, and scrolling back to the
-  // row would spontaneously reopen the panel.
-  it("cancels (does not commit) an over-cap unmount, clearing editing state", () => {
-    const { onCommit, onCancel, unmount } = setup({
-      value: { text: "x".repeat(20_005) },
-    });
+  // An untouched unmount must call NOTHING. This is not merely an
+  // optimisation: StrictMode runs the unmount cleanup once right after mount,
+  // so any callback here closes the panel the instant it opens. The cost is
+  // that the parent's editing state survives an untouched unmount and the
+  // panel reopens when the row scrolls back — harmless, since no data is
+  // involved and the user never dismissed it.
+  it("calls nothing when unmounted with the value untouched", () => {
+    const { onCommit, onCancel, unmount } = setup();
     unmount();
     expect(onCommit).not.toHaveBeenCalled();
-    expect(onCancel).toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  // A cell that arrived over the cap through the spreadsheet-import bypass
+  // (see textValueSchema's comment) cannot be committed on an implicit
+  // unmount — the value would exceed the schema bound and there is no panel
+  // left to show the blocking message. The edit is lost; nothing is written.
+  it("never commits an over-cap unmount", async () => {
+    const { onCommit, unmount } = setup({
+      value: { text: "x".repeat(20_005) },
+    });
+    await userEvent.type(screen.getByRole("textbox"), "x");
+    unmount();
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 
