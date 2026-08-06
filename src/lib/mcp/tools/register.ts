@@ -23,6 +23,8 @@ import { registerGetWidgetDataTool } from "./get-widget-data";
 import { registerGetWorkloadTool } from "./get-workload";
 import { registerListReportsTool } from "./list-reports";
 import { registerGetReportTool } from "./get-report";
+import { registerCreateAttachmentUploadTool } from "./create-attachment-upload";
+import { registerAttachFileTool } from "./attach-file";
 
 /** Registers every MCP tool onto the server instance, closing over the request's auth. */
 export function registerTools(server: McpServer, auth: AuthInfo): void {
@@ -35,6 +37,8 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
   registerGetItemTool(server, getClient);
   registerCreateItemTool(server, getClient, actorId);
   registerUpdateItemTool(server, getClient, actorId);
+  registerCreateAttachmentUploadTool(server, getClient);
+  registerAttachFileTool(server, getClient, actorId);
   registerListOrganizationsTool(server, getClient);
   registerGetMyWorkTool(server, getClient);
   registerListTimeAllocationsTool(server, getClient, actorId);

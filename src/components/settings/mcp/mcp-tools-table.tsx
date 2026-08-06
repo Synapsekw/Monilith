@@ -44,6 +44,16 @@ export const MCP_TOOLS_TABLE_ROWS = [
     what: "Rename an item and/or change its field values.",
   },
   {
+    name: "create_attachment_upload",
+    access: "write",
+    what: "Start a file upload for an item — returns a 2-hour signed URL that can place a file in your storage. Nothing appears on the item until attach_file is called.",
+  },
+  {
+    name: "attach_file",
+    access: "write",
+    what: "Attach a file to an item, or into a Files column's cell. Cannot replace or remove an existing attachment.",
+  },
+  {
     name: "list_organizations",
     access: "read",
     what: "List the organizations you belong to.",
