@@ -63,3 +63,36 @@ describe("ListWidget colored cell", () => {
     expect(chip.style.backgroundColor).toBe("");
   });
 });
+
+describe("ListWidget long text cell", () => {
+  const textRows: WidgetRows = {
+    columns: [{ id: "col-notes", name: "Notes", kind: "text", options: [] }],
+    rows: [
+      {
+        itemId: "item-1",
+        name: "Ship it",
+        cells: {
+          "col-notes": { text: "**bold** plan\n- step one\n- step two" },
+        },
+      },
+    ],
+  };
+
+  it("truncates the value cell like the name cell, and strips Markdown syntax", () => {
+    useWidgetRows.mockReturnValue({
+      data: textRows,
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ListWidget widget={widget} />);
+
+    const nameCell = screen.getByText("Ship it");
+    const valueCell = screen.getByText("bold plan step one step two");
+    expect(valueCell.textContent).not.toMatch(/[*-]/);
+    expect(valueCell.closest("td")?.className).toMatch(/truncate/);
+    expect(valueCell.closest("td")?.className).toBe(
+      nameCell.closest("td")?.className,
+    );
+  });
+});

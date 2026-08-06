@@ -1,5 +1,6 @@
 import type { ColumnOption } from "@/lib/dashboards/widget-data";
 import { currencyOf, formatCurrency } from "@/lib/boards/currency";
+import { stripMarkdown } from "@/lib/boards/markdown";
 
 /** A displayed column in a List widget: id/name/kind + (for status/dropdown) options. */
 export type DisplayColumn = {
@@ -20,8 +21,16 @@ const EMPTY: CellDisplay = { text: "—" };
 export function formatCell(column: DisplayColumn, value: unknown): CellDisplay {
   const v = (value ?? {}) as Record<string, unknown>;
   switch (column.kind) {
-    case "text":
-      return typeof v.text === "string" && v.text ? { text: v.text } : EMPTY;
+    case "text": {
+      // Text columns hold Markdown (up to 20,000 chars) — this widget renders
+      // a single-line table cell, so show the syntax-free preview
+      // (`stripMarkdown`, the same helper the board's collapsed text cell
+      // uses) rather than literal `**`/`-` syntax. The cell itself still gets
+      // CSS `truncate` for overflow; this only removes the markup.
+      if (typeof v.text !== "string" || !v.text) return EMPTY;
+      const stripped = stripMarkdown(v.text);
+      return stripped ? { text: stripped } : EMPTY;
+    }
     case "numbers":
       return typeof v.n === "number" ? { text: String(v.n) } : EMPTY;
     case "currency":

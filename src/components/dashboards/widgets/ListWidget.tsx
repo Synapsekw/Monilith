@@ -45,11 +45,13 @@ export function ListWidget({ widget }: { widget: CacheWidget }) {
               {data.columns.map((c) => {
                 const cell = formatCell(c, row.cells[c.id]);
                 return (
-                  <td key={c.id} className="px-2 py-1">
+                  <td key={c.id} className="truncate px-2 py-1">
                     {cell.color ? (
                       <ColorChip color={cell.color}>{cell.text}</ColorChip>
                     ) : (
-                      <span className="text-muted-foreground">{cell.text}</span>
+                      <span className="text-muted-foreground" title={cell.text}>
+                        {cell.text}
+                      </span>
                     )}
                   </td>
                 );
