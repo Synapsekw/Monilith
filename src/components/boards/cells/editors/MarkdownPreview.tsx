@@ -19,7 +19,7 @@ function renderInline(nodes: Inline[]): React.ReactNode {
   return nodes.map((node, i) => {
     switch (node.type) {
       case "text":
-        return node.value.length > 0 ? <span key={i}>{node.value}</span> : null;
+        return node.value.length > 0 ? node.value : null;
       case "bold":
         return <strong key={i}>{renderInline(node.children)}</strong>;
       case "italic":
@@ -111,7 +111,12 @@ export function MarkdownPreview({
 }): React.JSX.Element {
   const blocks = useMemo(() => parseMarkdown(markdown), [markdown]);
 
-  if (blocks.length === 0) {
+  // `markdown.trim()` (not `blocks.length`) is the correct emptiness check:
+  // whitespace-only input (e.g. "   ") still parses to a non-empty
+  // Block[] — a paragraph holding a whitespace-only text node — so
+  // `blocks.length === 0` alone misses it and renders a blank paragraph
+  // instead of the empty state.
+  if (markdown.trim().length === 0) {
     return (
       <p className="text-muted-foreground text-sm italic">Nothing to preview</p>
     );

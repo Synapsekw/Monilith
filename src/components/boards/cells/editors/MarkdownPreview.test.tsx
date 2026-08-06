@@ -64,10 +64,20 @@ describe("MarkdownPreview", () => {
     expect(screen.getByText(/nothing to preview/i)).toBeInTheDocument();
   });
 
+  it("shows an empty-state line for whitespace-only markdown", () => {
+    render(<MarkdownPreview markdown="   " />);
+    expect(screen.getByText(/nothing to preview/i)).toBeInTheDocument();
+  });
+
   it("preserves paragraph order", () => {
     const { container } = render(
       <MarkdownPreview markdown={"first\n\nsecond"} />,
     );
     expect(container.textContent).toBe("firstsecond");
+  });
+
+  it("does not wrap a text leaf in an extra element — its parent is the mark itself", () => {
+    render(<MarkdownPreview markdown="**bold**" />);
+    expect(screen.getByText("bold").tagName).toBe("STRONG");
   });
 });
