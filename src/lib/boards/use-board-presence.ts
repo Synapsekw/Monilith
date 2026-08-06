@@ -24,8 +24,17 @@ export type BoardPresence = {
   channelStatus: string;
 };
 
-export function useBoardPresence(boardId: string, self: Self): BoardPresence {
+export function useBoardPresence(
+  boardId: string,
+  self: Self,
+  opts?: { enabled?: boolean },
+): BoardPresence {
   const qc = useQueryClient();
+  // Set false to skip opening the Supabase presence channel — the offline
+  // read-only render (`/offline`) has no network by definition, so there is
+  // nothing to subscribe to. Defaults to true so every existing (online) call
+  // site is unaffected. See offline-render-context.tsx.
+  const enabled = opts?.enabled ?? true;
   const [raw, setRaw] = useState<Record<string, PresenceState[]>>({});
   const [channelStatus, setStatus] = useState("INIT");
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -49,6 +58,7 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
   );
 
   useEffect(() => {
+    if (!enabled) return;
     let channel: RealtimeChannel | null = null;
     let cancelled = false;
     void (async () => {
@@ -88,7 +98,7 @@ export function useBoardPresence(boardId: string, self: Self): BoardPresence {
       channelRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, self.userId]);
+  }, [boardId, self.userId, enabled]);
 
   // Trailing-throttle the presence broadcast to ≤1 per 150ms; the synchronous
   // focusRef update + local highlight happen on every call so self-focus stays

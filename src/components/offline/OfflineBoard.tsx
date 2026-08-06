@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { persistQueryClientRestore } from "@tanstack/react-query-persist-client";
 import { BoardViews } from "@/components/boards/BoardViews";
 import { OfflineBanner } from "@/components/offline/OfflineBanner";
+import { OfflineRenderProvider } from "@/lib/offline/offline-render-context";
 import { persistOptionsFor } from "@/lib/offline/persister";
 import { boardSnapshotKey, type BoardSnapshot } from "@/lib/offline/snapshot";
 
@@ -81,14 +82,20 @@ export function OfflineBoard({
       {/* min-w-0 for the same reason the online board page carries it: board
           tables have a min-width and would otherwise push the PAGE sideways. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <BoardViews
-          payload={snapshot.payload}
-          members={snapshot.members}
-          initialViewId={snapshot.initialViewId}
-          currentUserId={snapshot.currentUserId}
-          access="viewer"
-          grants={[]}
-        />
+        {/* BoardViews is the ONLINE component; this provider tells its
+            offline-aware pieces (useBoardSnapshot, OfflinePersistence,
+            realtime/presence) to stand down — see offline-render-context.tsx
+            for why. */}
+        <OfflineRenderProvider>
+          <BoardViews
+            payload={snapshot.payload}
+            members={snapshot.members}
+            initialViewId={snapshot.initialViewId}
+            currentUserId={snapshot.currentUserId}
+            access="viewer"
+            grants={[]}
+          />
+        </OfflineRenderProvider>
       </div>
     </div>
   );

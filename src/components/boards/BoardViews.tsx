@@ -17,6 +17,7 @@ import {
   type BoardPresenceContextValue,
 } from "@/lib/boards/presence-context";
 import { useBoardCache } from "@/lib/boards/use-board-cache";
+import { useIsOfflineRender } from "@/lib/offline/offline-render-context";
 import { useBoardSnapshot } from "@/lib/offline/snapshot";
 import { usePresenceFocusStore } from "@/lib/boards/presence-focus-store";
 import { useBoardPresence } from "@/lib/boards/use-board-presence";
@@ -93,6 +94,12 @@ export function BoardViews({
 }) {
   useBoardCache(payload.board.id, payload as unknown as BoardCache);
 
+  // True only when this tree is the `/offline` route's replay of a cached
+  // board (see offline-render-context.tsx). Gates the pieces below that are
+  // only correct when there is a network: the snapshot write, persistence
+  // subscription, and the realtime/presence channels.
+  const isOfflineRender = useIsOfflineRender();
+
   // Record what this board needs to re-render with no network. `currentUserId`
   // is already a prop here, so persistence needs no layout change and no extra
   // read to learn who is signed in.
@@ -104,14 +111,19 @@ export function BoardViews({
     name: selfMember?.fullName ?? selfMember?.email ?? "Someone",
     avatarUrl: selfMember?.avatarUrl ?? null,
   };
-  const presence = useBoardPresence(payload.board.id, self);
+  const presence = useBoardPresence(payload.board.id, self, {
+    enabled: !isOfflineRender,
+  });
 
   // Last-write-wins flash: when a remote change lands on the cell the local user
   // currently has focused, briefly highlight it and surface an attributed
   // message. The realtime channel feeds `onRemoteChange`; `flashTargetId` flows
   // into the presence context so `FlashHighlight` can pick it up per-cell.
   const flash = useLwwFlash(presence);
-  useBoardRealtime(payload.board.id, { onRemoteChange: flash.onRemoteChange });
+  useBoardRealtime(payload.board.id, {
+    onRemoteChange: flash.onRemoteChange,
+    enabled: !isOfflineRender,
+  });
 
   const presenceValue: BoardPresenceContextValue = {
     ...presence,

@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { isPersistableKey } from "@/lib/offline/persister";
+import { OfflineRenderProvider } from "@/lib/offline/offline-render-context";
 import {
   boardSnapshotKey,
   useBoardSnapshot,
@@ -15,6 +16,16 @@ const payload = { board: { id: "b1", org_id: "o1" }, views: [{ id: "v1" }] };
 function wrapper(qc: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  };
+}
+
+function offlineWrapper(qc: QueryClient) {
+  return function OfflineWrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={qc}>
+        <OfflineRenderProvider>{children}</OfflineRenderProvider>
+      </QueryClientProvider>
+    );
   };
 }
 
@@ -121,5 +132,28 @@ describe("useBoardSnapshot", () => {
 
   it("produces a key that satisfies the persister's allowlist", () => {
     expect(isPersistableKey(boardSnapshotKey("b1"))).toBe(true);
+  });
+
+  it("does NOT write when rendered inside OfflineRenderProvider", () => {
+    // This is the defect: BoardViews (which calls useBoardSnapshot) is reused
+    // to render the cached board on the `/offline` route. Without this guard,
+    // merely viewing a board offline re-stamps `savedAt` and the 7-day
+    // OFFLINE_WINDOW_MS cap never applies.
+    const qc = new QueryClient();
+    const setQueryDataSpy = vi.spyOn(qc, "setQueryData");
+
+    renderHook(
+      () =>
+        useBoardSnapshot({
+          payload: payload as never,
+          members: [],
+          initialViewId: "v1",
+          currentUserId: "u1",
+        }),
+      { wrapper: offlineWrapper(qc) },
+    );
+
+    expect(setQueryDataSpy).not.toHaveBeenCalled();
+    expect(qc.getQueryData(boardSnapshotKey("b1"))).toBeUndefined();
   });
 });

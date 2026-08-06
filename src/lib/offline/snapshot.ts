@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EditorMember } from "@/components/boards/cells/editors";
 import type { BoardPayload } from "@/lib/boards/queries";
+import { useIsOfflineRender } from "@/lib/offline/offline-render-context";
 
 /**
  * The exact props `BoardViews` needs to render. Deliberately NOT `BoardCache`:
@@ -34,6 +35,9 @@ export function useBoardSnapshot(
 ): void {
   const qc = useQueryClient();
   const boardId = snapshot.payload.board.id;
+  // Called unconditionally (rules of hooks) — the offline/online branch
+  // happens inside the effect below, not around this call.
+  const isOfflineRender = useIsOfflineRender();
 
   // Keep the latest props in a ref rather than closing over `snapshot`
   // directly, so the persistence effect below can depend on just
@@ -52,11 +56,17 @@ export function useBoardSnapshot(
   });
 
   useEffect(() => {
+    // Offline render (the `/offline` route replaying a cached board via
+    // `<BoardViews>`): writing here would re-stamp `savedAt` on the very
+    // snapshot the device is offline-reading, defeating the 7-day
+    // `OFFLINE_WINDOW_MS` cap — a board kept open offline would never age
+    // out. See offline-render-context.tsx.
+    if (isOfflineRender) return;
     qc.setQueryData<BoardSnapshot>(boardSnapshotKey(boardId), {
       ...snapshotRef.current,
       savedAt: Date.now(),
     });
     // Keying on the board id plus the view id keeps the write to once per
     // meaningful change rather than once per render.
-  }, [qc, boardId, snapshot.initialViewId]);
+  }, [qc, boardId, snapshot.initialViewId, isOfflineRender]);
 }

@@ -22,12 +22,23 @@ vi.mock("@/lib/offline/persister", () => ({
 }));
 
 import { OfflinePersistence } from "./OfflinePersistence";
+import { OfflineRenderProvider } from "@/lib/offline/offline-render-context";
 
 function wrap(qc: QueryClient) {
   // Named function expression so eslint's react/display-name has a name to
   // infer — same idiom as `Wrapper` in OfflineBoard.test.tsx.
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  };
+}
+
+function wrapOffline(qc: QueryClient) {
+  return function OfflineWrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={qc}>
+        <OfflineRenderProvider>{children}</OfflineRenderProvider>
+      </QueryClientProvider>
+    );
   };
 }
 
@@ -81,5 +92,35 @@ describe("OfflinePersistence", () => {
     await Promise.resolve();
 
     expect(persistQueryClientSubscribe).not.toHaveBeenCalled();
+  });
+
+  it("does not subscribe inside OfflineRenderProvider even when grace permits", async () => {
+    // This is the defect: BoardViews (which renders OfflinePersistence) is
+    // reused to render the cached board on the `/offline` route. Without this
+    // guard, merely viewing a board offline re-persists the whole client to
+    // IndexedDB on a device already known to be offline.
+    enforceOfflineGrace.mockResolvedValue(true);
+    const qc = new QueryClient();
+
+    render(<OfflinePersistence userId="u1" />, { wrapper: wrapOffline(qc) });
+
+    // Give the (incorrect) async subscribe path a turn to run before
+    // asserting its absence.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(enforceOfflineGrace).not.toHaveBeenCalled();
+    expect(persistQueryClientSubscribe).not.toHaveBeenCalled();
+    expect(rememberIdentity).not.toHaveBeenCalled();
+  });
+
+  it("still subscribes normally outside the offline provider when grace permits", async () => {
+    enforceOfflineGrace.mockResolvedValue(true);
+    const qc = new QueryClient();
+
+    render(<OfflinePersistence userId="u1" />, { wrapper: wrap(qc) });
+
+    await waitFor(() =>
+      expect(persistQueryClientSubscribe).toHaveBeenCalledTimes(1),
+    );
   });
 });

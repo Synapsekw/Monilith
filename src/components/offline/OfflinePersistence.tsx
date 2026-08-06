@@ -7,6 +7,7 @@ import {
   enforceOfflineGrace,
   rememberIdentity,
 } from "@/lib/offline/entitlement";
+import { useIsOfflineRender } from "@/lib/offline/offline-render-context";
 import { persistOptionsFor } from "@/lib/offline/persister";
 
 /**
@@ -21,8 +22,14 @@ import { persistOptionsFor } from "@/lib/offline/persister";
  */
 export function OfflinePersistence({ userId }: { userId: string }) {
   const queryClient = useQueryClient();
+  // On the `/offline` route's replay of a cached board, subscribing here
+  // would re-write the whole persisted client to IndexedDB on a device we
+  // already know is offline — see offline-render-context.tsx.
+  const isOfflineRender = useIsOfflineRender();
 
   useEffect(() => {
+    if (isOfflineRender) return;
+
     rememberIdentity(userId);
 
     let cancelled = false;
@@ -46,7 +53,7 @@ export function OfflinePersistence({ userId }: { userId: string }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [queryClient, userId]);
+  }, [queryClient, userId, isOfflineRender]);
 
   return null;
 }
