@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth/session";
 import { authorizeRequestSchema } from "@/lib/validations/mcp-oauth";
 import { getOauthClient } from "@/lib/mcp/oauth/client-store";
+import { isRegisteredRedirectUri } from "@/lib/mcp/oauth/redirect-uri";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -15,7 +16,13 @@ export async function GET(req: Request) {
   }
 
   const client = await getOauthClient(parsed.data.client_id);
-  if (!client || !client.redirect_uris.includes(parsed.data.redirect_uri)) {
+  // Not `redirect_uris.includes(...)`: a native/CLI client binds a fresh
+  // ephemeral loopback port on every login, so exact matching made every
+  // connect after the first fail `invalid_client`. See redirect-uri.ts.
+  if (
+    !client ||
+    !isRegisteredRedirectUri(client.redirect_uris, parsed.data.redirect_uri)
+  ) {
     return new Response("invalid_client", { status: 400 });
   }
 
