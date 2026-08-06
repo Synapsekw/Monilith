@@ -221,3 +221,40 @@ describe("buildAppendPayload (column resolution)", () => {
     ).toThrow("no name column");
   });
 });
+
+describe("buildAppendPayload — format scopes the CSV formula-guard undo", () => {
+  const quotedTable: ParsedTable = {
+    header: ["Name", "Notes"],
+    rows: [["Alpha", "'- not a bullet, a typed apostrophe"]],
+    rowIndices: [1],
+  };
+  const quotedStructure: RowStructureEntry[] = [
+    { gridIndex: 1, groupKey: "g1", type: "item" },
+  ];
+  const oneGroup: ImportGroup[] = [
+    { key: "g1", name: "Backlog", existingGroupId: null },
+  ];
+
+  it("xlsx keeps a leading apostrophe; csv (default) undoes the guard", () => {
+    const csvPayload = buildAppendPayload(
+      quotedTable,
+      specs,
+      boardColumns,
+      oneGroup,
+      quotedStructure,
+      "csv",
+    );
+    const xlsxPayload = buildAppendPayload(
+      quotedTable,
+      specs,
+      boardColumns,
+      oneGroup,
+      quotedStructure,
+      "xlsx",
+    );
+    const csvCell = csvPayload.items[0].cells[0].value as { text: string };
+    const xlsxCell = xlsxPayload.items[0].cells[0].value as { text: string };
+    expect(csvCell.text).toBe("- not a bullet, a typed apostrophe");
+    expect(xlsxCell.text).toBe("'- not a bullet, a typed apostrophe");
+  });
+});

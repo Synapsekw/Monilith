@@ -95,4 +95,65 @@ describe("ListWidget long text cell", () => {
       nameCell.closest("td")?.className,
     );
   });
+
+  it("gives the table a definite column width (table-fixed + colgroup), not just the truncate class", () => {
+    // jsdom does no layout, so it can't observe whether text-overflow:ellipsis
+    // actually fires — a `className` assertion alone would pass even if the
+    // table used `table-layout:auto` (where `truncate`'s `white-space:nowrap`
+    // makes the column grow to fit instead of clipping). Pin the structural
+    // precondition ellipsis depends on: a fixed table layout with every
+    // column given a definite, non-auto width via <colgroup>.
+    useWidgetRows.mockReturnValue({
+      data: textRows,
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ListWidget widget={widget} />);
+
+    const table = screen.getByRole("table");
+    expect(table.className).toMatch(/table-fixed/);
+    const cols = table.querySelectorAll("colgroup col");
+    // "Item" name column + 1 data column ("Notes").
+    expect(cols).toHaveLength(2);
+    for (const col of cols) {
+      const width = (col as HTMLElement).style.width;
+      expect(width).not.toBe("");
+      expect(width).not.toBe("auto");
+    }
+  });
+
+  it("bounds the actual character count of a very long cell (not just visual clipping)", () => {
+    // The DOM/tooltip payload must be bounded regardless of what CSS does —
+    // `title` is a native tooltip that shows the FULL string on hover no
+    // matter how the cell is visually clipped.
+    const longValue = "word ".repeat(400).trim(); // ~2,000 chars
+    const longRows: WidgetRows = {
+      columns: [{ id: "col-notes", name: "Notes", kind: "text", options: [] }],
+      rows: [
+        {
+          itemId: "item-1",
+          name: "Ship it",
+          cells: { "col-notes": { text: longValue } },
+        },
+      ],
+    };
+    useWidgetRows.mockReturnValue({
+      data: longRows,
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<ListWidget widget={widget} />);
+
+    const valueSpan = document.querySelector(
+      "tbody td:nth-child(2) span",
+    ) as HTMLElement;
+    expect(valueSpan).toBeTruthy();
+    expect(valueSpan.textContent!.length).toBeLessThan(210);
+    expect(valueSpan.textContent!.endsWith("…")).toBe(true);
+    // The native `title` tooltip must be bounded too — it bypasses CSS
+    // clipping entirely and shows whatever string is in the attribute.
+    expect(valueSpan.getAttribute("title")!.length).toBeLessThan(210);
+  });
 });

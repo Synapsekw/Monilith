@@ -711,6 +711,61 @@ describe("textToCell text — CSV formula-guard round trip", () => {
     // so it must be left alone rather than speculatively stripped.
     expect(textToCell("text", "''- item", [])).toEqual({ text: "''- item" });
   });
+
+  // PINNING TEST — documents an accepted, deliberate, one-shot data loss.
+  // A CSV file cannot distinguish an apostrophe our OWN export guard added
+  // from one the user genuinely typed right before a formula-lead character
+  // ("=+-@" or tab/CR). Given that ambiguity, we choose to always undo the
+  // guard — because getting Markdown bullets/headings (which start with the
+  // formula-lead characters "-"/"#") to round-trip cleanly matters more than
+  // preserving a typed apostrophe in this narrow, adjacent case. Do not
+  // "fix" this by making the undo more conservative — that reintroduces the
+  // Markdown-corruption bug this guard exists to solve. See
+  // `unquoteCsvFormulaGuard`'s doc comment in cell-codec.ts.
+  it("PINS the accepted loss: a genuinely-typed apostrophe before a formula-lead char is destroyed on CSV import", () => {
+    expect(textToCell("text", "'=SUM(A1) is a formula", [], "csv")).toEqual({
+      text: "=SUM(A1) is a formula",
+    }); // the leading "'" is gone — accepted, not a bug
+  });
+
+  it("defaults to the CSV (undo-unconditionally) behavior when no format is given", () => {
+    // Back-compat: callers that don't pass `format` (client-only preview /
+    // validation paths not yet format-aware) keep the pre-fix behavior.
+    expect(textToCell("text", "'- item", [])).toEqual({ text: "- item" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// textToCell "text" — the guard undo is scoped to CSV imports only (fix #4)
+// ---------------------------------------------------------------------------
+describe("textToCell text — format scoping (xlsx has no guard to undo)", () => {
+  it("does NOT undo a leading apostrophe on an xlsx import — there was never a guard applied", () => {
+    // export-workbook.ts's guardCsvCell only ever runs on the CSV path
+    // (xlsx cells are typed, never quoted) — so on xlsx, a leading "'" can
+    // only be something the user actually typed, and undoing it would be
+    // pure, needless data loss.
+    expect(textToCell("text", "'- item", [], "xlsx")).toEqual({
+      text: "'- item",
+    });
+    expect(textToCell("text", "'=SUM(A1) is a formula", [], "xlsx")).toEqual({
+      text: "'=SUM(A1) is a formula",
+    }); // preserved, unlike the CSV case above
+  });
+
+  it("csv format explicitly still undoes the guard", () => {
+    expect(textToCell("text", "'- item", [], "csv")).toEqual({
+      text: "- item",
+    });
+  });
+
+  it("non-text kinds are unaffected by format (the guard only ever touched the 'text' case)", () => {
+    expect(textToCell("phone", "'5551234", [], "xlsx")).toEqual({
+      phone: "'5551234",
+    });
+    expect(textToCell("phone", "'5551234", [], "csv")).toEqual({
+      phone: "'5551234",
+    });
+  });
 });
 
 describe("priority codec", () => {

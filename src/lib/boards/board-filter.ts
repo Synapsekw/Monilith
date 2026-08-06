@@ -233,11 +233,35 @@ function numericKey(kind: ColumnKind, v: Rec): number | null {
   return null;
 }
 
-/** Evaluate one generic condition against a single item's cell value. */
+/**
+ * Precomputed, stripped forms of `cond.value` for the text-comparing
+ * operators ("contains" lowercases, "eq" doesn't). `evaluateCondition` runs
+ * this stripping itself when `prepared` is omitted — the standalone/tested
+ * default — but `buildItemPredicate` below evaluates the SAME condition
+ * against every item on the board, so it computes this once in its setup
+ * (outside the returned closure, the same way it already hoists `q`) and
+ * passes it in, instead of re-stripping the identical `cond.value` on every
+ * one of N items.
+ */
+export type PreparedConditionValue = {
+  contains: string;
+  eq: string;
+};
+
+export function prepareConditionValue(
+  cond: FilterCondition,
+): PreparedConditionValue {
+  const stripped = stripMarkdown(String(cond.value ?? ""));
+  return { contains: stripped.toLowerCase(), eq: stripped };
+}
+
+/** Evaluate one generic condition against a single item's cell value.
+ *  `prepared` is an optional perf hint — see {@link prepareConditionValue}. */
 export function evaluateCondition(
   cond: FilterCondition,
   kind: ColumnKind,
   value: unknown,
+  prepared?: PreparedConditionValue,
 ): boolean {
   const op: FilterOperator = cond.operator;
   if (op === "is_empty") return isCellEmpty(kind, value);
@@ -255,13 +279,13 @@ export function evaluateCondition(
       // match (AGENTS.md text-column consumers fix).
       const text = stripMarkdown(String(v.text ?? "")).toLowerCase();
       return text.includes(
-        stripMarkdown(String(cond.value ?? "")).toLowerCase(),
+        prepared?.contains ?? prepareConditionValue(cond).contains,
       );
     }
     case "eq":
       return (
         stripMarkdown(String(v.text ?? "")) ===
-        stripMarkdown(String(cond.value ?? ""))
+        (prepared?.eq ?? prepareConditionValue(cond).eq)
       );
     case "num_eq":
     case "num_ne":
@@ -303,7 +327,11 @@ export function buildItemPredicate(
   state: BoardFilterState,
   ctx: FilterContext,
 ): (item: SearchableItem) => boolean {
-  const q = state.q.trim().toLowerCase();
+  // Stripped once here, in setup — not on every item — the same way the cell
+  // side is stripped per item below (it has to be; each item's cell text
+  // differs). A query typed with Markdown syntax in it should still match
+  // (mirrors the "contains" condition operator's treatment of both sides).
+  const q = stripMarkdown(state.q).toLowerCase();
   const people = new Set(state.people);
   const status = new Set(state.status);
   const byId = new Map(ctx.columns.map((c) => [c.id, c]));
@@ -313,18 +341,27 @@ export function buildItemPredicate(
   const statusColumns = ctx.columns.filter((c) => c.kind === "status");
   const conditions = state.conditions.conditions;
   const combinator = state.conditions.combinator ?? "and";
+  // Hoisted out of the returned closure for the same reason `q` is: each
+  // condition's `cond.value` is fixed for the life of this predicate, so
+  // stripping it once per condition (not once per item per condition) avoids
+  // re-running the identical strip thousands of times on a large board.
+  const preparedConditions = conditions.map(prepareConditionValue);
 
   const get = (itemId: string, columnId: string) =>
     ctx.cellMap.get(cellKey(itemId, columnId));
 
   return (item) => {
-    // 1) quick search — item name OR any text cell contains the query
+    // 1) quick search — item name OR any text cell contains the query. Cell
+    // text is compared stripped of Markdown syntax — the board's collapsed
+    // cell displays stripped text, so quick search must match what's
+    // actually on screen, not the raw stored value (a cell storing
+    // "- ship\nbilling" displays as "ship billing").
     if (q) {
       let hit = item.name.toLowerCase().includes(q);
       if (!hit) {
         for (const col of textColumns) {
-          const text = String(
-            rec(get(item.id, col.id)).text ?? "",
+          const text = stripMarkdown(
+            String(rec(get(item.id, col.id)).text ?? ""),
           ).toLowerCase();
           if (text.includes(q)) {
             hit = true;
@@ -363,10 +400,15 @@ export function buildItemPredicate(
 
     // 4) generic conditions (and/or)
     if (conditions.length > 0) {
-      const results = conditions.map((cond) => {
+      const results = conditions.map((cond, i) => {
         const col = byId.get(cond.columnId);
         if (!col) return false;
-        return evaluateCondition(cond, col.kind, get(item.id, cond.columnId));
+        return evaluateCondition(
+          cond,
+          col.kind,
+          get(item.id, cond.columnId),
+          preparedConditions[i],
+        );
       });
       const pass =
         combinator === "or" ? results.some(Boolean) : results.every(Boolean);

@@ -1,6 +1,16 @@
 import type { ColumnOption } from "@/lib/dashboards/widget-data";
 import { currencyOf, formatCurrency } from "@/lib/boards/currency";
-import { stripMarkdown } from "@/lib/boards/markdown";
+import { previewMarkdown } from "@/lib/boards/markdown";
+
+// Text columns hold Markdown up to 20,000 characters (see
+// src/lib/boards/markdown.ts). This is the only one of the four preview
+// surfaces (activity feed, report table, this widget, AI column-fill) that
+// didn't bound the character count — it only stripped syntax — so an
+// unusually long cell shipped its full length into the DOM (and into this
+// cell's native `title` tooltip below). CSS `truncate` clips the ON-SCREEN
+// line, but that's a rendering detail, not a bound on what's actually sent
+// to the client.
+const LIST_CELL_PREVIEW_MAX = 200;
 
 /** A displayed column in a List widget: id/name/kind + (for status/dropdown) options. */
 export type DisplayColumn = {
@@ -23,13 +33,15 @@ export function formatCell(column: DisplayColumn, value: unknown): CellDisplay {
   switch (column.kind) {
     case "text": {
       // Text columns hold Markdown (up to 20,000 chars) — this widget renders
-      // a single-line table cell, so show the syntax-free preview
-      // (`stripMarkdown`, the same helper the board's collapsed text cell
-      // uses) rather than literal `**`/`-` syntax. The cell itself still gets
-      // CSS `truncate` for overflow; this only removes the markup.
+      // a single-line table cell, so show a syntax-free, bounded preview
+      // (`previewMarkdown`, the shared helper every text-cell preview surface
+      // uses) rather than literal `**`/`-` syntax or the raw 20,000-char
+      // value. The cell itself still gets CSS `truncate` for on-screen
+      // overflow; this bounds what's actually sent to the client (and shown
+      // in the cell's `title` tooltip).
       if (typeof v.text !== "string" || !v.text) return EMPTY;
-      const stripped = stripMarkdown(v.text);
-      return stripped ? { text: stripped } : EMPTY;
+      const preview = previewMarkdown(v.text, LIST_CELL_PREVIEW_MAX);
+      return preview ? { text: preview } : EMPTY;
     }
     case "numbers":
       return typeof v.n === "number" ? { text: String(v.n) } : EMPTY;

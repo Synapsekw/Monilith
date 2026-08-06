@@ -177,3 +177,58 @@ describe("shapeReport text column preview", () => {
     expect(statusCell?.text).toBe("Done");
   });
 });
+
+describe("shapeReport fullText (Appendix full-data-dump)", () => {
+  function fixtureWithTextColumn(textValue: string): BoardPayload {
+    const base = fixture();
+    base.columns = [
+      ...base.columns,
+      {
+        id: "c-text",
+        board_id: "b1",
+        kind: "text",
+        name: "Notes",
+        settings: {},
+        position: 2,
+      } as unknown as BoardPayload["columns"][number],
+    ];
+    base.cellValues = [
+      ...base.cellValues,
+      {
+        item_id: "i1",
+        column_id: "c-text",
+        value: { text: textValue },
+      } as unknown as BoardPayload["cellValues"][number],
+    ];
+    return base;
+  }
+
+  it("carries the complete, untruncated value on fullText even when text is bounded", () => {
+    // Well over REPORT_TEXT_PREVIEW_MAX (200) so `text` is truncated.
+    const longValue = "word ".repeat(4000).trim(); // ~20,000 chars, board's cap
+    const model = shapeReport(fixtureWithTextColumn(longValue), new Map());
+    const cell = model.groups[0].rows[0].cells.get("c-text");
+    expect(cell?.text.length).toBeLessThan(210);
+    // fullText is the raw cellToText output — unstripped AND untruncated —
+    // the same value CSV/xlsx export round-trips, so the Appendix ("full
+    // data dump") is byte-for-byte what's stored, not a lossy preview.
+    expect(cell?.fullText).toBe(longValue);
+  });
+
+  it("keeps fullText raw (Markdown syntax intact, not stripped) for a short value too", () => {
+    const model = shapeReport(
+      fixtureWithTextColumn("**bold** and a\n- bullet"),
+      new Map(),
+    );
+    const cell = model.groups[0].rows[0].cells.get("c-text");
+    expect(cell?.text).toBe("bold and a bullet"); // preview: stripped
+    expect(cell?.fullText).toBe("**bold** and a\n- bullet"); // full: raw
+  });
+
+  it('fullText equals text for non-"text" kinds (status), which were never bounded', () => {
+    const model = shapeReport(fixtureWithTextColumn("hi"), new Map());
+    const statusCell = model.groups[0].rows[0].cells.get("c1");
+    expect(statusCell?.fullText).toBe(statusCell?.text);
+    expect(statusCell?.fullText).toBe("Done");
+  });
+});

@@ -1,6 +1,6 @@
 import type { Tables } from "@/types/database.types";
 import { formatDuration } from "@/lib/boards/time-format";
-import { stripMarkdown } from "@/lib/boards/markdown";
+import { previewMarkdown } from "@/lib/boards/markdown";
 
 export type ActivityRow = Tables<"item_activities">;
 export type Column = Tables<"columns">;
@@ -38,10 +38,7 @@ type StatusOption = { id: string; label: string; color: string };
 const CELL_TEXT_PREVIEW_MAX = 120;
 
 function previewText(text: string): string {
-  const stripped = stripMarkdown(text);
-  return stripped.length > CELL_TEXT_PREVIEW_MAX
-    ? `${stripped.slice(0, CELL_TEXT_PREVIEW_MAX).trimEnd()}…`
-    : stripped;
+  return previewMarkdown(text, CELL_TEXT_PREVIEW_MAX);
 }
 
 function describeCell(

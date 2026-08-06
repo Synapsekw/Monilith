@@ -72,6 +72,13 @@ describe("formatCell", () => {
   it("text → whitespace-only Markdown strips to the empty-cell dash", () => {
     expect(formatCell(text, { text: "   " })).toEqual({ text: "—" });
   });
+  it("text → bounds a long value with an ellipsis rather than shipping it raw", () => {
+    const long = "word ".repeat(400).trim(); // ~2,000 chars
+    const result = formatCell(text, { text: long });
+    expect(result.text.length).toBeLessThan(210);
+    expect(result.text.endsWith("…")).toBe(true);
+    expect(result.text).not.toBe(long);
+  });
   it("numbers → stringified n", () => {
     expect(formatCell(num, { n: 5 })).toEqual({ text: "5" });
   });

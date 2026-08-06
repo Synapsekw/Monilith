@@ -1,4 +1,4 @@
-import type { ImportableKind, SynthOption } from "./types";
+import type { ImportableKind, ImportFormat, SynthOption } from "./types";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import type { Json } from "@/types/database.types";
@@ -8,23 +8,38 @@ import type { Json } from "@/types/database.types";
  * formula (formula injection): `= + - @` and the tab / carriage-return
  * control chars. See OWASP "CSV Injection".
  *
- * Single source of truth for BOTH sides of the CSV formula-guard round trip:
- * `export-workbook.ts`'s `guardCsvCell` prefixes a `'` to any string cell
- * whose text starts with one of these characters (defined here and imported
- * there — export-workbook already imports from this module, so this is the
- * one-way dependency direction); `unquoteCsvFormulaGuard` below undoes
- * exactly that prefix on import. The two sides MUST use the same character
- * class — if the export guard is ever hardened with a new character while
- * this one doesn't change too, imports silently stop undoing the quote for
- * that character and cells accumulate a stray `'` on every round trip. A
- * shared constant, not a comment, is what keeps that from happening.
+ * The source of truth for what a formula-lead character IS, shared by both
+ * sides of the CSV formula-guard round trip: `export-workbook.ts`'s
+ * `guardCsvCell` prefixes a `'` to any string cell whose text starts with
+ * one of these characters (defined here and imported there — export-workbook
+ * already imports from this module, so this is the one-way dependency
+ * direction); `unquoteCsvFormulaGuard` below undoes exactly that prefix on
+ * import. The two sides MUST use the same character class — if the export
+ * guard is ever hardened with a new character while this one doesn't change
+ * too, imports silently stop undoing the quote for that character and cells
+ * accumulate a stray `'` on every round trip. A shared constant, not a
+ * comment, is what keeps THAT from happening.
+ *
+ * What this does NOT make symmetric: `guardCsvCell` applies to every STRING
+ * cell it's given — item name, group name, phone, and status/dropdown
+ * OPTION LABELS all pass through it on export — while `unquoteCsvFormulaGuard`
+ * below is only ever invoked from `textToCell`'s `case "text"`. Item/group
+ * names and phone numbers have no import-side undo at all (a name like
+ * `- Fix login` round-trips as `'- Fix login`); a status/dropdown label
+ * beginning with a formula-lead character comes back prefixed with `'`,
+ * matches no existing option, and `textToCell`'s "status"/"dropdown" cases
+ * return `null` for an unmatched label — so that cell is silently DROPPED on
+ * import, not just corrupted. This asymmetry predates this fix and is a
+ * known, separate follow-up, not something this file claims to solve.
  */
 export const CSV_FORMULA_LEAD_RE = /^[=+\-@\t\r]/;
 
 /**
  * Undo the CSV formula-injection guard's leading `'` on import — and
- * nothing else. `guardCsvCell` in export-workbook.ts prefixes a `'` to any
- * string cell whose text starts with a formula-trigger character (see
+ * nothing else (see the "text" case only — CSV_FORMULA_LEAD_RE's doc comment
+ * above for what else the export-side guard touches that this does not
+ * undo). `guardCsvCell` in export-workbook.ts prefixes a `'` to any string
+ * cell whose text starts with a formula-trigger character (see
  * `CSV_FORMULA_LEAD_RE` above) so a spreadsheet app shows it as literal
  * text. Without this inverse, exporting a board and re-importing it
  * corrupts every Markdown bullet/heading (`- item` → `'- item`) and
@@ -32,6 +47,17 @@ export const CSV_FORMULA_LEAD_RE = /^[=+\-@\t\r]/;
  * FOLLOWS it is itself a formula-lead character — so a genuine leading
  * apostrophe the user typed (`'twas the night`) is left completely
  * untouched, since `t` is not a formula-lead character.
+ *
+ * Irreducible ambiguity: `guardCsvCell` only ever runs on the CSV export
+ * path (xlsx cells are typed, never quoted — see export-workbook.ts). A CSV
+ * file can't distinguish "we added this `'`" from "the user typed this `'`
+ * right before a formula-lead character" — `'=SUM(A1) is a formula` imports
+ * as `=SUM(A1) is a formula`, apostrophe gone, one-shot (not compounding).
+ * We accept that loss deliberately: correct round-tripping of Markdown
+ * bullets/headings (which start with `-`/`#`, both formula-lead characters)
+ * matters far more than preserving a typed apostrophe that happens to
+ * precede a formula-trigger character. See the pinning test in
+ * cell-codec.test.ts documenting the exact accepted-loss input/output.
  */
 function unquoteCsvFormulaGuard(text: string): string {
   if (text[0] !== "'") return text;
@@ -307,18 +333,33 @@ function buildIsoDate(y: number, m: number, d: number): string | null {
 /**
  * Parse a raw spreadsheet string into a cell value Json for an importable kind.
  * Returns null when empty/invalid. Never throws.
+ *
+ * `format` scopes `unquoteCsvFormulaGuard` (the "text" case only) to imports
+ * that actually came from a CSV — `guardCsvCell` in export-workbook.ts only
+ * ever quotes CSV output (xlsx cells are typed, never quoted: see that
+ * file's comment), so undoing the quote on an xlsx import would strip a `'`
+ * the user actually typed, for no reason — there was never a guard to undo.
+ * Defaults to `"csv"` (the undo-unconditionally behavior this had before
+ * format-awareness existed) so callers that don't have file-format
+ * information threaded to them yet — the client-only preview/validation
+ * paths (`ConfirmStep`, `invalidCellMap`), as opposed to the actual
+ * persisting writers (`buildImportPayloadV3`, `buildAppendPayload`) — keep
+ * their existing behavior unchanged.
  */
 export function textToCell(
   kind: ImportableKind,
   raw: string,
   options: SynthOption[],
+  format: ImportFormat = "csv",
 ): Json | null {
   const trimmed = raw.trim();
   if (trimmed === "") return null;
 
   switch (kind) {
     case "text":
-      return { text: unquoteCsvFormulaGuard(trimmed) };
+      return {
+        text: format === "csv" ? unquoteCsvFormulaGuard(trimmed) : trimmed,
+      };
 
     case "numbers": {
       const n = parseNumericLoose(trimmed);

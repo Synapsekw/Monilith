@@ -18,7 +18,7 @@ import { mapAiError } from "@/lib/ai/action-guard";
 import { createClient } from "@/lib/supabase/server";
 import { bulkSetCell, type BulkOutcome } from "@/lib/boards/bulk-actions";
 import { fail, type ActionResult } from "@/lib/actions/result";
-import { stripMarkdown } from "@/lib/boards/markdown";
+import { previewMarkdown } from "@/lib/boards/markdown";
 
 const classifyColumnSchema = z.object({
   boardId: z.string().uuid(),
@@ -113,15 +113,15 @@ export async function classifyColumn(input: {
         // Strip Markdown syntax first — the classifier wants the prose, not
         // `**`/`-`/etc — then cap to the per-row budget so a handful of
         // long-form descriptions can't blow up the prompt (see
-        // CLASSIFY_TEXT_CHAR_BUDGET above). The preview's `sourceText` is
-        // built from this same truncated/stripped value below, not the raw
-        // cell text, so the reviewer sees exactly what the model classified
-        // against — never a value that implies the model read more than it
-        // did.
-        const stripped = stripMarkdown(text).slice(
-          0,
-          CLASSIFY_TEXT_CHAR_BUDGET,
-        );
+        // CLASSIFY_TEXT_CHAR_BUDGET above). `previewMarkdown` appends an
+        // ellipsis on a real cut, so a reviewer looking at `sourceText`
+        // below gets a visible "there's more" signal instead of a value
+        // that silently reads as a complete, hard-cut sentence. The
+        // preview's `sourceText` is built from this same truncated/stripped
+        // value, not the raw cell text, so the reviewer sees exactly what
+        // the model classified against — never a value that implies the
+        // model read more than it did.
+        const stripped = previewMarkdown(text, CLASSIFY_TEXT_CHAR_BUDGET);
         rows.push({ itemId: row.item_id, text: stripped });
         textByItemId.set(row.item_id, stripped);
       }

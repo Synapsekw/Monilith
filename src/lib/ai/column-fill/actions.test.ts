@@ -231,7 +231,12 @@ describe("classifyColumn action", () => {
   // handful of long descriptions could blow the prompt up to millions of
   // characters. Each row's text must be stripped of Markdown syntax and
   // capped to CLASSIFY_TEXT_CHAR_BUDGET before it reaches classifyColumn.
-  it("caps a long row's text to the per-row classify budget", async () => {
+  //
+  // FIX 5: the cap now goes through the shared `previewMarkdown` helper,
+  // which appends "…" on a real cut — so the model (and the reviewer looking
+  // at the preview's sourceText) gets a visible truncation signal instead of
+  // a hard-cut string that silently reads as a complete sentence.
+  it("caps a long row's text to the per-row classify budget, with a truncation signal", async () => {
     const { CLASSIFY_TEXT_CHAR_BUDGET } =
       await import("@/lib/ai/column-fill/schema");
     const longText = "x".repeat(20_000);
@@ -245,11 +250,16 @@ describe("classifyColumn action", () => {
       sourceColumnId: SOURCE_COLUMN_ID,
       targetColumnId: TARGET_COLUMN_ID,
     });
+    const expectedText = `${"x".repeat(CLASSIFY_TEXT_CHAR_BUDGET)}…`;
     expect(classifyColumnWithAi).toHaveBeenCalledWith(
       expect.objectContaining({
-        rows: [{ itemId: ITEM_1, text: "x".repeat(CLASSIFY_TEXT_CHAR_BUDGET) }],
+        rows: [{ itemId: ITEM_1, text: expectedText }],
       }),
     );
+    // Bounded to the budget plus the ellipsis marker — not unboundedly long,
+    // and not silently hard-cut with no signal.
+    expect(expectedText.length).toBe(CLASSIFY_TEXT_CHAR_BUDGET + 1);
+    expect(expectedText.endsWith("…")).toBe(true);
   });
 
   it("strips Markdown syntax from a row's text before classifying and previewing", async () => {

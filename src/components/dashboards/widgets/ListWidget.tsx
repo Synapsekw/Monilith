@@ -25,14 +25,35 @@ export function ListWidget({ widget }: { widget: CacheWidget }) {
       </div>
     );
 
+  // `truncate` (overflow:hidden + text-overflow:ellipsis + white-space:nowrap)
+  // only ever fires when the element it's on has a DEFINITE width to overflow
+  // against. The default `table-layout:auto` doesn't give cells one — it
+  // sizes each column to its content's min-content width, and `white-space:
+  // nowrap` makes that min-content width the entire unbroken line, so the
+  // column just grows and the wrapper's `overflow-auto` becomes a horizontal
+  // scrollbar instead of an ellipsis (see report-css.ts's `.r-table` comment,
+  // which hits the identical problem in the PDF table and — because that
+  // table's columns are caller-chosen and can't be evenly pre-sized — solves
+  // it the other way, by bounding the source string instead). `table-fixed` +
+  // a `<colgroup>` giving every column an equal, definite percentage width is
+  // what makes `truncate` actually able to compute an overflow here.
+  const colCount = data.columns.length + 1;
+  const colWidth = `${100 / colCount}%`;
+
   return (
     <div className="h-full overflow-auto">
-      <table className="w-full text-sm">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col style={{ width: colWidth }} />
+          {data.columns.map((c) => (
+            <col key={c.id} style={{ width: colWidth }} />
+          ))}
+        </colgroup>
         <thead className="text-muted-foreground bg-card sticky top-0 border-b text-left text-xs">
           <tr>
-            <th className="px-2 py-1 font-medium">Item</th>
+            <th className="truncate px-2 py-1 font-medium">Item</th>
             {data.columns.map((c) => (
-              <th key={c.id} className="px-2 py-1 font-medium">
+              <th key={c.id} className="truncate px-2 py-1 font-medium">
                 {c.name}
               </th>
             ))}

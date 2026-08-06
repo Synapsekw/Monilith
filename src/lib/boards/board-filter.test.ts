@@ -312,6 +312,26 @@ describe("buildItemPredicate", () => {
     expect(pred(item("i1", "Task"))).toBe(true);
   });
 
+  it("quick search matches the STRIPPED cell text (what the user sees), not raw Markdown", () => {
+    // "- ship\nbilling" displays as "ship billing" (bullet stripped, newline
+    // flattened) — searching that displayed text must find the item.
+    const pred = buildItemPredicate(
+      { ...EMPTY_BOARD_FILTER, q: "ship billing" },
+      ctxWith({
+        [cellKey("i1", "c-text")]: { text: "- ship\nbilling" },
+      }),
+    );
+    expect(pred(item("i1", "Task"))).toBe(true);
+  });
+
+  it("quick search also strips Markdown out of the query itself", () => {
+    const pred = buildItemPredicate(
+      { ...EMPTY_BOARD_FILTER, q: "**billing**" },
+      ctxWith({ [cellKey("i1", "c-text")]: { text: "billing work" } }),
+    );
+    expect(pred(item("i1", "Task"))).toBe(true);
+  });
+
   it("people filter matches any assigned user (OR)", () => {
     const pred = buildItemPredicate(
       { ...EMPTY_BOARD_FILTER, people: ["me"] },
@@ -369,6 +389,31 @@ describe("buildItemPredicate", () => {
       }),
     );
     expect(pred(item("i1"))).toBe(true); // matches the status branch
+  });
+
+  it("a hoisted 'contains' condition still strips both sides correctly across multiple items", () => {
+    // Regression guard for the setup-time hoist (prepareConditionValue): the
+    // SAME condition object is evaluated against every item in the board, so
+    // this pins that the precomputed value isn't stale/shared incorrectly
+    // across items with different cell contents.
+    const state: BoardFilterState = {
+      ...EMPTY_BOARD_FILTER,
+      conditions: {
+        combinator: "and",
+        conditions: [
+          { columnId: "c-text", operator: "contains", value: "**goals**" },
+        ],
+      },
+    };
+    const pred = buildItemPredicate(
+      state,
+      ctxWith({
+        [cellKey("i1", "c-text")]: { text: "- goals\nship it" },
+        [cellKey("i2", "c-text")]: { text: "unrelated notes" },
+      }),
+    );
+    expect(pred(item("i1"))).toBe(true);
+    expect(pred(item("i2"))).toBe(false);
   });
 });
 
