@@ -2,7 +2,20 @@
 
 import { Plus } from "lucide-react";
 
-export function AddGroupRow({ onAdd }: { onAdd: () => void }) {
+export function AddGroupRow({
+  onAdd,
+  canEdit,
+}: {
+  onAdd: () => void;
+  /**
+   * Board-level edit permission (`access !== "viewer"`, derived once in
+   * {@link BoardTableInner}). Viewers — including every offline board, which
+   * renders with `access="viewer"` — see no "Add group" button at all.
+   */
+  canEdit: boolean;
+}) {
+  if (!canEdit) return null;
+
   return (
     <button
       type="button"

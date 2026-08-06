@@ -321,10 +321,14 @@ export function GroupSection({
                 </div>
               </SortableContext>
             )}
+            {/* `summary.canEdit` IS the board's `access !== "viewer"` bit,
+                built once in BoardTableInner and threaded down — reuse it
+                rather than adding a second read-only notion that can drift. */}
             <AddItemRow
               groupId={group.id}
               controls={controls}
               nameWidth={nameWidth}
+              canEdit={summary.canEdit}
             />
             {hasAssignedSummary(columns) && (
               <SummaryRow
