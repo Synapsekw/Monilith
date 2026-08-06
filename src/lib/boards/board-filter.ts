@@ -6,6 +6,7 @@ import {
 } from "@/lib/validations/dashboards";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { cellKey } from "@/lib/boards/cache";
+import { stripMarkdown } from "@/lib/boards/markdown";
 
 /**
  * Board-level filter / sort / quick-search state.
@@ -249,11 +250,19 @@ export function evaluateCondition(
     case "is_not":
       return v.optionId !== cond.value;
     case "contains": {
-      const text = String(v.text ?? "").toLowerCase();
-      return text.includes(String(cond.value ?? "").toLowerCase());
+      // Compare stripped text on both sides — the cell displays stripped
+      // Markdown, and a query typed with Markdown syntax in it should still
+      // match (AGENTS.md text-column consumers fix).
+      const text = stripMarkdown(String(v.text ?? "")).toLowerCase();
+      return text.includes(
+        stripMarkdown(String(cond.value ?? "")).toLowerCase(),
+      );
     }
     case "eq":
-      return String(v.text ?? "") === String(cond.value ?? "");
+      return (
+        stripMarkdown(String(v.text ?? "")) ===
+        stripMarkdown(String(cond.value ?? ""))
+      );
     case "num_eq":
     case "num_ne":
     case "gt":
@@ -399,7 +408,10 @@ export function buildItemComparator(
   const compareKey = (v: Rec): number | string | null => {
     switch (kind) {
       case "text":
-        return v.text ? String(v.text) : null;
+        // Sort by what the cell displays (stripped Markdown), not the raw
+        // stored string — otherwise punctuation/marker characters (`-`, `**`)
+        // dominate the ordering instead of the visible text.
+        return v.text ? stripMarkdown(String(v.text)) : null;
       case "email":
         return v.email ? String(v.email) : null;
       case "phone":
@@ -432,9 +444,23 @@ export function buildItemComparator(
     }
   };
 
+  // Memoize the per-item sort key: a comparator is invoked O(n log n) times
+  // by Array.prototype.sort, but each item's key only needs computing once.
+  // This matters most for the "text" kind, whose key runs `stripMarkdown` —
+  // paying that per-comparison instead of per-row would turn an O(n) strip
+  // pass into an O(n log n) one for every sort.
+  const keyCache = new Map<string, number | string | null>();
+  const getKey = (itemId: string): number | string | null => {
+    const cached = keyCache.get(itemId);
+    if (cached !== undefined) return cached;
+    const k = compareKey(rec(get(itemId)));
+    keyCache.set(itemId, k);
+    return k;
+  };
+
   return (a, b) => {
-    const ka = compareKey(rec(get(a.id)));
-    const kb = compareKey(rec(get(b.id)));
+    const ka = getKey(a.id);
+    const kb = getKey(b.id);
     // Empty always last, regardless of direction.
     if (ka == null && kb == null) return 0;
     if (ka == null) return 1;

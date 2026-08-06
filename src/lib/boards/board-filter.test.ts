@@ -191,6 +191,49 @@ describe("evaluateCondition", () => {
     ).toBe(true);
   });
 
+  it("contains matches against the STRIPPED cell text (what the user sees)", () => {
+    // Stored raw value has Markdown; the cell displays "Q3 goals ship billing"
+    // (bold stripped, newline flattened) — a query over the visible words
+    // must match even though it's not a literal substring of the raw string.
+    expect(
+      evaluateCondition(
+        { columnId: "c", operator: "contains", value: "goals ship" },
+        "text",
+        { text: "**Q3 goals**\n- ship billing" },
+      ),
+    ).toBe(true);
+  });
+
+  it("contains also strips Markdown out of the query value itself", () => {
+    expect(
+      evaluateCondition(
+        { columnId: "c", operator: "contains", value: "**billing**" },
+        "text",
+        { text: "- ship billing" },
+      ),
+    ).toBe(true);
+  });
+
+  it("eq matches a bolded stored value against its plain-text query", () => {
+    expect(
+      evaluateCondition(
+        { columnId: "c", operator: "eq", value: "Q3 goals" },
+        "text",
+        { text: "**Q3 goals**" },
+      ),
+    ).toBe(true);
+  });
+
+  it("eq strips Markdown from both sides symmetrically", () => {
+    expect(
+      evaluateCondition(
+        { columnId: "c", operator: "eq", value: "**Q3 goals**" },
+        "text",
+        { text: "Q3 goals" },
+      ),
+    ).toBe(true);
+  });
+
   it("numeric gt / lt / eq over numbers and currency", () => {
     expect(
       evaluateCondition(
@@ -404,5 +447,62 @@ describe("buildItemComparator", () => {
     )!;
     const rows = [item("i1"), item("i2"), item("i3")];
     expect([...rows].sort(asc).map((r) => r.id)).toEqual(["i2", "i3", "i1"]);
+  });
+
+  it("sorts a text column by the STRIPPED value, not raw Markdown punctuation", () => {
+    // Raw strings would sort "- bullet" and "**Zebra**" ahead of "Alpha"
+    // (punctuation sorts before letters); the stripped/displayed text should
+    // sort Alpha, bullet, Zebra.
+    const cells = {
+      [cellKey("i1", "c-text")]: { text: "- bullet" },
+      [cellKey("i2", "c-text")]: { text: "**Zebra**" },
+      [cellKey("i3", "c-text")]: { text: "Alpha" },
+    };
+    const asc = buildItemComparator(
+      {
+        ...EMPTY_BOARD_FILTER,
+        sort: {
+          field: { kind: "column", columnId: "c-text" },
+          direction: "asc",
+        },
+      },
+      ctxWith(cells),
+    )!;
+    const rows = [item("i1"), item("i2"), item("i3")];
+    expect([...rows].sort(asc).map((r) => r.id)).toEqual(["i3", "i1", "i2"]);
+  });
+
+  it("memoizes the per-item sort key instead of recomputing it per comparison", () => {
+    // Regression guard for the sort-key performance fix: stripMarkdown (or
+    // any per-kind key derivation) must run once per row, not once per
+    // comparison. We can't spy on the module-private stripMarkdown call
+    // directly, so instead we assert the *comparator itself* only reads each
+    // cell's raw value once across a sort with many rows/comparisons.
+    let reads = 0;
+    const cellMap = new Map<string, unknown>();
+    const rows = Array.from({ length: 50 }, (_, i) => {
+      const id = `i${i}`;
+      cellMap.set(cellKey(id, "c-text"), { text: `- item ${49 - i}` });
+      return item(id);
+    });
+    const trackedCellMap = {
+      get(key: string) {
+        if (key.endsWith(":c-text")) reads++;
+        return cellMap.get(key);
+      },
+    } as unknown as Map<string, unknown>;
+    const asc = buildItemComparator(
+      {
+        ...EMPTY_BOARD_FILTER,
+        sort: {
+          field: { kind: "column", columnId: "c-text" },
+          direction: "asc",
+        },
+      },
+      { columns, cellMap: trackedCellMap },
+    )!;
+    [...rows].sort(asc);
+    // O(n) reads (one per row), not O(n log n) (one per comparison).
+    expect(reads).toBe(rows.length);
   });
 });
