@@ -79,24 +79,26 @@ userId nor an orgId (its RPC is SECURITY INVOKER and RLS-scoped per caller); tim
 RSC page is untouched:
 
 ```ts
-// src/lib/my-work/queries.ts
+// src/lib/my-work/queries.ts — the RPC is SECURITY INVOKER, so no ctx is needed
 export async function getMyWorkItemsCore(
   supabase: SupabaseClient<Database>,
-  ctx: { userId: string; orgId: string },
+  limit: number = MY_WORK_ITEM_LIMIT,
 ): Promise<MyWorkItem[]> {
-  /* the current body, minus createClient() / getUser() / getActiveOrgId() */
+  /* the current body, minus createClient() / getUser() */
 }
 
 /** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
 export async function getMyWorkItems(): Promise<MyWorkItem[]> {
-  const [supabase, user, orgId] = await Promise.all([
-    createClient(),
-    requireUser(),
-    getActiveOrgId(),
-  ]);
-  return getMyWorkItemsCore(supabase, { userId: user.id, orgId });
+  const user = await getUser();
+  if (!user) return [];
+  const supabase = await createClient();
+  return getMyWorkItemsCore(supabase);
 }
 ```
+
+A module that _does_ need context takes it explicitly — e.g.
+`getGoalsTreeCore(supabase, { owners, nowMs })`,
+`upsertTimeAllocationCore(supabase, input, { userId, orgId })`.
 
 Rules for the extraction:
 
