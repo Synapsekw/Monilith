@@ -147,9 +147,10 @@ export function McpToolsTable() {
         ))}
       </ul>
       <p className="text-muted-foreground text-sm">
-        A connected client cannot delete anything — no delete tool exists on the
-        server. Every call runs as you and is subject to the same permissions
-        you have in the app.
+        The only thing a connected client can erase is your logged time —
+        setting a day&rsquo;s entry to 0 seconds clears it. Nothing else can be
+        deleted: no other delete tool exists on the server. Every call runs as
+        you and is subject to the same permissions you have in the app.
       </p>
     </div>
   );

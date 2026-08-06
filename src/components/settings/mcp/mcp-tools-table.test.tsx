@@ -77,8 +77,30 @@ describe("McpToolsTable", () => {
     }
   });
 
-  it("states that no tool can delete", () => {
+  it("discloses the one destructive capability instead of claiming none exists", () => {
     render(<McpToolsTable />);
-    expect(screen.getByText(/cannot delete/i)).toBeInTheDocument();
+
+    // The blanket "cannot delete anything" claim this replaced was FALSE:
+    // `upsert_time_allocation` with `p_duration_secs = 0` runs a
+    // `delete from public.time_allocations` (migration 20260806060855), and
+    // log_time_allocation's Zod accepts `secs: 0`. The consent screen is the
+    // user's only account of what they are granting, so it must name that.
+    expect(
+      screen.getByText(
+        /only thing a connected client can erase is your logged time/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/0 seconds clears it/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/no other delete tool exists on the server/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/cannot delete anything/i)).toBeNull();
+
+    // …and it must agree with the row two lines above it, which already says
+    // "0 clears it" — trailer and table can no longer contradict each other.
+    const row = MCP_TOOLS_TABLE_ROWS.find(
+      (r) => r.name === "log_time_allocation",
+    );
+    expect(row?.what).toMatch(/0 clears it/);
   });
 });
