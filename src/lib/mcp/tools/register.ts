@@ -51,3 +51,36 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
   registerListReportsTool(server, getClient);
   registerGetReportTool(server, getClient);
 }
+
+/**
+ * Every tool name `registerTools` registers, in registration order.
+ *
+ * The settings table (`src/components/settings/mcp/mcp-tools-table.tsx`) is
+ * checked against this list by test, so a tool added above without a row there
+ * fails CI. That table is the user's only account of what they are granting;
+ * an understated list is a consent bug, not a docs bug.
+ */
+export const MCP_TOOL_NAMES = [
+  "list_boards",
+  "get_board",
+  "list_items",
+  "search_items",
+  "get_item",
+  "create_item",
+  "update_item",
+  "list_organizations",
+  "get_my_work",
+  "list_time_allocations",
+  "get_time_summary",
+  "log_time_allocation",
+  "list_goals",
+  "get_goal",
+  "list_portfolios",
+  "get_portfolio",
+  "list_dashboards",
+  "get_dashboard",
+  "get_widget_data",
+  "get_workload",
+  "list_reports",
+  "get_report",
+] as const;
