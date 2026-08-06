@@ -15,7 +15,7 @@ type Settings = Record<string, unknown> & { options?: ColumnOption[] };
 /**
  * Collapsed text cell. Text columns hold Markdown (see LongTextEditor), so the
  * resting view strips the syntax and flattens to one line — this renderer also
- * backs Kanban cards, the Calendar agenda, Mirror and Rollup cells.
+ * backs Mirror and Rollup cells.
  */
 export function TextCell({
   value,

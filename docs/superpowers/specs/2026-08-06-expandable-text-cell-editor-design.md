@@ -69,7 +69,9 @@ export const textValueSchema = z.object({ text: z.string().max(20_000) });
 
 A paragraph editor invites large pastes into a `jsonb` column. 20,000 characters is far above any
 legitimate cell and far below anything that would strain the row. The editor surfaces a character
-counter as the value approaches the cap, so the bound is visible before it is enforced.
+counter as the value approaches the cap, so the bound is visible before it is enforced. The cap
+applies to writes through the cell editor and MCP create_item / update_item calls; spreadsheet
+import writes via RPC and is not subject to this cap.
 
 ## 3. Components
 
@@ -162,8 +164,8 @@ asymmetry is the point, and it is why `LongTextEditor` does not reuse `useCommit
 <span className="truncate text-sm">{stripMarkdown(value?.text ?? "")}</span>
 ```
 
-`TextCell` is the single renderer behind the table, Kanban cards, the Calendar agenda, Mirror cells
-and Rollup cells, so this one change makes Markdown read cleanly on all five surfaces.
+`TextCell` is the single renderer behind the table, Mirror cells and Rollup cells, so this one
+change makes Markdown read cleanly on all three surfaces.
 
 ## 4. Non-goals
 

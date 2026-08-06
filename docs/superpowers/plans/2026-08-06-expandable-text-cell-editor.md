@@ -902,7 +902,7 @@ useCommitKeys, because a discarded paragraph is real lost work."
 
 ### Design notes for the implementer
 
-`TextCell` is the single renderer behind the table, Kanban cards, the Calendar agenda, Mirror cells and Rollup cells, so this one edit fixes Markdown legibility on all five surfaces.
+`TextCell` is the single renderer behind the table, Mirror cells and Rollup cells, so this one edit fixes Markdown legibility on all three surfaces.
 
 Add `title={stripped}` so the full single-line text is available on hover, since the cell truncates.
 

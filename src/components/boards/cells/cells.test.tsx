@@ -114,6 +114,11 @@ describe("cell renderers (read-only, 2a)", () => {
     expect(container.querySelector("span")).toHaveAttribute("title", "a b");
   });
 
+  it("TextCell has no title attribute when value is null", () => {
+    const { container } = render(<TextCell value={null} settings={{}} />);
+    expect(container.querySelector("span")).not.toHaveAttribute("title");
+  });
+
   it("StatusCell shows the matching option label", () => {
     render(<StatusCell value={{ optionId: "o1" }} settings={statusSettings} />);
     expect(screen.getByText("Done")).toBeInTheDocument();

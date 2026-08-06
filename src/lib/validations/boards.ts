@@ -142,8 +142,9 @@ export function columnSettingsSchema(kind: ColumnKind) {
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected an ISO date");
 
 // Text cells hold Markdown in this one string (see the LongTextEditor panel).
-// The cap bounds jsonb growth from large pastes and applies to every write
-// path — the editor, spreadsheet paste, and the AI set_item_fields verb.
+// The cap bounds jsonb growth on the paths that validate through this schema —
+// the cell editor and the MCP create_item / update_item text writes. Spreadsheet
+// import writes via RPC and is not covered by this cap.
 export const textValueSchema = z.object({ text: z.string().max(20_000) });
 export const statusValueSchema = z.object({
   optionId: z.string().nullable(),
