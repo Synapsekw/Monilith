@@ -7,36 +7,81 @@
 
 ## Status in one line
 
-All 10 planned tasks are implemented, reviewed and through their fix rounds; the four automated gates are green; **the feature does not yet work end-to-end**, so the branch was deliberately not merged.
+All 10 planned tasks plus the whole B1-B6 follow-up list are implemented, reviewed and verified;
+the four gates are green and **`pnpm e2e:offline` passes on three consecutive runs** against a
+production build. The feature works end to end.
 
-## Why the branch is open
+## Why the acceptance command changed
 
-`pnpm typecheck` 0 errors · `pnpm lint` 0 errors · `pnpm test` 4407+ passing · `pnpm build` clean.
-**`pnpm e2e e2e/offline.spec.ts` is RED.**
+`pnpm e2e e2e/offline.spec.ts` could never pass, and not because of a bug. `next dev` serves
+documents with `Cache-Control: no-cache, must-revalidate` (storable), so the browser answers an
+offline reload from its HTTP cache, the navigation never fails, and the service worker's fallback -
+the entire feature - is never reached. `next start` sends `no-store`, so the document is never
+cached, the navigation genuinely fails and the worker takes over. Offline is structurally
+unobservable under `next dev`.
 
-The E2E spec was run for real in a browser against a real server, seven times, and never passed. It found defects that twelve per-task reviews and 4407 unit tests all missed. The spec is committed while failing on purpose: it encodes the acceptance bar and reproduces the defects.
+So offline acceptance runs against a production build:
 
-## What exists
+```bash
+pnpm e2e:offline        # playwright.offline.config.ts: build + start on :3001
+```
 
-20 commits, 58 files, +2517/−38.
+`offline.spec.ts` is `testIgnore`d from the default (dev) config. Every other spec is unchanged.
 
-**New modules** — `src/lib/offline/`: `constants.ts` (the single 7-day `OFFLINE_WINDOW_MS`, `OFFLINE_MESSAGE`, `LAST_USER_KEY`, `ENTITLEMENT_KEY`), `online-status.ts` (`assertOnline`, `useOnlineStatus`), `persister.ts` (user-namespaced IndexedDB persister, allowlist = `boardSnapshot` only), `wipe.ts`, `snapshot.ts`, `entitlement.ts`, `offline-render-context.tsx`.
-`src/components/offline/`: `ServiceWorkerRegistrar`, `OfflinePersistence`, `OfflineBoard`, `OfflineBanner`.
-Plus `public/sw.js`, `src/app/offline/page.tsx`, `public/desktop-release.json`, `e2e/offline.spec.ts`, and ADRs 35/36/37 in `vault/decisions/`.
+## What was actually wrong (B2 was four defects, not one)
 
-**Design in one paragraph.** A service worker precaches only content-hashed `/_next/static/**` and one document, `/offline`, and serves it for any navigation that fails. `BoardViews` snapshots its full render props under the `boardSnapshot` query key (not `BoardCache` — that type has no `views`), which a persister writes to IndexedDB namespaced by user id and capped at 7 days. `/offline` restores that snapshot and re-renders the board with `access="viewer"` — the board's existing read-only mode, not a new one. Writes are refused by `assertOnline()` at the top of all 58 `mutationFn`s, enforced by a static-analysis test.
+1. **The worker cached the `/offline` DOCUMENT and none of its JavaScript.** `cache.add()` stores
+   one response; the document's chunks are separate requests, and the cache-first rule only ever
+   populated assets already fetched while online - and `/offline` is never visited while online.
+   Measured on a production build: 28 of 30 script chunks absent. Whether an offline reload worked
+   was decided by whether Chrome's HTTP disk cache happened to still hold them, which is exactly the
+   reported "sometimes ChunkLoadError". The worker now caches the shell's whole asset graph
+   atomically, refreshes it from a live navigation so it survives a deploy (a byte-identical `sw.js`
+   is never reinstalled, while chunk hashes change every build), and prunes stale entries.
+2. **`persistQueryClientSubscribe` performs no initial save.** It saves only from a _subsequent_
+   cache event. The snapshot is written once, before the grace check resolves and the subscription
+   exists, so nothing was ever written to disk - `indexedDB.databases()` showed `keyval-store`
+   absent at every online observation point. Fixed with an explicit first save.
+3. **TanStack's `onlineManager` never reads `navigator.onLine`.** It starts at `true` and only
+   changes on the `online`/`offline` events, which fire on a _transition_. A page loaded while
+   already offline reported itself online forever - so on `/offline` the banner never rendered and
+   `assertOnline()` did not throw, losing the "every write clearly refused" guarantee for a session
+   started offline. Seeded once at module load.
+4. **The worker's network-first race was not a test of connectivity.** `fetch()` is answered from
+   the browser's HTTP cache when it can be, so a fresh navigation to a cacheable Partial-Prerender
+   shell "succeeded" while genuinely offline and the fallback never ran. Now short-circuits on
+   `self.navigator.onLine === false` before attempting the network.
 
-## Open work, in priority order
+## B3-B6
 
-**B2 — BLOCKING. Offline reading does not work end-to-end in production.** Reloading while offline sometimes throws `ChunkLoadError`; sometimes it reaches `/offline` but reports a just-cached board as never-visited. This is the plan's central promise. Needs `systematic-debugging` — reproduce and find the mechanism before changing code. Two hypotheses worth testing first: the SW precache races the snapshot write, so the board is not yet in IndexedDB when `/offline` restores; and the SW's cache-first `/_next/static/**` rule may not hold every chunk `/offline` needs, producing the `ChunkLoadError`.
+**B3 - not a product defect.** Same cause as the acceptance-command change above. One dev-mode
+defect _was_ real and is fixed: the asset scanner used an allow-list character class that silently
+skipped every Turbopack dev chunk containing `[`, `]` or `@`.
 
-**B3** — in dev, reloading offline hangs on the app's own loading skeletons instead of the SW fallback. May be the same root cause as B2, may be a dev-server artifact; establish which before fixing.
+**B4 - ruled and implemented.** `enforceOfflineGrace` now runs in `OfflineBoard` **before** the
+restore, not in `OfflinePersistence`. Offline is where the grace window matters, because being
+offline is precisely why the entitlement cannot be re-verified; enforcing after the restore would
+render the board and only wipe for next time, which is not enforcement. The ruling is recorded at
+the early return itself so it cannot be silently reverted.
 
-**B4** — the `isOfflineRender` early return in `OfflinePersistence.tsx` also skips `enforceOfflineGrace`, the only caller that wipes on entitlement lapse. A user who only ever opens `/offline` is never wiped. Needs an explicit decision plus a comment recording it, not a silent change.
+**B5** - `useBoardPresence`'s `enabled: false` path now tested, mirroring its realtime sibling.
 
-**B5** — `useBoardPresence`'s `enabled: false` path has no test; its `useBoardRealtime` sibling has one.
+**B6** - `AddItemRow`/`AddGroupRow` gated on the existing `canEdit` (`access !== "viewer"`), as a
+required prop so every future call site must decide. This was on the acceptance path.
 
-**B6** — `AddItemRow` / `AddGroupRow` are not gated by `canEdit`, so a read-only board still shows add controls. Writes are blocked at the mutation layer, so this is an affordance gap, not a safety hole. It affects online viewers too, so it predates this branch.
+## Also fixed (found while investigating, user-approved)
+
+- **`/desktop-release.json` was auth-gated.** The proxy matcher exempts static files by extension
+  and `.json` is not in that list, so it 307'd to `/login` - and Plan 2's shell reads it _before_
+  sign-in, so every desktop shell would have received an HTML login page where it expects JSON.
+  Fixed with an exact-match `PUBLIC_ROUTES` entry, not a blanket `.json` exemption.
+- **The desktop surface is now clustered** under `src/lib/desktop/` (contract + validation + test +
+  a README mapping every touchpoint), with `proxy.ts` importing `DESKTOP_RELEASE_PATH` so the
+  allowlist and the contract cannot drift.
+- **`playwright.config.ts` no longer reuses a stray server.** `reuseExistingServer` was
+  `!process.env.CI` against a fixed `:3000`; every task worktree shares that port, so a dev server
+  left running from `develop` was picked up silently and the suite reported on code that was not
+  under test. It is now `false` - start the suite with `:3000` free.
 
 ## Deferred minors (in the ledger, for the whole-branch review)
 
@@ -48,6 +93,14 @@ Static SW cache grows unbounded across deploys (fixed `CACHE` literal; `activate
 - **Five defects originated in the plan text**, faithfully transcribed: `cache.put` outside `event.waitUntil`; `isWithinGrace` failing open on a future timestamp; an inert `enforceOfflineGrace`; a wipe that never cleared the identity marker; and the offline route re-persisting its own cache (so a board kept in offline use never aged out). All fixed. The pattern: when a reviewer says "plan-mandated," the plan is usually the thing that is wrong.
 - **`@tanstack/react-query` and `@tanstack/react-query-persist-client` must share a `query-core` version** or a live `QueryClient` is not nominally assignable across the boundary. Both are pinned to `^5.101.4`.
 - **The mutation guard's second assertion is load-bearing** — it compares declared `mutationFn:` count against matcher-recognised count, and it caught two non-async expression-bodied arrows that would otherwise have been skipped in silence. Never weaken it; widen the matcher instead.
+- **A test probe can manufacture the bug it is looking for.** `waitForOfflineSnapshot` opened
+  `keyval-store` and aborted `onupgradeneeded`, documented as "observe, never create". Aborting a
+  version-change transaction that was creating the database rolls it back to version 0 and destroys
+  the store: `indexedDB.databases()` reported the database absent immediately after that probe had
+  confirmed the snapshot present. A control run with the instrument removed entirely is what
+  separated instrument from product - do that before trusting any measurement.
+- **`reuseExistingServer` + a fixed port + worktrees = silently testing another branch.** The main
+  checkout's `develop` server answers `:3000` and 404s `/sw.js`.
 - Parallel subagents in one worktree work fine when file sets are disjoint, provided they run **no git commands** and the controller commits between batches.
 
 ## How to resume
@@ -60,7 +113,7 @@ cat .superpowers/sdd/2026-08-06-offline-read-only/progress.md
 git log --oneline develop..HEAD
 ```
 
-Do **not** run `scripts/finish-task.sh` until B2 is resolved and `pnpm e2e e2e/offline.spec.ts` passes.
+Acceptance: `pnpm e2e:offline` (production build). The default `pnpm e2e` deliberately skips this spec.
 
 ## Plan 2 has not started
 
