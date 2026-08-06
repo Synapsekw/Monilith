@@ -63,6 +63,22 @@ describe("formatCell", () => {
     expect(formatCell(text, { text: "hi" })).toEqual({ text: "hi" });
     expect(formatCell(text, {})).toEqual({ text: "—" });
   });
+  it("text → strips Markdown syntax rather than showing raw marks", () => {
+    expect(formatCell(text, { text: "**bold** and _italic_" })).toEqual({
+      text: "bold and italic",
+    });
+    expect(formatCell(text, { text: "- a\n- b" })).toEqual({ text: "a b" });
+  });
+  it("text → whitespace-only Markdown strips to the empty-cell dash", () => {
+    expect(formatCell(text, { text: "   " })).toEqual({ text: "—" });
+  });
+  it("text → bounds a long value with an ellipsis rather than shipping it raw", () => {
+    const long = "word ".repeat(400).trim(); // ~2,000 chars
+    const result = formatCell(text, { text: long });
+    expect(result.text.length).toBeLessThan(210);
+    expect(result.text.endsWith("…")).toBe(true);
+    expect(result.text).not.toBe(long);
+  });
   it("numbers → stringified n", () => {
     expect(formatCell(num, { n: 5 })).toEqual({ text: "5" });
   });

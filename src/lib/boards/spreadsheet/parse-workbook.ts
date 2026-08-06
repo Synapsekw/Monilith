@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { Readable } from "node:stream";
 import type { ParsedSheet, RawSheet } from "./types";
-import { MAX_ROWS, MAX_COLS } from "./types";
+import { MAX_ROWS, MAX_COLS, importFormatFromFileName } from "./types";
 import { selectRows } from "./select-rows";
 
 async function loadWorkbook(
@@ -9,7 +9,7 @@ async function loadWorkbook(
   fileName: string,
 ): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
-  if (fileName.toLowerCase().endsWith(".csv")) {
+  if (importFormatFromFileName(fileName) === "csv") {
     await wb.csv.read(Readable.from(buf.toString("utf8")));
   } else {
     // exceljs types xlsx.load's param as the non-generic `Buffer`, while
@@ -26,7 +26,7 @@ export async function parseWorkbookSheets(
 ): Promise<RawSheet[]> {
   const wb = await loadWorkbook(buf, fileName);
   if (wb.worksheets.length === 0) throw new Error("empty");
-  const isCsv = fileName.toLowerCase().endsWith(".csv");
+  const isCsv = importFormatFromFileName(fileName) === "csv";
   const csvName =
     fileName
       .replace(/\.[^.]+$/, "")

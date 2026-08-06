@@ -19,8 +19,19 @@ export type ItemDocumentParts = {
 // Caps bound both the embedding cost and the model's input window. Comments are
 // the unbounded surface (an item can accrue many), so we keep the most recent.
 const MAX_COMMENTS = 10;
-const MAX_PART_CHARS = 2_000;
-const MAX_DOC_CHARS = 8_000;
+// Per-part cap (each text cell / comment / label individually). Sized so a
+// long text-column cell — which can run several paragraphs of Markdown-
+// stripped prose — stays semantically searchable past its opening lines
+// instead of being cut at the first couple of sentences. Owner-approved
+// sizing (not a chunking redesign): a text cell at the 20,000-char column
+// cap (`textValueSchema` in src/lib/validations/boards.ts) will still clip
+// here — only the first MAX_PART_CHARS of it are embedded.
+const MAX_PART_CHARS = 6_000;
+// Whole-document cap (name + all text cells + comments + labels, joined).
+// Raised alongside MAX_PART_CHARS so a handful of long text cells don't
+// exhaust the budget and push comments/status labels out of the embedding
+// entirely.
+const MAX_DOC_CHARS = 16_000;
 
 function clean(value: string): string {
   return value.replace(/\s+/g, " ").trim().slice(0, MAX_PART_CHARS);

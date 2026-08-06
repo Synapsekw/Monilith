@@ -25,14 +25,49 @@ export function ListWidget({ widget }: { widget: CacheWidget }) {
       </div>
     );
 
+  // `truncate` (overflow:hidden + text-overflow:ellipsis + white-space:nowrap)
+  // only ever fires when the element it's on has a DEFINITE width to overflow
+  // against. The default `table-layout:auto` doesn't give cells one — it
+  // sizes each column to its content's min-content width, and `white-space:
+  // nowrap` makes that min-content width the entire unbroken line, so the
+  // column just grows and the wrapper's `overflow-auto` becomes a horizontal
+  // scrollbar instead of an ellipsis (see report-css.ts's `.r-table` comment,
+  // which hits the identical problem in the PDF table and — because that
+  // table's columns are caller-chosen and can't be evenly pre-sized — solves
+  // it the other way, by bounding the source string instead). `table-fixed` +
+  // a `<colgroup>` giving every column a definite percentage width is what
+  // makes `truncate` actually able to compute an overflow here.
+  //
+  // Widths are WEIGHTED, not equal: the Item/name column is the primary
+  // column and — being a free-text name rather than a short status/date/
+  // number value — is almost always the longest string on the row, so an
+  // equal split let a mostly-empty Status/Owner column crowd it into a hard
+  // truncate. NAME_WEIGHT:VALUE_WEIGHT = 2:1 gives the name column exactly
+  // double a value column's share, whatever the value-column count is (2 of
+  // 3 "shares" at zero value columns down to a vanishingly small-but-still-
+  // 2x share at many) — a proportional floor rather than a fixed px/% one,
+  // so it never inverts (name < value) and never goes stale as columns are
+  // added or removed.
+  const NAME_WEIGHT = 2;
+  const VALUE_WEIGHT = 1;
+  const totalWeight = NAME_WEIGHT + data.columns.length * VALUE_WEIGHT;
+  const nameColWidth = `${(NAME_WEIGHT / totalWeight) * 100}%`;
+  const valueColWidth = `${(VALUE_WEIGHT / totalWeight) * 100}%`;
+
   return (
     <div className="h-full overflow-auto">
-      <table className="w-full text-sm">
+      <table className="w-full table-fixed text-sm">
+        <colgroup>
+          <col style={{ width: nameColWidth }} />
+          {data.columns.map((c) => (
+            <col key={c.id} style={{ width: valueColWidth }} />
+          ))}
+        </colgroup>
         <thead className="text-muted-foreground bg-card sticky top-0 border-b text-left text-xs">
           <tr>
-            <th className="px-2 py-1 font-medium">Item</th>
+            <th className="truncate px-2 py-1 font-medium">Item</th>
             {data.columns.map((c) => (
-              <th key={c.id} className="px-2 py-1 font-medium">
+              <th key={c.id} className="truncate px-2 py-1 font-medium">
                 {c.name}
               </th>
             ))}
@@ -45,11 +80,13 @@ export function ListWidget({ widget }: { widget: CacheWidget }) {
               {data.columns.map((c) => {
                 const cell = formatCell(c, row.cells[c.id]);
                 return (
-                  <td key={c.id} className="px-2 py-1">
+                  <td key={c.id} className="truncate px-2 py-1">
                     {cell.color ? (
                       <ColorChip color={cell.color}>{cell.text}</ColorChip>
                     ) : (
-                      <span className="text-muted-foreground">{cell.text}</span>
+                      <span className="text-muted-foreground" title={cell.text}>
+                        {cell.text}
+                      </span>
                     )}
                   </td>
                 );

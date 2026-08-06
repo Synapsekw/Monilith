@@ -41,6 +41,42 @@ describe("buildItemDocument", () => {
     expect(doc).toContain("comment-14"); // newest kept
     expect(doc).not.toContain("comment-0"); // oldest dropped
   });
+
+  it("keeps a long text cell's later paragraphs searchable (part cap = 6,000)", () => {
+    // Below the old 2,000-char cap this content would have been truncated
+    // mid-cell; it must now survive intact up to 6,000 chars.
+    const longCell = "a".repeat(5_999) + "Z";
+    const doc = buildItemDocument({ name: "x", textCells: [longCell] });
+    expect(doc).toContain("Z");
+    expect(doc.length).toBeGreaterThan(2_000);
+  });
+
+  it("truncates a single part at exactly MAX_PART_CHARS (6,000)", () => {
+    const longCell = "a".repeat(7_000);
+    const doc = buildItemDocument({ name: "", textCells: [longCell] });
+    expect(doc.length).toBe(6_000);
+  });
+
+  it("does not let a handful of long cells exhaust the doc budget before labels (doc cap = 16,000)", () => {
+    // Four long-ish cells that would have blown through the old 8,000-char
+    // doc cap on their own, plus trailing comments/labels that must still
+    // survive in the final document.
+    const cells = Array.from({ length: 4 }, (_, i) => `cell-${i} `.repeat(500));
+    const doc = buildItemDocument({
+      name: "Item name",
+      textCells: cells,
+      comments: ["a trailing comment"],
+      statusLabels: ["In Progress"],
+    });
+    expect(doc).toContain("In Progress");
+    expect(doc).toContain("a trailing comment");
+  });
+
+  it("truncates the whole document at MAX_DOC_CHARS (16,000)", () => {
+    const cells = Array.from({ length: 4 }, () => "x".repeat(6_000));
+    const doc = buildItemDocument({ name: "", textCells: cells });
+    expect(doc.length).toBe(16_000);
+  });
 });
 
 describe("contentHash", () => {

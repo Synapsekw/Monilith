@@ -6,6 +6,7 @@ import {
 } from "@/lib/validations/dashboards";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { cellKey } from "@/lib/boards/cache";
+import { stripMarkdown } from "@/lib/boards/markdown";
 
 /**
  * Board-level filter / sort / quick-search state.
@@ -232,11 +233,35 @@ function numericKey(kind: ColumnKind, v: Rec): number | null {
   return null;
 }
 
-/** Evaluate one generic condition against a single item's cell value. */
+/**
+ * Precomputed, stripped forms of `cond.value` for the text-comparing
+ * operators ("contains" lowercases, "eq" doesn't). `evaluateCondition` runs
+ * this stripping itself when `prepared` is omitted — the standalone/tested
+ * default — but `buildItemPredicate` below evaluates the SAME condition
+ * against every item on the board, so it computes this once in its setup
+ * (outside the returned closure, the same way it already hoists `q`) and
+ * passes it in, instead of re-stripping the identical `cond.value` on every
+ * one of N items.
+ */
+export type PreparedConditionValue = {
+  contains: string;
+  eq: string;
+};
+
+export function prepareConditionValue(
+  cond: FilterCondition,
+): PreparedConditionValue {
+  const stripped = stripMarkdown(String(cond.value ?? ""));
+  return { contains: stripped.toLowerCase(), eq: stripped };
+}
+
+/** Evaluate one generic condition against a single item's cell value.
+ *  `prepared` is an optional perf hint — see {@link prepareConditionValue}. */
 export function evaluateCondition(
   cond: FilterCondition,
   kind: ColumnKind,
   value: unknown,
+  prepared?: PreparedConditionValue,
 ): boolean {
   const op: FilterOperator = cond.operator;
   if (op === "is_empty") return isCellEmpty(kind, value);
@@ -249,11 +274,19 @@ export function evaluateCondition(
     case "is_not":
       return v.optionId !== cond.value;
     case "contains": {
-      const text = String(v.text ?? "").toLowerCase();
-      return text.includes(String(cond.value ?? "").toLowerCase());
+      // Compare stripped text on both sides — the cell displays stripped
+      // Markdown, and a query typed with Markdown syntax in it should still
+      // match (AGENTS.md text-column consumers fix).
+      const text = stripMarkdown(String(v.text ?? "")).toLowerCase();
+      return text.includes(
+        prepared?.contains ?? prepareConditionValue(cond).contains,
+      );
     }
     case "eq":
-      return String(v.text ?? "") === String(cond.value ?? "");
+      return (
+        stripMarkdown(String(v.text ?? "")) ===
+        (prepared?.eq ?? prepareConditionValue(cond).eq)
+      );
     case "num_eq":
     case "num_ne":
     case "gt":
@@ -294,7 +327,11 @@ export function buildItemPredicate(
   state: BoardFilterState,
   ctx: FilterContext,
 ): (item: SearchableItem) => boolean {
-  const q = state.q.trim().toLowerCase();
+  // Stripped once here, in setup — not on every item — the same way the cell
+  // side is stripped per item below (it has to be; each item's cell text
+  // differs). A query typed with Markdown syntax in it should still match
+  // (mirrors the "contains" condition operator's treatment of both sides).
+  const q = stripMarkdown(state.q).toLowerCase();
   const people = new Set(state.people);
   const status = new Set(state.status);
   const byId = new Map(ctx.columns.map((c) => [c.id, c]));
@@ -304,18 +341,27 @@ export function buildItemPredicate(
   const statusColumns = ctx.columns.filter((c) => c.kind === "status");
   const conditions = state.conditions.conditions;
   const combinator = state.conditions.combinator ?? "and";
+  // Hoisted out of the returned closure for the same reason `q` is: each
+  // condition's `cond.value` is fixed for the life of this predicate, so
+  // stripping it once per condition (not once per item per condition) avoids
+  // re-running the identical strip thousands of times on a large board.
+  const preparedConditions = conditions.map(prepareConditionValue);
 
   const get = (itemId: string, columnId: string) =>
     ctx.cellMap.get(cellKey(itemId, columnId));
 
   return (item) => {
-    // 1) quick search — item name OR any text cell contains the query
+    // 1) quick search — item name OR any text cell contains the query. Cell
+    // text is compared stripped of Markdown syntax — the board's collapsed
+    // cell displays stripped text, so quick search must match what's
+    // actually on screen, not the raw stored value (a cell storing
+    // "- ship\nbilling" displays as "ship billing").
     if (q) {
       let hit = item.name.toLowerCase().includes(q);
       if (!hit) {
         for (const col of textColumns) {
-          const text = String(
-            rec(get(item.id, col.id)).text ?? "",
+          const text = stripMarkdown(
+            String(rec(get(item.id, col.id)).text ?? ""),
           ).toLowerCase();
           if (text.includes(q)) {
             hit = true;
@@ -354,10 +400,15 @@ export function buildItemPredicate(
 
     // 4) generic conditions (and/or)
     if (conditions.length > 0) {
-      const results = conditions.map((cond) => {
+      const results = conditions.map((cond, i) => {
         const col = byId.get(cond.columnId);
         if (!col) return false;
-        return evaluateCondition(cond, col.kind, get(item.id, cond.columnId));
+        return evaluateCondition(
+          cond,
+          col.kind,
+          get(item.id, cond.columnId),
+          preparedConditions[i],
+        );
       });
       const pass =
         combinator === "or" ? results.some(Boolean) : results.every(Boolean);
@@ -399,7 +450,10 @@ export function buildItemComparator(
   const compareKey = (v: Rec): number | string | null => {
     switch (kind) {
       case "text":
-        return v.text ? String(v.text) : null;
+        // Sort by what the cell displays (stripped Markdown), not the raw
+        // stored string — otherwise punctuation/marker characters (`-`, `**`)
+        // dominate the ordering instead of the visible text.
+        return v.text ? stripMarkdown(String(v.text)) : null;
       case "email":
         return v.email ? String(v.email) : null;
       case "phone":
@@ -432,9 +486,23 @@ export function buildItemComparator(
     }
   };
 
+  // Memoize the per-item sort key: a comparator is invoked O(n log n) times
+  // by Array.prototype.sort, but each item's key only needs computing once.
+  // This matters most for the "text" kind, whose key runs `stripMarkdown` —
+  // paying that per-comparison instead of per-row would turn an O(n) strip
+  // pass into an O(n log n) one for every sort.
+  const keyCache = new Map<string, number | string | null>();
+  const getKey = (itemId: string): number | string | null => {
+    const cached = keyCache.get(itemId);
+    if (cached !== undefined) return cached;
+    const k = compareKey(rec(get(itemId)));
+    keyCache.set(itemId, k);
+    return k;
+  };
+
   return (a, b) => {
-    const ka = compareKey(rec(get(a.id)));
-    const kb = compareKey(rec(get(b.id)));
+    const ka = getKey(a.id);
+    const kb = getKey(b.id);
     // Empty always last, regardless of direction.
     if (ka == null && kb == null) return 0;
     if (ka == null) return 1;

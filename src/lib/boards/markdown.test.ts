@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Inline } from "./markdown";
-import { applyMarkdown, parseMarkdown, stripMarkdown } from "./markdown";
+import {
+  applyMarkdown,
+  parseMarkdown,
+  previewMarkdown,
+  stripMarkdown,
+} from "./markdown";
 
 describe("stripMarkdown", () => {
   it("returns plain text unchanged (fast path)", () => {
@@ -113,6 +118,56 @@ describe("stripMarkdown", () => {
       );
       expect(stripMarkdown("5 * 3 = 15 * 2")).toBe("5 * 3 = 15 * 2");
     });
+  });
+});
+
+describe("previewMarkdown", () => {
+  it("strips Markdown syntax before bounding", () => {
+    expect(previewMarkdown("**bold** and _italic_\n- a bullet", 100)).toBe(
+      "bold and italic a bullet",
+    );
+  });
+
+  it("returns the stripped text unchanged when under the budget", () => {
+    expect(previewMarkdown("short", 100)).toBe("short");
+  });
+
+  it("truncates and appends an ellipsis when over budget", () => {
+    const long = "word ".repeat(50).trim(); // 249 chars
+    const preview = previewMarkdown(long, 20);
+    // At most maxChars + 1 (the "…") — may be a touch shorter when the cut
+    // lands on trailing whitespace that trimEnd() then removes.
+    expect(preview.length).toBeLessThanOrEqual(21);
+    expect(preview.endsWith("…")).toBe(true);
+    expect(long.startsWith(preview.slice(0, -1))).toBe(true);
+    expect(preview).not.toBe(long);
+  });
+
+  it("trims trailing whitespace before the ellipsis", () => {
+    // Cutting right after "word " would otherwise leave a trailing space
+    // before the ellipsis.
+    const preview = previewMarkdown("word word word", 5);
+    expect(preview).toBe("word…");
+  });
+
+  it("does not split a surrogate pair (emoji) at the cut, unlike a naive UTF-16 slice", () => {
+    // "😀" is a single code point but two UTF-16 code units, so a naive
+    // `string.slice(0, 120)` on this input cuts through the middle of the
+    // pair, leaving a lone (unpaired) surrogate — a broken half-character.
+    const prefix = "a".repeat(119);
+    const naiveSlice = (prefix + "😀").slice(0, 120);
+    expect(naiveSlice.length).toBe(120);
+    expect(naiveSlice).not.toBe(prefix + "😀"); // the naive cut broke the pair
+    // The last UTF-16 unit is a lone high surrogate (0xD800–0xDBFF) with no
+    // matching low surrogate — the broken half of the emoji's pair.
+    const lastCode = naiveSlice.charCodeAt(naiveSlice.length - 1);
+    expect(lastCode).toBeGreaterThanOrEqual(0xd800);
+    expect(lastCode).toBeLessThanOrEqual(0xdbff);
+
+    const input = prefix + "😀" + "more text to force truncation past 120";
+    const preview = previewMarkdown(input, 120);
+    // A code-point-aware slice to 120 code points includes the emoji whole.
+    expect(preview).toBe(`${prefix}😀…`);
   });
 });
 

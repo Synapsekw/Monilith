@@ -59,4 +59,37 @@ describe("buildImportPayloadV3", () => {
     const p = buildImportPayloadV3(table, specs, groups, structure);
     expect(p.templatePayload.columns.map((c) => c.name)).toEqual(["Notes"]);
   });
+
+  it("format scopes the CSV formula-guard undo — xlsx keeps a leading apostrophe", () => {
+    const quotedTable: ParsedTable = {
+      header: ["Name", "Notes"],
+      rows: [["Alpha", "'- not a bullet, a typed apostrophe"]],
+      rowIndices: [1],
+    };
+    const csvPayload = buildImportPayloadV3(
+      quotedTable,
+      specs,
+      groups,
+      [{ gridIndex: 1, groupKey: "g1", type: "item" }],
+      "csv",
+    );
+    const xlsxPayload = buildImportPayloadV3(
+      quotedTable,
+      specs,
+      groups,
+      [{ gridIndex: 1, groupKey: "g1", type: "item" }],
+      "xlsx",
+    );
+    const csvCell = csvPayload.templatePayload.items[0].cells[0].value as {
+      text: string;
+    };
+    const xlsxCell = xlsxPayload.templatePayload.items[0].cells[0].value as {
+      text: string;
+    };
+    // csv (default behavior): guard undone, leading "'" stripped.
+    expect(csvCell.text).toBe("- not a bullet, a typed apostrophe");
+    // xlsx: no guard was ever applied on export, so nothing to undo — the
+    // user's typed apostrophe is preserved.
+    expect(xlsxCell.text).toBe("'- not a bullet, a typed apostrophe");
+  });
 });
