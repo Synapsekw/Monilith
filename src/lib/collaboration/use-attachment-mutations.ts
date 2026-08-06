@@ -14,6 +14,7 @@ import {
   type AttachmentsCache,
 } from "@/lib/collaboration/attachments-cache";
 import { itemAttachmentsKey } from "@/lib/collaboration/use-item-attachments";
+import { assertOnline } from "@/lib/offline/online-status";
 
 export const MAX_FILE_BYTES = 52_428_800; // 50 MB
 
@@ -41,6 +42,7 @@ export function useAttachmentMutations(
     UploadCtx
   >({
     mutationFn: async ({ file }) => {
+      assertOnline();
       if (file.size > MAX_FILE_BYTES) throw new Error("File exceeds 50 MB.");
       if (file.size === 0) throw new Error("File is empty.");
       const path = buildStoragePath({
@@ -117,6 +119,7 @@ export function useAttachmentMutations(
 
   const remove = useMutation<void, Error, RemoveVars, RemoveCtx>({
     mutationFn: async ({ attachmentId }) => {
+      assertOnline();
       const res = await deleteAttachment({ attachmentId });
       if (!res.ok) throw new Error(res.error);
     },

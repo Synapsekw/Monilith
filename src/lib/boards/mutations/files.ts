@@ -16,6 +16,7 @@ import {
 } from "@/lib/boards/cache";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import type { BoardMutationCtx, Ctx } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** Files-column attachment mutations: upload + delete. */
 export function useColumnFileMutations(ctx: BoardMutationCtx) {
@@ -36,6 +37,7 @@ export function useColumnFileMutations(ctx: BoardMutationCtx) {
     { itemId: string; columnId: string; file: File }
   >({
     mutationFn: async ({ itemId, columnId, file }) => {
+      assertOnline();
       if (file.size > MAX_FILE_BYTES) throw new Error("File exceeds 50 MB.");
       if (file.size === 0) throw new Error("File is empty.");
 
@@ -110,6 +112,7 @@ export function useColumnFileMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await deleteAttachment(vars);
       if (!res.ok) throw new Error(res.error);
       return res;

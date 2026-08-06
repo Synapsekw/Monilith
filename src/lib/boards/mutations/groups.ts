@@ -17,6 +17,7 @@ import {
 } from "@/lib/boards/cache";
 import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
 import type { BoardMutationCtx, Ctx, RenameGroupVars } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** Group mutations: add/rename/reorder/color/archive/restore. */
 export function useGroupMutations(ctx: BoardMutationCtx) {
@@ -35,6 +36,7 @@ export function useGroupMutations(ctx: BoardMutationCtx) {
     void
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await createGroup({ boardId, name: vars.name });
       if (!res.ok) throw new Error(res.error);
       return res.data;
@@ -49,6 +51,7 @@ export function useGroupMutations(ctx: BoardMutationCtx) {
   const renameGroupMutation = useMutation<unknown, Error, RenameGroupVars, Ctx>(
     {
       mutationFn: async (vars) => {
+        assertOnline();
         const res = await renameGroup(vars);
         if (!res.ok) throw new Error(res.error);
         return res;
@@ -74,6 +77,7 @@ export function useGroupMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await reorderGroup(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -98,6 +102,7 @@ export function useGroupMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await updateGroupColor(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -122,6 +127,7 @@ export function useGroupMutations(ctx: BoardMutationCtx) {
   const restoreGroupMutation = useMutation<unknown, Error, { groupId: string }>(
     {
       mutationFn: async (vars) => {
+        assertOnline();
         const res = await restoreGroup(vars);
         if (!res.ok) throw new Error(res.error);
         return res;
@@ -145,6 +151,7 @@ export function useGroupMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await archiveGroup(vars);
       if (!res.ok) throw new Error(res.error);
       return res;

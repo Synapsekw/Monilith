@@ -23,6 +23,7 @@ import type {
   Ctx,
   RenameItemVars,
 } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 /** Item mutations: add/subitem/archive/restore/reorder/move/rename. */
 export function useItemMutations(ctx: BoardMutationCtx) {
@@ -47,6 +48,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
     void
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await createItem(vars);
       if (!res.ok) throw new Error(res.error);
       return { item: res.data.item as CacheItem };
@@ -66,6 +68,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
     void
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await addSubitem(vars);
       if (!res.ok) throw new Error(res.error);
       return { item: res.data.item as CacheItem };
@@ -84,6 +87,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
    */
   const restoreItemMutation = useMutation<unknown, Error, { itemId: string }>({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await restoreItem(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -106,6 +110,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await archiveItem(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -137,6 +142,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await reorderItem(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -162,6 +168,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await moveItem(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -185,6 +192,7 @@ export function useItemMutations(ctx: BoardMutationCtx) {
    */
   const renameItemMutation = useMutation<unknown, Error, RenameItemVars, Ctx>({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await renameItem(vars);
       if (!res.ok) throw new Error(res.error);
       return res;

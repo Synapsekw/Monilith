@@ -21,6 +21,7 @@ import {
 } from "@/lib/boards/cache";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import type { BoardMutationCtx, Ctx } from "./shared";
+import { assertOnline } from "@/lib/offline/online-status";
 
 // ─── Time-tracking mutations ────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ export function useTimeMutations(ctx: BoardMutationCtx) {
     { itemId: string; columnId: string }
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await startTimer(vars);
       if (!res.ok) throw new Error(res.error);
       return { entries: res.data.entries as CacheTimeEntry[] };
@@ -57,6 +59,7 @@ export function useTimeMutations(ctx: BoardMutationCtx) {
     { entryId: string }
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await stopTimer(vars);
       if (!res.ok) throw new Error(res.error);
       return { entry: res.data.entry as CacheTimeEntry };
@@ -78,6 +81,7 @@ export function useTimeMutations(ctx: BoardMutationCtx) {
     { itemId: string; columnId: string; date: string; durationSecs: number }
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await addManualEntry(vars);
       if (!res.ok) throw new Error(res.error);
       return { entry: res.data.entry as CacheTimeEntry };
@@ -99,6 +103,7 @@ export function useTimeMutations(ctx: BoardMutationCtx) {
     { entryId: string; date: string; durationSecs: number }
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await editEntry(vars);
       if (!res.ok) throw new Error(res.error);
       return { entry: res.data.entry as CacheTimeEntry };
@@ -121,6 +126,7 @@ export function useTimeMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await deleteEntry(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
@@ -150,6 +156,7 @@ export function useTimeMutations(ctx: BoardMutationCtx) {
     Ctx
   >({
     mutationFn: async (vars) => {
+      assertOnline();
       const res = await setEstimate(vars);
       if (!res.ok) throw new Error(res.error);
       return res;
