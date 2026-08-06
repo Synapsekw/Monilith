@@ -13,6 +13,7 @@ import { listDashboardsHandler } from "./list-dashboards";
 import { getWorkloadHandler } from "./get-workload";
 import { logTimeAllocationHandler } from "./log-time-allocation";
 import type { GetClient } from "./shared";
+import { runTeardownSteps } from "@/test/teardown-steps";
 
 loadIntegrationEnv();
 
@@ -136,10 +137,35 @@ describe.skipIf(!integrationTargetReady())(
       // by the time we delete the owning user no row anywhere still
       // references them — `organizations.created_by` is deliberately
       // NOT NULL / NO ACTION (2026-07-25 account-deletion-fks migration) and
-      // would otherwise block deleteUser outright.
-      await admin.from("organizations").delete().eq("id", orgAId);
-      await admin.auth.admin.deleteUser(userAId);
-      await admin.auth.admin.deleteUser(userBId);
+      // would otherwise block deleteUser outright. `runTeardownSteps` keeps
+      // this order while still attempting every step even if an earlier one
+      // fails, so a broken delete can't strand the rest.
+      await runTeardownSteps([
+        {
+          label: `delete organization ${orgAId}`,
+          run: async () => {
+            const { error } = await admin
+              .from("organizations")
+              .delete()
+              .eq("id", orgAId);
+            return { error };
+          },
+        },
+        {
+          label: `delete user ${userAId}`,
+          run: async () => {
+            const { error } = await admin.auth.admin.deleteUser(userAId);
+            return { error };
+          },
+        },
+        {
+          label: `delete user ${userBId}`,
+          run: async () => {
+            const { error } = await admin.auth.admin.deleteUser(userBId);
+            return { error };
+          },
+        },
+      ]);
     }, 60_000);
 
     const cases: {

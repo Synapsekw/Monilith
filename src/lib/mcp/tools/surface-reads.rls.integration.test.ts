@@ -17,6 +17,7 @@ import { getDashboardHandler } from "./get-dashboard";
 import { listTimeAllocationsHandler } from "./list-time-allocations";
 import { getTimeSummaryHandler } from "./get-time-summary";
 import { logTimeAllocationHandler } from "./log-time-allocation";
+import { runTeardownSteps } from "@/test/teardown-steps";
 
 loadIntegrationEnv();
 
@@ -30,6 +31,13 @@ type Tenant = {
   workspaceId: string;
   boardId: string;
   groupId: string;
+  // The raw bridged client, fetched ONCE in provisionTenant and closed over
+  // by `getClient` below (matching cross-org-access.rls.integration.test.ts's
+  // fetch-once pattern — each getBridgedClient() call can rotate the OAuth
+  // bridge secret, so repeatedly re-fetching per handler call is a latent
+  // source of first-run flakiness). Exposed directly too, so a test can run a
+  // raw table query as this tenant without going through an MCP tool.
+  client: SupabaseClient<Database>;
   getClient: GetClient;
 };
 
@@ -117,7 +125,8 @@ describe.skipIf(!integrationTargetReady())(
         workspaceId,
         boardId,
         groupId,
-        getClient: async () => (await getBridgedClient(secretId)).client,
+        client,
+        getClient: async () => client,
       };
     }
 
@@ -201,13 +210,30 @@ describe.skipIf(!integrationTargetReady())(
       // still references them. `organizations.created_by` is deliberately
       // NOT NULL / NO ACTION (2026-07-25 account-deletion-fks migration) —
       // deleting the user first would fail with a foreign-key violation and
-      // leave the org (and everything under it) orphaned.
-      for (const orgId of createdOrgIds) {
-        await admin.from("organizations").delete().eq("id", orgId);
-      }
-      for (const id of createdUserIds) {
-        await admin.auth.admin.deleteUser(id);
-      }
+      // leave the org (and everything under it) orphaned. `runTeardownSteps`
+      // keeps this order while still attempting every step even if an
+      // earlier one fails — this suite provisions a full org-plus-cascade
+      // per tenant, not just bare users, so a single unguarded failure could
+      // strand real rows.
+      await runTeardownSteps([
+        ...createdOrgIds.map((orgId) => ({
+          label: `delete organization ${orgId}`,
+          run: async () => {
+            const { error } = await admin
+              .from("organizations")
+              .delete()
+              .eq("id", orgId);
+            return { error };
+          },
+        })),
+        ...createdUserIds.map((id) => ({
+          label: `delete user ${id}`,
+          run: async () => {
+            const { error } = await admin.auth.admin.deleteUser(id);
+            return { error };
+          },
+        })),
+      ]);
     }, 60_000);
 
     describe("list_items / get_item", () => {
@@ -300,10 +326,33 @@ describe.skipIf(!integrationTargetReady())(
         const dashboards = JSON.parse(list.content[0].text as string) as {
           name: string;
         }[];
+        // This only proves the app-level `.eq("org_id", scope.org.id)` filter
+        // in listDashboardsCore excludes org A's dashboard — it would still
+        // pass even if the `dashboards` RLS policy were completely broken.
+        // Worth keeping anyway (a real regression in that filter should
+        // fail a test), but it is NOT an RLS proof by itself.
         expect(dashboards.map((d) => d.name)).not.toContain(dashboardName);
+
+        // Direct RLS probe: query `dashboards` with B's own bridged client,
+        // naming org A's dashboard id explicitly, bypassing
+        // listDashboardsCore's org filter entirely. This is what actually
+        // proves the row is invisible to B at the database layer — do not
+        // delete it as "redundant" with the list assertion above; it covers
+        // a different failure mode (a broken RLS policy vs. a broken app
+        // filter) and only this probe would catch the former.
+        const { data: direct, error: directErr } = await tenantB.client
+          .from("dashboards")
+          .select("id")
+          .eq("id", dashboardId)
+          .maybeSingle();
+        expect(directErr).toBeNull();
+        expect(direct).toBeNull();
 
         // get_dashboard takes no orgId — RLS on `dashboards` is the only
         // thing standing between B and org A's row when B names it directly.
+        // (Already a genuine RLS proof on its own, same as the direct probe
+        // above, since getDashboardPayloadCore does the equivalent query
+        // through application code rather than a raw client.)
         const single = await getDashboardHandler(tenantB.getClient, {
           dashboardId,
         });
