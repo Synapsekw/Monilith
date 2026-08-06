@@ -10,6 +10,8 @@ import { registerCreateItemTool } from "./create-item";
 import { registerUpdateItemTool } from "./update-item";
 import { registerListOrganizationsTool } from "./list-organizations";
 import { registerGetMyWorkTool } from "./get-my-work";
+import { registerListTimeAllocationsTool } from "./list-time-allocations";
+import { registerGetTimeSummaryTool } from "./get-time-summary";
 
 /** Registers every MCP tool onto the server instance, closing over the request's auth. */
 export function registerTools(server: McpServer, auth: AuthInfo): void {
@@ -24,4 +26,6 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
   registerUpdateItemTool(server, getClient, actorId);
   registerListOrganizationsTool(server, getClient);
   registerGetMyWorkTool(server, getClient);
+  registerListTimeAllocationsTool(server, getClient, actorId);
+  registerGetTimeSummaryTool(server, getClient, actorId);
 }

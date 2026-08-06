@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import { resolveUserTimeZone } from "@/lib/datetime/user-timezone";
@@ -144,4 +146,69 @@ export async function listUserCategories(): Promise<string[]> {
   const out: string[] = [...PRESET_CATEGORIES];
   for (const c of used) if (!out.includes(c)) out.push(c);
   return out;
+}
+
+/** Hot-path caps (AGENTS.md: bounded reads over indexed columns). The row read
+ *  is served by the (user_id, work_date) unique partial indexes. */
+export const TIME_ALLOCATIONS_LIMIT = 1000;
+export const TIME_RANGE_MAX_DAYS = 92;
+
+/** One manual allocation, flattened for agent consumption — no week/cell
+ *  scaffolding (that shape exists for the grid UI only). */
+export type TimeAllocationFlat = {
+  date: string;
+  itemId: string | null;
+  itemName: string | null;
+  boardId: string | null;
+  category: string | null;
+  secs: number;
+  note: string | null;
+};
+
+/**
+ * Flat manual allocations for one user over [from, to]. Client-injected so the
+ * MCP path shares this implementation; the caller bounds the span
+ * (`validateRange`) before calling.
+ */
+export async function listTimeAllocationsCore(
+  supabase: SupabaseClient<Database>,
+  args: { userId: string; from: string; to: string; limit?: number },
+): Promise<TimeAllocationFlat[]> {
+  const { data, error } = await supabase
+    .from("time_allocations")
+    .select("work_date, item_id, board_id, category, duration_secs, note")
+    .eq("user_id", args.userId)
+    .gte("work_date", args.from)
+    .lte("work_date", args.to)
+    .order("work_date", { ascending: true })
+    .limit(args.limit ?? TIME_ALLOCATIONS_LIMIT);
+  if (error)
+    throw new Error(`Failed to load time allocations: ${error.message}`);
+
+  const rows = data ?? [];
+  const itemIds = [
+    ...new Set(rows.map((r) => r.item_id).filter((id): id is string => !!id)),
+  ];
+
+  // ONE metadata read for every referenced item — never per row.
+  const names = new Map<string, string>();
+  if (itemIds.length > 0) {
+    const { data: items, error: itemsErr } = await supabase
+      .from("items")
+      .select("id, name")
+      .in("id", itemIds);
+    if (itemsErr)
+      throw new Error(`Failed to load item metadata: ${itemsErr.message}`);
+    for (const it of items ?? []) names.set(it.id, it.name);
+  }
+
+  return rows.map((r) => ({
+    date: r.work_date,
+    itemId: r.item_id,
+    itemName: r.item_id ? (names.get(r.item_id) ?? null) : null,
+    boardId: r.board_id,
+    category: r.category,
+    secs: Number(r.duration_secs ?? 0),
+    note: r.note,
+  }));
 }
