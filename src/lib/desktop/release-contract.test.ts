@@ -36,6 +36,10 @@ describe("validateDesktopRelease", () => {
     minSupportedShell: "1.0.0",
     latestShell: "1.2.0",
     notes: "n",
+    downloads: {
+      macArm64: "https://example.com/a.dmg",
+      macX64: "https://example.com/x.dmg",
+    },
   };
 
   it("accepts a well-formed contract", () => {
@@ -64,6 +68,34 @@ describe("validateDesktopRelease", () => {
         latestShell: "1.9.9",
       }),
     ).toContainEqual(expect.stringContaining("must be <="));
+  });
+
+  it("rejects a missing downloads block", () => {
+    const { downloads: _omitted, ...withoutDownloads } = valid;
+    expect(validateDesktopRelease(withoutDownloads)).toContainEqual(
+      expect.stringContaining("downloads"),
+    );
+  });
+
+  it("rejects a missing architecture", () => {
+    // Shipping only one arch silently breaks every user on the other one.
+    expect(
+      validateDesktopRelease({
+        ...valid,
+        downloads: { macArm64: "https://example.com/a.dmg" },
+      }),
+    ).toContainEqual(expect.stringContaining("macX64"));
+  });
+
+  it("rejects a plain-http installer URL", () => {
+    // The user executes whatever this URL returns, so http is a code-execution
+    // vector, not a style preference.
+    expect(
+      validateDesktopRelease({
+        ...valid,
+        downloads: { ...valid.downloads, macX64: "http://example.com/x.dmg" },
+      }),
+    ).toContainEqual(expect.stringContaining("https"));
   });
 
   it("rejects a non-object", () => {

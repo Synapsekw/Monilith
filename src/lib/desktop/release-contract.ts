@@ -24,15 +24,40 @@ export const DESKTOP_RELEASE_PATH = "/desktop-release.json";
 /** Path of the shipped file on disk, relative to the repo root. */
 export const DESKTOP_RELEASE_FILE = ["public", "desktop-release.json"] as const;
 
+/**
+ * Installer URLs, one per macOS architecture.
+ *
+ * Apple Silicon and Intel need different binaries and a user cannot be asked to
+ * know which they are on — the Settings page detects it and defaults the button,
+ * but always offers the other, because detection from a user-agent is a guess.
+ */
+export type DesktopDownloads = {
+  /** Apple Silicon (M1–M4). */
+  macArm64: string;
+  /** Intel Macs. */
+  macX64: string;
+};
+
 export type DesktopRelease = {
   /** A shell older than this hard-blocks with an update prompt. */
   minSupportedShell: string;
   /** Newest shell the deployed web app is known to work with. */
   latestShell: string;
   notes: string;
+  downloads: DesktopDownloads;
 };
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
+
+/** Architectures the Settings page offers. Order is display order. */
+export const DOWNLOAD_ARCHS = [
+  { key: "macArm64", label: "Apple Silicon", hint: "M1, M2, M3, M4" },
+  { key: "macX64", label: "Intel", hint: "pre-2020 Macs" },
+] as const satisfies ReadonlyArray<{
+  key: keyof DesktopDownloads;
+  label: string;
+  hint: string;
+}>;
 
 /**
  * Compare two `major.minor.patch` versions numerically.
@@ -75,6 +100,24 @@ export function validateDesktopRelease(value: unknown): string[] {
   }
   if (typeof record.notes !== "string") {
     problems.push("notes must be a string");
+  }
+
+  const downloads = record.downloads;
+  if (typeof downloads !== "object" || downloads === null) {
+    problems.push("downloads must be an object");
+  } else {
+    const urls = downloads as Record<string, unknown>;
+    for (const { key } of DOWNLOAD_ARCHS) {
+      const url = urls[key];
+      if (typeof url !== "string") {
+        problems.push(`downloads.${key} must be a string`);
+      } else if (!url.startsWith("https://")) {
+        // A plain-http installer URL is a code-execution vector: the user runs
+        // whatever the download returns. Refuse it in the contract rather than
+        // hoping nobody pastes one in.
+        problems.push(`downloads.${key} must be an https URL, got "${url}"`);
+      }
+    }
   }
 
   if (problems.length === 0) {

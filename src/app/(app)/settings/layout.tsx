@@ -54,6 +54,7 @@ export default async function SettingsLayout({
       items: [
         { href: "/settings/ai", label: "AI" },
         { href: "/settings/mcp", label: "Connect via MCP" },
+        { href: "/settings/desktop", label: "Desktop app" },
       ],
     },
   ];
