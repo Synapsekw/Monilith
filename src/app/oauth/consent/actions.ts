@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { authorizeRequestSchema } from "@/lib/validations/mcp-oauth";
 import { getOauthClient } from "@/lib/mcp/oauth/client-store";
 import { createAuthorizationCode } from "@/lib/mcp/oauth/code-store";
+import { isRegisteredRedirectUri } from "@/lib/mcp/oauth/redirect-uri";
 
 export async function approveConsent(formData: FormData): Promise<void> {
   const user = await requireUser();
@@ -13,7 +14,13 @@ export async function approveConsent(formData: FormData): Promise<void> {
   if (!parsed.success) throw new Error("Invalid authorization request.");
 
   const client = await getOauthClient(parsed.data.client_id);
-  if (!client || !client.redirect_uris.includes(parsed.data.redirect_uri)) {
+  // Must stay the SAME predicate the authorize route gates on — a consent
+  // screen that renders and then throws, or one laxer than authorize, are both
+  // bugs. See redirect-uri.ts for why exact matching is not enough.
+  if (
+    !client ||
+    !isRegisteredRedirectUri(client.redirect_uris, parsed.data.redirect_uri)
+  ) {
     throw new Error("Unknown client or redirect_uri.");
   }
 
