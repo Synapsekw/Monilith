@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   listTimeAllocationsCore,
+  TIME_ALLOCATIONS_LIMIT,
   TIME_RANGE_MAX_DAYS,
 } from "@/lib/time/queries";
 import { summarizeAllocations, type SummaryGroupBy } from "@/lib/time/summary";
@@ -27,12 +28,26 @@ export async function getTimeSummaryHandler(
 
   const supabase = await getClient();
   try {
-    const rows = await listTimeAllocationsCore(supabase, {
+    const result = await listTimeAllocationsCore(supabase, {
       userId,
       from: args.from,
       to: args.to,
     });
-    const buckets = summarizeAllocations(rows, args.groupBy);
+    // A partial sum presented as a total is worse than an error: if the
+    // window holds more rows than the cap, refuse rather than silently
+    // summing only the first TIME_ALLOCATIONS_LIMIT rows.
+    if (result.truncated) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Row cap exceeded: this window has more than ${TIME_ALLOCATIONS_LIMIT} time allocations, so the summary would be a partial total, not a complete one. Narrow the window and call again.`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    const buckets = summarizeAllocations(result.rows, args.groupBy);
     return { content: [{ type: "text", text: JSON.stringify(buckets) }] };
   } catch (e) {
     return {
@@ -51,7 +66,7 @@ export function registerGetTimeSummaryTool(
     "get_time_summary",
     {
       title: "Get time summary",
-      description: `Totals of the connected user's manually logged time between two dates, grouped by item, category or day. Range must be at most ${TIME_RANGE_MAX_DAYS} days.`,
+      description: `Totals of the connected user's manually logged time between two dates, grouped by item, category or day. Range must be at most ${TIME_RANGE_MAX_DAYS} days and the window's rows at most ${TIME_ALLOCATIONS_LIMIT} — if exceeded, returns an error instead of a partial total, so narrow the window.`,
       inputSchema: getTimeSummaryInput,
     },
     async (args) => getTimeSummaryHandler(getClient, actorId, args),

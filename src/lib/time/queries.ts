@@ -165,15 +165,36 @@ export type TimeAllocationFlat = {
   note: string | null;
 };
 
+/** Result of `listTimeAllocationsCore`: the (possibly capped) rows, plus
+ *  whether the window held more rows than the cap. `truncated: true` means
+ *  the rows below are a PREFIX, not the whole window — any total computed
+ *  from them is a partial, not a total. */
+export type TimeAllocationsResult = {
+  rows: TimeAllocationFlat[];
+  truncated: boolean;
+};
+
 /**
  * Flat manual allocations for one user over [from, to]. Client-injected so the
  * MCP path shares this implementation; the caller bounds the span
  * (`validateRange`) before calling.
+ *
+ * Fetches one row past the cap to detect truncation without a separate
+ * COUNT query, then reports `truncated` rather than silently returning a
+ * confident-looking but incomplete set — the same anti-pattern `range.ts`'s
+ * docstring calls out for the day-span guard, just via row count.
  */
 export async function listTimeAllocationsCore(
   supabase: SupabaseClient<Database>,
   args: { userId: string; from: string; to: string; limit?: number },
-): Promise<TimeAllocationFlat[]> {
+): Promise<TimeAllocationsResult> {
+  // Clamp the caller-supplied limit — it must never exceed the hard cap,
+  // even for future callers that pass an arbitrary `limit`.
+  const effectiveLimit = Math.min(
+    args.limit ?? TIME_ALLOCATIONS_LIMIT,
+    TIME_ALLOCATIONS_LIMIT,
+  );
+
   const { data, error } = await supabase
     .from("time_allocations")
     .select("work_date, item_id, board_id, category, duration_secs, note")
@@ -181,11 +202,14 @@ export async function listTimeAllocationsCore(
     .gte("work_date", args.from)
     .lte("work_date", args.to)
     .order("work_date", { ascending: true })
-    .limit(args.limit ?? TIME_ALLOCATIONS_LIMIT);
+    .limit(effectiveLimit + 1);
   if (error)
     throw new Error(`Failed to load time allocations: ${error.message}`);
 
-  const rows = data ?? [];
+  const fetched = data ?? [];
+  const truncated = fetched.length > effectiveLimit;
+  const rows = truncated ? fetched.slice(0, effectiveLimit) : fetched;
+
   const itemIds = [
     ...new Set(rows.map((r) => r.item_id).filter((id): id is string => !!id)),
   ];
@@ -202,13 +226,16 @@ export async function listTimeAllocationsCore(
     for (const it of items ?? []) names.set(it.id, it.name);
   }
 
-  return rows.map((r) => ({
-    date: r.work_date,
-    itemId: r.item_id,
-    itemName: r.item_id ? (names.get(r.item_id) ?? null) : null,
-    boardId: r.board_id,
-    category: r.category,
-    secs: Number(r.duration_secs ?? 0),
-    note: r.note,
-  }));
+  return {
+    rows: rows.map((r) => ({
+      date: r.work_date,
+      itemId: r.item_id,
+      itemName: r.item_id ? (names.get(r.item_id) ?? null) : null,
+      boardId: r.board_id,
+      category: r.category,
+      secs: Number(r.duration_secs ?? 0),
+      note: r.note,
+    })),
+    truncated,
+  };
 }

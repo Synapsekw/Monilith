@@ -28,12 +28,24 @@ export async function listTimeAllocationsHandler(
 
   const supabase = await getClient();
   try {
-    const rows = await listTimeAllocationsCore(supabase, {
+    const result = await listTimeAllocationsCore(supabase, {
       userId,
       from: args.from,
       to: args.to,
     });
-    return { content: [{ type: "text", text: JSON.stringify(rows) }] };
+    // A list is understood to be capped — surface `truncated` in the payload
+    // rather than erroring, so the agent knows more rows exist beyond the cap.
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            rows: result.rows,
+            truncated: result.truncated,
+          }),
+        },
+      ],
+    };
   } catch (e) {
     return {
       content: [{ type: "text", text: (e as Error).message }],
@@ -51,7 +63,7 @@ export function registerListTimeAllocationsTool(
     "list_time_allocations",
     {
       title: "List time allocations",
-      description: `The connected user's manually logged time between two dates, as flat rows. Range must be at most ${TIME_RANGE_MAX_DAYS} days; returns at most ${TIME_ALLOCATIONS_LIMIT} rows. Does not include running-timer entries.`,
+      description: `The connected user's manually logged time between two dates, as flat rows. Range must be at most ${TIME_RANGE_MAX_DAYS} days; returns at most ${TIME_ALLOCATIONS_LIMIT} rows, with \`truncated: true\` in the payload if more exist — narrow the window to see them. Does not include running-timer entries.`,
       inputSchema: listTimeAllocationsInput,
     },
     async (args) => listTimeAllocationsHandler(getClient, actorId, args),
