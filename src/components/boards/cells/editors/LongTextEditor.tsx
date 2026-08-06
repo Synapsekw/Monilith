@@ -139,29 +139,39 @@ export function LongTextEditor({
   // Covers the one exit path that isn't event-driven: GroupSection virtualizes
   // rows (overscan: 6), so scrolling can unmount this panel mid-edit without
   // Escape/outside-click/close ever firing — see the component doc comment.
+  //
+  // THIS CLEANUP MUST DO NOTHING WHEN NOTHING WAS TYPED, and must not settle
+  // the guard in that case. React StrictMode double-invokes effects on mount
+  // (setup → cleanup → setup) and the App Router runs in StrictMode in dev
+  // whenever next.config.ts leaves `reactStrictMode` unset — which it does, so
+  // Next resolves __NEXT_STRICT_MODE_APP to true. That means this cleanup runs
+  // once immediately after mount, before the user can type. An earlier version
+  // called onCancel there and set `settled`, which broke the panel two ways:
+  // the parent cleared its editing state and the panel closed the instant it
+  // opened (clicking a text cell appeared to do nothing at all), and the
+  // latched guard then made the real unmount a no-op, silently reinstating the
+  // data loss this effect exists to prevent.
+  //
+  // Trade-off, deliberate: unmounting an untouched panel now leaves the
+  // parent's `editing` pointing at this cell, so scrolling the row back into
+  // view reopens the panel. That is harmless — no data is involved, and the
+  // user never dismissed it — and clicking any other cell resets it.
   useEffect(() => {
     return () => {
       if (settled.current) return;
       const finalText = latestText.current;
+      // Untouched: nothing to save, and calling back here is what StrictMode
+      // turns into a self-closing panel. Leave `settled` armed for the real
+      // unmount.
+      if (finalText === initialRef.current) return;
+      // Over the cap we cannot commit (the value would exceed the schema's
+      // 20,000-char bound) and there is no panel left to show the blocking
+      // message on an implicit unmount, so the edit is lost — the same
+      // accepted gap textValueSchema's comment documents for the
+      // spreadsheet-import path. Settle so nothing else fires.
       settled.current = true;
-      if (finalText.length > CHAR_CAP) {
-        // Can't commit an over-cap value here (would save data past the
-        // schema's 20,000-char bound) and there's no panel left to show the
-        // blocking message on an implicit unmount — the edit is lost, the
-        // same accepted gap textValueSchema's comment documents for the
-        // spreadsheet-import path. Still call onCancel rather than doing
-        // nothing, though: it doesn't write anything, and it clears the
-        // parent's editing state — skipping it would leave that state
-        // pointing at this cell, and scrolling back to the row would
-        // spontaneously reopen the panel.
-        onCancelRef.current();
-        return;
-      }
-      if (finalText === initialRef.current) {
-        onCancelRef.current();
-      } else {
-        onCommitRef.current({ text: finalText });
-      }
+      if (finalText.length > CHAR_CAP) return;
+      onCommitRef.current({ text: finalText });
     };
   }, []);
 
