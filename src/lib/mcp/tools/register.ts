@@ -17,6 +17,9 @@ import { registerListGoalsTool } from "./list-goals";
 import { registerGetGoalTool } from "./get-goal";
 import { registerListPortfoliosTool } from "./list-portfolios";
 import { registerGetPortfolioTool } from "./get-portfolio";
+import { registerListDashboardsTool } from "./list-dashboards";
+import { registerGetDashboardTool } from "./get-dashboard";
+import { registerGetWidgetDataTool } from "./get-widget-data";
 
 /** Registers every MCP tool onto the server instance, closing over the request's auth. */
 export function registerTools(server: McpServer, auth: AuthInfo): void {
@@ -38,4 +41,7 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
   registerGetGoalTool(server, getClient);
   registerListPortfoliosTool(server, getClient);
   registerGetPortfolioTool(server, getClient);
+  registerListDashboardsTool(server, getClient);
+  registerGetDashboardTool(server, getClient);
+  registerGetWidgetDataTool(server, getClient);
 }
