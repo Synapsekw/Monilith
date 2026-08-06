@@ -26,7 +26,7 @@ function utcToIso(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 /** ISO weekday 1=Mon … 7=Sun for an ISO date. */
-function isoWeekday(iso: string): number {
+export function isoWeekday(iso: string): number {
   const d = new Date(isoToUTC(iso)).getUTCDay(); // 0=Sun … 6=Sat
   return d === 0 ? 7 : d;
 }
