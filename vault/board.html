@@ -7,150 +7,155 @@
 -->
 <script type="application/json" id="board-data">
 {
- "schema": 1,
- "updated": "2026-08-04 22:22",
- "kicker": "MONOLITH / NORTH STAR",
- "headline": "Promotion #84 closed the gap between fixed-on-develop and fixed-for-users: the AI write path is now reachable in production. The three tools that lied about their own success are repaired and pinned by tests that were watched to fail first.",
- "chips": [
-  {
-   "label": "develop",
-   "value": "f7e6f975",
-   "note": "== origin · level with main · squash divergence healed",
-   "tone": "ok"
+  "schema": 1,
+  "updated": "2026-08-06 09:02",
+  "kicker": "MONOLITH / NORTH STAR",
+  "headline": "The MCP OAuth server worked for exactly one client, and that hid two structural bugs. Connecting a CLI client exposed both in one session: a spec MUST we had never exercised, and a uniqueness key coarser than the thing it identified. Both fixed, promoted and re-probed against production.",
+  "chips": [
+    {
+      "label": "develop",
+      "value": "c0a53171",
+      "note": "== origin · level with main · squash divergence healed",
+      "tone": "ok"
+    },
+    {
+      "label": "main",
+      "value": "3f3f55b1",
+      "note": "#86 LIVE · #85 same day · Vercel success on both",
+      "tone": "ok"
+    },
+    {
+      "label": "gates",
+      "value": "green",
+      "note": "typecheck/lint/test/build · 4392 tests · main CI green",
+      "tone": "ok"
+    },
+    {
+      "label": "ledger",
+      "value": "131/131",
+      "note": "in sync · no schema shipped this session",
+      "tone": "ok"
+    }
+  ],
+  "progress": {
+    "done": 14,
+    "total": 15
   },
-  {
-   "label": "main",
-   "value": "82c5a89a",
-   "note": "#84 LIVE · 29 commits · www.monolith.works verified 200",
-   "tone": "ok"
+  "gates": [
+    {
+      "led": "green",
+      "tag": "SHIPPED",
+      "text": "Two promotions in one session: #85 (0bfa9967) then #86 (3f3f55b1). MCP OAuth now works for CLI clients. Verified live by re-probing production with the real client_id, not by trusting the deploy status - the previously-failing ephemeral port now 307s while a mismatched path still 400s."
+    },
+    {
+      "led": "green",
+      "tag": "FIXED",
+      "text": "Exact redirect_uris.includes() matching locked out every native/CLI client. A CLI binds an EPHEMERAL loopback port per login, so its second connect always failed invalid_client - RFC 8252 s7.3 says a server MUST allow any port for loopback. One predicate now gates both authorize and consent so they cannot drift. gotcha-76."
+    },
+    {
+      "led": "green",
+      "tag": "FIXED",
+      "text": "A Vault secret named mcp_bridge:<userId> capped a user at ONE bridge forever: the first client squatted the name, so no second MCP client - and no MCP client alongside a personal agent - could ever connect. Surfaced as a 500 with an EMPTY BODY, diagnosable only from the Vercel runtime log. Names are now per-secret. gotcha-77."
+    },
+    {
+      "led": "green",
+      "tag": "HARDENED",
+      "text": "POST /api/oauth/token no longer leaks an unhandled throw as an empty-bodied 500. It now returns the RFC 6749 s5.2 server_error envelope and logs the real cause server-side only. An endpoint that speaks a structured error protocol on its four validation branches and nothing at all on its infrastructure branch has the hole exactly where failures are least predictable."
+    },
+    {
+      "led": "amber",
+      "tag": "NEXT?",
+      "text": "MCP full-surface-reads: spec AND implementation plan both landed on develop this session from a parallel session, and are unstarted. This is the only shovel-ready, fully-planned work on the board - everything else on the critical path needs brainstorming or writing-plans first."
+    },
+    {
+      "led": "hollow",
+      "tag": "OWED",
+      "text": "/promote's commitlint gate is STILL mis-scoped and has now cost three promotions - worked around twice more today by linting the since-last-promotion range. It lints the whole 2334-commit develop history and stops on 7 Phase 6/7-era commits already in production, while CI skips that job on base_ref==main by design. Fix the command."
+    },
+    {
+      "led": "hollow",
+      "tag": "OWED",
+      "text": "vercel.json now restricts auto-deploy to main, so promotion PRs no longer carry a Vercel preview check - that signal is gone from the pre-merge evidence. Prod still has no RESEND_API_KEY. 8 dependabot branches unmerged; the npm ones contend with E6's Stripe SDK over the lockfile."
+    },
+    {
+      "led": "hollow",
+      "tag": "NEXT?",
+      "text": "Report Builder v2 (critical path) has NO spec and NO plan - the charts spec explicitly defers roll-ups and org templates. Or the E6 Stripe track (units B, C, E-H): spec written, needs a plan, needs NO migration - the safe partner beside a migration-bearing task."
+    }
+  ],
+  "worktrees": [],
+  "session": {
+    "id": "2026-08-06-0902-mcp-oauth-loopback-and-bridge-secret",
+    "when": "2026-08-06 09:02",
+    "bullets": [
+      "Both bugs were invisible to the test suite and to the one client we use daily. claude.ai registers a fixed https callback and connects once - which is exactly the subset of the surface that exact matching and a per-user secret name happen to satisfy.",
+      "The first diagnosis handed over was 'the authorization page's Continue button doesn't work'. There is no Continue button in this app. The DB settled it: an oauth_clients row existed, no oauth_codes row did - so the flow died before consent, not at it.",
+      "A 500 with an empty body cost a Vercel log dive. Every layer that could have named the cause carried no information; the fix for that shipped alongside the fix for the bug.",
+      "Ground truth for an OAuth flow is the DB, not the browser. The blank 'site can't be reached' callback page is the CLIENT's loopback server closing without writing a body - the exchange had already succeeded."
+    ]
   },
-  {
-   "label": "gates",
-   "value": "green",
-   "note": "typecheck/lint/test/build · main CI 375s · Vercel success",
-   "tone": "ok"
-  },
-  {
-   "label": "ledger",
-   "value": "131/131",
-   "note": "in sync · apply_migration has drifted 5 of 5",
-   "tone": "ok"
-  }
- ],
- "progress": {
-  "done": 14,
-  "total": 15
- },
- "gates": [
-  {
-   "led": "green",
-   "tag": "SHIPPED",
-   "text": "Promotion #84 to main (82c5a89a, 29 commits). The AI write path is reachable IN PRODUCTION - previously every fix lived only on develop, so prod still answered 'I don't have a tool that can move an item'. Verified by fetching the page (200), not by trusting the deploy status. Squash divergence healed with -s ours (f7e6f975)."
-  },
-  {
-   "led": "green",
-   "tag": "FIXED",
-   "text": "reconcile-migration-version.sh no longer prints a repair that matches zero rows. Root cause was sharper than recorded: the ledger's name column has TWO legitimate forms - 100 rows slug-only (CLI db push) and 31 rows version_slug (MCP apply_migration) - and the repair only ever runs against the MCP kind. Now keys on version alone, with RETURNING."
-  },
-  {
-   "led": "green",
-   "tag": "FIXED",
-   "text": "finish-task.sh stops deleting COMMITTED session drafts (which dirtied the tree and failed its own clean-tree check), and now sweeps vitest workers that outlived the gates while still pointed at the live DEV project. Sweep scoping was measured, not assumed: runner and all 8 workers carry the worktree's absolute node_modules path in argv."
-  },
-  {
-   "led": "green",
-   "tag": "VERIFIED",
-   "text": "Two 'owed - production' claims were stale. digest_secret's halves MATCH - proven via digest_runs (22 sent/skipped rows on 08-02 and 08-03; a mismatch 401s and writes no row at all), without reading either secret. The Ask write path IS exercised: an approved proposal moved QYSEA (ROV) at 13:54:47 UTC, matching item_activities to the millisecond."
-  },
-  {
-   "led": "hollow",
-   "tag": "OWED",
-   "text": "/promote's commitlint gate is mis-scoped: it lints the whole 2328-commit develop history and stops on 7 Phase 6/7-era commits already in production. CI skips that job on base_ref==main BY DESIGN. Obeying step 3 literally would block every future promotion. Narrow it to the since-last-promotion range."
-  },
-  {
-   "led": "hollow",
-   "tag": "OWED",
-   "text": "Prod has no RESEND_API_KEY (confirmed against Vercel) - digest and briefing runs file in-app notifications and send no email. A run recorded as 'ran' with no email is expected, not a fault. 8 dependabot branches unmerged; the npm ones contend with E6's Stripe SDK over the lockfile."
-  },
-  {
-   "led": "hollow",
-   "tag": "NEXT?",
-   "text": "Report Builder v2 (critical path) has NO spec and NO plan - the charts spec explicitly defers roll-ups and org templates, so it needs brainstorming then writing-plans before any build. Or the E6 Stripe track (units B, C, E-H): spec written, needs a plan, needs NO migration - which makes it the safe partner beside a migration-bearing task."
-  }
- ],
- "worktrees": [],
- "session": {
-  "id": "2026-08-04-2222-promote-84-ai-write-path-live",
-  "when": "2026-08-04 22:22",
-  "bullets": [
-   "A /whats-next triage became a carryover sweep: three tooling repairs shipped (c04dfce9), then promotion #84 put them and the AI-write fixes on the deployment.",
-   "Every new guard was mutation-tested BEFORE landing - the old code was restored under the new tests and 7 of 15 assertions went red. A guard you have never seen fail is not a guard.",
-   "The migration/database.types.ts regen is the real concurrency limit: Report Builder v2, Personal Agents' remainder and F17 each add a migration, so only one can be in flight. E6 Stripe needs none.",
-   "net._http_response self-prunes - it answers 'is this cron failing right now', never 'did it fail last week'. Durable history lives in digest_runs and item_activities."
+  "roadmap": [
+    {
+      "label": "0 Setup",
+      "state": "done"
+    },
+    {
+      "label": "1 Auth",
+      "state": "done"
+    },
+    {
+      "label": "2 Boards",
+      "state": "done"
+    },
+    {
+      "label": "3 Views",
+      "state": "done"
+    },
+    {
+      "label": "4 Collab",
+      "state": "done"
+    },
+    {
+      "label": "5 Autom",
+      "state": "done"
+    },
+    {
+      "label": "6 Depth",
+      "state": "prog"
+    },
+    {
+      "label": "7 Asana",
+      "state": "done"
+    },
+    {
+      "label": "8 Dash",
+      "state": "done"
+    },
+    {
+      "label": "9 Perf",
+      "state": "done"
+    },
+    {
+      "label": "RS",
+      "state": "done"
+    },
+    {
+      "label": "MVP-F",
+      "state": "done"
+    },
+    {
+      "label": "Touch",
+      "state": "done"
+    },
+    {
+      "label": "PF",
+      "state": "done"
+    },
+    {
+      "label": "10 AI",
+      "state": "prog"
+    }
   ]
- },
- "roadmap": [
-  {
-   "label": "0 Setup",
-   "state": "done"
-  },
-  {
-   "label": "1 Auth",
-   "state": "done"
-  },
-  {
-   "label": "2 Boards",
-   "state": "done"
-  },
-  {
-   "label": "3 Views",
-   "state": "done"
-  },
-  {
-   "label": "4 Collab",
-   "state": "done"
-  },
-  {
-   "label": "5 Autom",
-   "state": "done"
-  },
-  {
-   "label": "6 Depth",
-   "state": "prog"
-  },
-  {
-   "label": "7 Asana",
-   "state": "done"
-  },
-  {
-   "label": "8 Dash",
-   "state": "done"
-  },
-  {
-   "label": "9 Perf",
-   "state": "done"
-  },
-  {
-   "label": "RS",
-   "state": "done"
-  },
-  {
-   "label": "MVP-F",
-   "state": "done"
-  },
-  {
-   "label": "Touch",
-   "state": "done"
-  },
-  {
-   "label": "PF",
-   "state": "done"
-  },
-  {
-   "label": "10 AI",
-   "state": "prog"
-  }
- ]
 }
 </script>
 
