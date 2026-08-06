@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LongTextEditor } from "./LongTextEditor";
 
 function setup(overrides: Partial<Parameters<typeof LongTextEditor>[0]> = {}) {
   const onCommit = vi.fn();
   const onCancel = vi.fn();
-  render(
+  const result = render(
     <LongTextEditor
       value={{ text: "old" }}
       settings={{}}
@@ -16,7 +16,7 @@ function setup(overrides: Partial<Parameters<typeof LongTextEditor>[0]> = {}) {
       {...overrides}
     />,
   );
-  return { onCommit, onCancel };
+  return { onCommit, onCancel, unmount: result.unmount };
 }
 
 describe("LongTextEditor — panel", () => {
@@ -78,6 +78,53 @@ describe("LongTextEditor — save semantics", () => {
   it("cancels instead of committing when the text is unchanged", async () => {
     const { onCommit, onCancel } = setup();
     await userEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  // FIX 1 regression: GroupSection virtualizes rows (overscan: 6), so
+  // scrolling can unmount this panel without any of the explicit dismiss
+  // paths above ever firing. Losing an in-progress edit to that is silent
+  // data loss — the panel must commit on unmount too.
+  it("commits the pending edit when the panel unmounts without an explicit dismissal", async () => {
+    const { onCommit, unmount } = setup();
+    const ta = screen.getByRole("textbox");
+    await userEvent.click(ta);
+    await userEvent.type(ta, "er");
+    unmount();
+    expect(onCommit).toHaveBeenCalledWith({ text: "older" });
+  });
+
+  it("commits on an outside click (pointerdown outside the panel)", async () => {
+    const { onCommit } = setup();
+    const ta = screen.getByRole("textbox");
+    await userEvent.click(ta);
+    await userEvent.type(ta, "er");
+    fireEvent.pointerDown(document.body);
+    expect(onCommit).toHaveBeenCalledWith({ text: "older" });
+  });
+
+  it("does not double-commit when Escape is followed by unmount", async () => {
+    const { onCommit, unmount } = setup();
+    const ta = screen.getByRole("textbox");
+    await userEvent.click(ta);
+    await userEvent.type(ta, "er{Escape}");
+    unmount();
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith({ text: "older" });
+  });
+
+  // Combined FIX 1 / FIX 4 edge case: a cell that arrived over the cap
+  // through the spreadsheet-import bypass (see textValueSchema's comment)
+  // can't be safely committed on an implicit unmount either. It must still
+  // resolve via onCancel rather than doing nothing — otherwise the parent's
+  // editing state is left pointing at this cell, and scrolling back to the
+  // row would spontaneously reopen the panel.
+  it("cancels (does not commit) an over-cap unmount, clearing editing state", () => {
+    const { onCommit, onCancel, unmount } = setup({
+      value: { text: "x".repeat(20_005) },
+    });
+    unmount();
     expect(onCommit).not.toHaveBeenCalled();
     expect(onCancel).toHaveBeenCalled();
   });
@@ -151,9 +198,12 @@ describe("LongTextEditor — preview", () => {
 });
 
 describe("LongTextEditor — cap", () => {
-  it("caps the textarea at 20000 characters", () => {
+  it("does not truncate the textarea at 20000 characters", () => {
+    // FIX 4: a paste that lands over the cap must not be silently cut down
+    // to exactly 20,000 — the user needs to see (and can edit down) the
+    // full pasted text, so no `maxLength` on the textarea.
     setup();
-    expect(screen.getByRole("textbox")).toHaveAttribute("maxLength", "20000");
+    expect(screen.getByRole("textbox")).not.toHaveAttribute("maxLength");
   });
 
   it("hides the counter well below the cap", () => {
@@ -164,5 +214,47 @@ describe("LongTextEditor — cap", () => {
   it("shows the counter as the cap approaches", () => {
     setup({ value: { text: "x".repeat(19_500) } });
     expect(screen.getByText(/19,500 \/ 20,000/)).toBeInTheDocument();
+  });
+
+  it("blocks the commit and keeps the panel open when over the cap", async () => {
+    const { onCommit } = setup({ value: { text: "x".repeat(20_001) } });
+    await userEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(onCommit).not.toHaveBeenCalled();
+    // The panel is still open — the textarea (and the user's text) is
+    // still on screen, not discarded.
+    expect(screen.getByRole("textbox")).toHaveValue("x".repeat(20_001));
+    expect(
+      screen.getByText(/1 characters over the 20,000 limit/i),
+    ).toBeInTheDocument();
+  });
+
+  it("names the overage in the blocking message", () => {
+    setup({ value: { text: "x".repeat(22_480) } });
+    expect(
+      screen.getByText(/2,480 characters over the 20,000 limit/i),
+    ).toBeInTheDocument();
+  });
+
+  it("allows the commit once edited back under the cap", async () => {
+    const { onCommit } = setup({ value: { text: "x".repeat(20_005) } });
+    const ta = screen.getByRole("textbox");
+    // Trim 10 chars off — back under the cap.
+    await userEvent.click(ta);
+    fireEvent.change(ta, { target: { value: "x".repeat(19_995) } });
+    await userEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(onCommit).toHaveBeenCalledWith({ text: "x".repeat(19_995) });
+  });
+});
+
+describe("LongTextEditor — toolbar disabled on Preview", () => {
+  it("disables toolbar actions while on the Preview tab", async () => {
+    setup({ value: { text: "hello" } });
+    await userEvent.click(screen.getByRole("tab", { name: /preview/i }));
+    expect(screen.getByRole("button", { name: /^bold$/i })).toBeDisabled();
+  });
+
+  it("keeps toolbar actions enabled on the Write tab", () => {
+    setup();
+    expect(screen.getByRole("button", { name: /^bold$/i })).toBeEnabled();
   });
 });

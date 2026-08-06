@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bold,
   Code,
@@ -26,7 +26,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** Hard cap on paragraph length — matches the `text` column's storage budget. */
+/**
+ * Cap on paragraph length — matches `textValueSchema`'s storage budget
+ * (`src/lib/validations/boards.ts`). Not enforced as a hard input limit
+ * (no `maxLength` on the textarea): a paste that lands over this is kept
+ * on screen in full and the commit is blocked with an inline message
+ * instead, so nothing is silently truncated.
+ */
 const CHAR_CAP = 20_000;
 /** The counter only earns its place in the footer once the cap is close enough to matter. */
 const COUNTER_THRESHOLD = 19_000;
@@ -66,6 +72,13 @@ type LongTextEditorProps = {
  *
  * `text` lives here (not in the textarea DOM node) because the Preview tab
  * unmounts the textarea entirely — the value has to survive that swap.
+ *
+ * Every exit path is event-driven (Escape, outside click, the close button,
+ * Cmd/Ctrl+Enter) *except* one: `GroupSection`'s row virtualization can
+ * unmount this panel out from under an in-progress edit (overscan is only 6
+ * rows) with none of those events ever firing. The cleanup effect below
+ * covers that case — it commits the latest text on unmount unless an exit
+ * path already did, so scrolling never silently destroys a draft.
  */
 export function LongTextEditor({
   value,
@@ -78,16 +91,79 @@ export function LongTextEditor({
   const [tab, setTab] = useState<"write" | "preview">("write");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Mirrors of the latest render's text/callbacks/initial value, read from
+  // the unmount effect below. A `useEffect` cleanup with an empty deps array
+  // closes over whatever these were at MOUNT time, which would go stale the
+  // moment the user typed a second character — refs keep it current instead.
+  // Written from an effect (not directly in the render body) per
+  // react-hooks/refs: a ref write has to happen outside of render.
+  const latestText = useRef(text);
+  const onCommitRef = useRef(onCommit);
+  const onCancelRef = useRef(onCancel);
+  const initialRef = useRef(initial);
+  useEffect(() => {
+    latestText.current = text;
+    onCommitRef.current = onCommit;
+    onCancelRef.current = onCancel;
+    initialRef.current = initial;
+  });
+  // Guards against double-committing: set true the moment any exit path
+  // (Escape, outside click, close button, Cmd/Ctrl+Enter) resolves the
+  // panel, so the unmount cleanup below knows not to act again.
+  const settled = useRef(false);
+
+  const overBy = text.length - CHAR_CAP;
+  const isOverCap = overBy > 0;
+
   // A no-op save is still a save per the contract, but writing back an
   // identical value is pointless — fall back to onCancel when nothing
   // actually changed so an untouched open-then-close doesn't dirty the row.
+  //
+  // Over the cap, this deliberately does nothing: no onCommit (would save
+  // oversized/invalid data), no onCancel (would silently discard the user's
+  // work). `Popover`'s `open` prop above is hardcoded `true`, not read from
+  // state, so leaving both uncalled is what keeps the panel open — nothing
+  // else in this component removes it from the tree. The footer surfaces
+  // the blocking reason so the user can edit the text back under the cap
+  // and retry.
   function commitOrCancel() {
+    if (isOverCap) return;
+    settled.current = true;
     if (text === initial) {
       onCancel();
     } else {
       onCommit({ text });
     }
   }
+
+  // Covers the one exit path that isn't event-driven: GroupSection virtualizes
+  // rows (overscan: 6), so scrolling can unmount this panel mid-edit without
+  // Escape/outside-click/close ever firing — see the component doc comment.
+  useEffect(() => {
+    return () => {
+      if (settled.current) return;
+      const finalText = latestText.current;
+      settled.current = true;
+      if (finalText.length > CHAR_CAP) {
+        // Can't commit an over-cap value here (would save data past the
+        // schema's 20,000-char bound) and there's no panel left to show the
+        // blocking message on an implicit unmount — the edit is lost, the
+        // same accepted gap textValueSchema's comment documents for the
+        // spreadsheet-import path. Still call onCancel rather than doing
+        // nothing, though: it doesn't write anything, and it clears the
+        // parent's editing state — skipping it would leave that state
+        // pointing at this cell, and scrolling back to the row would
+        // spontaneously reopen the panel.
+        onCancelRef.current();
+        return;
+      }
+      if (finalText === initialRef.current) {
+        onCancelRef.current();
+      } else {
+        onCommitRef.current({ text: finalText });
+      }
+    };
+  }, []);
 
   function runAction(action: MarkdownAction) {
     const ta = textareaRef.current;
@@ -216,7 +292,7 @@ export function LongTextEditor({
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={handleKeyDown}
-              maxLength={CHAR_CAP}
+              aria-invalid={isOverCap}
               className="max-h-[min(24rem,var(--radix-popover-content-available-height))] min-h-[12rem] resize-none overflow-y-auto"
             />
           ) : (
@@ -235,6 +311,11 @@ export function LongTextEditor({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={label}
+                // The Preview tab unmounts the textarea, so every action
+                // here would silently no-op (`runAction` bails when the ref
+                // is null) — disable rather than let nine dead buttons sit
+                // there looking clickable.
+                disabled={tab === "preview"}
                 // Toolbar clicks must not blur the textarea — a blur would
                 // collapse the selection applyMarkdown needs to act on.
                 onMouseDown={(e) => e.preventDefault()}
@@ -244,10 +325,20 @@ export function LongTextEditor({
               </Button>
             ))}
           </div>
-          {showCounter && (
-            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-              {text.length.toLocaleString()} / {CHAR_CAP.toLocaleString()}
-            </span>
+          {isOverCap ? (
+            <p
+              role="alert"
+              className="text-destructive min-w-0 flex-1 text-right text-xs leading-snug"
+            >
+              {overBy.toLocaleString()} characters over the{" "}
+              {CHAR_CAP.toLocaleString()} limit — shorten to save.
+            </p>
+          ) : (
+            showCounter && (
+              <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                {text.length.toLocaleString()} / {CHAR_CAP.toLocaleString()}
+              </span>
+            )
           )}
         </div>
       </PopoverContent>

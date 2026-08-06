@@ -12,10 +12,11 @@
  *
  * `stripMarkdown` runs once per VISIBLE text cell on every board render
  * (hundreds of cells on a large board), so its fast path — bailing out
- * before any regex work when the input has no Markdown syntax at all —
- * is a real performance requirement. Do not remove it, and do not build
- * `stripMarkdown` on top of `parseMarkdown` (that would make every cell
- * pay for full block/inline parsing just to render a plain preview).
+ * before the Markdown-specific replace passes when the input has no
+ * Markdown syntax at all — is a real performance requirement. Do not
+ * remove it, and do not build `stripMarkdown` on top of `parseMarkdown`
+ * (that would make every cell pay for full block/inline parsing just to
+ * render a plain preview).
  */
 
 import { isHttpUrl } from "@/lib/validations/boards";
@@ -65,28 +66,74 @@ const LINE_PREFIX_RE = /^(?:#{1,3}[ \t]+|[-*][ \t]+|\d+\.[ \t]+|>[ \t]+)/gm;
 const BOLD_RE = /\*\*([^*]+)\*\*/g;
 const STRIKE_RE = /~~([^~]+)~~/g;
 const CODE_RE = /`([^`]+)`/g;
-// Italic: single `*` or `_` around non-empty, non-`*`/`_` content.
+// Italic: single `*` or `_` around non-empty, non-`*`/`_` content. Validity
+// (word-boundary + no-adjacent-whitespace) is enforced separately by
+// `isValidEmphasis` below — this regex only finds *candidate* pairs.
 const ITALIC_RE = /(?:\*([^*]+)\*|_([^_]+)_)/g;
 const LINK_RE = /\[([^\]]*)\]\([^)]*\)/g;
 
+function isWordChar(ch: string | undefined): boolean {
+  return ch !== undefined && /\w/.test(ch);
+}
+
+// CommonMark-ish emphasis rule, applied to both `stripMarkdown` and
+// `parseMarkdown` so a stored plain-text value (never intended as Markdown)
+// never gets its `_`/`*` characters silently eaten:
+//
+// - Not flanked by a word character on the outside (rules out intraword
+//   delimiters like the underscores in `user_id`, `prod_db_2`,
+//   `snake_case_name.txt`).
+// - No whitespace touching the marker on the inside (rules out false
+//   positives like `5 * 3 = 15 * 2`, where the marker is followed/preceded
+//   by a space rather than the emphasised text).
+//
+// `full`/`start`/`end` are the string being matched against and the
+// candidate match's `[start, end)` span within it; `content` is the text
+// between the delimiters.
+function isValidEmphasis(
+  full: string,
+  start: number,
+  end: number,
+  content: string,
+): boolean {
+  if (content.length === 0) return false;
+  if (isWordChar(full[start - 1]) || isWordChar(full[end])) return false;
+  if (/^\s/.test(content) || /\s$/.test(content)) return false;
+  return true;
+}
+
 export function stripMarkdown(md: string): string {
-  if (!MARKDOWN_SNIFF.test(md) && !NUMBERED_LIST_SNIFF.test(md)) return md;
+  let out = md;
 
-  let out = md
-    .replace(LINE_PREFIX_RE, "")
-    .replace(LINK_RE, "$1")
-    .replace(CODE_RE, "$1")
-    .replace(BOLD_RE, "$1")
-    .replace(STRIKE_RE, "$1")
-    .replace(
-      ITALIC_RE,
-      (_m, star: string | undefined, underscore: string | undefined) =>
-        star ?? underscore ?? "",
-    )
-    .replace(/\n/g, " ");
+  if (MARKDOWN_SNIFF.test(md) || NUMBERED_LIST_SNIFF.test(md)) {
+    out = out
+      .replace(LINE_PREFIX_RE, "")
+      .replace(LINK_RE, "$1")
+      .replace(CODE_RE, "$1")
+      .replace(BOLD_RE, "$1")
+      .replace(STRIKE_RE, "$1")
+      .replace(
+        ITALIC_RE,
+        (
+          m: string,
+          star: string | undefined,
+          underscore: string | undefined,
+          offset: number,
+          str: string,
+        ) => {
+          const content = star ?? underscore ?? "";
+          return isValidEmphasis(str, offset, offset + m.length, content)
+            ? content
+            : m;
+        },
+      )
+      .replace(/\n/g, " ");
+  }
 
-  out = out.replace(/\s+/g, " ").trim();
-  return out;
+  // Always normalised, on both the fast path (no Markdown syntax detected)
+  // and the full-strip path above, so the same visible content produces the
+  // same output regardless of which path ran.
+  return out.replace(/\s+/g, " ").trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -444,22 +491,38 @@ function parseStrikethrough(text: string): Inline[] {
 
 function parseItalic(text: string): Inline[] {
   const nodes: Inline[] = [];
-  let rest = text;
-  const re = /\*([^*]+)\*|_([^_]+)_/;
+  // Global + manual `lastIndex` (rather than the shrinking-`rest` loop the
+  // other precedence levels use) because a rejected candidate — see
+  // `isValidEmphasis` — must not stop the scan: the search has to resume
+  // just past the rejected delimiter and keep looking for a later, valid
+  // pair, while still coalescing everything skipped into one literal text
+  // run rather than fragmenting it.
+  const re = /\*([^*]+)\*|_([^_]+)_/g;
+  let lastEmitted = 0;
+  let searchFrom = 0;
   for (;;) {
-    const match = re.exec(rest);
-    if (!match || match.index === undefined) {
-      if (rest.length > 0) nodes.push({ type: "text", value: rest });
-      break;
-    }
-    const before = rest.slice(0, match.index);
-    if (before.length > 0) nodes.push({ type: "text", value: before });
+    re.lastIndex = searchFrom;
+    const match = re.exec(text);
+    if (!match) break;
     const content = match[1] ?? match[2] ?? "";
-    nodes.push({
-      type: "italic",
-      children: [{ type: "text", value: content }],
-    });
-    rest = rest.slice(match.index + match[0].length);
+    const start = match.index;
+    const end = start + match[0].length;
+    if (isValidEmphasis(text, start, end, content)) {
+      if (start > lastEmitted) {
+        nodes.push({ type: "text", value: text.slice(lastEmitted, start) });
+      }
+      nodes.push({
+        type: "italic",
+        children: [{ type: "text", value: content }],
+      });
+      lastEmitted = end;
+      searchFrom = end;
+    } else {
+      searchFrom = start + 1;
+    }
+  }
+  if (lastEmitted < text.length) {
+    nodes.push({ type: "text", value: text.slice(lastEmitted) });
   }
   return nodes;
 }

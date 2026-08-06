@@ -34,6 +34,42 @@ describe("stripMarkdown", () => {
   it("collapses runs of whitespace left behind by stripping", () => {
     expect(stripMarkdown("a\n\n\nb")).toBe("a b");
   });
+
+  it("normalises whitespace identically on the fast path and the full-strip path", () => {
+    // No Markdown syntax at all -> fast path. Same double-spaced/padded
+    // content as below, run through the sniff-triggering "- " prefix -> full
+    // path. Both must collapse to the same normalised string.
+    expect(stripMarkdown("  padded  text  ")).toBe("padded text");
+    expect(stripMarkdown("- padded  text")).toBe("padded text");
+  });
+
+  describe("intraword delimiters are literal, not emphasis", () => {
+    it.each([
+      ["user_id and order_id", "user_id and order_id"],
+      ["Deploy to prod_db_2 now", "Deploy to prod_db_2 now"],
+      ["snake_case_name.txt", "snake_case_name.txt"],
+      ["5 * 3 = 15 * 2", "5 * 3 = 15 * 2"],
+    ])("leaves %s unchanged", (input, expected) => {
+      expect(stripMarkdown(input)).toBe(expected);
+    });
+  });
+
+  describe("valid emphasis still strips", () => {
+    it.each([
+      ["*italic*", "italic"],
+      ["_italic_", "italic"],
+      ["a *b* c", "a b c"],
+    ])("strips %s", (input, expected) => {
+      expect(stripMarkdown(input)).toBe(expected);
+    });
+
+    // Nested emphasis (`**bold *italic* text**`) is a `parseMarkdown`-only
+    // regression, covered below in the `parseMarkdown` suite — stripMarkdown's
+    // `BOLD_RE` (unlike `parseBold`) requires bold content to contain no `*`
+    // at all, so it never matches a bold span with nested italic in the
+    // first place; that is a pre-existing, out-of-scope characteristic of
+    // the collapsed-cell strip path, not something this fix touches.
+  });
 });
 
 describe("applyMarkdown — wrap actions", () => {
@@ -186,6 +222,26 @@ describe("parseMarkdown", () => {
             ],
           },
         ],
+      },
+    ]);
+  });
+
+  // FIX 3: the preview must not italicise `user_id` — same intraword rule
+  // as stripMarkdown, applied via parseItalic.
+  it("does not italicise intraword underscores", () => {
+    expect(parseMarkdown("user_id and order_id")).toEqual([
+      {
+        type: "paragraph",
+        children: [{ type: "text", value: "user_id and order_id" }],
+      },
+    ]);
+  });
+
+  it("does not italicise a whitespace-padded asterisk pair", () => {
+    expect(parseMarkdown("5 * 3 = 15 * 2")).toEqual([
+      {
+        type: "paragraph",
+        children: [{ type: "text", value: "5 * 3 = 15 * 2" }],
       },
     ]);
   });
