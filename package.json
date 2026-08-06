@@ -25,6 +25,7 @@
     "test:watch": "vitest",
     "lhci": "lhci autorun",
     "e2e": "playwright test",
+    "e2e:offline": "playwright test -c playwright.offline.config.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",

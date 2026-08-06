@@ -7,6 +7,12 @@ vi.mock("@tanstack/react-query-persist-client", () => ({
   persistQueryClientRestore: vi.fn(),
 }));
 
+// The grace check gates the restore (B4), so it has to be controllable here.
+const enforceOfflineGrace = vi.fn();
+vi.mock("@/lib/offline/entitlement", () => ({
+  enforceOfflineGrace: (...args: unknown[]) => enforceOfflineGrace(...args),
+}));
+
 const boardViewsProps = vi.fn();
 vi.mock("@/components/boards/BoardViews", () => ({
   // Named function expression (not an anonymous arrow) so eslint's
@@ -38,6 +44,8 @@ beforeEach(() => {
   // exercise the pending and rejected paths.
   restoreMock.mockReset();
   restoreMock.mockResolvedValue(undefined);
+  enforceOfflineGrace.mockReset();
+  enforceOfflineGrace.mockResolvedValue(true);
 });
 
 describe("OfflineBoard", () => {
@@ -121,5 +129,65 @@ describe("OfflineBoard", () => {
     expect(
       await screen.findByText(/isn't available offline/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe("OfflineBoard entitlement grace (B4)", () => {
+  it("refuses to restore or render when the grace has lapsed", async () => {
+    // `enforceOfflineGrace` returning false means it has already wiped the
+    // cached data. Restoring anyway would render boards the user is no longer
+    // entitled to, and wiping only for "next time" is not enforcement.
+    enforceOfflineGrace.mockResolvedValue(false);
+    const qc = new QueryClient();
+    qc.setQueryData(boardSnapshotKey("b1"), {
+      payload: { board: { id: "b1", org_id: "o1" }, views: [{ id: "v1" }] },
+      members: [],
+      initialViewId: "v1",
+      currentUserId: "u1",
+      savedAt: Date.now(),
+    });
+
+    render(<OfflineBoard boardId="b1" userId="u1" />, { wrapper: wrap(qc) });
+
+    expect(
+      await screen.findByText(/offline access has expired/i),
+    ).toBeInTheDocument();
+    expect(restoreMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("board-views")).not.toBeInTheDocument();
+  });
+
+  it("runs the grace check BEFORE restoring, not after", async () => {
+    const order: string[] = [];
+    enforceOfflineGrace.mockImplementation(() => {
+      order.push("grace");
+      return Promise.resolve(true);
+    });
+    restoreMock.mockImplementation(() => {
+      order.push("restore");
+      return Promise.resolve(undefined);
+    });
+
+    render(<OfflineBoard boardId="b1" userId="u1" />, {
+      wrapper: wrap(new QueryClient()),
+    });
+
+    await waitFor(() => expect(order).toEqual(["grace", "restore"]));
+  });
+
+  it("fails closed if the grace check itself rejects", async () => {
+    // Unreachable today (enforceOfflineGrace swallows its own errors), but an
+    // unhandled rejection would otherwise strand the page on the skeleton.
+    enforceOfflineGrace.mockRejectedValue(new Error("boom"));
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(<OfflineBoard boardId="b1" userId="u1" />, {
+      wrapper: wrap(new QueryClient()),
+    });
+
+    expect(
+      await screen.findByText(/offline access has expired/i),
+    ).toBeInTheDocument();
+    expect(restoreMock).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

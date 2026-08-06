@@ -5,9 +5,20 @@ import type { ReactNode } from "react";
 
 const unsubscribe = vi.fn();
 const persistQueryClientSubscribe = vi.fn((..._args: unknown[]) => unsubscribe);
+// `persistQueryClientSave` must be part of this mock, not omitted: the
+// component calls it for the initial save (the subscription alone never
+// captures state that predates it — see OfflinePersistence.initial-save.test.tsx).
+// Omitting it here does not fail a test, it throws an UNHANDLED error while the
+// suite still reports green, which is precisely the failure mode this branch
+// has been bitten by before.
+const persistQueryClientSave = vi.fn((..._args: unknown[]) =>
+  Promise.resolve(),
+);
 vi.mock("@tanstack/react-query-persist-client", () => ({
   persistQueryClientSubscribe: (...args: unknown[]) =>
     persistQueryClientSubscribe(...args),
+  persistQueryClientSave: (...args: unknown[]) =>
+    persistQueryClientSave(...args),
 }));
 
 const enforceOfflineGrace = vi.fn();
@@ -45,6 +56,7 @@ function wrapOffline(qc: QueryClient) {
 describe("OfflinePersistence", () => {
   beforeEach(() => {
     persistQueryClientSubscribe.mockClear();
+    persistQueryClientSave.mockClear();
     unsubscribe.mockClear();
     enforceOfflineGrace.mockReset();
     rememberIdentity.mockReset();

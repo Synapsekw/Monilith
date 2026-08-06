@@ -2,7 +2,10 @@
 
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { persistQueryClientSubscribe } from "@tanstack/react-query-persist-client";
+import {
+  persistQueryClientSave,
+  persistQueryClientSubscribe,
+} from "@tanstack/react-query-persist-client";
 import {
   enforceOfflineGrace,
   rememberIdentity,
@@ -28,6 +31,13 @@ export function OfflinePersistence({ userId }: { userId: string }) {
   const isOfflineRender = useIsOfflineRender();
 
   useEffect(() => {
+    // RULING (B4): this early return also skips `enforceOfflineGrace` below,
+    // and that is correct — but only because `OfflineBoard` now runs the grace
+    // check itself, BEFORE it restores the cached snapshot. Enforcing here
+    // instead would be too late: the board would already have rendered, and the
+    // wipe would only take effect on the next load. Do not "fix" this by moving
+    // the grace check back into this component; move it out of `OfflineBoard`
+    // only if you have somewhere earlier to put it.
     if (isOfflineRender) return;
 
     rememberIdentity(userId);
@@ -43,10 +53,22 @@ export function OfflinePersistence({ userId }: { userId: string }) {
     // subscription with nothing to ever call its cleanup.
     void enforceOfflineGrace(Date.now()).then((permitted) => {
       if (cancelled || !permitted) return;
-      unsubscribe = persistQueryClientSubscribe({
-        queryClient,
-        ...persistOptionsFor(userId),
-      });
+      const options = { queryClient, ...persistOptionsFor(userId) };
+      unsubscribe = persistQueryClientSubscribe(options);
+
+      // `persistQueryClientSubscribe` performs NO initial save — it only calls
+      // `persistQueryClientSave` from a SUBSEQUENT query/mutation cache event
+      // (see `persist.ts` in @tanstack/query-persist-client-core). The board
+      // snapshot is written exactly once, by `useBoardSnapshot`'s effect, and
+      // that write has already happened by the time the grace check above
+      // resolves — so without this explicit first save there is no later event
+      // to trigger one, and nothing is ever written to disk. Measured against a
+      // production build before this line existed: the `keyval-store` database
+      // was never even created while online, and `/offline` reported a
+      // just-visited board as never visited. Do not remove it on the grounds
+      // that the subscription "already covers" persistence; it does not cover
+      // anything that entered the cache before it existed.
+      void persistQueryClientSave(options);
     });
 
     return () => {

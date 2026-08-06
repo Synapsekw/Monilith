@@ -71,17 +71,21 @@ async function waitForServiceWorker(page: Page) {
  * `queryKey`/`queryHash`) for the specific `["boardSnapshot", boardId]` entry
  * this test is about to depend on, not merely "something" at the IDB key.
  *
- * `indexedDB.open("keyval-store")` with no explicit version is used to poll,
- * because that is the only way to read the record without a race: calling it
- * BEFORE the app's own first-ever `idb-keyval` write would otherwise trigger
- * `onupgradeneeded` for THIS call, and if it committed, that would create the
- * database at version 1 with no `keyval` object store — permanently
- * preventing idb-keyval's own `createObjectStore` from ever running again for
- * the life of the page (confirmed empirically: an earlier, unguarded version
- * of this helper reproducibly won that race and starved the app's real write
- * every time). The fix is to never let this poll's own `onupgradeneeded`
- * commit: abort its version-change transaction immediately, so the poll can
- * only ever observe state, never create it.
+ * The poll must never CREATE or MUTATE the database it is observing. An earlier
+ * version of this helper called `indexedDB.open("keyval-store")` unconditionally
+ * and aborted the resulting `onupgradeneeded` transaction, on the theory that
+ * aborting makes the probe observe-only. It does not: aborting a version-change
+ * transaction that was creating the database rolls the database back to version
+ * 0, destroying the object store and everything in it. Measured directly — with
+ * that probe in place, `indexedDB.databases()` reported `keyval-store` absent
+ * immediately after the probe had just confirmed the snapshot present, and
+ * `/offline` then reported a just-visited board as never visited. The probe was
+ * manufacturing the very symptom under investigation.
+ *
+ * So this version never opens a database that does not already exist:
+ * `indexedDB.databases()` reports existence with no connection at all, and only
+ * once the app itself has created the store is it opened for reading — at which
+ * point `onupgradeneeded` cannot fire for this probe.
  */
 async function waitForOfflineSnapshot(
   page: Page,
@@ -90,11 +94,16 @@ async function waitForOfflineSnapshot(
 ) {
   await page.waitForFunction(
     async ({ k, boardId: bid }) => {
+      // Existence check first, with no connection and therefore no possibility
+      // of triggering (or aborting) a version change.
+      const databases = await indexedDB.databases();
+      if (!databases.some((d) => d.name === "keyval-store")) return false;
+
       return await new Promise<boolean>((resolve) => {
+        // Safe: the database demonstrably exists, so `onupgradeneeded` cannot
+        // fire for this request.
         const req = indexedDB.open("keyval-store");
-        req.onupgradeneeded = (ev) => {
-          (ev.target as IDBOpenDBRequest).transaction?.abort();
-        };
+        req.onerror = () => resolve(false);
         req.onsuccess = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains("keyval")) {
@@ -125,10 +134,6 @@ async function waitForOfflineSnapshot(
             resolve(false);
           };
         };
-        // Includes the aborted-upgrade case above: an aborted versionchange
-        // transaction fails the whole open request, landing here — correctly
-        // reported as "not found yet", not as a real error.
-        req.onerror = () => resolve(false);
       });
     },
     { k: idbKey, boardId },
@@ -191,7 +196,14 @@ test.describe("offline read-only boards", () => {
     await page.getByLabel(/organization name/i).fill(unique("Org"));
     await page.getByLabel(/workspace name/i).fill("Engineering");
     await page.getByRole("button", { name: /create organization/i }).click();
-    await page.waitForURL(/localhost:3000\/$/, { timeout: 30_000 });
+    // Port-tolerant (the sibling specs hardcode :3000). Still matches the
+    // normal :3000 run, but lets this spec be verified against a server on
+    // another port — which matters here because `playwright.config.ts` sets
+    // `reuseExistingServer: !CI` against a fixed :3000, so a dev server left
+    // running from a DIFFERENT checkout is silently used instead of this one.
+    // That is not hypothetical: the main checkout's `develop` server answers
+    // 404 for /sw.js, so the whole offline feature would appear broken.
+    await page.waitForURL(/localhost:\d+\/$/, { timeout: 30_000 });
     await expect(page.getByText(/no boards yet/i)).toBeVisible({
       timeout: 15_000,
     });
