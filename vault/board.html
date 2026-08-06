@@ -65,7 +65,7 @@
     {
       "led": "amber",
       "tag": "NEXT?",
-      "text": "MCP full-surface-reads: spec AND implementation plan both landed on develop this session from a parallel session, and are unstarted. This is the only shovel-ready, fully-planned work on the board - everything else on the critical path needs brainstorming or writing-plans first."
+      "text": "MCP full-surface-reads: spec AND implementation plan both landed on develop this session, and the task/mcp-full-surface worktree has already been cut for it. CLAIMED, not open - coordinate rather than duplicate. The offline read-only track is also live in a second worktree, several commits deep and unmerged."
     },
     {
       "led": "hollow",
@@ -83,7 +83,20 @@
       "text": "Report Builder v2 (critical path) has NO spec and NO plan - the charts spec explicitly defers roll-ups and org templates. Or the E6 Stripe track (units B, C, E-H): spec written, needs a plan, needs NO migration - the safe partner beside a migration-bearing task."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "led": "amber",
+      "branch": "task/offline-read-only",
+      "head": "9ecef043",
+      "note": "offline read-only · several commits · unmerged"
+    },
+    {
+      "led": "amber",
+      "branch": "task/mcp-full-surface",
+      "head": "c0a53171",
+      "note": "just cut from develop tip · no work yet"
+    }
+  ],
   "session": {
     "id": "2026-08-06-0902-mcp-oauth-loopback-and-bridge-secret",
     "when": "2026-08-06 09:02",
