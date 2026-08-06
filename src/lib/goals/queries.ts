@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
 import { getActiveOrgId } from "@/lib/org/active";
 import { createClient } from "@/lib/supabase/server";
@@ -95,11 +97,17 @@ export async function getGoalOwners(): Promise<Map<string, RowOwner>> {
   return new Map(members.map((m) => [m.userId, m]));
 }
 
-/** One bounded pass: goals SELECT + goals_rollup() RPC + members → assembled tree. */
-export async function getGoalsTree(): Promise<GoalNode[]> {
-  const now = Date.now();
-  const supabase = await createClient();
-  const [{ data: goals }, { data: aggs }, owners] = await Promise.all([
+/**
+ * Client-injected core: goals SELECT + goals_rollup() RPC → assembled tree.
+ * `owners` is a PARAMETER because the RSC path resolves it from the active-org
+ * cookie via the service-client cache, while MCP resolves it over the bridged
+ * client (spec §3.2: no service client on the MCP path).
+ */
+export async function getGoalsTreeCore(
+  supabase: SupabaseClient<Database>,
+  ctx: { owners: Map<string, RowOwner>; nowMs: number },
+): Promise<GoalNode[]> {
+  const [{ data: goals }, { data: aggs }] = await Promise.all([
     supabase
       .from("goals")
       .select(
@@ -108,7 +116,6 @@ export async function getGoalsTree(): Promise<GoalNode[]> {
       .order("position")
       .limit(GOALS_LIMIT),
     supabase.rpc("goals_rollup"),
-    getGoalOwners(),
   ]);
 
   const rows: GoalRow[] = (goals ?? []).map((g) => toGoalRow(g as GoalDbRow));
@@ -118,5 +125,15 @@ export async function getGoalsTree(): Promise<GoalNode[]> {
     total: Number(a.total_items),
     done: Number(a.done_items),
   }));
-  return buildGoalTree(rows, boardAggs, owners, serverToday(now));
+  return buildGoalTree(rows, boardAggs, ctx.owners, serverToday(ctx.nowMs));
+}
+
+/** Cookie-bound wrapper — the RSC entry point. Signature unchanged. */
+export async function getGoalsTree(): Promise<GoalNode[]> {
+  const nowMs = Date.now();
+  const [supabase, owners] = await Promise.all([
+    createClient(),
+    getGoalOwners(),
+  ]);
+  return getGoalsTreeCore(supabase, { owners, nowMs });
 }
