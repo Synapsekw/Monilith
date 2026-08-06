@@ -1,6 +1,7 @@
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { cellToText } from "@/lib/boards/spreadsheet/cell-codec";
+import { stripMarkdown } from "@/lib/boards/markdown";
 
 /** A shaped cell: display text plus, for option-bearing kinds
  *  (status/dropdown/priority), the selected option's raw hex so blocks can
@@ -22,6 +23,30 @@ export type Kpis = {
 };
 
 const DONE_LABELS = new Set(["done", "complete", "completed", "closed"]);
+
+// Text columns hold Markdown up to 20,000 characters (see
+// src/lib/boards/markdown.ts). `cellToText`'s own "text" case intentionally
+// returns the RAW value — that's load-bearing for CSV export/import
+// round-tripping (see cell-codec.ts), so it must not change. The PDF/print
+// table is a different consumer with a different requirement: a value this
+// long, rendered unbounded in an auto-layout `<td>`, makes that one row
+// wrap into hundreds of lines and breaks pagination. Bounding the actual
+// character count here — not just visually clipping it in CSS — is what
+// makes the fix reliable in a paginated PDF: `text-overflow: ellipsis`
+// needs a definite cell width and a single un-wrapped line to trigger, which
+// auto table layout doesn't reliably give a variable, caller-chosen set of
+// report columns, and it produces no visible "there's more" affordance on a
+// printed page (no hover title). Truncating the source text, paired with the
+// `max-width` this file's own `.r-narrative`/`.r-cover-lede` rules already
+// use for long-form content, is the deterministic version of the same idea.
+const REPORT_TEXT_PREVIEW_MAX = 200;
+
+function reportTextPreview(text: string): string {
+  const stripped = stripMarkdown(text);
+  return stripped.length > REPORT_TEXT_PREVIEW_MAX
+    ? `${stripped.slice(0, REPORT_TEXT_PREVIEW_MAX).trimEnd()}…`
+    : stripped;
+}
 
 function cellLookup(payload: BoardPayload): Map<string, unknown> {
   const map = new Map<string, unknown>();
@@ -87,8 +112,9 @@ export function shapeReport(
     for (const col of columns) {
       const raw = lookup.get(`${item.id}:${col.id}`);
       const kind = col.kind as ColumnKind;
+      const text = cellToText(kind, raw, col.settings, resolvePerson);
       cells.set(col.id, {
-        text: cellToText(kind, raw, col.settings, resolvePerson),
+        text: kind === "text" ? reportTextPreview(text) : text,
         color: optionColor(kind, raw, col.settings),
       });
     }

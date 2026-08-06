@@ -125,3 +125,55 @@ describe("shapeReport", () => {
     );
   });
 });
+
+describe("shapeReport text column preview", () => {
+  function fixtureWithTextColumn(textValue: string): BoardPayload {
+    const base = fixture();
+    base.columns = [
+      ...base.columns,
+      {
+        id: "c-text",
+        board_id: "b1",
+        kind: "text",
+        name: "Notes",
+        settings: {},
+        position: 2,
+      } as unknown as BoardPayload["columns"][number],
+    ];
+    base.cellValues = [
+      ...base.cellValues,
+      {
+        item_id: "i1",
+        column_id: "c-text",
+        value: { text: textValue },
+      } as unknown as BoardPayload["cellValues"][number],
+    ];
+    return base;
+  }
+
+  it("strips Markdown syntax from a text cell", () => {
+    const model = shapeReport(
+      fixtureWithTextColumn("**bold** and _italic_\n- a bullet"),
+      new Map(),
+    );
+    const cell = model.groups[0].rows[0].cells.get("c-text");
+    expect(cell?.text).toBe("bold and italic a bullet");
+  });
+
+  it("truncates a long text cell with an ellipsis, well short of the raw value", () => {
+    const longValue = "word ".repeat(4000).trim(); // ~20,000 chars, board's cap
+    const model = shapeReport(fixtureWithTextColumn(longValue), new Map());
+    const cell = model.groups[0].rows[0].cells.get("c-text");
+    expect(cell?.text).toBeDefined();
+    const text = cell!.text;
+    expect(text.length).toBeLessThan(210);
+    expect(text.endsWith("…")).toBe(true);
+    expect(text).not.toBe(longValue);
+  });
+
+  it("leaves short, non-text-kind cells (e.g. status) untouched", () => {
+    const model = shapeReport(fixtureWithTextColumn("hi"), new Map());
+    const statusCell = model.groups[0].rows[0].cells.get("c1");
+    expect(statusCell?.text).toBe("Done");
+  });
+});

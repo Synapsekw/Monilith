@@ -57,7 +57,17 @@ export const REPORT_CSS = `
     text-align:left; font-size:9px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--muted); font-weight:600; padding:6px 9px; border-bottom:1.5px solid var(--line-strong);
   }
-  table.r-table td { padding:7px 9px; border-bottom:1px solid var(--line); font-size:12px; }
+  /* max-width follows the same long-form-content convention as .r-narrative
+     (70ch) / .r-cover-lede (52ch): a bounded, readable line length rather
+     than letting one text column's content dictate the whole table's layout
+     in the auto table-layout algorithm. overflow-wrap mirrors .r-bar-name
+     below, for the same reason (a long unbroken run must still wrap). The
+     real bound on row height is the source text itself — see
+     REPORT_TEXT_PREVIEW_MAX in shape.ts — since text-overflow:ellipsis
+     needs a definite single-line width to trigger, which this table's
+     variable, caller-chosen columns don't reliably have, and clipping alone
+     gives no "there's more" affordance on a printed page. */
+  table.r-table td { padding:7px 9px; border-bottom:1px solid var(--line); font-size:12px; max-width:40ch; overflow-wrap:anywhere; }
   table.r-table tbody tr:nth-child(even) { background:var(--zebra); }
   table.r-table th.r-num, table.r-table td.r-num { text-align:right; font-variant-numeric:tabular-nums; }
   .r-cell-name { font-weight:600; }
