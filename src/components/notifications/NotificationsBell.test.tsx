@@ -74,6 +74,26 @@ describe("NotificationsBell", () => {
     expect(screen.queryByText(/^\d+$/)).not.toBeInTheDocument();
   });
 
+  it("publishes the badge count to the desktop shell when the bridge is present", () => {
+    const setBadge = vi.fn();
+    (window as { monolith?: unknown }).monolith = { setBadge };
+    mockUnread = 2;
+    mockInvites = [invite];
+
+    render(<NotificationsBell userId="u1" />);
+
+    // The same number the bell renders — not `unread` — so the dock and the
+    // in-app badge can never disagree.
+    expect(setBadge).toHaveBeenCalledWith(3);
+    delete (window as { monolith?: unknown }).monolith;
+  });
+
+  it("does not throw in a plain browser, where there is no bridge", () => {
+    expect((window as { monolith?: unknown }).monolith).toBeUndefined();
+    mockUnread = 1;
+    expect(() => render(<NotificationsBell userId="u1" />)).not.toThrow();
+  });
+
   it("shows the invitation and accepts it by id", () => {
     mockInvites = [invite];
     render(<NotificationsBell userId="u1" />);
