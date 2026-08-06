@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import { onlineManager } from "@tanstack/react-query";
+import { offlineRecoveryKey } from "@/lib/offline/constants";
 import { OfflineNavigationGuard } from "./OfflineNavigationGuard";
 
 /**
@@ -208,5 +209,47 @@ describe("OfflineNavigationGuard", () => {
   it("renders nothing", () => {
     const { container } = render(<OfflineNavigationGuard />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  describe("offline recovery one-shot", () => {
+    const HERE = offlineRecoveryKey(
+      "/boards/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    );
+    const ELSEWHERE = offlineRecoveryKey("/boards/bbbb");
+
+    beforeEach(() => window.sessionStorage.clear());
+    afterEach(() => window.sessionStorage.clear());
+
+    it("online: clears the key for the current pathname on mount", () => {
+      onlineManager.setOnline(true);
+      window.sessionStorage.setItem(HERE, "1");
+      window.sessionStorage.setItem(ELSEWHERE, "1");
+
+      render(<OfflineNavigationGuard />);
+
+      expect(window.sessionStorage.getItem(HERE)).toBeNull();
+      // Other pathnames keep their own one-shot until they too render clean.
+      expect(window.sessionStorage.getItem(ELSEWHERE)).toBe("1");
+    });
+
+    it("offline: leaves the key in place, so the one-shot still binds", () => {
+      onlineManager.setOnline(false);
+      window.sessionStorage.setItem(HERE, "1");
+
+      render(<OfflineNavigationGuard />);
+
+      expect(window.sessionStorage.getItem(HERE)).toBe("1");
+    });
+
+    it("clears the key when connectivity returns", () => {
+      onlineManager.setOnline(false);
+      window.sessionStorage.setItem(HERE, "1");
+      render(<OfflineNavigationGuard />);
+      expect(window.sessionStorage.getItem(HERE)).toBe("1");
+
+      act(() => onlineManager.setOnline(true));
+
+      expect(window.sessionStorage.getItem(HERE)).toBeNull();
+    });
   });
 });

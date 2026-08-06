@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { offlineRecoveryKey } from "@/lib/offline/constants";
 import { useOnlineStatus } from "@/lib/offline/online-status";
 
 /**
@@ -32,6 +33,33 @@ import { useOnlineStatus } from "@/lib/offline/online-status";
  */
 export function OfflineNavigationGuard() {
   const online = useOnlineStatus();
+
+  /**
+   * Rearm the error boundary's offline recovery one-shot for this pathname.
+   *
+   * This component lives in the `(app)` layout, so reaching this effect while
+   * ONLINE means the page rendered without crashing into the boundary — the
+   * exact condition under which a later genuine error deserves a fresh reload.
+   *
+   * The boundary itself must never clear the key: it only ever renders on
+   * failure, so clearing there would rearm the one-shot on the very pass that
+   * is supposed to be bound by it, restoring the infinite loop.
+   *
+   * `[online]` alone is the right dependency set. A stale key can only exist at
+   * a pathname we already reloaded, and a reload remounts this component fresh
+   * at that pathname; the other case — reconnecting while sitting on the page —
+   * is the `online` transition itself.
+   */
+  useEffect(() => {
+    if (!online) return;
+    try {
+      window.sessionStorage.removeItem(
+        offlineRecoveryKey(window.location.pathname),
+      );
+    } catch {
+      // Storage unavailable — the boundary refuses to reload without it anyway.
+    }
+  }, [online]);
 
   useEffect(() => {
     if (online) return;
