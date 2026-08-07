@@ -66,40 +66,58 @@ export default function DesktopSettingsPage() {
             </p>
           </div>
 
+          {/*
+            The Terminal step is FIRST, and that ordering is the whole point.
+
+            An earlier version of this page listed it last, targeting
+            /Applications/Monolith.app — advice that can never be followed.
+            Gatekeeper blocks the drag OUT of the quarantined disk image, so the
+            app never reaches /Applications for the command to act on. The
+            attribute has to come off the .dmg itself, before it is mounted.
+
+            Worth knowing: `com.apple.quarantine` is stamped on by the browser
+            that downloads the file, not by anything in the build. That is why a
+            locally built copy installs with no ceremony at all, and why this is
+            not an Electron quirk — any unsigned app downloaded this way behaves
+            identically.
+
+            Delete this whole block once notarization ships; the remaining steps
+            stand on their own.
+          */}
           <div>
             <Kicker>Installing</Kicker>
-            <ol className="text-muted-foreground mt-3 list-decimal space-y-1.5 pl-5 text-sm">
-              <li>Open the downloaded .dmg file.</li>
+            <ol className="text-muted-foreground mt-3 list-decimal space-y-2.5 pl-5 text-sm">
+              <li>
+                <span className="text-foreground font-medium">
+                  Open Terminal and run this first
+                </span>{" "}
+                — the build isn’t notarized by Apple yet, so macOS will refuse
+                to install it until the download flag is cleared:
+                <code className="bg-surface-sunken text-foreground mt-1.5 block overflow-x-auto rounded-sm border px-2.5 py-1.5 font-mono text-xs">
+                  xattr -dr com.apple.quarantine ~/Downloads/Monolith-*.dmg
+                </code>
+              </li>
+              <li>Open the .dmg file.</li>
               <li>Drag Monolith into your Applications folder.</li>
               <li>Launch it from Launchpad or Spotlight and sign in.</li>
             </ol>
           </div>
 
-          {/*
-            This notice is not decoration. The current build is unsigned, so
-            macOS Gatekeeper WILL refuse a downloaded copy with "Monolith is
-            damaged and can't be opened" — a message that reads like a corrupt
-            file rather than a signing problem. Saying so here is the difference
-            between a known limitation and a support ticket. Remove this block
-            once notarization ships.
-          */}
           <div className="bg-surface-muted flex gap-3 rounded-lg border p-4">
             <Info
               className="text-muted-foreground mt-0.5 size-4 shrink-0"
               aria-hidden="true"
             />
             <div className="space-y-1.5 text-sm">
-              <p className="text-foreground font-medium">
-                This build isn’t signed by Apple yet
-              </p>
+              <p className="text-foreground font-medium">Why the extra step?</p>
               <p className="text-muted-foreground">
-                macOS will refuse to open it and may say the app is “damaged”.
-                It isn’t — it just hasn’t been notarized. To run it anyway, open
-                Terminal and run:
+                This build isn’t signed by Apple yet, so macOS quarantines it on
+                download and may claim the app is “damaged”. It isn’t. Run the
+                command in step 1 <span className="font-medium">before</span>{" "}
+                opening the .dmg — once it’s mounted, macOS blocks the drag and
+                there’s nothing left to fix. This step disappears once the app
+                is notarized.
               </p>
-              <code className="bg-surface-sunken text-foreground block overflow-x-auto rounded-sm border px-2.5 py-1.5 font-mono text-xs">
-                xattr -dr com.apple.quarantine /Applications/Monolith.app
-              </code>
             </div>
           </div>
         </div>

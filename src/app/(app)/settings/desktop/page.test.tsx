@@ -35,6 +35,32 @@ describe("Desktop settings page", () => {
     ).toBeInTheDocument();
   });
 
+  it("tells the user to clear quarantine on the .dmg, not the installed app", () => {
+    // The regression this guards is not cosmetic: the page once pointed the
+    // command at /Applications/Monolith.app, which the user can never reach —
+    // Gatekeeper blocks the drag out of the quarantined disk image, so the app
+    // is never installed for the command to act on. Instructions that cannot
+    // be followed are worse than none, because they look authoritative.
+    render(<DesktopSettingsPage />);
+    const command = screen.getByText(/xattr -dr com\.apple\.quarantine/);
+    expect(command).toHaveTextContent(/\.dmg\s*$/);
+    expect(command).not.toHaveTextContent("/Applications/");
+  });
+
+  it("puts the quarantine step before the step that mounts the .dmg", () => {
+    // Ordering IS the fix. Running it after mounting is too late.
+    render(<DesktopSettingsPage />);
+    const steps = screen
+      .getAllByRole("listitem")
+      .map((li) => li.textContent ?? "");
+    const clear = steps.findIndex((s) => s.includes("xattr -dr"));
+    const open = steps.findIndex((s) => /Open the \.dmg/i.test(s));
+
+    expect(clear).toBeGreaterThanOrEqual(0);
+    expect(open).toBeGreaterThanOrEqual(0);
+    expect(clear).toBeLessThan(open);
+  });
+
   it("shows the shipped version", () => {
     render(<DesktopSettingsPage />);
     expect(
