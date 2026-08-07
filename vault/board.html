@@ -8,14 +8,14 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-08-07 20:16",
+  "updated": "2026-08-07 20:32",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "Org invitations were the one collaboration surface in the app that was pull-only. Reported as \"invites take 5+ minutes\" - there was no timer at all: the invite reached the recipient only on their next full page load, and never for an open tab. Three conditions had to hold for a push and none did. Fixed, merged, undeployed.",
+  "headline": "Hermes named the gap precisely: the MCP exposed the Files column but had no binary upload operation, and its OAuth credential cannot authenticate the web app - so there was no safe workaround. Closed. 24 tools, files attach, and get_board now tells an agent the shape of every column it may write.",
   "chips": [
     {
       "label": "develop",
-      "value": "f8b3f590",
-      "note": "== origin | ahead of main | invite realtime merged",
+      "value": "753765a2",
+      "note": "== origin | ahead of main | MCP attachments merged",
       "tone": "ok"
     },
     {
@@ -27,7 +27,7 @@
     {
       "label": "gates",
       "value": "green",
-      "note": "typecheck/lint/test/build | 4713 tests",
+      "note": "typecheck/lint/test/build | 4823 tests",
       "tone": "ok"
     },
     {
@@ -42,6 +42,16 @@
     "total": 15
   },
   "gates": [
+    {
+      "led": "green",
+      "tag": "SHIPPED",
+      "text": "MCP attachments: attach_file (inline base64 under 128 KB, or a storagePath from create_attachment_upload's 2-hour signed URL, 50 MB) plus per-column write metadata on get_board - writable, valueShape, options with ids. Size and MIME are read from Storage, never from the caller's claim. Merged to develop (753765a2), worktree and branch cleaned up. 22 tools -> 24."
+    },
+    {
+      "led": "amber",
+      "tag": "UNRUN",
+      "text": "gotcha-81: the attachment cross-org RLS suite has NEVER executed. The plan prescribed PULSE_TEST_DB=1 against DEV, but integration-env.ts deny-lists the DEV and PROD refs and there is no .env.test - so it skips even with the marker forced. Deliberate: it provisions real users, orgs and storage objects. Compensating evidence gathered read-only on DEV (items SELECT scoped to readable_board_ids, attachments INSERT WITH CHECK, storage obj_insert checks the board segment). A suite that skips proves nothing but looks like success in a summary line."
+    },
     {
       "led": "green",
       "tag": "SHIPPED",
@@ -60,12 +70,7 @@
     {
       "led": "amber",
       "tag": "NEXT?",
-      "text": "Promote develop -> main. Now carries MCP full-surface reads, offline read-only, the long-text editor and the invitation fix - all four gates green on the merged state. The invite fix is a user-visible bug fix sitting undeployed, and its migration is already live on DEV (inert until the client code ships)."
-    },
-    {
-      "led": "amber",
-      "tag": "PARKED",
-      "text": "task/mcp-metadata-attachments is live in a worktree (e8746568): get_board write-metadata columns + attachment tools, from the 2026-08-06 spec and plan. CLAIMED, not open - coordinate rather than duplicate."
+      "text": "Promote develop -> main - now the strongest candidate. Carries MCP full-surface reads, offline read-only, the long-text editor, the invitation fix and the MCP attachment tools; all four gates green on the merged state. TWO user-visible things sit undeployed: the invite fix, and the attachment tools Hermes explicitly asked for and still cannot reach."
     },
     {
       "led": "hollow",
@@ -88,22 +93,15 @@
       "text": "Owner's chosen track is Plan 2, the macOS desktop shell (8 tasks, not started, a NEW monolith-desktop repo). Otherwise Report Builder v2 has NO spec and NO plan, or the E6 Stripe track (units B, C, E-H) which needs NO migration - the safe partner beside a migration-bearing task."
     }
   ],
-  "worktrees": [
-    {
-      "led": "amber",
-      "branch": "task/mcp-metadata-attachments",
-      "head": "e8746568",
-      "note": "get_board write-metadata + attachment tools | in flight"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-08-07-2016-invite-realtime-delivery",
-    "when": "2026-08-07 20:16",
+    "id": "2026-08-07-2032-mcp-column-metadata-and-attachments",
+    "when": "2026-08-07 20:32",
     "bullets": [
-      "There was no five-minute timer to find. The delay was 'whenever they next hard-reloaded' - unbounded, and infinite for a tab left open. A reported duration can be an artifact of the user's own behaviour, not the system's.",
-      "postgres_changes evaluates RLS per subscriber, so the recipient SELECT policy IS the delivery rule. Publication membership alone pushes nothing to the person who needs it.",
-      "staleTime: Infinity is only correct paired with a push channel. Alone it is a one-shot read - and this repo uses it widely, so any other unsubscribed query is the same bug in waiting.",
-      "The invitee already had an account, so Supabase Auth sent no email either ('User already registered' is swallowed by design). Two independent silences read to the user as one slow notification."
+      "A capability report from a connected agent is a bug report. Hermes could see the Files column and could not write it - the gap was already specced and planned, one task in, so the work was execution not discovery.",
+      "Size and MIME come from Storage, not the caller. An agent that claims 4 KB and uploads 40 MB gets recorded as 40 MB, because info() is the source and the client's numbers are never trusted.",
+      "gotcha-81: the plan prescribed an integration run the codebase's own guard forbids. DEV is deny-listed by constant so integration suites cannot pollute live user data - the guard wins, the plan was wrong, and the four assertions ship unexecuted and labelled as such.",
+      "Third session running where the defects originate in the PLAN, not the implementation: Task 6 Step 9 listed only register.ts and would have failed the consent-table sync guard."
     ]
   },
   "roadmap": [
