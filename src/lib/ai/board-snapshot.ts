@@ -1,4 +1,4 @@
-import { optionSchema } from "@/lib/validations/boards";
+import { parseColumnOptions } from "@/lib/boards/column-options";
 
 type RawColumn = { id: string; name: string; kind: string; settings: unknown };
 type RawGroup = { id: string; name: string };
@@ -85,11 +85,7 @@ export function buildBoardSnapshot(input: {
   const columnStats: Record<string, ColumnStats> = {};
 
   for (const col of columns) {
-    const opts =
-      optionSchema
-        .array()
-        .safeParse((col.settings as { options?: unknown })?.options ?? [])
-        .data ?? [];
+    const opts = parseColumnOptions(col.settings);
     const labelById = new Map(opts.map((o) => [o.id, o.label]));
     snapColumns.push({
       id: col.id,

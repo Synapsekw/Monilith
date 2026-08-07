@@ -14,6 +14,7 @@ import {
 } from "@/lib/validations/collaboration-actions";
 import { isPreviewable } from "@/lib/collaboration/attachments-format";
 import { fail, type ActionResult } from "@/lib/actions/result";
+import { createAttachmentCore } from "./attachment-core";
 import type { Json } from "@/types/database.types";
 
 export async function addUpdate(input: {
@@ -174,53 +175,9 @@ export async function createAttachment(input: {
   } = await supabase.auth.getUser();
   if (!user) return fail("Not authenticated.");
 
-  // Re-derive org/board from the item (RLS-scoped) and reject any path not
-  // under this org/board/item — a client cannot register a row pointing at
-  // another tenant's object (path-spoof guard).
-  const { data: item, error: itemErr } = await supabase
-    .from("items")
-    .select("org_id, board_id")
-    .eq("id", parsed.data.itemId)
-    .maybeSingle();
-  if (itemErr || !item) return fail("Item not found.");
-
-  // Files-column attachments nest the column id into the path; item-level ones
-  // do not. The prefix guard rejects any path outside this org/board/item(/col).
-  const prefix = parsed.data.columnId
-    ? `${item.org_id}/${item.board_id}/${parsed.data.itemId}/${parsed.data.columnId}/`
-    : `${item.org_id}/${item.board_id}/${parsed.data.itemId}/`;
-  if (!parsed.data.storagePath.startsWith(prefix))
-    return fail("Storage path does not match this item.");
-
-  // A column-scoped attachment must target a Files column on this item's board.
-  if (parsed.data.columnId) {
-    const { data: col } = await supabase
-      .from("columns")
-      .select("id, kind, board_id")
-      .eq("id", parsed.data.columnId)
-      .maybeSingle();
-    if (!col || col.board_id !== item.board_id || col.kind !== "files")
-      return fail("Invalid file column.");
-  }
-
-  const { data, error } = await supabase
-    .from("attachments")
-    .insert({
-      org_id: item.org_id,
-      board_id: item.board_id,
-      item_id: parsed.data.itemId,
-      column_id: parsed.data.columnId ?? null,
-      uploaded_by: user.id,
-      storage_path: parsed.data.storagePath,
-      file_name: parsed.data.fileName,
-      mime_type: parsed.data.mimeType,
-      size_bytes: parsed.data.sizeBytes,
-    })
-    .select("id")
-    .single();
-  if (error || !data)
-    return fail(error?.message ?? "Could not register attachment.");
-  return { ok: true, data: { attachmentId: data.id } };
+  // Guards + insert live in the core so the MCP path produces identical side
+  // effects; this wrapper contributes only the cookie client and the actor.
+  return createAttachmentCore(supabase, parsed.data, user.id);
 }
 
 export async function getAttachmentDownloadUrl(input: {
