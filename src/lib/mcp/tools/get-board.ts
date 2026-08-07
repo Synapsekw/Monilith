@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetClient } from "./shared";
+import { describeColumn } from "./column-meta";
 
 const getBoardInput = { boardId: z.string().uuid() };
 
@@ -23,7 +24,7 @@ export async function getBoardHandler(
   const [{ data: columns }, { data: groups }] = await Promise.all([
     supabase
       .from("columns")
-      .select("id, name, kind")
+      .select("id, name, kind, settings")
       .eq("board_id", input.boardId)
       .order("position", { ascending: true }),
     supabase
@@ -39,7 +40,7 @@ export async function getBoardHandler(
         type: "text" as const,
         text: JSON.stringify({
           board,
-          columns: columns ?? [],
+          columns: (columns ?? []).map(describeColumn),
           groups: groups ?? [],
         }),
       },
@@ -55,7 +56,12 @@ export function registerGetBoardTool(
     "get_board",
     {
       title: "Get board",
-      description: "Get a board's metadata, columns, and groups.",
+      description:
+        "Get a board's metadata, columns, and groups. Each column reports " +
+        "`writable`, a `valueShape` string for create_item/update_item field " +
+        "values, `options` (status/dropdown: use an option's `id` as `optionId`), " +
+        "and any settings that affect writes. Columns with `writable: false` " +
+        "cannot be set via `fields` — use `attach_file` for `files` columns.",
       inputSchema: getBoardInput,
     },
     async (input) => getBoardHandler(getClient, input),
