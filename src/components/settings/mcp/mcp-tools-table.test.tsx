@@ -59,11 +59,17 @@ describe("McpToolsTable", () => {
     );
   });
 
-  it("marks exactly the three write tools as writes", () => {
+  it("marks exactly the write tools as writes", () => {
     const writes = MCP_TOOLS_TABLE_ROWS.filter((r) => r.access === "write").map(
       (r) => r.name,
     );
+    // `create_attachment_upload` inserts nothing itself, but it hands out a
+    // signed URL that puts bytes in the caller's storage — a real mutation of
+    // tenant state even when `attach_file` is never called. The consent screen
+    // errs toward naming a capability as a write rather than understating it.
     expect(writes.sort()).toEqual([
+      "attach_file",
+      "create_attachment_upload",
       "create_item",
       "log_time_allocation",
       "update_item",

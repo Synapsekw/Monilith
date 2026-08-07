@@ -146,6 +146,35 @@ export function stripMarkdown(md: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// previewMarkdown
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip Markdown, then bound the result to `maxChars` (code points, not UTF-16
+ * code units — see below) with a trailing "…" when it was cut. The single,
+ * shared implementation for every "syntax-free preview of a text cell"
+ * surface: `src/lib/collaboration/activity.ts`, `src/lib/reports/shape.ts`,
+ * `src/lib/dashboards/list-rows.ts`, and `src/lib/ai/column-fill/actions.ts`
+ * each previously reimplemented this (strip → slice → maybe "…") with their
+ * own budget. Route new call sites through this instead of copying the
+ * pattern again — keep only the budget as a named constant at the call site,
+ * since that legitimately varies per surface.
+ *
+ * Slicing is code-point-aware (`Array.from`, which iterates by Unicode code
+ * point) rather than a plain `string.slice`, which indexes by UTF-16 code
+ * unit: a naive `slice(0, maxChars)` can land inside an astral character's
+ * surrogate pair (e.g. an emoji) and leave a lone, unpaired surrogate at the
+ * cut — "�" (the replacement character) or a broken glyph — instead of
+ * cutting cleanly before or after it.
+ */
+export function previewMarkdown(text: string, maxChars: number): string {
+  const stripped = stripMarkdown(text);
+  const codePoints = Array.from(stripped);
+  if (codePoints.length <= maxChars) return stripped;
+  return `${codePoints.slice(0, maxChars).join("").trimEnd()}…`;
+}
+
+// ---------------------------------------------------------------------------
 // applyMarkdown
 // ---------------------------------------------------------------------------
 

@@ -1,11 +1,18 @@
 import type { BoardPayload, Column, Group, Item } from "@/lib/boards/queries";
 import type { ColumnKind } from "@/lib/validations/boards";
 import { cellToText } from "@/lib/boards/spreadsheet/cell-codec";
+import { previewMarkdown } from "@/lib/boards/markdown";
 
-/** A shaped cell: display text plus, for option-bearing kinds
- *  (status/dropdown/priority), the selected option's raw hex so blocks can
- *  render a colored pill. `color` is undefined for plain cells. */
-export type ReportCell = { text: string; color?: string };
+/** A shaped cell: `text` is the (possibly bounded) display value used by the
+ *  table/spotlight blocks, `fullText` is always the complete, untruncated
+ *  value — the same string `cellToText` produced, before any preview
+ *  bounding — for consumers like the Appendix block that are a genuine
+ *  full-data dump and must never truncate. For non-"text" kinds the two are
+ *  identical (only "text"-kind cells are ever bounded, see `reportTextPreview`
+ *  below). `color` carries the selected option's raw hex for option-bearing
+ *  kinds (status/dropdown/priority) so blocks can render a colored pill;
+ *  undefined for plain cells. */
+export type ReportCell = { text: string; fullText: string; color?: string };
 export type ReportRow = {
   item: Item;
   cells: Map<string, ReportCell>;
@@ -22,6 +29,34 @@ export type Kpis = {
 };
 
 const DONE_LABELS = new Set(["done", "complete", "completed", "closed"]);
+
+// Text columns hold Markdown up to 20,000 characters (see
+// src/lib/boards/markdown.ts). `cellToText`'s own "text" case intentionally
+// returns the RAW value — that's load-bearing for CSV export/import
+// round-tripping (see cell-codec.ts), so it must not change. The PDF/print
+// TABLE and SPOTLIGHT blocks are a different consumer with a different
+// requirement: a value this long, rendered unbounded in an auto-layout
+// `<td>`, makes that one row wrap into hundreds of lines and breaks
+// pagination. Bounding the actual character count here — not just visually
+// clipping it in CSS — is what makes the fix reliable in a paginated PDF:
+// `text-overflow: ellipsis` needs a definite cell width and a single
+// un-wrapped line to trigger, which auto table layout doesn't reliably give
+// a variable, caller-chosen set of report columns, and it produces no
+// visible "there's more" affordance on a printed page (no hover title).
+// Truncating the source text, paired with the `max-width` this file's own
+// `.r-narrative`/`.r-cover-lede` rules already use for long-form content, is
+// the deterministic version of the same idea.
+//
+// The APPENDIX block is explicitly exempt from this bound — it's opt-in
+// (`config.ts`'s `appendix` block defaults to disabled) and its own doc
+// comment calls it "a true full-data dump". That's why `ReportCell` carries
+// BOTH `text` (this preview, used by table/spotlight) and `fullText` (always
+// complete) — see the type's doc comment above.
+const REPORT_TEXT_PREVIEW_MAX = 200;
+
+function reportTextPreview(text: string): string {
+  return previewMarkdown(text, REPORT_TEXT_PREVIEW_MAX);
+}
 
 function cellLookup(payload: BoardPayload): Map<string, unknown> {
   const map = new Map<string, unknown>();
@@ -87,8 +122,10 @@ export function shapeReport(
     for (const col of columns) {
       const raw = lookup.get(`${item.id}:${col.id}`);
       const kind = col.kind as ColumnKind;
+      const text = cellToText(kind, raw, col.settings, resolvePerson);
       cells.set(col.id, {
-        text: cellToText(kind, raw, col.settings, resolvePerson),
+        text: kind === "text" ? reportTextPreview(text) : text,
+        fullText: text,
         color: optionColor(kind, raw, col.settings),
       });
     }

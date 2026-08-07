@@ -3,19 +3,26 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LongTextEditor } from "./LongTextEditor";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
+// The toolbar buttons are wrapped in Tooltip/TooltipTrigger, which throws
+// without a TooltipProvider ancestor. In the app this comes from the
+// root-level provider (src/components/providers.tsx); tests supply their own,
+// same as BoardsNav.test.tsx / DashboardsNav.test.tsx do for their own
+// Tooltip usage.
 function setup(overrides: Partial<Parameters<typeof LongTextEditor>[0]> = {}) {
   const onCommit = vi.fn();
   const onCancel = vi.fn();
   const result = render(
-    <LongTextEditor
-      value={{ text: "old" }}
-      settings={{}}
-      onCommit={onCommit}
-      onCancel={onCancel}
-      columnName="Description"
-      {...overrides}
-    />,
+    <TooltipProvider>
+      <LongTextEditor
+        value={{ text: "old" }}
+        onCommit={onCommit}
+        onCancel={onCancel}
+        columnName="Description"
+        {...overrides}
+      />
+    </TooltipProvider>,
   );
   return { onCommit, onCancel, unmount: result.unmount };
 }
@@ -53,13 +60,14 @@ describe("LongTextEditor — StrictMode (the dev default)", () => {
     const onCancel = vi.fn();
     const result = render(
       <StrictMode>
-        <LongTextEditor
-          value={{ text }}
-          settings={{}}
-          onCommit={onCommit}
-          onCancel={onCancel}
-          columnName="Description"
-        />
+        <TooltipProvider>
+          <LongTextEditor
+            value={{ text }}
+            onCommit={onCommit}
+            onCancel={onCancel}
+            columnName="Description"
+          />
+        </TooltipProvider>
       </StrictMode>,
     );
     return { onCommit, onCancel, unmount: result.unmount };
@@ -104,13 +112,14 @@ describe("LongTextEditor — StrictMode (the dev default)", () => {
           </button>
         );
       return (
-        <LongTextEditor
-          value={{ text: "old" }}
-          settings={{}}
-          onCommit={() => setEditing(false)}
-          onCancel={() => setEditing(false)}
-          columnName="Description"
-        />
+        <TooltipProvider>
+          <LongTextEditor
+            value={{ text: "old" }}
+            onCommit={() => setEditing(false)}
+            onCancel={() => setEditing(false)}
+            columnName="Description"
+          />
+        </TooltipProvider>
       );
     }
     render(
@@ -352,5 +361,109 @@ describe("LongTextEditor — toolbar disabled on Preview", () => {
   it("keeps toolbar actions enabled on the Write tab", () => {
     setup();
     expect(screen.getByRole("button", { name: /^bold$/i })).toBeEnabled();
+  });
+});
+
+// FIX 1: the toolbar icons carried aria-labels only, so sighted users had no
+// way to discover what each button did without clicking it. TooltipTrigger's
+// onFocus opens the tooltip synchronously (no hover-delay timer to fake), so
+// focusing the button is enough to assert the tooltip content renders.
+describe("LongTextEditor — toolbar tooltips", () => {
+  // Radix's TooltipContent renders the text twice — once in the visible
+  // popup, once in a visually-hidden node carrying role="tooltip" for
+  // screen readers — so `getByText` matches two nodes. Reading the
+  // role="tooltip" node's text is the unambiguous query.
+  it("shows the label with its keyboard shortcut in a tooltip", async () => {
+    setup();
+    fireEvent.focus(screen.getByRole("button", { name: /^bold$/i }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Bold (⌘B)");
+  });
+
+  it("shows the italic shortcut in a tooltip", async () => {
+    setup();
+    fireEvent.focus(screen.getByRole("button", { name: /^italic$/i }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Italic (⌘I)");
+  });
+
+  it("shows just the label for actions with no keyboard shortcut", async () => {
+    setup();
+    fireEvent.focus(screen.getByRole("button", { name: /quote/i }));
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Quote");
+    expect(tooltip.textContent).not.toMatch(/Quote \(/);
+  });
+
+  it("keeps the aria-label as the accessible name — the tooltip does not replace it", async () => {
+    setup();
+    const button = screen.getByRole("button", { name: /^bold$/i });
+    fireEvent.focus(button);
+    await screen.findByRole("tooltip");
+    // The tooltip text ("Bold (⌘B)") is additive; the button's own
+    // accessible name stays the plain "Bold" aria-label.
+    expect(button).toHaveAccessibleName("Bold");
+  });
+});
+
+// FIX 2: role="tab"/aria-selected covered basic mouse/Enter-Space use, but
+// the WAI-ARIA APG tabs pattern also needs aria-controls on each tab,
+// role="tabpanel"/aria-labelledby on the panel, a roving tabindex, and
+// Left/Right arrow-key switching. There is only ever one tabpanel mounted
+// (Preview unmounts the textarea, Write unmounts the preview), so both tabs
+// share one aria-controls target and the panel's aria-labelledby is what
+// actually tracks which tab currently owns it.
+describe("LongTextEditor — tabs ARIA pattern", () => {
+  it("wires aria-controls (both tabs) and aria-labelledby (the active panel) to each other", () => {
+    setup();
+    const writeTab = screen.getByRole("tab", { name: /write/i });
+    const previewTab = screen.getByRole("tab", { name: /preview/i });
+    const panel = screen.getByRole("tabpanel");
+    expect(writeTab).toHaveAttribute("aria-controls", panel.id);
+    expect(previewTab).toHaveAttribute("aria-controls", panel.id);
+    expect(panel).toHaveAttribute("aria-labelledby", writeTab.id);
+  });
+
+  it("relabels the single tabpanel to the preview tab once switched", async () => {
+    setup();
+    await userEvent.click(screen.getByRole("tab", { name: /preview/i }));
+    const previewTab = screen.getByRole("tab", { name: /preview/i });
+    const panel = screen.getByRole("tabpanel");
+    expect(panel).toHaveAttribute("aria-labelledby", previewTab.id);
+  });
+
+  it("uses a roving tabindex — only the selected tab is in the Tab order", () => {
+    setup();
+    expect(screen.getByRole("tab", { name: /write/i })).toHaveAttribute(
+      "tabindex",
+      "0",
+    );
+    expect(screen.getByRole("tab", { name: /preview/i })).toHaveAttribute(
+      "tabindex",
+      "-1",
+    );
+  });
+
+  it("switches tabs with ArrowRight / ArrowLeft, moving focus to Preview", async () => {
+    setup();
+    const writeTab = screen.getByRole("tab", { name: /write/i });
+    const previewTab = screen.getByRole("tab", { name: /preview/i });
+
+    writeTab.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    // Preview has no competing autoFocus content, so focus lands on the tab
+    // itself, per the APG roving-tabindex pattern.
+    expect(previewTab).toHaveAttribute("aria-selected", "true");
+    expect(previewTab).toHaveFocus();
+    expect(previewTab).toHaveAttribute("tabindex", "0");
+    expect(writeTab).toHaveAttribute("tabindex", "-1");
+
+    await userEvent.keyboard("{ArrowLeft}");
+    // Switching back to Write re-mounts the `autoFocus` textarea (existing,
+    // pre-fix behaviour — the same thing happens on a mouse click), which
+    // wins the focus race after this handler's own `.focus()` call. The
+    // selection/tabindex state is still correct even though DOM focus ends
+    // up in the panel rather than on the tab.
+    expect(writeTab).toHaveAttribute("aria-selected", "true");
+    expect(writeTab).toHaveAttribute("tabindex", "0");
+    expect(screen.getByRole("textbox")).toHaveFocus();
   });
 });

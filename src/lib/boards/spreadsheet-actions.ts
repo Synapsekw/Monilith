@@ -23,6 +23,7 @@ import {
   MAX_ROWS,
   MAX_COLS,
   PREVIEW_GRID_ROWS,
+  importFormatFromFileName,
   type ImportFormat,
   type ImportPreview,
   type SheetPreview,
@@ -324,6 +325,7 @@ async function appendToExistingBoard(
   specs: ColumnSpec[],
   groups: ImportGroup[],
   structure: RowStructureEntry[],
+  format: ImportFormat,
 ): Promise<{ ok: true; boardId: string } | { ok: false; error: string }> {
   const { data: columnRows, error: columnsError } = await supabase
     .from("columns")
@@ -375,7 +377,14 @@ async function appendToExistingBoard(
 
   let payload;
   try {
-    payload = buildAppendPayload(table, specs, boardColumns, groups, structure);
+    payload = buildAppendPayload(
+      table,
+      specs,
+      boardColumns,
+      groups,
+      structure,
+      format,
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: msg };
@@ -412,6 +421,13 @@ export async function commitImport(input: {
 
   const guard = guardFile(parsed.data.fileBase64, parsed.data.fileName);
   if (!guard.ok) return fail(guard.error);
+
+  // The CSV formula-guard undo in `textToCell` (cell-codec.ts) only applies
+  // to CSV — `guardCsvCell` in export-workbook.ts never quotes xlsx cells,
+  // so undoing on an xlsx import would strip a user-typed leading `'` for no
+  // reason. This is the one place that knows the real uploaded filename, so
+  // it's the seam that threads the real format down into the two builders.
+  const format = importFormatFromFileName(parsed.data.fileName);
 
   let rawSheets;
   try {
@@ -476,6 +492,7 @@ export async function commitImport(input: {
       parsed.data.columns,
       parsed.data.groups,
       parsed.data.structure,
+      format,
     );
     if (!result.ok) return fail(result.error);
 
@@ -488,6 +505,7 @@ export async function commitImport(input: {
     parsed.data.columns,
     parsed.data.groups,
     parsed.data.structure,
+    format,
   );
   const result = await insertNewBoard(
     supabase,

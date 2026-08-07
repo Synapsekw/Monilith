@@ -155,4 +155,36 @@ describe.skipIf(!integrationTargetReady())("invite acceptance RPCs", () => {
       .single();
     expect((inv as { status: string }).status).toBe("declined");
   });
+
+  // The two below cover the SELECT policy that makes Realtime delivery
+  // possible: postgres_changes evaluates RLS per subscriber, so without a
+  // recipient-scoped read the invitee is never sent their own row.
+  it("lets the invitee read the invitation addressed to them (realtime RLS gate)", async () => {
+    const email = `direct-reader-${randomUUID()}@example.com`;
+    const inviteId = await seedInvite(email);
+    const invitee = await makeUser(email);
+
+    const { data, error } = await invitee.anon
+      .from("org_invitations")
+      .select("id, status, role")
+      .eq("id", inviteId);
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+    expect(data![0].status).toBe("pending");
+  });
+
+  it("does not let a third party read an invitation addressed to someone else", async () => {
+    const inviteId = await seedInvite(`target-${randomUUID()}@example.com`);
+    const stranger = await makeUser(`nosy-${randomUUID()}@example.com`);
+
+    const { data, error } = await stranger.anon
+      .from("org_invitations")
+      .select("id")
+      .eq("id", inviteId);
+
+    // RLS filters rather than errors — the empty set IS the assertion.
+    expect(error).toBeNull();
+    expect(data).toHaveLength(0);
+  });
 });

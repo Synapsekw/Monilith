@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Bell } from "lucide-react";
 import {
   Popover,
@@ -27,6 +28,19 @@ export function NotificationsBell({ userId }: { userId: string }) {
       ? ((decline.variables as string | undefined) ?? null)
       : null;
   const inviteError = (accept.error ?? decline.error)?.message ?? null;
+
+  useEffect(() => {
+    // The desktop shell exposes `window.monolith` via its preload bridge; in a
+    // plain browser this is undefined and the effect is a no-op. Guarding on the
+    // object rather than a user-agent sniff keeps the web build unaware of the
+    // desktop app.
+    //
+    // Publishes `badge`, not `unread`: that is the number rendered in the bell
+    // above, and a dock showing 2 while the bell shows 3 reads as a bug.
+    const bridge = (window as { monolith?: { setBadge(n: number): void } })
+      .monolith;
+    bridge?.setBadge(badge);
+  }, [badge]);
 
   function open(n: AppNotification) {
     markRead(n.id);

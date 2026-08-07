@@ -3,6 +3,7 @@ import type {
   ColumnSpec,
   SynthOption,
   ImportableKind,
+  ImportFormat,
   ImportGroup,
   RowStructureEntry,
 } from "./types";
@@ -85,6 +86,11 @@ export function buildAppendPayload(
   boardColumns: BoardColumnRef[],
   groups: ImportGroup[],
   structure: RowStructureEntry[],
+  /** The uploaded file's format — scopes the CSV formula-guard undo in
+   *  `textToCell`'s "text" case to CSV imports only (see cell-codec.ts).
+   *  Defaults to "csv" (prior behavior) for the handful of test callers that
+   *  don't care about the guard either way. */
+  format: ImportFormat = "csv",
 ): AppendPayload {
   const nameSpec = specs.find((s) => s.role === "name");
   if (!nameSpec) throw new Error("no name column");
@@ -189,7 +195,12 @@ export function buildAppendPayload(
   const buildCells = (row: string[]) => {
     const cells: { columnId: string; value: Json }[] = [];
     for (const r of resolvedCols) {
-      const value = textToCell(r.kind, row[r.sourceIndex] ?? "", r.options);
+      const value = textToCell(
+        r.kind,
+        row[r.sourceIndex] ?? "",
+        r.options,
+        format,
+      );
       if (value !== null) cells.push({ columnId: r.columnId, value });
     }
     return cells;

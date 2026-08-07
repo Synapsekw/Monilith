@@ -47,7 +47,7 @@ export function AppendixBlock({ model }: { model: ReportModel }) {
                   {row.item.name}
                 </td>
                 {model.columns.map((c) => (
-                  <td key={c.id}>{row.cells.get(c.id)?.text ?? ""}</td>
+                  <td key={c.id}>{row.cells.get(c.id)?.fullText ?? ""}</td>
                 ))}
               </tr>
             )),

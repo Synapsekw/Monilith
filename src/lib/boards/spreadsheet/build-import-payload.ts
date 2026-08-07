@@ -1,6 +1,7 @@
 import type {
   ParsedTable,
   ColumnSpec,
+  ImportFormat,
   ImportGroup,
   RowStructureEntry,
 } from "./types";
@@ -101,6 +102,11 @@ export function buildImportPayloadV3(
   specs: ColumnSpec[],
   groups: ImportGroup[],
   structure: RowStructureEntry[],
+  /** The uploaded file's format — scopes the CSV formula-guard undo in
+   *  `textToCell`'s "text" case to CSV imports only (see cell-codec.ts).
+   *  Defaults to "csv" (prior behavior) for the handful of test callers that
+   *  don't care about the guard either way. */
+  format: ImportFormat = "csv",
 ): ImportPayload {
   const nameSpec = specs.find((s) => s.role === "name");
   if (!nameSpec) throw new Error("no name column");
@@ -129,6 +135,7 @@ export function buildImportPayloadV3(
         spec.kind,
         row[spec.sourceIndex] ?? "",
         spec.options,
+        format,
       );
       if (value !== null) cells.push({ columnId: columnIds[i], value });
     });

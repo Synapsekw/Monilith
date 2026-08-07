@@ -77,9 +77,16 @@ Pull `develop`. Steps 1–3 need no MCP client.
 - Three `_draft-*.md` (0507/0715/0918) and `decision-35-only-main-auto-deploys` belong to **other**
   sessions — left untouched.
 
+## Promoted + confirmed live
+
+Promoted the same day as **PR #88** (`main` @ `55153248`) — develop CI, PR checks and main CI all
+green, Vercel `state=success`, `www.monolith.works` 200. Then confirmed the way the gates cannot:
+the **Hermes agent exercised all 22 tools against production and reported them working**. That is
+the first end-to-end validation of the surface by a real connected MCP client, and it also
+retires the open question of whether `log_time_allocation` writes for real users.
+
 ## Next session entry point
 
-`develop` is one merge ahead of `main` and ready to promote. Spec 2 (`create_dashboard`,
-`add_widget`, `update_goal`) now has its cores extracted and is unblocked. Before either, decide on
-the dashboard-aggregate-widget suspicion above — it is the only open item that may be affecting
-users today.
+Spec 2 (`create_dashboard`, `add_widget`, `update_goal`) now has its cores extracted and is
+unblocked. Before it, decide on the dashboard-aggregate-widget suspicion above — it is the only
+open item that may be affecting users today, and it is unaffected by this promotion.

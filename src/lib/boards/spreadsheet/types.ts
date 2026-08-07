@@ -6,6 +6,14 @@ export const MAX_ROWS = 2000;
 export const MAX_COLS = 40;
 export const PREVIEW_GRID_ROWS = 200;
 export type ImportFormat = "xlsx" | "csv";
+
+/** Derive the import format from the uploaded filename's extension — the
+ *  same test `parse-workbook.ts` uses to pick a CSV vs xlsx parser. Shared
+ *  so the CSV-only formula-guard undo (`cell-codec.ts`'s `textToCell`) uses
+ *  the identical rule the parser did, rather than a second copy drifting. */
+export function importFormatFromFileName(fileName: string): ImportFormat {
+  return fileName.toLowerCase().endsWith(".csv") ? "csv" : "xlsx";
+}
 export type ImportableKind =
   | "text"
   | "numbers"

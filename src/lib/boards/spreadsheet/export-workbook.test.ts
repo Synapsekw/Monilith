@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildExportWorkbook } from "./export-workbook";
 import { parseWorkbook } from "./parse-workbook";
+import { textToCell } from "./cell-codec";
 import { detectColumns } from "./detect";
 import { SUBTASK_MARKER, GROUP_HEADER, NAME_HEADER } from "./types";
 import type { BoardPayload } from "@/lib/boards/queries";
@@ -290,6 +291,33 @@ describe("buildExportWorkbook — CSV formula-injection guard", () => {
     const { buffer } = await buildExportWorkbook(withNotes(danger), "xlsx");
     const parsed = await parseWorkbook(buffer, "export.xlsx");
     expect(parsed.rows[0][5]).toBe(danger);
+  });
+
+  // Fix: exporting a Markdown text cell to CSV and re-importing it must
+  // recover the original value, not accumulate a leading quote on every
+  // round trip. The guard (correctly) fires on "- ship billing" — a
+  // legitimate Markdown bullet — so textToCell must undo exactly that quote.
+  it.each(["- ship billing", "=SUM(A1)", "+cmd", "@mention"])(
+    "round-trips %j through CSV export → parse → textToCell unharmed",
+    async (original) => {
+      const { buffer } = await buildExportWorkbook(withNotes(original), "csv");
+      const parsed = await parseWorkbook(buffer, "export.csv");
+      const guarded = parsed.rows[0][5];
+      expect(guarded).toBe(`'${original}`); // guard fired, as expected
+      expect(textToCell("text", guarded, [])).toEqual({ text: original });
+    },
+  );
+
+  it("a genuine leading apostrophe is not touched by export OR re-import", async () => {
+    const original = "'twas the night before launch";
+    const { buffer } = await buildExportWorkbook(withNotes(original), "csv");
+    const parsed = await parseWorkbook(buffer, "export.csv");
+    // The guard only fires on =+-@/tab/CR, not on an apostrophe, so this
+    // cell is never quoted in the first place.
+    expect(parsed.rows[0][5]).toBe(original);
+    expect(textToCell("text", parsed.rows[0][5], [])).toEqual({
+      text: original,
+    });
   });
 });
 

@@ -8,32 +8,32 @@
 <script type="application/json" id="board-data">
 {
   "schema": 1,
-  "updated": "2026-08-06 09:02",
+  "updated": "2026-08-07 20:16",
   "kicker": "MONOLITH / NORTH STAR",
-  "headline": "The MCP OAuth server worked for exactly one client, and that hid two structural bugs. Connecting a CLI client exposed both in one session: a spec MUST we had never exercised, and a uniqueness key coarser than the thing it identified. Both fixed, promoted and re-probed against production.",
+  "headline": "Org invitations were the one collaboration surface in the app that was pull-only. Reported as \"invites take 5+ minutes\" - there was no timer at all: the invite reached the recipient only on their next full page load, and never for an open tab. Three conditions had to hold for a push and none did. Fixed, merged, undeployed.",
   "chips": [
     {
       "label": "develop",
-      "value": "c0a53171",
-      "note": "== origin · level with main · squash divergence healed",
+      "value": "f8b3f590",
+      "note": "== origin | ahead of main | invite realtime merged",
       "tone": "ok"
     },
     {
       "label": "main",
-      "value": "3f3f55b1",
-      "note": "#86 LIVE · #85 same day · Vercel success on both",
-      "tone": "ok"
+      "value": "55153248",
+      "note": "#88 LIVE since 08-06 | several merges behind develop",
+      "tone": "warn"
     },
     {
       "label": "gates",
       "value": "green",
-      "note": "typecheck/lint/test/build · 4392 tests · main CI green",
+      "note": "typecheck/lint/test/build | 4713 tests",
       "tone": "ok"
     },
     {
       "label": "ledger",
-      "value": "131/131",
-      "note": "in sync · no schema shipped this session",
+      "value": "134/134",
+      "note": "in sync after the 7th apply_migration mis-stamp + reconcile",
       "tone": "ok"
     }
   ],
@@ -45,66 +45,65 @@
     {
       "led": "green",
       "tag": "SHIPPED",
-      "text": "Two promotions in one session: #85 (0bfa9967) then #86 (3f3f55b1). MCP OAuth now works for CLI clients. Verified live by re-probing production with the real client_id, not by trusting the deploy status - the previously-failing ephemeral port now 307s while a mismatched path still 400s."
+      "text": "Invitations now arrive over Realtime: a recipient-scoped SELECT policy on org_invitations plus publication membership, and useInvitations subscribes to INSERT/UPDATE. Merged to develop (f8b3f590), worktree and branch cleaned up. Revoke is symmetric - no stale Accept button that would fail with 'invitation not found'."
     },
     {
       "led": "green",
       "tag": "FIXED",
-      "text": "Exact redirect_uris.includes() matching locked out every native/CLI client. A CLI binds an EPHEMERAL loopback port per login, so its second connect always failed invalid_client - RFC 8252 s7.3 says a server MUST allow any port for loopback. One predicate now gates both authorize and consent so they cannot drift. gotcha-76."
+      "text": "gotcha-80: Realtime delivers nothing without a recipient SELECT policy. org_invitations was absent from supabase_realtime AND had no invitee policy (all three were admin-scoped), while useInvitations held staleTime: Infinity with refetchOnWindowFocus off globally. Verified live on DEV in a rolled-back transaction: recipient 1 row, stranger 0, mixed-case row vs lowercase JWT."
     },
     {
-      "led": "green",
-      "tag": "FIXED",
-      "text": "A Vault secret named mcp_bridge:<userId> capped a user at ONE bridge forever: the first client squatted the name, so no second MCP client - and no MCP client alongside a personal agent - could ever connect. Surfaced as a 500 with an EMPTY BODY, diagnosable only from the Vercel runtime log. Names are now per-secret. gotcha-77."
-    },
-    {
-      "led": "green",
-      "tag": "HARDENED",
-      "text": "POST /api/oauth/token no longer leaks an unhandled throw as an empty-bodied 500. It now returns the RFC 6749 s5.2 server_error envelope and logs the real cause server-side only. An endpoint that speaks a structured error protocol on its four validation branches and nothing at all on its infrastructure branch has the hole exactly where failures are least predictable."
+      "led": "red",
+      "tag": "CRITICAL",
+      "text": "number/battery/completion/health dashboard widgets call SECURITY DEFINER RPCs through the SERVICE client, where auth.uid() is null and the can_read_board guard denies - so they should have been raising 42501 since 2026-07-04. Verified on DEV that all five carry the guard and it returns false with no auth context. May be affecting users TODAY. Verify in the running app before 'fixing' the guard."
     },
     {
       "led": "amber",
       "tag": "NEXT?",
-      "text": "MCP full-surface-reads: spec AND implementation plan both landed on develop this session, and the task/mcp-full-surface worktree has already been cut for it. CLAIMED, not open - coordinate rather than duplicate. The offline read-only track is also live in a second worktree, several commits deep and unmerged."
+      "text": "Promote develop -> main. Now carries MCP full-surface reads, offline read-only, the long-text editor and the invitation fix - all four gates green on the merged state. The invite fix is a user-visible bug fix sitting undeployed, and its migration is already live on DEV (inert until the client code ships)."
+    },
+    {
+      "led": "amber",
+      "tag": "PARKED",
+      "text": "task/mcp-metadata-attachments is live in a worktree (e8746568): get_board write-metadata columns + attachment tools, from the 2026-08-06 spec and plan. CLAIMED, not open - coordinate rather than duplicate."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "/promote's commitlint gate is STILL mis-scoped and has now cost three promotions - worked around twice more today by linting the since-last-promotion range. It lints the whole 2334-commit develop history and stops on 7 Phase 6/7-era commits already in production, while CI skips that job on base_ref==main by design. Fix the command."
+      "text": "An invitee who ALREADY has an account still gets no invite email - inviteUserByEmail's 'User already registered' is swallowed by design at admin-actions.ts:144. In-app is now instant; away-from-app is not covered. Would be a Resend send (key + batch client already exist for the digest). Whether brand-new invitees are still on Supabase's built-in email service (~2/hour cap) is a dashboard setting, unverified."
     },
     {
       "led": "hollow",
       "tag": "OWED",
-      "text": "vercel.json now restricts auto-deploy to main, so promotion PRs no longer carry a Vercel preview check - that signal is gone from the pre-merge evidence. Prod still has no RESEND_API_KEY. 8 dependabot branches unmerged; the npm ones contend with E6's Stripe SDK over the lockfile."
+      "text": "/promote's commitlint gate is STILL mis-scoped and has cost three promotions. It lints the whole 2334-commit develop history and stops on 7 Phase 6/7-era commits already in production, while CI skips that job on base_ref==main by design. Fix the command - narrow the range or grandfather the 7."
+    },
+    {
+      "led": "hollow",
+      "tag": "OWED",
+      "text": "Prod still has no RESEND_API_KEY, so digest and briefing runs file in-app notifications and send no email. Promotion PRs no longer carry a Vercel preview check (vercel.json restricts auto-deploy to main). 8 dependabot branches unmerged; the npm ones contend with E6's Stripe SDK over the lockfile."
     },
     {
       "led": "hollow",
       "tag": "NEXT?",
-      "text": "Report Builder v2 (critical path) has NO spec and NO plan - the charts spec explicitly defers roll-ups and org templates. Or the E6 Stripe track (units B, C, E-H): spec written, needs a plan, needs NO migration - the safe partner beside a migration-bearing task."
+      "text": "Owner's chosen track is Plan 2, the macOS desktop shell (8 tasks, not started, a NEW monolith-desktop repo). Otherwise Report Builder v2 has NO spec and NO plan, or the E6 Stripe track (units B, C, E-H) which needs NO migration - the safe partner beside a migration-bearing task."
     }
   ],
   "worktrees": [
     {
       "led": "amber",
-      "branch": "task/offline-read-only",
-      "head": "9ecef043",
-      "note": "offline read-only · several commits · unmerged"
-    },
-    {
-      "led": "amber",
-      "branch": "task/mcp-full-surface",
-      "head": "c0a53171",
-      "note": "just cut from develop tip · no work yet"
+      "branch": "task/mcp-metadata-attachments",
+      "head": "e8746568",
+      "note": "get_board write-metadata + attachment tools | in flight"
     }
   ],
   "session": {
-    "id": "2026-08-06-0902-mcp-oauth-loopback-and-bridge-secret",
-    "when": "2026-08-06 09:02",
+    "id": "2026-08-07-2016-invite-realtime-delivery",
+    "when": "2026-08-07 20:16",
     "bullets": [
-      "Both bugs were invisible to the test suite and to the one client we use daily. claude.ai registers a fixed https callback and connects once - which is exactly the subset of the surface that exact matching and a per-user secret name happen to satisfy.",
-      "The first diagnosis handed over was 'the authorization page's Continue button doesn't work'. There is no Continue button in this app. The DB settled it: an oauth_clients row existed, no oauth_codes row did - so the flow died before consent, not at it.",
-      "A 500 with an empty body cost a Vercel log dive. Every layer that could have named the cause carried no information; the fix for that shipped alongside the fix for the bug.",
-      "Ground truth for an OAuth flow is the DB, not the browser. The blank 'site can't be reached' callback page is the CLIENT's loopback server closing without writing a body - the exchange had already succeeded."
+      "There was no five-minute timer to find. The delay was 'whenever they next hard-reloaded' - unbounded, and infinite for a tab left open. A reported duration can be an artifact of the user's own behaviour, not the system's.",
+      "postgres_changes evaluates RLS per subscriber, so the recipient SELECT policy IS the delivery rule. Publication membership alone pushes nothing to the person who needs it.",
+      "staleTime: Infinity is only correct paired with a push channel. Alone it is a one-shot read - and this repo uses it widely, so any other unsubscribed query is the same bug in waiting.",
+      "The invitee already had an account, so Supabase Auth sent no email either ('User already registered' is swallowed by design). Two independent silences read to the user as one slow notification."
     ]
   },
   "roadmap": [

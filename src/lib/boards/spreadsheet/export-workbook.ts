@@ -5,7 +5,11 @@ import {
   SUBTASK_MARKER,
   type ImportFormat,
 } from "./types";
-import { cellToExcelValue, type ExcelCellValue } from "./cell-codec";
+import {
+  cellToExcelValue,
+  CSV_FORMULA_LEAD_RE,
+  type ExcelCellValue,
+} from "./cell-codec";
 import {
   applyWorkbookFormatting,
   optionFillHex,
@@ -22,19 +26,14 @@ function sanitizeWorksheetName(name: string): string {
 }
 
 /**
- * Leading characters that make a spreadsheet app interpret a CSV cell as a
- * formula (formula injection): `= + - @` and the tab / carriage-return control
- * chars. See OWASP "CSV Injection".
- */
-const CSV_FORMULA_LEAD_RE = /^[=+\-@\t\r]/;
-
-/**
  * Neutralize CSV formula injection for STRING cells only. A leading formula
- * trigger is defused with a single-quote prefix (the spreadsheet then shows the
- * literal text). Non-string cells (real numbers from numeric columns) pass
- * through untouched, so a legitimate negative number like -42 stays numeric.
- * xlsx export does NOT use this — its cells are typed, so `-2+3` is stored as
- * text, not evaluated.
+ * trigger (`CSV_FORMULA_LEAD_RE`, defined in `cell-codec.ts` — the shared
+ * source of truth for this guard and its import-side inverse,
+ * `unquoteCsvFormulaGuard`) is defused with a single-quote prefix (the
+ * spreadsheet then shows the literal text). Non-string cells (real numbers
+ * from numeric columns) pass through untouched, so a legitimate negative
+ * number like -42 stays numeric. xlsx export does NOT use this — its cells
+ * are typed, so `-2+3` is stored as text, not evaluated.
  */
 function guardCsvCell(value: ExcelCellValue): ExcelCellValue {
   if (typeof value !== "string") return value;
