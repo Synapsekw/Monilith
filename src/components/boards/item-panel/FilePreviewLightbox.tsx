@@ -124,10 +124,12 @@ export function FilePreviewLightbox({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      {/* max-w-none defeats the primitive's default sm:max-w-sm, which would
-          otherwise win over the inline width. */}
+      {/* `sm:max-w-none` is not redundant with `max-w-none`: tailwind-merge
+          treats a variant-prefixed class as its own group, so the primitive's
+          `sm:max-w-sm` survives an unprefixed override and would pin the
+          dialog to 24rem on every desktop viewport. Both are required. */}
       <DialogContent
-        className="flex max-h-[90vh] w-[var(--preview-w)] max-w-none flex-col gap-3"
+        className="flex max-h-[90vh] w-[var(--preview-w)] max-w-none flex-col gap-3 sm:max-w-none"
         style={frameStyle(frame)}
       >
         <DialogTitle className="sr-only">{current.file_name}</DialogTitle>

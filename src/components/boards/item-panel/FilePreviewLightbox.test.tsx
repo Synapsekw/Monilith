@@ -230,6 +230,29 @@ describe("FilePreviewLightbox", () => {
     );
   });
 
+  it("clears the primitive's sm:max-w-sm cap, which would clamp it to 384px", () => {
+    // tailwind-merge treats `sm:max-w-sm` and an unprefixed `max-w-none` as
+    // different groups, so the variant survives the merge unless it is
+    // overridden AT the same variant. Without `sm:max-w-none` the dialog is
+    // pinned to 24rem on every desktop viewport — narrower than the
+    // sm:max-w-3xl it replaced.
+    render(
+      <FilePreviewLightbox
+        attachments={[att("a")]}
+        index={0}
+        previewUrls={{ a: "https://signed/a" }}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    const cls = screen.getByRole("dialog").className;
+    expect(cls).not.toContain("sm:max-w-sm");
+    expect(cls).toContain("w-[var(--preview-w)]");
+  });
+
   it("opens a deck at the 16:9 preset even though it cannot render", () => {
     const deck = [
       att("k", {

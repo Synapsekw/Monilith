@@ -60,18 +60,31 @@ const ARCHIVE_EXT = ["zip", "rar", "7z", "tar", "gz"];
 const SHEET_EXT = ["xls", "xlsx", "csv", "numbers", "ods"];
 const SLIDES_EXT = ["ppt", "pptx", "key", "odp"];
 const DOC_EXT = ["doc", "docx", "txt", "rtf", "md", "pages", "odt"];
+const IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "heic"];
+const VIDEO_EXT = ["mp4", "webm", "mov", "m4v", "avi", "mkv"];
 
-/** Coarse type bucket for icons/badges — mime first, extension fallback. Pure. */
+/** Coarse type bucket for icons/badges — mime first, extension fallback. Pure.
+ *
+ *  The extension fallback covers pdf/image/video too, not just the Office
+ *  formats: an upload whose browser reported `application/octet-stream` (which
+ *  happens for plenty of real files) would otherwise land in "other" and show
+ *  a generic grey icon despite an unambiguous `.pdf` on the end of its name.
+ *  Note this is a LABELLING path only — the security gates (`isPreviewable`,
+ *  `isPdf`) remain mime-only on purpose, so a mislabelled extension can never
+ *  widen what we are willing to render or sign. */
 export function fileKind(mime: string, name: string): FileKind {
   const m = mime.toLowerCase();
   if (m.startsWith("image/")) return "image";
   if (m.startsWith("video/")) return "video";
   if (m === "application/pdf") return "pdf";
   const ext = extOf(name);
+  if (ext === "pdf") return "pdf";
   if (ARCHIVE_EXT.includes(ext)) return "archive";
   if (SHEET_EXT.includes(ext)) return "sheet";
   if (SLIDES_EXT.includes(ext)) return "slides";
   if (DOC_EXT.includes(ext)) return "doc";
+  if (IMAGE_EXT.includes(ext)) return "image";
+  if (VIDEO_EXT.includes(ext)) return "video";
   return "other";
 }
 
@@ -114,6 +127,34 @@ export function fileTypeLabel(fileName: string, mime: string): string {
   const sub = mime.toLowerCase().split("/")[1] ?? "";
   if (sub) return sub.toUpperCase().slice(0, 4);
   return "FILE";
+}
+
+/** Which slot of the `--file-*` palette a file paints with. Deliberately
+ *  coarser than FileKind: `csv` and `xlsx` are different kinds but the same
+ *  spreadsheet green, and every image/video shares one media tone. */
+export type FileTone =
+  | "pdf"
+  | "doc"
+  | "xls"
+  | "ppt"
+  | "zip"
+  | "media"
+  | "generic";
+
+const TONE_BY_KIND: Record<FileKind, FileTone> = {
+  pdf: "pdf",
+  doc: "doc",
+  sheet: "xls",
+  slides: "ppt",
+  archive: "zip",
+  image: "media",
+  video: "media",
+  other: "generic",
+};
+
+/** Palette slot for a file, derived from its kind. Pure. */
+export function fileTypeTone(fileName: string, mime: string): FileTone {
+  return TONE_BY_KIND[fileKind(mime, fileName)];
 }
 
 /** True for OOXML .docx only. Legacy binary .doc is NOT included — docx-preview
