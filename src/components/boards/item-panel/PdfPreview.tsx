@@ -14,7 +14,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 type Status = "loading" | "ready" | "error";
 
-export function PdfPreview({ src }: { src: string; fileName?: string }) {
+export function PdfPreview({
+  src,
+  onAspect,
+}: {
+  src: string;
+  fileName?: string;
+  /** Reports page 1's intrinsic width/height so the modal can shape itself to
+   *  a portrait vs landscape document. Fires once per loaded document. */
+  onAspect?: (aspect: number) => void;
+}) {
   const pagesRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [pageCount, setPageCount] = useState(0);
@@ -47,6 +56,9 @@ export function PdfPreview({ src }: { src: string; fileName?: string }) {
           const page = await doc.getPage(n);
           if (cancelled) return;
           const base = page.getViewport({ scale: 1 });
+          // Page 1's intrinsic shape drives the modal's proportions. `base` is
+          // already computed for the fit-width maths, so this is free.
+          if (n === 1 && base.height > 0) onAspect?.(base.width / base.height);
           const fit = fitWidth > 0 ? fitWidth / base.width : 1;
           const viewport = page.getViewport({ scale: fit * scale });
 
@@ -70,7 +82,7 @@ export function PdfPreview({ src }: { src: string; fileName?: string }) {
       cancelled = true;
       loadingTask?.destroy?.();
     };
-  }, [src, scale]);
+  }, [src, scale, onAspect]);
 
   if (status === "error") {
     return (

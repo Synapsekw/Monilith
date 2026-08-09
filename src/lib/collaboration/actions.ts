@@ -10,9 +10,12 @@ import {
   deleteAttachmentSchema,
   attachmentUrlSchema,
   attachmentUrlsSchema,
-  attachmentPdfUrlSchema,
+  attachmentPreviewUrlSchema,
 } from "@/lib/validations/collaboration-actions";
-import { isPreviewable } from "@/lib/collaboration/attachments-format";
+import {
+  isPreviewable,
+  isInlineParseable,
+} from "@/lib/collaboration/attachments-format";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { createAttachmentCore } from "./attachment-core";
 import type { Json } from "@/types/database.types";
@@ -280,25 +283,27 @@ export async function getAttachmentPreviewUrls(input: {
   return { ok: true, data: { urls, thumbUrls } };
 }
 
-export async function getAttachmentPdfUrl(input: {
+export async function getAttachmentPreviewUrl(input: {
   attachmentId: string;
 }): Promise<ActionResult<{ url: string }>> {
-  const parsed = attachmentPdfUrlSchema.safeParse(input);
+  const parsed = attachmentPreviewUrlSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
 
   const supabase = await createClient();
   const { data: row, error } = await supabase
     .from("attachments")
-    .select("storage_path, mime_type")
+    .select("storage_path, mime_type, file_name")
     .eq("id", parsed.data.attachmentId)
     .maybeSingle();
   if (error || !row) return fail("Attachment not found.");
 
   // Defense in depth: the only bytes we ever sign for inline `fetch` (no
-  // download disposition) are PDFs the client renders via PDF.js.
-  if (row.mime_type.toLowerCase() !== "application/pdf")
-    return fail("Not a previewable PDF.");
+  // download disposition) are formats a parser consumes — PDF via PDF.js,
+  // DOCX via docx-preview. The bytes reach a parser, never a top-level
+  // navigation, so nothing signed here can execute script by being opened.
+  if (!isInlineParseable(row.mime_type, row.file_name))
+    return fail("Not a previewable file.");
 
   // No `download` disposition — bytes are consumed by fetch → canvas, never
   // top-level navigation. Short TTL (shared with the gallery preview window).

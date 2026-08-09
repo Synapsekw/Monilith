@@ -23,7 +23,7 @@ import {
   createAttachment,
   getAttachmentDownloadUrl,
   getAttachmentPreviewUrls,
-  getAttachmentPdfUrl,
+  getAttachmentPreviewUrl,
   deleteAttachment,
 } from "@/lib/collaboration/actions";
 
@@ -217,7 +217,7 @@ describe("getAttachmentPreviewUrls", () => {
   });
 });
 
-describe("getAttachmentPdfUrl", () => {
+describe("getAttachmentPreviewUrl", () => {
   it("signs a no-download URL for a pdf row", async () => {
     from.mockImplementation(() => ({
       select: () => ({
@@ -226,6 +226,7 @@ describe("getAttachmentPdfUrl", () => {
             data: {
               storage_path: `${ORG}/${BOARD}/${ITEM}/abc-d.pdf`,
               mime_type: "application/pdf",
+              file_name: "abc-d.pdf",
             },
             error: null,
           }),
@@ -236,7 +237,7 @@ describe("getAttachmentPdfUrl", () => {
       data: { signedUrl: "https://signed/pdf" },
       error: null,
     });
-    const res = await getAttachmentPdfUrl({ attachmentId: ATT });
+    const res = await getAttachmentPreviewUrl({ attachmentId: ATT });
     expect(createSignedUrl).toHaveBeenCalledWith(
       `${ORG}/${BOARD}/${ITEM}/abc-d.pdf`,
       300,
@@ -244,18 +245,22 @@ describe("getAttachmentPdfUrl", () => {
     expect(res).toEqual({ ok: true, data: { url: "https://signed/pdf" } });
   });
 
-  it("rejects a non-pdf attachment without signing", async () => {
+  it("rejects an attachment outside the inline-parse allow-list", async () => {
     from.mockImplementation(() => ({
       select: () => ({
         eq: () => ({
           maybeSingle: async () => ({
-            data: { storage_path: "p/x.png", mime_type: "image/png" },
+            data: {
+              storage_path: "p/x.png",
+              mime_type: "image/png",
+              file_name: "x.png",
+            },
             error: null,
           }),
         }),
       }),
     }));
-    const res = await getAttachmentPdfUrl({ attachmentId: ATT });
+    const res = await getAttachmentPreviewUrl({ attachmentId: ATT });
     expect(res.ok).toBe(false);
     expect(createSignedUrl).not.toHaveBeenCalled();
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Eye, Trash2, File } from "lucide-react";
+import { Download, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/lib/collaboration/attachments-format";
 import type { Attachment } from "@/lib/collaboration/attachments-cache";
 import type { Member } from "@/lib/collaboration/activity";
+import { FileTypeChip } from "@/components/boards/FileTypeChip";
 
 export function AttachmentRow({
   attachment,
@@ -28,11 +29,18 @@ export function AttachmentRow({
   const uploader =
     members.find((m) => m.userId === attachment.uploaded_by)?.fullName ??
     "Someone";
-  const canPreview = canPreviewInline(attachment.mime_type);
+  const canPreview = canPreviewInline(
+    attachment.mime_type,
+    attachment.file_name,
+  );
 
   return (
     <div className="group hover:bg-state-hover flex items-center gap-3 rounded-md px-2 py-1.5 text-sm">
-      <File className="text-muted-foreground size-4 shrink-0" aria-hidden />
+      <FileTypeChip
+        fileName={attachment.file_name}
+        mimeType={attachment.mime_type}
+        size="md"
+      />
       <span className="min-w-0 flex-1 truncate" title={attachment.file_name}>
         {attachment.file_name}
       </span>

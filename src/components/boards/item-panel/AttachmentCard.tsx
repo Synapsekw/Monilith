@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Eye, Trash2, Play, FileText } from "lucide-react";
+import { Download, Eye, Trash2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import {
@@ -12,6 +12,7 @@ import {
 import type { Attachment } from "@/lib/collaboration/attachments-cache";
 import type { Member } from "@/lib/collaboration/activity";
 import { ThumbImg } from "@/components/boards/ThumbImg";
+import { FileTypeChip } from "@/components/boards/FileTypeChip";
 
 export function AttachmentCard({
   attachment,
@@ -40,7 +41,10 @@ export function AttachmentCard({
     members.find((m) => m.userId === attachment.uploaded_by)?.fullName ??
     "Someone";
   const previewable = isPreviewable(attachment.mime_type);
-  const canPreview = canPreviewInline(attachment.mime_type);
+  const canPreview = canPreviewInline(
+    attachment.mime_type,
+    attachment.file_name,
+  );
 
   return (
     <div className="group bg-surface-muted card-lift border-border hover:border-border-bright relative flex flex-col overflow-hidden rounded-lg border">
@@ -55,7 +59,11 @@ export function AttachmentCard({
         ) : kind === "video" ? (
           <Play className="text-muted-foreground size-8" aria-hidden />
         ) : (
-          <FileText className="text-muted-foreground size-8" aria-hidden />
+          <FileTypeChip
+            fileName={attachment.file_name}
+            mimeType={attachment.mime_type}
+            size="lg"
+          />
         )}
 
         {uploading && (

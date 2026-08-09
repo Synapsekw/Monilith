@@ -4,12 +4,15 @@ import { FilePreviewLightbox } from "@/components/boards/item-panel/FilePreviewL
 import type { Tables } from "@/types/database.types";
 
 vi.mock("next/dynamic", () => ({
-  default: () => (props: { src: string }) => (
-    <div data-testid="pdf-preview" data-src={props.src} />
-  ),
+  default: () => (props: { src?: string; attachmentId?: string }) =>
+    props.attachmentId ? (
+      <div data-testid="sheet-preview" data-id={props.attachmentId} />
+    ) : (
+      <div data-testid="pdf-preview" data-src={props.src} />
+    ),
 }));
 vi.mock("@/lib/collaboration/actions", () => ({
-  getAttachmentPdfUrl: vi.fn(async () => ({
+  getAttachmentPreviewUrl: vi.fn(async () => ({
     ok: true,
     data: { url: "https://signed/pdf" },
   })),
@@ -89,10 +92,14 @@ describe("FilePreviewLightbox", () => {
       expect(el).toHaveAttribute("data-slot", "button");
     }
 
+    // "Open in new tab" opens the signed URL; only "Download" downloads.
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
     fireEvent.click(open);
-    expect(onDownload).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith("y", "_blank", "noopener");
+    expect(onDownload).not.toHaveBeenCalled();
     fireEvent.click(download);
-    expect(onDownload).toHaveBeenCalledTimes(2);
+    expect(onDownload).toHaveBeenCalledTimes(1);
     fireEvent.click(del);
     expect(onDelete).toHaveBeenCalledWith(three[1]);
     fireEvent.click(prev);
@@ -121,7 +128,8 @@ describe("FilePreviewLightbox", () => {
   });
 
   it("renders the PDF preview branch for a pdf attachment", async () => {
-    const { getAttachmentPdfUrl } = await import("@/lib/collaboration/actions");
+    const { getAttachmentPreviewUrl } =
+      await import("@/lib/collaboration/actions");
     const pdf = [
       att("p", { mime_type: "application/pdf", file_name: "p.pdf" }),
     ];
@@ -139,6 +147,132 @@ describe("FilePreviewLightbox", () => {
     );
     const node = await screen.findByTestId("pdf-preview");
     expect(node).toHaveAttribute("data-src", "https://signed/pdf");
-    expect(getAttachmentPdfUrl).toHaveBeenCalledWith({ attachmentId: "p" });
+    expect(getAttachmentPreviewUrl).toHaveBeenCalledWith({ attachmentId: "p" });
+  });
+
+  it("signs bytes and mounts a renderer for a .docx attachment", async () => {
+    const { getAttachmentPreviewUrl } =
+      await import("@/lib/collaboration/actions");
+    const docx = [
+      att("d", {
+        mime_type:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        file_name: "d.docx",
+      }),
+    ];
+    render(
+      <FilePreviewLightbox
+        attachments={docx}
+        index={0}
+        previewUrls={{}}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    await screen.findByTestId("pdf-preview");
+    expect(getAttachmentPreviewUrl).toHaveBeenCalledWith({ attachmentId: "d" });
+    expect(screen.queryByText(/No inline preview/i)).not.toBeInTheDocument();
+  });
+
+  it("mounts the sheet viewer for a spreadsheet without signing a URL", async () => {
+    const { getAttachmentPreviewUrl } =
+      await import("@/lib/collaboration/actions");
+    vi.mocked(getAttachmentPreviewUrl).mockClear();
+    const xlsx = [att("s", { mime_type: "text/csv", file_name: "rows.csv" })];
+    render(
+      <FilePreviewLightbox
+        attachments={xlsx}
+        index={0}
+        previewUrls={{}}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    const node = await screen.findByTestId("sheet-preview");
+    expect(node).toHaveAttribute("data-id", "s");
+    // Sheets are parsed server-side — no signed URL is handed to the client.
+    expect(getAttachmentPreviewUrl).not.toHaveBeenCalled();
+  });
+
+  it("opens at the kind preset and refines to the image's measured aspect", async () => {
+    render(
+      <FilePreviewLightbox
+        attachments={[att("a")]}
+        index={0}
+        previewUrls={{ a: "https://signed/a" }}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    const panel = screen.getByRole("dialog");
+    // image preset — no aspect term until the bitmap reports one
+    expect(panel.style.getPropertyValue("--preview-w")).toBe(
+      "min(92vw, 1100px)",
+    );
+
+    // The dialog renders through a portal, so query the screen, not `container`.
+    const img = screen.getByAltText("a.png") as HTMLImageElement;
+    Object.defineProperty(img, "naturalWidth", { value: 1600 });
+    Object.defineProperty(img, "naturalHeight", { value: 900 });
+    fireEvent.load(img);
+
+    expect(panel.style.getPropertyValue("--preview-w")).toBe(
+      "min(92vw, calc(90vh * 1.778), 1100px)",
+    );
+  });
+
+  it("opens a deck at the 16:9 preset even though it cannot render", () => {
+    const deck = [
+      att("k", {
+        mime_type: "application/vnd.ms-powerpoint",
+        file_name: "q3.pptx",
+      }),
+    ];
+    render(
+      <FilePreviewLightbox
+        attachments={deck}
+        index={0}
+        previewUrls={{}}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("dialog").style.getPropertyValue("--preview-w"),
+    ).toBe("min(92vw, calc(90vh * 1.778), 1200px)");
+    expect(screen.getByText("PPT")).toBeInTheDocument();
+  });
+
+  it("gives an unpreviewable archive a small card, not a huge empty frame", () => {
+    const zip = [
+      att("z", { mime_type: "application/zip", file_name: "z.zip" }),
+    ];
+    render(
+      <FilePreviewLightbox
+        attachments={zip}
+        index={0}
+        previewUrls={{}}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("dialog").style.getPropertyValue("--preview-w"),
+    ).toBe("min(92vw, 520px)");
   });
 });
