@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-09 20:35",
+  "updated": "2026-08-09 20:43",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "8d49a039",
-        "tone": "ok",
-        "note": "The -s ours heal itself, 0 commits past it. Nothing user-visible is undeployed."
+        "value": "7ecc24e7",
+        "tone": "warn",
+        "note": "9 commits past the -s ours heal (8d49a039): the 25-entry /updates changelog backfill plus the /wrapup coverage check. The backfill is user-visible — promoting publishes it."
       },
       {
         "name": "main",
@@ -180,6 +180,14 @@
     ]
   },
   "next": [
+    {
+      "title": "Promote develop → main to publish the /updates backfill",
+      "why": "25 user-facing changelog entries covering 2026-08-01 → 08-09 sit undeployed; /updates in production still ends at July 27. Nothing else is pending and the gates are green, so this is a cheap promotion — the only one on the list that ships something a user sees.",
+      "tags": [
+        "promote",
+        "changelog"
+      ]
+    },
     {
       "title": "Verify the dashboard widgets in the running app",
       "tags": [
@@ -269,18 +277,18 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-09-2035-desktop-101-release",
-    "when": "2026-08-09 20:35",
-    "title": "Desktop 1.0.1: the version stopped lying",
+    "id": "2026-08-09-2043-changelog-backfill-and-wrapup-coverage",
+    "when": "2026-08-09 20:43",
+    "title": "/updates backfilled again, and the coverage question moved into /wrapup",
     "bullets": [
-      "SHELL_VERSION was a hand-written literal beside package.json with nothing syncing them. Shipping 1.0.1 would have produced a build reporting itself as 1.0.0 and offering an update to what the user already had — latent only because both strings read 1.0.0.",
-      "Fixed by injection, not import: checkVersionGate takes the version as an argument, so the comparison stays unit-testable without pulling Electron into it.",
-      "The fix caught itself — the dialog fixture went red because app.getVersion() under `electron <file>` returns Electron’s own version. It now pins the version and asserts a build newer than the feed is offered nothing.",
-      "Cutting the release exposed a publish bug: every upload returned 200 and the next read served the previous version. A read straight after a write is not a verification — it now polls, cache-busted, and diffs byte-for-byte (gotcha-87)."
+      "/updates had gone 13 days and 10 promotions (#79 → #91) with no Changelog: trailer — four weeks after the identical gap was backfilled once already.",
+      "Backfilled 25 entries across seven ship dates as backdated empty announcement commits, then regenerated generated.ts. The page goes 50 → 75 entries.",
+      "gotcha-64 put the coverage check at the promotion seam; a recurrence that fast says one deferred check isn't enough. /wrapup step 6 now asks it too, fed by a CHANGELOG COVERAGE section in wrapup-context.sh.",
+      "The check compares ship dates, not commits — an announcement legitimately rides a backdated empty commit, so a per-commit check would flag every backfilled feature forever."
     ]
   }
 }
-    </script>
+</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────
