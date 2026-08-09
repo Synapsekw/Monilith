@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
+  FileText,
   LayoutDashboard,
   LayoutGrid,
   Monitor,
@@ -203,6 +204,9 @@ export function CommandPalette({
                 onSelect={() => run(() => router.push("/dashboards"))}
               >
                 <LayoutDashboard className="size-4" /> Dashboards
+              </CommandItem>
+              <CommandItem onSelect={() => run(() => router.push("/reports"))}>
+                <FileText className="size-4" /> Reports
               </CommandItem>
               {boards.map((b) => (
                 <CommandItem

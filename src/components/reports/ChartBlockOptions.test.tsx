@@ -10,6 +10,7 @@ const options: ChartBlockOptions = {
   columnId: null,
   title: "",
   maxCategories: 6,
+  boardScope: { mode: "all" },
 };
 
 const columns = [
