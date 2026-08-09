@@ -2642,35 +2642,90 @@ export type Database = {
           },
         ];
       };
-      reports: {
+      report_boards: {
         Row: {
           board_id: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          position: number;
+          report_id: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          position?: number;
+          report_id: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          position?: number;
+          report_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "report_boards_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_boards_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "report_boards_report_id_fkey";
+            columns: ["report_id"];
+            isOneToOne: false;
+            referencedRelation: "reports";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      reports: {
+        Row: {
+          board_id: string | null;
           config: Json;
           created_at: string;
           created_by: string | null;
           id: string;
           name: string;
           org_id: string;
+          portfolio_id: string | null;
+          scope: string;
           updated_at: string;
         };
         Insert: {
-          board_id: string;
+          board_id?: string | null;
           config?: Json;
           created_at?: string;
           created_by?: string | null;
           id?: string;
           name?: string;
           org_id: string;
+          portfolio_id?: string | null;
+          scope?: string;
           updated_at?: string;
         };
         Update: {
-          board_id?: string;
+          board_id?: string | null;
           config?: Json;
           created_at?: string;
           created_by?: string | null;
           id?: string;
           name?: string;
           org_id?: string;
+          portfolio_id?: string | null;
+          scope?: string;
           updated_at?: string;
         };
         Relationships: [
@@ -2686,6 +2741,13 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reports_portfolio_id_fkey";
+            columns: ["portfolio_id"];
+            isOneToOne: false;
+            referencedRelation: "portfolios";
             referencedColumns: ["id"];
           },
         ];
@@ -3813,6 +3875,10 @@ export type Database = {
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
         Returns: undefined;
+      };
+      report_in_org: {
+        Args: { p_org_id: string; p_report_id: string };
+        Returns: boolean;
       };
       restore_group: { Args: { p_group_id: string }; Returns: number };
       restore_item: { Args: { p_item_id: string }; Returns: number };
