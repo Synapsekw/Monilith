@@ -9,7 +9,7 @@ vi.mock("next/dynamic", () => ({
   ),
 }));
 vi.mock("@/lib/collaboration/actions", () => ({
-  getAttachmentPdfUrl: vi.fn(async () => ({
+  getAttachmentPreviewUrl: vi.fn(async () => ({
     ok: true,
     data: { url: "https://signed/pdf" },
   })),
@@ -121,7 +121,8 @@ describe("FilePreviewLightbox", () => {
   });
 
   it("renders the PDF preview branch for a pdf attachment", async () => {
-    const { getAttachmentPdfUrl } = await import("@/lib/collaboration/actions");
+    const { getAttachmentPreviewUrl } =
+      await import("@/lib/collaboration/actions");
     const pdf = [
       att("p", { mime_type: "application/pdf", file_name: "p.pdf" }),
     ];
@@ -139,6 +140,6 @@ describe("FilePreviewLightbox", () => {
     );
     const node = await screen.findByTestId("pdf-preview");
     expect(node).toHaveAttribute("data-src", "https://signed/pdf");
-    expect(getAttachmentPdfUrl).toHaveBeenCalledWith({ attachmentId: "p" });
+    expect(getAttachmentPreviewUrl).toHaveBeenCalledWith({ attachmentId: "p" });
   });
 });

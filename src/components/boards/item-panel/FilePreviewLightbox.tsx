@@ -15,7 +15,7 @@ import {
   fileKind,
   isPreviewable,
 } from "@/lib/collaboration/attachments-format";
-import { getAttachmentPdfUrl } from "@/lib/collaboration/actions";
+import { getAttachmentPreviewUrl } from "@/lib/collaboration/actions";
 import type { Attachment } from "@/lib/collaboration/attachments-cache";
 
 // Client-only PDF.js renderer — lazily loaded only when a PDF lightbox opens,
@@ -60,7 +60,7 @@ export function FilePreviewLightbox({
     const c = attachments[index];
     if (!c || fileKind(c.mime_type, c.file_name) !== "pdf") return;
     let cancelled = false;
-    getAttachmentPdfUrl({ attachmentId: c.id }).then((res) => {
+    getAttachmentPreviewUrl({ attachmentId: c.id }).then((res) => {
       if (cancelled) return;
       setPdf({ id: c.id, url: res.ok ? res.data.url : null });
     });
