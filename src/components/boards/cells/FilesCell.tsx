@@ -50,23 +50,21 @@ export function FilesCell({
               e.stopPropagation();
               onOpen(i);
             }}
-            className="border-border flex h-6 min-w-6 items-center justify-center overflow-hidden rounded border pointer-coarse:size-11"
+            className="flex h-6 min-w-6 items-center justify-center pointer-coarse:size-11"
           >
             {k === "image" && (thumb || url) ? (
               <ThumbImg
                 thumbUrl={thumb}
                 fullUrl={url}
                 alt=""
-                className="size-6 object-cover pointer-coarse:size-11"
+                className="border-border size-6 overflow-hidden rounded border object-cover pointer-coarse:size-11"
               />
             ) : (
-              // Every non-image kind gets its own mono label — PDF/PPT/XLS/…
-              // rather than one generic document glyph for all of them.
-              <FileTypeChip
-                fileName={a.file_name}
-                mimeType={a.mime_type}
-                className="border-0 bg-transparent"
-              />
+              // Every non-image kind gets its own coloured page icon — PDF red,
+              // Word blue, Excel green — rather than one generic glyph for all.
+              // The button draws no border of its own here: the icon IS the
+              // silhouette, and a box around it would fight the clipped corner.
+              <FileTypeChip fileName={a.file_name} mimeType={a.mime_type} />
             )}
           </button>
         );

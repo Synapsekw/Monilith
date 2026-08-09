@@ -3,6 +3,7 @@ import {
   formatSize,
   fileKind,
   fileTypeLabel,
+  fileTypeTone,
   isPreviewable,
   isPdf,
   isDocx,
@@ -109,6 +110,31 @@ describe("fileTypeLabel", () => {
 
   it("falls back to FILE when it has neither", () => {
     expect(fileTypeLabel("noextension", "")).toBe("FILE");
+  });
+});
+
+describe("fileTypeTone", () => {
+  it.each([
+    ["a.pdf", "pdf"],
+    ["a.docx", "doc"],
+    ["a.doc", "doc"],
+    ["a.rtf", "doc"],
+    ["a.xlsx", "xls"],
+    ["a.csv", "xls"],
+    ["a.pptx", "ppt"],
+    ["a.key", "ppt"],
+    ["a.zip", "zip"],
+    ["a.tar", "zip"],
+    ["a.mp4", "media"],
+    ["a.png", "media"],
+    ["a.bin", "generic"],
+  ])("tones %s as %s", (name, expected) => {
+    expect(fileTypeTone(name, "application/octet-stream")).toBe(expected);
+  });
+
+  it("tones by mime when the name has no useful extension", () => {
+    expect(fileTypeTone("noext", "application/pdf")).toBe("pdf");
+    expect(fileTypeTone("noext", "image/png")).toBe("media");
   });
 });
 

@@ -1,22 +1,42 @@
-import { fileTypeLabel } from "@/lib/collaboration/attachments-format";
+import {
+  fileTypeLabel,
+  fileTypeTone,
+  type FileTone,
+} from "@/lib/collaboration/attachments-format";
 import { cn } from "@/lib/utils";
 
-// text-3xs (0.625rem) is the floor of the type scale — arbitrary px sizes are
-// rejected by scripts/check-px-text.mjs because they ignore the user's browser
-// font-size setting.
 const SIZES = {
-  sm: "h-6 min-w-7 rounded px-1 text-3xs",
-  md: "h-8 min-w-9 rounded-md px-1.5 text-xs",
-  lg: "h-12 min-w-14 rounded-md px-2 text-sm",
+  sm: "h-6 w-5 text-3xs",
+  md: "h-8 w-6.5 text-2xs",
+  lg: "h-12 w-10 text-xs",
 } as const;
 
+/** Tone → fill. Written out rather than composed as `bg-file-${tone}` because
+ *  Tailwind scans source statically and never sees an interpolated class. */
+const TONE_FILL: Record<FileTone, string> = {
+  pdf: "bg-file-pdf",
+  doc: "bg-file-doc",
+  xls: "bg-file-xls",
+  ppt: "bg-file-ppt",
+  zip: "bg-file-zip",
+  media: "bg-file-media",
+  generic: "bg-file-generic",
+};
+
 /**
- * Monochrome mono-label chip identifying a file's type (PDF / PPT / XLS / …).
+ * A file-type icon: a page silhouette in the format's conventional colour with
+ * its short label across the body — PDF red, Word blue, Excel green,
+ * PowerPoint orange.
  *
- * Deliberately NOT colored: pulse-ui keeps chrome strictly monochrome and
- * reserves multi-color for status pills. A mono uppercase label also reads
- * unambiguously at 24px where distinct icon silhouettes do not, and covers any
- * future format for free.
+ * This is a deliberate, scoped exception to pulse-ui's "chrome is strictly
+ * monochrome" rule, and the second sanctioned multi-colour set after status
+ * pills. The justification is recognition, not decoration: users arrive
+ * already knowing these colours from Finder, Drive and Office, and a Files
+ * column exists precisely so a deck can be told from a spreadsheet without
+ * reading. A monochrome variant was tried first and could not do that at 24px.
+ *
+ * Colour is never the only channel — the label is always present — so the icon
+ * still resolves for a colourblind or greyscale reader.
  */
 export function FileTypeChip({
   fileName,
@@ -29,10 +49,14 @@ export function FileTypeChip({
   size?: keyof typeof SIZES;
   className?: string;
 }) {
+  const tone = fileTypeTone(fileName, mimeType);
   return (
     <span
       className={cn(
-        "border-border bg-surface-muted text-muted-foreground inline-flex shrink-0 items-center justify-center border font-mono font-medium tracking-tight uppercase",
+        // The clipped top-right corner is what reads as "document" rather than
+        // "coloured box"; it is the whole silhouette at this size.
+        "relative inline-flex shrink-0 items-end justify-center rounded-[3px] pb-0.5 font-mono leading-none font-semibold tracking-tight text-white uppercase [clip-path:polygon(0_0,68%_0,100%_26%,100%_100%,0_100%)]",
+        TONE_FILL[tone],
         SIZES[size],
         className,
       )}
