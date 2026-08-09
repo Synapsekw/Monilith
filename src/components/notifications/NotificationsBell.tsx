@@ -12,6 +12,7 @@ import { useNotificationMutations } from "@/lib/collaboration/use-notification-m
 import { useInvitations } from "@/lib/collaboration/use-invitations";
 import { useInvitationMutations } from "@/lib/collaboration/use-invitation-mutations";
 import type { AppNotification } from "@/lib/collaboration/notifications-cache";
+import { getDesktopBridge } from "@/lib/desktop/bridge";
 import { NotificationsList } from "./NotificationsList";
 import { InvitationsSection } from "./InvitationsSection";
 
@@ -37,9 +38,7 @@ export function NotificationsBell({ userId }: { userId: string }) {
     //
     // Publishes `badge`, not `unread`: that is the number rendered in the bell
     // above, and a dock showing 2 while the bell shows 3 reads as a bug.
-    const bridge = (window as { monolith?: { setBadge(n: number): void } })
-      .monolith;
-    bridge?.setBadge(badge);
+    getDesktopBridge()?.setBadge?.(badge);
   }, [badge]);
 
   function open(n: AppNotification) {
