@@ -1,249 +1,493 @@
 <title>Monolith — Mission Control</title>
+
 <!--
   Monolith mission-control board. DERIVED view — sources of truth: vault/00-north-star.md,
   git worktree list, vault/sessions/. Refreshed by .claude/commands/board.md.
   RULE: refreshes edit ONLY the #board-data JSON island below. Markup/CSS/JS change
   only on explicit user request (bump "schema" when they do).
+  schema 2 (2026-08-09) — redesigned around four questions: what we're building,
+  where we stand, what's next, and the percentages behind each.
 -->
+
 <script type="application/json" id="board-data">
 {
-  "schema": 1,
-  "updated": "2026-08-07 20:32",
-  "kicker": "MONOLITH / NORTH STAR",
-  "headline": "Hermes named the gap precisely: the MCP exposed the Files column but had no binary upload operation, and its OAuth credential cannot authenticate the web app - so there was no safe workaround. Closed. 24 tools, files attach, and get_board now tells an agent the shape of every column it may write.",
-  "chips": [
-    {
-      "label": "develop",
-      "value": "753765a2",
-      "note": "== origin | ahead of main | MCP attachments merged",
-      "tone": "ok"
-    },
-    {
-      "label": "main",
-      "value": "55153248",
-      "note": "#88 LIVE since 08-06 | several merges behind develop",
-      "tone": "warn"
-    },
-    {
-      "label": "gates",
-      "value": "green",
-      "note": "typecheck/lint/test/build | 4823 tests",
-      "tone": "ok"
-    },
-    {
-      "label": "ledger",
-      "value": "134/134",
-      "note": "in sync after the 7th apply_migration mis-stamp + reconcile",
-      "tone": "ok"
-    }
-  ],
-  "progress": {
-    "done": 14,
-    "total": 15
+  "schema": 2,
+  "updated": "2026-08-09 17:02",
+
+  "product": {
+    "kicker": "MONOLITH · WORK OS",
+    "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
+    "stack": "Next.js 16 · React 19 · Tailwind v4 · Supabase · org-scoped RLS"
   },
-  "gates": [
-    {
-      "led": "green",
-      "tag": "SHIPPED",
-      "text": "MCP attachments: attach_file (inline base64 under 128 KB, or a storagePath from create_attachment_upload's 2-hour signed URL, 50 MB) plus per-column write metadata on get_board - writable, valueShape, options with ids. Size and MIME are read from Storage, never from the caller's claim. Merged to develop (753765a2), worktree and branch cleaned up. 22 tools -> 24."
-    },
-    {
-      "led": "amber",
-      "tag": "UNRUN",
-      "text": "gotcha-81: the attachment cross-org RLS suite has NEVER executed. The plan prescribed PULSE_TEST_DB=1 against DEV, but integration-env.ts deny-lists the DEV and PROD refs and there is no .env.test - so it skips even with the marker forced. Deliberate: it provisions real users, orgs and storage objects. Compensating evidence gathered read-only on DEV (items SELECT scoped to readable_board_ids, attachments INSERT WITH CHECK, storage obj_insert checks the board segment). A suite that skips proves nothing but looks like success in a summary line."
-    },
-    {
-      "led": "green",
-      "tag": "SHIPPED",
-      "text": "Invitations now arrive over Realtime: a recipient-scoped SELECT policy on org_invitations plus publication membership, and useInvitations subscribes to INSERT/UPDATE. Merged to develop (f8b3f590), worktree and branch cleaned up. Revoke is symmetric - no stale Accept button that would fail with 'invitation not found'."
-    },
-    {
-      "led": "green",
-      "tag": "FIXED",
-      "text": "gotcha-80: Realtime delivers nothing without a recipient SELECT policy. org_invitations was absent from supabase_realtime AND had no invitee policy (all three were admin-scoped), while useInvitations held staleTime: Infinity with refetchOnWindowFocus off globally. Verified live on DEV in a rolled-back transaction: recipient 1 row, stranger 0, mixed-case row vs lowercase JWT."
-    },
-    {
-      "led": "red",
-      "tag": "CRITICAL",
-      "text": "number/battery/completion/health dashboard widgets call SECURITY DEFINER RPCs through the SERVICE client, where auth.uid() is null and the can_read_board guard denies - so they should have been raising 42501 since 2026-07-04. Verified on DEV that all five carry the guard and it returns false with no auth context. May be affecting users TODAY. Verify in the running app before 'fixing' the guard."
-    },
-    {
-      "led": "amber",
-      "tag": "NEXT?",
-      "text": "Promote develop -> main - now the strongest candidate. Carries MCP full-surface reads, offline read-only, the long-text editor, the invitation fix and the MCP attachment tools; all four gates green on the merged state. TWO user-visible things sit undeployed: the invite fix, and the attachment tools Hermes explicitly asked for and still cannot reach."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "An invitee who ALREADY has an account still gets no invite email - inviteUserByEmail's 'User already registered' is swallowed by design at admin-actions.ts:144. In-app is now instant; away-from-app is not covered. Would be a Resend send (key + batch client already exist for the digest). Whether brand-new invitees are still on Supabase's built-in email service (~2/hour cap) is a dashboard setting, unverified."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "/promote's commitlint gate is STILL mis-scoped and has cost three promotions. It lints the whole 2334-commit develop history and stops on 7 Phase 6/7-era commits already in production, while CI skips that job on base_ref==main by design. Fix the command - narrow the range or grandfather the 7."
-    },
-    {
-      "led": "hollow",
-      "tag": "OWED",
-      "text": "Prod still has no RESEND_API_KEY, so digest and briefing runs file in-app notifications and send no email. Promotion PRs no longer carry a Vercel preview check (vercel.json restricts auto-deploy to main). 8 dependabot branches unmerged; the npm ones contend with E6's Stripe SDK over the lockfile."
-    },
-    {
-      "led": "hollow",
-      "tag": "NEXT?",
-      "text": "Owner's chosen track is Plan 2, the macOS desktop shell (8 tasks, not started, a NEW monolith-desktop repo). Otherwise Report Builder v2 has NO spec and NO plan, or the E6 Stripe track (units B, C, E-H) which needs NO migration - the safe partner beside a migration-bearing task."
-    }
-  ],
-  "worktrees": [],
-  "session": {
-    "id": "2026-08-07-2032-mcp-column-metadata-and-attachments",
-    "when": "2026-08-07 20:32",
-    "bullets": [
-      "A capability report from a connected agent is a bug report. Hermes could see the Files column and could not write it - the gap was already specced and planned, one task in, so the work was execution not discovery.",
-      "Size and MIME come from Storage, not the caller. An agent that claims 4 KB and uploads 40 MB gets recorded as 40 MB, because info() is the source and the client's numbers are never trusted.",
-      "gotcha-81: the plan prescribed an integration run the codebase's own guard forbids. DEV is deny-listed by constant so integration suites cannot pollute live user data - the guard wins, the plan was wrong, and the four assertions ship unexecuted and labelled as such.",
-      "Third session running where the defects originate in the PLAN, not the implementation: Task 6 Step 9 listed only register.ts and would have failed the consent-table sync guard."
+
+  "environment": {
+    "tone": "warn",
+    "title": "The production deployment runs the DEV database",
+    "text": "www.monolith.works is wired to the DEV Supabase project (hjqca…), so DEV holds the real, live, user-facing data — treat it with production care. The PROD project (jzsyq…) is provisioned and mirrored but serves no traffic until the app is declared feature-complete. This is deliberate. Do not \"fix\" it."
+  },
+
+  "stand": {
+    "percent": 87,
+    "fraction": "13 of 15 tracks complete",
+    "caption": "≈97% by slice — the two open tracks are nearly finished. What actually remains is E6 Stripe billing and Phase 6e Docs, which was deliberately deferred.",
+    "meter": [
+      { "label": "0 Setup",  "state": "done" },
+      { "label": "1 Auth",   "state": "done" },
+      { "label": "2 Boards", "state": "done" },
+      { "label": "3 Views",  "state": "done" },
+      { "label": "4 Collab", "state": "done" },
+      { "label": "5 Autom",  "state": "done" },
+      { "label": "6 Depth",  "state": "part", "pct": 88 },
+      { "label": "7 Asana",  "state": "done" },
+      { "label": "8 Dash",   "state": "done" },
+      { "label": "9 Perf",   "state": "done" },
+      { "label": "RS",       "state": "done" },
+      { "label": "MVP-F",    "state": "done" },
+      { "label": "Touch",    "state": "done" },
+      { "label": "PF",       "state": "done" },
+      { "label": "10 AI",    "state": "part", "pct": 83 }
     ]
   },
-  "roadmap": [
+
+  "pillars": [
     {
-      "label": "0 Setup",
-      "state": "done"
+      "name": "Boards & views",
+      "pct": 100,
+      "have": "Workspaces → boards → groups → items. Table, Kanban, Calendar and Timeline/Gantt with dependencies, subitems, 18 column kinds, relations + mirror columns, inline editing, realtime.",
+      "left": ""
     },
     {
-      "label": "1 Auth",
-      "state": "done"
+      "name": "Collaboration",
+      "pct": 100,
+      "have": "Item detail panel, updates, @mentions, attachments, activity log, notifications inbox, live presence — and org invitations that now arrive over Realtime instead of on next page load.",
+      "left": ""
     },
     {
-      "label": "2 Boards",
-      "state": "done"
+      "name": "Automation",
+      "pct": 100,
+      "have": "Trigger/condition/action rules on Postgres triggers + pg_cron/pg_net, webhook actions, run history, plus an AI decide-step with dry-run and a scheduled board agent.",
+      "left": ""
     },
     {
-      "label": "3 Views",
-      "state": "done"
+      "name": "Planning & insight",
+      "pct": 92,
+      "have": "Portfolios, goals/OKRs, workload + capacity, time tracking and manual allocation, cross-board dashboards with 9 chart types and AI-generated layouts.",
+      "left": "Report Builder v2 — roll-ups and org templates. No spec, no plan yet."
     },
     {
-      "label": "4 Collab",
-      "state": "done"
+      "name": "AI & agents",
+      "pct": 83,
+      "have": "One metered gateway (managed or bring-your-own key), Ask Monolith with confirm-before-execute writes, a board agent dock, semantic search, and a hosted MCP server — 24 tools behind real OAuth 2.1.",
+      "left": "E6 Stripe billing — the last open AI epic. Needs no migration."
     },
     {
-      "label": "5 Autom",
-      "state": "done"
-    },
-    {
-      "label": "6 Depth",
-      "state": "prog"
-    },
-    {
-      "label": "7 Asana",
-      "state": "done"
-    },
-    {
-      "label": "8 Dash",
-      "state": "done"
-    },
-    {
-      "label": "9 Perf",
-      "state": "done"
-    },
-    {
-      "label": "RS",
-      "state": "done"
-    },
-    {
-      "label": "MVP-F",
-      "state": "done"
-    },
-    {
-      "label": "Touch",
-      "state": "done"
-    },
-    {
-      "label": "PF",
-      "state": "done"
-    },
-    {
-      "label": "10 AI",
-      "state": "prog"
+      "name": "Platform & craft",
+      "pct": 90,
+      "have": "Multi-tenant RLS from day one, two full performance programs, the dark-first Keystone reskin, iPad touch parity across 8 surfaces, offline read-only boards, and a macOS desktop shell.",
+      "left": "Desktop repo has no remote, its update feed is unhosted, notarization parked."
     }
-  ]
+  ],
+
+  "ship": {
+    "stages": [
+      {
+        "name": "develop",
+        "value": "309484ac",
+        "tone": "ok",
+        "note": "6 commits past the last heal — docs and specs only. No undeployed user-visible work in the queue."
+      },
+      {
+        "name": "main",
+        "value": "7a9ab15e",
+        "tone": "ok",
+        "note": "PR #89 merged 2026-08-09 — 35 commits: realtime invitations, MCP attachments, desktop download"
+      },
+      {
+        "name": "production",
+        "value": "www.monolith.works",
+        "tone": "ok",
+        "note": "Vercel state=success on 7a9ab15e — verified live, not assumed"
+      }
+    ],
+    "gates": [
+      { "label": "typecheck", "value": "pass", "tone": "ok" },
+      { "label": "lint", "value": "pass", "tone": "ok" },
+      { "label": "test", "value": "4823", "tone": "ok" },
+      { "label": "build", "value": "pass", "tone": "ok" },
+      { "label": "migration ledger", "value": "134/134", "tone": "ok" }
+    ]
+  },
+
+  "next": [
+    {
+      "title": "Verify the dashboard widgets in the running app",
+      "tags": ["critical", "half a session"],
+      "why": "Number, battery, completion and health widgets call SECURITY DEFINER RPCs through the service client, where auth.uid() is null and the can_read_board guard denies — so they should have been raising 42501 since 2026-07-04. Confirmed on DEV that all five carry the guard and it returns false with no auth context. This may be affecting users today. Look at a real dashboard before changing anything."
+    },
+    {
+      "title": "Give monolith-desktop a remote and a release feed",
+      "tags": ["owner's track", "needs go-ahead"],
+      "why": "The shell is installable and drag-fixed, but 10 commits exist only on local disk — the repo has never been pushed. electron-updater points at releases.monolith.works/desktop/latest-mac.yml, which 404s; the bucket now accepts the zip + yaml, so only the host is missing. gh repo create was blocked and needs your word."
+    },
+    {
+      "title": "E6 Stripe — units B, C, E–H",
+      "tags": ["last AI epic", "no migration"],
+      "why": "The final open epic in Phase 10, and the safest large task to run beside a migration-bearing one because it carries no migration of its own. Only end-to-end verification waits on credentials. Sequence the 6 npm dependabot branches either side of it — never during; they contend over the lockfile."
+    },
+    {
+      "title": "Report Builder v2",
+      "tags": ["needs a spec first"],
+      "why": "Roll-ups and org templates: one migration dropping reports.board_id NOT NULL, then unwinding the single-board assumption across access checks, payload fetch, shaping, routing and about 1.4k lines of tests. It has no spec and no plan — the charts spec explicitly defers it. Brainstorm before building."
+    },
+    {
+      "title": "Personal Agents Phase 2 — second half",
+      "tags": ["specced", "unscheduled"],
+      "why": "@mentionable agents inside item threads, agent-initiated proposals, per-agent principals, and PDF documents. The board dock half already shipped and is live."
+    }
+  ],
+
+  "risks": [
+    {
+      "sev": "red",
+      "title": "Dashboard widgets may be broken in production right now",
+      "text": "Five widget RPCs deny under the service client. Unverified in the running app — it is queued as the first thing next."
+    },
+    {
+      "sev": "amber",
+      "title": "The desktop shell exists on one disk",
+      "text": "monolith-desktop has no git remote. Ten commits, including both signing fixes, are unbacked."
+    },
+    {
+      "sev": "amber",
+      "title": "Production sends no email",
+      "text": "There is no RESEND_API_KEY in production, so digests and agent briefings file in-app notifications only. A run recorded as ran with no email is expected, not a fault."
+    },
+    {
+      "sev": "amber",
+      "title": "Existing users get no invite email",
+      "text": "inviteUserByEmail's \"User already registered\" is swallowed by design at admin-actions.ts:144. In-app delivery is instant now; away-from-app is not covered."
+    },
+    {
+      "sev": "open",
+      "title": "One security suite has never executed",
+      "text": "The MCP attachment cross-org RLS tests skip: integration-env.ts deny-lists the DEV and PROD refs even with the marker forced. The claim rests on live policy evidence instead."
+    },
+    {
+      "sev": "open",
+      "title": "/sync-prod's data phase copies the fixtures",
+      "text": "A full replace would copy the two Tier 2 fixture accounts — whose passwords are committed to this repo — into production. Schema-only pushes are unaffected."
+    }
+  ],
+
+  "worktrees": [],
+
+  "session": {
+    "id": "2026-08-09-1702-desktop-drag-fix-and-pr89-promote",
+    "when": "2026-08-09 17:02",
+    "title": "Desktop shell made installable, and PR #89 promoted",
+    "bullets": [
+      "All 8 desktop tasks were built and every gate was green while the window could not be dragged at all and Gatekeeper called the app corrupt. Neither defect is visible to typecheck, lint, test or build — running the real artifact is what found them.",
+      "The framework was blamed for an OS behaviour: com.apple.quarantine is stamped by the downloading browser, not by any build system, so a downloaded Tauri app is blocked identically.",
+      "The shipped install instructions targeted a step the user can never reach — xattr on /Applications/Monolith.app, when Gatekeeper blocks the drag out of the disk image first. Instructions that look authoritative and cannot be followed are worse than none.",
+      "PR #89 put 35 commits into production and /promote's commitlint gate is fixed: squash + -s ours makes origin/main..origin/develop grow forever — 2448 commits against a real delta of 35 — so it now derives its base from the last heal."
+    ]
+  }
 }
 </script>
 
 <style>
-  /* Keystone Console — committed dark world (matches the app's dark-first identity). */
+  /* ── Keystone Console ─────────────────────────────────────────────────────
+     A committed dark world, matching Monolith's own dark-first identity.
+     Single theme is deliberate: this console looks like the product it tracks. */
+  :root {
+    --ground:  #0c0c0e;
+    --panel:   #141417;
+    --raised:  #1b1b1f;
+    --line:    rgba(255, 255, 255, .085);
+    --line-lit:rgba(255, 255, 255, .16);
+    --ink:     #f2f2f5;
+    --ink-mid: #9d9da6;
+    --ink-low: #63636c;
+    --accent:  #8ea2eb;
+    --accent-d:#5b6fb8;
+    --ok:      #4ade80;
+    --warn:    #fbbf24;
+    --bad:     #f87171;
+
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "Nunito Sans", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+
   body {
-    background: #0e0e10; color: #f4f4f6; min-height: 100vh;
-    font-family: "Nunito Sans", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-    line-height: 1.5;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    min-height: 100vh;
   }
-  .mono { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-  .kicker {
-    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
-    color: #6b6b72; font-weight: 500;
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 26px 20px 56px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 48px; }
+
   .panel {
-    background: #161619; border: 1px solid rgba(255,255,255,.10); border-radius: 14px;
-    transition: border-color .3s cubic-bezier(.16,1,.3,1);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
   }
-  .panel:hover { border-color: rgba(255,255,255,.16); }
+  .pad { padding: 18px 20px; }
 
-  /* Header strip */
-  .strip { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding: 16px 20px; }
-  .strip .headline { font-weight: 800; font-size: 1.05rem; letter-spacing: -.01em; margin-right: auto; text-wrap: balance; }
-  .strip .headline .kicker { display: block; margin-bottom: 3px; }
-  .chip { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: .04em; color: #9a9aa2; white-space: nowrap; }
-  .chip b { color: #f4f4f6; font-weight: 600; }
-  .chip .ok { color: #86efac; }
-  .chip .warn { color: #fbbf24; }
-  .chip .bad { color: #f87171; }
-  .frac { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 13px; color: #8ea2eb; font-weight: 600; }
-  .frac span { color: #6b6b72; }
-  .bar { width: 90px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.09); position: relative; overflow: hidden; }
-  .bar i { position: absolute; top: 0; bottom: 0; left: 0; background: #8ea2eb; border-radius: 2px; }
+  /* Section headings ------------------------------------------------------ */
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 12px 2px 0;
+  }
+  .sec-head h2 {
+    font-size: .95rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    margin: 0;
+  }
+  .sec-head .hint {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .05em;
+    color: var(--ink-low);
+    margin-left: auto;
+    text-align: right;
+  }
 
-  /* Panels grid */
-  .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; margin-top: 14px; }
-  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
-  .panel-pad { padding: 16px 18px; }
-  h3.ph { font-size: .8rem; font-weight: 700; margin: 2px 0 10px; display: flex; align-items: baseline; gap: 10px; }
-  ul.gates { display: flex; flex-direction: column; list-style: none; }
-  ul.gates li { display: flex; align-items: center; gap: 10px; padding: 7px 2px; border-top: 1px solid rgba(255,255,255,.06); font-size: .84rem; }
-  ul.gates li:first-child { border-top: 0; }
-  ul.gates .tail { margin-left: auto; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; color: #6b6b72; letter-spacing: .05em; white-space: nowrap; padding-left: 12px; }
-  .led { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-  .led.red { background: #f87171; box-shadow: 0 0 8px rgba(248,113,113,.8); animation: pulse 1.6s ease-in-out infinite; }
-  .led.amber { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,.55); }
-  .led.green { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,.45); }
-  .led.hollow { background: transparent; border: 1.5px solid #6b6b72; }
-  .led.brand { background: #8ea2eb; box-shadow: 0 0 6px rgba(142,162,235,.55); }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--accent);
+    font-weight: 500;
+  }
 
-  .wt { display: flex; align-items: center; gap: 10px; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; color: #c8c8cf; padding: 8px 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: #1c1c20; margin-bottom: 6px; }
-  .wt em { color: #6b6b72; font-style: normal; margin-left: auto; font-size: 10px; padding-left: 10px; white-space: nowrap; }
-  .wt-none { font-size: .8rem; color: #6b6b72; padding: 4px 0 2px; }
-  ul.sess { list-style: none; }
-  ul.sess li { font-size: .82rem; color: #c8c8cf; padding: 5px 0 5px 14px; position: relative; }
-  ul.sess li::before { content: ""; position: absolute; left: 0; top: 12px; width: 5px; height: 5px; border-radius: 50%; background: #8ea2eb; }
-  .sess-id { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 10px; color: #6b6b72; margin-top: 8px; word-break: break-all; }
+  /* Environment banner ---------------------------------------------------- */
+  .env {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 13px 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(251, 191, 36, .28);
+    background: linear-gradient(90deg, rgba(251, 191, 36, .10), rgba(251, 191, 36, .02));
+  }
+  .env .mark {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--warn);
+    letter-spacing: .1em;
+    padding-top: 2px;
+    white-space: nowrap;
+  }
+  .env b { color: var(--warn); font-weight: 700; display: block; font-size: .9rem; }
+  .env p { margin: 2px 0 0; font-size: .82rem; color: var(--ink-mid); max-width: 78ch; }
 
-  /* Roadmap rail */
-  .rail { display: flex; align-items: flex-start; margin-top: 14px; padding: 18px 20px 14px; overflow-x: auto; }
-  .stop { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 56px; flex: 1; position: relative; }
-  .stop::before { content: ""; position: absolute; top: 5px; left: -50%; width: 100%; height: 2px; background: rgba(255,255,255,.12); }
-  .stop:first-child::before { display: none; }
-  .stop.done::before { background: rgba(142,162,235,.55); }
-  .dot { width: 11px; height: 11px; border-radius: 50%; z-index: 1; background: transparent; border: 2px solid #4a4a52; }
-  .stop.done .dot { background: #8ea2eb; border: 0; width: 11px; height: 11px; }
-  .stop.prog .dot { background: #0e0e10; border: 2.5px solid #fbbf24; box-shadow: 0 0 7px rgba(251,191,36,.5); }
-  .stop span { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 9.5px; letter-spacing: .06em; color: #9a9aa2; text-transform: uppercase; text-align: center; }
-  .stop.prog span { color: #fbbf24; }
-  .stop.future span { color: #55555c; }
+  /* Hero: thesis + completion -------------------------------------------- */
+  .hero { display: grid; grid-template-columns: 1.45fr 1fr; gap: 0; overflow: hidden; }
+  .hero .say { padding: 22px 24px; }
+  .hero h1 {
+    font-size: 1.28rem;
+    line-height: 1.4;
+    font-weight: 800;
+    letter-spacing: -.015em;
+    margin: 8px 0 0;
+    text-wrap: balance;
+  }
+  .hero .stack {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ink-low);
+    letter-spacing: .04em;
+    margin-top: 12px;
+  }
+  .hero .score {
+    padding: 22px 24px;
+    border-left: 1px solid var(--line);
+    background: var(--raised);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .score .big {
+    font-family: var(--mono);
+    font-size: 3.4rem;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .score .big sup { font-size: 1.3rem; vertical-align: super; color: var(--accent-d); }
+  .score .frac { font-size: .85rem; font-weight: 700; margin-top: 6px; }
+  .score .cap { font-size: .76rem; color: var(--ink-mid); margin-top: 8px; }
 
-  footer { margin-top: 20px; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 10px; color: #55555c; letter-spacing: .05em; }
-  .err { margin: 40px auto; max-width: 600px; padding: 20px; border: 1px solid rgba(248,113,113,.4); border-radius: 14px; color: #f87171; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
-  @media (prefers-reduced-motion: reduce) { .led.red { animation: none; } }
+  /* Segmented meter: one segment per roadmap track ------------------------ */
+  .meter { display: flex; gap: 3px; margin-top: 16px; }
+  .seg {
+    flex: 1;
+    height: 26px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, .07);
+    position: relative;
+    overflow: hidden;
+  }
+  .seg.done { background: var(--accent); }
+  .seg.part { background: rgba(251, 191, 36, .18); }
+  .seg.part i {
+    position: absolute; inset: 0 auto 0 0;
+    background: var(--warn);
+  }
+  .meter-key {
+    display: flex; gap: 14px; margin-top: 9px;
+    font-family: var(--mono); font-size: 10px; color: var(--ink-low); letter-spacing: .04em;
+  }
+  .meter-key span { display: flex; align-items: center; gap: 5px; }
+  .meter-key i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+  /* Pillars --------------------------------------------------------------- */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .pillar { padding: 15px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .pillar .top { display: flex; align-items: baseline; gap: 10px; }
+  .pillar h3 { font-size: .88rem; font-weight: 800; margin: 0; letter-spacing: -.01em; }
+  .pillar .pct {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: .82rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+  .pillar.partial .pct { color: var(--warn); }
+  .track { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+  .track i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .pillar.partial .track i { background: var(--warn); }
+  .pillar p { margin: 0; font-size: .79rem; color: var(--ink-mid); }
+  .pillar .left {
+    font-size: .76rem;
+    color: var(--warn);
+    border-top: 1px dashed rgba(251, 191, 36, .25);
+    padding-top: 8px;
+    margin-top: auto;
+  }
+  .pillar .left b { font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; display: block; color: rgba(251,191,36,.7); font-weight: 600; }
+
+  /* Ship pipeline --------------------------------------------------------- */
+  .ship { display: flex; align-items: stretch; flex-wrap: wrap; }
+  .stage { flex: 1 1 220px; padding: 14px 18px; border-left: 1px solid var(--line); position: relative; }
+  .stage:first-child { border-left: 0; }
+  .stage .nm { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-low); }
+  .stage .vl { font-family: var(--mono); font-size: .92rem; font-weight: 700; margin-top: 3px; display: flex; align-items: center; gap: 7px; }
+  .stage .nt { font-size: .75rem; color: var(--ink-mid); margin-top: 5px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 7px rgba(74, 222, 128, .5); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 7px rgba(251, 191, 36, .5); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 7px rgba(248, 113, 113, .6); }
+
+  .gatebar {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 11px 18px; border-top: 1px solid var(--line); background: var(--raised);
+    border-radius: 0 0 13px 13px;
+  }
+  .gate {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em;
+    color: var(--ink-mid); display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+  }
+  .gate b { color: var(--ink); font-weight: 600; }
+
+  /* What's next: a ranked queue ------------------------------------------- */
+  .queue { display: flex; flex-direction: column; }
+  .qrow { display: flex; gap: 16px; padding: 15px 20px; border-top: 1px solid var(--line); }
+  .qrow:first-child { border-top: 0; }
+  .qrow .rank {
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--ink-low);
+    line-height: 1;
+    width: 30px;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .qrow:first-child .rank { color: var(--accent); }
+  .qrow .body { flex: 1; min-width: 0; }
+  .qrow h3 { font-size: .92rem; font-weight: 800; margin: 0 0 4px; letter-spacing: -.01em; }
+  .qrow p { margin: 0; font-size: .8rem; color: var(--ink-mid); max-width: 88ch; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tag {
+    font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--ink-mid); border: 1px solid var(--line-lit); border-radius: 4px; padding: 2px 7px;
+  }
+  .tag.hot { color: var(--bad); border-color: rgba(248, 113, 113, .45); }
+
+  /* Risks ----------------------------------------------------------------- */
+  .risks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .risk { padding: 13px 15px 13px 16px; border-left-width: 3px; border-left-style: solid; }
+  .risk.red { border-left-color: var(--bad); }
+  .risk.amber { border-left-color: var(--warn); }
+  .risk.open { border-left-color: var(--ink-low); }
+  .risk h3 { font-size: .83rem; font-weight: 800; margin: 0 0 3px; display: flex; align-items: center; gap: 8px; }
+  .risk.red h3::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 8px rgba(248,113,113,.8); animation: pulse 1.7s ease-in-out infinite; flex: none; }
+  .risk p { margin: 0; font-size: .77rem; color: var(--ink-mid); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* Footer strip: session + in flight -------------------------------------- */
+  .foot-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; }
+  .sess h3 { font-size: .86rem; font-weight: 800; margin: 4px 0 8px; }
+  ul.bul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  ul.bul li { font-size: .79rem; color: var(--ink-mid); padding-left: 15px; position: relative; }
+  ul.bul li::before { content: ""; position: absolute; left: 0; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-d); }
+  .path { font-family: var(--mono); font-size: 9.5px; color: var(--ink-low); margin-top: 10px; word-break: break-all; }
+  .wt {
+    display: flex; align-items: center; gap: 9px;
+    font-family: var(--mono); font-size: 11px; color: #c8c8cf;
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--raised); margin-bottom: 6px;
+  }
+  .wt em { color: var(--ink-low); font-style: normal; margin-left: auto; font-size: 10px; padding-left: 10px; }
+  .none { font-size: .8rem; color: var(--ink-low); }
+
+  footer {
+    font-family: var(--mono); font-size: 9.5px; color: #4c4c54;
+    letter-spacing: .05em; text-align: center; margin-top: 6px;
+  }
+
+  .err {
+    margin: 40px auto; max-width: 620px; padding: 20px;
+    border: 1px solid rgba(248, 113, 113, .4); border-radius: 14px;
+    color: var(--bad); font-family: var(--mono); font-size: 13px;
+  }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; }
+    .hero .score { border-left: 0; border-top: 1px solid var(--line); }
+    .pillars { grid-template-columns: repeat(2, 1fr); }
+    .risks, .foot-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 620px) {
+    .pillars { grid-template-columns: 1fr; }
+    .stage { border-left: 0; border-top: 1px solid var(--line); }
+    .stage:first-child { border-top: 0; }
+    .meter { gap: 2px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .risk.red h3::before { animation: none; }
+  }
 </style>
 
 <div class="wrap" id="app"></div>
@@ -252,6 +496,7 @@
   (function () {
     var app = document.getElementById("app");
     var data;
+
     try {
       data = JSON.parse(document.getElementById("board-data").textContent);
     } catch (e) {
@@ -265,101 +510,196 @@
 
     function el(tag, cls, text) {
       var n = document.createElement(tag);
-      if (cls) n.className = cls;
-      if (text != null) n.textContent = text;
+      if (cls) { n.className = cls; }
+      if (text != null) { n.textContent = text; }
       return n;
     }
 
-    /* Header strip */
-    var strip = el("div", "panel strip");
-    var head = el("div", "headline");
-    head.appendChild(el("span", "kicker", data.kicker || "PULSE"));
-    head.appendChild(document.createTextNode(data.headline || ""));
-    strip.appendChild(head);
-    (data.chips || []).forEach(function (c) {
-      var chip = el("span", "chip");
-      chip.appendChild(document.createTextNode(c.label + " "));
-      if (c.value) { chip.appendChild(el("b", null, c.value)); chip.appendChild(document.createTextNode(" ")); }
-      if (c.note) chip.appendChild(el("span", c.tone || "ok", c.note));
-      strip.appendChild(chip);
-    });
-    if (data.progress) {
-      var frac = el("span", "frac", String(data.progress.done));
-      frac.appendChild(el("span", null, "/" + data.progress.total));
-      strip.appendChild(frac);
-      var bar = el("div", "bar");
-      var fill = el("i");
-      fill.style.width = Math.round(100 * data.progress.done / data.progress.total) + "%";
-      bar.appendChild(fill);
-      strip.appendChild(bar);
+    function section(title, hint) {
+      var h = el("div", "sec-head");
+      h.appendChild(el("h2", null, title));
+      if (hint) { h.appendChild(el("div", "hint", hint)); }
+      app.appendChild(h);
     }
-    var upd = el("span", "chip");
-    upd.appendChild(document.createTextNode("upd "));
-    upd.appendChild(el("b", null, data.updated || "?"));
-    strip.appendChild(upd);
-    app.appendChild(strip);
 
-    /* Grid: gates + in-flight/session */
-    var grid = el("div", "grid");
+    /* ── Environment banner ─────────────────────────────────────────────── */
+    if (data.environment) {
+      var env = el("div", "env");
+      env.appendChild(el("div", "mark", "ENV"));
+      var envBody = el("div");
+      envBody.appendChild(el("b", null, data.environment.title));
+      envBody.appendChild(el("p", null, data.environment.text));
+      env.appendChild(envBody);
+      app.appendChild(env);
+    }
 
-    var gatesPanel = el("div", "panel panel-pad");
-    var h1 = el("h3", "ph");
-    h1.appendChild(el("span", "kicker", "01"));
-    h1.appendChild(document.createTextNode("Now / Owed"));
-    gatesPanel.appendChild(h1);
-    var ul = el("ul", "gates");
-    (data.gates || []).forEach(function (g) {
-      var li = el("li");
-      li.appendChild(el("span", "led " + (g.led || "hollow")));
-      li.appendChild(document.createTextNode(g.text));
-      if (g.tag) li.appendChild(el("span", "tail", g.tag));
-      ul.appendChild(li);
+    /* ── Hero: what we're building + how far along ──────────────────────── */
+    var hero = el("div", "panel hero");
+    var say = el("div", "say");
+    say.appendChild(el("div", "kicker", (data.product && data.product.kicker) || "MONOLITH"));
+    say.appendChild(el("h1", null, (data.product && data.product.thesis) || ""));
+    if (data.product && data.product.stack) {
+      say.appendChild(el("div", "stack", data.product.stack));
+    }
+    hero.appendChild(say);
+
+    var stand = data.stand || {};
+    var score = el("div", "score");
+    score.appendChild(el("div", "kicker", "BUILD COMPLETE"));
+    var big = el("div", "big", String(stand.percent != null ? stand.percent : "—"));
+    big.appendChild(el("sup", null, "%"));
+    score.appendChild(big);
+    score.appendChild(el("div", "frac", stand.fraction || ""));
+    if (stand.caption) { score.appendChild(el("div", "cap", stand.caption)); }
+
+    var meter = el("div", "meter");
+    (stand.meter || []).forEach(function (m) {
+      var seg = el("div", "seg " + (m.state || "todo"));
+      seg.title = m.label + (m.state === "part" ? " — " + (m.pct || 0) + "%" : m.state === "done" ? " — complete" : "");
+      if (m.state === "part") {
+        var fill = el("i");
+        fill.style.width = (m.pct || 0) + "%";
+        seg.appendChild(fill);
+      }
+      meter.appendChild(seg);
     });
-    gatesPanel.appendChild(ul);
-    grid.appendChild(gatesPanel);
+    score.appendChild(meter);
 
-    var side = el("div", "panel panel-pad");
-    var h2 = el("h3", "ph");
-    h2.appendChild(el("span", "kicker", "02"));
-    h2.appendChild(document.createTextNode("In flight"));
-    side.appendChild(h2);
-    if ((data.worktrees || []).length === 0) {
-      side.appendChild(el("div", "wt-none", "none building"));
+    var key = el("div", "meter-key");
+    [["done", "var(--accent)", "shipped"], ["part", "var(--warn)", "in progress"]].forEach(function (k) {
+      var s = el("span");
+      var sw = el("i");
+      sw.style.background = k[1];
+      s.appendChild(sw);
+      s.appendChild(document.createTextNode(k[2]));
+      key.appendChild(s);
+    });
+    key.appendChild(el("span", null, "one segment = one roadmap track"));
+    score.appendChild(key);
+    hero.appendChild(score);
+    app.appendChild(hero);
+
+    /* ── What we're building, by capability ─────────────────────────────── */
+    section("What we're building", "percent = slices shipped in that pillar");
+    var pillars = el("div", "pillars");
+    (data.pillars || []).forEach(function (p) {
+      var card = el("div", "panel pillar" + (p.pct < 100 ? " partial" : ""));
+      var top = el("div", "top");
+      top.appendChild(el("h3", null, p.name));
+      top.appendChild(el("div", "pct", p.pct + "%"));
+      card.appendChild(top);
+
+      var track = el("div", "track");
+      var fill = el("i");
+      fill.style.width = p.pct + "%";
+      track.appendChild(fill);
+      card.appendChild(track);
+
+      card.appendChild(el("p", null, p.have));
+      if (p.left) {
+        var left = el("div", "left");
+        left.appendChild(el("b", null, "still open"));
+        left.appendChild(document.createTextNode(p.left));
+        card.appendChild(left);
+      }
+      pillars.appendChild(card);
+    });
+    app.appendChild(pillars);
+
+    /* ── Where the code is ──────────────────────────────────────────────── */
+    section("Where it's shipped", "develop → main → production");
+    var shipPanel = el("div", "panel");
+    var ship = el("div", "ship");
+    ((data.ship && data.ship.stages) || []).forEach(function (s) {
+      var stage = el("div", "stage");
+      stage.appendChild(el("div", "nm", s.name));
+      var vl = el("div", "vl");
+      vl.appendChild(el("span", "dot " + (s.tone || "ok")));
+      vl.appendChild(document.createTextNode(s.value));
+      stage.appendChild(vl);
+      if (s.note) { stage.appendChild(el("div", "nt", s.note)); }
+      ship.appendChild(stage);
+    });
+    shipPanel.appendChild(ship);
+
+    var gatebar = el("div", "gatebar");
+    ((data.ship && data.ship.gates) || []).forEach(function (g) {
+      var gate = el("div", "gate");
+      gate.appendChild(el("span", "dot " + (g.tone || "ok")));
+      gate.appendChild(document.createTextNode(g.label + " "));
+      gate.appendChild(el("b", null, g.value));
+      gatebar.appendChild(gate);
+    });
+    shipPanel.appendChild(gatebar);
+    app.appendChild(shipPanel);
+
+    /* ── What's next, in order ──────────────────────────────────────────── */
+    section("What's next", "ranked — top of the list is the next thing to do");
+    var queue = el("div", "panel queue");
+    (data.next || []).forEach(function (n, i) {
+      var row = el("div", "qrow");
+      row.appendChild(el("div", "rank", String(i + 1)));
+      var body = el("div", "body");
+      body.appendChild(el("h3", null, n.title));
+      body.appendChild(el("p", null, n.why));
+      if ((n.tags || []).length) {
+        var tags = el("div", "tags");
+        n.tags.forEach(function (t) {
+          tags.appendChild(el("span", "tag" + (t === "critical" ? " hot" : ""), t));
+        });
+        body.appendChild(tags);
+      }
+      row.appendChild(body);
+      queue.appendChild(row);
+    });
+    app.appendChild(queue);
+
+    /* ── What could bite ────────────────────────────────────────────────── */
+    section("Open risks", "standing conditions, not tasks");
+    var risks = el("div", "risks");
+    (data.risks || []).forEach(function (r) {
+      var card = el("div", "panel risk " + (r.sev || "open"));
+      card.appendChild(el("h3", null, r.title));
+      card.appendChild(el("p", null, r.text));
+      risks.appendChild(card);
+    });
+    app.appendChild(risks);
+
+    /* ── Last session + in flight ───────────────────────────────────────── */
+    section("Last session", data.updated ? "board refreshed " + data.updated : "");
+    var foot = el("div", "foot-grid");
+
+    var sess = el("div", "panel pad sess");
+    if (data.session) {
+      sess.appendChild(el("div", "kicker", data.session.when || ""));
+      sess.appendChild(el("h3", null, data.session.title || ""));
+      var ul = el("ul", "bul");
+      (data.session.bullets || []).forEach(function (b) { ul.appendChild(el("li", null, b)); });
+      sess.appendChild(ul);
+      if (data.session.id) {
+        sess.appendChild(el("div", "path", "vault/sessions/" + data.session.id + ".md"));
+      }
+    }
+    foot.appendChild(sess);
+
+    var flight = el("div", "panel pad");
+    flight.appendChild(el("div", "kicker", "IN FLIGHT"));
+    flight.appendChild(el("h3", null, "Building right now"));
+    if (!(data.worktrees || []).length) {
+      flight.appendChild(el("div", "none", "No worktrees open — nothing is mid-build."));
     } else {
       data.worktrees.forEach(function (w) {
         var wt = el("div", "wt");
-        wt.appendChild(el("span", "led " + (w.led || "amber")));
+        wt.appendChild(el("span", "dot " + (w.tone || "warn")));
         wt.appendChild(document.createTextNode(w.branch));
         wt.appendChild(el("em", null, w.head + (w.note ? " · " + w.note : "")));
-        side.appendChild(wt);
+        flight.appendChild(wt);
       });
     }
-    if (data.session) {
-      var h3 = el("h3", "ph");
-      h3.style.marginTop = "14px";
-      h3.appendChild(el("span", "kicker", "03"));
-      h3.appendChild(document.createTextNode("Last session · " + (data.session.when || "")));
-      side.appendChild(h3);
-      var sl = el("ul", "sess");
-      (data.session.bullets || []).forEach(function (b) { sl.appendChild(el("li", null, b)); });
-      side.appendChild(sl);
-      if (data.session.id) side.appendChild(el("div", "sess-id", "vault/sessions/" + data.session.id + ".md"));
-    }
-    grid.appendChild(side);
-    app.appendChild(grid);
-
-    /* Roadmap rail */
-    var rail = el("div", "panel rail");
-    (data.roadmap || []).forEach(function (s) {
-      var stop = el("div", "stop " + (s.state || "future"));
-      stop.appendChild(el("i", "dot"));
-      stop.appendChild(el("span", null, s.label));
-      rail.appendChild(stop);
-    });
-    app.appendChild(rail);
-
-    var foot = el("footer", null,
-      "derived view · sources: vault/00-north-star.md · git worktree list · vault/sessions/ · refreshed by /board (schema " + data.schema + ")");
+    foot.appendChild(flight);
     app.appendChild(foot);
+
+    app.appendChild(el("footer", null,
+      "derived view · sources: vault/00-north-star.md · git worktree list · vault/sessions/ · refreshed by /board · schema " + data.schema));
   })();
 </script>
