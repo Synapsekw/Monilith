@@ -3,6 +3,14 @@
 // THREE rules, all load-bearing:
 //   1. Only content-hashed assets are cache-first. `/_next/static/**` filenames
 //      change whenever their contents change, so a stale entry is impossible.
+//      THIS HOLDS FOR A PRODUCTION BUILD ONLY. Turbopack dev reuses a chunk's
+//      filename across recompiles — verified: after a source edit,
+//      `/_next/static/chunks/src_0hajv86._.js` kept its exact name while its
+//      bytes changed. Cache-first there pins the browser to stale chunks and
+//      the app dies with "module factory is not available", surviving both a
+//      dev-server restart and `rm -rf .next`. This worker is consequently
+//      never registered outside production — see ServiceWorkerRegistrar.tsx,
+//      which also unregisters any copy a previous dev session installed.
 //   2. NO real HTML document is ever cached. Caching a document cache-first is
 //      how a service worker pins users to a dead build. The single exception is
 //      `/offline`, which is a static client-only shell with no user data in it.
