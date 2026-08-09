@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatSize } from "@/lib/collaboration/attachments-format";
+import { fetchWithProgress } from "@/lib/collaboration/fetch-with-progress";
+import { PreviewProgress } from "./PreviewProgress";
 
 type Status = "loading" | "ready" | "error";
 
@@ -21,6 +24,10 @@ export function DocxPreview({ src }: { src: string; fileName?: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [frameReady, setFrameReady] = useState(false);
   const [status, setStatus] = useState<Status>("loading");
+  const [download, setDownload] = useState<{
+    received: number;
+    total: number | null;
+  } | null>(null);
 
   // jsdom (and some browsers) can have about:blank's document ready before the
   // load event ever fires, so poll once on mount rather than relying on onLoad
@@ -36,13 +43,17 @@ export function DocxPreview({ src }: { src: string; fileName?: string }) {
     (async () => {
       try {
         setStatus("loading");
-        const [{ renderAsync }, res] = await Promise.all([
+        const [{ renderAsync }, bytes] = await Promise.all([
           import("docx-preview"),
-          fetch(src),
+          fetchWithProgress(src, (p) => {
+            if (!cancelled) setDownload(p);
+          }),
         ]);
         if (cancelled) return;
-        const blob = await res.blob();
-        if (cancelled) return;
+        // Past the download; docx-preview exposes no render progress, so the
+        // bar goes indeterminate rather than inventing a percentage.
+        setDownload(null);
+        const blob = new Blob([bytes]);
 
         const doc = frameRef.current?.contentDocument;
         if (!doc) return;
@@ -78,8 +89,19 @@ export function DocxPreview({ src }: { src: string; fileName?: string }) {
   return (
     <div className="relative h-full w-full">
       {status === "loading" && (
-        <div className="text-muted-foreground absolute inset-0 grid place-items-center text-sm">
-          Loading preview…
+        <div className="bg-popover absolute inset-0 grid place-items-center rounded">
+          <PreviewProgress
+            label={
+              download
+                ? download.total
+                  ? `Downloading ${formatSize(download.received)} of ${formatSize(download.total)}`
+                  : `Downloading ${formatSize(download.received)}`
+                : "Rendering document…"
+            }
+            value={
+              download?.total ? download.received / download.total : undefined
+            }
+          />
         </div>
       )}
       <iframe

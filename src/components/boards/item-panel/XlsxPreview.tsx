@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getAttachmentSheetPreview } from "@/lib/collaboration/sheet-preview-actions";
 import type { SheetPreview } from "@/lib/boards/spreadsheet/types";
 import { cn } from "@/lib/utils";
+import { PreviewProgress } from "./PreviewProgress";
 
 /**
  * Spreadsheet preview. The workbook is parsed on the SERVER (see
@@ -59,8 +60,10 @@ export function XlsxPreview({ attachmentId }: { attachmentId: string }) {
     );
   if (!sheets)
     return (
-      <div className="text-muted-foreground py-12 text-sm">
-        Loading preview…
+      <div className="grid h-full place-items-center">
+        {/* Parsing happens server-side and reports no progress, so this is
+            honestly indeterminate rather than a fake percentage. */}
+        <PreviewProgress label="Reading spreadsheet…" />
       </div>
     );
   if (sheets.length === 0)
