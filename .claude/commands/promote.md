@@ -10,7 +10,8 @@ that deploys production on Vercel, so the merge is gated behind an explicit conf
 
 **Promotion is all-or-nothing — the entire `develop` branch as one bundle.** Pulse develops many
 features on `develop` and ships them together, never cherry-picked. This command promotes the
-**complete** `origin/main..origin/develop` delta (whole branch → whole branch via one PR); it never
+**complete** unpromoted delta (whole branch → whole branch via one PR — see `PROMO_BASE` in step 3
+for how that delta is computed, which is deliberately _not_ `origin/main..origin/develop`); it never
 selects a subset of commits or features. If you do not want some work in production yet, it must not
 be merged into `develop` in the first place — there is no "promote only these features" mode.
 
