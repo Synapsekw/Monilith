@@ -1,4 +1,5 @@
 import { Apple, Download, Info } from "lucide-react";
+import { InstalledVersion } from "@/components/settings/desktop/installed-version";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { Kicker } from "@/components/ui/kicker";
 import { getDesktopRelease } from "@/lib/desktop/read-release";
@@ -60,10 +61,20 @@ export default function DesktopSettingsPage() {
                 </a>
               ))}
             </div>
+            {/*
+              "Latest version", not "Version". Sitting under the download
+              buttons with no qualifier, the bare word was ambiguous — a reader
+              inside the desktop app could reasonably take it for the version
+              they were running, which is the exact question this section
+              exists to answer.
+            */}
             <p className="text-kicker mt-2 text-xs">
-              Version {release.latestShell} · Not sure which? Apple menu → About
-              This Mac. “Apple M1” or newer means Apple Silicon.
+              Latest version {release.latestShell} · Not sure which? Apple menu
+              → About This Mac. “Apple M1” or newer means Apple Silicon.
             </p>
+            {/* Client island: renders only inside a shell new enough to report
+                its own version, and is absent in a browser. */}
+            <InstalledVersion latest={release.latestShell} />
           </div>
 
           {/*

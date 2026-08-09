@@ -95,11 +95,14 @@ describe("Desktop settings page", () => {
     expect(clear).toBeLessThan(open);
   });
 
-  it("shows the shipped version", () => {
+  it("labels the version as the LATEST one, not the running one", () => {
+    // Under the download buttons, a bare "Version 1.0.0" is ambiguous — read
+    // inside the desktop app it looks like the version you are running, which
+    // is the opposite of what it means. The qualifier is the whole assertion.
     render(<DesktopSettingsPage />);
     expect(
       screen.getByText(
-        new RegExp(`Version ${getDesktopRelease().latestShell}`),
+        new RegExp(`Latest version ${getDesktopRelease().latestShell}`),
       ),
     ).toBeInTheDocument();
   });
