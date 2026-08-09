@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-09 17:37",
+  "updated": "2026-08-09 17:56",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -127,16 +127,16 @@
       "name": "Platform & craft",
       "pct": 90,
       "have": "Multi-tenant RLS from day one, two full performance programs, the dark-first Keystone reskin, iPad touch parity across 8 surfaces, offline read-only boards, and a macOS desktop shell.",
-      "left": "Desktop repo has no git remote, and auto-update cannot install until the app is signed."
+      "left": "Desktop repo has no git remote; updates are announced but installed by hand until the app is signed."
     }
   ],
   "ship": {
     "stages": [
       {
         "name": "develop",
-        "value": "0ca47f6b",
+        "value": "5fbceb8c",
         "tone": "warn",
-        "note": "20 commits past the last heal. The files-preview track landed since PR #89 — type chips plus a content-shaped preview modal with DOCX and spreadsheet rendering — so there is user-visible work undeployed again."
+        "note": "26 commits past the last heal, and user-visible work is undeployed again: the files-preview track (type chips + a content-shaped preview modal with DOCX and spreadsheet rendering) plus the desktop update docs."
       },
       {
         "name": "main",
@@ -194,7 +194,7 @@
         "owner's track",
         "needs go-ahead"
       ],
-      "why": "The update feed now exists and is verified end-to-end, but 12 commits of finished, installable software still live on one local disk with no backup. gh repo create was blocked by the permission classifier, so this needs the owner."
+      "why": "The update feed exists, and users are now told when a new build is out — but 13 commits of finished software still live on one local disk with no backup. gh repo create was blocked by the permission classifier, so this needs the owner."
     },
     {
       "title": "E6 Stripe — units B, C, E–H",
@@ -233,8 +233,8 @@
     },
     {
       "sev": "open",
-      "title": "Desktop auto-update can find updates but not install them",
-      "text": "Squirrel.Mac validates an update against the running app's designated code-signing requirement, which for an ad-hoc signature is the current binary's cdhash. Verified through download and sha512; the install step is refused by construction until a Developer ID lands."
+      "title": "Desktop updates are announced, not installed",
+      "text": "Squirrel.Mac refuses an update whose signature does not satisfy the running app’s designated requirement, which an ad-hoc build never can. Users are prompted at launch and install by hand until a Developer ID lands."
     },
     {
       "sev": "amber",
@@ -259,14 +259,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-09-1703-desktop-release-feed",
-    "when": "2026-08-09 17:03",
-    "title": "The desktop update feed is live",
+    "id": "2026-08-09-1756-desktop-manual-update-path",
+    "when": "2026-08-09 17:56",
+    "title": "A manual update path that actually reaches users",
     "bullets": [
-      "releases.monolith.works had been declared in electron-builder.yml since 1.0.0 and no Vercel project ever claimed it — every update check had 404d since the shell shipped.",
-      "The feed was never the missing piece. The mac build had no zip target, and electron-updater does findFile(files, \"zip\", [\"pkg\",\"dmg\"]) — so a dmg-only feed is valid YAML, serves a 200, and can install nothing.",
-      "A third blocker only appeared at upload time: the bucket's allowed_mime_types rejected the feed's own file types with a 415.",
-      "Failure was invisible by construction. AppUpdater emits \"error\" then throws; with no listener Node makes the emit throw ERR_UNHANDLED_ERROR, replacing the real error before .catch(() => undefined) discarded it."
+      "latestShell had been advertised in the release contract since the shell shipped and was read by nothing outside an error string — bumping it did literally nothing. It is now the release lever.",
+      "The hard block was a dead end: \"too old to run\" with a single Quit button naming no destination. It now offers a Download.",
+      "isUpdateAvailable fails CLOSED, the deliberate mirror of isShellSupported fail-open — deciding whether to BLOCK must degrade to run, deciding whether to NAG must degrade to silence.",
+      "Updating is not installing with a different title: it opens with quit-the-app, which macOS enforces and a first install never needs. Settings now documents it."
     ]
   }
 }
