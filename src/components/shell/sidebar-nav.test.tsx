@@ -104,6 +104,7 @@ describe("SidebarNav", () => {
       ["My Work", "/my-work"],
       ["Goals", "/goals"],
       ["Portfolios", "/portfolios"],
+      ["Reports", "/reports"],
       ["Workload", "/workload"],
       ["My Time", "/time"],
     ] as const) {
@@ -255,6 +256,7 @@ describe("SidebarNav", () => {
         "My Work",
         "Goals",
         "Portfolios",
+        "Reports",
         "Workload",
         "My Time",
       ]) {

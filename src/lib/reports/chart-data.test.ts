@@ -9,6 +9,7 @@ const OPTS: ChartBlockOptions = {
   columnId: null,
   title: "",
   maxCategories: 6,
+  boardScope: { mode: "all" },
 };
 const opts = (o: Partial<ChartBlockOptions> = {}): ChartBlockOptions => ({
   ...OPTS,

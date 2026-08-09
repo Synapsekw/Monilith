@@ -121,12 +121,12 @@ export const MCP_TOOLS_TABLE_ROWS = [
   {
     name: "list_reports",
     access: "read",
-    what: "List a board's saved reports.",
+    what: "List the saved reports that include a board — its own, plus any multi-board or portfolio roll-up covering it.",
   },
   {
     name: "get_report",
     access: "read",
-    what: "Read a report's structure (not the underlying data).",
+    what: "Read a report's structure and which boards it spans (not the underlying data).",
   },
 ] as const;
 

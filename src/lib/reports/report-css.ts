@@ -26,6 +26,13 @@ export const REPORT_CSS = `
   .r-cf-lbl { font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
   .r-cf-val { font-size:13px; font-weight:500; }
 
+  /* Boards the viewer can't read are disclosed, never silently dropped — a
+     quiet caveat directly under the cover, in the muted footnote register. */
+  .r-omitted {
+    margin:0 4mm 8mm; padding-left:9px; border-left:2px solid var(--line-strong);
+    font-size:10.5px; color:var(--muted);
+  }
+
   /* ---- sections ---- */
   .r-section { padding:0 4mm; margin-bottom:9mm; }
   .r-section:first-child { margin-top:2mm; }
@@ -36,6 +43,32 @@ export const REPORT_CSS = `
     border-bottom:1.5px solid var(--ink); padding-bottom:7px; margin-bottom:13px;
   }
   .r-narrative { white-space:pre-wrap; font-size:14px; line-height:1.7; color:#2b2f3a; margin:0; max-width:70ch; }
+
+  /* ---- multi-board: one sub-section per bound board ----
+     Emitted ONLY when a report binds more than one board; a single-board report
+     renders the block markup bare, exactly as it did before boards became
+     plural. Inside a board the board name takes the strong rule and the block's
+     own kicker steps down to a caption under it — otherwise "Board detail"
+     repeated once per board reads as N peer sections rather than one section
+     split by board, and two groups sharing a name across boards look like the
+     same group listed twice. */
+  .r-board-set { padding:0 4mm; margin-bottom:9mm; }
+  .r-board-set:first-child { margin-top:2mm; }
+  .r-board { margin-bottom:8mm; }
+  .r-board:last-child { margin-bottom:0; }
+  .r-board-head {
+    display:flex; align-items:baseline; gap:9px;
+    border-bottom:1.5px solid var(--ink); padding-bottom:6px; margin-bottom:11px;
+    page-break-after:avoid; break-after:avoid;
+  }
+  .r-board-head-lbl { font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .r-board-name { font-size:14px; font-weight:700; letter-spacing:-.01em; }
+  .r-board .r-section { padding:0; margin:0; }
+  .r-board .r-section + .r-section { margin-top:7mm; }
+  .r-board .r-kicker {
+    font-size:9.5px; font-weight:600; color:var(--muted);
+    border-bottom:1px solid var(--line); padding-bottom:5px; margin-bottom:10px;
+  }
 
   /* ---- KPIs: editorial figures split by hairlines, not boxes ---- */
   .r-kpis { display:grid; grid-template-columns:repeat(3,1fr); }

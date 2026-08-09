@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Clock,
+  FileText,
   Gauge,
   ListTodo,
   Target,
@@ -43,6 +44,7 @@ const ASK: NavLink = {
 const PLANNING: NavLink[] = [
   { label: "Goals", href: "/goals", icon: Target },
   { label: "Portfolios", href: "/portfolios", icon: BarChart3 },
+  { label: "Reports", href: "/reports", icon: FileText },
   { label: "Workload", href: "/workload", icon: Gauge },
 ];
 const PERSONAL: NavLink[] = [{ label: "My Time", href: "/time", icon: Clock }];
