@@ -4,6 +4,16 @@ import { createRoot, type Root } from "react-dom/client";
 import { ReportDocument, type ReportDocumentProps } from "./ReportDocument";
 import { REPORT_CSS } from "@/lib/reports/report-css";
 
+/**
+ * Live preview of the printed report, rendered into an iframe so the document's
+ * own print stylesheet (`REPORT_CSS`) cannot collide with the app's Tailwind.
+ *
+ * Props are `ReportDocumentProps` verbatim and are forwarded untouched — that
+ * 1:1 pass-through is the point. The multi-board shape (`boards`, `totals`,
+ * `pooledChartSeries`, `scopeLabel`, `omittedBoardCount`) therefore arrived here
+ * for free, and there is nowhere in this file for the preview to diverge from
+ * what `exportReportPdf` renders server-side.
+ */
 export function PreviewPane(props: ReportDocumentProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const rootRef = useRef<Root | null>(null);

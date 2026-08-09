@@ -10,8 +10,9 @@ describe.skipIf(!integrationTargetReady())("reports actions", () => {
   it("createReport rejects a caller without board edit access", async () => {
     const { createReport } = await import("@/lib/reports/actions");
     const res = await createReport({
-      boardId: "00000000-0000-0000-0000-000000000000",
       name: "Nope",
+      scope: "board",
+      boardId: "00000000-0000-0000-4000-800000000000",
     });
     expect(res.ok).toBe(false);
   });

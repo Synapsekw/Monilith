@@ -29,14 +29,16 @@ import {
  * row hover, with a destructive Delete item guarded by an AlertDialog. On a
  * successful `deleteReport`, `router.refresh()` re-runs the RSC list so the row
  * disappears; failures surface inline in the dialog (which stays open).
+ *
+ * A report is identified by its id alone — it may be bound to several boards
+ * (or none), so there is no board to scope the delete by, and the action
+ * resolves the report's own binding to authorize the call.
  */
 export function ReportRowActions({
   reportId,
-  boardId,
   reportName,
 }: {
   reportId: string;
-  boardId: string;
   reportName: string;
 }) {
   const router = useRouter();
@@ -47,7 +49,7 @@ export function ReportRowActions({
   function doDelete() {
     setError(null);
     startTransition(async () => {
-      const res = await deleteReport({ reportId, boardId });
+      const res = await deleteReport({ reportId });
       if (!res.ok) {
         setError(res.error);
         return;

@@ -1,37 +1,27 @@
-import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
-import { getBoardPayload } from "@/lib/boards/queries";
-import { resolvePeopleNames } from "@/lib/boards/people-names";
-import { resolveActiveOrg } from "@/lib/org/active";
-import { getReport } from "@/lib/reports/queries";
-import { ReportBuilder } from "@/components/reports/ReportBuilder";
+import { redirect } from "next/navigation";
 
-export default async function ReportBuilderPage({
+/**
+ * Legacy deep link → the builder's real home.
+ *
+ * The builder used to live here, under one board. A report can now roll up
+ * several boards or follow a portfolio, so it moved to `/reports/[reportId]`
+ * and this route is kept purely so existing bookmarks, shared links and
+ * anything that stored the old URL keep working. It is a permanent fixture of
+ * the app, not a migration step to delete later.
+ *
+ * No reads happen here: `boardId` is not even resolved, because the target
+ * page owns auth and access (a report bound to boards you cannot read 404s
+ * there). Redirecting before any query also means a stale link costs nothing.
+ *
+ * `redirect` (307) rather than `permanentRedirect` (308) on purpose: a 308 is
+ * cached by the browser indefinitely, which would make the route impossible to
+ * reclaim. Bookmarks follow either one.
+ */
+export default async function LegacyReportBuilderPage({
   params,
 }: {
   params: Promise<{ boardId: string; reportId: string }>;
 }) {
-  const { boardId, reportId } = await params;
-  await requireUser();
-  const [payload, report] = await Promise.all([
-    getBoardPayload(boardId),
-    getReport(reportId),
-  ]);
-  if (!payload || !report || report.boardId !== boardId) notFound();
-  const peopleNames = Object.fromEntries(await resolvePeopleNames(payload));
-  // Org display name for the cover — the human-readable name, never the id.
-  const orgName = (await resolveActiveOrg())?.name ?? "";
-  return (
-    <div style={{ height: "100dvh" }}>
-      <ReportBuilder
-        reportId={report.id}
-        boardId={boardId}
-        initialName={report.name}
-        initialConfig={report.config}
-        payload={payload}
-        peopleNames={peopleNames}
-        orgName={orgName}
-      />
-    </div>
-  );
+  const { reportId } = await params;
+  redirect(`/reports/${reportId}`);
 }
