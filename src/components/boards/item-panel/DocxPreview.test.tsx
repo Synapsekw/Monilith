@@ -12,7 +12,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   global.fetch = vi.fn(async () => ({
     ok: true,
-    blob: async () => new Blob(["x"]),
+    headers: { get: () => null },
+    body: undefined,
+    arrayBuffer: async () => new ArrayBuffer(4),
   })) as unknown as typeof fetch;
 });
 

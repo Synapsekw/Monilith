@@ -150,6 +150,17 @@
   }
 }
 
+/* Indeterminate preview loading bar — a segment sweeping the track. Used by
+   PreviewProgress when the underlying step reports no real progress. */
+@keyframes preview-sweep {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
 @keyframes thinking-dot {
   0%,
   70%,
