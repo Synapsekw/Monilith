@@ -4,6 +4,7 @@ import {
   blockSchema,
   parseReportConfig,
   defaultReportConfig,
+  blockBoardIds,
   REPORT_CONFIG_VERSION,
 } from "@/lib/reports/config";
 
@@ -140,5 +141,137 @@ describe("report config — charts (v2 slice)", () => {
       blockSchema.safeParse({ type: "chart", options: { maxCategories: 4 } })
         .success,
     ).toBe(true);
+  });
+});
+
+// Well-formed v4 UUIDs — Zod's .uuid() checks the version and variant nibbles.
+const BOARD_A = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+const BOARD_B = "5b8e9f10-2c3d-4e5f-8a9b-0c1d2e3f4a5b";
+const BOARD_GONE = "9c9e6679-7425-40de-944b-e07fc1f90ae7";
+
+/** The four board-specific blocks — the ones that carry `boardScope`. */
+const BOARD_SCOPED_BLOCKS = [
+  "chart",
+  "table",
+  "group_summaries",
+  "appendix",
+] as const;
+
+function scopeOf(block: unknown): unknown {
+  return (block as { options?: { boardScope?: unknown } } | undefined)?.options
+    ?.boardScope;
+}
+
+describe("report config — boardScope (multi-board v2)", () => {
+  it("REPORT_CONFIG_VERSION is still 1 and there are still 9 block types", () => {
+    expect(REPORT_CONFIG_VERSION).toBe(1);
+    expect(new Set(defaultReportConfig().blocks.map((b) => b.type)).size).toBe(
+      9,
+    );
+  });
+
+  it("legacy stored blocks with no boardScope still parse and default to all", () => {
+    for (const type of BOARD_SCOPED_BLOCKS) {
+      const parsed = blockSchema.parse({ type, enabled: true, options: {} });
+      expect(scopeOf(parsed)).toEqual({ mode: "all" });
+    }
+  });
+
+  it("the exact legacy table block (orientation + columnIds, no boardScope) parses", () => {
+    const stored = {
+      type: "table",
+      enabled: true,
+      options: { orientation: "landscape", columnIds: null },
+    };
+    const parsed = blockSchema.parse(stored);
+    expect(parsed.type).toBe("table");
+    if (parsed.type === "table") {
+      expect(parsed.options.orientation).toBe("landscape");
+      expect(parsed.options.columnIds).toBeNull();
+      expect(parsed.options.boardScope).toEqual({ mode: "all" });
+    }
+
+    // …and through the lenient READ path on a whole stored config
+    const cfg = parseReportConfig({ v: 1, title: "Weekly", blocks: [stored] });
+    expect(scopeOf(cfg.blocks.find((b) => b.type === "table"))).toEqual({
+      mode: "all",
+    });
+  });
+
+  it("defaultReportConfig gives every board-specific block { mode: 'all' }", () => {
+    const cfg = defaultReportConfig();
+    for (const type of BOARD_SCOPED_BLOCKS) {
+      expect(scopeOf(cfg.blocks.find((b) => b.type === type))).toEqual({
+        mode: "all",
+      });
+    }
+    // kpis stays option-free — KPIs pool across all bound boards by design
+    const kpis = cfg.blocks.find((b) => b.type === "kpis");
+    expect(kpis?.type === "kpis" && kpis.options).toEqual({});
+  });
+
+  it("a pinned { mode: 'board', boardId } round-trips through the strict write schema", () => {
+    for (const type of BOARD_SCOPED_BLOCKS) {
+      const input = {
+        type,
+        enabled: true,
+        options: { boardScope: { mode: "board", boardId: BOARD_A } },
+      };
+      const parsed = blockSchema.parse(input);
+      expect(scopeOf(parsed)).toEqual({ mode: "board", boardId: BOARD_A });
+      // survives a full config round-trip
+      const cfg = reportConfigSchema.parse({ blocks: [input] });
+      expect(scopeOf(cfg.blocks[0])).toEqual({
+        mode: "board",
+        boardId: BOARD_A,
+      });
+    }
+  });
+
+  it("rejects a non-uuid boardId on the strict write path", () => {
+    for (const type of BOARD_SCOPED_BLOCKS) {
+      expect(
+        blockSchema.safeParse({
+          type,
+          enabled: true,
+          options: { boardScope: { mode: "board", boardId: "board-1" } },
+        }).success,
+      ).toBe(false);
+    }
+    // an unknown mode is rejected too
+    expect(
+      blockSchema.safeParse({
+        type: "chart",
+        options: { boardScope: { mode: "everything" } },
+      }).success,
+    ).toBe(false);
+    // mode: "board" without a boardId is rejected
+    expect(
+      blockSchema.safeParse({
+        type: "chart",
+        options: { boardScope: { mode: "board" } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("blockBoardIds returns every bound board for mode: 'all'", () => {
+    expect(blockBoardIds({ mode: "all" }, [BOARD_A, BOARD_B])).toEqual([
+      BOARD_A,
+      BOARD_B,
+    ]);
+    expect(blockBoardIds({ mode: "all" }, [])).toEqual([]);
+  });
+
+  it("blockBoardIds returns just the pinned board for mode: 'board'", () => {
+    expect(
+      blockBoardIds({ mode: "board", boardId: BOARD_B }, [BOARD_A, BOARD_B]),
+    ).toEqual([BOARD_B]);
+  });
+
+  it("blockBoardIds yields [] for a stale pin to a board no longer bound", () => {
+    expect(
+      blockBoardIds({ mode: "board", boardId: BOARD_GONE }, [BOARD_A, BOARD_B]),
+    ).toEqual([]);
+    expect(blockBoardIds({ mode: "board", boardId: BOARD_A }, [])).toEqual([]);
   });
 });
