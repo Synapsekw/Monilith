@@ -62,8 +62,15 @@ out, report "still running after N min" + the link · `3` → usage/prereq error
   the ledger's version, not to promote. Exit `3` (could not check) → **note it in the report and
   continue** — `/promote` runs from the main checkout where `.env.prod.local` is present, so a `3`
   here means a genuinely unreachable DB, and blocking a code promotion on it is disproportionate.
-- Compute the delta: `git log --oneline origin/main..origin/develop`. **Empty → friendly stop**
-  ("`main` is already up to date with `develop` — nothing to promote.").
+- Compute `PROMO_BASE` (see step 3 for the derivation and why it is not `origin/main`), then the
+  delta: `git log --oneline "$PROMO_BASE"..origin/develop`. **Empty → friendly stop** ("`main` is
+  already up to date with `develop` — nothing to promote.").
+
+  Do **not** test emptiness with `origin/main..origin/develop`. After a heal, `develop`'s tip is the
+  heal commit, so that range is non-empty **even when nothing new exists** — the friendly stop would
+  never fire and every no-op invocation would open a PR with a body describing months of shipped
+  history.
+
 - Collect **branch-hygiene notes** (reported, never auto-fixed): stale local `task/*` branches
   (`git branch --list 'task/*'`) and a dirty working tree (`git status --porcelain`, **excluding
   `.obsidian/*`**) — both are notes, **not** stops.
@@ -84,10 +91,35 @@ out, report "still running after N min" + the link · `3` → usage/prereq error
 
 ### 3. Commit quality — "properly described"
 
-- Run `pnpm exec commitlint --from origin/main --to origin/develop --verbose`. (Merge commits are
+- **First compute `PROMO_BASE` — do NOT lint from `origin/main`.**
+
+  ```bash
+  PROMO_BASE=$(git log --first-parent --format='%H %s' origin/develop \
+    | grep -m1 'heal squash divergence' | cut -d' ' -f1)
+  PROMO_BASE=${PROMO_BASE:-$(git rev-parse origin/main)}   # fallback: never healed yet
+  ```
+
+  **Why this is not `origin/main`.** Step 6 squash-merges and step 6b heals with `-s ours`. That
+  combination leaves every _pre-squash_ commit permanently unreachable from `main` — the squash
+  replaced them with one new commit, and `-s ours` records the ancestry without importing them. So
+  `origin/main..origin/develop` never shrinks after a promotion; it **accumulates forever**. On the
+  2026-08-07 promotion it was **2448 commits** covering months of already-shipped history, against a
+  real delta of 35. Linting that range re-judges commits production has been running since long
+  before the current commitlint config existed, so it fails on history nobody can now fix — which is
+  what has blocked promotions before. The last heal commit is the true "everything before this is in
+  production" watermark.
+
+  Caveat worth knowing: a commit that lands on `develop` after the PR merges but before the heal
+  falls just outside this window. That is a narrow race and it under-reports rather than blocking;
+  the PR's own `commitlint` job is the backstop.
+
+- Run `pnpm exec commitlint --from "$PROMO_BASE" --to origin/develop --verbose`. (Merge commits are
   ignored by config, so `finish-task.sh` merge commits in the range are fine.) Any failure → **list
   the offending commit(s) + the rule each broke and stop** — the PR's `commitlint` job would fail
   anyway, so catch it here.
+- **Use `PROMO_BASE` for the delta everywhere else too** — the commit count and the PR body come from
+  `$PROMO_BASE..origin/develop`, not `origin/main..origin/develop`, for the same reason. Report the
+  raw `origin/main..origin/develop` count only if you explain it, never as "what is shipping".
 - **Compose the promotion PR text** from the delta's Conventional-Commit subjects:
   - **Title:** `Promote develop → main: <themes>` — a short, comma-joined summary of the dominant
     features/areas (mirror the `#17/#18/#19` style).
@@ -108,6 +140,15 @@ and **stop here** ("dry run — no PR opened, `main` untouched").
   and the failing check.
 - Also confirm the PR is mergeable (`gh pr view <number> --json mergeable,mergeStateStatus`). Not
   mergeable (conflict / behind) → **stop** with the link.
+- **Re-read the head before the gate — `develop` moves.** Other sessions merge while CI runs, and the
+  PR silently tracks the branch: whatever `develop` points at when you merge is what ships, not what
+  you composed the body from. Re-run `git fetch origin develop` and compare
+  `gh pr view <n> --json headRefOid` to the SHA you described. If it moved, **recompose the body and
+  `gh pr edit <n> --body-file …` before presenting the gate**, so the summary the user approves is the
+  set of changes that actually deploys. On 2026-08-07 this drifted from 27 commits to 35 — an entire
+  MCP feature shipped un-described, and a `cancelled` CI run (GitHub's concurrency group killing the
+  superseded run) was the only hint. A `cancelled` conclusion means "a newer commit arrived", not
+  "CI failed": re-fetch and watch the new run rather than stopping.
 
 ### 5. GATE — confirm the merge
 
