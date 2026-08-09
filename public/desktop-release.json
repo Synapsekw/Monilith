@@ -1,9 +1,9 @@
 {
   "minSupportedShell": "1.0.0",
-  "latestShell": "1.0.0",
-  "notes": "Read by the Monolith desktop shell at boot. A shell older than minSupportedShell blocks with an update prompt. Static and public by design: it carries no user data and must be reachable before sign-in.",
+  "latestShell": "1.0.1",
+  "notes": "Read by the Monolith desktop shell at boot. A shell older than minSupportedShell blocks with an update prompt. A shell older than latestShell gets a non-blocking Download/Later prompt. Static and public by design: it carries no user data and must be reachable before sign-in.",
   "downloads": {
-    "macArm64": "https://hjqcahbbbdaknbbnfnvl.supabase.co/storage/v1/object/public/desktop/Monolith-1.0.0-arm64.dmg",
-    "macX64": "https://hjqcahbbbdaknbbnfnvl.supabase.co/storage/v1/object/public/desktop/Monolith-1.0.0-x64.dmg"
+    "macArm64": "https://hjqcahbbbdaknbbnfnvl.supabase.co/storage/v1/object/public/desktop/Monolith-1.0.1-arm64.dmg",
+    "macX64": "https://hjqcahbbbdaknbbnfnvl.supabase.co/storage/v1/object/public/desktop/Monolith-1.0.1-x64.dmg"
   }
 }
