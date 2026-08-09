@@ -75,7 +75,9 @@ export function XlsxPreview({ attachmentId }: { attachmentId: string }) {
 
   return (
     <div className="flex h-full w-full flex-col gap-2 p-2">
-      <div className="min-h-0 flex-1 overflow-auto">
+      {/* Reserves a stable scrollbar gutter so switching between a short and a
+          long sheet does not shift the grid sideways. */}
+      <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-collapse text-left text-xs">
           <tbody>
             {sheet.grid.map((row, r) => (

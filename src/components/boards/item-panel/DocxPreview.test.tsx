@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
-const renderAsync = vi.fn(async () => undefined);
+const renderAsync = vi.fn(async (..._a: unknown[]) => undefined);
 vi.mock("docx-preview", () => ({
   renderAsync: (...a: unknown[]) => renderAsync(...a),
 }));

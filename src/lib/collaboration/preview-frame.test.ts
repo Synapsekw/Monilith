@@ -52,15 +52,13 @@ describe("measuredFrame", () => {
 describe("frameStyle", () => {
   it("caps width by viewport, aspect-derived height, and the px cap", () => {
     expect(frameStyle({ maxWidthPx: 1200, aspect: 16 / 9 })).toEqual({
-      width: "min(92vw, calc(90vh * 1.778), 1200px)",
-      maxHeight: "90vh",
+      "--preview-w": "min(92vw, calc(90vh * 1.778), 1200px)",
     });
   });
 
   it("omits the aspect term when there is no aspect", () => {
     expect(frameStyle({ maxWidthPx: 520, aspect: null })).toEqual({
-      width: "min(92vw, 520px)",
-      maxHeight: "90vh",
+      "--preview-w": "min(92vw, 520px)",
     });
   });
 });
