@@ -253,6 +253,39 @@ describe("FilePreviewLightbox", () => {
     expect(cls).toContain("w-[var(--preview-w)]");
   });
 
+  it("gives the viewer a flex pane, not a grid, so long documents can scroll", () => {
+    // Verified in a real browser, not inferred: a grid's implicit row is
+    // auto-sized, so it grows to the content's full height and `stretch`
+    // stretches the viewer to that ROW rather than to the pane. Measured with
+    // the shipped markup, a 12-page PDF made the viewer 7272px tall inside a
+    // 616px pane — clipped by overflow-hidden, with the inner overflow-auto
+    // never receiving a definite height. A flex pane bounds it (616/616) and
+    // the scroller then scrolls. jsdom cannot measure layout, so this pins the
+    // structural choice that the browser measurement proved.
+    render(
+      <FilePreviewLightbox
+        attachments={[att("a")]}
+        index={0}
+        previewUrls={{ a: "https://signed/a" }}
+        currentUserId="u"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    const pane = screen
+      .getByRole("dialog")
+      .querySelector("div.overflow-hidden.rounded-md") as HTMLElement;
+    expect(pane).not.toBeNull();
+    expect(pane.className).toContain("flex");
+    expect(pane.className).not.toContain("grid");
+    // A centred item is not stretched at all, which reintroduces the bug.
+    expect(pane.className).not.toContain("place-items-center");
+    // Without min-h-0 the flex child refuses to shrink below its content.
+    expect(pane.className).toContain("min-h-0");
+  });
+
   it("opens a deck at the 16:9 preset even though it cannot render", () => {
     const deck = [
       att("k", {

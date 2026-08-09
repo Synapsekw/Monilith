@@ -87,7 +87,7 @@ export function DocxPreview({ src }: { src: string; fileName?: string }) {
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative min-h-0 w-full">
       {status === "loading" && (
         <div className="bg-popover absolute inset-0 grid place-items-center rounded">
           <PreviewProgress
