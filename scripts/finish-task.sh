@@ -240,7 +240,12 @@ fi
 # with the one command that fixes it.
 DEP_CHANGES="$(git -C "$MAIN" diff --name-only "$DEVELOP_BEFORE_MERGE" HEAD -- package.json pnpm-lock.yaml)"
 if [ -n "$DEP_CHANGES" ]; then
-  echo "→ this merge changed dependencies — installing in $MAIN…"
+  # Braces are load-bearing: macOS ships bash 3.2, which absorbs the following
+  # "…" (a multibyte char) into the variable name, so bare `$MAIN…` under
+  # `set -u` dies with "MAIN<?>: unbound variable" — after the merge and push
+  # have already landed, stranding the worktree and branch. Only fires when a
+  # merge changes dependencies, which is why it stayed latent.
+  echo "→ this merge changed dependencies — installing in ${MAIN}…"
   if (cd "$MAIN" && pnpm install --frozen-lockfile); then
     DEPS_INSTALLED=1
   else
