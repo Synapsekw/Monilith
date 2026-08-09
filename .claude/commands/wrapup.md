@@ -96,12 +96,23 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    Keep it light — a quick rot check, not a full audit. This is a `pulse` main-thread tool only;
    subagents in headless worktree builds can't reach the running desktop app.
 
-7. **Refresh the plan board (best-effort) — follow `.claude/commands/board.md`.** Update the
-   `#board-data` JSON island in `vault/board.html` from the just-bumped north-star + worktrees +
-   this session's note, validate it parses, and redeploy to the permanent Artifact URL recorded in
-   `board.md`. This runs **before** the vault commit so the refreshed board rides it. If the
-   Artifact tool is unavailable, update the JSON anyway and note the skip — **never block or fail
-   a wrapup on the board.**
+7. **Refresh the plan board — DATA ONLY (best-effort) — follow `.claude/commands/board.md`.** Update
+   the `#board-data` JSON island in `vault/board.html` from the just-bumped north-star + worktrees +
+   this session's note, then redeploy to the permanent Artifact URL recorded in `board.md`. This runs
+   **before** the vault commit so the refreshed board rides it.
+
+   **The board's design is not yours to change during a wrapup.** Markup, CSS, render JS, section
+   order, palette and layout stay byte-identical; a wrapup only refreshes what the sections say.
+   Both of `board.md` step 3's checks are mandatory before deploying:
+
+   ```bash
+   node scripts/check-board-chrome.mjs   # fails if anything outside the island moved
+   ```
+
+   If it fails, **do not deploy** — restore the design, redo the edit inside the island, and say so
+   in your report. Never run `--accept` during a wrapup; that is for an owner-requested redesign
+   only. If the Artifact tool is unavailable, update the JSON anyway and note the skip — **never
+   block or fail a wrapup on the board.**
 
 8. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
    commits its own output:

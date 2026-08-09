@@ -1,8 +1,9 @@
 import { useRef } from "react";
-import { Film, FileText, Paperclip, Plus } from "lucide-react";
+import { Paperclip, Plus } from "lucide-react";
 import type { Tables } from "@/types/database.types";
 import { fileKind } from "@/lib/collaboration/attachments-format";
 import { ThumbImg } from "@/components/boards/ThumbImg";
+import { FileTypeChip } from "@/components/boards/FileTypeChip";
 
 type A = Tables<"attachments">;
 const MAX = 3;
@@ -49,19 +50,21 @@ export function FilesCell({
               e.stopPropagation();
               onOpen(i);
             }}
-            className="border-border flex size-6 items-center justify-center overflow-hidden rounded border pointer-coarse:size-11"
+            className="flex h-6 min-w-6 items-center justify-center pointer-coarse:size-11"
           >
             {k === "image" && (thumb || url) ? (
               <ThumbImg
                 thumbUrl={thumb}
                 fullUrl={url}
                 alt=""
-                className="size-full object-cover"
+                className="border-border size-6 overflow-hidden rounded border object-cover pointer-coarse:size-11"
               />
-            ) : k === "video" ? (
-              <Film className="size-3.5" />
             ) : (
-              <FileText className="size-3.5" />
+              // Every non-image kind gets its own coloured page icon — PDF red,
+              // Word blue, Excel green — rather than one generic glyph for all.
+              // The button draws no border of its own here: the icon IS the
+              // silhouette, and a box around it would fight the clipped corner.
+              <FileTypeChip fileName={a.file_name} mimeType={a.mime_type} />
             )}
           </button>
         );

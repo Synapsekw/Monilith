@@ -60,7 +60,7 @@ export const attachmentUrlsSchema = z.object({
     .optional(),
 });
 
-export const attachmentPdfUrlSchema = z.object({
+export const attachmentPreviewUrlSchema = z.object({
   attachmentId: z.string().uuid(),
 });
 
@@ -68,4 +68,6 @@ export type CreateAttachmentInput = z.infer<typeof createAttachmentSchema>;
 export type DeleteAttachmentInput = z.infer<typeof deleteAttachmentSchema>;
 export type AttachmentUrlInput = z.infer<typeof attachmentUrlSchema>;
 export type AttachmentUrlsInput = z.infer<typeof attachmentUrlsSchema>;
-export type AttachmentPdfUrlInput = z.infer<typeof attachmentPdfUrlSchema>;
+export type AttachmentPreviewUrlInput = z.infer<
+  typeof attachmentPreviewUrlSchema
+>;

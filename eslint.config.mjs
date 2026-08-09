@@ -36,8 +36,11 @@ const eslintConfig = defineConfig([
   // Exemptions: the two schema modules themselves; instrumentation.ts (reads
   // NEXT_RUNTIME/VERCEL_ENV, the platform vars that gate validation);
   // web-vitals.tsx (deliberate static reads for Next inline replacement — the
-  // endpoint var IS schema-validated in env.ts); and test land, where mutating
-  // process.env is the job.
+  // endpoint var IS schema-validated in env.ts); ServiceWorkerRegistrar.tsx
+  // (same: a static NODE_ENV read Next inlines, gating the caching worker to
+  // production — it is a build-mode flag, not configuration, so it has no
+  // place in the env schemas); and test land, where mutating process.env is
+  // the job.
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: [
@@ -45,6 +48,7 @@ const eslintConfig = defineConfig([
       "src/lib/env.server.ts",
       "src/instrumentation.ts",
       "src/components/web-vitals.tsx",
+      "src/components/offline/ServiceWorkerRegistrar.tsx",
       "src/test/**",
       "src/**/*.test.{ts,tsx}",
     ],

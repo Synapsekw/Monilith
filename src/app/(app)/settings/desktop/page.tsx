@@ -1,4 +1,5 @@
 import { Apple, Download, Info } from "lucide-react";
+import { InstalledVersion } from "@/components/settings/desktop/installed-version";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { Kicker } from "@/components/ui/kicker";
 import { getDesktopRelease } from "@/lib/desktop/read-release";
@@ -60,10 +61,20 @@ export default function DesktopSettingsPage() {
                 </a>
               ))}
             </div>
+            {/*
+              "Latest version", not "Version". Sitting under the download
+              buttons with no qualifier, the bare word was ambiguous — a reader
+              inside the desktop app could reasonably take it for the version
+              they were running, which is the exact question this section
+              exists to answer.
+            */}
             <p className="text-kicker mt-2 text-xs">
-              Version {release.latestShell} · Not sure which? Apple menu → About
-              This Mac. “Apple M1” or newer means Apple Silicon.
+              Latest version {release.latestShell} · Not sure which? Apple menu
+              → About This Mac. “Apple M1” or newer means Apple Silicon.
             </p>
+            {/* Client island: renders only inside a shell new enough to report
+                its own version, and is absent in a browser. */}
+            <InstalledVersion latest={release.latestShell} />
           </div>
 
           {/*
@@ -119,6 +130,55 @@ export default function DesktopSettingsPage() {
                 is notarized.
               </p>
             </div>
+          </div>
+
+          {/*
+            Updating is a SEPARATE list, not a footnote on Installing, because
+            it is not the same procedure: it opens with "quit the app", a step
+            that does not exist on a first install and that macOS enforces —
+            Finder refuses to replace a running .app. Leaving it implicit sends
+            people to a "the app is in use" error with no explanation.
+
+            The xattr command is repeated in full rather than cross-referenced.
+            An instruction that says "see step 1 above" is one the reader has to
+            reassemble while following a different list, and the page-test now
+            asserts EVERY copy of that command targets the .dmg.
+          */}
+          <div>
+            <Kicker>Updating</Kicker>
+            <p className="text-muted-foreground mt-3 text-sm">
+              Monolith checks for a new version each time it launches and offers
+              to download one. You can also check whenever you like from{" "}
+              <span className="text-foreground font-medium">
+                Monolith → Check for Updates…
+              </span>{" "}
+              in the menu bar. Updates can’t install themselves until the app is
+              notarized, so applying one is a quick re-download:
+            </p>
+            <ol className="text-muted-foreground mt-3 list-decimal space-y-2.5 pl-5 text-sm">
+              <li>
+                <span className="text-foreground font-medium">
+                  Quit Monolith first
+                </span>{" "}
+                — macOS won’t let you replace an app while it’s running.
+              </li>
+              <li>Download the latest build using the links above.</li>
+              <li>
+                Clear the download flag on the new .dmg, exactly as you did when
+                installing:
+                <code className="bg-surface-sunken text-foreground mt-1.5 block overflow-x-auto rounded-sm border px-2.5 py-1.5 font-mono text-xs">
+                  xattr -dr com.apple.quarantine ~/Downloads/Monolith-*.dmg
+                </code>
+              </li>
+              <li>
+                Open it and drag Monolith into Applications, replacing the
+                existing copy when macOS asks.
+              </li>
+              <li>
+                Launch it — you’ll still be signed in, with your boards exactly
+                as you left them.
+              </li>
+            </ol>
           </div>
         </div>
       </SettingsSection>
