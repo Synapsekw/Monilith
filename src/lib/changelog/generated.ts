@@ -6,6 +6,27 @@ export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-08-09",
     kind: "new",
+    title: "Reports across multiple boards",
+    description:
+      "A report can now cover several boards at once, or follow a portfolio and pick up its boards automatically. Summary figures and charts roll up across everything in scope, and each board still gets its own detail, group progress and appendix.",
+  },
+  {
+    date: "2026-08-09",
+    kind: "new",
+    title: "Reports has its own section",
+    description:
+      "Find every report in one place from the new Reports item in the sidebar, instead of digging into each board. Reports you open from a board still work exactly as before.",
+  },
+  {
+    date: "2026-08-09",
+    kind: "new",
+    title: "Save a report as a template",
+    description:
+      "Turn any report you have laid out into a reusable organization template, then start new reports from it. Templates are shared with everyone in your organization.",
+  },
+  {
+    date: "2026-08-09",
+    kind: "new",
     title: "Preview a file without downloading it",
     description:
       "Attachments open in a viewer sized to the document itself. PDFs render sharply on high-resolution screens, with a progress bar counting real megabytes and pages that appear as you scroll. Word documents and spreadsheets render inline too, spreadsheets with switchable sheet tabs. Nothing is handed to a third-party viewer.",
