@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-09 19:46",
+  "updated": "2026-08-09 20:35",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -269,14 +269,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-09-1910-file-icons-and-preview-viewer",
-    "when": "2026-08-09 19:10",
-    "title": "File-type icons and a real document viewer",
+    "id": "2026-08-09-2035-desktop-101-release",
+    "when": "2026-08-09 20:35",
+    "title": "Desktop 1.0.1: the version stopped lying",
     "bullets": [
-      "The Files column paints each type in its conventional colour (PDF red, Word blue, Excel green) via a new --file-* token palette — a deliberate scoped exception to pulse-ui’s monochrome rule, joining status pills.",
-      "DOCX and XLSX/CSV now render inline with nothing leaving our infrastructure: DOCX parses in-browser in a script-less sandboxed iframe, spreadsheets parse server-side by reusing the import wizard’s already-hardened parseWorkbookSheets.",
-      "Three of the defects were mine and all were layout or environment, not logic — a variant class survived tailwind-merge and clamped the ‘bigger’ modal to 384px, and PDFs were rasterised at CSS pixels, halving resolution on Retina.",
-      "A cache-first service worker was poisoning Turbopack dev: chunk filenames are only content-addressed in production, so a dev browser pinned itself to stale chunks and survived every restart. Now production-only, and it unregisters to heal itself."
+      "SHELL_VERSION was a hand-written literal beside package.json with nothing syncing them. Shipping 1.0.1 would have produced a build reporting itself as 1.0.0 and offering an update to what the user already had — latent only because both strings read 1.0.0.",
+      "Fixed by injection, not import: checkVersionGate takes the version as an argument, so the comparison stays unit-testable without pulling Electron into it.",
+      "The fix caught itself — the dialog fixture went red because app.getVersion() under `electron <file>` returns Electron’s own version. It now pins the version and asserts a build newer than the feed is offered nothing.",
+      "Cutting the release exposed a publish bug: every upload returned 200 and the next read served the previous version. A read straight after a write is not a verification — it now polls, cache-busted, and diffs byte-for-byte (gotcha-87)."
     ]
   }
 }
