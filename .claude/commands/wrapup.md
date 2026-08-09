@@ -8,8 +8,9 @@ Write a structured session summary in `vault/sessions/YYYY-MM-DD-HHmm-<slug>.md`
 1. **Gather state — one call:** run `scripts/wrapup-context.sh`. It emits everything this step
    needs in labeled sections: date/time (including the `YYYY-MM-DD-HHmm` note-id), repo root +
    worktree detection, branch + HEAD, `git status --short` (with `.obsidian/*` noise separated),
-   ahead/behind vs `origin/develop`, the **full north-star §3 "Now" text**, any `_draft-*.md` left
-   by the Stop hook, and the 3 newest session notes. **Do not improvise separate `date`/`git`/`cat`
+   ahead/behind vs `origin/develop`, the **full north-star §3 "Now" text**, the **`/updates`
+   changelog-coverage check** (step 6), any `_draft-*.md` left by the Stop hook, and the 3 newest
+   session notes. **Do not improvise separate `date`/`git`/`cat`
    calls for anything this script already prints.** (For "What changed" detail you may still run
    `git diff --stat HEAD~5..HEAD` or `git log` — that's content, not boot context.)
 
@@ -75,7 +76,56 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    - **Bump `last-updated`** in the frontmatter to today's date.
    - Add the new session to the `related:` of anything it closes out, and link it with `[[<session-filename-without-ext>]]` where relevant.
 
-6. **Check for link rot (best-effort, via the `obsidian-cli` skill).** Catch broken wikilinks and
+6. **Check `/updates` coverage — did this session ship anything a user would notice?** The public
+   changelog at `/updates` is generated from opt-in `Changelog:` commit trailers, and CI's drift
+   check **cannot** catch a trailer that was never written — it only proves `generated.ts` matches
+   history ([[2026-07-31-gotcha-64-changelog-drift-check-cannot-see-a-missing-trailer]]). A wrapup
+   is the right moment to ask, because you still remember what you built.
+
+   **Step 1's `CHANGELOG COVERAGE` section already ran the check** — it lists ship dates in the last
+   14 days that carry `feat`/`fix` work but no `/updates` entry, and what landed on each. It compares
+   by **ship date, not by commit**, because an announcement may ride a backdated empty commit, so a
+   feature commit's own missing trailer proves nothing. Don't re-derive it with ad-hoc `git log`.
+
+   For every listed commit with a **user-visible surface**, ask: _is it announced?_
+
+   - **Skip silently** when nothing shipped is user-observable — refactors, tests, infra, internal
+     libs, migrations with no visible effect, vault/docs work, and hardening that changes nothing a
+     legitimate user can see. Most sessions land here; an entry for a non-event is worse than none.
+   - **Announce** anything a user could notice: a new surface or control, changed behaviour, a fix
+     to something that was visibly broken, a redesign they'd see.
+
+   To announce, write a **backdated, empty announcement commit** — the trailer never has to ride
+   the commit that implemented the feature:
+
+   ```bash
+   # message file: `docs(changelog): announce <what>` + why, then a trailing
+   # block of `Changelog:` lines (trailers must be the LAST paragraph).
+   git commit --allow-empty --date="2026-08-04T12:00:00" -F <message-file>
+   pnpm changelog:gen && git add src/lib/changelog/generated.ts
+   git commit -m "chore(changelog): regenerate generated.ts"
+   ```
+
+   One announcement commit **per ship date** (author date pinned to that date, so `groupByDate`
+   renders accurate headings instead of lumping everything under today), carrying one
+   `Changelog: <kind> | <title> | <description>` line per entry, `kind` ∈ `new|improved|fixed`.
+   Write **user-facing** wording — no scopes, milestone codes, or file names. Full convention:
+   `CONTRIBUTING.md` → "Changelog entries (`/updates`)".
+
+   Two things to hold to:
+
+   - **Never hand-edit `src/lib/changelog/generated.ts`** — it is regenerated from git history and
+     CI fails on drift. `seed.ts` is frozen pre-convention history; don't add to it either.
+   - **Don't announce what doesn't work yet.** Entries publish on the next promotion whether or not
+     the feature is provisioned in production. If it ships but isn't live, say so in "Open threads"
+     rather than announcing it early.
+
+   These commits are **source**, not vault, so they are exempt from step 9's "vault paths only"
+   rule — but they are still `--allow-empty` plus one generated file, never a sweep of the tree.
+   Note in the session note's "What changed" what you announced, or that you deliberately announced
+   nothing.
+
+7. **Check for link rot (best-effort, via the `obsidian-cli` skill).** Catch broken wikilinks and
    newly-stranded notes so dev-memory doesn't silently rot. This needs the Obsidian desktop app
    running, so skip it cleanly when the binary is absent — never block a wrapup on it:
 
@@ -96,7 +146,7 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    Keep it light — a quick rot check, not a full audit. This is a `pulse` main-thread tool only;
    subagents in headless worktree builds can't reach the running desktop app.
 
-7. **Refresh the plan board — DATA ONLY (best-effort) — follow `.claude/commands/board.md`.** Update
+8. **Refresh the plan board — DATA ONLY (best-effort) — follow `.claude/commands/board.md`.** Update
    the `#board-data` JSON island in `vault/board.html` from the just-bumped north-star + worktrees +
    this session's note, then redeploy to the permanent Artifact URL recorded in `board.md`. This runs
    **before** the vault commit so the refreshed board rides it.
@@ -114,7 +164,7 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    only. If the Artifact tool is unavailable, update the JSON anyway and note the skip — **never
    block or fail a wrapup on the board.**
 
-8. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
+9. **Commit the vault (vault paths only).** Dev-memory's value is durability, so `/wrapup`
    commits its own output:
 
    ```bash
@@ -127,9 +177,10 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
    - If there are also source changes in the working tree, leave them staged-out and untouched.
    - Don't push unless the user asks.
 
-9. **Report back** to the user with the session file path, the commit hash, a one-line
-   summary, and a note of what you changed in the north-star — plus the plan-board URL
-   (from `.claude/commands/board.md`) with a one-liner on whether it was refreshed or skipped.
+10. **Report back** to the user with the session file path, the commit hash, a one-line
+    summary, and a note of what you changed in the north-star — plus the plan-board URL
+    (from `.claude/commands/board.md`) with a one-liner on whether it was refreshed or skipped,
+    and one line on `/updates`: what you announced, or that nothing shipped that warranted an entry.
 
 ## Discipline
 
@@ -142,8 +193,9 @@ If the work is NOT user-observable — pure refactor, infra, internal lib — wr
 - **The north-star is a snapshot, not a log.** §3 "Now" is overwritten each wrapup, never appended to; §2 stays at status + one-liner per phase. History is carried by the session notes + the §3 dataview blocks — if you feel the urge to add a dated "Latest" entry to the north-star, that's the session note's job.
 - **Commit vault paths only.** The standing "never commit unless asked" preference protects
   _source code_ from surprise commits/deploys — it does **not** apply to the vault, whose whole
-  point is durable dev-memory. So `/wrapup` commits `vault/` (and only `vault/`) per step 8. Never
-  stage or commit source changes during a wrapup.
+  point is durable dev-memory. So `/wrapup` commits `vault/` (and only `vault/`) per step 9. Never
+  stage or commit source changes during a wrapup. The **one** exception is step 6's changelog
+  announcement: empty commits plus the regenerated `generated.ts`, nothing else.
 - **No emoji** in the file body unless the user asked for them.
 - **Cross-link** any decisions worth surfacing — if a real architectural decision or a non-obvious gotcha came up, also create an ADR in `vault/decisions/` using the `decision.md` template (tag gotchas with `gotcha`).
 

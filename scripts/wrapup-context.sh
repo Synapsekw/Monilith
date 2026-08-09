@@ -92,6 +92,37 @@ else
   echo "not found — cannot show current status"
 fi
 
+# ---- changelog coverage for /updates ----------------------------------------
+# The CI drift check proves generated.ts matches history; it can never see a
+# trailer that was never written (gotcha-64). So surface the coverage question
+# here, over the unpromoted range - the same range the promotion PR reviews.
+section "CHANGELOG COVERAGE (/updates, last 14 days)"
+# Compared by ship date, not by commit: an announcement is allowed to ride a
+# backdated empty commit, so a feature commit's own lack of a trailer proves
+# nothing. A date carrying feat/fix work but zero entries is the real signal.
+CL_WINDOW='14 days ago'
+SHIP_DATES="$(git log --since="$CL_WINDOW" --date=short --format='%ad %s' \
+  | grep -E ' (feat|fix)\(' | awk '{print $1}' | sort -u)"
+ANNOUNCED_DATES="$(git log --since="$CL_WINDOW" --date=short \
+  --format='%ad%x09%(trailers:key=Changelog,valueonly,separator=%x2c)' \
+  | awk -F'\t' '$2 != "" { print $1 }' | sort -u)"
+GAP_DATES="$(comm -23 <(printf '%s\n' "$SHIP_DATES" | grep -v '^$') \
+                      <(printf '%s\n' "$ANNOUNCED_DATES" | grep -v '^$'))"
+if [ -z "$SHIP_DATES" ]; then
+  echo "no feat/fix commits in the last 14 days - nothing to announce"
+elif [ -z "$GAP_DATES" ]; then
+  echo "every ship date in the last 14 days has at least one /updates entry"
+else
+  echo "ship dates with feat/fix work and NO /updates entry:"
+  printf '%s\n' "$GAP_DATES" | sed 's/^/  /'
+  echo ""
+  echo "what landed on those dates (announce anything user-visible):"
+  for D in $GAP_DATES; do
+    git log --since="$CL_WINDOW" --date=short --format='%ad %s' \
+      | grep -E ' (feat|fix)\(' | grep "^$D " | head -12 | sed 's/^/  /'
+  done
+fi
+
 # ---- session drafts + recent notes ------------------------------------------
 section "SESSION DRAFTS (vault/sessions/_draft-*.md)"
 DRAFTS="$(find "$ROOT/vault/sessions" -maxdepth 1 -name '_draft-*.md' 2>/dev/null || true)"
