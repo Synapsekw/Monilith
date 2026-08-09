@@ -4,6 +4,181 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-08-09",
+    kind: "new",
+    title: "Preview a file without downloading it",
+    description:
+      "Attachments open in a viewer sized to the document itself. PDFs render sharply on high-resolution screens, with a progress bar counting real megabytes and pages that appear as you scroll. Word documents and spreadsheets render inline too, spreadsheets with switchable sheet tabs. Nothing is handed to a third-party viewer.",
+  },
+  {
+    date: "2026-08-09",
+    kind: "improved",
+    title: "Tell your files apart at a glance",
+    description:
+      "Every non-image attachment now carries a coloured page icon in the conventional colour for its type — PDF red, Word blue, Excel green, PowerPoint orange — with the format written on the chip.",
+  },
+  {
+    date: "2026-08-09",
+    kind: "improved",
+    title: "Know which desktop version you're running",
+    description:
+      "The desktop app tells you when a newer one is available and offers the download, adds a Check for Updates item to its menu, and says the check failed rather than claiming you're up to date. Settings gained an Updating section, since updating starts by quitting the app.",
+  },
+  {
+    date: "2026-08-07",
+    kind: "improved",
+    title: "Invitations arrive in real time",
+    description:
+      "An invitation used to appear only on the recipient's next full page load, so an open tab never saw it. The bell now updates within a second of one being sent, and clears just as quickly if it's revoked.",
+  },
+  {
+    date: "2026-08-07",
+    kind: "improved",
+    title: "Connected AI clients can attach files",
+    description:
+      "A client can now upload a file straight into an item's Files column. It can also read which columns are writable, what shape each value takes, and the real options behind a Status column — so it stops guessing.",
+  },
+  {
+    date: "2026-08-07",
+    kind: "fixed",
+    title: "Desktop install instructions you can follow",
+    description:
+      "The first step ran a command against an app you hadn't installed yet. It now names the file you just downloaded, in the order you actually do it.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "new",
+    title: "Your boards work offline",
+    description:
+      "Boards you've opened stay readable with no connection. Reopen the app on a plane and the last boards you visited render read-only with an offline bar, and you can move between them. Everything cached is wiped from the device when you sign out.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "new",
+    title: "A proper editor for long text",
+    description:
+      "Text cells now open in a side panel with Markdown formatting and a live preview, instead of a cramped inline box.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "improved",
+    title: "Long text reads as text everywhere else",
+    description:
+      "Collapsed cells, the activity feed, dashboard list widgets and report tables show formatted text as plain words rather than raw Markdown — and filtering and sorting now match what you see.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "new",
+    title: "Monolith for macOS",
+    description:
+      "Settings now offers a macOS desktop app under Integrations, with step-by-step install instructions. It carries your unread count on its dock icon.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "improved",
+    title: "Connected AI clients can see your whole workspace",
+    description:
+      "The connector goes from 7 tools to 22 — your week's work and your team's workload, time entries, goals, portfolios, dashboards and what their widgets say, and reports — plus logging time against an item. Settings lists every tool, marks the three that write, and says plainly what a client can remove.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "fixed",
+    title: "Manual time entry saves",
+    description:
+      "Typing hours into a My Time cell silently failed to save. It now persists, and entering 0 clears the entry.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "fixed",
+    title: "Signing in from a command-line AI client",
+    description:
+      "Clients that finish sign-in on a local port were rejected, as was connecting a second client or reconnecting the first. They connect now, and each connection is kept separate from the others.",
+  },
+  {
+    date: "2026-08-06",
+    kind: "fixed",
+    title: "Viewers no longer see controls they can't use",
+    description:
+      "The add-item and add-group buttons are hidden on a board you can only view.",
+  },
+  {
+    date: "2026-08-04",
+    kind: "new",
+    title: "Your agents, docked beside the board",
+    description:
+      "Every board gains a collapsible dock on its right edge. Talk to Ask or to any of your agents about that board, keep a thread private or share it with the board, and reply straight into a scheduled briefing. It stays collapsed until you open it, and costs nothing until you do.",
+  },
+  {
+    date: "2026-08-04",
+    kind: "new",
+    title: "Ask AI to move an item",
+    description:
+      "Tell the assistant to move an item to another group and it proposes the move as a confirm card, naming the item and both groups. Nothing moves until you approve it.",
+  },
+  {
+    date: "2026-08-04",
+    kind: "improved",
+    title: "An approved change appears straight away",
+    description:
+      "A change you approve now lands on the board immediately — no reload, no flicker, no lost scroll position.",
+  },
+  {
+    date: "2026-08-04",
+    kind: "fixed",
+    title: "The assistant can act on the items it just listed",
+    description:
+      "Asking it to change an item it had found could fail with a complaint that it couldn't find the item. Its lookups now return everything its write actions need.",
+  },
+  {
+    date: "2026-08-04",
+    kind: "fixed",
+    title: "A move you aren't allowed to make now says so",
+    description:
+      'Moving an item on a board you can only view reported "Done" while changing nothing — by drag and drop, in bulk, and through the assistant.',
+  },
+  {
+    date: "2026-08-03",
+    kind: "improved",
+    title: "A calmer, deeper look",
+    description:
+      "The sidebar and header now sit on a soft periwinkle wash, with your content as an inset card floating on it. Hovering and selecting lightens whatever is beneath instead of painting a grey rectangle, muted text is easier to read, and scrollbars no longer nudge the page as they appear.",
+  },
+  {
+    date: "2026-08-02",
+    kind: "improved",
+    title: "See when an agent last ran, and why it stopped",
+    description:
+      "Every agent in your roster now carries a last-run pill, and expanding one lists its recent runs with the real reason when a run is skipped or doesn't finish — previously a failing agent was silent.",
+  },
+  {
+    date: "2026-08-02",
+    kind: "new",
+    title: "Pricing, published",
+    description:
+      "A public pricing page lays the plans out side by side, with monthly and annual pricing, a full comparison table and answers to the usual questions.",
+  },
+  {
+    date: "2026-08-02",
+    kind: "improved",
+    title: "Sign-ups are open",
+    description:
+      "The waitlist is gone. Anyone can create an account straight from the home page.",
+  },
+  {
+    date: "2026-08-01",
+    kind: "new",
+    title: "Personal agents that brief you each morning",
+    description:
+      "A new Agents section in Settings gives you a roster of your own agents. Start from the Morning Brief template, say in plain language what it should watch, pick an hour, and it emails you a briefing on your work and leaves it in your notifications. An agent runs as you, so it only ever sees what you can see. Briefing emails have their own toggle, separate from the weekly digest.",
+  },
+  {
+    date: "2026-08-01",
+    kind: "improved",
+    title: "A home page that shows the product",
+    description:
+      "The landing page is now one continuous page built around agents, with a nav that stays put, worked examples of a board, an agent thread and a morning briefing, and answers to the questions people actually ask.",
+  },
+  {
     date: "2026-07-27",
     kind: "fixed",
     title: "The weekly digest sends, and covers the right week",
