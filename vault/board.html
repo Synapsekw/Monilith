@@ -9,10 +9,9 @@
   where we stand, what's next, and the percentages behind each.
 -->
 
-<script type="application/json" id="board-data">
-{
+<script type="application/json" id="board-data">{
   "schema": 2,
-  "updated": "2026-08-09 17:56",
+  "updated": "2026-08-09 19:10",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +133,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "5fbceb8c",
+        "value": "6a54317e",
         "tone": "warn",
-        "note": "26 commits past the last heal, and user-visible work is undeployed again: the files-preview track (type chips + a content-shaped preview modal with DOCX and spreadsheet rendering) plus the desktop update docs."
+        "note": "34 commits past the last heal, and user-visible work is undeployed again: the files/preview viewer (coloured type icons, a content-shaped modal, inline DOCX and spreadsheet rendering, device-resolution PDFs) plus the desktop manual-update path."
       },
       {
         "name": "main",
@@ -164,7 +163,7 @@
       },
       {
         "label": "test",
-        "value": "4839",
+        "value": "4948",
         "tone": "ok"
       },
       {
@@ -255,22 +254,31 @@
       "sev": "open",
       "title": "/sync-prod's data phase copies the fixtures",
       "text": "A full replace would copy the two Tier 2 fixture accounts — whose passwords are committed to this repo — into production. Schema-only pushes are unaffected."
+    },
+    {
+      "sev": "open",
+      "title": "Offline support is untestable under `pnpm dev`",
+      "text": "The caching service worker is now production-only — it poisoned Turbopack dev, whose chunk filenames are not content-addressed. Exercise offline behaviour with `pnpm build && pnpm start`; `pnpm dev` will never register it."
+    },
+    {
+      "sev": "open",
+      "title": "PPTX has no inline preview",
+      "text": "Decks get a 16:9 card and Download only. Every in-browser renderer surveyed is immature and echarts-heavy; the alternative that also keeps data in-house is self-hosted LibreOffice to PDF. Deferred as its own decision."
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-09-1756-desktop-manual-update-path",
-    "when": "2026-08-09 17:56",
-    "title": "A manual update path that actually reaches users",
+    "id": "2026-08-09-1910-file-icons-and-preview-viewer",
+    "when": "2026-08-09 19:10",
+    "title": "File-type icons and a real document viewer",
     "bullets": [
-      "latestShell had been advertised in the release contract since the shell shipped and was read by nothing outside an error string — bumping it did literally nothing. It is now the release lever.",
-      "The hard block was a dead end: \"too old to run\" with a single Quit button naming no destination. It now offers a Download.",
-      "isUpdateAvailable fails CLOSED, the deliberate mirror of isShellSupported fail-open — deciding whether to BLOCK must degrade to run, deciding whether to NAG must degrade to silence.",
-      "Updating is not installing with a different title: it opens with quit-the-app, which macOS enforces and a first install never needs. Settings now documents it."
+      "The Files column paints each type in its conventional colour (PDF red, Word blue, Excel green) via a new --file-* token palette — a deliberate scoped exception to pulse-ui's monochrome rule, joining status pills.",
+      "DOCX and XLSX/CSV now render inline with nothing leaving our infrastructure: DOCX parses in-browser in a script-less sandboxed iframe, spreadsheets parse server-side by reusing the import wizard's already-hardened parseWorkbookSheets.",
+      "Three of the defects were mine and all were layout or environment, not logic — a variant class survived tailwind-merge and clamped the 'bigger' modal to 384px, and PDFs were rasterised at CSS pixels, halving resolution on Retina.",
+      "A cache-first service worker was poisoning Turbopack dev: chunk filenames are only content-addressed in production, so a dev browser pinned itself to stale chunks and survived every restart. Now production-only, and it unregisters to heal itself."
     ]
   }
-}
-    </script>
+}</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────
