@@ -177,7 +177,7 @@ export function PdfPreview({
       : `Downloading ${formatSize(download.received)}`;
 
   return (
-    <div className="relative flex h-full w-full flex-col gap-2">
+    <div className="relative flex min-h-0 w-full flex-col gap-2">
       <div className="text-muted-foreground flex items-center justify-end gap-2 text-xs">
         <button
           type="button"

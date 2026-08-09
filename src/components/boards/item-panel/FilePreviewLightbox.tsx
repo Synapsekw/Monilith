@@ -177,7 +177,16 @@ export function FilePreviewLightbox({
           </div>
         </div>
 
-        <div className="bg-surface-muted relative grid min-h-0 flex-1 place-items-center overflow-hidden rounded-md">
+        {/* FLEX, not grid — measured, not assumed. A grid's implicit row is
+            auto-sized, so it grows to the content's full height and
+            `align-items: stretch` stretches the viewer to that ROW rather than
+            to this pane: a 12-page PDF made the viewer 7272px tall inside a
+            616px pane, overflowed, got clipped by overflow-hidden, and its own
+            overflow-auto never received a definite height to scroll within.
+            A flex container stretches children to the CONTAINER, so the viewer
+            is bounded and scrolls. Children that should be centred rather than
+            filled say so themselves with m-auto. */}
+        <div className="bg-surface-muted relative flex min-h-0 flex-1 overflow-hidden rounded-md">
           {index > 0 && (
             <Button
               variant="ghost"
@@ -200,7 +209,7 @@ export function FilePreviewLightbox({
                 if (el.naturalHeight > 0)
                   setAspect(el.naturalWidth / el.naturalHeight);
               }}
-              className="max-h-full max-w-full object-contain"
+              className="m-auto max-h-full max-w-full object-contain"
             />
           ) : previewable && kind === "video" && url ? (
             <video
@@ -211,7 +220,7 @@ export function FilePreviewLightbox({
                 if (el.videoHeight > 0)
                   setAspect(el.videoWidth / el.videoHeight);
               }}
-              className="max-h-full max-w-full"
+              className="m-auto max-h-full max-w-full"
             />
           ) : kind === "pdf" ? (
             signed && signed.id === current.id ? (
@@ -222,12 +231,12 @@ export function FilePreviewLightbox({
                   onAspect={setAspect}
                 />
               ) : (
-                <div className="text-muted-foreground py-12 text-sm">
+                <div className="text-muted-foreground m-auto py-12 text-sm">
                   Couldn’t load preview.
                 </div>
               )
             ) : (
-              <div className="text-muted-foreground py-12 text-sm">
+              <div className="text-muted-foreground m-auto py-12 text-sm">
                 Loading preview…
               </div>
             )
@@ -236,19 +245,19 @@ export function FilePreviewLightbox({
               signed.url ? (
                 <DocxPreview src={signed.url} fileName={current.file_name} />
               ) : (
-                <div className="text-muted-foreground py-12 text-sm">
+                <div className="text-muted-foreground m-auto py-12 text-sm">
                   Couldn’t load preview.
                 </div>
               )
             ) : (
-              <div className="text-muted-foreground py-12 text-sm">
+              <div className="text-muted-foreground m-auto py-12 text-sm">
                 Loading preview…
               </div>
             )
           ) : isSheetParseable(current.mime_type, current.file_name) ? (
             <XlsxPreview attachmentId={current.id} />
           ) : (
-            <div className="text-muted-foreground flex flex-col items-center gap-3 py-12 text-sm">
+            <div className="text-muted-foreground m-auto flex flex-col items-center gap-3 py-12 text-sm">
               <FileTypeChip
                 fileName={current.file_name}
                 mimeType={current.mime_type}

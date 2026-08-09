@@ -77,7 +77,7 @@ export function XlsxPreview({ attachmentId }: { attachmentId: string }) {
   const truncated = sheet.rowCount > sheet.grid.length;
 
   return (
-    <div className="flex h-full w-full flex-col gap-2 p-2">
+    <div className="flex min-h-0 w-full flex-col gap-2 p-2">
       {/* Reserves a stable scrollbar gutter so switching between a short and a
           long sheet does not shift the grid sideways. */}
       <div data-scroll-container className="min-h-0 flex-1 overflow-auto">
