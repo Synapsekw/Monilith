@@ -5,6 +5,7 @@ import AppError from "./(app)/error";
 import BoardsError from "./(app)/boards/error";
 import DashboardsError from "./(app)/dashboards/error";
 import PortfoliosError from "./(app)/portfolios/error";
+import ReportsError from "./(app)/reports/error";
 import GoalsError from "./(app)/goals/error";
 import TimeError from "./(app)/time/error";
 import RootNotFound from "./not-found";
@@ -31,6 +32,7 @@ describe("error boundaries", () => {
     ["boards", BoardsError],
     ["dashboards", DashboardsError],
     ["portfolios", PortfoliosError],
+    ["reports", ReportsError],
     ["goals", GoalsError],
     ["time", TimeError],
   ];

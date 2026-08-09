@@ -25,6 +25,39 @@ export const blockTypeSchema = z.enum([
 ]);
 export type BlockType = z.infer<typeof blockTypeSchema>;
 
+/**
+ * Which board(s) a board-specific block renders, now that ONE report can span
+ * MULTIPLE boards.
+ *
+ * `{ mode: "all" }` (the default, and what every pre-multi-board config
+ * back-fills to) → render one section per bound board. `{ mode: "board" }`
+ * pins the block to a single board. Purely additive: a stored block with no
+ * `boardScope` parses to `{ mode: "all" }`, which is the old single-board
+ * behaviour when exactly one board is bound.
+ */
+const boardScopeSchema = z
+  .discriminatedUnion("mode", [
+    z.object({ mode: z.literal("all") }),
+    z.object({ mode: z.literal("board"), boardId: z.string().uuid() }),
+  ])
+  .prefault({ mode: "all" });
+export type BoardScope = z.infer<typeof boardScopeSchema>;
+
+/**
+ * Board ids a block should render, given the report's bound boards.
+ *
+ * A pin to a board that is no longer bound yields `[]` — never a leak: the id
+ * is filtered against `boundBoardIds`, so a stale `boardScope` cannot pull in
+ * a board the report was detached from.
+ */
+export function blockBoardIds(
+  scope: BoardScope,
+  boundBoardIds: string[],
+): string[] {
+  if (scope.mode === "all") return [...boundBoardIds];
+  return boundBoardIds.filter((id) => id === scope.boardId);
+}
+
 const coverOptions = z.object({
   showLogo: z.boolean().default(true),
   preparedFor: z.string().max(200).default(""),
@@ -39,6 +72,7 @@ const tableOptions = z.object({
   orientation: z.enum(["landscape", "portrait"]).default("landscape"),
   // null = include all columns (the default per the spec)
   columnIds: z.array(z.string()).nullable().default(null),
+  boardScope: boardScopeSchema,
 });
 const spotlightOptions = z.object({
   itemIds: z.array(z.string()).default([]),
@@ -60,8 +94,16 @@ const chartOptions = z.object({
   /** "" → derive "Items by <category name>" at render time. */
   title: z.string().max(120).default(""),
   maxCategories: z.number().int().min(3).max(6).default(6),
+  boardScope: boardScopeSchema,
 });
 export type ChartBlockOptions = z.infer<typeof chartOptions>;
+const groupSummariesOptions = z.object({
+  boardScope: boardScopeSchema,
+});
+const appendixOptions = z.object({
+  boardScope: boardScopeSchema,
+});
+/** KPIs pool across ALL bound boards by design — no `boardScope`. */
 const noOptions = z.object({});
 
 export const blockSchema = z.discriminatedUnion("type", [
@@ -97,7 +139,7 @@ export const blockSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("group_summaries"),
     enabled: z.boolean().default(true),
-    options: noOptions.default({}),
+    options: groupSummariesOptions.prefault({}),
   }),
   z.object({
     type: z.literal("spotlight"),
@@ -112,7 +154,7 @@ export const blockSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("appendix"),
     enabled: z.boolean().default(false),
-    options: noOptions.default({}),
+    options: appendixOptions.prefault({}),
   }),
 ]);
 export type ReportBlock = z.infer<typeof blockSchema>;
