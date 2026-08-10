@@ -85,7 +85,7 @@ describe("toAiUsage", () => {
     expect(res.inputTokens).toBe(60);
   });
 
-  it("never returns a negative input count", () => {
+  it("never returns a negative input count on the DERIVED branch", () => {
     const res = toAiUsage(
       usage({
         inputTokens: 10,
@@ -97,6 +97,45 @@ describe("toAiUsage", () => {
       }),
     );
     expect(res.inputTokens).toBe(0);
+  });
+
+  it("never returns a negative input count on the EXPLICIT branch either", () => {
+    // `noCacheTokens` is itself a subtraction inside the provider package
+    // (`promptTokens - cacheReadTokens` in @ai-sdk/openai-compatible), and an
+    // OpenAI-compatible vendor whose `prompt_tokens` EXCLUDES cached tokens
+    // makes it negative. Unclamped that reaches record_ai_usage as a negative
+    // charge — a silent quota refund, not a rounding error.
+    const res = toAiUsage(
+      usage({
+        inputTokens: 900,
+        inputTokenDetails: {
+          noCacheTokens: -100,
+          cacheReadTokens: 1000,
+          cacheWriteTokens: 0,
+        },
+      }),
+    );
+    expect(res.inputTokens).toBe(0);
+    expect(computeCostUsd("claude-sonnet-5", res)).toBeGreaterThanOrEqual(0);
+  });
+
+  it("never bills a negative cost for any provider-reported usage", () => {
+    // The property the two clamps exist to guarantee, stated once.
+    for (const noCacheTokens of [-1, -1000, 0, 5]) {
+      const res = toAiUsage(
+        usage({
+          inputTokens: 100,
+          inputTokenDetails: {
+            noCacheTokens,
+            cacheReadTokens: 100,
+            cacheWriteTokens: 0,
+          },
+          outputTokens: 0,
+        }),
+      );
+      expect(res.inputTokens).toBeGreaterThanOrEqual(0);
+      expect(computeCostUsd("claude-sonnet-5", res)).toBeGreaterThanOrEqual(0);
+    }
   });
 
   it("falls back to zeroes when the provider reports no usage at all", () => {

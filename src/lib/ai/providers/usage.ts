@@ -28,10 +28,19 @@ export function toAiUsage(
   const cacheReadTokens = details?.cacheReadTokens ?? 0;
   const cacheWriteTokens = details?.cacheWriteTokens ?? 0;
   // Prefer the explicit uncached count; derive it only when a provider left it
-  // undefined, and never let the subtraction go negative.
-  const inputTokens =
+  // undefined. The clamp wraps BOTH branches, not just the derived one: the
+  // explicit field is itself a subtraction inside the provider package
+  // (`@ai-sdk/openai-compatible` computes `noCache: promptTokens -
+  // cacheReadTokens`), and whether `prompt_tokens` includes cached tokens
+  // varies across the OpenAI-compatible ecosystem — which this adapter now
+  // serves from an open-ended DB-driven provider list. A vendor that EXCLUDES
+  // them yields a negative count here, which flows into a negative cost_usd
+  // and a negative credit charge, i.e. record_ai_usage silently REFUNDS quota.
+  const inputTokens = Math.max(
+    0,
     details?.noCacheTokens ??
-    Math.max(0, (usage?.inputTokens ?? 0) - cacheReadTokens - cacheWriteTokens);
+      (usage?.inputTokens ?? 0) - cacheReadTokens - cacheWriteTokens,
+  );
   return {
     inputTokens,
     outputTokens: usage?.outputTokens ?? 0,

@@ -186,6 +186,69 @@ describe("every adapter honours the requested model", () => {
   });
 });
 
+describe("google keeps our `oneOf` schemas off Gemini's responseSchema", () => {
+  // Gemini's responseSchema is an OpenAPI-3.0 subset with no `oneOf`, and
+  // @ai-sdk/google forwards `oneOf` verbatim — so without this the two schemas
+  // that use it (PROPOSAL_JSON_SCHEMA, AUTOMATION_DRAFT_JSON_SCHEMA) 400.
+  const ONE_OF_SCHEMA = {
+    type: "object",
+    properties: { widget: { oneOf: [{ type: "string" }, { type: "number" }] } },
+  };
+
+  async function call() {
+    const captured: CapturedCall[] = [];
+    await googleAdapter.generateStructured({
+      apiKey: "k",
+      baseUrl: null,
+      model: "gemini-3-flash",
+      system: "s",
+      user: "u",
+      schema: ONE_OF_SCHEMA,
+      client: { generateObject: fakeGenerateObject(captured) },
+    });
+    return captured[0];
+  }
+
+  it("suppresses the provider-side responseSchema", async () => {
+    expect((await call()).providerOptions?.google).toEqual({
+      structuredOutputs: false,
+    });
+  });
+
+  it("still gives the model the schema — in the prompt", async () => {
+    // structuredOutputs:false drops responseSchema ENTIRELY, so without this
+    // the model would receive no schema at all — weaker than the adapter this
+    // replaced, which embedded it in the prompt.
+    const call0 = await call();
+    expect(call0.prompt).toContain(JSON.stringify(ONE_OF_SCHEMA));
+    expect(call0.prompt).toContain("u");
+  });
+
+  it("still passes the schema to the SDK for parsing", async () => {
+    expect(
+      ((await call()).schema as { jsonSchema: unknown }).jsonSchema,
+    ).toEqual(ONE_OF_SCHEMA);
+  });
+
+  it("leaves the other adapters on native structured output", async () => {
+    // Only Google needs the escape hatch; asserting the absence keeps a future
+    // copy-paste from quietly disabling structured output everywhere.
+    for (const kind of ["anthropic", "openai", "openai-compatible"] as const) {
+      const captured: CapturedCall[] = [];
+      await getAdapter(kind).generateStructured({
+        apiKey: "k",
+        baseUrl: baseUrlFor(kind),
+        model: "m",
+        system: "s",
+        user: "u",
+        schema: ONE_OF_SCHEMA,
+        client: { generateObject: fakeGenerateObject(captured) },
+      });
+      expect(captured[0].providerOptions?.google).toBeUndefined();
+    }
+  });
+});
+
 describe("usage is metered from the provider response", () => {
   it.each(ADAPTER_KINDS)(
     "%s reports uncached input separately",

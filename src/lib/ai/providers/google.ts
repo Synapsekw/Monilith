@@ -5,6 +5,7 @@ import {
   PROPOSAL_JSON_SCHEMA,
   type DashboardProposal,
 } from "@/lib/ai/proposal-schema";
+import { withSchemaObject } from "@/lib/ai/providers/prompt";
 import { generateObjectFn, toSdkSchema } from "@/lib/ai/providers/sdk";
 import {
   ProviderAuthError,
@@ -42,9 +43,25 @@ export const googleAdapter: ProviderAdapter = {
     const provider = createGoogleGenerativeAI({ apiKey, fetch: client?.fetch });
     const res = await generateObjectFn(client)({
       model: provider(model),
+      // Still passed: this is what parses and types the response. Only the
+      // PROVIDER-side copy is suppressed below.
       schema: toSdkSchema(schema),
       system,
-      prompt: user,
+      // Gemini's `responseSchema` is an OpenAPI-3.0 subset with no `oneOf`,
+      // and @ai-sdk/google forwards `oneOf` verbatim
+      // (convertJSONSchemaToOpenAPISchema), so the request 400s for the two
+      // schemas that use it — PROPOSAL_JSON_SCHEMA (dashboard_gen) and
+      // AUTOMATION_DRAFT_JSON_SCHEMA (automation_gen). `structuredOutputs:
+      // false` is the SDK's own documented escape hatch for exactly this, but
+      // it drops `responseSchema` ENTIRELY (keeping only
+      // responseMimeType: application/json) — so on its own it would leave the
+      // model with no schema at all, weaker than the adapter this replaces.
+      // Embedding the schema in the prompt restores that prior behaviour, and
+      // the pair together is what the old adapter did. Applied uniformly
+      // rather than sniffing each schema for `oneOf`: one predictable path
+      // beats two, and a 400 is a hard user-facing failure.
+      prompt: withSchemaObject(user, schema),
+      providerOptions: { google: { structuredOutputs: false } },
     });
     return {
       data: res.object as T,

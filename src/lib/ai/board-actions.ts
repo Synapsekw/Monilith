@@ -61,8 +61,15 @@ export async function generateBoardProposal(input: {
     const proposal = await runAi(
       { orgId: org.id, userId: user.id, feature: "board_gen" },
       async ({ adapter, apiKey }) => {
-        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
-        // adapters ignore `choice` and run their own fixed model.
+        // Meter the model the adapter REPORTS, not choice.model: the adapter
+        // returns the model it actually ran, and that is what record_ai_usage
+        // must price. Every adapter now honours the requested model (the
+        // OpenAI/Google adapters used to ignore `choice` and run a fixed
+        // constant), so the two agree today — but the returned value stays the
+        // source of truth for when model resolution can substitute again.
+        // Known gap: model-map still emits Claude ids for EVERY provider, so a
+        // non-Anthropic org is asked for a model it does not have. Task 7's
+        // resolveModel closes that; it is tracked at the plan level.
         const { proposal, usage, model } = await generateBoardProposalLLM(
           parsed.data.prompt,
           { adapter, apiKey, feedback: parsed.data.feedback, choice },
