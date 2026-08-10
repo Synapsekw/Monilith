@@ -266,7 +266,8 @@
     "when": "2026-08-10 16:59",
     "title": "Test-account purge, admin accordion, and an E2E guard for DEV",
     "bullets": [
-      "/admin/users held 74 profiles of which 14 were real people. 56 E2E throwaways and their 56 single-member orgs are gone — verified: profiles 74 → 18, orgs 71 → 15, auth.users in sync, Synapse's 429 items untouched.",
+      "/admin/users held 74 profiles of which 14 were real people. 56 E2E throwaways and their 56 single-member orgs are gone — verified: profiles 74 → 18, auth.users in sync, Synapse's 429 items untouched. A second pass took duplicate onboarding orgs from 15 to 9.",
+      "Org cleanup deleted only where an org was empty AND its owner kept another one. Three empty orgs survive because each is its owner's only org — an empty org that is someone's only org is not a duplicate, it is their account. Accenture's two Hassantuk boards (43 items of live client work) were never candidates.",
       "The sweeper for exactly this leak had never run: global-teardown.ts refuses any project not marked PULSE_TEST_DB — correct, since the purge is destructive and DEV holds the real live data — while every e2e spec loads .env.local (DEV) and provisions freely. Provisioning was permitted exactly where collection was forbidden.",
       "The refusal moved to the producer: one globalSetup choke point wired into both playwright configs. PROD refused outright; DEV needs a deliberate PULSE_E2E_ALLOW_DEV=1. offline.spec.ts runs only from the second config and was the largest single offender.",
       "Three @example.com accounts must never be swept — the Tier-2 fixtures, whose deletion does not fail the isolation suite but silently empties it. Proven safe after the purge: test:fixtures 56/56 against DEV.",

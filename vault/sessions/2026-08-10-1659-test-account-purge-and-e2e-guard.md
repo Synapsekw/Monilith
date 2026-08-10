@@ -28,6 +28,15 @@ related:
   both sections render identical markup, actions included).
 - **E2E provisioning is guarded** — `e2e/support/e2e-target.ts` + `global-setup.ts`, wired into
   **both** playwright configs. PROD refused outright; DEV refused unless `PULSE_E2E_ALLOW_DEV=1`.
+- **Then 6 duplicate onboarding orgs, in a second pass** (orgs **15 → 9**, no user accounts
+  touched). Each was a personal org created at signup by someone who then joined Synapse
+  Solutions — not duplicates of each other. Deleted only where the org was empty **and** the
+  owner kept another org; two guards enforced exactly that and would have aborted otherwise.
+  **Kept, deliberately:** Accenture (`irdhina.harith@`) holds live client work — `Hassantuk POC
+  - LIVE Jul 23` (23 items) and `Hassantuk_QCC_Drone_Demo_Tracker` (20 items); `e&`
+  (`leostalin91@`) has 4 real items; `E&` (`bobolokicivan@`) has 1 item + 1 file; and three
+  empty orgs (`lstalin@`, `absajwani@`, `jones@grok-digital`) that are their owner's **only**
+  org — deleting those strands a real person in onboarding for no gain.
 - Merged as `2d7294a0` (9 files, +427/−26). ADR: gotcha-88.
 - **`/updates`: nothing announced.** The only user-visible surface is the platform-admin console,
   reachable by platform admins alone — not a user-facing change.
@@ -61,9 +70,13 @@ freely. Deleting the rows without fixing that would have bought a few weeks. Ful
   same suite's usual 137s. A clean re-run passed 5158/5158 and the merge went through untouched.
   Machine contention, not a regression — but worth watching, since a flaky gate that aborts
   after the rebase is expensive.
-- The **14 remaining humans include stale entries** worth a decision later: `djovanovic@eand.com`
-  has never signed in and belongs to no org, and several `e&`/`Accenture` accounts have one
-  duplicate org each from repeated onboarding. Left alone — they are real people, not debris.
+- **`djovanovic@eand.com` has never signed in and belongs to no org** — pre-existing, untouched by
+  both passes, and left alone deliberately (a real person, not debris).
+- **Three empty orgs survive because they are their owner's only org** (`lstalin@eand.com`,
+  `absajwani@eand.com`, `jones@grok-digital.com` — all dormant since June/July). The standing
+  reason not to delete them: **an empty org that is someone's only org is not a duplicate, it is
+  their account.** If they are ever cleared, note that a deleted org leaves `pulse_active_org`
+  pointing at nothing and the board page does not reconcile that cookie.
 - Partitioning is **per page** (the RPC paginates at 25). Correct at 4 such accounts; if the
   fixture count ever grows past a page, the count line would need the RPC to filter server-side.
 
