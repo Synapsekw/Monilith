@@ -10,7 +10,7 @@ import type {
   ItemAssistProposal,
   ItemAssistWant,
 } from "@/lib/ai/item-assist/schema";
-import { ProviderNotCapableError } from "@/lib/ai/errors";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { mapAiError } from "@/lib/ai/action-guard";
 import { createClient } from "@/lib/supabase/server";
 import { getBoardPayload } from "@/lib/boards/queries";
@@ -149,9 +149,8 @@ export async function generateItemAssist(input: {
 
     const proposal = await runAi(
       { orgId: org.id, userId: user.id, feature: "item_assist" },
-      async ({ adapter, apiKey }) => {
-        if (adapter.id !== "anthropic")
-          throw new ProviderNotCapableError("item_assist");
+      async ({ provider, apiKey }) => {
+        assertToolLoopCapable(provider, "item_assist");
         const r = await generateItemAssistWithAi({
           apiKey,
           item: { name: item.name, textContext: textContext || undefined },

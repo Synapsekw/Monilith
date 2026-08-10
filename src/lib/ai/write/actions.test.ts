@@ -19,7 +19,7 @@ vi.mock("@/lib/ai/entitlement", () => ({
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: vi.fn(
     async (_a: unknown, fn: (r: unknown) => Promise<{ result: unknown }>) =>
-      (await fn({ adapter: { supportsTools: true }, apiKey: "k" })).result,
+      (await fn({ provider: "anthropic", apiKey: "k" })).result,
   ),
 }));
 const GROWN_TRANSCRIPT = [

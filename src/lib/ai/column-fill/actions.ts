@@ -13,7 +13,7 @@ import {
   type ClassifyRow,
   type TargetOption,
 } from "@/lib/ai/column-fill/schema";
-import { ProviderNotCapableError } from "@/lib/ai/errors";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { mapAiError } from "@/lib/ai/action-guard";
 import { createClient } from "@/lib/supabase/server";
 import { bulkSetCell, type BulkOutcome } from "@/lib/boards/bulk-actions";
@@ -142,9 +142,8 @@ export async function classifyColumn(input: {
 
     const classifications = await runAi<Classification[]>(
       { orgId: org.id, userId: user.id, feature: "column_fill" },
-      async ({ adapter, apiKey }) => {
-        if (adapter.id !== "anthropic")
-          throw new ProviderNotCapableError("column_fill");
+      async ({ provider, apiKey }) => {
+        assertToolLoopCapable(provider, "column_fill");
         const r = await classifyColumnWithAi({
           apiKey,
           rows,

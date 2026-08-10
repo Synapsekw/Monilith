@@ -6,6 +6,7 @@ import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { runAi } from "@/lib/ai/gateway";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   AiDisabledError,
@@ -279,10 +280,8 @@ export async function POST(req: Request): Promise<Response> {
     try {
       result = await runAi(
         { orgId: agent.org_id, userId: agent.owner_id, feature: FEATURE },
-        async ({ adapter, apiKey }) => {
-          if (adapter.id !== "anthropic") {
-            throw new ProviderNotCapableError(FEATURE);
-          }
+        async ({ provider, apiKey }) => {
+          assertToolLoopCapable(provider, FEATURE);
           const r = await summariseBriefing({
             apiKey,
             instructions: agent.instructions,

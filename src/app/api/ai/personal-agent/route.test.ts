@@ -180,17 +180,19 @@ vi.mock("@/lib/agents/send", () => ({
   sendBriefingEmail: (...a: unknown[]) => sendBriefingEmail(...(a as [])),
 }));
 
-// runAi just runs the callback by default with an Anthropic adapter (metering
+// runAi just runs the callback by default with an Anthropic PROVIDER (metering
 // exercised in the gateway's own test). A vi.fn so individual tests can
 // override it — e.g. to simulate the per_user "no key on file" path throwing
-// AiNotConfiguredError, or a non-Anthropic adapter to exercise the
-// wrong-provider skip.
-type FakeResolved = { adapter: { id: string }; apiKey: string };
+// AiNotConfiguredError, or a non-Anthropic provider to exercise the
+// wrong-provider skip. The gate reads `provider`, not the adapter: the loop
+// builds `new Anthropic()` itself, so the honest question is which provider's
+// key was resolved.
+type FakeResolved = { provider: string; apiKey: string };
 const runAi = vi.fn(
   async (
     _args: unknown,
     fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-  ) => (await fn({ adapter: { id: "anthropic" }, apiKey: "k" })).result,
+  ) => (await fn({ provider: "anthropic", apiKey: "k" })).result,
 );
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: (...a: Parameters<typeof runAi>) => runAi(...a),
@@ -258,7 +260,7 @@ beforeEach(() => {
     async (
       _args: unknown,
       fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-    ) => (await fn({ adapter: { id: "anthropic" }, apiKey: "k" })).result,
+    ) => (await fn({ provider: "anthropic", apiKey: "k" })).result,
   );
 });
 
@@ -401,10 +403,10 @@ describe("POST /api/ai/personal-agent", () => {
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 
-  // ── wrong-provider guard: an Anthropic adapter proceeds normally ───────
-  it("proceeds through summarise + send when the resolved adapter is anthropic", async () => {
+  // ── wrong-provider guard: the anthropic provider proceeds normally ─────
+  it("proceeds through summarise + send when the resolved provider is anthropic", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
-    // Default mock already resolves { adapter: { id: "anthropic" }, apiKey }.
+    // Default mock already resolves { provider: "anthropic", apiKey }.
 
     const res = await POST(post(slot));
 
@@ -418,16 +420,16 @@ describe("POST /api/ai/personal-agent", () => {
   // ── wrong-provider guard: a non-Anthropic per_user key must never be sent
   //    to api.anthropic.com. This is a CONFIGURATION state (skipped), not a
   //    fault — it must spend nothing and never call summarise or send. ──────
-  it("finalizes as skipped (not error) when the resolved adapter is not anthropic, and never calls the model or the send", async () => {
+  it("finalizes as skipped (not error) when the resolved provider is not anthropic, and never calls the model or the send", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
     // Drive the REAL callback route.ts passes to runAi (not a re-implemented
-    // stand-in) with a non-anthropic adapter — this exercises route.ts's own
-    // `adapter.id !== "anthropic"` check, not just its catch block.
+    // stand-in) with a non-anthropic provider — this exercises route.ts's own
+    // assertToolLoopCapable() call, not just its catch block.
     runAi.mockImplementation(
       async (
         _args: unknown,
         fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-      ) => (await fn({ adapter: { id: "openai" }, apiKey: "k" })).result,
+      ) => (await fn({ provider: "openai", apiKey: "k" })).result,
     );
 
     const res = await POST(post(slot));

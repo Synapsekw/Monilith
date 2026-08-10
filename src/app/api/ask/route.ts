@@ -7,7 +7,7 @@ import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
-import { ProviderNotCapableError } from "@/lib/ai/errors";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { createClient } from "@/lib/supabase/server";
 import { composePersona, composeBoardScope } from "@/lib/ai/ask/persona";
 import { getMessages } from "@/lib/ai/ask/conversations";
@@ -202,9 +202,8 @@ export async function POST(req: Request) {
       const askModel = modelFor("ask_pulse").model;
       const result = await runAi(
         { orgId: org.id, userId: user.id, feature: "ask_pulse" },
-        async ({ apiKey, adapter }) => {
-          if (!adapter.supportsTools)
-            throw new ProviderNotCapableError("ask_pulse");
+        async ({ apiKey, provider }) => {
+          assertToolLoopCapable(provider, "ask_pulse");
           const client = new Anthropic({ apiKey });
           const usage: AiUsageTokens = {
             inputTokens: 0,

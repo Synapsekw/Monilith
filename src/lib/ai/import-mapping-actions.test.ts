@@ -12,7 +12,7 @@ vi.mock("@/lib/ai/import-mapping-generate", () => ({
 }));
 
 const FAKE_RESOLVED = {
-  adapter: { defaultModel: "claude-opus-4-8", supportsTools: true },
+  adapter: { kind: "anthropic" },
   apiKey: "k",
   mode: "per_user",
   provider: "anthropic",

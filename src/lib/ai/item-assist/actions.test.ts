@@ -2,9 +2,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { ItemAssistWant } from "@/lib/ai/item-assist/schema";
 
 // A resolved adapter+key, as the real gateway hands to runAi's callback.
-// `id` is per-test so the not-capable branch is exercisable.
+// `provider` is per-test so the not-capable branch is exercisable — the gate
+// reads the PROVIDER id, not the (per-wire-format) adapter.
 let FAKE_RESOLVED = {
-  adapter: { id: "anthropic", supportsTools: true },
+  adapter: { kind: "anthropic" },
   apiKey: "k",
   mode: "managed",
   provider: "anthropic",
@@ -134,7 +135,7 @@ beforeEach(() => {
   createClient.mockClear();
 
   FAKE_RESOLVED = {
-    adapter: { id: "anthropic", supportsTools: true },
+    adapter: { kind: "anthropic" },
     apiKey: "k",
     mode: "managed",
     provider: "anthropic",
@@ -253,7 +254,7 @@ describe("generateItemAssist action", () => {
 
   it("maps a not-capable provider to the Anthropic-specific copy and never calls the lib", async () => {
     FAKE_RESOLVED = {
-      adapter: { id: "openai", supportsTools: false },
+      adapter: { kind: "openai" },
       apiKey: "k",
       mode: "managed",
       provider: "openai",

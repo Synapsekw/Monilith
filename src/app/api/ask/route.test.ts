@@ -42,10 +42,10 @@ vi.mock("@/lib/ai/gateway", () => ({
       _a: unknown,
       fn: (r: {
         apiKey: string;
-        adapter: { supportsTools: boolean };
+        provider: string;
       }) => Promise<{ result: unknown; usage: unknown }>,
     ) => {
-      const r = await fn({ apiKey: "k", adapter: { supportsTools: true } });
+      const r = await fn({ apiKey: "k", provider: "anthropic" });
       meteredSpy(r.usage);
       return r.result;
     },

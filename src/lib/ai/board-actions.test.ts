@@ -18,7 +18,7 @@ vi.mock("@/lib/ai/board-generate", () => ({
 }));
 
 const FAKE_RESOLVED = {
-  adapter: { defaultModel: "claude-opus-4-8", supportsTools: true },
+  adapter: { kind: "anthropic" },
   apiKey: "k",
   mode: "managed",
   provider: "anthropic",
