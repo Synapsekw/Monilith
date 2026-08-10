@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-10
 **Status:** approved (brainstorming)
-**Scope:** Spec 1 of 2. Spec 2 (agent capability & orchestration) is out of scope here — see §10.
+**Scope:** Spec 1 of 3. Agent capability & knowledge (spec 2) and orchestration & addressing
+(spec 3) are out of scope here — see §10.
 
 ## Problem
 
@@ -35,7 +36,7 @@ that keeps the adapter change from being a regression.** The two must ship toget
 
 | Question         | Decision                                                                                            |
 | ---------------- | --------------------------------------------------------------------------------------------------- |
-| Sequencing       | Two specs; provider/model layer first. Capability/orchestration layer second.                       |
+| Sequencing       | Three specs; provider/model layer first, then capability & knowledge, then orchestration.           |
 | Catalog location | A database table, not an in-repo constant — new models must appear without a deploy.                |
 | Catalog source   | Vercel AI Gateway `GET /v1/models` (metadata feed only; inference still goes direct with BYO keys). |
 | Key ownership    | Keep the org-wide `ai_mode`; each mode holds up to one key **per provider**.                        |
