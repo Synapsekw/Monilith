@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-09 23:25",
+  "updated": "2026-08-10 17:05",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "f5a8343b",
+        "value": "2d7294a0",
         "tone": "ok",
-        "note": "No code undeployed. The three commits ahead of main are vault docs only (tree diff: north-star, this board, one session note) — the last shipped code is still PR #93."
+        "note": "One code commit undeployed: the test-account-hygiene merge — platform-admin chrome plus E2E test tooling, no user-facing surface. It can ride the next promotion. Everything else ahead of main is vault docs."
       },
       {
         "name": "main",
@@ -164,7 +164,7 @@
       },
       {
         "label": "test",
-        "value": "5140",
+        "value": "5158",
         "tone": "ok"
       },
       {
@@ -247,7 +247,7 @@
     {
       "sev": "open",
       "title": "/sync-prod's data phase copies the fixtures",
-      "text": "A full replace would copy the two Tier 2 fixture accounts — whose passwords are committed to this repo — into production. Schema-only pushes are unaffected."
+      "text": "A full replace would copy the three Tier 2 fixture accounts — whose shared password is committed to this repo — into production. Schema-only pushes are unaffected."
     },
     {
       "sev": "open",
@@ -260,24 +260,18 @@
       "text": "Decks get a 16:9 card and Download only. Every in-browser renderer surveyed is immature and echarts-heavy; the alternative that also keeps data in-house is self-hosted LibreOffice to PDF. Deferred as its own decision."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/test-account-hygiene",
-      "head": "860fe411",
-      "note": "another session"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-08-09-2323-desktop-remote-and-release-ci",
-    "when": "2026-08-09 23:23",
-    "title": "The desktop repo got a remote, and the signed release got a switch",
+    "id": "2026-08-10-1659-test-account-purge-and-e2e-guard",
+    "when": "2026-08-10 16:59",
+    "title": "Test-account purge, admin accordion, and an E2E guard for DEV",
     "bullets": [
-      "Synapsekw/monolith-desktop now exists — private, 20 commits, remote HEAD verified identical to local. The largest standing risk in the desktop work is retired.",
-      "A v* tag is now the release. The workflow is deliberately useful before there is an Apple account: with no secrets it builds unsigned and uploads artifacts; adding six secrets makes it signed and notarized with no code edit.",
-      "pnpm package:signed exists at last — electron-builder.yml had named it since the shell was scaffolded while package.json never defined it, and the README filled the gap with the two-hand-edits advice that produced the corrupt-app pair.",
-      "Three traps latent behind identity: null, all verified against the installed app-builder-lib 26.15.3 — forceCodeSigning (a signing failure only warns), double notarization, and mac.identity being tri-state where adhoc-sign.cjs read it as a boolean.",
-      "Comments had explained the corrupt pair at length and it shipped anyway, so each invariant is now a test (23 → 33), every one mutation-tested red before being trusted.",
-      "No code change in this repo — a finding, not an omission: the web side is deliberately pinned to the unsigned reality until a notarized build exists."
+      "/admin/users held 74 profiles of which 14 were real people. 56 E2E throwaways and their 56 single-member orgs are gone — verified: profiles 74 → 18, orgs 71 → 15, auth.users in sync, Synapse's 429 items untouched.",
+      "The sweeper for exactly this leak had never run: global-teardown.ts refuses any project not marked PULSE_TEST_DB — correct, since the purge is destructive and DEV holds the real live data — while every e2e spec loads .env.local (DEV) and provisions freely. Provisioning was permitted exactly where collection was forbidden.",
+      "The refusal moved to the producer: one globalSetup choke point wired into both playwright configs. PROD refused outright; DEV needs a deliberate PULSE_E2E_ALLOW_DEV=1. offline.spec.ts runs only from the second config and was the largest single offender.",
+      "Three @example.com accounts must never be swept — the Tier-2 fixtures, whose deletion does not fail the isolation suite but silently empties it. Proven safe after the purge: test:fixtures 56/56 against DEV.",
+      "The four survivors now collapse behind a <details> accordion, classified by domain (RFC 2606 reserved + .internal) rather than an id list that would rot on the next seeded fixture.",
+      "The rule: when you deny-list an environment for a destructive cleanup, ask what is still allowed to write there. A one-sided guard turns a self-healing leak into a permanent one."
     ]
   }
 }
