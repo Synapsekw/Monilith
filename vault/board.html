@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-09 22:10",
+  "updated": "2026-08-09 23:25",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -125,18 +125,18 @@
     },
     {
       "name": "Platform & craft",
-      "pct": 90,
-      "have": "Multi-tenant RLS from day one, two full performance programs, the dark-first Keystone reskin, iPad touch parity across 8 surfaces, offline read-only boards, and a macOS desktop shell.",
-      "left": "Desktop repo has no git remote; updates are announced but installed by hand until the app is signed."
+      "pct": 93,
+      "have": "Multi-tenant RLS from day one, two full performance programs, the dark-first Keystone reskin, iPad touch parity across 8 surfaces, offline read-only boards, and a macOS desktop shell that now has a private remote and tag-triggered release CI.",
+      "left": "Desktop updates are announced but installed by hand until a Developer ID signs the app. Blocked on a $99 purchase, not on code — the CI publishes a signed, notarized release the moment the secrets exist."
     }
   ],
   "ship": {
     "stages": [
       {
         "name": "develop",
-        "value": "594413d3",
+        "value": "f5a8343b",
         "tone": "ok",
-        "note": "Nothing undeployed — develop == main == production. The tip is the -s ours heal after PR #93 (tree verified byte-identical)."
+        "note": "No code undeployed. The three commits ahead of main are vault docs only (tree diff: north-star, this board, one session note) — the last shipped code is still PR #93."
       },
       {
         "name": "main",
@@ -189,14 +189,6 @@
       "why": "Number, battery, completion and health widgets call SECURITY DEFINER RPCs through the service client, where auth.uid() is null and the can_read_board guard denies — so they should have been raising 42501 since 2026-07-04. Confirmed on DEV that all five carry the guard and it returns false with no auth context. This may be affecting users today. Look at a real dashboard before changing anything."
     },
     {
-      "title": "Give monolith-desktop a git remote",
-      "tags": [
-        "owner's track",
-        "needs go-ahead"
-      ],
-      "why": "16 commits of finished software — now including a published 1.0.1 release — live on one local disk with no backup. gh repo create was blocked by the permission classifier, so this needs the owner."
-    },
-    {
       "title": "E6 Stripe — units B, C, E–H",
       "tags": [
         "last AI epic",
@@ -211,6 +203,14 @@
         "unscheduled"
       ],
       "why": "@mentionable agents inside item threads, agent-initiated proposals, per-agent principals, and PDF documents. The board dock half already shipped and is live."
+    },
+    {
+      "title": "Buy the $99 Apple Developer account",
+      "tags": [
+        "owner's track",
+        "a purchase, not a task"
+      ],
+      "why": "The only thing between here and installable auto-update. Everything downstream is built and waiting: adding six secrets to monolith-desktop turns the existing tag-triggered CI into a signed, notarized, published release with no code edit. It also retires the xattr dance and the \"damaged\" warning. Runbook: .github/RELEASING.md."
     }
   ],
   "risks": [
@@ -220,14 +220,14 @@
       "text": "Five widget RPCs deny under the service client. Unverified in the running app — it is queued as the first thing next."
     },
     {
-      "sev": "amber",
-      "title": "The desktop shell exists on one disk",
-      "text": "monolith-desktop has no git remote. Sixteen commits, including both signing fixes, the release feed and a published 1.0.1, are unbacked."
-    },
-    {
       "sev": "open",
       "title": "Desktop updates are announced, not installed",
       "text": "Squirrel.Mac refuses an update whose signature does not satisfy the running app’s designated requirement, which an ad-hoc build never can. 1.0.1 is live and users are prompted, but they install by hand until a Developer ID lands. Copies on 1.0.0 predate the prompt and need one manual reinstall first."
+    },
+    {
+      "sev": "open",
+      "title": "Nothing in the desktop signing path has ever run signed",
+      "text": "The release CI is verified end to end unsigned — a real dry run, signing steps correctly skipped. Everything past certificate import (keychain import on the runner, electron-builder honouring the identity, notarization, stapling, spctl, whether auto-update installs) is untested by construction. Three latent traps were found and guarded before they could fire; assume more."
     },
     {
       "sev": "amber",
@@ -260,17 +260,24 @@
       "text": "Decks get a 16:9 card and Download only. Every in-browser renderer surveyed is immature and echarts-heavy; the alternative that also keeps data in-house is self-hosted LibreOffice to PDF. Deferred as its own decision."
     }
   ],
-  "worktrees": [],
+  "worktrees": [
+    {
+      "branch": "task/test-account-hygiene",
+      "head": "860fe411",
+      "note": "another session"
+    }
+  ],
   "session": {
-    "id": "2026-08-09-2130-report-builder-v2-rollups-templates",
-    "when": "2026-08-09 21:30",
-    "title": "Report Builder v2 — roll-ups and org templates",
+    "id": "2026-08-09-2323-desktop-remote-and-release-ci",
+    "when": "2026-08-09 23:23",
+    "title": "The desktop repo got a remote, and the signed release got a switch",
     "bullets": [
-      "A report is no longer one board: board_id became a nullable home-board pointer, report_boards is the canonical membership (backfilled), and a check-constrained scope makes an inconsistent binding unrepresentable.",
-      "Reports bind to one board, an explicit set, or a portfolio they auto-follow. Org templates are just scope=template rows, so save-as-template needed no second table.",
-      "New top-level /reports owns the index and the template gallery; the builder moved to /reports/[reportId] and the board-nested URL redirects.",
-      "The ~1.4k lines of predicted test churn did not happen — the per-board shapers were left byte-identical and a new aggregate layer pools them, so the two highest-risk suites never changed.",
-      "Closes the last item behind Planning & insight: 92% → 100%. Gates: typecheck, lint, 5140 tests, build."
+      "Synapsekw/monolith-desktop now exists — private, 20 commits, remote HEAD verified identical to local. The largest standing risk in the desktop work is retired.",
+      "A v* tag is now the release. The workflow is deliberately useful before there is an Apple account: with no secrets it builds unsigned and uploads artifacts; adding six secrets makes it signed and notarized with no code edit.",
+      "pnpm package:signed exists at last — electron-builder.yml had named it since the shell was scaffolded while package.json never defined it, and the README filled the gap with the two-hand-edits advice that produced the corrupt-app pair.",
+      "Three traps latent behind identity: null, all verified against the installed app-builder-lib 26.15.3 — forceCodeSigning (a signing failure only warns), double notarization, and mac.identity being tri-state where adhoc-sign.cjs read it as a boolean.",
+      "Comments had explained the corrupt pair at length and it shipped anyway, so each invariant is now a test (23 → 33), every one mutation-tested red before being trusted.",
+      "No code change in this repo — a finding, not an omission: the web side is deliberately pinned to the unsigned reality until a notarized build exists."
     ]
   }
 }
