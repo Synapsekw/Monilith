@@ -44,7 +44,7 @@
 | 11   | Agent provider/model picker + agent columns                                         | 7, 8       |
 
 - **Batch 1 (parallel):** 1, 2, 3
-- **Batch 2 (parallel):** 4, 5, 6
+- **Batch 2 (parallel):** 3a, 4, 5, 6
 - **Batch 3 (parallel):** 7, 9
 - **Batch 4:** 8
 - **Batch 5 (parallel):** 10, 11
@@ -235,6 +235,13 @@ alter table public.org_ai_settings
 alter table public.user_agents
   add column if not exists provider text references public.ai_providers (id),
   add column if not exists model_id text;
+
+-- 6) Did this run fall back off a retired pin? A real boolean, not a prefix
+--    stuffed into `error` — the run-history UI must not string-match to avoid
+--    rendering an informational note as a hard failure (the trap
+--    CLAIM_PLACEHOLDER already documents for `status`).
+alter table public.user_agent_runs
+  add column if not exists model_substituted boolean not null default false;
 ```
 
 - [ ] **Step 4: Write the credential-function changes**
@@ -242,7 +249,7 @@ alter table public.user_agents
 Append:
 
 ```sql
--- 6) One key PER PROVIDER. The (user_id, provider) primary key already modelled
+-- 7) One key PER PROVIDER. The (user_id, provider) primary key already modelled
 --    this correctly; only the delete-everything loop below enforced "one active
 --    provider". Dropping that loop is the whole change.
 create or replace function public.ai_credential_set(
@@ -355,7 +362,7 @@ grant execute on function public.org_ai_secret_get(uuid, text) to service_role;
 Append:
 
 ```sql
--- 7) Daily catalog refresh. Same pg_net + HMAC shape as embed-sweep and
+-- 8) Daily catalog refresh. Same pg_net + HMAC shape as embed-sweep and
 --    personal-agent-sweep. cron.schedule upserts by job name => re-runnable.
 create or replace function public._ai_models_refresh_tick()
 returns void
@@ -1196,10 +1203,19 @@ export type GenerateArgs = {
 };
 
 /**
- * One adapter per WIRE FORMAT, not per provider. `supportsTools` used to live
- * here as a per-adapter constant; it is now a per-MODEL column on ai_models,
- * because tool support varies by model within a provider (11 of Google's 17
- * language models support tools, not all 17).
+ * One adapter per WIRE FORMAT, not per provider.
+ *
+ * `supportsTools` is GONE from this interface. It was a per-adapter constant;
+ * tool support is really per-MODEL (11 of Google's 17 language models support
+ * tools, not all 17), and that now lives on ai_models.supports_tools.
+ *
+ * But note what the catalog flag does NOT buy yet: the tool-use loops in
+ * app/api/ask/route.ts and lib/ai/write/actions.ts construct `new Anthropic()`
+ * DIRECTLY, bypassing adapters entirely — so they cannot run on any other
+ * provider no matter what the catalog says. Task 3a replaces their capability
+ * checks with an explicit provider check, which is the honest description of
+ * what the code can do today. Generalizing those loops is Spec 2's tool-grant
+ * work, not this spec's.
  */
 export interface ProviderAdapter {
   kind: AdapterKind;
@@ -1213,9 +1229,7 @@ export interface ProviderAdapter {
   generateStructured<T = unknown>(
     args: GenerateArgs,
   ): Promise<{ data: T; usage: AiUsageTokens; model: string }>;
-  generateProposal(
-    args: Omit<GenerateArgs, "schema">,
-  ): Promise<{
+  generateProposal(args: Omit<GenerateArgs, "schema">): Promise<{
     proposal: DashboardProposal;
     usage: AiUsageTokens;
     model: string;
@@ -1666,6 +1680,159 @@ Rewrites the three native adapters over generateObject and adds one
 generic openai-compatible adapter serving mistral, kimi and any provider
 added later. Every adapter now runs the requested model instead of a
 module-level constant, and supportsTools moves to a per-model column."
+```
+
+---
+
+## Task 3a: Move tool-capability gating off the adapter
+
+**Files:**
+
+- Create: `src/lib/ai/tool-capability.ts`
+- Create: `src/lib/ai/tool-capability.test.ts`
+- Modify: `src/app/api/ask/route.ts`, `src/lib/ai/write/actions.ts`, `src/lib/ai/column-fill/actions.ts`, `src/lib/ai/item-assist/actions.ts`, `src/lib/ai/summarize/actions.ts`, `src/app/api/ai/personal-agent/route.ts`
+- Modify: the matching `*.test.ts` files that stub `supportsTools`
+
+**Interfaces:**
+
+- Consumes: `ProviderNotCapableError` (existing, `src/lib/ai/errors.ts`); `ResolvedAi.provider` (Task 8 — but this task only needs the string, so it can land before Task 8 using `resolved.provider` once available, or `adapter.kind` until then).
+- Produces: `export const TOOL_LOOP_PROVIDER = "anthropic"`, `export function assertToolLoopCapable(provider: string, feature: string): void`
+
+**Why this task exists:** Task 3 deletes `supportsTools` from `ProviderAdapter`. Nine source files gate on it. They cannot simply read the catalog's per-model flag, because `app/api/ask/route.ts:208` and `lib/ai/write/actions.ts` construct `new Anthropic({ apiKey })` **directly** — those loops are hardcoded to the Anthropic SDK and cannot run on Kimi, Mistral, GPT or Gemini regardless of what any flag says. An explicit provider check is the truthful gate. The catalog's `supports_tools` column is still populated and still correct; Spec 2 consumes it when it generalizes the loops.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `src/lib/ai/tool-capability.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import {
+  assertToolLoopCapable,
+  TOOL_LOOP_PROVIDER,
+} from "@/lib/ai/tool-capability";
+import { ProviderNotCapableError } from "@/lib/ai/errors";
+
+describe("assertToolLoopCapable", () => {
+  it("permits anthropic", () => {
+    expect(() => assertToolLoopCapable("anthropic", "ask_pulse")).not.toThrow();
+  });
+
+  it("rejects every other provider, naming the feature", () => {
+    for (const p of ["openai", "google", "mistral", "moonshotai"]) {
+      expect(() => assertToolLoopCapable(p, "ask_pulse")).toThrow(
+        ProviderNotCapableError,
+      );
+    }
+  });
+
+  it("names the single capable provider as a constant, not a literal", () => {
+    // The loops construct `new Anthropic()` directly; when Spec 2 generalizes
+    // them this constant is the one place that changes.
+    expect(TOOL_LOOP_PROVIDER).toBe("anthropic");
+  });
+});
+```
+
+- [ ] **Step 2: Run it and watch it fail**
+
+Run: `pnpm vitest run src/lib/ai/tool-capability.test.ts`
+Expected: FAIL — cannot resolve `@/lib/ai/tool-capability`.
+
+- [ ] **Step 3: Implement the gate**
+
+Create `src/lib/ai/tool-capability.ts`:
+
+```ts
+import { ProviderNotCapableError } from "@/lib/ai/errors";
+
+/**
+ * The ONLY provider whose tool-use loops are implemented.
+ *
+ * This is deliberately a provider check and not a read of
+ * `ai_models.supports_tools`. The catalog flag is accurate — most models on
+ * every provider support tool calling — but the loops in
+ * `app/api/ask/route.ts` and `lib/ai/write/actions.ts` construct
+ * `new Anthropic({ apiKey })` directly rather than going through an adapter,
+ * so they physically cannot run anywhere else. Gating on the catalog flag
+ * would advertise a capability the code does not have and fail at the API
+ * call instead of at the boundary.
+ *
+ * Spec 2 generalizes those loops onto the AI SDK's provider-agnostic tool
+ * calling; at that point this module is replaced by a per-model catalog read
+ * and this constant is the single place that changes.
+ */
+export const TOOL_LOOP_PROVIDER = "anthropic";
+
+export function assertToolLoopCapable(provider: string, feature: string): void {
+  if (provider !== TOOL_LOOP_PROVIDER)
+    throw new ProviderNotCapableError(feature);
+}
+```
+
+- [ ] **Step 4: Run the test**
+
+Run: `pnpm vitest run src/lib/ai/tool-capability.test.ts`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Replace every call site**
+
+Find them all first:
+
+```bash
+grep -rn "supportsTools" --include="*.ts" --include="*.tsx" src
+```
+
+In each **source** file, replace the adapter check with the provider check. For example, in `src/app/api/ask/route.ts` (around line 206):
+
+```ts
+// before
+async ({ apiKey, adapter }) => {
+  if (!adapter.supportsTools)
+    throw new ProviderNotCapableError("ask_pulse");
+
+// after
+async ({ apiKey, provider }) => {
+  assertToolLoopCapable(provider, "ask_pulse");
+```
+
+Apply the same substitution in `write/actions.ts` (`"conversational_action"`), `column-fill/actions.ts`, `item-assist/actions.ts`, `summarize/actions.ts` and `personal-agent/route.ts`, each keeping the feature string it already passes. Add `import { assertToolLoopCapable } from "@/lib/ai/tool-capability";` and drop the now-unused `ProviderNotCapableError` import where nothing else uses it.
+
+**`provider` is already on `ResolvedAi`** (it is in the type today), so no new plumbing is needed.
+
+- [ ] **Step 6: Update the tests that stub `supportsTools`**
+
+In each `*.test.ts` that builds a fake resolved-AI object, delete `supportsTools: true/false` from the adapter stub and set `provider: "anthropic"` (or another provider id for the negative cases) on the resolved object instead. Run:
+
+```bash
+grep -rln "supportsTools" --include="*.test.ts" src
+```
+
+Expected after the edit: that command returns nothing.
+
+- [ ] **Step 7: Verify nothing references the removed property**
+
+```bash
+grep -rn "supportsTools" --include="*.ts" --include="*.tsx" src && echo "STILL PRESENT — fix before committing" || echo "clean"
+pnpm typecheck && pnpm lint && pnpm test
+```
+
+Expected: `clean`, then all three gates pass. This task exists to keep the tree green between Tasks 3 and 8 — a red typecheck here means it is not done.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/lib/ai/tool-capability.ts src/lib/ai/tool-capability.test.ts \
+        src/app/api/ask/route.ts src/lib/ai/write/actions.ts \
+        src/lib/ai/column-fill/actions.ts src/lib/ai/item-assist/actions.ts \
+        src/lib/ai/summarize/actions.ts src/app/api/ai/personal-agent/route.ts
+git add -u src
+git commit -m "refactor(ai): gate tool loops on provider, not an adapter flag
+
+The ask and write tool loops construct new Anthropic() directly, so they
+cannot run on any other provider whatever a capability flag claims. Gates
+on the provider id instead, which is what the code can actually do. The
+per-model supports_tools column stays populated for spec 2, which
+generalizes the loops onto provider-agnostic tool calling."
 ```
 
 ---
@@ -3139,7 +3306,7 @@ pnpm vitest run src/lib/ai/gateway.test.ts
 pnpm typecheck
 ```
 
-Expected: gateway tests PASS. `typecheck` will now flag every `runAi` call site whose `fn` does not return `rates` — that is fine, `rates` is optional; it will **not** flag them. It **will** flag any remaining `PROVIDER_CATALOG` / `adapter.id` / `adapter.supportsTools` usage. Fix those by threading a `ProviderRow` from the nearest server component; do not reintroduce a static catalog.
+Expected: gateway tests PASS. `rates` is optional, so existing `runAi` call sites are not flagged. Any remaining `PROVIDER_CATALOG` / `adapter.id` usage is fixed by threading a `ProviderRow` from the nearest server component — do not reintroduce a static catalog. `adapter.supportsTools` should already be gone: Task 3a owns that, and if typecheck still flags it here, Task 3a was incomplete rather than this task being wrong.
 
 - [ ] **Step 7: Commit**
 
