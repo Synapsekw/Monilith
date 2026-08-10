@@ -1,7 +1,9 @@
 import Form from "next/form";
+import { ChevronRight } from "lucide-react";
 import { searchUsers } from "@/lib/platform/queries";
+import { partitionByAccountKind } from "@/lib/platform/test-accounts";
 import { Pager } from "@/components/platform/pager";
-import { UserRowActions } from "@/components/admin/user-row-actions";
+import { USER_ROW_GRID, UserRow } from "@/components/admin/user-row";
 
 export const metadata = { title: "Platform admin · users" };
 const PAGE_SIZE = 25;
@@ -17,6 +19,9 @@ export default async function AdminUsers({
   const rows = await searchUsers(q, PAGE_SIZE + 1, page * PAGE_SIZE);
   const hasNext = rows.length > PAGE_SIZE;
   const users = rows.slice(0, PAGE_SIZE);
+  // System actors and reserved-domain test accounts are real rows an admin may
+  // still need to act on — collapse them, never drop them.
+  const { people, systemAndTest } = partitionByAccountKind(users);
 
   return (
     <div className="space-y-5">
@@ -45,42 +50,51 @@ export default async function AdminUsers({
         </button>
       </Form>
 
-      {users.length === 0 ? (
+      {users.length === 0 && (
         <p className="text-muted-foreground text-sm">
           {q ? "No users match that search." : "No users yet."}
         </p>
-      ) : (
+      )}
+
+      {people.length > 0 && (
         <div className="bg-surface overflow-hidden rounded-xl border">
-          <div className="text-muted-foreground grid grid-cols-[1.6fr_2fr_0.7fr_120px] gap-3 border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase">
+          <div
+            className={`${USER_ROW_GRID} text-muted-foreground border-b px-4 py-2.5 text-xs font-medium tracking-wide uppercase`}
+          >
             <span>Email</span>
             <span>Organizations</span>
             <span>Status</span>
             <span />
           </div>
-          {users.map((u) => (
-            <div
-              key={u.id}
-              className="grid grid-cols-[1.6fr_2fr_0.7fr_120px] items-center gap-3 border-b px-4 py-3 text-sm last:border-b-0"
-            >
-              <span className="text-foreground truncate">{u.email ?? "—"}</span>
-              <span className="text-muted-foreground truncate">
-                {u.orgNames.length ? u.orgNames.join(" · ") : "—"}
-              </span>
-              <span
-                className={
-                  u.bannedUntil ? "text-destructive" : "text-muted-foreground"
-                }
-              >
-                {u.bannedUntil ? "Banned" : "Active"}
-              </span>
-              <UserRowActions
-                userId={u.id}
-                email={u.email ?? ""}
-                banned={Boolean(u.bannedUntil)}
-              />
-            </div>
+          {people.map((u) => (
+            <UserRow key={u.id} user={u} />
           ))}
         </div>
+      )}
+
+      {systemAndTest.length > 0 && (
+        <details className="bg-surface hover:border-border-hover group overflow-hidden rounded-xl border transition-colors">
+          <summary className="focus-visible:ring-ring flex cursor-pointer list-none items-center gap-2 px-4 py-3 marker:content-none focus-visible:ring-2 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+            <ChevronRight
+              aria-hidden
+              className="text-muted-foreground ease-keystone size-4 shrink-0 transition-transform duration-200 group-open:rotate-90"
+            />
+            <span className="text-foreground text-sm font-medium">
+              System &amp; test accounts
+            </span>
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {systemAndTest.length}
+            </span>
+            <span className="text-kicker ml-auto hidden text-xs sm:inline">
+              Not real customers — the platform agent and seeded test fixtures
+            </span>
+          </summary>
+          <div className="border-t">
+            {systemAndTest.map((u) => (
+              <UserRow key={u.id} user={u} />
+            ))}
+          </div>
+        </details>
       )}
 
       <Pager
