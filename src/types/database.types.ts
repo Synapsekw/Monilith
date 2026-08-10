@@ -177,6 +177,98 @@ export type Database = {
           },
         ];
       };
+      ai_models: {
+        Row: {
+          cache_read_price_per_mtok: number | null;
+          cache_write_price_per_mtok: number | null;
+          context_length: number | null;
+          gateway_id: string;
+          input_price_per_mtok: number | null;
+          label: string;
+          last_seen_at: string;
+          max_output_tokens: number | null;
+          model_id: string;
+          output_price_per_mtok: number | null;
+          provider: string;
+          status: string;
+          supports_tools: boolean;
+          tier: string;
+        };
+        Insert: {
+          cache_read_price_per_mtok?: number | null;
+          cache_write_price_per_mtok?: number | null;
+          context_length?: number | null;
+          gateway_id: string;
+          input_price_per_mtok?: number | null;
+          label: string;
+          last_seen_at?: string;
+          max_output_tokens?: number | null;
+          model_id: string;
+          output_price_per_mtok?: number | null;
+          provider: string;
+          status?: string;
+          supports_tools?: boolean;
+          tier?: string;
+        };
+        Update: {
+          cache_read_price_per_mtok?: number | null;
+          cache_write_price_per_mtok?: number | null;
+          context_length?: number | null;
+          gateway_id?: string;
+          input_price_per_mtok?: number | null;
+          label?: string;
+          last_seen_at?: string;
+          max_output_tokens?: number | null;
+          model_id?: string;
+          output_price_per_mtok?: number | null;
+          provider?: string;
+          status?: string;
+          supports_tools?: boolean;
+          tier?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_models_provider_fkey";
+            columns: ["provider"];
+            isOneToOne: false;
+            referencedRelation: "ai_providers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_providers: {
+        Row: {
+          adapter_kind: string;
+          base_url: string | null;
+          created_at: string;
+          enabled: boolean;
+          id: string;
+          key_format: string;
+          key_placeholder: string;
+          label: string;
+        };
+        Insert: {
+          adapter_kind: string;
+          base_url?: string | null;
+          created_at?: string;
+          enabled?: boolean;
+          id: string;
+          key_format: string;
+          key_placeholder: string;
+          label: string;
+        };
+        Update: {
+          adapter_kind?: string;
+          base_url?: string | null;
+          created_at?: string;
+          enabled?: boolean;
+          id?: string;
+          key_format?: string;
+          key_placeholder?: string;
+          label?: string;
+        };
+        Relationships: [];
+      };
       ai_usage: {
         Row: {
           cache_read_tokens: number | null;
@@ -2157,6 +2249,8 @@ export type Database = {
           byo_key_last4: string | null;
           byo_provider: string | null;
           byo_secret_id: string | null;
+          default_model_id: string | null;
+          default_provider: string | null;
           max_agent_runs_per_user_per_day: number;
           max_agents_per_user: number;
           monthly_credit_limit: number;
@@ -2170,6 +2264,8 @@ export type Database = {
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
+          default_model_id?: string | null;
+          default_provider?: string | null;
           max_agent_runs_per_user_per_day?: number;
           max_agents_per_user?: number;
           monthly_credit_limit?: number;
@@ -2183,6 +2279,8 @@ export type Database = {
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
+          default_model_id?: string | null;
+          default_provider?: string | null;
           max_agent_runs_per_user_per_day?: number;
           max_agents_per_user?: number;
           monthly_credit_limit?: number;
@@ -2192,6 +2290,20 @@ export type Database = {
           updated_by?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "org_ai_settings_byo_provider_fkey";
+            columns: ["byo_provider"];
+            isOneToOne: false;
+            referencedRelation: "ai_providers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_ai_settings_default_provider_fkey";
+            columns: ["default_provider"];
+            isOneToOne: false;
+            referencedRelation: "ai_providers";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "org_ai_settings_org_id_fkey";
             columns: ["org_id"];
@@ -2931,6 +3043,7 @@ export type Database = {
           fire_hour: number;
           id: string;
           input_tokens: number | null;
+          model_substituted: boolean;
           org_id: string;
           output_tokens: number | null;
           owner_id: string;
@@ -2944,6 +3057,7 @@ export type Database = {
           fire_hour: number;
           id?: string;
           input_tokens?: number | null;
+          model_substituted?: boolean;
           org_id: string;
           output_tokens?: number | null;
           owner_id: string;
@@ -2957,6 +3071,7 @@ export type Database = {
           fire_hour?: number;
           id?: string;
           input_tokens?: number | null;
+          model_substituted?: boolean;
           org_id?: string;
           output_tokens?: number | null;
           owner_id?: string;
@@ -2989,9 +3104,11 @@ export type Database = {
           enabled: boolean;
           id: string;
           instructions: string;
+          model_id: string | null;
           name: string;
           org_id: string;
           owner_id: string;
+          provider: string | null;
           run_at_local_hour: number;
           template_id: string;
           updated_at: string;
@@ -3004,9 +3121,11 @@ export type Database = {
           enabled?: boolean;
           id?: string;
           instructions: string;
+          model_id?: string | null;
           name: string;
           org_id: string;
           owner_id: string;
+          provider?: string | null;
           run_at_local_hour?: number;
           template_id: string;
           updated_at?: string;
@@ -3019,9 +3138,11 @@ export type Database = {
           enabled?: boolean;
           id?: string;
           instructions?: string;
+          model_id?: string | null;
           name?: string;
           org_id?: string;
           owner_id?: string;
+          provider?: string | null;
           run_at_local_hour?: number;
           template_id?: string;
           updated_at?: string;
@@ -3032,6 +3153,13 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agents_provider_fkey";
+            columns: ["provider"];
+            isOneToOne: false;
+            referencedRelation: "ai_providers";
             referencedColumns: ["id"];
           },
         ];
@@ -3061,7 +3189,15 @@ export type Database = {
           updated_at?: string;
           user_id?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "user_ai_credentials_provider_fkey";
+            columns: ["provider"];
+            isOneToOne: false;
+            referencedRelation: "ai_providers";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       workspaces: {
         Row: {
@@ -3115,6 +3251,7 @@ export type Database = {
         };
         Returns: undefined;
       };
+      _ai_models_refresh_tick: { Args: never; Returns: undefined };
       _automation_ai_reconcile: { Args: never; Returns: undefined };
       _automation_condition_predicate: {
         Args: { p_col: string; p_item_id: string; p_op: string; p_val: string };
@@ -3239,13 +3376,25 @@ export type Database = {
         };
       };
       ai_credential_clear: { Args: { p_user: string }; Returns: undefined };
-      ai_credential_get: {
-        Args: { p_user: string };
-        Returns: {
-          provider: string;
-          secret: string;
-        }[];
+      ai_credential_delete: {
+        Args: { p_provider: string; p_user: string };
+        Returns: undefined;
       };
+      ai_credential_get:
+        | {
+            Args: { p_user: string };
+            Returns: {
+              provider: string;
+              secret: string;
+            }[];
+          }
+        | {
+            Args: { p_provider: string; p_user: string };
+            Returns: {
+              provider: string;
+              secret: string;
+            }[];
+          };
       ai_credential_set: {
         Args: {
           p_hint: string;
@@ -3765,13 +3914,21 @@ export type Database = {
         Returns: string;
       };
       org_ai_secret_clear: { Args: { p_org: string }; Returns: undefined };
-      org_ai_secret_get: {
-        Args: { p_org: string };
-        Returns: {
-          provider: string;
-          secret: string;
-        }[];
-      };
+      org_ai_secret_get:
+        | {
+            Args: { p_org: string };
+            Returns: {
+              provider: string;
+              secret: string;
+            }[];
+          }
+        | {
+            Args: { p_org: string; p_provider: string };
+            Returns: {
+              provider: string;
+              secret: string;
+            }[];
+          };
       org_ai_secret_set: {
         Args: {
           p_hint: string;
