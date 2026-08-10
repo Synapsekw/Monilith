@@ -56,7 +56,22 @@ export async function resolveUserAdapterById(userId: TrustedUserId): Promise<{
     p_user: userId,
   });
   if (error) throw error;
-  const row = data?.[0];
+  // A user may now hold ONE KEY PER PROVIDER: migration 20260810173752 dropped
+  // the clear-every-other-provider loop from `ai_credential_set`. The 1-arg
+  // `ai_credential_get(p_user)` returns every one of those rows and its SQL body
+  // has NO `order by`, so `data[0]` is whatever row Postgres happened to emit
+  // first — which key a `per_user` run spends could differ between two
+  // otherwise identical invocations. Sorting by provider makes that choice
+  // arbitrary but STABLE, so the behaviour is at least reproducible and
+  // debuggable.
+  //
+  // STOPGAP, deliberately: the right answer is to resolve the provider the
+  // caller actually asked for, which is what Task 5 does via the 2-arg
+  // `ai_credential_get(p_user, p_provider)` overload. This sort disappears with
+  // that change. Copied before sorting so `data` is never mutated in place.
+  const row = [...(data ?? [])].sort((a, b) =>
+    a.provider.localeCompare(b.provider),
+  )[0];
   if (!row) throw new PersonalAiKeyMissingError();
   return {
     adapter: getAdapter(row.provider as AiProvider),
@@ -72,7 +87,24 @@ export function maskKey(rawKey: string): string {
   return `${head}…${last4}`;
 }
 
-/** RLS self-read for the settings page: the user's single credential, or null. */
+/**
+ * RLS self-read for the settings page: one of the user's credentials, or null
+ * when they have none.
+ *
+ * Multi-row tolerant on purpose. Migration 20260810173752 made credentials
+ * per-provider, so a user can hold several rows. This read previously used
+ * `.maybeSingle()` filtered only on `user_id` AND discarded the error — with a
+ * second row PostgREST errors, `data` came back null, and the settings page
+ * rendered "no key configured" while the user's keys existed and were
+ * unmanageable from the UI. A swallowed error that degrades into a *false empty
+ * state* is worse than a loud failure, so: bound the read to one row instead of
+ * asserting there is only one, order it so the same request keeps returning the
+ * same credential, and let a genuine database fault surface rather than
+ * impersonating "you have no key".
+ *
+ * STOPGAP for today's single-credential UI. Task 5 replaces this with a
+ * per-provider list; until then the page deliberately shows exactly one.
+ */
 export async function getMyAiCredential(): Promise<{
   provider: AiProvider;
   hint: string;
@@ -80,15 +112,18 @@ export async function getMyAiCredential(): Promise<{
 } | null> {
   const user = await requireUser();
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("user_ai_credentials")
     .select("provider, key_hint, updated_at")
     .eq("user_id", user.id)
-    .maybeSingle();
-  if (!data) return null;
+    .order("provider")
+    .limit(1);
+  if (error) throw new Error(`getMyAiCredential: ${error.message}`);
+  const row = data?.[0];
+  if (!row) return null;
   return {
-    provider: data.provider as AiProvider,
-    hint: data.key_hint,
-    updatedAt: data.updated_at,
+    provider: row.provider as AiProvider,
+    hint: row.key_hint,
+    updatedAt: row.updated_at,
   };
 }

@@ -48,13 +48,21 @@ describe.skipIf(!integrationTargetReady())(
     it("lets a signed-in user read the seeded providers", async () => {
       const { data, error } = await anon.from("ai_providers").select("id");
       expect(error).toBeNull();
-      expect((data ?? []).map((r) => r.id).sort()).toEqual([
-        "anthropic",
-        "google",
-        "mistral",
-        "moonshotai",
-        "openai",
-      ]);
+      // SUBSET, not equality. The registry is a growing table — a provider can
+      // legitimately be added by a later migration, and the daily
+      // `ai-models-refresh` tick is expected to change the catalog. The
+      // invariant worth guarding is that the seeded floor stays readable, not
+      // that the table is frozen at exactly five rows; pinning the snapshot
+      // would fail this suite for a change that is working as designed.
+      expect((data ?? []).map((r) => r.id)).toEqual(
+        expect.arrayContaining([
+          "anthropic",
+          "google",
+          "mistral",
+          "moonshotai",
+          "openai",
+        ]),
+      );
     });
 
     it("lets a signed-in user read the model catalog", async () => {
@@ -77,19 +85,35 @@ describe.skipIf(!integrationTargetReady())(
     });
 
     it("denies a client update of a model's price", async () => {
+      // Read the price FIRST rather than hard-coding today's $3/Mtok. The
+      // `ai-models-refresh` cron legitimately re-prices the catalog, so the
+      // security invariant is "a client cannot change this value", not "this
+      // value is 3" — pinning the snapshot would break the suite for a
+      // successful refresh, i.e. for the wrong reason entirely.
+      const readPrice = async (): Promise<number> => {
+        const { data } = await admin
+          .from("ai_models")
+          .select("input_price_per_mtok")
+          .eq("provider", "anthropic")
+          .eq("model_id", "claude-sonnet-5")
+          .single();
+        return Number(data?.input_price_per_mtok);
+      };
+      const before = await readPrice();
+
       const { error } = await anon
         .from("ai_models")
         .update({ input_price_per_mtok: 0 })
         .eq("model_id", "claude-sonnet-5");
+
       // Default-deny yields either an explicit error or zero affected rows;
-      // assert the price is unchanged either way.
-      const { data } = await admin
-        .from("ai_models")
-        .select("input_price_per_mtok")
-        .eq("provider", "anthropic")
-        .eq("model_id", "claude-sonnet-5")
-        .single();
-      expect(Number(data?.input_price_per_mtok)).toBe(3);
+      // assert the price is unchanged either way. The attempted write is 0, so
+      // "still positive and finite" is itself sufficient to catch a successful
+      // client update — this stays a real security assertion, not a loosened one.
+      const after = await readPrice();
+      expect(after).toBe(before);
+      expect(Number.isFinite(after)).toBe(true);
+      expect(after).toBeGreaterThan(0);
       void error;
     });
 
