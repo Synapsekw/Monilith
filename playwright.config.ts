@@ -8,6 +8,9 @@ export default defineConfig({
   // cache, the navigation never fails, and the service worker's fallback — the
   // entire feature — is never reached.
   testIgnore: /offline\.spec\.ts$/,
+  // Refuses the run when pointed at DEV/PROD — specs here provision real users
+  // via the service-role admin API. See e2e/support/e2e-target.ts.
+  globalSetup: "./e2e/support/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
