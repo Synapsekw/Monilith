@@ -3,7 +3,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getAdapter } from "@/lib/ai/providers/registry";
+import { getAdapterForProviderId } from "@/lib/ai/providers/registry";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
 import { PROVIDER_CATALOG, type AiProvider } from "@/lib/ai/providers/catalog";
@@ -23,15 +23,19 @@ export async function saveAiKey(input: {
   const { provider, key } = parsed.data;
 
   const user = await requireUser();
-  const adapter = getAdapter(provider);
+  const adapter = getAdapterForProviderId(provider);
 
-  if (!adapter.keyFormat.safeParse(key).success)
+  // Cheap pre-flight shape check before the live ping. The regex mirrors
+  // `ai_providers.key_format`; Task 5 reads it from the row instead. It lives
+  // per-PROVIDER, never on the adapter — one adapter serves several providers
+  // whose keys look nothing alike.
+  if (!new RegExp(PROVIDER_CATALOG[provider].keyFormat).test(key))
     return fail(
       `That doesn't look like a ${PROVIDER_CATALOG[provider].label} key.`,
     );
 
   try {
-    await adapter.validateKey(key);
+    await adapter.validateKey({ apiKey: key, baseUrl: null });
   } catch (e) {
     if (e instanceof ProviderAuthError)
       return fail(

@@ -1,31 +1,42 @@
 import "server-only";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import Anthropic from "@anthropic-ai/sdk";
-import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
-import { z } from "zod";
+import type { ModelMessage } from "ai";
 import {
   PROPOSAL_JSON_SCHEMA,
   type DashboardProposal,
 } from "@/lib/ai/proposal-schema";
-import { DEFAULT_MODEL_CHOICE } from "@/lib/ai/model-map";
-import { PROVIDER_CATALOG } from "@/lib/ai/providers/catalog";
+import { generateObjectFn, toSdkSchema } from "@/lib/ai/providers/sdk";
 import {
   ProviderAuthError,
+  type GenerateArgs,
   type ProviderAdapter,
+  type ThinkingConfig,
 } from "@/lib/ai/providers/types";
+import { toAiUsage } from "@/lib/ai/providers/usage";
+
+/** Matches today's `max_tokens: 16000`. */
+const MAX_OUTPUT_TOKENS = 16000;
+
+/**
+ * `ModelChoice.thinking` uses the RAW Anthropic wire shape (`budget_tokens`);
+ * `providerOptions.anthropic.thinking` uses the AI SDK's camelCase
+ * (`budgetTokens`). The SDK's zod schema strips unknown keys, so handing it
+ * `budget_tokens` would silently drop the budget and send `{ type: "enabled" }`
+ * with no budget at all — which Anthropic rejects. Translate explicitly.
+ */
+function toSdkThinking(thinking: ThinkingConfig | undefined) {
+  if (!thinking) return undefined;
+  return thinking.type === "adaptive"
+    ? { type: "adaptive" as const }
+    : { type: "enabled" as const, budgetTokens: thinking.budget_tokens };
+}
 
 export const anthropicAdapter: ProviderAdapter = {
-  id: "anthropic",
-  label: PROVIDER_CATALOG.anthropic.label,
-  placeholder: PROVIDER_CATALOG.anthropic.placeholder,
-  keyFormat: z
-    .string()
-    .trim()
-    .startsWith("sk-ant-", "Anthropic keys start with sk-ant-")
-    .max(300),
-  defaultModel: DEFAULT_MODEL_CHOICE.model,
-  supportsTools: true,
-  async validateKey(rawKey) {
-    const client = new Anthropic({ apiKey: rawKey });
+  kind: "anthropic",
+
+  async validateKey({ apiKey }) {
+    const client = new Anthropic({ apiKey });
     try {
       await client.models.list({ limit: 1 });
     } catch (e) {
@@ -34,47 +45,56 @@ export const anthropicAdapter: ProviderAdapter = {
       throw e;
     }
   },
-  async generateStructured({ apiKey, system, user, schema, choice, client }) {
-    const c = (client as Anthropic) ?? new Anthropic({ apiKey });
-    const m = choice ?? DEFAULT_MODEL_CHOICE;
-    const message = await c.messages.parse({
-      model: m.model,
-      max_tokens: 16000,
-      thinking: m.thinking,
-      output_config: {
-        // Haiku 4.5 rejects `effort` — omit the key entirely rather than
-        // sending undefined, which the SDK would still serialize.
-        ...(m.effort ? { effort: m.effort } : {}),
-        format: jsonSchemaOutputFormat(schema as never),
+
+  async generateStructured<T>({
+    apiKey,
+    model,
+    system,
+    user,
+    schema,
+    thinking,
+    effort,
+    client,
+  }: GenerateArgs) {
+    const provider = createAnthropic({ apiKey, fetch: client?.fetch });
+    const sdkThinking = toSdkThinking(thinking);
+    // The system prompt is frozen per feature, so it is the cache prefix. Sent
+    // as an explicit system MESSAGE rather than the `system` string because
+    // `cache_control` can only be attached via a message's providerOptions —
+    // dropping it would silently end prompt caching and multiply input COGS.
+    const messages: ModelMessage[] = [
+      {
+        role: "system",
+        content: system,
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
       },
-      system: [
-        { type: "text", text: system, cache_control: { type: "ephemeral" } },
-      ],
-      messages: [{ role: "user", content: user }],
+      { role: "user", content: user },
+    ];
+    const res = await generateObjectFn(client)({
+      model: provider(model),
+      schema: toSdkSchema(schema),
+      messages,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      providerOptions: {
+        anthropic: {
+          ...(sdkThinking ? { thinking: sdkThinking } : {}),
+          // Haiku 4.5 rejects `effort` — omit the key entirely rather than
+          // sending undefined, which would still serialize.
+          ...(effort ? { effort } : {}),
+        },
+      },
     });
-    const textBlock = message.content.find((b) => b.type === "text");
-    const parsed =
-      (message as { parsed_output?: unknown }).parsed_output ??
-      JSON.parse(textBlock && "text" in textBlock ? textBlock.text : "{}");
     return {
-      data: parsed,
-      model: m.model,
-      usage: {
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
-        cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
-        cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
-      },
+      data: res.object as T,
+      model,
+      usage: toAiUsage(res.usage),
     };
   },
-  async generateProposal({ apiKey, system, user, choice, client }) {
+
+  async generateProposal(args) {
     const { data, usage, model } = await this.generateStructured({
-      apiKey,
-      system,
-      user,
+      ...args,
       schema: PROPOSAL_JSON_SCHEMA,
-      choice,
-      client,
     });
     return { proposal: data as DashboardProposal, usage, model };
   },

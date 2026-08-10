@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { PersonalAiKeyMissingError } from "@/lib/ai/errors";
-import { getAdapter } from "@/lib/ai/providers/registry";
+import { getAdapterForProviderId } from "@/lib/ai/providers/registry";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
 
@@ -50,6 +50,7 @@ export function asTrustedUserId(id: string): TrustedUserId {
 export async function resolveUserAdapterById(userId: TrustedUserId): Promise<{
   adapter: ProviderAdapter;
   apiKey: string;
+  provider: AiProvider;
 }> {
   const svc = createServiceClient();
   const { data, error } = await svc.rpc("ai_credential_get", {
@@ -73,9 +74,14 @@ export async function resolveUserAdapterById(userId: TrustedUserId): Promise<{
     a.provider.localeCompare(b.provider),
   )[0];
   if (!row) throw new PersonalAiKeyMissingError();
+  // The provider id is returned so the gateway can report WHICH provider ran
+  // without reading it back off the adapter — an adapter is now keyed by wire
+  // format and one adapter can serve several providers, so `adapter.id` was
+  // never a sound answer and no longer exists.
   return {
-    adapter: getAdapter(row.provider as AiProvider),
+    adapter: getAdapterForProviderId(row.provider),
     apiKey: row.secret,
+    provider: row.provider,
   };
 }
 

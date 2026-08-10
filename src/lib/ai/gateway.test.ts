@@ -19,10 +19,14 @@ vi.mock("@/lib/env.server", () => ({
   getServerEnv: () => ({ ANTHROPIC_API_KEY: process.env.TEST_MANAGED_KEY }),
 }));
 
-const anthropicAdapter = { id: "anthropic", supportsTools: true };
-const googleAdapter = { id: "google", supportsTools: false };
+// Adapters are keyed by WIRE FORMAT now; the provider id is carried on the
+// resolved object rather than read back off the adapter.
+const anthropicAdapter = { kind: "anthropic" };
+const googleAdapter = { kind: "google" };
 vi.mock("@/lib/ai/providers/registry", () => ({
-  getAdapter: (p: string) =>
+  getAdapter: (k: string) =>
+    k === "google" ? googleAdapter : anthropicAdapter,
+  getAdapterForProviderId: (p: string) =>
     p === "google" ? googleAdapter : anthropicAdapter,
 }));
 
@@ -125,10 +129,17 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
+      provider: "anthropic",
     });
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
     const r = await resolveAiAdapter("org-1", "user-42");
-    expect(r).toMatchObject({ mode: "per_user", apiKey: "sk-user" });
+    expect(r).toMatchObject({
+      mode: "per_user",
+      apiKey: "sk-user",
+      // Reported by the credential resolver, not inferred from the adapter —
+      // one adapter can serve several providers.
+      provider: "anthropic",
+    });
     // The whole point of the fix: resolution is keyed on the caller-supplied
     // userId, not a session — never a different id than what runAi meters
     // against.
@@ -169,6 +180,7 @@ describe("runAi", () => {
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
+      provider: "anthropic",
     });
     rpc.mockResolvedValue({ data: null, error: null });
     const { runAi } = await import("@/lib/ai/gateway");
@@ -207,6 +219,7 @@ describe("runAi", () => {
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
+      provider: "anthropic",
     });
     rpc.mockResolvedValue({ data: null, error: { message: "ledger down" } });
     const { runAi } = await import("@/lib/ai/gateway");
@@ -224,6 +237,7 @@ describe("runAi", () => {
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
+      provider: "anthropic",
     });
     rpc.mockResolvedValue({ data: null, error: null });
     const { runAi } = await import("@/lib/ai/gateway");
@@ -261,6 +275,7 @@ describe("runAi", () => {
     resolveUserAdapterById.mockResolvedValue({
       adapter: anthropicAdapter,
       apiKey: "sk-user",
+      provider: "anthropic",
     });
     rpc.mockResolvedValue({ data: null, error: null });
     const { runAi } = await import("@/lib/ai/gateway");

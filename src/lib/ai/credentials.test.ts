@@ -83,10 +83,14 @@ describe("resolveUserAdapterById", () => {
       data: [{ provider: "openai", secret: "sk-owner" }],
       error: null,
     });
-    const { adapter, apiKey } = await resolveUserAdapterById(
+    const { adapter, apiKey, provider } = await resolveUserAdapterById(
       asTrustedUserId("owner-9"),
     );
-    expect(adapter.id).toBe("openai");
+    // The adapter is keyed by WIRE FORMAT and one adapter can serve several
+    // providers, so the provider id is returned alongside it rather than read
+    // back off the adapter.
+    expect(provider).toBe("openai");
+    expect(adapter.kind).toBe("openai");
     expect(apiKey).toBe("sk-owner");
     expect(rpc).toHaveBeenCalledWith("ai_credential_get", {
       p_user: "owner-9",
@@ -151,10 +155,10 @@ describe("resolveUserAdapterById · multiple stored providers", () => {
     });
     const second = await resolveUserAdapterById(asTrustedUserId("owner-9"));
 
-    expect(first.adapter.id).toBe(second.adapter.id);
+    expect(first.provider).toBe(second.provider);
     expect(first.apiKey).toBe(second.apiKey);
     // Stable sort is by provider id, so the choice is arbitrary but predictable.
-    expect(first.adapter.id).toBe("anthropic");
+    expect(first.provider).toBe("anthropic");
     expect(first.apiKey).toBe("sk-anthropic");
   });
 
@@ -173,10 +177,11 @@ describe("resolveUserAdapterById · multiple stored providers", () => {
       data: [{ provider: "openai", secret: "sk-only" }],
       error: null,
     });
-    const { adapter, apiKey } = await resolveUserAdapterById(
+    const { adapter, apiKey, provider } = await resolveUserAdapterById(
       asTrustedUserId("owner-9"),
     );
-    expect(adapter.id).toBe("openai");
+    expect(provider).toBe("openai");
+    expect(adapter.kind).toBe("openai");
     expect(apiKey).toBe("sk-only");
   });
 });

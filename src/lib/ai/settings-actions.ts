@@ -5,12 +5,12 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
-import { getAdapter } from "@/lib/ai/providers/registry";
+import { getAdapterForProviderId } from "@/lib/ai/providers/registry";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
 import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
-import { type AiProvider } from "@/lib/ai/providers/catalog";
+import { PROVIDER_CATALOG, type AiProvider } from "@/lib/ai/providers/catalog";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { readOrgBillingStatus } from "@/lib/billing/status";
 import { entitlesAi } from "@/lib/billing/entitling";
@@ -143,16 +143,19 @@ export async function setOrgByoKey(input: {
   const ctx = await requireOrgAdmin();
   if (!ctx) return fail(NOT_ADMIN);
 
-  const adapter = getAdapter(provider);
+  const adapter = getAdapterForProviderId(provider);
+  const { label, keyFormat } = PROVIDER_CATALOG[provider];
 
-  if (!adapter.keyFormat.safeParse(key).success)
-    return fail(`That doesn't look like a ${adapter.label} key.`);
+  // See credentials-actions.ts: the shape check and the human label are
+  // per-PROVIDER metadata, which is why they no longer live on the adapter.
+  if (!new RegExp(keyFormat).test(key))
+    return fail(`That doesn't look like a ${label} key.`);
 
   try {
-    await adapter.validateKey(key);
+    await adapter.validateKey({ apiKey: key, baseUrl: null });
   } catch (e) {
     if (e instanceof ProviderAuthError)
-      return fail(`That key was rejected by ${adapter.label}.`);
+      return fail(`That key was rejected by ${label}.`);
     return fail("Couldn't verify the key. Please try again.");
   }
 

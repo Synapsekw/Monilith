@@ -9,13 +9,12 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+// The adapter no longer carries the key format — that is per-PROVIDER
+// metadata (`ai_providers.key_format`), and the action applies it itself.
 const validateKey = vi.fn();
 vi.mock("@/lib/ai/providers/registry", () => ({
-  getAdapter: () => ({
-    id: "anthropic",
-    keyFormat: {
-      safeParse: (v: string) => ({ success: v.startsWith("sk-ant-") }),
-    },
+  getAdapterForProviderId: () => ({
+    kind: "anthropic",
     validateKey: (...a: unknown[]) => validateKey(...a),
   }),
 }));

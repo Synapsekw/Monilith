@@ -9,7 +9,10 @@ import {
 } from "@/lib/ai/errors";
 import { resolveUserAdapterById, asTrustedUserId } from "@/lib/ai/credentials";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { getAdapter } from "@/lib/ai/providers/registry";
+import {
+  getAdapter,
+  getAdapterForProviderId,
+} from "@/lib/ai/providers/registry";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
@@ -58,9 +61,9 @@ export async function resolveAiAdapter(
       if (error) throw error;
       const row = data?.[0];
       if (!row?.secret) throw new ByoKeyMissingError();
-      const provider = row.provider as AiProvider;
+      const provider = row.provider;
       return {
-        adapter: getAdapter(provider),
+        adapter: getAdapterForProviderId(provider),
         apiKey: row.secret,
         mode: "org_byo",
         provider,
@@ -84,10 +87,10 @@ export async function resolveAiAdapter(
     // parameter passed straight through. This is the ONE call site allowed
     // to mint a TrustedUserId — see credentials.ts for what that buys.
     case "per_user": {
-      const { adapter, apiKey } = await resolveUserAdapterById(
+      const { adapter, apiKey, provider } = await resolveUserAdapterById(
         asTrustedUserId(userId),
       );
-      return { adapter, apiKey, mode: "per_user", provider: adapter.id };
+      return { adapter, apiKey, mode: "per_user", provider };
     }
   }
 }

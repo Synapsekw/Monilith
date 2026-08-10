@@ -3,6 +3,7 @@ import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
+import { toRequestArgs } from "@/lib/ai/providers/request";
 import type { ModelChoice } from "@/lib/ai/model-map";
 
 /**
@@ -43,6 +44,7 @@ export async function generateProposal(
   opts: {
     adapter: ProviderAdapter;
     apiKey: string;
+    baseUrl?: string | null;
     feedback?: string;
     choice?: ModelChoice;
   },
@@ -52,9 +54,8 @@ export async function generateProposal(
   model: string;
 }> {
   return opts.adapter.generateProposal({
-    apiKey: opts.apiKey,
+    ...toRequestArgs(opts),
     system: buildSystemPrompt(),
     user: buildUserPrompt(snap, opts.feedback),
-    choice: opts.choice,
   });
 }

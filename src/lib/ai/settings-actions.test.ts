@@ -62,14 +62,12 @@ const billing = (status: string, tier = "pulse", seats = 4) =>
     graceEndsAt: null,
   });
 
+// See credentials-actions.test.ts: key format + label are per-PROVIDER and no
+// longer live on the (per-wire-format) adapter.
 const validateKey = vi.fn();
 vi.mock("@/lib/ai/providers/registry", () => ({
-  getAdapter: () => ({
-    id: "anthropic",
-    label: "Anthropic",
-    keyFormat: {
-      safeParse: (v: string) => ({ success: v.startsWith("sk-ant-") }),
-    },
+  getAdapterForProviderId: () => ({
+    kind: "anthropic",
     validateKey: (...a: unknown[]) => validateKey(...a),
   }),
 }));
@@ -103,7 +101,10 @@ describe("org ai settings actions", () => {
       provider: "anthropic",
       key: "sk-ant-valid-key",
     });
-    expect(validateKey).toHaveBeenCalledWith("sk-ant-valid-key");
+    expect(validateKey).toHaveBeenCalledWith({
+      apiKey: "sk-ant-valid-key",
+      baseUrl: null,
+    });
     expect(svcRpc).toHaveBeenCalledWith(
       "org_ai_secret_set",
       expect.objectContaining({

@@ -5,6 +5,7 @@ import {
   type BoardProposal,
 } from "@/lib/ai/board-gen-schema";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
+import { toRequestArgs } from "@/lib/ai/providers/request";
 import type { ModelChoice } from "@/lib/ai/model-map";
 
 /**
@@ -49,17 +50,17 @@ export async function generateBoardProposal(
   opts: {
     adapter: ProviderAdapter;
     apiKey: string;
+    baseUrl?: string | null;
     feedback?: string;
     choice?: ModelChoice;
   },
 ): Promise<{ proposal: BoardProposal; usage: AiUsageTokens; model: string }> {
   const { data, usage, model } =
     await opts.adapter.generateStructured<BoardProposal>({
-      apiKey: opts.apiKey,
+      ...toRequestArgs(opts),
       system: buildBoardGenSystemPrompt(),
       user: buildUserPrompt(prompt, opts.feedback),
       schema: BOARD_PROPOSAL_JSON_SCHEMA,
-      choice: opts.choice,
     });
   return { proposal: data, usage, model };
 }
