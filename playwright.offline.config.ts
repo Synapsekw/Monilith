@@ -23,6 +23,9 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: /offline\.spec\.ts$/,
+  // `offline.spec.ts` provisions users via the service-role admin API and was
+  // the largest single source of leaked DEV accounts. See e2e/support/e2e-target.ts.
+  globalSetup: "./e2e/support/global-setup.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
