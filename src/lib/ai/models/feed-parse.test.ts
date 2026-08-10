@@ -60,6 +60,51 @@ describe("parseFeed", () => {
     expect(unpriced!.input_price_per_mtok).toBeNull();
   });
 
+  it("marks a model with only an input price as needs_pricing but still parses that price", () => {
+    // Asymmetric pricing (one rate present, one absent) must quarantine the
+    // row the same way full-absence does — a model can't be metered off half
+    // a price pair — but the price that IS present should still come through.
+    const feed = {
+      data: [
+        {
+          id: "openai/input-only-test",
+          owned_by: "openai",
+          name: "Input Only Test",
+          type: "language",
+          tags: ["tool-use"],
+          context_window: 8000,
+          max_tokens: 4000,
+          pricing: { input: "0.000001" },
+        },
+      ],
+    };
+    const [row] = parseFeed(feed, ENABLED);
+    expect(row.status).toBe("needs_pricing");
+    expect(row.input_price_per_mtok).toBeCloseTo(1, 6);
+    expect(row.output_price_per_mtok).toBeNull();
+  });
+
+  it("marks a model with only an output price as needs_pricing but still parses that price", () => {
+    const feed = {
+      data: [
+        {
+          id: "openai/output-only-test",
+          owned_by: "openai",
+          name: "Output Only Test",
+          type: "language",
+          tags: ["tool-use"],
+          context_window: 8000,
+          max_tokens: 4000,
+          pricing: { output: "0.000002" },
+        },
+      ],
+    };
+    const [row] = parseFeed(feed, ENABLED);
+    expect(row.status).toBe("needs_pricing");
+    expect(row.input_price_per_mtok).toBeNull();
+    expect(row.output_price_per_mtok).toBeCloseTo(2, 6);
+  });
+
   it("leaves cache prices null when the provider publishes none", () => {
     const mistral = rows.find((r) => r.provider === "mistral");
     expect(mistral).toBeDefined();
@@ -74,8 +119,37 @@ describe("parseFeed", () => {
     expect(sonnet!.cache_write_price_per_mtok).toBeCloseTo(2.5, 6);
   });
 
-  it("returns an empty array for a malformed payload instead of throwing", () => {
-    expect(parseFeed({ nope: true }, ENABLED)).toEqual([]);
-    expect(parseFeed(null, ENABLED)).toEqual([]);
+  it("leaves supports_tools false for a model with no tool-use tag", () => {
+    // gpt-4o-mini-search-preview was added to the fixture specifically to keep
+    // a no-tool-use shape in play; this asserts that's actually the case.
+    const searchPreview = rows.find(
+      (r) => r.model_id === "gpt-4o-mini-search-preview",
+    );
+    expect(searchPreview).toBeDefined();
+    expect(searchPreview!.supports_tools).toBe(false);
+  });
+
+  describe.each([
+    ["nope key", { nope: true }],
+    ["null", null],
+    ["undefined", undefined],
+    ["string", "not-a-feed"],
+    ["number", 42],
+    ["array", []],
+    ["data: null", { data: null }],
+    ["data: not-an-array", { data: "not-an-array" }],
+    [
+      "data: mix of non-object/malformed entries",
+      { data: [null, 42, "x", {}] },
+    ],
+  ])("malformed payload: %s", (_label, payload) => {
+    it("returns an empty array instead of throwing", () => {
+      // This guard is what stops a Gateway outage (or a shape change) from
+      // retiring the whole catalog: the caller treats [] as "skip the
+      // refresh," so parseFeed must never throw regardless of input shape,
+      // and one bad entry inside `data` must not poison entries around it.
+      expect(() => parseFeed(payload, ENABLED)).not.toThrow();
+      expect(parseFeed(payload, ENABLED)).toEqual([]);
+    });
   });
 });
