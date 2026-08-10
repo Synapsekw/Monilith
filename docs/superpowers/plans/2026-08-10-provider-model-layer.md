@@ -950,8 +950,8 @@ const pricingSchema = z
   .object({
     input: z.string().optional(),
     output: z.string().optional(),
-    cachedInputTokens: z.string().optional(),
-    cacheCreationInputTokens: z.string().optional(),
+    input_cache_read: z.string().optional(),
+    input_cache_write: z.string().optional(),
   })
   .partial();
 
@@ -1015,8 +1015,8 @@ export function parseFeed(
       supports_tools: (e.tags ?? []).includes("tool-use"),
       input_price_per_mtok: input,
       output_price_per_mtok: output,
-      cache_read_price_per_mtok: perMtok(e.pricing?.cachedInputTokens),
-      cache_write_price_per_mtok: perMtok(e.pricing?.cacheCreationInputTokens),
+      cache_read_price_per_mtok: perMtok(e.pricing?.input_cache_read),
+      cache_write_price_per_mtok: perMtok(e.pricing?.input_cache_write),
       tier: tierFor(input),
       status: priced ? "active" : "needs_pricing",
     });
