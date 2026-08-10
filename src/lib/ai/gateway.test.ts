@@ -142,8 +142,9 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     });
     // The whole point of the fix: resolution is keyed on the caller-supplied
     // userId, not a session — never a different id than what runAi meters
-    // against.
-    expect(resolveUserAdapterById).toHaveBeenCalledWith("user-42");
+    // against. The second arg is hardcoded "anthropic" until Task 8 threads
+    // a requested provider through resolveAiAdapter itself.
+    expect(resolveUserAdapterById).toHaveBeenCalledWith("user-42", "anthropic");
   });
 
   it("per_user with no key on file → PersonalAiKeyMissingError (a per-user config state runAi callers can catch, not a raw crash)", async () => {
@@ -211,7 +212,7 @@ describe("runAi", () => {
     );
     // Credential resolution and ledger attribution must agree by
     // construction: the same "u-1" that gets billed is the id whose key ran.
-    expect(resolveUserAdapterById).toHaveBeenCalledWith("u-1");
+    expect(resolveUserAdapterById).toHaveBeenCalledWith("u-1", "anthropic");
   });
 
   it("a failed ledger write does not fail the call", async () => {

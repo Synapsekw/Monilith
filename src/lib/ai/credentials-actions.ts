@@ -3,49 +3,47 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getAdapterForProviderId } from "@/lib/ai/providers/registry";
+import { getAdapter } from "@/lib/ai/providers/registry";
+import { getProviderRow } from "@/lib/ai/providers/provider-rows";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
-import { PROVIDER_CATALOG, type AiProvider } from "@/lib/ai/providers/catalog";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
+// The provider is validated against the ai_providers table, not a hardcoded
+// enum — that table is the constraint now, so a provider added by a DB row is
+// immediately usable here with no code change.
 const saveSchema = z.object({
-  provider: z.enum(["anthropic", "openai", "google"]),
+  provider: z.string().trim().min(1).max(64),
   key: z.string().trim().min(10).max(300),
 });
 
 export async function saveAiKey(input: {
-  provider: AiProvider;
+  provider: string;
   key: string;
-}): Promise<ActionResult<{ provider: AiProvider; hint: string }>> {
+}): Promise<ActionResult<{ provider: string; hint: string }>> {
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return fail("Enter a valid API key.");
   const { provider, key } = parsed.data;
 
   const user = await requireUser();
-  const adapter = getAdapterForProviderId(provider);
+  const svc = createServiceClient();
+  const row = await getProviderRow(svc, provider);
+  if (!row || !row.enabled) return fail("Unknown provider.");
 
-  // Cheap pre-flight shape check before the live ping. The regex mirrors
-  // `ai_providers.key_format`; Task 5 reads it from the row instead. It lives
-  // per-PROVIDER, never on the adapter — one adapter serves several providers
-  // whose keys look nothing alike.
-  if (!new RegExp(PROVIDER_CATALOG[provider].keyFormat).test(key))
-    return fail(
-      `That doesn't look like a ${PROVIDER_CATALOG[provider].label} key.`,
-    );
+  // Cheap shape check from the row's regex, before the live network ping.
+  if (!new RegExp(row.keyFormat).test(key))
+    return fail(`That doesn't look like a ${row.label} key.`);
 
+  const adapter = getAdapter(row.adapterKind);
   try {
-    await adapter.validateKey({ apiKey: key, baseUrl: null });
+    await adapter.validateKey({ apiKey: key, baseUrl: row.baseUrl });
   } catch (e) {
     if (e instanceof ProviderAuthError)
-      return fail(
-        `That key was rejected by ${PROVIDER_CATALOG[provider].label}.`,
-      );
+      return fail(`That key was rejected by ${row.label}.`);
     return fail("Couldn't verify the key. Please try again.");
   }
 
   const hint = maskKey(key);
-  const svc = createServiceClient();
   const { error } = await svc.rpc("ai_credential_set", {
     p_user: user.id,
     p_provider: provider,
@@ -54,17 +52,25 @@ export async function saveAiKey(input: {
   });
   if (error) return fail("Couldn't save the key. Please try again.");
 
-  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
   return { ok: true, data: { provider, hint } };
 }
 
-export async function removeAiKey(): Promise<
-  ActionResult<Record<never, never>>
-> {
+export async function removeAiKey(input: {
+  provider: string;
+}): Promise<ActionResult<Record<never, never>>> {
+  const parsed = z
+    .object({ provider: z.string().trim().min(1).max(64) })
+    .safeParse(input);
+  if (!parsed.success) return fail("Unknown provider.");
   const user = await requireUser();
   const svc = createServiceClient();
-  const { error } = await svc.rpc("ai_credential_clear", { p_user: user.id });
+  // Deletes ONLY this provider's key; other providers' keys survive.
+  const { error } = await svc.rpc("ai_credential_delete", {
+    p_user: user.id,
+    p_provider: parsed.data.provider,
+  });
   if (error) return fail("Couldn't remove the key. Please try again.");
-  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
   return { ok: true, data: {} };
 }

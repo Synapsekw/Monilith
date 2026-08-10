@@ -9,25 +9,23 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({ rpc }),
 }));
 
-// `credentials.ts` imports requireUser at module scope for getMyAiCredential —
-// mocked so module resolution never hits the real cookie-bound implementation.
-// resolveUserAdapterById does not call this at all (see the "session-less" test
-// below, which now actually asserts that rather than just claiming it in its
-// name).
+// `credentials.ts` imports requireUser at module scope for
+// listMyAiCredentials — mocked so module resolution never hits the real
+// cookie-bound implementation. resolveUserAdapterById does not call this at
+// all (see the "session-less" test below, which asserts that rather than
+// just claiming it in its name).
 const requireUser = vi.fn(async () => ({ id: "user-1" }));
 vi.mock("@/lib/auth/session", () => ({
   requireUser: (...a: unknown[]) => requireUser(...(a as [])),
 }));
 
-// The RLS self-read behind getMyAiCredential. `postgrestResult` is what the
+// The RLS self-read behind listMyAiCredentials. `postgrestResult` is what the
 // awaited builder resolves to; `queryLog` records the shaping calls so the
-// tests can assert the read is ORDERED and BOUNDED rather than just that it
-// returned something.
+// tests can assert the read is ORDERED (all rows, not bounded to one).
 const postgrestResult = vi.fn();
-const queryLog: { order: unknown[][]; limit: number[]; single: number } = {
+const queryLog: { order: unknown[][]; limit: number[] } = {
   order: [],
   limit: [],
-  single: 0,
 };
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -37,16 +35,10 @@ vi.mock("@/lib/supabase/server", () => ({
         eq: () => builder,
         order: (...a: unknown[]) => {
           queryLog.order.push(a);
-          return builder;
+          return Promise.resolve(postgrestResult());
         },
         limit: (n: number) => {
           queryLog.limit.push(n);
-          return Promise.resolve(postgrestResult());
-        },
-        // Present only so a regression back to `.maybeSingle()` is caught by
-        // the "never asserts single-row" test instead of throwing here.
-        maybeSingle: () => {
-          queryLog.single += 1;
           return Promise.resolve(postgrestResult());
         },
       };
@@ -55,61 +47,138 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
+// getProviderRow is consumed by resolveUserAdapterById to find the adapter
+// kind + base_url for the requested provider.
+const getProviderRow = vi.fn();
+vi.mock("@/lib/ai/providers/provider-rows", () => ({
+  getProviderRow: (...a: unknown[]) => getProviderRow(...a),
+}));
+
+// Adapters are keyed by WIRE FORMAT now; getAdapter(kind) returns a stub
+// tagged by kind so tests can assert which one was picked.
+vi.mock("@/lib/ai/providers/registry", () => ({
+  getAdapter: (kind: string) => ({ kind }),
+}));
+
 import {
   resolveUserAdapterById,
+  listMyAiCredentials,
   asTrustedUserId,
   maskKey,
-  getMyAiCredential,
 } from "@/lib/ai/credentials";
+
+function providerRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "anthropic",
+    label: "Anthropic (Claude)",
+    adapterKind: "anthropic",
+    baseUrl: null,
+    keyPlaceholder: "sk-ant-…",
+    keyFormat: "^sk-ant-",
+    enabled: true,
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   rpc.mockReset();
   requireUser.mockClear();
   postgrestResult.mockReset();
+  getProviderRow.mockReset();
   queryLog.order = [];
   queryLog.limit = [];
-  queryLog.single = 0;
 });
 
 describe("maskKey", () => {
-  it("shows a head and the last 4 chars", () => {
-    expect(maskKey("sk-ant-abcdefAB12")).toBe("sk-ant-…AB12");
+  it("keeps a head and the last four, never the middle", () => {
+    expect(maskKey("sk-ant-api03-ABCDEFGHIJKLMNOP1234")).toBe("sk-ant-…1234");
+  });
+
+  it("handles a short key without throwing", () => {
+    expect(maskKey("sk-1234")).toBe("sk-…1234");
   });
 });
 
 describe("resolveUserAdapterById", () => {
-  it("is session-less: resolves the SUPPLIED id with no requireUser() call", async () => {
+  it("is session-less: resolves the SUPPLIED id/provider with no requireUser() call", async () => {
     rpc.mockResolvedValueOnce({
-      data: [{ provider: "openai", secret: "sk-owner" }],
+      data: [{ provider: "anthropic", secret: "sk-owner" }],
       error: null,
     });
-    const { adapter, apiKey, provider } = await resolveUserAdapterById(
+    getProviderRow.mockResolvedValueOnce(providerRow());
+
+    const { adapter, apiKey, baseUrl } = await resolveUserAdapterById(
       asTrustedUserId("owner-9"),
+      "anthropic",
     );
-    // The adapter is keyed by WIRE FORMAT and one adapter can serve several
-    // providers, so the provider id is returned alongside it rather than read
-    // back off the adapter.
-    expect(provider).toBe("openai");
-    expect(adapter.kind).toBe("openai");
+    expect(adapter.kind).toBe("anthropic");
     expect(apiKey).toBe("sk-owner");
+    expect(baseUrl).toBeNull();
     expect(rpc).toHaveBeenCalledWith("ai_credential_get", {
       p_user: "owner-9",
+      p_provider: "anthropic",
     });
+    expect(getProviderRow).toHaveBeenCalledWith(expect.anything(), "anthropic");
     // The actual claim the test name makes, asserted rather than assumed.
     expect(requireUser).not.toHaveBeenCalled();
   });
 
-  it("throws PersonalAiKeyMissingError when that user has no stored key — a per-user config state, not a crash", async () => {
+  it("returns the requested provider's baseUrl for an openai-compatible provider", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ provider: "moonshotai", secret: "sk-kimi" }],
+      error: null,
+    });
+    getProviderRow.mockResolvedValueOnce(
+      providerRow({
+        id: "moonshotai",
+        adapterKind: "openai-compatible",
+        baseUrl: "https://api.moonshot.ai/v1",
+      }),
+    );
+    const { adapter, apiKey, baseUrl } = await resolveUserAdapterById(
+      asTrustedUserId("owner-9"),
+      "moonshotai",
+    );
+    expect(adapter.kind).toBe("openai-compatible");
+    expect(apiKey).toBe("sk-kimi");
+    expect(baseUrl).toBe("https://api.moonshot.ai/v1");
+  });
+
+  it("throws PersonalAiKeyMissingError when that user has no stored key for the requested provider", async () => {
     rpc.mockResolvedValueOnce({ data: [], error: null });
+    getProviderRow.mockResolvedValueOnce(providerRow());
     await expect(
-      resolveUserAdapterById(asTrustedUserId("owner-9")),
+      resolveUserAdapterById(asTrustedUserId("owner-9"), "anthropic"),
+    ).rejects.toBeInstanceOf(PersonalAiKeyMissingError);
+  });
+
+  it("throws PersonalAiKeyMissingError when the provider row is unknown", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ provider: "made-up", secret: "sk-x" }],
+      error: null,
+    });
+    getProviderRow.mockResolvedValueOnce(null);
+    await expect(
+      resolveUserAdapterById(asTrustedUserId("owner-9"), "made-up"),
+    ).rejects.toBeInstanceOf(PersonalAiKeyMissingError);
+  });
+
+  it("throws PersonalAiKeyMissingError when the provider row is disabled", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{ provider: "anthropic", secret: "sk-owner" }],
+      error: null,
+    });
+    getProviderRow.mockResolvedValueOnce(providerRow({ enabled: false }));
+    await expect(
+      resolveUserAdapterById(asTrustedUserId("owner-9"), "anthropic"),
     ).rejects.toBeInstanceOf(PersonalAiKeyMissingError);
   });
 
   it("PersonalAiKeyMissingError is still an AiNotConfiguredError, so existing mapAiError/action catches keep matching", async () => {
     rpc.mockResolvedValueOnce({ data: [], error: null });
+    getProviderRow.mockResolvedValueOnce(providerRow());
     await expect(
-      resolveUserAdapterById(asTrustedUserId("owner-9")),
+      resolveUserAdapterById(asTrustedUserId("owner-9"), "anthropic"),
     ).rejects.toBeInstanceOf(AiNotConfiguredError);
   });
 
@@ -118,76 +187,32 @@ describe("resolveUserAdapterById", () => {
       data: null,
       error: { message: "vault down" },
     });
+    getProviderRow.mockResolvedValueOnce(providerRow());
     await expect(
-      resolveUserAdapterById(asTrustedUserId("owner-9")),
+      resolveUserAdapterById(asTrustedUserId("owner-9"), "anthropic"),
     ).rejects.toMatchObject({ message: "vault down" });
   });
-});
 
-// ===========================================================================
-// One key PER PROVIDER (migration 20260810173752).
-// ===========================================================================
-// `ai_credential_set` no longer clears the user's other providers, so both
-// readers below can now see MORE THAN ONE ROW for a single user. Neither was
-// written for that. These are the regression tests for the two ways that broke.
-
-describe("resolveUserAdapterById · multiple stored providers", () => {
-  it("picks the SAME provider regardless of the order the rows arrive in", async () => {
-    // The 1-arg ai_credential_get(p_user) has no `order by`, so row order is
-    // whatever Postgres emits. Two runs must still spend the same key.
+  it("resolves only the requested provider even when the rpc mock/data holds others (2-arg rpc call is scoped server-side)", async () => {
+    // The 2-arg ai_credential_get(p_user, p_provider) is scoped in SQL, so the
+    // resolver simply trusts row [0] of whatever comes back — this asserts it
+    // reads that row rather than filtering client-side, matching the real RPC
+    // contract of returning at most one row for a given provider.
     rpc.mockResolvedValueOnce({
-      data: [
-        { provider: "openai", secret: "sk-openai" },
-        { provider: "anthropic", secret: "sk-anthropic" },
-        { provider: "google", secret: "sk-google" },
-      ],
+      data: [{ provider: "anthropic", secret: "sk-anthropic" }],
       error: null,
     });
-    const first = await resolveUserAdapterById(asTrustedUserId("owner-9"));
-
-    rpc.mockResolvedValueOnce({
-      data: [
-        { provider: "google", secret: "sk-google" },
-        { provider: "anthropic", secret: "sk-anthropic" },
-        { provider: "openai", secret: "sk-openai" },
-      ],
-      error: null,
-    });
-    const second = await resolveUserAdapterById(asTrustedUserId("owner-9"));
-
-    expect(first.provider).toBe(second.provider);
-    expect(first.apiKey).toBe(second.apiKey);
-    // Stable sort is by provider id, so the choice is arbitrary but predictable.
-    expect(first.provider).toBe("anthropic");
-    expect(first.apiKey).toBe("sk-anthropic");
-  });
-
-  it("does not mutate the array the rpc handed back", async () => {
-    const data = [
-      { provider: "openai", secret: "sk-openai" },
-      { provider: "anthropic", secret: "sk-anthropic" },
-    ];
-    rpc.mockResolvedValueOnce({ data, error: null });
-    await resolveUserAdapterById(asTrustedUserId("owner-9"));
-    expect(data.map((r) => r.provider)).toEqual(["openai", "anthropic"]);
-  });
-
-  it("still resolves the single-row case unchanged", async () => {
-    rpc.mockResolvedValueOnce({
-      data: [{ provider: "openai", secret: "sk-only" }],
-      error: null,
-    });
-    const { adapter, apiKey, provider } = await resolveUserAdapterById(
+    getProviderRow.mockResolvedValueOnce(providerRow());
+    const { apiKey } = await resolveUserAdapterById(
       asTrustedUserId("owner-9"),
+      "anthropic",
     );
-    expect(provider).toBe("openai");
-    expect(adapter.kind).toBe("openai");
-    expect(apiKey).toBe("sk-only");
+    expect(apiKey).toBe("sk-anthropic");
   });
 });
 
-describe("getMyAiCredential", () => {
-  it("returns a credential when the user has one", async () => {
+describe("listMyAiCredentials", () => {
+  it("returns every stored credential, ordered by provider", async () => {
     postgrestResult.mockReturnValueOnce({
       data: [
         {
@@ -195,69 +220,44 @@ describe("getMyAiCredential", () => {
           key_hint: "sk-ant-…AB12",
           updated_at: "2026-08-10T00:00:00Z",
         },
-      ],
-      error: null,
-    });
-    await expect(getMyAiCredential()).resolves.toEqual({
-      provider: "anthropic",
-      hint: "sk-ant-…AB12",
-      updatedAt: "2026-08-10T00:00:00Z",
-    });
-  });
-
-  it("returns null when the user has no credential at all", async () => {
-    postgrestResult.mockReturnValueOnce({ data: [], error: null });
-    await expect(getMyAiCredential()).resolves.toBeNull();
-  });
-
-  it("never asserts a single row — it orders and bounds the read instead", async () => {
-    // `.maybeSingle()` ERRORS on the second row. Since keys became
-    // per-provider, that turned a user with two keys into a null `data` — and
-    // the old code discarded the error, so the settings page rendered "no key
-    // configured" while their keys existed and were unmanageable from the UI.
-    postgrestResult.mockReturnValueOnce({
-      data: [
         {
-          provider: "anthropic",
-          key_hint: "sk-ant-…AB12",
-          updated_at: "2026-08-10T00:00:00Z",
+          provider: "moonshotai",
+          key_hint: "sk-kimi…BBBB",
+          updated_at: "2026-08-09T00:00:00Z",
         },
       ],
       error: null,
     });
-    await getMyAiCredential();
-    expect(queryLog.single).toBe(0);
-    expect(queryLog.order).toEqual([["provider"]]);
-    expect(queryLog.limit).toEqual([1]);
-  });
-
-  it("returns the same credential for a user holding several, whatever the row order", async () => {
-    const rows = [
-      { provider: "openai", key_hint: "sk-…9999", updated_at: "2026-08-09" },
+    await expect(listMyAiCredentials()).resolves.toEqual([
       {
         provider: "anthropic",
-        key_hint: "sk-ant-…AB12",
-        updated_at: "2026-08-10",
+        hint: "sk-ant-…AB12",
+        updatedAt: "2026-08-10T00:00:00Z",
       },
-    ];
-    postgrestResult.mockReturnValueOnce({ data: rows, error: null });
-    const a = await getMyAiCredential();
-    postgrestResult.mockReturnValueOnce({
-      data: [...rows].reverse(),
-      error: null,
-    });
-    const b = await getMyAiCredential();
-    // The DB does the ordering (asserted above); the point here is that a
-    // multi-row answer resolves to a credential rather than collapsing to null.
-    expect(a).not.toBeNull();
-    expect(b).not.toBeNull();
+      {
+        provider: "moonshotai",
+        hint: "sk-kimi…BBBB",
+        updatedAt: "2026-08-09T00:00:00Z",
+      },
+    ]);
+    expect(queryLog.order).toEqual([["provider"]]);
+    // Not bounded — every provider's key is returned, not just one.
+    expect(queryLog.limit).toEqual([]);
   });
 
-  it("SURFACES a database error instead of degrading to a false 'no key configured'", async () => {
-    postgrestResult.mockReturnValueOnce({
-      data: null,
-      error: { message: "JSON object requested, multiple rows returned" },
-    });
-    await expect(getMyAiCredential()).rejects.toThrow(/getMyAiCredential/);
+  it("returns an empty array when the user has no credentials", async () => {
+    postgrestResult.mockReturnValueOnce({ data: [], error: null });
+    await expect(listMyAiCredentials()).resolves.toEqual([]);
+  });
+
+  it("returns an empty array rather than throwing when data is null", async () => {
+    postgrestResult.mockReturnValueOnce({ data: null, error: null });
+    await expect(listMyAiCredentials()).resolves.toEqual([]);
+  });
+
+  it("is a real session read: calls requireUser", async () => {
+    postgrestResult.mockReturnValueOnce({ data: [], error: null });
+    await listMyAiCredentials();
+    expect(requireUser).toHaveBeenCalledTimes(1);
   });
 });

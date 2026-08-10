@@ -87,10 +87,16 @@ export async function resolveAiAdapter(
     // parameter passed straight through. This is the ONE call site allowed
     // to mint a TrustedUserId — see credentials.ts for what that buys.
     case "per_user": {
-      const { adapter, apiKey, provider } = await resolveUserAdapterById(
+      // INTERIM: hardcoded to "anthropic" until Task 8 threads a requested
+      // provider through resolveAiAdapter itself (model-map only ever emits
+      // claude-* model ids today, so this is a no-op for current callers —
+      // see docs/superpowers/plans/2026-08-10-provider-model-layer.md Task 8).
+      const wanted = "anthropic";
+      const { adapter, apiKey } = await resolveUserAdapterById(
         asTrustedUserId(userId),
+        wanted,
       );
-      return { adapter, apiKey, mode: "per_user", provider };
+      return { adapter, apiKey, mode: "per_user", provider: wanted };
     }
   }
 }

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { isOrgAdminCached } from "@/lib/org/guard";
-import { getMyAiCredential } from "@/lib/ai/credentials";
+import { listMyAiCredentials } from "@/lib/ai/credentials";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingRow } from "@/components/settings/setting-row";
@@ -23,11 +23,15 @@ export default async function AiSettingsPage() {
   const org = await resolveActiveOrg();
   if (!org) redirect("/onboarding");
 
-  const [aiCredential, orgAi, isAdmin] = await Promise.all([
-    getMyAiCredential(),
+  const [credentials, orgAi, isAdmin] = await Promise.all([
+    listMyAiCredentials(),
     getOrgAiSettings(),
     isOrgAdminCached(user.id, org.id),
   ]);
+  // INTERIM: AiProviderForm still renders a single credential. A user can now
+  // hold one key per provider (Task 1); Task 9 replaces this with a real
+  // multi-key list UI. Until then, show whichever key sorts first.
+  const aiCredential = credentials[0] ?? null;
 
   const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";

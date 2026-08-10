@@ -49,9 +49,10 @@ export function AiProviderForm({ initial }: { initial: Configured | null }) {
   }
 
   function remove() {
+    if (!configured) return;
     setError(null);
     start(async () => {
-      const res = await removeAiKey();
+      const res = await removeAiKey({ provider: configured.provider });
       if (res.ok) {
         setConfigured(null);
         setEditing(true);
