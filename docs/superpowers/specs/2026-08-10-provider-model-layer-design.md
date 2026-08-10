@@ -8,7 +8,7 @@
 ## Problem
 
 Users want agents pinned to a model of their choosing, on whichever provider they hold an
-API key for. Three hard limits block that today:
+API key for. Four hard limits block that today:
 
 1. **One key per user.** `user_ai_credentials` is already PK'd `(user_id, provider)`, but
    `ai_credential_set` opens with a loop that deletes every other row for that user
@@ -18,9 +18,13 @@ API key for. Three hard limits block that today:
 3. **Two of three adapters ignore the model.** `providers/types.ts` documents it plainly:
    "Only the Anthropic adapter honours `choice`; the OpenAI/Google adapters ignore it and
    run their own fixed model."
+4. **The provider set is closed.** `AiProvider` is a three-member TS union mirrored by two
+   hardcoded `check (provider in (…))` constraints, so a provider like Kimi cannot be added
+   without a code change and a migration.
 
-A fourth requirement arrived during brainstorming: **new models must become selectable
-without shipping a release.**
+Two further requirements arrived during brainstorming: **new models must become selectable
+without shipping a release**, and the provider set must reach beyond the original three —
+targeting Anthropic, OpenAI, Google, Mistral and Kimi.
 
 ### The regression this must not cause
 
@@ -39,6 +43,7 @@ that keeps the adapter change from being a regression.** The two must ship toget
 | Sequencing       | Three specs; provider/model layer first, then capability & knowledge, then orchestration.           |
 | Catalog location | A database table, not an in-repo constant — new models must appear without a deploy.                |
 | Catalog source   | Vercel AI Gateway `GET /v1/models` (metadata feed only; inference still goes direct with BYO keys). |
+| Provider set     | DB-driven registry, not a TS union — new providers (Kimi, DeepSeek, xAI, …) added without a deploy. |
 | Key ownership    | Keep the org-wide `ai_mode`; each mode holds up to one key **per provider**.                        |
 | Adapter strategy | Keep `ProviderAdapter` / `registry` / `runAi` intact; swap each adapter's internals to AI SDK v6.   |
 | Selection scope  | Per-agent picker + one org default model; `model-map` degrades to a per-feature tier hint.          |
@@ -46,18 +51,72 @@ that keeps the adapter change from being a regression.** The two must ship toget
 
 ## Architecture
 
+### 0. `ai_providers` — the provider registry
+
+`AiProvider` is currently a three-member TS union (`providers/catalog.ts`), mirrored by two
+hardcoded `check (provider in ('anthropic','openai','google'))` constraints. That union is
+the reason adding Kimi would need a deploy — so it moves to the database, exactly as the
+model catalog did.
+
+```
+id             text primary key      -- 'moonshotai', 'anthropic', 'deepseek', …
+label          text                  -- 'Kimi (Moonshot AI)'
+adapter_kind   'anthropic' | 'google' | 'openai-compatible'
+base_url       text                  -- OpenAI-compatible endpoints only
+key_placeholder text                 -- 'sk-…' — UI hint
+key_format     text                  -- regex for the cheap pre-flight shape check
+enabled        bool
+```
+
+**`adapter_kind` is what keeps this to four code paths.** Anthropic, OpenAI and Google have
+bespoke wire formats and keep their existing dedicated adapters. Everyone else exposes an
+OpenAI-compatible API, so **one new** generic `openai-compatible` adapter built on
+`@ai-sdk/openai-compatible` serves all of them, parameterised by `base_url`.
+
+**Seeded providers** — deliberately the strong five, not all 35:
+
+| id           | label              | adapter_kind        | base_url                     |
+| ------------ | ------------------ | ------------------- | ---------------------------- |
+| `anthropic`  | Anthropic (Claude) | `anthropic`         | native SDK                   |
+| `openai`     | OpenAI             | `openai`            | native SDK                   |
+| `google`     | Google Gemini      | `google`            | native SDK                   |
+| `mistral`    | Mistral            | `openai-compatible` | `https://api.mistral.ai/v1`  |
+| `moonshotai` | Kimi (Moonshot AI) | `openai-compatible` | `https://api.moonshot.ai/v1` |
+
+Only Mistral and Kimi need the new generic adapter, and both ride the same code path — so
+supporting them costs one adapter, not two.
+
+**Adding a sixth provider later is one row, no deploy** — the same promise already made for
+models, extended to providers. The other 30 providers in the feed stay unseeded; the
+`enabled` filter in §2 means their models never reach a picker.
+
+A useful consequence falls out for free: the **Gateway itself is just another row**
+(`adapter_kind: 'openai-compatible'`, `base_url: https://ai-gateway.vercel.sh/v1`). A user
+who would rather hold one key than eleven can add a single Gateway key and reach all 324
+models. BYO-direct and one-key-for-everything become the same mechanism rather than two.
+
+Consequential changes:
+
+- `AiProvider` widens from a union to `string`, validated against this table. 43 references
+  across 13 files; `providers/catalog.ts`'s `PROVIDER_CATALOG` becomes the seed data.
+- `getAdapter(provider)` resolves by `adapter_kind`, not by provider id.
+- The two `check (provider in (…))` constraints
+  (`user_ai_credentials`, `ai_platform_foundation`'s `byo_provider`) become foreign keys to
+  `ai_providers(id)` — still constrained, no longer requiring a migration per provider.
+
 ### 1. `ai_models` — the catalog
 
 New table. Source of truth for both **selection** and **pricing**, which is what keeps the
 two from drifting.
 
 ```
-provider                     'anthropic' | 'openai' | 'google'
-model_id                     provider-native id, e.g. 'claude-sonnet-5'
-gateway_id                   Gateway catalog key, e.g. 'anthropic/claude-sonnet-5'
-label                        display name
-context_length               int, nullable
-supports_tools               bool
+provider                     text references ai_providers (id)
+model_id                     provider-native id, e.g. 'kimi-k2'
+gateway_id                   Gateway catalog key, e.g. 'moonshotai/kimi-k2'
+label                        display name, e.g. 'Kimi K2 Instruct'
+context_length               int, nullable      -- feed: context_window
+max_output_tokens            int, nullable      -- feed: max_tokens
+supports_tools               bool               -- feed: 'tool-use' ∈ tags
 input_price_per_mtok         numeric
 output_price_per_mtok        numeric
 cache_read_price_per_mtok    numeric
@@ -76,9 +135,12 @@ primary key (provider, model_id)
   (`src/lib/ai/pricing.ts`). This is the floor: a refresh that never succeeds still leaves
   a working picker.
 
-The four price columns are chosen to mirror `AiUsageTokens` exactly (input, output, cache
-read, cache write), which is what the Gateway feed returns and what `computeCostUsd`
-already consumes.
+The four price columns mirror `AiUsageTokens` exactly (input, output, cache read, cache
+write), which is what the Gateway feed returns and what `computeCostUsd` already consumes.
+
+`supports_tools`, `context_length` and `max_output_tokens` are **derived from the feed, not
+hand-maintained** — verified against the live response (see §2). `max_output_tokens` and
+`context_length` are also the inputs Spec 2's reference-template token budget needs.
 
 ### 2. Catalog refresh
 
@@ -86,8 +148,36 @@ Daily `pg_cron` job → HMAC-signed POST to `/api/ai/models/refresh`. This reuse
 established sweep pattern verbatim (`verifyBody` from `ai/agentic/hmac.ts`, app URL and
 HMAC secret read from `vault.decrypted_secrets` — the shape used by five existing jobs).
 
-The handler calls `gateway.getAvailableModels()` from `@ai-sdk/gateway`, filters to the
-three providers we hold adapters for, upserts each row and stamps `last_seen_at`.
+The handler fetches the catalog, upserts each row and stamps `last_seen_at`.
+
+**Verified against the live endpoint on 2026-08-10** (`curl https://ai-gateway.vercel.sh/v1/models`,
+HTTP 200, no auth required — it is genuinely public): 324 models across 35 providers. Each
+entry carries `id`, `name`, `owned_by`, `context_window`, `max_tokens`, `type`, `tags`,
+`supported_parameters`, `modalities` and `pricing`.
+
+Two filters:
+
+- **`type == 'language'`.** The feed also carries image, video, audio, rerank and embedding
+  models (`bfl`, `klingai`, `fish-audio`, `recraft`, `voyage`) which are not chat models and
+  must never reach a model picker. Embeddings are unaffected either way —
+  `runEmbedding` deliberately bypasses `resolveAiAdapter` for a fixed platform model.
+- **`owned_by` is `enabled` in `ai_providers`.** Models from unseeded providers are ignored,
+  so the catalog never offers a model no key can reach.
+
+Across the five seeded providers that yields **95 selectable models**, every one of them
+priced, 88 of them tool-capable:
+
+| provider     | language models | tool-use | cache-priced |
+| ------------ | --------------- | -------- | ------------ |
+| `openai`     | 41              | 40       | 31           |
+| `google`     | 17              | 11       | 15           |
+| `anthropic`  | 15              | 15       | 15           |
+| `mistral`    | 14              | 14       | 0            |
+| `moonshotai` | 8               | 8        | 7            |
+
+Mistral publishes no cache pricing; the two cache columns are nullable and coalesce to 0,
+which is arithmetically correct rather than a gap. Of the 126 raw rows for these providers,
+31 are non-language and dropped by the `type` filter — the filter earns its place.
 
 Two guards, both load-bearing:
 
@@ -126,13 +216,19 @@ provider so the UI can say which key to add. The trust rules around `TrustedUser
 Unchanged: the `ProviderAdapter` interface, `registry.ts`, `getAdapter`, and `runAi`'s
 metering chokepoint. Call sites are untouched.
 
-Changed: each adapter's internals are reimplemented over AI SDK v6 (`generateText` /
+Changed: the three existing adapters are reimplemented over AI SDK v6 (`generateText` /
 `generateObject`), constructing `@ai-sdk/anthropic|openai|google` per call with the BYO key.
 The existing `client?: unknown` DI seam is retained so adapter tests keep their injection
 point.
 
-`supportsTools` moves from a per-adapter constant to the per-model catalog flag. That single
-change is what makes Spec 2's tool grants possible on providers other than Anthropic.
+Added: **one** generic `openai-compatible` adapter on `@ai-sdk/openai-compatible`, taking
+its `base_url` from the provider row. Mistral and Kimi both run on it, as does every
+provider added later without a deploy.
+
+`supportsTools` moves from a per-adapter constant to the per-model catalog flag — the feed's
+`tags` field supplies it. That single change is what makes Spec 2's tool grants possible on
+providers other than Anthropic, and it is why 88 of the 95 seeded models are usable by a
+tool-using agent rather than 15.
 
 ### 5. Pricing
 
@@ -191,25 +287,34 @@ rows, indexed `(status, provider)`); provider/model filtering in the picker is c
 - **RLS integration:** `ai_models` readable by `authenticated`, all writes denied; per-provider
   credential isolation (user A cannot read user B's row, and clearing A's OpenAI key leaves
   A's Anthropic key intact).
-- **Adapter:** each of the three via the `client` DI seam, asserting the **requested model is
-  actually sent** and that the returned `model` reflects what ran.
+- **Adapter:** all four kinds via the `client` DI seam, asserting the **requested model is
+  actually sent** and that the returned `model` reflects what ran. The `openai-compatible`
+  adapter is additionally asserted to honour its row's `base_url`, since that one value is
+  the whole difference between talking to Mistral and talking to Kimi.
 - **Regression:** an OpenAI-keyed org exercising every feature in `model-map` never receives
   a Claude model id. This is the test that proves §Problem's regression is closed.
+- **Catalog fixture:** the refresh parser runs against a captured real Gateway response, so
+  a feed shape change (a renamed `tags` value, a dropped `type`) fails a test rather than
+  silently emptying the picker.
 
 ## Execution DAG (working agreement #6)
 
-| Unit | Work                                                                  | Depends on |
-| ---- | --------------------------------------------------------------------- | ---------- |
-| A    | `ai_models` table, seed migration, refresh endpoint, pg_cron job      | —          |
-| B    | Multi-key credentials: SQL functions, server actions, settings key UI | —          |
-| C    | Adapter re-implementation on AI SDK v6                                | —          |
-| D    | `resolveModel`, gateway threading, catalog-backed pricing             | A          |
-| E    | Org default-model picker + agent editor model select                  | A, D       |
+| Unit | Work                                                                             | Depends on |
+| ---- | -------------------------------------------------------------------------------- | ---------- |
+| A    | `ai_providers` + `ai_models` tables, seed migration, refresh endpoint, pg_cron   | —          |
+| B    | Multi-key credentials: SQL functions, FK swap, server actions, settings key UI   | —          |
+| C    | Re-implement 3 adapters on AI SDK v6 + add the generic `openai-compatible` one   | —          |
+| D    | `resolveModel`, gateway threading, catalog-backed pricing, `AiProvider` widening | A          |
+| E    | Org default-model picker + agent editor model select                             | A, D       |
 
 - **Batch 1 (parallel):** A, B, C
 - **Batch 2:** D
 - **Batch 3:** E
 - **Critical path:** A → D → E
+
+Unit B's FK swap and unit D's `AiProvider` widening both touch the provider type, so B and D
+must not land in the same worktree without a rebase — B is in batch 1 and D in batch 2, so
+the ordering already handles it.
 
 ## 10. Out of scope
 
