@@ -11,6 +11,40 @@ const svcMaybeSingle = vi.fn(
   }),
 );
 const svcUpsert = vi.fn(async () => ({ error: null }));
+// `.update(values, opts).eq(col, val)` — resolves to PostgREST's
+// `{ error, count }`, so a write that matched no row is distinguishable.
+const svcUpdateResult = vi.fn(async () => ({
+  error: null as unknown,
+  count: 1 as number | null,
+}));
+const svcUpdate = vi.fn((values: Record<string, unknown>) => {
+  svcUpdate.lastValues = values;
+  return { eq: (_c: string, _v: string) => svcUpdateResult() };
+}) as ReturnType<typeof vi.fn> & { lastValues?: Record<string, unknown> };
+
+// The catalog row `setOrgDefaultModel` validates against, keyed
+// "provider/model_id". Absent => the picker offered something that is not in
+// the catalog at all.
+let models: Record<string, Record<string, unknown>> = {};
+const modelFixture = (
+  provider: string,
+  modelId: string,
+  status = "active",
+) => ({
+  provider,
+  model_id: modelId,
+  native_model_id: null,
+  label: modelId,
+  context_length: 200000,
+  max_output_tokens: 8192,
+  supports_tools: true,
+  input_price_per_mtok: 1,
+  output_price_per_mtok: 5,
+  cache_read_price_per_mtok: null,
+  cache_write_price_per_mtok: null,
+  tier: "standard",
+  status,
+});
 
 // The provider registry, keyed by id — `ai_providers` is the constraint now,
 // so setOrgByoKey reads the row instead of a hardcoded three-member catalog.
@@ -33,20 +67,37 @@ const providerFixture = (
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
     rpc: svcRpc,
-    from: (table: string) =>
-      table === "ai_providers"
-        ? {
-            select: () => ({
-              eq: (_c: string, id: string) => ({
+    from: (table: string) => {
+      if (table === "ai_providers")
+        return {
+          select: () => ({
+            eq: (_c: string, id: string) => ({
+              maybeSingle: () =>
+                Promise.resolve({ data: providers[id] ?? null, error: null }),
+            }),
+          }),
+        };
+      if (table === "ai_models")
+        return {
+          // getModel narrows on provider AND model_id, so `eq` chains twice.
+          select: () => ({
+            eq: (_c: string, provider: string) => ({
+              eq: (_c2: string, modelId: string) => ({
                 maybeSingle: () =>
-                  Promise.resolve({ data: providers[id] ?? null, error: null }),
+                  Promise.resolve({
+                    data: models[`${provider}/${modelId}`] ?? null,
+                    error: null,
+                  }),
               }),
             }),
-          }
-        : {
-            select: () => ({ eq: () => ({ maybeSingle: svcMaybeSingle }) }),
-            upsert: svcUpsert,
-          },
+          }),
+        };
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: svcMaybeSingle }) }),
+        upsert: svcUpsert,
+        update: svcUpdate,
+      };
+    },
   }),
 }));
 
@@ -106,6 +157,19 @@ const admin = (allowed: boolean) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  svcUpdateResult.mockResolvedValue({ error: null, count: 1 });
+  models = {
+    "anthropic/claude-sonnet-5": modelFixture("anthropic", "claude-sonnet-5"),
+    "mistral/mistral-small-latest": modelFixture(
+      "mistral",
+      "mistral-small-latest",
+    ),
+    "mistral/mistral-retired": modelFixture(
+      "mistral",
+      "mistral-retired",
+      "retired",
+    ),
+  };
   providers = {
     anthropic: providerFixture("anthropic", "anthropic", null),
     mistral: providerFixture(
@@ -319,6 +383,115 @@ describe("setAiMode — managed is derived from the subscription", () => {
       }),
       { onConflict: "org_id" },
     );
+  });
+});
+
+describe("setOrgDefaultModel", () => {
+  it("rejects non-admins", async () => {
+    admin(false);
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      await setOrgDefaultModel({
+        provider: "anthropic",
+        modelId: "claude-sonnet-5",
+      }),
+    ).toEqual({
+      ok: false,
+      error: "Only organization admins can change AI settings.",
+    });
+    expect(svcUpdate).not.toHaveBeenCalled();
+  });
+
+  it("stores the provider and the CATALOG key for admins", async () => {
+    admin(true);
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    const res = await setOrgDefaultModel({
+      provider: "mistral",
+      modelId: "mistral-small-latest",
+    });
+    expect(res.ok).toBe(true);
+    expect(svcUpdate.lastValues).toMatchObject({
+      default_provider: "mistral",
+      default_model_id: "mistral-small-latest",
+      updated_by: "user-1",
+    });
+  });
+
+  // The client sends a provider+model pair; neither is trusted. A model that is
+  // not active must never become the org-wide fallback.
+  it("refuses a model that is not in the catalog", async () => {
+    admin(true);
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      await setOrgDefaultModel({ provider: "anthropic", modelId: "made-up" }),
+    ).toEqual({ ok: false, error: "That model isn't available." });
+    expect(svcUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a retired model", async () => {
+    admin(true);
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      await setOrgDefaultModel({
+        provider: "mistral",
+        modelId: "mistral-retired",
+      }),
+    ).toEqual({ ok: false, error: "That model isn't available." });
+    expect(svcUpdate).not.toHaveBeenCalled();
+  });
+
+  // listActiveModels does NOT join ai_providers.enabled, so "the model is
+  // active" is not enough — a disabled provider's models are unrunnable.
+  it("refuses a model whose provider is disabled", async () => {
+    admin(true);
+    providers.mistral = providerFixture(
+      "mistral",
+      "openai-compatible",
+      "https://api.mistral.ai/v1",
+      false,
+    );
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      await setOrgDefaultModel({
+        provider: "mistral",
+        modelId: "mistral-small-latest",
+      }),
+    ).toEqual({ ok: false, error: "Unknown provider." });
+    expect(svcUpdate).not.toHaveBeenCalled();
+  });
+
+  // UPDATE, never UPSERT: org_ai_settings.ai_mode defaults to 'per_user', so
+  // inserting a row here would silently switch an org that has no row at all
+  // (mode 'off' by DEFAULT_ORG_AI_SETTINGS) into per-user AI.
+  it("never creates a settings row, and says so when there is none", async () => {
+    admin(true);
+    svcUpdateResult.mockResolvedValue({ error: null, count: 0 });
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      await setOrgDefaultModel({
+        provider: "anthropic",
+        modelId: "claude-sonnet-5",
+      }),
+    ).toEqual({
+      ok: false,
+      error: "Choose how AI is powered for this organization first.",
+    });
+    expect(svcUpsert).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed write instead of claiming success", async () => {
+    admin(true);
+    svcUpdateResult.mockResolvedValue({
+      error: { message: "boom" },
+      count: null,
+    });
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      await setOrgDefaultModel({
+        provider: "anthropic",
+        modelId: "claude-sonnet-5",
+      }),
+    ).toEqual({ ok: false, error: "Couldn't save the default model." });
   });
 });
 

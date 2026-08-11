@@ -7,6 +7,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { getAdapter } from "@/lib/ai/providers/registry";
 import { getProviderRow } from "@/lib/ai/providers/provider-rows";
+import { getModel } from "@/lib/ai/models/catalog-db";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
 import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
@@ -48,6 +49,9 @@ export async function getOrgAiSettings(): Promise<
     creditsUsed: number;
     byoProvider: AiProvider | null;
     byoKeyLast4: string | null;
+    /** The org-wide default, as a provider + CATALOG key pair. */
+    defaultProvider: string | null;
+    defaultModelId: string | null;
   }>
 > {
   await requireUser();
@@ -67,6 +71,8 @@ export async function getOrgAiSettings(): Promise<
       creditsUsed: entitlement.creditsUsed,
       byoProvider: settings.byoProvider,
       byoKeyLast4: settings.byoKeyLast4,
+      defaultProvider: settings.defaultProvider,
+      defaultModelId: settings.defaultModelId,
     },
   };
 }
@@ -179,6 +185,64 @@ export async function setOrgByoKey(input: {
 
   revalidatePath("/settings");
   return { ok: true, data: { provider, hint } };
+}
+
+const defaultModelSchema = z.object({
+  provider: z.string().trim().min(1).max(64),
+  modelId: z.string().trim().min(1).max(128),
+});
+
+/**
+ * Points the whole org at one model. `modelId` is a CATALOG KEY
+ * (`ai_models.model_id`) — never the wire id; `resolveModel` derives that.
+ *
+ * Both halves are re-validated server-side against the catalog and the registry
+ * rather than trusted from the picker: a retired model, or a model belonging to
+ * a provider that has been switched off, must never become the org-wide
+ * fallback. `listActiveModels` deliberately does not join `ai_providers.enabled`
+ * (see its doc comment), so the provider check is this action's job.
+ *
+ * UPDATE, never UPSERT. `org_ai_settings.ai_mode` defaults to `'per_user'`
+ * while `DEFAULT_ORG_AI_SETTINGS` reads a MISSING row as `'off'` — inserting
+ * here would hand AI to an org that has never been given it. An org with no row
+ * is told to choose a mode first, which writes the row through `setAiMode`.
+ */
+export async function setOrgDefaultModel(input: {
+  provider: string;
+  modelId: string;
+}): Promise<ActionResult<{ provider: string; modelId: string }>> {
+  const parsed = defaultModelSchema.safeParse(input);
+  if (!parsed.success) return fail("Pick a model.");
+  const { provider, modelId } = parsed.data;
+
+  const ctx = await requireOrgAdmin();
+  if (!ctx) return fail(NOT_ADMIN);
+
+  const svc = createServiceClient();
+  const row = await getProviderRow(svc, provider);
+  if (!row || !row.enabled) return fail("Unknown provider.");
+
+  const model = await getModel(svc, provider, modelId);
+  if (!model || model.status !== "active")
+    return fail("That model isn't available.");
+
+  const { error, count } = await svc
+    .from("org_ai_settings")
+    .update(
+      {
+        default_provider: provider,
+        default_model_id: modelId,
+        updated_by: ctx.userId,
+      },
+      { count: "exact" },
+    )
+    .eq("org_id", ctx.orgId);
+  if (error) return fail("Couldn't save the default model.");
+  if (count === 0)
+    return fail("Choose how AI is powered for this organization first.");
+
+  revalidatePath("/settings/ai");
+  return { ok: true, data: { provider, modelId } };
 }
 
 export async function removeOrgByoKey(): Promise<
