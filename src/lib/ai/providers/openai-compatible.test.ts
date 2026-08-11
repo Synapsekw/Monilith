@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { openaiCompatibleAdapter } from "@/lib/ai/providers/openai-compatible";
+import { MODEL_LIST_TIMEOUT_MS } from "@/lib/ai/models/verify-ids";
 import { fakeGenerateObject, type CapturedCall } from "@/test/adapter-fakes";
 
 const SCHEMA = { type: "object", properties: { ok: { type: "boolean" } } };
@@ -79,6 +80,60 @@ describe("openaiCompatibleAdapter", () => {
     await expect(
       openaiCompatibleAdapter.validateKey({ apiKey: "sk-test", baseUrl: null }),
     ).rejects.toThrow(/baseUrl/);
+  });
+});
+
+/**
+ * `validateKey` runs INSIDE a Server Action's response path (`saveAiKey`,
+ * `setOrgByoKey`) — the user is sitting on a spinner while it happens. A
+ * provider that completes the TCP handshake and then never answers is the
+ * dangerous case: without a deadline, undici waits minutes and the "Validate &
+ * save" button stays busy the whole time. This is the same class of endpoint
+ * `listNativeModelIds` already bounded, so it reuses that budget.
+ */
+describe("openaiCompatibleAdapter.validateKey — deadline", () => {
+  const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const KEY = { apiKey: "sk-test", baseUrl: "https://api.moonshot.ai/v1" };
+
+  it("hands the request an abort signal budgeted at MODEL_LIST_TIMEOUT_MS", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    const fetchSpy = vi.fn(
+      async () => new Response("{}", { status: 200 }),
+    ) as unknown as typeof globalThis.fetch;
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await openaiCompatibleAdapter.validateKey(KEY);
+
+    expect(timeoutSpy).toHaveBeenCalledWith(MODEL_LIST_TIMEOUT_MS);
+    const init = vi.mocked(fetchSpy).mock.calls[0][1];
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("gives up on a provider that accepts the connection and then stalls", async () => {
+    // The budget is shrunk to 5ms so the deadline itself is exercised in
+    // milliseconds instead of ten real seconds — the same trick
+    // listNativeModelIds' `timeoutMs` seam exists for.
+    vi.spyOn(AbortSignal, "timeout").mockImplementation(() => realTimeout(5));
+    const fetchSpy = vi.fn(
+      (_url: unknown, init?: { signal?: AbortSignal }) =>
+        new Promise<Response>((_resolve, reject) => {
+          // Never resolves on its own: only the abort ends this request.
+          init?.signal?.addEventListener("abort", () =>
+            reject(init.signal?.reason),
+          );
+        }),
+    ) as unknown as typeof globalThis.fetch;
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(openaiCompatibleAdapter.validateKey(KEY)).rejects.toThrow(
+      /abort|timed out|timeout/i,
+    );
   });
 
   it("actually posts to the row's baseUrl", async () => {

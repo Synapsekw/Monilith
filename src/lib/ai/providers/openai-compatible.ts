@@ -11,6 +11,7 @@ import {
   type ProviderAdapter,
 } from "@/lib/ai/providers/types";
 import { toAiUsage } from "@/lib/ai/providers/usage";
+import { MODEL_LIST_TIMEOUT_MS } from "@/lib/ai/models/verify-ids";
 
 /**
  * ONE adapter for every OpenAI-compatible provider. Mistral and Kimi both run
@@ -42,6 +43,13 @@ export const openaiCompatibleAdapter: ProviderAdapter = {
     const url = `${requireBaseUrl(baseUrl).replace(/\/$/, "")}/models`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}` },
+      // This call sits on a Server Action's response path (`saveAiKey`,
+      // `setOrgByoKey`), so a provider that accepts the connection and then
+      // stalls holds the user's "Validate & save" open for undici's default
+      // — minutes. The deadline is the SAME budget `listNativeModelIds` puts
+      // on the same `/models` endpoint, deliberately shared rather than
+      // restated, so the two cannot drift.
+      signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS),
     });
     if (res.status === 401 || res.status === 403)
       throw new ProviderAuthError(baseUrl ?? "provider");
