@@ -466,9 +466,11 @@ describe("runAi", () => {
     );
     expect(rpc).toHaveBeenCalledWith(
       "record_ai_usage",
-      // No FALLBACK_RATES entry for the Gateway's dotted id, so the catalog
-      // price stands: 1M input tokens at $0.50/Mtok.
-      expect.objectContaining({ p_model: "claude-haiku-4.5", p_cost_usd: 0.5 }),
+      // The FLOOR reaching a model whose Gateway id is spelled with a DOT: the
+      // catalog publishes $0.50/Mtok, FALLBACK_RATES["claude-haiku-4-5"] holds
+      // $1, and the lookup finds it through the native id. Until the key
+      // normalisation this billed $0.50 — the floor missed every dotted id.
+      expect.objectContaining({ p_model: "claude-haiku-4.5", p_cost_usd: 1 }),
     );
   });
 

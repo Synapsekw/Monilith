@@ -6,6 +6,7 @@ import {
   getProviderRow,
   type ProviderRow,
 } from "@/lib/ai/providers/provider-rows";
+import { candidateNativeIds } from "@/lib/ai/models/model-ids";
 
 /**
  * The Gateway's model-id namespace is not the providers' native namespace
@@ -13,16 +14,11 @@ import {
  * wants claude-haiku-4-5, and exposes no native id anywhere). We call
  * providers DIRECTLY with BYO keys, so a gateway-only id is a 404.
  *
- * Normalisation here only proposes CANDIDATES. The provider's own model list
- * is the judge — matchNativeId returns null rather than guessing, and an
- * unmatched row is quarantined instead of being offered.
+ * The rules moved to `models/model-ids.ts` when `pricing.ts` turned out to need
+ * the identical reconciliation to find a model's price floor — see that file.
+ * Re-exported here because this is where callers expect it.
  */
-export function candidateNativeIds(gatewayModelId: string): string[] {
-  const out = [gatewayModelId];
-  const hyphenated = gatewayModelId.replace(/\./g, "-");
-  if (hyphenated !== gatewayModelId) out.push(hyphenated);
-  return out;
-}
+export { candidateNativeIds };
 
 /**
  * Exact match wins. Otherwise accept a native id that extends a candidate with

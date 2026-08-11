@@ -3,6 +3,8 @@ import {
   applyRateFloor,
   computeCostUsd,
   costToCredits,
+  FALLBACK_RATES,
+  floorKeyCandidates,
   ratesForModel,
   type ModelRates,
 } from "@/lib/ai/pricing";
@@ -244,6 +246,144 @@ describe("applyRateFloor", () => {
 
   it("does not treat Object.prototype names as floored models", () => {
     expect(applyRateFloor("constructor", null)).toBeNull();
+  });
+});
+
+/**
+ * The floor is only as good as the KEY it is looked up under, and the two id
+ * namespaces do not agree: FALLBACK_RATES is written in Anthropic's native
+ * spelling (`claude-haiku-4-5`), the catalog key is the Gateway's
+ * (`claude-haiku-4.5`), and the verified native id is a dated snapshot
+ * (`claude-haiku-4-5-20251001`). Before this normalisation the floor matched
+ * `claude-sonnet-5` and nothing else in the Anthropic catalog — it protected
+ * one of its three models by coincidence of spelling.
+ */
+describe("floor key normalisation", () => {
+  it("tries the catalog id, its hyphenated form, the native id, then the native id without its date", () => {
+    expect(
+      floorKeyCandidates("claude-haiku-4.5", "claude-haiku-4-5-20251001"),
+    ).toEqual([
+      "claude-haiku-4.5",
+      "claude-haiku-4-5",
+      "claude-haiku-4-5-20251001",
+    ]);
+    // Dedup: a native id equal to an earlier candidate is not repeated.
+    expect(floorKeyCandidates("claude-sonnet-5", "claude-sonnet-5")).toEqual([
+      "claude-sonnet-5",
+    ]);
+    // Only a trailing 8-digit DATE is stripped — never an arbitrary suffix,
+    // which would let `gpt-4-turbo` borrow `gpt-4`'s floor.
+    expect(floorKeyCandidates("x", "gpt-4-turbo")).toEqual([
+      "x",
+      "gpt-4-turbo",
+    ]);
+  });
+
+  it("path 1 — the catalog id matches the table directly", () => {
+    expect(applyRateFloor({ modelId: "claude-sonnet-5" }, null)).toEqual(
+      SONNET,
+    );
+  });
+
+  it("path 2 — the catalog id matches once its dots become hyphens", () => {
+    // claude-opus-4.8 (catalog) → claude-opus-4-8 (table). This one had NO
+    // floor at all before: a feed price of $1 was billed as $1.
+    expect(
+      applyRateFloor(
+        { modelId: "claude-opus-4.8" },
+        {
+          input: 1,
+          output: 1,
+          cacheRead: null,
+          cacheWrite: null,
+        },
+      ),
+    ).toMatchObject({ input: 5, output: 25 });
+  });
+
+  it("path 3 — the native id matches when the catalog id cannot", () => {
+    expect(
+      applyRateFloor(
+        {
+          modelId: "anthropic/claude-opus-4-8",
+          nativeModelId: "claude-opus-4-8",
+        },
+        null,
+      ),
+    ).toMatchObject({ input: 5, output: 25 });
+  });
+
+  it("path 4 — the native id matches once its date snapshot is stripped", () => {
+    // The live DEV row: catalog claude-haiku-4.5, native
+    // claude-haiku-4-5-20251001, table claude-haiku-4-5.
+    expect(
+      applyRateFloor(
+        { modelId: "haiku-4.5", nativeModelId: "claude-haiku-4-5-20251001" },
+        { input: 0.1, output: 0.1, cacheRead: null, cacheWrite: null },
+      ),
+    ).toMatchObject({ input: 1, output: 5 });
+  });
+
+  it("still bills nothing for a model in neither source", () => {
+    expect(
+      applyRateFloor(
+        { modelId: "kimi-k2", nativeModelId: "kimi-k2-0905" },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  /**
+   * The assertion that would have caught the hole. Every model in
+   * FALLBACK_RATES is there because a human decided what it must cost AT
+   * MINIMUM; a model whose real catalog identity cannot reach its own row is a
+   * decision that silently does not apply.
+   *
+   * The ids on the right are the REAL rows in the DEV catalog, read
+   * 2026-08-11. text-embedding-3-small is not in the Gateway feed at all — the
+   * embedding path prices it through ratesForModel by its exact id — so it is
+   * asserted directly rather than through a catalog identity.
+   */
+  it("every FALLBACK_RATES model is reachable from its real DEV catalog identity", () => {
+    const live: Record<
+      string,
+      { modelId: string; nativeModelId: string | null }
+    > = {
+      "claude-opus-4-8": {
+        modelId: "claude-opus-4.8",
+        nativeModelId: "claude-opus-4-8",
+      },
+      "claude-sonnet-5": {
+        modelId: "claude-sonnet-5",
+        nativeModelId: "claude-sonnet-5",
+      },
+      "claude-haiku-4-5": {
+        modelId: "claude-haiku-4.5",
+        nativeModelId: "claude-haiku-4-5-20251001",
+      },
+      "gpt-4o": { modelId: "gpt-4o", nativeModelId: "gpt-4o" },
+      "gemini-2.0-flash": {
+        modelId: "gemini-2.0-flash",
+        nativeModelId: "gemini-2.0-flash",
+      },
+      "text-embedding-3-small": {
+        modelId: "text-embedding-3-small",
+        nativeModelId: null,
+      },
+    };
+    // Guards the pin itself: a model added to the table with no live identity
+    // here fails rather than being silently skipped.
+    expect(Object.keys(live).sort()).toEqual(
+      Object.keys(FALLBACK_RATES).sort(),
+    );
+
+    const unreachable = Object.entries(live).filter(
+      ([tableKey, identity]) =>
+        !floorKeyCandidates(identity.modelId, identity.nativeModelId).includes(
+          tableKey,
+        ),
+    );
+    expect(unreachable).toEqual([]);
   });
 });
 

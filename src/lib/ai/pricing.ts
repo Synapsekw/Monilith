@@ -1,3 +1,5 @@
+import { candidateNativeIds, stripDateSuffix } from "@/lib/ai/models/model-ids";
+
 export type AiUsageTokens = {
   inputTokens: number;
   outputTokens: number;
@@ -106,6 +108,40 @@ export function ratesForModel(model: string): ModelRates | null {
   return Object.hasOwn(FALLBACK_RATES, model) ? FALLBACK_RATES[model] : null;
 }
 
+/** How a catalog row identifies itself — both ids, because neither alone finds
+ *  the floor. See {@link floorKeyCandidates}. */
+export type ModelIdentity = { modelId: string; nativeModelId?: string | null };
+
+/**
+ * The lookup keys to try against {@link FALLBACK_RATES}, in order, first hit
+ * wins.
+ *
+ * FALLBACK_RATES is hand-written in the PROVIDER's spelling
+ * (`claude-haiku-4-5`). A catalog row carries two other spellings: the
+ * Gateway's key (`claude-haiku-4.5`) and the verified native id, which for
+ * Anthropic is a dated snapshot (`claude-haiku-4-5-20251001`). Matching only
+ * the literal catalog key meant the floor found `claude-sonnet-5` and missed
+ * `claude-haiku-4.5` and `claude-opus-4.8` — it protected one of Anthropic's
+ * three floored models, by coincidence of spelling, while reading as though it
+ * protected all of them.
+ *
+ * The order is least-to-most inferred, so a model that names itself exactly is
+ * never overridden by a normalisation. Only an 8-digit DATE is stripped from a
+ * native id — a bare prefix is never enough, or `gpt-4-turbo` would borrow
+ * `gpt-4`'s floor.
+ */
+export function floorKeyCandidates(
+  modelId: string,
+  nativeModelId?: string | null,
+): string[] {
+  const out = candidateNativeIds(modelId);
+  for (const candidate of nativeModelId
+    ? [nativeModelId, stripDateSuffix(nativeModelId)]
+    : [])
+    if (!out.includes(candidate)) out.push(candidate);
+  return out;
+}
+
 /** `null` means "absent", so it loses to any number rather than to zero. */
 function higher(a: number | null, b: number | null): number | null {
   if (a === null) return b;
@@ -123,12 +159,21 @@ function higher(a: number | null, b: number | null): number | null {
  * `needs_pricing` quarantine exists to prevent.
  */
 export function applyRateFloor(
-  model: string,
+  model: string | ModelIdentity,
   catalog: ModelRates | null,
 ): ModelRates | null {
-  // Object.hasOwn for the same reason ratesForModel uses it: a plain index
-  // lookup for "constructor"/"toString" returns an inherited Function.
-  const floor = ratesForModel(model);
+  // A catalog row must pass BOTH ids ({@link ModelIdentity}) — the bare string
+  // form finds a floor only when the id is already spelled the table's way, and
+  // exists for the fixed-model callers (runEmbedding) that have no second id.
+  // Object.hasOwn inside ratesForModel guards the prototype-chain keys.
+  const keys =
+    typeof model === "string"
+      ? floorKeyCandidates(model)
+      : floorKeyCandidates(model.modelId, model.nativeModelId);
+  const floor = keys.reduce<ModelRates | null>(
+    (found, key) => found ?? ratesForModel(key),
+    null,
+  );
   if (!floor) return catalog;
   // The floor's own cache components are null, so computeCostUsd derives them
   // from floor.input at the same multipliers used below — the two branches

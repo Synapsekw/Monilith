@@ -86,7 +86,14 @@ function ratesOf(row: ModelRow): ModelRates | null {
             `${key}.cacheWrite`,
           ),
         };
-  return applyRateFloor(row.modelId, catalog);
+  // BOTH ids: the floor table is written in the provider's spelling, which is
+  // neither the catalog key nor (for Anthropic) the dated native id. Passing
+  // only `row.modelId` silently lost the floor for every model whose Gateway id
+  // uses a dot — see pricing.ts · floorKeyCandidates.
+  return applyRateFloor(
+    { modelId: row.modelId, nativeModelId: row.nativeModelId },
+    catalog,
+  );
 }
 
 function resolvedFrom(row: ModelRow, substituted: boolean) {
