@@ -6,6 +6,7 @@ import {
   setOrgByoKey,
   removeOrgByoKey,
   setOrgDefaultModel,
+  clearOrgDefaultModel,
 } from "@/lib/ai/settings-actions";
 import { type AiMode } from "@/lib/ai/org-settings";
 import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
@@ -161,13 +162,17 @@ export function OrgAiSettingsForm({
     });
   }
 
+  // `null` is "no default" — the way back out of a default that overrides every
+  // feature's tier. Optimistic in both directions, reverting to the last
+  // server-acknowledged value, like the mode radios above.
   function chooseDefaultModel(next: ModelValue | null) {
-    if (!next) return;
     const previous = defaultModel;
     setDefaultError(null);
     setDefaultModel(next); // optimistic
     startDefault(async () => {
-      const res = await setOrgDefaultModel(next);
+      const res = next
+        ? await setOrgDefaultModel(next)
+        : await clearOrgDefaultModel();
       if (!res.ok) {
         setDefaultModel(previous); // revert
         setDefaultError(res.error);
@@ -364,6 +369,8 @@ export function OrgAiSettingsForm({
           emptyProviders={emptyProviders}
           value={defaultModel}
           onChange={chooseDefaultModel}
+          allowInherit
+          inheritLabel="No default — each feature picks its own tier"
           disabled={defaultPending}
         />
 

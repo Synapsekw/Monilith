@@ -116,7 +116,10 @@ export function ModelPicker({
         ? inheritLabel
         : "Pick a model";
 
-  if (options.length === 0)
+  // Nothing to offer AND nothing to undo — the only useful thing left is the
+  // sentence. With a value still set the picker stays, however empty, because
+  // it is the only way back out of a stored choice.
+  if (options.length === 0 && value === null)
     return (
       <p className="text-muted-foreground text-xs">
         {emptyHint ??

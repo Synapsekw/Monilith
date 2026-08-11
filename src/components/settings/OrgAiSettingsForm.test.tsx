@@ -8,11 +8,13 @@ const setAiMode = vi.fn();
 const setOrgByoKey = vi.fn();
 const removeOrgByoKey = vi.fn();
 const setOrgDefaultModel = vi.fn();
+const clearOrgDefaultModel = vi.fn();
 vi.mock("@/lib/ai/settings-actions", () => ({
   setAiMode: (...a: unknown[]) => setAiMode(...a),
   setOrgByoKey: (...a: unknown[]) => setOrgByoKey(...a),
   removeOrgByoKey: (...a: unknown[]) => removeOrgByoKey(...a),
   setOrgDefaultModel: (...a: unknown[]) => setOrgDefaultModel(...a),
+  clearOrgDefaultModel: (...a: unknown[]) => clearOrgDefaultModel(...a),
 }));
 
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
@@ -100,6 +102,7 @@ beforeEach(() => {
   setOrgByoKey.mockReset();
   removeOrgByoKey.mockReset();
   setOrgDefaultModel.mockReset();
+  clearOrgDefaultModel.mockReset();
 });
 
 describe("OrgAiSettingsForm", () => {
@@ -298,6 +301,56 @@ describe("OrgAiSettingsForm — default model", () => {
     });
     expect(screen.queryByText(/applies only/i)).not.toBeInTheDocument();
   });
+
+  // Setting a default overrides every per-feature tier request, so "undo that"
+  // has to be reachable — otherwise the only way back is a support ticket.
+  it("clears the default back to per-feature tiers", async () => {
+    clearOrgDefaultModel.mockResolvedValueOnce({ ok: true, data: {} });
+    renderForm({
+      ...base,
+      defaultProvider: "anthropic",
+      defaultModelId: "claude-sonnet-5",
+    });
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: /no default/i }),
+    );
+    await waitFor(() => expect(clearOrgDefaultModel).toHaveBeenCalled());
+    expect(setOrgDefaultModel).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: /no default/i }),
+      ).toBeInTheDocument(),
+    );
+  }, 30_000);
+
+  it("restores the previous default when clearing is rejected", async () => {
+    clearOrgDefaultModel.mockResolvedValueOnce({
+      ok: false,
+      error: "Couldn't clear the default model.",
+    });
+    renderForm({
+      ...base,
+      defaultProvider: "anthropic",
+      defaultModelId: "claude-sonnet-5",
+    });
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: /no default/i }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Couldn't clear the default model.",
+      ),
+    );
+    expect(
+      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+    ).toBeInTheDocument();
+  }, 30_000);
 
   it("points at the keys section when no provider has models yet", () => {
     renderForm(base, []);

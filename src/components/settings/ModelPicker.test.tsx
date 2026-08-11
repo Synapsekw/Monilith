@@ -52,6 +52,26 @@ describe("ModelPicker", () => {
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
+  it("keeps a stored value clearable even when the catalog is empty", async () => {
+    // The empty state replaces the control, so a stored default would become
+    // unremovable if it fired here too.
+    const onChange = vi.fn();
+    render(
+      <ModelPicker
+        options={[]}
+        value={{ provider: "anthropic", modelId: "claude-sonnet-5" }}
+        onChange={onChange}
+        allowInherit
+        inheritLabel="No default"
+      />,
+    );
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.click(
+      await screen.findByRole("option", { name: /no default/i }),
+    );
+    expect(onChange).toHaveBeenCalledWith(null);
+  }, 30_000);
+
   it("flags a value that is no longer in the options as retired", () => {
     render(
       <ModelPicker
