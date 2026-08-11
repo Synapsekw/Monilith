@@ -6,16 +6,23 @@ import { fakeResolvedModel } from "@/test/adapter-fakes";
 // `{ apiKey }` and returns whatever the callback's `result` is. Combined with
 // the `./decide` mock below (the only module that constructs an Anthropic
 // client), no test in this file can reach a live model.
+// The provider runAi resolves for this call. Overridable per test: the tool
+// loops build `new Anthropic()` directly, so a non-Anthropic provider must be
+// refused at the boundary rather than POSTed to api.anthropic.com.
+let resolvedProvider = "anthropic";
+
 const runAi = vi.fn(
   async (
     _args: { orgId: string; userId: string; feature: string },
     fn: (resolved: {
       apiKey: string;
+      provider: string;
       model: ReturnType<typeof fakeResolvedModel>;
     }) => Promise<{ result: unknown }>,
   ) => {
     const { result } = await fn({
       apiKey: "test-key",
+      provider: resolvedProvider,
       model: fakeResolvedModel(),
     });
     return result;
@@ -102,6 +109,7 @@ const validInput = () => ({
 });
 
 beforeEach(() => {
+  resolvedProvider = "anthropic";
   runAi.mockClear();
   requireAiEntitlement.mockReset();
   resolveActiveOrg.mockReset();
@@ -254,6 +262,23 @@ describe("previewAiStep — happy path", () => {
         sampleItem: { id: ITEM_ID, name: "Widget A" },
       },
     });
+  });
+
+  // ── the tool-loop capability boundary ─────────────────────────────────
+  // These loops build `new Anthropic({ apiKey })` directly and ignore baseUrl,
+  // so a non-Anthropic key must be refused HERE. Since per_user mode resolves
+  // `provider ?? org default ?? anthropic`, an org that sets a non-Anthropic
+  // default would otherwise POST that provider's key and model id to
+  // api.anthropic.com.
+  it("refuses a non-Anthropic provider before the loop spends the key", async () => {
+    resolvedProvider = "google";
+    const { previewAiStep } = await import("./actions");
+    const res = await previewAiStep(validInput());
+    expect(res).toEqual({
+      ok: false,
+      error: "This step needs an Anthropic key — see Settings → AI.",
+    });
+    expect(decideAction).not.toHaveBeenCalled();
   });
 
   it("surfaces the decision loop's warnings and a null action", async () => {

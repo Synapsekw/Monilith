@@ -4,12 +4,14 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createServiceClient } from "@/lib/supabase/service";
 import { runAi } from "@/lib/ai/gateway";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   AiDisabledError,
   AiQuotaExceededError,
   ByoKeyMissingError,
   AiNotConfiguredError,
+  ProviderNotCapableError,
 } from "@/lib/ai/errors";
 import { AI_STEP_ALLOWED_ACTIONS } from "@/lib/validations/automations";
 import type { AutomationAction } from "@/lib/validations/automations";
@@ -87,7 +89,13 @@ export async function previewAiStep(input: {
     const user = await requireUser();
     const result = await runAi(
       { orgId: org.id, userId: user.id, feature: FEATURE },
-      async ({ apiKey, model }) => {
+      async ({ provider, apiKey, model }) => {
+        // The loop below builds `new Anthropic({ apiKey })` directly and
+        // ignores baseUrl, so it physically cannot run on another provider.
+        // Refuse at the boundary rather than POSTing someone else's key to
+        // api.anthropic.com — per_user mode resolves the ORG DEFAULT provider
+        // when an agent pins none.
+        assertToolLoopCapable(provider, FEATURE);
         const r = await decideAction({
           apiKey,
           model: model.requestModel,
@@ -116,6 +124,9 @@ export async function previewAiStep(input: {
       return fail("Your organization's AI key is missing — ask an admin.");
     if (e instanceof AiNotConfiguredError)
       return fail("Add an AI provider key in Settings to use AI.");
+    // Permanent for this org's provider, so "please try again" would be a lie.
+    if (e instanceof ProviderNotCapableError)
+      return fail("This step needs an Anthropic key — see Settings → AI.");
     return fail("Couldn't test the step. Please try again.");
   }
 }

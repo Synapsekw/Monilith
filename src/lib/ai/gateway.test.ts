@@ -360,6 +360,32 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     expect(resolved.apiKey).toBe("sk-kimi");
   });
 
+  it("per_user takes the ORG DEFAULT provider when the caller names none", async () => {
+    // This is the configuration that makes the tool-loop capability guard
+    // load-bearing: before the provider was threaded, per_user was hardcoded
+    // to "anthropic", so an org default could never reach a loop that builds
+    // `new Anthropic()` directly. Now it can — hence assertToolLoopCapable at
+    // the top of every such callback.
+    settingsRow("per_user", { default_provider: "moonshotai" });
+    userKeys({ anthropic: "sk-user", moonshotai: "sk-kimi" });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    const r = await resolveAiAdapter(ORG_ID, USER_ID);
+    expect(r).toMatchObject({
+      provider: "moonshotai",
+      apiKey: "sk-kimi",
+      baseUrl: "https://api.moonshot.ai/v1",
+    });
+    expect(resolveUserAdapterById).toHaveBeenCalledWith(USER_ID, "moonshotai");
+  });
+
+  it("an explicit provider still beats the org default", async () => {
+    settingsRow("per_user", { default_provider: "moonshotai" });
+    userKeys({ anthropic: "sk-user", moonshotai: "sk-kimi" });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    const r = await resolveAiAdapter(ORG_ID, USER_ID, "anthropic");
+    expect(r).toMatchObject({ provider: "anthropic", apiKey: "sk-user" });
+  });
+
   it("names the provider when its key is missing", async () => {
     settingsRow("per_user");
     userKeys({ anthropic: "sk-user" });
