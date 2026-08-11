@@ -7,6 +7,7 @@ import { getAdapter } from "@/lib/ai/providers/registry";
 import { getProviderRow } from "@/lib/ai/providers/provider-rows";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
+import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
 // The provider is validated against the ai_providers table, not a hardcoded
@@ -51,6 +52,22 @@ export async function saveAiKey(input: {
     p_hint: hint,
   });
   if (error) return fail("Couldn't save the key. Please try again.");
+
+  // This key is the only thing that can ask THIS provider which model ids it
+  // actually answers to — the catalog is populated from the Gateway, whose id
+  // namespace is not the providers'. Saving a key is therefore also the moment
+  // this provider's catalog rows become selectable.
+  //
+  // Never allowed to fail the save: the key is valid regardless, and an
+  // unverified row is simply not offered until the next pass.
+  try {
+    await verifyProviderModels({ client: svc, provider, apiKey: key });
+  } catch (e) {
+    console.error(
+      `[ai] id verification failed after saving ${provider} key`,
+      e,
+    );
+  }
 
   revalidatePath("/settings/ai");
   return { ok: true, data: { provider, hint } };

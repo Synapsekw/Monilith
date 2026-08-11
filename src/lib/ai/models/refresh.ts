@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { parseFeed } from "@/lib/ai/models/feed-parse";
 import { listEnabledProviders } from "@/lib/ai/providers/provider-rows";
+import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
+import { getServerEnv } from "@/lib/env.server";
 
 export const GATEWAY_MODELS_URL = "https://ai-gateway.vercel.sh/v1/models";
 
@@ -13,6 +15,31 @@ export async function fetchGatewayFeed(): Promise<unknown> {
   });
   if (!res.ok) throw new Error(`gateway models feed returned ${res.status}`);
   return res.json();
+}
+
+/**
+ * The default id-verification pass. Anthropic is the one provider we hold a
+ * key for outside a user's BYO credential, so it is the only one this path can
+ * verify; the other four are verified when their key is saved (see
+ * credentials-actions.saveAiKey).
+ */
+async function verifyAnthropicIds(
+  client: SupabaseClient<Database>,
+): Promise<void> {
+  const apiKey = getServerEnv().ANTHROPIC_API_KEY;
+  if (!apiKey) return;
+  try {
+    const res = await verifyProviderModels({
+      client,
+      provider: "anthropic",
+      apiKey,
+    });
+    console.info(
+      `[ai] anthropic id verification: ${res.verified} verified, ${res.unverified} unverified`,
+    );
+  } catch (e) {
+    console.error("[ai] anthropic id verification failed", e);
+  }
 }
 
 /**
@@ -30,6 +57,14 @@ export async function fetchGatewayFeed(): Promise<unknown> {
 export async function refreshCatalog(deps: {
   fetchFeed: () => Promise<unknown>;
   client: SupabaseClient<Database>;
+  /**
+   * Injected seam for the id-verification pass. Defaults to the real one,
+   * which runs only when the platform ANTHROPIC_API_KEY is set — Anthropic is
+   * the one provider we hold a key for outside a user's BYO credential, so it
+   * is the only one this path can verify. The other four are verified when
+   * their key is saved (see credentials-actions.saveAiKey).
+   */
+  verifyIds?: (client: SupabaseClient<Database>) => Promise<void>;
 }): Promise<{ upserted: number; retired: number; skipped: boolean }> {
   const providers = await listEnabledProviders(deps.client);
   const enabledIds = providers.map((p) => p.id);
@@ -72,6 +107,15 @@ export async function refreshCatalog(deps: {
     .eq("status", "active")
     .select("provider,model_id");
   if (retireErr) throw new Error(`refreshCatalog retire: ${retireErr.message}`);
+
+  // The catalog now holds fresh GATEWAY ids; resolve the ones we can to
+  // provider-native ids. Never allowed to fail the refresh — the rows are
+  // already correct for pricing, and an unverified row is simply not offered.
+  try {
+    await (deps.verifyIds ?? verifyAnthropicIds)(deps.client);
+  } catch (e) {
+    console.error("[ai] model catalog refresh: id verification failed", e);
+  }
 
   return {
     upserted: rows.length,

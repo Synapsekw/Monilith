@@ -28,6 +28,13 @@ vi.mock("@/lib/ai/providers/registry", () => ({
   }),
 }));
 
+// Saving a key is also the moment this provider's catalog rows can be
+// resolved to provider-native ids — the key is the only thing that can ask.
+const verifyProviderModels = vi.fn();
+vi.mock("@/lib/ai/models/verify-ids", () => ({
+  verifyProviderModels: (...a: unknown[]) => verifyProviderModels(...a),
+}));
+
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { saveAiKey, removeAiKey } from "@/lib/ai/credentials-actions";
 
@@ -48,6 +55,8 @@ beforeEach(() => {
   rpc.mockReset();
   validateKey.mockReset();
   getProviderRow.mockReset();
+  verifyProviderModels.mockReset();
+  verifyProviderModels.mockResolvedValue({ verified: 0, unverified: 0 });
 });
 
 describe("saveAiKey", () => {
@@ -159,7 +168,7 @@ describe("saveAiKey", () => {
     );
   });
 
-  it("fails cleanly when the DB write errors", async () => {
+  it("fails cleanly when the DB write errors, without running id verification", async () => {
     getProviderRow.mockResolvedValueOnce(anthropicRow());
     validateKey.mockResolvedValueOnce(undefined);
     rpc.mockResolvedValueOnce({ error: { message: "vault down" } });
@@ -168,6 +177,34 @@ describe("saveAiKey", () => {
       key: "sk-ant-abcdefAB12",
     });
     expect(res.ok).toBe(false);
+    expect(verifyProviderModels).not.toHaveBeenCalled();
+  });
+
+  it("resolves this provider's catalog ids with the key it just saved", async () => {
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockResolvedValueOnce(undefined);
+    rpc.mockResolvedValueOnce({ error: null });
+    await saveAiKey({ provider: "anthropic", key: "sk-ant-abcdefAB12" });
+    expect(verifyProviderModels).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "anthropic",
+        apiKey: "sk-ant-abcdefAB12",
+      }),
+    );
+  });
+
+  it("still saves the key when id verification blows up", async () => {
+    // The key is valid regardless; an unverified row is simply not offered
+    // until the next pass. A catalog problem must never look like a bad key.
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockResolvedValueOnce(undefined);
+    rpc.mockResolvedValueOnce({ error: null });
+    verifyProviderModels.mockRejectedValueOnce(new Error("catalog offline"));
+    const res = await saveAiKey({
+      provider: "anthropic",
+      key: "sk-ant-abcdefAB12",
+    });
+    expect(res.ok).toBe(true);
   });
 });
 

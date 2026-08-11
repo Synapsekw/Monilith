@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { refreshCatalog } from "@/lib/ai/models/refresh";
 
 type FakeModelRow = {
@@ -131,9 +131,11 @@ describe("refreshCatalog", () => {
         },
       ],
     );
+    const verifyIds = vi.fn(async () => {});
     const res = await refreshCatalog({
       fetchFeed: async () => FEED,
       client: client as never,
+      verifyIds,
     });
     expect(res.skipped).toBe(false);
     expect(res.upserted).toBe(1);
@@ -144,6 +146,33 @@ describe("refreshCatalog", () => {
     expect(table.find((r) => r.model_id === "stale-model")?.status).toBe(
       "retired",
     );
+    // Fresh GATEWAY ids just landed, so the native-id resolution pass runs.
+    expect(verifyIds).toHaveBeenCalledTimes(1);
+  });
+
+  it("still reports success when the id-verification pass throws", async () => {
+    // The rows are already correct for pricing and an unverified row is simply
+    // not offered — a verification failure must never fail the refresh.
+    const { client } = fakeClient(
+      ["anthropic"],
+      [
+        {
+          provider: "anthropic",
+          model_id: "stale-model",
+          status: "active",
+          last_seen_at: STALE,
+        },
+      ],
+    );
+    const res = await refreshCatalog({
+      fetchFeed: async () => FEED,
+      client: client as never,
+      verifyIds: async () => {
+        throw new Error("anthropic 500");
+      },
+    });
+    expect(res.skipped).toBe(false);
+    expect(res.upserted).toBe(1);
   });
 
   it("does NOT retire an active row for a provider absent from this run's parsed feed", async () => {
@@ -168,9 +197,11 @@ describe("refreshCatalog", () => {
         },
       ],
     );
+    const verifyIds = vi.fn(async () => {});
     const res = await refreshCatalog({
       fetchFeed: async () => FEED,
       client: client as never,
+      verifyIds,
     });
     expect(res.skipped).toBe(false);
     expect(res.retired).toBe(1);
@@ -194,10 +225,13 @@ describe("refreshCatalog", () => {
         },
       ],
     );
+    const verifyIds = vi.fn(async () => {});
     const res = await refreshCatalog({
       fetchFeed: async () => ({ data: [] }),
       client: client as never,
+      verifyIds,
     });
+    expect(verifyIds).not.toHaveBeenCalled();
     expect(res.skipped).toBe(true);
     expect(res.retired).toBe(0);
     expect(state.retireCalls).toEqual([]);
@@ -217,12 +251,15 @@ describe("refreshCatalog", () => {
         },
       ],
     );
+    const verifyIds = vi.fn(async () => {});
     const res = await refreshCatalog({
       fetchFeed: async () => {
         throw new Error("gateway 503");
       },
       client: client as never,
+      verifyIds,
     });
+    expect(verifyIds).not.toHaveBeenCalled();
     expect(res.skipped).toBe(true);
     expect(state.upserted).toEqual([]);
     expect(state.retireCalls).toEqual([]);
@@ -230,10 +267,13 @@ describe("refreshCatalog", () => {
 
   it("SKIPS when the payload is malformed", async () => {
     const { client, state } = fakeClient([], []);
+    const verifyIds = vi.fn(async () => {});
     const res = await refreshCatalog({
       fetchFeed: async () => ({ unexpected: true }),
       client: client as never,
+      verifyIds,
     });
+    expect(verifyIds).not.toHaveBeenCalled();
     expect(res.skipped).toBe(true);
     expect(state.retireCalls).toEqual([]);
   });

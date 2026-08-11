@@ -7,7 +7,14 @@ import type { ModelTier } from "@/lib/ai/models/feed-parse";
 
 export type ModelRow = {
   provider: string;
+  /** The GATEWAY's id — the catalog key. NOT guaranteed callable anywhere. */
   modelId: string;
+  /**
+   * The provider-native id, confirmed against that provider's own model list.
+   * Null until verified. Callers that make an inference request MUST send
+   * `nativeModelId ?? modelId`.
+   */
+  nativeModelId: string | null;
   label: string;
   contextLength: number | null;
   maxOutputTokens: number | null;
@@ -21,11 +28,12 @@ export type ModelRow = {
 };
 
 const MODEL_COLS =
-  "provider, model_id, label, context_length, max_output_tokens, supports_tools, input_price_per_mtok, output_price_per_mtok, cache_read_price_per_mtok, cache_write_price_per_mtok, tier, status";
+  "provider, model_id, native_model_id, label, context_length, max_output_tokens, supports_tools, input_price_per_mtok, output_price_per_mtok, cache_read_price_per_mtok, cache_write_price_per_mtok, tier, status";
 
 type RawModelRow = {
   provider: string;
   model_id: string;
+  native_model_id: string | null;
   label: string;
   context_length: number | null;
   max_output_tokens: number | null;
@@ -49,6 +57,7 @@ export function toModelRow(raw: RawModelRow): ModelRow {
   return {
     provider: raw.provider,
     modelId: raw.model_id,
+    nativeModelId: raw.native_model_id,
     label: raw.label,
     contextLength: raw.context_length,
     maxOutputTokens: raw.max_output_tokens,
@@ -63,25 +72,42 @@ export function toModelRow(raw: RawModelRow): ModelRow {
 }
 
 /**
- * Active models for one provider, cheapest input rate first. `.eq("status",…)`
- * plus `.eq("provider",…)` is exactly `ai_models_status_provider_idx`, so this
- * stays an index scan (working agreement #5).
+ * Selectable models for one provider, cheapest input rate first.
+ *
+ * `status` + `id_verified` + `provider` is exactly `ai_models_selectable_idx`,
+ * so this stays an index scan (working agreement #5).
+ *
+ * `verifiedOnly` defaults to TRUE, and that default is the gate that stops an
+ * unverified id ever reaching a picker or a provider call: the catalog is
+ * populated from the Gateway, whose model-id namespace is not the providers'
+ * native namespace, so an unverified row may simply 404 at the provider. Pass
+ * `false` only for diagnostics that want to see the quarantine.
  */
 export async function listActiveModels(
   client: SupabaseClient<Database>,
   provider: string,
+  opts: { verifiedOnly?: boolean } = {},
 ): Promise<ModelRow[]> {
-  const { data, error } = await client
+  let query = client
     .from("ai_models")
     .select(MODEL_COLS)
     .eq("status", "active")
-    .eq("provider", provider)
-    .order("input_price_per_mtok", { ascending: true, nullsFirst: false });
+    .eq("provider", provider);
+  if (opts.verifiedOnly !== false) query = query.eq("id_verified", true);
+  const { data, error } = await query.order("input_price_per_mtok", {
+    ascending: true,
+    nullsFirst: false,
+  });
   if (error) throw new Error(`listActiveModels: ${error.message}`);
   return (data ?? []).map((r) => toModelRow(r as RawModelRow));
 }
 
-/** One model by its composite key, whatever its status (callers check). */
+/**
+ * One model by its composite key, whatever its status AND whatever its
+ * verification state (callers check). Deliberately NOT gated on
+ * `id_verified`, so a caller can tell "retired" apart from "unverified" in
+ * its messaging instead of both collapsing to "not found".
+ */
 export async function getModel(
   client: SupabaseClient<Database>,
   provider: string,
