@@ -148,13 +148,20 @@ export async function resolveModel(args: {
   feature: string;
   requested?: string | null;
   orgDefaultModelId?: string | null;
+  /**
+   * Overrides {@link tierForFeature}. For the one caller whose tier is decided
+   * by the SIZE of the request, not by the feature: `column_fill` serialises
+   * every row into a single message, so above its row limit it has to move up
+   * a tier or risk a context overflow (see `column-fill/classify.ts`).
+   */
+  tier?: ModelTier;
 }): Promise<ResolvedModel> {
   const active = await listActiveModels(args.client, args.provider);
   const picked = pickModel({
     active,
     requested: args.requested ?? null,
     orgDefaultModelId: args.orgDefaultModelId ?? null,
-    tier: tierForFeature(args.feature),
+    tier: args.tier ?? tierForFeature(args.feature),
   });
   return { ...picked, provider: args.provider };
 }

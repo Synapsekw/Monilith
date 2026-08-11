@@ -6,16 +6,16 @@ import {
   AiNotConfiguredError,
   AiDisabledError,
   ByoKeyMissingError,
+  NoUsableModelError,
 } from "@/lib/ai/errors";
 import { resolveUserAdapterById, asTrustedUserId } from "@/lib/ai/credentials";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import {
-  getAdapter,
-  getAdapterForProviderId,
-} from "@/lib/ai/providers/registry";
-import type { AiProvider } from "@/lib/ai/providers/catalog";
+import { getAdapter } from "@/lib/ai/providers/registry";
+import { getProviderRow } from "@/lib/ai/providers/provider-rows";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
+import { resolveModel, type ResolvedModel } from "@/lib/ai/models/resolve";
+import type { ModelTier } from "@/lib/ai/models/feed-parse";
 import {
   computeCostUsd,
   costToCredits,
@@ -26,50 +26,102 @@ import {
 export type ResolvedAi = {
   adapter: ProviderAdapter;
   apiKey: string;
+  /** Non-null exactly for openai-compatible providers. */
+  baseUrl: string | null;
   mode: AiMode;
-  provider: AiProvider;
+  provider: string;
+  /**
+   * `org_ai_settings.default_model_id`, but ONLY when the org's
+   * `default_provider` is the provider resolved above — a catalog key is
+   * meaningless to a different provider. Carried here so `runAi` gets the
+   * middle rung of `resolveModel`'s ladder without a second read of the same
+   * settings row.
+   */
+  orgDefaultModelId: string | null;
 };
 
-/** The single chokepoint: picks the key + adapter for the org's ai_mode.
- *  `userId` is required because the `per_user` branch resolves THAT user's
- *  key — always pass the id of the person whose spend this call is (the same
- *  id you pass to runAi/record_ai_usage), never a session-derived id from a
- *  different source. */
+/** A {@link ResolvedModel} that actually has a model — see `runAi`'s null gate. */
+export type UsableModel = Omit<ResolvedModel, "model" | "requestModel"> & {
+  model: string;
+  requestModel: string;
+};
+
+/** What `runAi` hands its callback: the key, the adapter, and the model to run. */
+export type ResolvedAiCall = ResolvedAi & { model: UsableModel };
+
+/**
+ * The single chokepoint: picks the key + adapter for the org's ai_mode.
+ *
+ * `provider` names WHICH provider's key to resolve — supplied when an agent has
+ * pinned a model, omitted to take the mode's own provider. `userId` is required
+ * because the `per_user` branch resolves THAT user's key — always pass the id of
+ * the person whose spend this call is (the same id you pass to
+ * runAi/record_ai_usage), never a session-derived id from a different source.
+ *
+ * This is also the only place a DISABLED provider is refused. `listActiveModels`
+ * filters status/provider/id_verified but does not join `ai_providers.enabled`,
+ * and `runAi` is the only production caller of `resolveModel` — so every catalog
+ * read on the inference path passes through this gate first.
+ */
 export async function resolveAiAdapter(
   orgId: string,
   userId: string,
+  provider?: string,
 ): Promise<ResolvedAi> {
   const svc = createServiceClient();
   const settings = await readOrgAiSettings(svc, orgId);
+  const defaultModelIdFor = (resolvedProvider: string) =>
+    settings.defaultProvider === resolvedProvider
+      ? settings.defaultModelId
+      : null;
 
   switch (settings.mode) {
     case "off":
       throw new AiDisabledError();
+
     case "managed": {
+      // The platform key is Anthropic's; a request for any other provider
+      // cannot be served under managed mode.
+      const wanted = provider ?? "anthropic";
+      if (wanted !== "anthropic") throw new ByoKeyMissingError(wanted);
       const apiKey = getServerEnv().ANTHROPIC_API_KEY;
       if (!apiKey) throw new AiNotConfiguredError();
+      const row = await getProviderRow(svc, "anthropic");
+      if (!row || !row.enabled) throw new AiNotConfiguredError();
       return {
-        adapter: getAdapter("anthropic"),
+        adapter: getAdapter(row.adapterKind),
         apiKey,
+        baseUrl: row.baseUrl,
         mode: "managed",
         provider: "anthropic",
+        orgDefaultModelId: defaultModelIdFor("anthropic"),
       };
     }
+
     case "org_byo": {
+      // The org stores ONE key, so `byo_provider` is the only provider it can
+      // serve; a request for another one is a missing key, not a fallback.
+      const wanted = provider ?? settings.byoProvider;
+      if (!wanted) throw new ByoKeyMissingError();
       const { data, error } = await svc.rpc("org_ai_secret_get", {
         p_org: orgId,
+        p_provider: wanted,
       });
       if (error) throw error;
-      const row = data?.[0];
-      if (!row?.secret) throw new ByoKeyMissingError();
-      const provider = row.provider;
+      const secret = data?.[0];
+      if (!secret?.secret) throw new ByoKeyMissingError(wanted);
+      const row = await getProviderRow(svc, wanted);
+      if (!row || !row.enabled) throw new ByoKeyMissingError(wanted);
       return {
-        adapter: getAdapterForProviderId(provider),
-        apiKey: row.secret,
+        adapter: getAdapter(row.adapterKind),
+        apiKey: secret.secret,
+        baseUrl: row.baseUrl,
         mode: "org_byo",
-        provider,
+        provider: wanted,
+        orgDefaultModelId: defaultModelIdFor(wanted),
       };
     }
+
     // per_user resolves the SUPPLIED userId's key (session-less, service-role
     // read) — not a cookie-bound session. This is what makes the gateway
     // usable from cron/service-role callers (e.g. the personal-agent sweep)
@@ -88,49 +140,92 @@ export async function resolveAiAdapter(
     // parameter passed straight through. This is the ONE call site allowed
     // to mint a TrustedUserId — see credentials.ts for what that buys.
     case "per_user": {
-      // INTERIM: hardcoded to "anthropic" until Task 8 threads a requested
-      // provider through resolveAiAdapter itself (model-map only ever emits
-      // claude-* model ids today, so this is a no-op for current callers —
-      // see docs/superpowers/plans/2026-08-10-provider-model-layer.md Task 8).
-      const wanted = "anthropic";
-      const { adapter, apiKey } = await resolveUserAdapterById(
+      // The org's default provider is the fallback, not a hard route: a user
+      // with no key for it gets a PersonalAiKeyMissingError naming it, which
+      // is the actionable message. `anthropic` remains the floor for the orgs
+      // that have never picked a default.
+      const wanted = provider ?? settings.defaultProvider ?? "anthropic";
+      const { adapter, apiKey, baseUrl } = await resolveUserAdapterById(
         asTrustedUserId(userId),
         wanted,
       );
-      return { adapter, apiKey, mode: "per_user", provider: wanted };
+      return {
+        adapter,
+        apiKey,
+        baseUrl,
+        mode: "per_user",
+        provider: wanted,
+        orgDefaultModelId: defaultModelIdFor(wanted),
+      };
     }
   }
 }
 
 /**
- * Wraps one AI call: resolve → invoke → meter. All spend flows through here.
- * A ledger-write failure is logged, never surfaced — telemetry loss must not
- * break the user's request (revisit when managed billing hardens in E6).
+ * Wraps one AI call: resolve key → resolve model → invoke → meter. All spend
+ * flows through here. A ledger-write failure is logged, never surfaced —
+ * telemetry loss must not break the user's request (revisit when managed
+ * billing hardens in E6).
+ *
+ * The callback returns only `{ result, usage }`: the model and its rates both
+ * come from the ONE catalog row resolved here, so they cannot disagree. A
+ * callback that reported its own model could name a row whose price was never
+ * read — and `computeCostUsd(null, …)` bills that at $0.
  *
  * Usage is only metered when fn resolves — a provider call that consumes
  * tokens and then throws during post-processing is not billed (no usage is
  * available on the error path).
  */
 export async function runAi<T>(
-  args: { orgId: string; userId: string; feature: string },
+  args: {
+    orgId: string;
+    userId: string;
+    feature: string;
+    /** Resolve THIS provider's key (an agent pin), not the mode's default. */
+    provider?: string;
+    /** A pinned CATALOG key. Unavailable pins fall back and set `substituted`. */
+    requestedModel?: string | null;
+    /** Overrides {@link tierForFeature} for a size-dependent call (column_fill). */
+    tier?: ModelTier;
+  },
   fn: (
-    resolved: ResolvedAi,
-  ) => Promise<{ result: T; usage: AiUsageTokens; model: string }>,
+    resolved: ResolvedAiCall,
+  ) => Promise<{ result: T; usage: AiUsageTokens }>,
 ): Promise<T> {
-  const resolved = await resolveAiAdapter(args.orgId, args.userId);
-  const { result, usage, model } = await fn(resolved);
-  // INTERIM: rates come from the fallback floor, not the catalog — Task 7
-  // threads a catalog read through here (see docs/superpowers/plans/
-  // 2026-08-10-provider-model-layer.md Task 7).
-  const costUsd = computeCostUsd(ratesForModel(model), usage);
-  const credits = costToCredits(costUsd);
+  const resolved = await resolveAiAdapter(
+    args.orgId,
+    args.userId,
+    args.provider,
+  );
   const svc = createServiceClient();
+  const model = await resolveModel({
+    client: svc,
+    provider: resolved.provider,
+    feature: args.feature,
+    requested: args.requestedModel,
+    orgDefaultModelId: resolved.orgDefaultModelId,
+    tier: args.tier,
+  });
+  // No active, id-verified row for this provider. Throwing is the point: an
+  // unpriced model bills nothing, so "run it anyway" would buy free inference.
+  if (model.model === null || model.requestModel === null)
+    throw new NoUsableModelError(resolved.provider);
+  const usable = model as UsableModel;
+
+  const { result, usage } = await fn({ ...resolved, model: usable });
+  // resolved.rates, never a re-derivation: the fallback floor and the price
+  // validation in resolveModel apply to THIS row, and re-reading rates by model
+  // id here would silently drop both (see pricing.ts · applyRateFloor).
+  const costUsd = computeCostUsd(usable.rates, usage);
+  const credits = costToCredits(costUsd);
   const { error } = await svc.rpc("record_ai_usage", {
     p_org: args.orgId,
     p_user: args.userId,
     p_feature: args.feature,
     p_provider: resolved.provider,
-    p_model: model,
+    // The CATALOG key, not the wire id: pins, pickers and the ledger all speak
+    // `ai_models.model_id`.
+    p_model: usable.model,
     p_input_tokens: usage.inputTokens,
     p_output_tokens: usage.outputTokens,
     p_cache_read_tokens: usage.cacheReadTokens ?? 0,
@@ -142,7 +237,7 @@ export async function runAi<T>(
     console.error("[ai] record_ai_usage failed:", {
       org: args.orgId,
       feature: args.feature,
-      model,
+      model: usable.model,
       credits,
       cause: error.message,
     });
@@ -159,6 +254,10 @@ export async function runAi<T>(
  * output_tokens = 0 (computeCostUsd handles the zero-rate arithmetic). Provider
  * is fixed to "openai" (the platform embedding provider).
  *
+ * The model is fixed and always present in FALLBACK_RATES, so this path prices
+ * from the floor rather than the catalog — deliberately, since the corpus must
+ * not follow whatever the catalog offers today.
+ *
  * A ledger-write failure is logged, never surfaced — telemetry loss must not
  * break the pipeline (parity with runAi).
  */
@@ -171,7 +270,6 @@ export async function runEmbedding<T>(
 ): Promise<T> {
   await requireAiEntitlement(args.orgId, args.feature);
   const { result, usage, model } = await fn();
-  // INTERIM: see the comment in runAi — Task 7 threads catalog rates here.
   const costUsd = computeCostUsd(ratesForModel(model), usage);
   const credits = costToCredits(costUsd);
   const svc = createServiceClient();

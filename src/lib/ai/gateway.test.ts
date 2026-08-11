@@ -1,11 +1,94 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  fakeAiModelsClient,
+  type AiModelFixture,
+} from "@/test/ai-models-fake-client";
+
+const ORG_ID = "org-1";
+const USER_ID = "user-42";
 
 const rpc = vi.fn();
 const maybeSingle = vi.fn();
+
+/**
+ * Provider registry fixture. Keyed by id, shaped like an `ai_providers` row —
+ * the gateway narrows it through `toProviderRow`, so a wrong `adapter_kind`
+ * here would throw exactly as it would in production.
+ */
+type FakeProviderRow = {
+  id: string;
+  label: string;
+  adapter_kind: string;
+  base_url: string | null;
+  key_placeholder: string;
+  key_format: string;
+  enabled: boolean;
+};
+
+function providerRow(
+  id: string,
+  adapterKind: string,
+  baseUrl: string | null,
+  enabled = true,
+): FakeProviderRow {
+  return {
+    id,
+    label: id,
+    adapter_kind: adapterKind,
+    base_url: baseUrl,
+    key_placeholder: "sk-…",
+    key_format: "^sk-",
+    enabled,
+  };
+}
+
+let providers: Record<string, FakeProviderRow> = {};
+let models = fakeAiModelsClient([]);
+
+/** An `ai_models` row with sane defaults; override only what a test asserts on. */
+function modelFixture(
+  o: { provider: string; model_id: string } & Partial<AiModelFixture>,
+): AiModelFixture {
+  return {
+    native_model_id: null,
+    label: o.model_id,
+    context_length: 200_000,
+    max_output_tokens: 8192,
+    supports_tools: true,
+    input_price_per_mtok: 1,
+    output_price_per_mtok: 5,
+    cache_read_price_per_mtok: null,
+    cache_write_price_per_mtok: null,
+    tier: "standard",
+    status: "active",
+    id_verified: true,
+    ...o,
+  };
+}
+
+function setModels(fixtures: AiModelFixture[]) {
+  models = fakeAiModelsClient(fixtures);
+}
+
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
     rpc,
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }),
+    from: (table: string) => {
+      // `ai_models` goes through the shared argument-aware fake, so a dropped
+      // provider/status/id_verified predicate changes the rows a test sees.
+      if (table === "ai_models") return models.client.from("ai_models");
+      if (table === "ai_providers")
+        return {
+          select: () => ({
+            eq: (_column: string, id: string) => ({
+              maybeSingle: () =>
+                Promise.resolve({ data: providers[id] ?? null, error: null }),
+            }),
+          }),
+        };
+      // org_ai_settings.
+      return { select: () => ({ eq: () => ({ maybeSingle }) }) };
+    },
   }),
 }));
 
@@ -23,11 +106,14 @@ vi.mock("@/lib/env.server", () => ({
 // resolved object rather than read back off the adapter.
 const anthropicAdapter = { kind: "anthropic" };
 const googleAdapter = { kind: "google" };
+const compatibleAdapter = { kind: "openai-compatible" };
 vi.mock("@/lib/ai/providers/registry", () => ({
   getAdapter: (k: string) =>
-    k === "google" ? googleAdapter : anthropicAdapter,
-  getAdapterForProviderId: (p: string) =>
-    p === "google" ? googleAdapter : anthropicAdapter,
+    k === "google"
+      ? googleAdapter
+      : k === "openai-compatible"
+        ? compatibleAdapter
+        : anthropicAdapter,
 }));
 
 function settingsRow(mode: string, extra: Record<string, unknown> = {}) {
@@ -38,22 +124,86 @@ function settingsRow(mode: string, extra: Record<string, unknown> = {}) {
       monthly_credit_limit: 0,
       byo_provider: null,
       byo_key_last4: null,
+      default_provider: null,
+      default_model_id: null,
+      max_agents_per_user: 3,
+      max_agent_runs_per_user_per_day: 3,
       ...extra,
     },
     error: null,
   });
 }
 
+/** The per_user credential resolver, driven by the same provider fixtures. */
+function userKeys(byProvider: Record<string, string>) {
+  resolveUserAdapterById.mockImplementation(
+    async (_userId: string, provider: string) => {
+      const { PersonalAiKeyMissingError } = await import("@/lib/ai/errors");
+      const row = providers[provider];
+      const key = byProvider[provider];
+      if (!row || !row.enabled || !key)
+        throw new PersonalAiKeyMissingError(provider);
+      return {
+        adapter:
+          row.adapter_kind === "openai-compatible"
+            ? compatibleAdapter
+            : anthropicAdapter,
+        apiKey: key,
+        baseUrl: row.base_url,
+      };
+    },
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.TEST_MANAGED_KEY;
+  providers = {
+    anthropic: providerRow("anthropic", "anthropic", null),
+    google: providerRow("google", "google", null),
+    mistral: providerRow(
+      "mistral",
+      "openai-compatible",
+      "https://api.mistral.ai/v1",
+    ),
+    moonshotai: providerRow(
+      "moonshotai",
+      "openai-compatible",
+      "https://api.moonshot.ai/v1",
+    ),
+  };
+  setModels([
+    modelFixture({
+      provider: "anthropic",
+      model_id: "claude-sonnet-5",
+      native_model_id: "claude-sonnet-5-20260101",
+      // The Gateway publishes Anthropic's INTRODUCTORY rate; FALLBACK_RATES
+      // floors it back to the standard $3/$15 (see pricing.ts).
+      input_price_per_mtok: 2,
+      output_price_per_mtok: 10,
+    }),
+    modelFixture({
+      provider: "anthropic",
+      model_id: "claude-haiku-4.5",
+      native_model_id: "claude-haiku-4-5",
+      tier: "cheap",
+      input_price_per_mtok: 0.5,
+      output_price_per_mtok: 2,
+    }),
+    modelFixture({
+      provider: "moonshotai",
+      model_id: "kimi-k2",
+      input_price_per_mtok: 0.6,
+      output_price_per_mtok: 2.5,
+    }),
+  ]);
 });
 
 describe("resolveAiAdapter — 4-mode matrix", () => {
   it("off → AiDisabledError", async () => {
     settingsRow("off");
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
+    await expect(resolveAiAdapter(ORG_ID, USER_ID)).rejects.toMatchObject({
       name: "AiDisabledError",
     });
   });
@@ -66,7 +216,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     // by genuinely new orgs.
     maybeSingle.mockResolvedValue({ data: null, error: null });
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
+    await expect(resolveAiAdapter(ORG_ID, USER_ID)).rejects.toMatchObject({
       name: "AiDisabledError",
     });
   });
@@ -74,27 +224,43 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
   it("managed → anthropic adapter + env key; missing env key → AiNotConfiguredError", async () => {
     settingsRow("managed");
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
+    await expect(resolveAiAdapter(ORG_ID, USER_ID)).rejects.toMatchObject({
       name: "AiNotConfiguredError",
     });
     process.env.TEST_MANAGED_KEY = "sk-ant-managed";
-    const r = await resolveAiAdapter("org-1", "user-1");
+    const r = await resolveAiAdapter(ORG_ID, USER_ID);
     expect(r).toMatchObject({
       mode: "managed",
       provider: "anthropic",
       apiKey: "sk-ant-managed",
+      baseUrl: null,
     });
   });
 
-  it("org_byo → org vault secret via rpc; no secret → ByoKeyMissingError", async () => {
+  it("managed cannot serve a non-Anthropic request — the platform key is Anthropic's", async () => {
+    settingsRow("managed");
+    process.env.TEST_MANAGED_KEY = "sk-ant-managed";
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    await expect(
+      resolveAiAdapter(ORG_ID, USER_ID, "mistral"),
+    ).rejects.toMatchObject({
+      name: "ByoKeyMissingError",
+      provider: "mistral",
+    });
+  });
+
+  it("org_byo → org vault secret via rpc, asked for BY PROVIDER; no secret → ByoKeyMissingError", async () => {
     settingsRow("org_byo", { byo_provider: "google" });
     rpc.mockResolvedValueOnce({
       data: [{ provider: "google", secret: "g-key" }],
       error: null,
     });
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    const r = await resolveAiAdapter("org-1", "user-1");
-    expect(rpc).toHaveBeenCalledWith("org_ai_secret_get", { p_org: "org-1" });
+    const r = await resolveAiAdapter(ORG_ID, USER_ID);
+    expect(rpc).toHaveBeenCalledWith("org_ai_secret_get", {
+      p_org: ORG_ID,
+      p_provider: "google",
+    });
     expect(r).toMatchObject({
       mode: "org_byo",
       provider: "google",
@@ -102,8 +268,25 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     });
 
     rpc.mockResolvedValueOnce({ data: [], error: null });
-    await expect(resolveAiAdapter("org-1", "user-1")).rejects.toMatchObject({
+    await expect(resolveAiAdapter(ORG_ID, USER_ID)).rejects.toMatchObject({
       name: "ByoKeyMissingError",
+      provider: "google",
+    });
+  });
+
+  it("org_byo → an openai-compatible provider carries its base_url", async () => {
+    settingsRow("org_byo", { byo_provider: "mistral" });
+    rpc.mockResolvedValue({
+      data: [{ provider: "mistral", secret: "sk-mistral" }],
+      error: null,
+    });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    const r = await resolveAiAdapter(ORG_ID, USER_ID);
+    expect(r).toMatchObject({
+      provider: "mistral",
+      apiKey: "sk-mistral",
+      baseUrl: "https://api.mistral.ai/v1",
+      adapter: compatibleAdapter,
     });
   });
 
@@ -116,7 +299,7 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
     let caught: unknown;
     try {
-      await resolveAiAdapter("org-1", "user-1");
+      await resolveAiAdapter(ORG_ID, USER_ID);
     } catch (e) {
       caught = e;
     }
@@ -124,15 +307,34 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     expect((caught as { name?: string })?.name).not.toBe("ByoKeyMissingError");
   });
 
-  it("per_user → resolveUserAdapterById passthrough, keyed on the SUPPLIED userId", async () => {
-    settingsRow("per_user");
-    resolveUserAdapterById.mockResolvedValue({
-      adapter: anthropicAdapter,
-      apiKey: "sk-user",
-      provider: "anthropic",
+  it("a DISABLED provider is refused before any catalog read", async () => {
+    // listActiveModels filters status/provider/id_verified but does NOT join
+    // ai_providers.enabled, so this is the only gate that stops a retired
+    // provider's models resolving. runAi reaches the catalog exclusively
+    // through here.
+    settingsRow("org_byo", { byo_provider: "mistral" });
+    providers.mistral = providerRow(
+      "mistral",
+      "openai-compatible",
+      "https://api.mistral.ai/v1",
+      false,
+    );
+    rpc.mockResolvedValue({
+      data: [{ provider: "mistral", secret: "sk-mistral" }],
+      error: null,
     });
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    const r = await resolveAiAdapter("org-1", "user-42");
+    await expect(resolveAiAdapter(ORG_ID, USER_ID)).rejects.toMatchObject({
+      name: "ByoKeyMissingError",
+      provider: "mistral",
+    });
+  });
+
+  it("per_user → resolveUserAdapterById passthrough, keyed on the SUPPLIED userId", async () => {
+    settingsRow("per_user");
+    userKeys({ anthropic: "sk-user" });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    const r = await resolveAiAdapter(ORG_ID, USER_ID);
     expect(r).toMatchObject({
       mode: "per_user",
       apiKey: "sk-user",
@@ -142,25 +344,45 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     });
     // The whole point of the fix: resolution is keyed on the caller-supplied
     // userId, not a session — never a different id than what runAi meters
-    // against. The second arg is hardcoded "anthropic" until Task 8 threads
-    // a requested provider through resolveAiAdapter itself.
-    expect(resolveUserAdapterById).toHaveBeenCalledWith("user-42", "anthropic");
+    // against.
+    expect(resolveUserAdapterById).toHaveBeenCalledWith(USER_ID, "anthropic");
+  });
+
+  it("resolves the REQUESTED provider's key, not whichever key exists", async () => {
+    // An agent pinned to Kimi must spend the Kimi key. Resolving 'whatever key
+    // the user has' would send an Anthropic key to Moonshot's endpoint.
+    settingsRow("per_user");
+    userKeys({ anthropic: "sk-user", moonshotai: "sk-kimi" });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    const resolved = await resolveAiAdapter(ORG_ID, USER_ID, "moonshotai");
+    expect(resolved.provider).toBe("moonshotai");
+    expect(resolved.baseUrl).toBe("https://api.moonshot.ai/v1");
+    expect(resolved.apiKey).toBe("sk-kimi");
+  });
+
+  it("names the provider when its key is missing", async () => {
+    settingsRow("per_user");
+    userKeys({ anthropic: "sk-user" });
+    const { resolveAiAdapter } = await import("@/lib/ai/gateway");
+    await expect(
+      resolveAiAdapter(ORG_ID, USER_ID, "mistral"),
+    ).rejects.toMatchObject({ provider: "mistral" });
   });
 
   it("per_user with no key on file → PersonalAiKeyMissingError (a per-user config state runAi callers can catch, not a raw crash)", async () => {
     settingsRow("per_user");
+    userKeys({});
     const { AiNotConfiguredError, PersonalAiKeyMissingError } =
       await import("@/lib/ai/errors");
-    resolveUserAdapterById.mockRejectedValue(new PersonalAiKeyMissingError());
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    await expect(resolveAiAdapter("org-1", "user-42")).rejects.toBeInstanceOf(
+    await expect(resolveAiAdapter(ORG_ID, USER_ID)).rejects.toBeInstanceOf(
       PersonalAiKeyMissingError,
     );
     // Still catchable by every existing `instanceof AiNotConfiguredError`
     // check (mapAiError, interactive action call sites) — this is a strict
     // narrowing, not a breaking change to that contract.
     await expect(
-      resolveAiAdapter("org-1", "user-42").catch((e) => e),
+      resolveAiAdapter(ORG_ID, USER_ID).catch((e) => e),
     ).resolves.toBeInstanceOf(AiNotConfiguredError);
   });
 
@@ -169,29 +391,27 @@ describe("resolveAiAdapter — 4-mode matrix", () => {
     const { AiNotConfiguredError, PersonalAiKeyMissingError } =
       await import("@/lib/ai/errors");
     const { resolveAiAdapter } = await import("@/lib/ai/gateway");
-    const err = await resolveAiAdapter("org-1", "user-1").catch((e) => e);
+    const err = await resolveAiAdapter(ORG_ID, USER_ID).catch((e) => e);
     expect(err).toBeInstanceOf(AiNotConfiguredError);
     expect(err).not.toBeInstanceOf(PersonalAiKeyMissingError);
   });
 });
 
 describe("runAi", () => {
-  it("invokes fn with the resolved adapter and records a ledger row", async () => {
+  beforeEach(() => {
     settingsRow("per_user");
-    resolveUserAdapterById.mockResolvedValue({
-      adapter: anthropicAdapter,
-      apiKey: "sk-user",
-      provider: "anthropic",
-    });
+    userKeys({ anthropic: "sk-user", moonshotai: "sk-kimi" });
     rpc.mockResolvedValue({ data: null, error: null });
+  });
+
+  it("invokes fn with the resolved adapter and records a ledger row", async () => {
     const { runAi } = await import("@/lib/ai/gateway");
 
     const out = await runAi(
-      { orgId: "org-1", userId: "u-1", feature: "dashboard_gen" },
+      { orgId: ORG_ID, userId: "u-1", feature: "dashboard_gen" },
       async () => ({
         result: "ok",
         usage: { inputTokens: 2000, outputTokens: 500 },
-        model: "claude-opus-4-8",
       }),
     );
 
@@ -199,15 +419,19 @@ describe("runAi", () => {
     expect(rpc).toHaveBeenCalledWith(
       "record_ai_usage",
       expect.objectContaining({
-        p_org: "org-1",
+        p_org: ORG_ID,
         p_user: "u-1",
         p_feature: "dashboard_gen",
         p_provider: "anthropic",
-        p_model: "claude-opus-4-8",
+        // The CATALOG KEY, not the wire id: this is what a pin, a picker and
+        // the ledger all speak.
+        p_model: "claude-sonnet-5",
         p_input_tokens: 2000,
         p_output_tokens: 500,
-        p_cost_usd: 0.0225,
-        p_credits: 2.25,
+        // Floored to the standard $3/$15 even though the catalog row publishes
+        // the introductory $2/$10.
+        p_cost_usd: 0.0135,
+        p_credits: 1.35,
       }),
     );
     // Credential resolution and ledger attribution must agree by
@@ -215,36 +439,200 @@ describe("runAi", () => {
     expect(resolveUserAdapterById).toHaveBeenCalledWith("u-1", "anthropic");
   });
 
-  it("a failed ledger write does not fail the call", async () => {
-    settingsRow("per_user");
-    resolveUserAdapterById.mockResolvedValue({
-      adapter: anthropicAdapter,
-      apiKey: "sk-user",
-      provider: "anthropic",
+  it("hands the callback the WIRE id, never the catalog key", async () => {
+    // The Gateway's namespace is not Anthropic's: sending `claude-haiku-4.5`
+    // to Anthropic is a 404. `requestModel` is the only field an adapter may
+    // receive.
+    const { runAi } = await import("@/lib/ai/gateway");
+    const seen: string[] = [];
+    await runAi(
+      { orgId: ORG_ID, userId: USER_ID, feature: "item_assist" },
+      async ({ model }) => {
+        seen.push(model.requestModel ?? "<null>", model.model ?? "<null>");
+        return { result: 1, usage: { inputTokens: 0, outputTokens: 0 } };
+      },
+    );
+    expect(seen).toEqual(["claude-haiku-4-5", "claude-haiku-4.5"]);
+  });
+
+  it("routes the feature's TIER through the catalog (cheap → the cheap row)", async () => {
+    const { runAi } = await import("@/lib/ai/gateway");
+    await runAi(
+      { orgId: ORG_ID, userId: USER_ID, feature: "item_assist" },
+      async () => ({
+        result: 1,
+        usage: { inputTokens: 1_000_000, outputTokens: 0 },
+      }),
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      // No FALLBACK_RATES entry for the Gateway's dotted id, so the catalog
+      // price stands: 1M input tokens at $0.50/Mtok.
+      expect.objectContaining({ p_model: "claude-haiku-4.5", p_cost_usd: 0.5 }),
+    );
+  });
+
+  it("an explicit tier overrides the feature's own tier", async () => {
+    // column_fill's long-context fallback: above Haiku's row limit the call has
+    // to move up a tier, and the ledger must follow it.
+    const { runAi } = await import("@/lib/ai/gateway");
+    await runAi(
+      {
+        orgId: ORG_ID,
+        userId: USER_ID,
+        feature: "column_fill",
+        tier: "standard",
+      },
+      async () => ({ result: 1, usage: { inputTokens: 0, outputTokens: 0 } }),
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({ p_model: "claude-sonnet-5" }),
+    );
+  });
+
+  it("spends the REQUESTED provider's key and meters its own catalog row", async () => {
+    const { runAi } = await import("@/lib/ai/gateway");
+    const seen: string[] = [];
+    await runAi(
+      {
+        orgId: ORG_ID,
+        userId: USER_ID,
+        feature: "ask_pulse",
+        provider: "moonshotai",
+      },
+      async ({ provider, baseUrl, model }) => {
+        seen.push(provider, baseUrl ?? "<null>", model.requestModel ?? "");
+        return {
+          result: 1,
+          usage: { inputTokens: 1_000_000, outputTokens: 0 },
+        };
+      },
+    );
+    expect(seen).toEqual([
+      "moonshotai",
+      "https://api.moonshot.ai/v1",
+      "kimi-k2",
+    ]);
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({
+        p_provider: "moonshotai",
+        p_model: "kimi-k2",
+        // Kimi is in no fallback table, so the catalog price is billed as-is.
+        p_cost_usd: 0.6,
+      }),
+    );
+  });
+
+  it("refuses to run — and bills nothing — when the provider has no usable model", async () => {
+    // computeCostUsd(null, usage) is $0: a provider with an empty catalog would
+    // otherwise buy free inference. Google's rows are all unverified until a
+    // key is saved, so this is the live state of three of the five providers.
+    setModels([
+      modelFixture({
+        provider: "google",
+        model_id: "gemini-3-pro",
+        id_verified: false,
+      }),
+    ]);
+    settingsRow("org_byo", { byo_provider: "google" });
+    rpc.mockResolvedValue({
+      data: [{ provider: "google", secret: "g-key" }],
+      error: null,
     });
+    const { runAi } = await import("@/lib/ai/gateway");
+    const fn = vi.fn();
+    await expect(
+      runAi({ orgId: ORG_ID, userId: USER_ID, feature: "ask_pulse" }, fn),
+    ).rejects.toMatchObject({
+      name: "NoUsableModelError",
+      provider: "google",
+    });
+    expect(fn).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("record_ai_usage", expect.anything());
+  });
+
+  it("prefers the org's default model — but only for the org's own provider", async () => {
+    settingsRow("per_user", {
+      default_provider: "anthropic",
+      default_model_id: "claude-haiku-4.5",
+    });
+    const { runAi } = await import("@/lib/ai/gateway");
+    await runAi(
+      { orgId: ORG_ID, userId: USER_ID, feature: "ask_pulse" },
+      async () => ({ result: 1, usage: { inputTokens: 0, outputTokens: 0 } }),
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({ p_model: "claude-haiku-4.5" }),
+    );
+
+    // Same default, a different provider requested: the org default names an
+    // ANTHROPIC catalog key, which is meaningless to Moonshot.
+    rpc.mockClear();
+    rpc.mockResolvedValue({ data: null, error: null });
+    await runAi(
+      {
+        orgId: ORG_ID,
+        userId: USER_ID,
+        feature: "ask_pulse",
+        provider: "moonshotai",
+      },
+      async () => ({ result: 1, usage: { inputTokens: 0, outputTokens: 0 } }),
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "record_ai_usage",
+      expect.objectContaining({ p_model: "kimi-k2" }),
+    );
+  });
+
+  it("honours an explicit model pin and reports a substitution when it is gone", async () => {
+    const { runAi } = await import("@/lib/ai/gateway");
+    const substituted: boolean[] = [];
+    await runAi(
+      {
+        orgId: ORG_ID,
+        userId: USER_ID,
+        feature: "ask_pulse",
+        requestedModel: "claude-haiku-4.5",
+      },
+      async ({ model }) => {
+        substituted.push(model.substituted);
+        return { result: 1, usage: { inputTokens: 0, outputTokens: 0 } };
+      },
+    );
+    await runAi(
+      {
+        orgId: ORG_ID,
+        userId: USER_ID,
+        feature: "ask_pulse",
+        requestedModel: "claude-retired-9",
+      },
+      async ({ model }) => {
+        substituted.push(model.substituted);
+        return { result: 1, usage: { inputTokens: 0, outputTokens: 0 } };
+      },
+    );
+    expect(substituted).toEqual([false, true]);
+  });
+
+  it("a failed ledger write does not fail the call", async () => {
     rpc.mockResolvedValue({ data: null, error: { message: "ledger down" } });
     const { runAi } = await import("@/lib/ai/gateway");
     await expect(
-      runAi({ orgId: "o", userId: "u", feature: "f" }, async () => ({
+      runAi({ orgId: ORG_ID, userId: "u", feature: "ask_pulse" }, async () => ({
         result: 1,
         usage: { inputTokens: 0, outputTokens: 0 },
-        model: "m",
       })),
     ).resolves.toBe(1);
   });
 
   it("passes cache token counts through to record_ai_usage", async () => {
-    settingsRow("per_user");
-    resolveUserAdapterById.mockResolvedValue({
-      adapter: anthropicAdapter,
-      apiKey: "sk-user",
-      provider: "anthropic",
-    });
-    rpc.mockResolvedValue({ data: null, error: null });
     const { runAi } = await import("@/lib/ai/gateway");
 
     await runAi(
-      { orgId: "org-1", userId: "user-1", feature: "ask_pulse" },
+      { orgId: ORG_ID, userId: "user-1", feature: "ask_pulse" },
       async () => ({
         result: "ok",
         usage: {
@@ -253,7 +641,6 @@ describe("runAi", () => {
           cacheReadTokens: 20_000,
           cacheWriteTokens: 4_000,
         },
-        model: "claude-sonnet-5",
       }),
     );
 
@@ -265,6 +652,8 @@ describe("runAi", () => {
         p_output_tokens: 500,
         p_cache_read_tokens: 20_000,
         p_cache_write_tokens: 4_000,
+        // The FLOOR reaching the wire: $3/$15 with derived cache rates, not the
+        // catalog's introductory $2/$10.
         p_cost_usd: 0.0315,
         p_credits: 3.15,
       }),
@@ -272,21 +661,13 @@ describe("runAi", () => {
   });
 
   it("defaults cache token counts to 0 when the adapter omits them", async () => {
-    settingsRow("per_user");
-    resolveUserAdapterById.mockResolvedValue({
-      adapter: anthropicAdapter,
-      apiKey: "sk-user",
-      provider: "anthropic",
-    });
-    rpc.mockResolvedValue({ data: null, error: null });
     const { runAi } = await import("@/lib/ai/gateway");
 
     await runAi(
-      { orgId: "org-1", userId: "user-1", feature: "item_assist" },
+      { orgId: ORG_ID, userId: "user-1", feature: "item_assist" },
       async () => ({
         result: "ok",
         usage: { inputTokens: 100, outputTokens: 50 },
-        model: "claude-haiku-4-5",
       }),
     );
 
@@ -310,7 +691,7 @@ describe("runEmbedding", () => {
     const { runEmbedding } = await import("@/lib/ai/gateway");
 
     const out = await runEmbedding(
-      { orgId: "org-1", userId: "user-1", feature: "item_embed" },
+      { orgId: ORG_ID, userId: "user-1", feature: "item_embed" },
       async () => ({
         result: "ok",
         usage: {
@@ -327,7 +708,7 @@ describe("runEmbedding", () => {
     expect(rpc).toHaveBeenCalledWith(
       "record_ai_usage",
       expect.objectContaining({
-        p_org: "org-1",
+        p_org: ORG_ID,
         p_user: "user-1",
         p_feature: "item_embed",
         p_provider: "openai",
