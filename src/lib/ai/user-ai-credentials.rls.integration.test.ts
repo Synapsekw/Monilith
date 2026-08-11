@@ -108,5 +108,56 @@ describe.skipIf(!integrationTargetReady())(
       });
       expect(error).not.toBeNull();
     });
+
+    it("keeps one key PER PROVIDER — saving a second does not clear the first", async () => {
+      const svc = admin;
+      await svc.rpc("ai_credential_set", {
+        p_user: userA.id,
+        p_provider: "anthropic",
+        p_secret: "sk-ant-test-key-aaaa",
+        p_hint: "sk-ant-…aaaa",
+      });
+      await svc.rpc("ai_credential_set", {
+        p_user: userA.id,
+        p_provider: "moonshotai",
+        p_secret: "sk-kimi-test-key-bbbb",
+        p_hint: "sk-kimi…bbbb",
+      });
+
+      const { data } = await svc
+        .from("user_ai_credentials")
+        .select("provider")
+        .eq("user_id", userA.id);
+      expect((data ?? []).map((r) => r.provider).sort()).toEqual([
+        "anthropic",
+        "moonshotai",
+      ]);
+    });
+
+    it("deletes only the named provider's key", async () => {
+      await admin.rpc("ai_credential_delete", {
+        p_user: userA.id,
+        p_provider: "moonshotai",
+      });
+      const { data } = await admin
+        .from("user_ai_credentials")
+        .select("provider")
+        .eq("user_id", userA.id);
+      expect((data ?? []).map((r) => r.provider)).toEqual(["anthropic"]);
+    });
+
+    it("resolves a specific provider's secret, not an arbitrary one", async () => {
+      const { data } = await admin.rpc("ai_credential_get", {
+        p_user: userA.id,
+        p_provider: "anthropic",
+      });
+      expect(data?.[0]?.provider).toBe("anthropic");
+
+      const { data: none } = await admin.rpc("ai_credential_get", {
+        p_user: userA.id,
+        p_provider: "moonshotai",
+      });
+      expect(none ?? []).toHaveLength(0);
+    });
   },
 );

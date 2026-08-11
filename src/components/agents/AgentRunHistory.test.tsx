@@ -7,8 +7,19 @@ import { AgentRunHistory } from "./AgentRunHistory";
 import { CLAIM_PLACEHOLDER, STALE_CLAIM_MS } from "@/lib/agents/run-status";
 
 const getAgentRuns = vi.fn();
+/**
+ * `throwWith` is the "the action call itself blew up" case, and it deliberately
+ * bypasses the `vi.fn()` spy. Vitest's spy records the settled result of every
+ * promise a spy returns, and that bookkeeping reports a REJECTED one as an
+ * unhandled error — failing the test even though the component handled it
+ * correctly. Rejecting outside the spy keeps the scenario honest (the module
+ * boundary rejects exactly as a dropped Server Action call does) without the
+ * false failure.
+ */
+let throwWith: Error | null = null;
 vi.mock("@/lib/agents/actions", () => ({
-  getAgentRuns: (...a: unknown[]) => getAgentRuns(...a),
+  getAgentRuns: (...a: unknown[]) =>
+    throwWith ? Promise.reject(throwWith) : getAgentRuns(...a),
 }));
 
 function wrap(ui: ReactNode) {
@@ -26,6 +37,7 @@ function row(over: Record<string, unknown> = {}) {
     fireHour: 7,
     inputTokens: 1200,
     outputTokens: 300,
+    modelSubstituted: false,
     ...over,
   };
 }
@@ -34,7 +46,10 @@ async function expand() {
   await userEvent.click(screen.getByRole("button", { name: /recent runs/i }));
 }
 
-beforeEach(() => getAgentRuns.mockReset());
+beforeEach(() => {
+  getAgentRuns.mockReset();
+  throwWith = null;
+});
 
 describe("AgentRunHistory", () => {
   // Working agreement #5: expanding is the only thing that costs a round trip.
@@ -58,12 +73,45 @@ describe("AgentRunHistory", () => {
   // A read that failed and a history that is genuinely empty must not look the
   // same — that conflation is how a broken agent stays invisible.
   it("shows a distinct error state when the read fails", async () => {
-    getAgentRuns.mockResolvedValue({ ok: false, error: "boom" });
+    getAgentRuns.mockResolvedValue({
+      ok: false,
+      error: "Couldn't load this agent's runs.",
+    });
     wrap(<AgentRunHistory agentId="a3" agentName="Risk Spotter" />);
     await expand();
     expect(
       await screen.findByText(/couldn.t load this agent.s runs/i),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/no runs yet/i)).not.toBeInTheDocument();
+  });
+
+  // `getAgentRuns` returns TWO different failures — an id that isn't a uuid and
+  // a query that blew up — and they mean different things to the person
+  // reading them. Replacing both with one hardcoded sentence at the last hop
+  // throws away the only diagnosis the server bothered to make.
+  it("shows the SERVER's message, not a generic restatement of it", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: false,
+      error: "That agent doesn't exist.",
+    });
+    wrap(<AgentRunHistory agentId="a3b" agentName="Risk Spotter" />);
+    await expand();
+    expect(
+      await screen.findByText(/that agent doesn.t exist/i),
+    ).toBeInTheDocument();
+  });
+
+  // The failure mode that rendered as "No runs yet.": when the action call
+  // THROWS, react-query leaves `data` undefined with `isLoading` already
+  // false, so a component reading only `!result.ok` falls straight through to
+  // the empty state and tells the owner their agent has simply never run.
+  it("does not render a THROWN read as an empty history", async () => {
+    throwWith = new Error("connection reset");
+    wrap(<AgentRunHistory agentId="a3c" agentName="Risk Spotter" />);
+    await expand();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /couldn.t load this agent.s runs/i,
+    );
     expect(screen.queryByText(/no runs yet/i)).not.toBeInTheDocument();
   });
 
@@ -144,5 +192,29 @@ describe("AgentRunHistory", () => {
     expect(
       screen.getByRole("button", { name: /recent runs for risk spotter/i }),
     ).toBeInTheDocument();
+  });
+
+  // `user_agent_runs.model_substituted` exists so "your pinned model is gone,
+  // this ran on the default" is its OWN signal rather than being overloaded
+  // onto `error`, which every reader renders as a failure. A run that
+  // substituted still SUCCEEDED — it must read as a run that needs attention,
+  // not as one that broke.
+  it("says when a run fell back off its pinned model", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ modelSubstituted: true })],
+    });
+    wrap(<AgentRunHistory agentId="a9" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(screen.getByText(/pinned model/i)).toBeInTheDocument();
+  });
+
+  it("says nothing about substitution on an ordinary run", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    wrap(<AgentRunHistory agentId="a10" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(screen.queryByText(/pinned model/i)).not.toBeInTheDocument();
   });
 });

@@ -61,6 +61,14 @@ export async function createAgent(
       cadence: s.cadence,
       run_at_local_hour: s.runAtLocalHour,
       enabled: s.enabled,
+      // The per-agent model pin, written explicitly as null when unset: the
+      // columns are nullable and null is what "inherit the org default" means
+      // to the run endpoint. Both were added to `authenticated`'s column-level
+      // INSERT grant by 20260810173752 — a column-scoped grant does not extend
+      // to columns added later, so naming one outside that list is a hard
+      // Postgres failure rather than a silent no-op.
+      provider: s.provider,
+      model_id: s.modelId,
     } as never)
     .select("id")
     .single();
@@ -91,6 +99,12 @@ export async function updateAgent(
       cadence: s.cadence,
       run_at_local_hour: s.runAtLocalHour,
       enabled: s.enabled,
+      // Always written, both halves — clearing the pin back to null is how an
+      // owner returns the agent to the org default, so omitting the columns
+      // when unset would make "Use the organization's default" a no-op that
+      // silently keeps the old pin.
+      provider: s.provider,
+      model_id: s.modelId,
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", id)
@@ -170,7 +184,12 @@ export async function getAgentRuns(
         runsLimitSchema.parse(limit),
       ),
     };
-  } catch {
+  } catch (e) {
+    // Logged, not just swallowed: this is the ONE read that makes a failing
+    // agent visible, so a query that throws here has to leave a trace on the
+    // server too — otherwise the only evidence anything went wrong is a red
+    // line in one user's browser that nobody is watching.
+    console.error(`[agents] run history read failed for ${agentId}`, e);
     return fail("Couldn't load this agent's runs.");
   }
 }

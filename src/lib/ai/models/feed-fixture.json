@@ -1,0 +1,326 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1782691200,
+      "owned_by": "anthropic",
+      "name": "Claude Sonnet 5",
+      "description": "Sonnet 5 is an upgrade to Sonnet 4.6, with gains across agentic coding and professional work. It builds on the strengths of previous Sonnet models, bringing top-tier intelligence at Sonnet pricing for coding, agents, and everyday professional work at scale.",
+      "context_window": 1000000,
+      "max_tokens": 128000,
+      "type": "language",
+      "tags": [
+        "reasoning",
+        "tool-use",
+        "explicit-caching",
+        "file-input",
+        "vision",
+        "web-search"
+      ],
+      "regions": ["eu", "us"],
+      "supported_specifications": ["v2", "v3", "v4"],
+      "modalities": {
+        "input": ["text", "image", "pdf"],
+        "output": ["text"]
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning"
+      ],
+      "temperature": true,
+      "reasoning_options": [
+        {
+          "type": "toggle"
+        },
+        {
+          "type": "effort",
+          "values": ["low", "medium", "high", "xhigh"]
+        }
+      ],
+      "knowledge": "2026-01-31",
+      "pricing": {
+        "input": "0.000002",
+        "output": "0.00001",
+        "input_cache_read": "0.0000002",
+        "input_cache_write": "0.0000025",
+        "web_search": "10",
+        "regional": {
+          "eu": {
+            "input": "0.0000022",
+            "output": "0.000011",
+            "input_cache_read": "0.00000022",
+            "input_cache_write": "0.00000275"
+          },
+          "us": {
+            "input": "0.0000022",
+            "output": "0.000011",
+            "input_cache_read": "0.00000022",
+            "input_cache_write": "0.00000275"
+          }
+        }
+      }
+    },
+    {
+      "id": "openai/gpt-4o",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1715558400,
+      "owned_by": "openai",
+      "name": "GPT-4o",
+      "description": "GPT-4o from OpenAI has broad general knowledge and domain expertise allowing it to follow complex instructions in natural language and solve difficult problems accurately. It matches GPT-4 Turbo performance with a faster and cheaper API.",
+      "context_window": 128000,
+      "max_tokens": 16384,
+      "type": "language",
+      "tags": [
+        "file-input",
+        "implicit-caching",
+        "tool-use",
+        "vision",
+        "web-search"
+      ],
+      "supported_specifications": ["v2", "v3", "v4"],
+      "modalities": {
+        "input": ["text", "image", "pdf"],
+        "output": ["text"]
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice"
+      ],
+      "temperature": true,
+      "knowledge": "2023-09",
+      "pricing": {
+        "input": "0.0000025",
+        "output": "0.00001",
+        "input_cache_read": "0.00000125",
+        "web_search": "10",
+        "service_tiers": {
+          "priority": {
+            "input": "0.00000425",
+            "output": "0.000017",
+            "input_cache_read": "0.000002125"
+          }
+        }
+      }
+    },
+    {
+      "id": "openai/gpt-4o-mini-search-preview",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1741737600,
+      "owned_by": "openai",
+      "name": "GPT 4o Mini Search Preview",
+      "description": "GPT-4o mini Search Preview is a specialized model trained to understand and execute web search queries with the Chat Completions API. In addition to token fees, web search queries have a fee per tool call.",
+      "context_window": 128000,
+      "max_tokens": 16384,
+      "type": "language",
+      "tags": ["web-search"],
+      "supported_specifications": ["v2", "v3", "v4"],
+      "modalities": {
+        "input": ["text"],
+        "output": ["text"]
+      },
+      "supported_parameters": ["max_tokens", "temperature", "stop"],
+      "temperature": true,
+      "knowledge": "2023-09",
+      "pricing": {
+        "input": "0.00000015",
+        "output": "0.0000006",
+        "web_search": "10"
+      }
+    },
+    {
+      "id": "moonshotai/kimi-k2",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1752192000,
+      "owned_by": "moonshotai",
+      "name": "Kimi K2 Instruct",
+      "description": "Kimi K2 is a state-of-the-art mixture-of-experts (MoE) language model with 32 billion activated parameters and 1 trillion total parameters. Trained with the Muon optimizer, Kimi K2 achieves exceptional performance across frontier knowledge, reasoning, and coding tasks while being meticulously optimized for agentic capabilities.",
+      "context_window": 131072,
+      "max_tokens": 131072,
+      "type": "language",
+      "tags": ["tool-use"],
+      "supported_specifications": ["v2", "v3", "v4"],
+      "modalities": {
+        "input": ["text"],
+        "output": ["text"]
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice"
+      ],
+      "temperature": true,
+      "pricing": {
+        "input": "0.00000057",
+        "output": "0.0000023"
+      }
+    },
+    {
+      "id": "google/gemini-2.5-flash",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1742428800,
+      "owned_by": "google",
+      "name": "Gemini 2.5 Flash",
+      "description": "Gemini 2.5 Flash is a thinking model that offers great, well-rounded capabilities. It is designed to offer a balance between price and performance with multimodal support and a 1M token context window.",
+      "context_window": 1000000,
+      "max_tokens": 65536,
+      "type": "language",
+      "tags": [
+        "file-input",
+        "reasoning",
+        "tool-use",
+        "vision",
+        "web-search",
+        "implicit-caching"
+      ],
+      "regions": ["eu", "us"],
+      "supported_specifications": ["v2", "v3", "v4"],
+      "modalities": {
+        "input": ["text", "image", "pdf"],
+        "output": ["text"]
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "include_reasoning"
+      ],
+      "temperature": true,
+      "reasoning_options": [
+        {
+          "type": "toggle"
+        },
+        {
+          "type": "budget_tokens",
+          "min": 0,
+          "max": 24576
+        }
+      ],
+      "knowledge": "2025-01",
+      "pricing": {
+        "input": "0.0000003",
+        "output": "0.0000025",
+        "input_cache_read": "0.00000003",
+        "web_search": "35",
+        "maps_search": "25",
+        "service_tiers": {
+          "priority": {
+            "input": "0.00000054",
+            "output": "0.0000045",
+            "input_cache_read": "0.000000054"
+          },
+          "flex": {
+            "input": "0.00000015",
+            "output": "0.00000125"
+          }
+        },
+        "regional": {
+          "eu": {
+            "input": "0.0000003",
+            "output": "0.0000025",
+            "input_cache_read": "0.00000003"
+          },
+          "us": {
+            "input": "0.0000003",
+            "output": "0.0000025",
+            "input_cache_read": "0.00000003"
+          }
+        }
+      }
+    },
+    {
+      "id": "mistral/mistral-large-3",
+      "object": "model",
+      "created": 1755815280,
+      "released": 1764633600,
+      "owned_by": "mistral",
+      "name": "Mistral Large 3",
+      "description": "Mistral Large 3 2512 is Mistral\u2019s most capable model to date. It has a sparse mixture-of-experts architecture with 41B active parameters (675B total).",
+      "context_window": 256000,
+      "max_tokens": 256000,
+      "type": "language",
+      "tags": ["tool-use", "vision"],
+      "supported_specifications": ["v2", "v3", "v4"],
+      "modalities": {
+        "input": ["text", "image"],
+        "output": ["text"]
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "temperature",
+        "stop",
+        "tools",
+        "tool_choice"
+      ],
+      "temperature": true,
+      "knowledge": "2024-10",
+      "pricing": {
+        "input": "0.0000005",
+        "output": "0.0000015"
+      }
+    },
+    {
+      "id": "bfl/flux-2-pro",
+      "owned_by": "bfl",
+      "name": "FLUX 2 Pro",
+      "type": "image",
+      "tags": [],
+      "context_window": null,
+      "max_tokens": null
+    },
+    {
+      "id": "openai/unpriced-test-model",
+      "owned_by": "openai",
+      "name": "Unpriced Test Model",
+      "type": "language",
+      "tags": ["tool-use"],
+      "context_window": 128000,
+      "max_tokens": 16384
+    },
+    {
+      "id": "openai/gpt-image-1",
+      "owned_by": "openai",
+      "name": "GPT Image 1",
+      "type": "image",
+      "tags": [],
+      "context_window": null,
+      "max_tokens": null,
+      "pricing": {
+        "input": "0.00001",
+        "output": "0.00004"
+      }
+    },
+    {
+      "id": "google/gemini-embedding-001",
+      "owned_by": "google",
+      "name": "Gemini Embedding 001",
+      "type": "embedding",
+      "tags": [],
+      "context_window": 2048,
+      "max_tokens": null,
+      "pricing": {
+        "input": "0.00000015",
+        "output": "0"
+      }
+    }
+  ]
+}

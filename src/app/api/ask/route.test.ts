@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 // The Anthropic SDK refuses to construct in a "browser-like" (jsdom) env. The
 // engine (askPulseStream) and title/summarize helpers are already mocked, so the
@@ -42,10 +43,15 @@ vi.mock("@/lib/ai/gateway", () => ({
       _a: unknown,
       fn: (r: {
         apiKey: string;
-        adapter: { supportsTools: boolean };
+        provider: string;
+        model: ReturnType<typeof fakeResolvedModel>;
       }) => Promise<{ result: unknown; usage: unknown }>,
     ) => {
-      const r = await fn({ apiKey: "k", adapter: { supportsTools: true } });
+      const r = await fn({
+        apiKey: "k",
+        provider: "anthropic",
+        model: fakeResolvedModel(),
+      });
       meteredSpy(r.usage);
       return r.result;
     },

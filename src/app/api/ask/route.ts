@@ -7,7 +7,7 @@ import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { runAi } from "@/lib/ai/gateway";
-import { ProviderNotCapableError } from "@/lib/ai/errors";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { createClient } from "@/lib/supabase/server";
 import { composePersona, composeBoardScope } from "@/lib/ai/ask/persona";
 import { getMessages } from "@/lib/ai/ask/conversations";
@@ -25,7 +25,6 @@ import {
   OPENING_STATUS,
   type AskStreamEvent,
 } from "@/lib/ai/ask/stream-protocol";
-import { modelFor } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import { getUserTimeZoneCached } from "@/lib/profile/queries-cached";
 import { zonedDayOf } from "@/lib/datetime/timezone";
@@ -196,15 +195,15 @@ export async function POST(req: Request) {
       // Rolling-summary compaction of older turns (keeps per-turn cost bounded).
       const { toFold, recent } = splitForCompaction(allRows, KEEP_RECENT);
 
-      // The whole turn — rolling summary, the tool-use loop, and the auto-title
-      // — runs on the ask_pulse model, so one lookup drives all three and the
-      // ledger row names the model that actually ran.
-      const askModel = modelFor("ask_pulse").model;
       const result = await runAi(
         { orgId: org.id, userId: user.id, feature: "ask_pulse" },
-        async ({ apiKey, adapter }) => {
-          if (!adapter.supportsTools)
-            throw new ProviderNotCapableError("ask_pulse");
+        async ({ apiKey, provider, model }) => {
+          assertToolLoopCapable(provider, "ask_pulse");
+          // The whole turn — rolling summary, the tool-use loop, and the
+          // auto-title — runs on the ONE model runAi resolved, so all three
+          // agree with the ledger row it meters. The WIRE id, not the catalog
+          // key: this call goes straight to the Anthropic SDK.
+          const askModel = model.requestModel;
           const client = new Anthropic({ apiKey });
           const usage: AiUsageTokens = {
             inputTokens: 0,
@@ -234,6 +233,7 @@ export async function POST(req: Request) {
 
           const r = await askPulseStream({
             apiKey,
+            model: askModel,
             orgId: org.id,
             workspaceId,
             client,
@@ -274,7 +274,6 @@ export async function POST(req: Request) {
               title,
             },
             usage,
-            model: askModel,
           };
         },
       );

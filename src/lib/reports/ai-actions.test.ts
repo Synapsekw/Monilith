@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 type Access = {
   boardIds: string[];
@@ -56,8 +57,10 @@ const runAi = vi.fn(
     const { result } = await fn({
       adapter: { generateStructured },
       apiKey: "k",
+      baseUrl: null,
       mode: "managed",
       provider: "anthropic",
+      model: fakeResolvedModel(),
     });
     return result;
   },

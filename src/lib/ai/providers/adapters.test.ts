@@ -1,9 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 
-// --- Anthropic SDK stub ---
+// --- Anthropic SDK stub (validateKey only — generation runs on the AI SDK) ---
 const anthropicList = vi.fn();
-const anthropicParse = vi.fn();
 // vi.mock factories are hoisted above normal top-level statements, so a plain
 // `class AnthropicAuthError extends Error {}` referenced inside the factory's
 // `static AuthenticationError = AnthropicAuthError` field initializer would hit
@@ -14,26 +13,19 @@ vi.mock("@anthropic-ai/sdk", () => {
   class Anthropic {
     static AuthenticationError = AnthropicAuthError;
     models = { list: (...a: unknown[]) => anthropicList(...a) };
-    messages = { parse: (...a: unknown[]) => anthropicParse(...a) };
     constructor(readonly opts: { apiKey: string }) {}
   }
   return { default: Anthropic };
 });
-const jsonSchemaOutputFormat = vi.hoisted(() => vi.fn(() => ({})));
-vi.mock("@anthropic-ai/sdk/helpers/json-schema", () => ({
-  jsonSchemaOutputFormat,
-}));
 
 // --- OpenAI SDK stub ---
 const openaiList = vi.fn();
-const openaiCreate = vi.fn();
 // Same TDZ hazard as AnthropicAuthError above — hoist via vi.hoisted().
 const OpenAIAuthError = vi.hoisted(() => class extends Error {});
 vi.mock("openai", () => {
   class OpenAI {
     static AuthenticationError = OpenAIAuthError;
     models = { list: (...a: unknown[]) => openaiList(...a) };
-    chat = { completions: { create: (...a: unknown[]) => openaiCreate(...a) } };
     constructor(readonly opts: { apiKey: string }) {}
   }
   return { default: OpenAI };
@@ -41,13 +33,9 @@ vi.mock("openai", () => {
 
 // --- Google GenAI stub ---
 const googleList = vi.fn();
-const googleGenerate = vi.fn();
 vi.mock("@google/genai", () => {
   class GoogleGenAI {
-    models = {
-      list: (...a: unknown[]) => googleList(...a),
-      generateContent: (...a: unknown[]) => googleGenerate(...a),
-    };
+    models = { list: (...a: unknown[]) => googleList(...a) };
     constructor(readonly opts: { apiKey: string }) {}
   }
   return { GoogleGenAI };
@@ -56,38 +44,37 @@ vi.mock("@google/genai", () => {
 import { anthropicAdapter } from "@/lib/ai/providers/anthropic";
 import { openaiAdapter } from "@/lib/ai/providers/openai";
 import { googleAdapter } from "@/lib/ai/providers/google";
+import { openaiCompatibleAdapter } from "@/lib/ai/providers/openai-compatible";
 import { getAdapter } from "@/lib/ai/providers/registry";
+import { ADAPTER_KINDS } from "@/lib/ai/providers/provider-rows";
+import { fakeGenerateObject, type CapturedCall } from "@/test/adapter-fakes";
 
 const PROPOSAL = { name: "X", widgets: [] };
+const SCHEMA = { type: "object", properties: { ok: { type: "boolean" } } };
+
+/** Only the openai-compatible adapter is allowed to need a baseUrl. */
+function baseUrlFor(kind: string): string | null {
+  return kind === "openai-compatible" ? "https://api.moonshot.ai/v1" : null;
+}
 
 beforeEach(() => {
-  [
-    anthropicList,
-    anthropicParse,
-    openaiList,
-    openaiCreate,
-    googleList,
-    googleGenerate,
-  ].forEach((m) => m.mockReset());
-  jsonSchemaOutputFormat.mockClear();
+  [anthropicList, openaiList, googleList].forEach((m) => m.mockReset());
 });
 
 describe("registry", () => {
-  it("maps each provider id to its adapter", () => {
-    expect(getAdapter("anthropic").id).toBe("anthropic");
-    expect(getAdapter("openai").id).toBe("openai");
-    expect(getAdapter("google").id).toBe("google");
+  it("maps each adapter KIND — not provider id — to its adapter", () => {
+    expect(getAdapter("anthropic")).toBe(anthropicAdapter);
+    expect(getAdapter("openai")).toBe(openaiAdapter);
+    expect(getAdapter("google")).toBe(googleAdapter);
+    expect(getAdapter("openai-compatible")).toBe(openaiCompatibleAdapter);
   });
-});
 
-describe("keyFormat", () => {
-  it("rejects wrong prefixes and accepts right ones", () => {
-    expect(anthropicAdapter.keyFormat.safeParse("sk-oops").success).toBe(false);
-    expect(anthropicAdapter.keyFormat.safeParse("sk-ant-123").success).toBe(
-      true,
-    );
-    expect(openaiAdapter.keyFormat.safeParse("nope").success).toBe(false);
-    expect(openaiAdapter.keyFormat.safeParse("sk-123").success).toBe(true);
+  it("covers every kind the provider registry can store", () => {
+    // A row with an adapter_kind the registry cannot serve would resolve to
+    // undefined and blow up at the call site instead of here.
+    for (const kind of ADAPTER_KINDS) {
+      expect(getAdapter(kind).kind).toBe(kind);
+    }
   });
 });
 
@@ -95,267 +82,205 @@ describe("validateKey", () => {
   it("anthropic: resolves on success, throws ProviderAuthError on 401", async () => {
     anthropicList.mockResolvedValueOnce({});
     await expect(
-      anthropicAdapter.validateKey("sk-ant-ok"),
+      anthropicAdapter.validateKey({ apiKey: "sk-ant-ok", baseUrl: null }),
     ).resolves.toBeUndefined();
     anthropicList.mockRejectedValueOnce(new AnthropicAuthError("bad"));
     await expect(
-      anthropicAdapter.validateKey("sk-ant-bad"),
+      anthropicAdapter.validateKey({ apiKey: "sk-ant-bad", baseUrl: null }),
     ).rejects.toBeInstanceOf(ProviderAuthError);
   });
 
   it("openai: throws ProviderAuthError on 401", async () => {
     openaiList.mockRejectedValueOnce(new OpenAIAuthError("bad"));
-    await expect(openaiAdapter.validateKey("sk-bad")).rejects.toBeInstanceOf(
-      ProviderAuthError,
-    );
+    await expect(
+      openaiAdapter.validateKey({ apiKey: "sk-bad", baseUrl: null }),
+    ).rejects.toBeInstanceOf(ProviderAuthError);
   });
 
   it("google: throws ProviderAuthError when the list call fails", async () => {
     googleList.mockImplementationOnce(() => {
       throw new Error("API key not valid");
     });
-    await expect(googleAdapter.validateKey("AIza-bad")).rejects.toBeInstanceOf(
-      ProviderAuthError,
-    );
+    await expect(
+      googleAdapter.validateKey({ apiKey: "AIza-bad", baseUrl: null }),
+    ).rejects.toBeInstanceOf(ProviderAuthError);
   });
 
   it("anthropic: propagates a non-auth error unmapped", async () => {
     anthropicList.mockRejectedValueOnce(new Error("network down"));
-    const p = anthropicAdapter.validateKey("sk-ant-ok");
+    const p = anthropicAdapter.validateKey({
+      apiKey: "sk-ant-ok",
+      baseUrl: null,
+    });
     await expect(p).rejects.toThrow("network down");
     await expect(p).rejects.not.toBeInstanceOf(ProviderAuthError);
   });
 
   it("openai: propagates a non-auth error unmapped", async () => {
     openaiList.mockRejectedValueOnce(new Error("network down"));
-    const p = openaiAdapter.validateKey("sk-ok");
+    const p = openaiAdapter.validateKey({ apiKey: "sk-ok", baseUrl: null });
     await expect(p).rejects.toThrow("network down");
     await expect(p).rejects.not.toBeInstanceOf(ProviderAuthError);
   });
 });
 
-describe("generateProposal", () => {
-  it("anthropic reads parsed_output", async () => {
-    anthropicParse.mockResolvedValueOnce({
-      content: [{ type: "text", text: JSON.stringify(PROPOSAL) }],
-      parsed_output: PROPOSAL,
-      usage: { input_tokens: 1200, output_tokens: 340 },
-    });
-    const res = await anthropicAdapter.generateProposal({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-    });
-    expect(res.proposal.name).toBe("X");
-    expect(res.usage).toEqual({
-      inputTokens: 1200,
-      outputTokens: 340,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    });
-  });
+// THE regression this layer exists to close. Before it, the OpenAI and Google
+// adapters ignored the requested model and ran a module-level constant
+// (`gpt-4o` / `gemini-2.0-flash`) — so `model-map` could emit whatever it liked
+// and a BYO org was metered against a model that never ran.
+describe("every adapter honours the requested model", () => {
+  it.each(ADAPTER_KINDS)(
+    "%s dispatches args.model and reports it back",
+    async (kind) => {
+      const captured: CapturedCall[] = [];
+      const res = await getAdapter(kind).generateStructured({
+        apiKey: "k",
+        baseUrl: baseUrlFor(kind),
+        model: "some-specific-model",
+        system: "s",
+        user: "u",
+        schema: SCHEMA,
+        client: { generateObject: fakeGenerateObject(captured) },
+      });
+      // `model` here is the REAL LanguageModel the provider factory built, so
+      // this asserts the string reached the SDK — not that we echoed it.
+      expect(captured[0].model.modelId).toBe("some-specific-model");
+      expect(res.model).toBe("some-specific-model");
+    },
+  );
 
-  it("openai parses the JSON message content", async () => {
-    openaiCreate.mockResolvedValueOnce({
-      choices: [{ message: { content: JSON.stringify(PROPOSAL) } }],
-      usage: { prompt_tokens: 800, completion_tokens: 200 },
-    });
-    const res = await openaiAdapter.generateProposal({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-    });
-    expect(res.proposal.name).toBe("X");
-    expect(res.usage).toEqual({ inputTokens: 800, outputTokens: 200 });
-  });
+  it.each(ADAPTER_KINDS)(
+    "%s carries it through generateProposal",
+    async (kind) => {
+      const captured: CapturedCall[] = [];
+      const res = await getAdapter(kind).generateProposal({
+        apiKey: "k",
+        baseUrl: baseUrlFor(kind),
+        model: "another-model",
+        system: "s",
+        user: "u",
+        client: {
+          generateObject: fakeGenerateObject(captured, { object: PROPOSAL }),
+        },
+      });
+      expect(captured[0].model.modelId).toBe("another-model");
+      expect(res.model).toBe("another-model");
+      expect(res.proposal.name).toBe("X");
+    },
+  );
 
-  it("openai falls back to zero usage when the response omits it", async () => {
-    openaiCreate.mockResolvedValueOnce({
-      choices: [{ message: { content: JSON.stringify(PROPOSAL) } }],
-      usage: undefined,
-    });
-    const res = await openaiAdapter.generateProposal({
+  it.each(ADAPTER_KINDS)("%s sends the caller's schema", async (kind) => {
+    const captured: CapturedCall[] = [];
+    await getAdapter(kind).generateStructured({
       apiKey: "k",
+      baseUrl: baseUrlFor(kind),
+      model: "m",
       system: "s",
       user: "u",
+      schema: SCHEMA,
+      client: { generateObject: fakeGenerateObject(captured) },
     });
-    expect(res.proposal.name).toBe("X");
-    expect(res.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
-  });
-
-  it("google parses response.text", async () => {
-    googleGenerate.mockResolvedValueOnce({ text: JSON.stringify(PROPOSAL) });
-    const res = await googleAdapter.generateProposal({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-    });
-    expect(res.proposal.name).toBe("X");
-    expect(res.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
+    expect((captured[0].schema as { jsonSchema: unknown }).jsonSchema).toEqual(
+      SCHEMA,
+    );
   });
 });
 
-describe("generateStructured", () => {
-  const SCHEMA = { type: "object", properties: { ok: { type: "boolean" } } };
-
-  it("anthropic passes the schema through jsonSchemaOutputFormat and returns data + usage", async () => {
-    anthropicParse.mockResolvedValueOnce({
-      content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
-      parsed_output: { ok: true },
-      usage: { input_tokens: 1, output_tokens: 2 },
-    });
-    const res = await anthropicAdapter.generateStructured({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-      schema: SCHEMA,
-    });
-    expect(res.data).toEqual({ ok: true });
-    expect(res.usage).toEqual({
-      inputTokens: 1,
-      outputTokens: 2,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    });
-    expect(jsonSchemaOutputFormat).toHaveBeenCalledWith(SCHEMA);
-  });
-
-  it("anthropic falls back to parsing the text block when parsed_output is absent", async () => {
-    anthropicParse.mockResolvedValueOnce({
-      content: [{ type: "text", text: JSON.stringify({ ok: false }) }],
-      usage: { input_tokens: 3, output_tokens: 4 },
-    });
-    const res = await anthropicAdapter.generateStructured({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-      schema: SCHEMA,
-    });
-    expect(res.data).toEqual({ ok: false });
-    expect(res.usage).toEqual({
-      inputTokens: 3,
-      outputTokens: 4,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-    });
-  });
-
-  it("openai returns the parsed JSON body + usage and embeds the schema in the prompt", async () => {
-    openaiCreate.mockResolvedValueOnce({
-      choices: [{ message: { content: JSON.stringify({ ok: true }) } }],
-      usage: { prompt_tokens: 5, completion_tokens: 6 },
-    });
-    const res = await openaiAdapter.generateStructured({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-      schema: SCHEMA,
-    });
-    expect(res.data).toEqual({ ok: true });
-    expect(res.usage).toEqual({ inputTokens: 5, outputTokens: 6 });
-    const call = openaiCreate.mock.calls[0][0];
-    expect(call.messages[1].content).toContain(JSON.stringify(SCHEMA));
-  });
-
-  it("google returns the parsed text body + usage and embeds the schema in the prompt", async () => {
-    googleGenerate.mockResolvedValueOnce({
-      text: JSON.stringify({ ok: true }),
-      usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 8 },
-    });
-    const res = await googleAdapter.generateStructured({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-      schema: SCHEMA,
-    });
-    expect(res.data).toEqual({ ok: true });
-    expect(res.usage).toEqual({ inputTokens: 7, outputTokens: 8 });
-    const call = googleGenerate.mock.calls[0][0];
-    expect(call.contents[0].parts[0].text).toContain(JSON.stringify(SCHEMA));
-  });
-});
-
-// The BYO mis-metering regression: `choice` is an Anthropic-shaped request
-// config, and only the Anthropic adapter honours it. The OpenAI and Google
-// adapters IGNORE it and run their own fixed model — so a caller that meters
-// `choice.model` bills an org_byo org on Gemini ($0.10/$0.40) at Sonnet 5's
-// $3/$15, roughly 30x over-charged against their monthly credit ceiling.
-// Every adapter therefore reports the model it actually ran.
-describe("generateStructured reports the model actually used", () => {
-  const SCHEMA = { type: "object" };
-  const SONNET_CHOICE = {
-    model: "claude-sonnet-5",
-    thinking: { type: "adaptive" as const },
-    effort: "high" as const,
+describe("google keeps our `oneOf` schemas off Gemini's responseSchema", () => {
+  // Gemini's responseSchema is an OpenAPI-3.0 subset with no `oneOf`, and
+  // @ai-sdk/google forwards `oneOf` verbatim — so without this the two schemas
+  // that use it (PROPOSAL_JSON_SCHEMA, AUTOMATION_DRAFT_JSON_SCHEMA) 400.
+  const ONE_OF_SCHEMA = {
+    type: "object",
+    properties: { widget: { oneOf: [{ type: "string" }, { type: "number" }] } },
   };
 
-  it("anthropic honours `choice`, so it reports choice.model", async () => {
-    anthropicParse.mockResolvedValueOnce({
-      content: [{ type: "text", text: "{}" }],
-      parsed_output: {},
-      usage: { input_tokens: 1, output_tokens: 1 },
-    });
-    const res = await anthropicAdapter.generateStructured({
+  async function call() {
+    const captured: CapturedCall[] = [];
+    await googleAdapter.generateStructured({
       apiKey: "k",
+      baseUrl: null,
+      model: "gemini-3-flash",
       system: "s",
       user: "u",
-      schema: SCHEMA,
-      choice: SONNET_CHOICE,
+      schema: ONE_OF_SCHEMA,
+      client: { generateObject: fakeGenerateObject(captured) },
     });
-    expect(res.model).toBe("claude-sonnet-5");
-    expect(anthropicParse.mock.calls[0][0].model).toBe("claude-sonnet-5");
+    return captured[0];
+  }
+
+  it("suppresses the provider-side responseSchema", async () => {
+    expect((await call()).providerOptions?.google).toEqual({
+      structuredOutputs: false,
+    });
   });
 
-  it("openai IGNORES `choice` — it reports its own model, never choice.model", async () => {
-    openaiCreate.mockResolvedValueOnce({
-      choices: [{ message: { content: "{}" } }],
-      usage: { prompt_tokens: 1, completion_tokens: 1 },
-    });
-    const res = await openaiAdapter.generateStructured({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-      schema: SCHEMA,
-      choice: SONNET_CHOICE,
-    });
-    expect(openaiCreate.mock.calls[0][0].model).toBe("gpt-4o");
-    expect(res.model).toBe("gpt-4o");
-    expect(res.model).toBe(openaiAdapter.defaultModel);
+  it("still gives the model the schema — in the prompt", async () => {
+    // structuredOutputs:false drops responseSchema ENTIRELY, so without this
+    // the model would receive no schema at all — weaker than the adapter this
+    // replaced, which embedded it in the prompt.
+    const call0 = await call();
+    expect(call0.prompt).toContain(JSON.stringify(ONE_OF_SCHEMA));
+    expect(call0.prompt).toContain("u");
   });
 
-  it("google IGNORES `choice` — it reports its own model, never choice.model", async () => {
-    googleGenerate.mockResolvedValueOnce({
-      text: "{}",
-      usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
-    });
-    const res = await googleAdapter.generateStructured({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-      schema: SCHEMA,
-      choice: SONNET_CHOICE,
-    });
-    expect(googleGenerate.mock.calls[0][0].model).toBe("gemini-2.0-flash");
-    expect(res.model).toBe("gemini-2.0-flash");
-    expect(res.model).toBe(googleAdapter.defaultModel);
+  it("still passes the schema to the SDK for parsing", async () => {
+    expect(
+      ((await call()).schema as { jsonSchema: unknown }).jsonSchema,
+    ).toEqual(ONE_OF_SCHEMA);
   });
 
-  it("generateProposal carries the same model through", async () => {
-    googleGenerate.mockResolvedValueOnce({ text: JSON.stringify(PROPOSAL) });
-    const res = await googleAdapter.generateProposal({
-      apiKey: "k",
-      system: "s",
-      user: "u",
-      choice: SONNET_CHOICE,
-    });
-    expect(res.model).toBe("gemini-2.0-flash");
+  it("leaves the other adapters on native structured output", async () => {
+    // Only Google needs the escape hatch; asserting the absence keeps a future
+    // copy-paste from quietly disabling structured output everywhere.
+    for (const kind of ["anthropic", "openai", "openai-compatible"] as const) {
+      const captured: CapturedCall[] = [];
+      await getAdapter(kind).generateStructured({
+        apiKey: "k",
+        baseUrl: baseUrlFor(kind),
+        model: "m",
+        system: "s",
+        user: "u",
+        schema: ONE_OF_SCHEMA,
+        client: { generateObject: fakeGenerateObject(captured) },
+      });
+      expect(captured[0].providerOptions?.google).toBeUndefined();
+    }
   });
 });
 
-describe("supportsTools", () => {
-  it("is true for anthropic and false for openai/google", () => {
-    expect(anthropicAdapter.supportsTools).toBe(true);
-    expect(openaiAdapter.supportsTools).toBe(false);
-    expect(googleAdapter.supportsTools).toBe(false);
-  });
+describe("usage is metered from the provider response", () => {
+  it.each(ADAPTER_KINDS)(
+    "%s reports uncached input separately",
+    async (kind) => {
+      const res = await getAdapter(kind).generateStructured({
+        apiKey: "k",
+        baseUrl: baseUrlFor(kind),
+        model: "m",
+        system: "s",
+        user: "u",
+        schema: SCHEMA,
+        client: {
+          generateObject: fakeGenerateObject([], {
+            usage: {
+              // The SDK's `inputTokens` is the cache-INCLUSIVE total.
+              inputTokens: 1100,
+              outputTokens: 340,
+              inputTokenDetails: {
+                noCacheTokens: 200,
+                cacheReadTokens: 800,
+                cacheWriteTokens: 100,
+              },
+            },
+          }),
+        },
+      });
+      expect(res.usage).toEqual({
+        inputTokens: 200,
+        outputTokens: 340,
+        cacheReadTokens: 800,
+        cacheWriteTokens: 100,
+      });
+    },
+  );
 });

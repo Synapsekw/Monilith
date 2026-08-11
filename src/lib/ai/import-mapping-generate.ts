@@ -1,7 +1,7 @@
 import "server-only";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
-import type { ModelChoice } from "@/lib/ai/model-map";
+import { toRequestArgs } from "@/lib/ai/providers/request";
 import {
   IMPORT_MAPPING_JSON_SCHEMA,
   type MappingSuggestion,
@@ -56,7 +56,13 @@ function buildUserPrompt(payload: ImportMappingPayload): string {
  */
 export async function generateImportMapping(
   payload: ImportMappingPayload,
-  opts: { adapter: ProviderAdapter; apiKey: string; choice?: ModelChoice },
+  opts: {
+    adapter: ProviderAdapter;
+    apiKey: string;
+    baseUrl?: string | null;
+    /** The WIRE model id to run (`ResolvedModel.requestModel`). */
+    model: string;
+  },
 ): Promise<{
   suggestions: MappingSuggestion[];
   usage: AiUsageTokens;
@@ -65,11 +71,10 @@ export async function generateImportMapping(
   const { data, usage, model } = await opts.adapter.generateStructured<{
     suggestions?: MappingSuggestion[];
   }>({
-    apiKey: opts.apiKey,
+    ...toRequestArgs(opts),
     system: buildImportMappingSystemPrompt(),
     user: buildUserPrompt(payload),
     schema: IMPORT_MAPPING_JSON_SCHEMA,
-    choice: opts.choice,
   });
   return { suggestions: data?.suggestions ?? [], usage, model };
 }

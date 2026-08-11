@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { autopilotRun, AUTOPILOT_ACTIONS } from "./autopilot";
-import { modelFor } from "@/lib/ai/model-map";
 import type { AutopilotContext } from "./autopilot";
 
 // Real uuids — automationActionSchema gates columnId/userId/groupId with .uuid().
@@ -81,6 +80,7 @@ describe("autopilotRun", () => {
     ]);
     const res = await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       tasks: ["triage", "goal_rollup"],
       client,
@@ -105,6 +105,7 @@ describe("autopilotRun", () => {
     ]);
     await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       tasks: ["triage"],
       client,
@@ -128,6 +129,7 @@ describe("autopilotRun", () => {
     ]);
     const res = await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       tasks: ["triage"],
       client,
@@ -152,6 +154,7 @@ describe("autopilotRun", () => {
     ]);
     const res = await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       tasks: ["goal_rollup"],
       client,
@@ -176,6 +179,7 @@ describe("autopilotRun", () => {
     ]);
     const res = await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       // enable ALL tasks so the only reason set_option is rejected is the vocabulary.
       tasks: ["triage", "chase_overdue", "goal_rollup"],
@@ -195,6 +199,7 @@ describe("autopilotRun", () => {
     ]);
     await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       tasks: ["triage"],
       client,
@@ -210,6 +215,7 @@ describe("autopilotRun", () => {
     const { client } = fakeClient([{ stop_reason: "end_turn", content: [] }]);
     const res = await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       tasks: ["triage", "chase_overdue", "goal_rollup"],
       client,
@@ -228,15 +234,15 @@ describe("autopilotRun", () => {
     ]);
     const res = await autopilotRun({
       apiKey: "k",
+      model: "claude-sonnet-5",
       agentContext: CTX,
       tasks: ["triage"],
       client,
     });
-    const expected = modelFor("autopilot_run");
-    expect(calls[0]!.model).toBe(expected.model);
+    expect(calls[0]!.model).toBe("claude-sonnet-5");
     expect(calls[0]!.thinking).toEqual({ type: "disabled" });
     expect(calls[0]!.max_tokens).toBe(1024);
-    // Reported back so runAi's ledger row names the model that actually ran.
-    expect(res.model).toBe(expected.model);
+    // Reported back: the model the caller resolved is the one that ran.
+    expect(res.model).toBe("claude-sonnet-5");
   });
 });

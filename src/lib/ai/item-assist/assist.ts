@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
-import { modelFor } from "@/lib/ai/model-map";
+import { requestShapeFor } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import {
   buildItemAssistJsonSchema,
@@ -70,6 +70,8 @@ function buildUserPrompt(args: {
  */
 export async function generateItemAssist(args: {
   apiKey: string;
+  /** The WIRE model id to run, resolved by runAi (`requestModel`). */
+  model: string;
   item: { name: string; textContext?: string };
   statusOptions?: { id: string; label: string }[];
   thread?: string;
@@ -81,20 +83,20 @@ export async function generateItemAssist(args: {
   model: string;
 }> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
-  const choice = modelFor("item_assist");
+  const shape = requestShapeFor(args.model);
   const statusOptionIds = args.want.status
     ? (args.statusOptions ?? []).map((o) => o.id)
     : [];
   const schema = buildItemAssistJsonSchema(args.want, statusOptionIds);
 
   const message = await client.messages.parse({
-    model: choice.model,
+    model: args.model,
     max_tokens: 4096,
-    thinking: choice.thinking,
+    thinking: shape.thinking,
     output_config: {
       // Haiku 4.5 rejects `effort` — omit the key entirely rather than
       // sending undefined, which the SDK would still serialize.
-      ...(choice.effort ? { effort: choice.effort } : {}),
+      ...(shape.effort ? { effort: shape.effort } : {}),
       format: jsonSchemaOutputFormat(schema as never),
     },
     system: [
@@ -133,7 +135,7 @@ export async function generateItemAssist(args: {
 
   return {
     proposal,
-    model: choice.model,
+    model: args.model,
     usage: {
       inputTokens: message.usage.input_tokens,
       outputTokens: message.usage.output_tokens,

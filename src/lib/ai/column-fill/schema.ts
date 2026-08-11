@@ -1,5 +1,11 @@
 /** Hard cap on rows a single classify call will accept — cost + latency guard.
- *  `validateClassifications` re-enforces this against raw model output. */
+ *  `validateClassifications` re-enforces this against raw model output.
+ *
+ *  If this is ever raised past the cheap tier's context budget, re-introduce a
+ *  tier escalation in actions.ts: every row is serialised into ONE user
+ *  message, so the batch size and the model's context window are the same
+ *  constraint. (There was one, keyed on a 2000-row threshold this cap made
+ *  unreachable; it was deleted rather than left as a dead branch.) */
 export const COLUMN_FILL_MAX = 200;
 
 /**

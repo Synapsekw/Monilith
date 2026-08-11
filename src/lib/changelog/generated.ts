@@ -4,6 +4,27 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-08-11",
+    kind: "new",
+    title: "Connect an AI key for each provider",
+    description:
+      "Settings → AI now holds one API key per provider — Anthropic, OpenAI, Google Gemini, Mistral and Kimi — instead of a single key for everything. Add, replace and remove each one independently.",
+  },
+  {
+    date: "2026-08-11",
+    kind: "new",
+    title: "Choose your organisation's default AI model",
+    description:
+      "Admins can pick the model the whole organisation falls back to, from a searchable list grouped by provider and ordered cheapest first. Clear it at any time to let each feature pick its own tier.",
+  },
+  {
+    date: "2026-08-11",
+    kind: "new",
+    title: "Pin an agent to a specific model",
+    description:
+      "Any agent can be pinned to a particular provider and model rather than following the organisation default, and its run history now tells you when a run fell back to a different model.",
+  },
+  {
     date: "2026-08-09",
     kind: "new",
     title: "Reports across multiple boards",

@@ -42,6 +42,7 @@ describe("generateBoardProposal", () => {
     const res = await generateBoardProposal("build me a CRM", {
       adapter,
       apiKey: "k",
+      model: "claude-sonnet-5",
     });
     expect(res.proposal).toEqual(proposal);
     expect(res.usage).toEqual(USAGE);
@@ -59,6 +60,7 @@ describe("generateBoardProposal", () => {
     await generateBoardProposal("a board", {
       adapter,
       apiKey: "k",
+      model: "claude-sonnet-5",
       feedback: "add a priority column",
     });
     expect(generate.mock.calls[0][0].user).toContain("add a priority column");

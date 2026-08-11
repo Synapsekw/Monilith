@@ -1,47 +1,51 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getAdapter } from "@/lib/ai/providers/registry";
+import { getProviderRow } from "@/lib/ai/providers/provider-rows";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
-import { PROVIDER_CATALOG, type AiProvider } from "@/lib/ai/providers/catalog";
+import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
+// The provider is validated against the ai_providers table, not a hardcoded
+// enum — that table is the constraint now, so a provider added by a DB row is
+// immediately usable here with no code change.
 const saveSchema = z.object({
-  provider: z.enum(["anthropic", "openai", "google"]),
+  provider: z.string().trim().min(1).max(64),
   key: z.string().trim().min(10).max(300),
 });
 
 export async function saveAiKey(input: {
-  provider: AiProvider;
+  provider: string;
   key: string;
-}): Promise<ActionResult<{ provider: AiProvider; hint: string }>> {
+}): Promise<ActionResult<{ provider: string; hint: string }>> {
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return fail("Enter a valid API key.");
   const { provider, key } = parsed.data;
 
   const user = await requireUser();
-  const adapter = getAdapter(provider);
+  const svc = createServiceClient();
+  const row = await getProviderRow(svc, provider);
+  if (!row || !row.enabled) return fail("Unknown provider.");
 
-  if (!adapter.keyFormat.safeParse(key).success)
-    return fail(
-      `That doesn't look like a ${PROVIDER_CATALOG[provider].label} key.`,
-    );
+  // Cheap shape check from the row's regex, before the live network ping.
+  if (!new RegExp(row.keyFormat).test(key))
+    return fail(`That doesn't look like a ${row.label} key.`);
 
+  const adapter = getAdapter(row.adapterKind);
   try {
-    await adapter.validateKey(key);
+    await adapter.validateKey({ apiKey: key, baseUrl: row.baseUrl });
   } catch (e) {
     if (e instanceof ProviderAuthError)
-      return fail(
-        `That key was rejected by ${PROVIDER_CATALOG[provider].label}.`,
-      );
+      return fail(`That key was rejected by ${row.label}.`);
     return fail("Couldn't verify the key. Please try again.");
   }
 
   const hint = maskKey(key);
-  const svc = createServiceClient();
   const { error } = await svc.rpc("ai_credential_set", {
     p_user: user.id,
     p_provider: provider,
@@ -50,17 +54,55 @@ export async function saveAiKey(input: {
   });
   if (error) return fail("Couldn't save the key. Please try again.");
 
-  revalidatePath("/settings");
+  // This key is the only thing that can ask THIS provider which model ids it
+  // actually answers to — the catalog is populated from the Gateway, whose id
+  // namespace is not the providers'. Saving a key is therefore also the moment
+  // this provider's catalog rows become selectable.
+  //
+  // It is NOT on the response path. Verification is a live round-trip to a
+  // third party we do not control; awaiting it made "Save key" as slow as the
+  // slowest provider, and a provider that accepts the connection and then
+  // stalls would hold the user's action open. `after` hands it to the
+  // platform's keep-alive (on Vercel, waitUntil) so the save returns as soon
+  // as the key is stored. Never allowed to fail the save either: the key is
+  // valid regardless, and an unverified row is simply not offered until the
+  // next pass.
+  const verifyIds = async () => {
+    try {
+      await verifyProviderModels({ client: svc, provider, apiKey: key });
+    } catch (e) {
+      console.error(
+        `[ai] id verification failed after saving ${provider} key`,
+        e,
+      );
+    }
+  };
+  try {
+    after(verifyIds);
+  } catch {
+    // No request scope — a direct call in a unit test. Still run it, detached.
+    void verifyIds();
+  }
+
+  revalidatePath("/settings/ai");
   return { ok: true, data: { provider, hint } };
 }
 
-export async function removeAiKey(): Promise<
-  ActionResult<Record<never, never>>
-> {
+export async function removeAiKey(input: {
+  provider: string;
+}): Promise<ActionResult<Record<never, never>>> {
+  const parsed = z
+    .object({ provider: z.string().trim().min(1).max(64) })
+    .safeParse(input);
+  if (!parsed.success) return fail("Unknown provider.");
   const user = await requireUser();
   const svc = createServiceClient();
-  const { error } = await svc.rpc("ai_credential_clear", { p_user: user.id });
+  // Deletes ONLY this provider's key; other providers' keys survive.
+  const { error } = await svc.rpc("ai_credential_delete", {
+    p_user: user.id,
+    p_provider: parsed.data.provider,
+  });
   if (error) return fail("Couldn't remove the key. Please try again.");
-  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
   return { ok: true, data: {} };
 }

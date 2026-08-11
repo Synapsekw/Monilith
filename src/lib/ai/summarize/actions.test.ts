@@ -1,12 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 // A resolved adapter+key, as the real gateway hands to runAi's callback.
-// `id` is per-test so the not-capable branch is exercisable.
+// `provider` is per-test so the not-capable branch is exercisable — the gate
+// reads the PROVIDER id, not the (per-wire-format) adapter.
 let FAKE_RESOLVED = {
-  adapter: { id: "anthropic", supportsTools: true },
+  adapter: { kind: "anthropic" },
   apiKey: "k",
   mode: "managed",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (
@@ -123,10 +127,12 @@ beforeEach(() => {
   createClient.mockClear();
 
   FAKE_RESOLVED = {
-    adapter: { id: "anthropic", supportsTools: true },
+    adapter: { kind: "anthropic" },
     apiKey: "k",
     mode: "managed",
     provider: "anthropic",
+    baseUrl: null,
+    model: fakeResolvedModel(),
   };
   ITEM_RESULT = { data: { id: "item-1", board_id: "board-1" }, error: null };
   UPDATES_RESULT = { data: [], error: null };
@@ -199,10 +205,12 @@ describe("summarizeThread action", () => {
 
   it("maps a not-capable provider to the Anthropic-specific copy and never calls the lib", async () => {
     FAKE_RESOLVED = {
-      adapter: { id: "openai", supportsTools: false },
+      adapter: { kind: "openai" },
       apiKey: "k",
       mode: "managed",
       provider: "openai",
+      baseUrl: null,
+      model: fakeResolvedModel(),
     };
     const { summarizeThread } = await import("@/lib/ai/summarize/actions");
     const res = await summarizeThread({ itemId: ITEM_ID });

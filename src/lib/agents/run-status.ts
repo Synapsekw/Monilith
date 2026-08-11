@@ -61,6 +61,20 @@ export type AgentRunSummary = AgentRunLike & {
   fireHour: number;
   inputTokens: number | null;
   outputTokens: number | null;
+  /**
+   * `user_agent_runs.model_substituted`: the agent's pinned model was gone, so
+   * the run used the default instead.
+   *
+   * Deliberately NOT part of {@link AgentRunLike}. The roster's last-run pill
+   * comes from `get_my_agent_last_runs()`, whose columns are fixed in SQL, and
+   * widening that function is a migration — so this is carried on the expanded
+   * history row only, which is a plain select.
+   *
+   * It is also deliberately not a `status` or an `error`: a substituted run
+   * SUCCEEDED. Folding it into `error` would tell an owner their working agent
+   * broke, which is exactly why the column was minted separately.
+   */
+  modelSubstituted: boolean;
 };
 
 const PRESENTATION: Record<
@@ -108,6 +122,15 @@ export function agentRunStatusColor(
 ): StatusColor {
   return PRESENTATION[status].color;
 }
+
+/**
+ * What a substituted run tells its owner. One sentence, in the owner's terms:
+ * the briefing arrived, the pinned model did not, and the fix is in the editor.
+ * Exported so the wording lives with the rest of the run vocabulary rather than
+ * inline in a component.
+ */
+export const MODEL_SUBSTITUTED_NOTE =
+  "Pinned model unavailable — ran on the default instead";
 
 /** Longest failure/skip reason rendered inline before an ellipsis. */
 const REASON_MAX = 160;

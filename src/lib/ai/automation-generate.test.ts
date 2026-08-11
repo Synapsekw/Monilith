@@ -55,6 +55,7 @@ describe("generateAutomationDraft", () => {
     const res = await generateAutomationDraft("archive new items", ctx, {
       adapter,
       apiKey: "k",
+      model: "claude-sonnet-5",
     });
 
     const call = generateStructured.mock.calls[0][0];

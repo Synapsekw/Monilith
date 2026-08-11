@@ -1,5 +1,5 @@
-import type { ModelChoice } from "@/lib/ai/model-map";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
+import { toRequestArgs } from "@/lib/ai/providers/request";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type {
   BoardSnapshot,
@@ -167,7 +167,13 @@ export function buildNarrativeUserPrompt(input: DraftNarrativeInput): string {
 
 export async function draftReportNarrative(
   input: DraftNarrativeInput,
-  opts: { adapter: ProviderAdapter; apiKey: string; choice?: ModelChoice },
+  opts: {
+    adapter: ProviderAdapter;
+    apiKey: string;
+    baseUrl?: string | null;
+    /** The WIRE model id to run (`ResolvedModel.requestModel`). */
+    model: string;
+  },
 ): Promise<{
   narrative: ReportNarrative;
   usage: AiUsageTokens;
@@ -178,11 +184,10 @@ export async function draftReportNarrative(
 
   const { data, usage, model } = await opts.adapter.generateStructured<unknown>(
     {
-      apiKey: opts.apiKey,
+      ...toRequestArgs(opts),
       system: systemPrompt(),
       user: buildNarrativeUserPrompt(input),
       schema: REPORT_NARRATIVE_JSON_SCHEMA,
-      choice: opts.choice,
     },
   );
   return { narrative: validateNarrative(data), usage, model };

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 import {
   AiNotConfiguredError,
@@ -28,10 +29,12 @@ vi.mock("@/lib/ai/generate", () => ({
 // adapter+key (as the real gateway would) and returns the callback's result,
 // so the action's proposal still flows through the metered path in tests.
 const FAKE_RESOLVED = {
-  adapter: { defaultModel: "claude-opus-4-8", supportsTools: true },
+  adapter: { kind: "anthropic" },
   apiKey: "k",
   mode: "per_user",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (

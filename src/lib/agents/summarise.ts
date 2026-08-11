@@ -1,6 +1,5 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { modelFor } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { Briefing } from "./briefing";
 
@@ -75,11 +74,13 @@ function fallbackSummary(briefing: Briefing): string {
  */
 export async function summariseBriefing(args: {
   apiKey: string;
+  /** The WIRE model id to run, resolved by runAi (`requestModel`). */
+  model: string;
   instructions: string;
   briefing: Briefing;
   client?: Anthropic;
 }): Promise<BriefingSummary> {
-  const { apiKey, instructions, briefing } = args;
+  const { apiKey, model, instructions, briefing } = args;
   const client = args.client ?? new Anthropic({ apiKey });
 
   const data = escapeAngleBrackets(
@@ -97,13 +98,12 @@ export async function summariseBriefing(args: {
     }),
   );
 
-  const choice = modelFor("personal_agent_run");
   const res = await client.messages.create({
-    model: choice.model,
+    model,
     max_tokens: 512,
     // MUST be explicit: omitting `thinking` on a Sonnet-tier model runs
     // adaptive thinking at effort "high", and max_tokens caps thinking PLUS
-    // the response text. Disabled — NOT choice.thinking — because this 512
+    // the response text. Disabled — NOT the model's own shape — because this 512
     // budget was sized for a no-thinking model and a thinking block would eat
     // it whole, leaving no text. (The fallbackSummary below would mask that as
     // a working-but-generic briefing, so it would ship silently.)
@@ -124,6 +124,6 @@ export async function summariseBriefing(args: {
       inputTokens: res.usage.input_tokens,
       outputTokens: res.usage.output_tokens,
     },
-    model: choice.model,
+    model,
   };
 }

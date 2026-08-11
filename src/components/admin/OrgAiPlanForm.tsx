@@ -18,7 +18,9 @@ const TIERS = ["none", "core", "pulse", "trial", "enterprise"] as const;
  * Platform-admin control for an org's AI entitlement (tier + monthly credit
  * ceiling). The operator grants the allowance here; `ai_mode` is intentionally
  * read-only — the org's own admins choose how to spend it. Mirrors
- * AiProviderForm's inline-message + useTransition pattern (no toast primitive).
+ * OrgAiSettingsForm's inline-message + useTransition pattern (no toast
+ * primitive); the AiProviderForm this used to cite was deleted when the org AI
+ * surface moved to /settings/ai.
  */
 export function OrgAiPlanForm({
   orgId,

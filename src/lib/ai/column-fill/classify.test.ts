@@ -55,6 +55,7 @@ describe("classifyColumn", () => {
 
     const res = await classifyColumn({
       apiKey: "sk-ant-test",
+      model: "claude-haiku-4-5",
       rows: ROWS,
       targetOptions: TARGET_OPTIONS,
       client: client as never,
@@ -96,6 +97,7 @@ describe("classifyColumn", () => {
 
     const res = await classifyColumn({
       apiKey: "sk-ant-test",
+      model: "claude-haiku-4-5",
       rows: [ROWS[0]],
       targetOptions: TARGET_OPTIONS,
       client: client as never,
@@ -128,6 +130,7 @@ describe("classifyColumn", () => {
 
     const { usage } = await classifyColumn({
       apiKey: "sk-ant-test",
+      model: "claude-haiku-4-5",
       rows: [],
       targetOptions: [],
       client,

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "u1" })),
@@ -19,7 +20,13 @@ vi.mock("@/lib/ai/entitlement", () => ({
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: vi.fn(
     async (_a: unknown, fn: (r: unknown) => Promise<{ result: unknown }>) =>
-      (await fn({ adapter: { supportsTools: true }, apiKey: "k" })).result,
+      (
+        await fn({
+          provider: "anthropic",
+          apiKey: "k",
+          model: fakeResolvedModel(),
+        })
+      ).result,
   ),
 }));
 const GROWN_TRANSCRIPT = [

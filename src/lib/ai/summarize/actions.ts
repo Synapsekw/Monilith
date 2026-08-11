@@ -8,7 +8,7 @@ import {
   buildTranscript,
   summarizeThread as summarizeThreadWithAi,
 } from "@/lib/ai/summarize/summarize";
-import { ProviderNotCapableError } from "@/lib/ai/errors";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { mapAiError } from "@/lib/ai/action-guard";
 import { createClient } from "@/lib/supabase/server";
 import { getBoardPayload } from "@/lib/boards/queries";
@@ -91,17 +91,17 @@ export async function summarizeThread(input: {
 
     const summary = await runAi(
       { orgId: org.id, userId: user.id, feature: "thread_summary" },
-      async ({ adapter, apiKey }) => {
-        if (adapter.id !== "anthropic")
-          throw new ProviderNotCapableError("thread_summary");
+      async ({ provider, apiKey, model }) => {
+        assertToolLoopCapable(provider, "thread_summary");
         const r = await summarizeThreadWithAi({
           apiKey,
+          model: model.requestModel,
           updates,
           activities,
           columns: payload.columns,
           members,
         });
-        return { result: r.summary, usage: r.usage, model: r.model };
+        return { result: r.summary, usage: r.usage };
       },
     );
 

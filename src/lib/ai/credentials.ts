@@ -4,8 +4,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { PersonalAiKeyMissingError } from "@/lib/ai/errors";
 import { getAdapter } from "@/lib/ai/providers/registry";
+import { getProviderRow } from "@/lib/ai/providers/provider-rows";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
-import type { AiProvider } from "@/lib/ai/providers/catalog";
 
 /**
  * Opaque marker that a userId was ESTABLISHED — not merely passed through —
@@ -28,39 +28,44 @@ export function asTrustedUserId(id: string): TrustedUserId {
 }
 
 /**
- * Session-less resolver for server-role/cron callers that have no cookie
- * session but already know — from their own scoped data, not from user
- * input — WHICH user's key a run should spend (e.g. `resolveAiAdapter`'s
- * `per_user` branch, resolving the personal-agent owner's key via the same
- * `userId` it also hands `runAi` for ledger attribution). The `TrustedUserId`
- * parameter exists so a bare `string` — e.g. one lifted straight from a
- * request — cannot be passed here by accident; the ONLY intended caller
- * (`resolveAiAdapter`) documents at its own call site what makes its
- * `userId` trustworthy. `ai_credential_get` is itself `security definer`,
- * revoked from `anon`/`authenticated`, and granted only to `service_role` —
- * so this function exposes no NEW database privilege — but the app-level
- * discipline of "never resolve a stranger's key" previously lived only in
+ * Session-less resolver for service-role/cron callers. Now takes the PROVIDER
+ * as well as the user: an agent pinned to Kimi must resolve the user's Kimi
+ * key, not whichever key happens to be first. The TrustedUserId contract is
+ * unchanged — see the type's doc comment for what establishes trust.
+ *
+ * `ai_credential_get` is itself `security definer`, revoked from
+ * `anon`/`authenticated`, and granted only to `service_role` — so this
+ * function exposes no NEW database privilege — but the app-level discipline
+ * of "never resolve a stranger's key" previously lived only in
  * `resolveUserAdapter`'s `requireUser()` call; this is that same discipline
  * made a type-level requirement for a session-less caller instead.
  *
  * Throws `PersonalAiKeyMissingError` (a narrower `AiNotConfiguredError`, see
- * `errors.ts`) when that specific user has no stored credential — a
- * per-user configuration state, not a platform fault.
+ * `errors.ts`) when that specific user has no stored credential for the
+ * requested provider, or the provider is unknown/disabled — a per-user
+ * configuration state, not a platform fault.
  */
-export async function resolveUserAdapterById(userId: TrustedUserId): Promise<{
+export async function resolveUserAdapterById(
+  userId: TrustedUserId,
+  provider: string,
+): Promise<{
   adapter: ProviderAdapter;
   apiKey: string;
+  baseUrl: string | null;
 }> {
   const svc = createServiceClient();
-  const { data, error } = await svc.rpc("ai_credential_get", {
-    p_user: userId,
-  });
+  const [{ data, error }, row] = await Promise.all([
+    svc.rpc("ai_credential_get", { p_user: userId, p_provider: provider }),
+    getProviderRow(svc, provider),
+  ]);
   if (error) throw error;
-  const row = data?.[0];
-  if (!row) throw new PersonalAiKeyMissingError();
+  if (!row || !row.enabled) throw new PersonalAiKeyMissingError();
+  const secret = data?.[0];
+  if (!secret) throw new PersonalAiKeyMissingError();
   return {
-    adapter: getAdapter(row.provider as AiProvider),
-    apiKey: row.secret,
+    adapter: getAdapter(row.adapterKind),
+    apiKey: secret.secret,
+    baseUrl: row.baseUrl,
   };
 }
 
@@ -72,23 +77,20 @@ export function maskKey(rawKey: string): string {
   return `${head}…${last4}`;
 }
 
-/** RLS self-read for the settings page: the user's single credential, or null. */
-export async function getMyAiCredential(): Promise<{
-  provider: AiProvider;
-  hint: string;
-  updatedAt: string;
-} | null> {
+/** RLS self-read for the settings page: ALL of the user's keys, one per provider. */
+export async function listMyAiCredentials(): Promise<
+  { provider: string; hint: string; updatedAt: string }[]
+> {
   const user = await requireUser();
   const supabase = await createClient();
   const { data } = await supabase
     .from("user_ai_credentials")
     .select("provider, key_hint, updated_at")
     .eq("user_id", user.id)
-    .maybeSingle();
-  if (!data) return null;
-  return {
-    provider: data.provider as AiProvider,
-    hint: data.key_hint,
-    updatedAt: data.updated_at,
-  };
+    .order("provider");
+  return (data ?? []).map((r) => ({
+    provider: r.provider,
+    hint: r.key_hint,
+    updatedAt: r.updated_at,
+  }));
 }
