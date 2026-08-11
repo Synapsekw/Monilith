@@ -52,16 +52,25 @@ const SOURCE_FILES = walk(SRC).map((f) => ({
  * found by brace matching. Good enough for these call sites — none of them
  * pass a string literal containing an unbalanced brace.
  */
-function objectLiteralAt(text: string, open: number): string {
+function balancedFrom(
+  text: string,
+  open: number,
+  opener: string,
+  closer: string,
+): string {
   let depth = 0;
   for (let i = open; i < text.length; i++) {
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}") {
+    if (text[i] === opener) depth++;
+    else if (text[i] === closer) {
       depth--;
       if (depth === 0) return text.slice(open, i + 1);
     }
   }
   return text.slice(open);
+}
+
+function objectLiteralAt(text: string, open: number): string {
+  return balancedFrom(text, open, "{", "}");
 }
 
 describe("every raw Anthropic message call states `thinking` explicitly", () => {
@@ -130,7 +139,7 @@ describe("every feature string reaching runAi is routed by the model map", () =>
     expect(callSites.length).toBeGreaterThanOrEqual(13);
   });
 
-  it("has a FEATURE_MODELS entry for each one", () => {
+  it("has a tier-map entry for each one", () => {
     const unrouted = callSites
       .filter((c) => !AI_FEATURES.includes(c.feature))
       .map((c) => `${c.feature} (${c.path})`);
@@ -143,14 +152,31 @@ describe("every feature string reaching runAi is routed by the model map", () =>
     expect(AI_FEATURES.filter((f) => !used.has(f))).toEqual([]);
   });
 
-  // The direction that actually bit: an entry can be METERED (its name reaches
-  // runAi) and still be INERT (nothing calls modelFor for it), so the feature
-  // never receives its ModelChoice — not its model, not its `thinking`. It
-  // lands on the default by coincidence, and remapping it tomorrow would change
-  // nothing about the request while mis-labelling the ledger row.
-  it("has no inert map entries — every routed feature calls modelFor", () => {
-    const all = SOURCE_FILES.map((f) => f.text).join("\n");
-    const inert = AI_FEATURES.filter((f) => !all.includes(`modelFor("${f}")`));
-    expect(inert).toEqual([]);
+  // The direction that actually bit, in its current form. It used to be "the
+  // feature reaches runAi but nothing calls modelFor for it", so it silently
+  // landed on the default model. `modelFor` is gone — runAi itself resolves the
+  // model from the feature's tier — so the inert case moved: a callback that
+  // never READS the resolved model still gets metered against it while sending
+  // whatever id it hardcoded. Every callback must destructure `model`.
+  it("has no inert call sites — every runAi callback reads the resolved model", () => {
+    const offenders: string[] = [];
+    let scanned = 0;
+    for (const file of SOURCE_FILES) {
+      // `({` — the same anchor the scan above uses, so prose mentioning runAi
+      // in a doc comment is not mistaken for a call site.
+      for (const m of file.text.matchAll(/\brunAi\s*(?:<[^>]*>)?\s*\(\s*\{/g)) {
+        scanned++;
+        const openParen = m.index! + m[0].lastIndexOf("(");
+        const call = balancedFrom(file.text, openParen, "(", ")");
+        const argsOpen = call.indexOf("{");
+        const args = objectLiteralAt(call, argsOpen);
+        const callback = call.slice(argsOpen + args.length);
+        if (!/\bmodel\b/.test(callback))
+          offenders.push(`${file.path} (${args.match(/feature:\s*\S+/)?.[0]})`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    // Guards the scan itself: a regex that matched nothing would pass silently.
+    expect(scanned).toBeGreaterThanOrEqual(13);
   });
 });

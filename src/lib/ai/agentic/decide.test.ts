@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { decideAction } from "./decide";
-import { modelFor } from "@/lib/ai/model-map";
 import type { AgenticContext } from "./context";
 
 // Real uuids — automationActionSchema gates columnId/userId/groupId with .uuid().
@@ -85,6 +84,7 @@ describe("decideAction", () => {
     ]);
     const res = await decideAction({
       apiKey: "k",
+      model: "claude-sonnet-5",
       context: CTX,
       instruction: "Mark it done",
       allow: ["set_option"],
@@ -110,6 +110,7 @@ describe("decideAction", () => {
     ]);
     await decideAction({
       apiKey: "k",
+      model: "claude-sonnet-5",
       context: CTX,
       instruction: "x",
       allow: ["move_to_group", "notify"],
@@ -138,6 +139,7 @@ describe("decideAction", () => {
     ]);
     const res = await decideAction({
       apiKey: "k",
+      model: "claude-sonnet-5",
       context: CTX,
       instruction: "x",
       allow: ["set_option"],
@@ -164,6 +166,7 @@ describe("decideAction", () => {
     ]);
     const res = await decideAction({
       apiKey: "k",
+      model: "claude-sonnet-5",
       context: CTX,
       instruction: "x",
       allow: ["set_option"],
@@ -183,6 +186,7 @@ describe("decideAction", () => {
     ]);
     const res = await decideAction({
       apiKey: "k",
+      model: "claude-sonnet-5",
       context: CTX,
       instruction: "ping grace",
       allow: ["notify"],
@@ -203,6 +207,7 @@ describe("decideAction", () => {
     ]);
     const res = await decideAction({
       apiKey: "k",
+      model: "claude-sonnet-5",
       context: CTX,
       instruction: "x",
       allow: ["set_option"],
@@ -226,16 +231,16 @@ describe("decideAction", () => {
     ]);
     const res = await decideAction({
       apiKey: "k",
+      model: "claude-sonnet-5",
       context: CTX,
       instruction: "Mark it done",
       allow: ["set_option"],
       client,
     });
-    const expected = modelFor("automation_ai_step");
-    expect(calls[0]!.model).toBe(expected.model);
+    expect(calls[0]!.model).toBe("claude-sonnet-5");
     expect(calls[0]!.thinking).toEqual({ type: "disabled" });
     expect(calls[0]!.max_tokens).toBe(1024);
-    // Reported back so runAi's ledger row names the model that actually ran.
-    expect(res.model).toBe(expected.model);
+    // Reported back: the model the caller resolved is the one that ran.
+    expect(res.model).toBe("claude-sonnet-5");
   });
 });

@@ -91,16 +91,17 @@ export async function summarizeThread(input: {
 
     const summary = await runAi(
       { orgId: org.id, userId: user.id, feature: "thread_summary" },
-      async ({ provider, apiKey }) => {
+      async ({ provider, apiKey, model }) => {
         assertToolLoopCapable(provider, "thread_summary");
         const r = await summarizeThreadWithAi({
           apiKey,
+          model: model.requestModel,
           updates,
           activities,
           columns: payload.columns,
           members,
         });
-        return { result: r.summary, usage: r.usage, model: r.model };
+        return { result: r.summary, usage: r.usage };
       },
     );
 

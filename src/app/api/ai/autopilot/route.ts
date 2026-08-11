@@ -124,13 +124,14 @@ export async function POST(req: Request): Promise<Response> {
 
     const decision = await runAi(
       { orgId: agent.org_id, userId: botUserId, feature: FEATURE },
-      async ({ apiKey }) => {
+      async ({ apiKey, model }) => {
         const r = await autopilotRun({
           apiKey,
+          model: model.requestModel,
           agentContext: context,
           tasks,
         });
-        return { result: r, usage: r.usage, model: r.model };
+        return { result: r, usage: r.usage };
       },
     );
 

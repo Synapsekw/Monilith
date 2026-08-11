@@ -4,7 +4,10 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { classifyColumn as classifyColumnWithAi } from "@/lib/ai/column-fill/classify";
+import {
+  classifyColumn as classifyColumnWithAi,
+  HAIKU_ROW_LIMIT,
+} from "@/lib/ai/column-fill/classify";
 import { validateClassifications } from "@/lib/ai/column-fill/validate";
 import {
   CLASSIFY_TEXT_CHAR_BUDGET,
@@ -141,18 +144,24 @@ export async function classifyColumn(input: {
     const nameByItemId = new Map((items ?? []).map((i) => [i.id, i.name]));
 
     const classifications = await runAi<Classification[]>(
-      { orgId: org.id, userId: user.id, feature: "column_fill" },
-      async ({ provider, apiKey }) => {
+      {
+        orgId: org.id,
+        userId: user.id,
+        feature: "column_fill",
+        // Every row goes into ONE message, so a big batch outgrows the cheap
+        // tier's context window — ask for the standard tier instead of risking
+        // a 400. The row count is known here, before any key is spent.
+        ...(rows.length > HAIKU_ROW_LIMIT ? { tier: "standard" as const } : {}),
+      },
+      async ({ provider, apiKey, model }) => {
         assertToolLoopCapable(provider, "column_fill");
         const r = await classifyColumnWithAi({
           apiKey,
+          model: model.requestModel,
           rows,
           targetOptions,
         });
-        // classifyColumnWithAi reports the model it actually used (it falls
-        // back to Sonnet above the Haiku row-count limit — see classify.ts),
-        // so the ledger meters against the right price row in either case.
-        return { result: r.classifications, usage: r.usage, model: r.model };
+        return { result: r.classifications, usage: r.usage };
       },
     );
 

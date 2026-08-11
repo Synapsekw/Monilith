@@ -40,7 +40,11 @@ describe("generateProposal", () => {
       widgets: [{ kind: "number", title: "Total", config: { agg: "count" } }],
     };
     const { adapter } = fakeAdapter(proposal);
-    const res = await generateProposal(snap, { adapter, apiKey: "k" });
+    const res = await generateProposal(snap, {
+      adapter,
+      apiKey: "k",
+      model: "claude-sonnet-5",
+    });
     expect(res.proposal.name).toBe("Sprint overview");
     expect(res.proposal.widgets).toHaveLength(1);
     expect(res.usage).toEqual(USAGE);
@@ -51,6 +55,7 @@ describe("generateProposal", () => {
     await generateProposal(snap, {
       adapter,
       apiKey: "k",
+      model: "claude-sonnet-5",
       feedback: "more charts please",
     });
     const call = generate.mock.calls[0][0];

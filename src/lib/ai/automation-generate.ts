@@ -2,7 +2,6 @@ import "server-only";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import { toRequestArgs } from "@/lib/ai/providers/request";
-import type { ModelChoice } from "@/lib/ai/model-map";
 import type { Draft } from "@/components/boards/automations/recipes";
 import type { AutomationContext } from "@/lib/ai/automation-context";
 import {
@@ -62,7 +61,8 @@ export async function generateAutomationDraft(
     adapter: ProviderAdapter;
     apiKey: string;
     baseUrl?: string | null;
-    choice?: ModelChoice;
+    /** The WIRE model id to run (`ResolvedModel.requestModel`). */
+    model: string;
   },
 ): Promise<{ draft: Draft; usage: AiUsageTokens; model: string }> {
   const { data, usage, model } =

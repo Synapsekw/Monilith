@@ -1,31 +1,32 @@
-import { DEFAULT_MODEL_CHOICE, type ModelChoice } from "@/lib/ai/model-map";
+import { requestShapeFor } from "@/lib/ai/model-map";
 import type { GenerateArgs } from "@/lib/ai/providers/types";
 
 /**
- * Flatten the per-feature `ModelChoice` into the adapter's request arguments.
+ * Flatten a resolved model into the adapter's request arguments.
  *
  * `ProviderAdapter` takes `model` / `thinking` / `effort` as separate fields
- * rather than a `ModelChoice`, because a `ModelChoice` is an ANTHROPIC-shaped
- * request config and three of the four adapters have no use for its knobs —
- * but every adapter must be told, unambiguously, which model to run. This is
- * the one place that bridge is written.
+ * rather than one config object, because `thinking`/`effort` are
+ * ANTHROPIC-shaped knobs that three of the four adapters have no use for — but
+ * every adapter must be told, unambiguously, which model to run. This is the
+ * one place that bridge is written.
  *
- * The `DEFAULT_MODEL_CHOICE` fallback preserves today's behaviour for the
- * handful of callers that pass no choice at all; `resolveModel` (Task 7)
- * replaces it with a catalog lookup.
+ * `model` is REQUIRED and is the WIRE id (`ResolvedModel.requestModel`), never
+ * the catalog key. It used to be optional with a hardcoded `claude-sonnet-5`
+ * fallback, which is precisely how a non-Anthropic org ended up asking its
+ * provider for a Claude model.
  */
 export function toRequestArgs(opts: {
   apiKey: string;
-  /** Non-null only for openai-compatible providers; threaded in Task 8. */
+  /** Non-null only for openai-compatible providers. */
   baseUrl?: string | null;
-  choice?: ModelChoice;
+  model: string;
 }): Pick<GenerateArgs, "apiKey" | "baseUrl" | "model" | "thinking" | "effort"> {
-  const choice = opts.choice ?? DEFAULT_MODEL_CHOICE;
+  const shape = requestShapeFor(opts.model);
   return {
     apiKey: opts.apiKey,
     baseUrl: opts.baseUrl ?? null,
-    model: choice.model,
-    thinking: choice.thinking,
-    effort: choice.effort,
+    model: opts.model,
+    thinking: shape.thinking,
+    effort: shape.effort,
   };
 }

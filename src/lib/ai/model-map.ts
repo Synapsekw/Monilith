@@ -9,10 +9,10 @@ import type { ModelTier } from "@/lib/ai/models/feed-parse";
  * adapter now honours it, so a Claude id emitted into an OpenAI-keyed org is a
  * 404. The map therefore emits an abstract TIER, and `resolveModel`
  * (`src/lib/ai/models/resolve.ts`) turns that tier into a concrete model from
- * the chosen provider's own catalog.
+ * the chosen provider's own catalog. `runAi` is the one place that runs it.
  *
- * The request-shape half of the map (`ModelChoice`) is a separate concern and
- * still lives here — see its own doc comment below.
+ * The request-shape half is a separate concern and still lives here — see
+ * {@link requestShapeFor} below.
  */
 
 /** Anything unmapped: the conservative middle. */
@@ -53,64 +53,44 @@ export function tierForFeature(feature: string): ModelTier {
  * Haiku returns a 400.
  *
  * These are ANTHROPIC-shaped knobs, which is why `toRequestArgs` flattens them
- * rather than passing a `ModelChoice` to adapters.
+ * rather than handing adapters a shape object: the other three wire formats
+ * ignore them entirely.
  */
 export type ThinkingConfig =
   | { type: "adaptive" }
   | { type: "enabled"; budget_tokens: number };
 
-export type ModelChoice = {
-  model: string;
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
+export type ModelRequestShape = {
   thinking: ThinkingConfig;
   /** Omitted for models that reject output_config.effort (Haiku 4.5). */
-  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  effort?: Effort;
 };
 
-const SONNET: ModelChoice = {
-  model: "claude-sonnet-5",
+// Haiku 4.5: no effort knob, older thinking shape, 200K context (not 1M).
+const HAIKU_SHAPE: ModelRequestShape = {
+  thinking: { type: "enabled", budget_tokens: 1024 },
+};
+
+const DEFAULT_SHAPE: ModelRequestShape = {
   thinking: { type: "adaptive" },
   effort: "high",
 };
 
-// Haiku 4.5: no effort knob, older thinking shape, 200K context (not 1M).
-const HAIKU: ModelChoice = {
-  model: "claude-haiku-4-5",
-  thinking: { type: "enabled", budget_tokens: 1024 },
-};
-
 /**
- * DEPRECATED — the `model` field is a hardcoded Anthropic id and must not
- * survive. It is kept only so the call sites that still read it keep
- * compiling; `resolveModel` + {@link tierForFeature} replace it, and the
- * gateway task threads the resolved model to those call sites.
+ * Which request knobs THIS model accepts.
  *
- * Every model id emitted here must exist in pricing.ts's FALLBACK_RATES —
- * computeCostUsd returns 0 for null rates, so an unpriced model bills nothing
- * at all. model-map.test.ts enforces this.
+ * Keyed on the model, not on the feature, because that is what the constraint
+ * actually is: the old `modelFor(feature)` returned a model id AND its shape
+ * together, which is why every feature was pinned to a hardcoded `claude-*` id.
+ * The model now comes from the catalog (`resolveModel`), so the shape has to be
+ * derivable from whatever that returns.
  *
- * @deprecated Use {@link tierForFeature} with `resolveModel`.
+ * Matching on the Haiku family covers both id namespaces — the Gateway's
+ * `claude-haiku-4.5` and Anthropic's native `claude-haiku-4-5` — and a
+ * non-Anthropic model simply never reaches an adapter that reads these fields.
  */
-export const DEFAULT_MODEL_CHOICE: ModelChoice = SONNET;
-
-const FEATURE_MODELS = Object.freeze(
-  Object.assign(Object.create(null) as Record<string, ModelChoice>, {
-    ask_pulse: SONNET,
-    conversational_action: SONNET,
-    automation_ai_step: SONNET,
-    autopilot_run: SONNET,
-    dashboard_gen: SONNET,
-    board_gen: SONNET,
-    automation_gen: SONNET,
-    import_mapping: SONNET,
-    report_narrative: SONNET,
-    thread_summary: SONNET,
-    personal_agent_run: SONNET,
-    item_assist: HAIKU,
-    column_fill: HAIKU,
-  }),
-);
-
-/** @deprecated Use {@link tierForFeature} with `resolveModel`. */
-export function modelFor(feature: string): ModelChoice {
-  return FEATURE_MODELS[feature] ?? DEFAULT_MODEL_CHOICE;
+export function requestShapeFor(model: string): ModelRequestShape {
+  return /haiku/i.test(model) ? HAIKU_SHAPE : DEFAULT_SHAPE;
 }

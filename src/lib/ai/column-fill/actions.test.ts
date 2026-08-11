@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 // A resolved adapter+key, as the real gateway hands to runAi's callback.
 // `provider` is per-test so the not-capable branch is exercisable — the gate
@@ -8,6 +9,8 @@ let FAKE_RESOLVED = {
   apiKey: "k",
   mode: "managed",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (
@@ -44,6 +47,8 @@ vi.mock("@/lib/auth/session", () => ({
 const classifyColumnWithAi = vi.fn();
 vi.mock("@/lib/ai/column-fill/classify", () => ({
   classifyColumn: (...args: unknown[]) => classifyColumnWithAi(...args),
+  // Real value: the action reads it to decide whether to ask for a bigger tier.
+  HAIKU_ROW_LIMIT: 2000,
 }));
 
 const bulkSetCell = vi.fn();
@@ -116,6 +121,8 @@ beforeEach(() => {
     apiKey: "k",
     mode: "managed",
     provider: "anthropic",
+    baseUrl: null,
+    model: fakeResolvedModel(),
   };
 
   requireUser.mockResolvedValue({ id: "user-1" });
@@ -342,6 +349,8 @@ describe("classifyColumn action", () => {
       apiKey: "k",
       mode: "managed",
       provider: "openai",
+      baseUrl: null,
+      model: fakeResolvedModel(),
     };
     const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
     const res = await classifyColumn({

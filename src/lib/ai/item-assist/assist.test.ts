@@ -31,6 +31,7 @@ describe("generateItemAssist", () => {
 
     const res = await generateItemAssist({
       apiKey: "k",
+      model: "claude-haiku-4-5",
       item: { name: "Fix login bug", textContext: "users can't log in" },
       want: { description: { columnId: "col-desc" } },
       client: client as never,
@@ -62,6 +63,7 @@ describe("generateItemAssist", () => {
 
     const res = await generateItemAssist({
       apiKey: "k",
+      model: "claude-haiku-4-5",
       item: { name: "Ship feature" },
       statusOptions: [
         { id: "opt-todo", label: "To do" },
@@ -85,6 +87,7 @@ describe("generateItemAssist", () => {
 
     const res = await generateItemAssist({
       apiKey: "k",
+      model: "claude-haiku-4-5",
       item: { name: "Item" },
       want: { description: { columnId: "col-desc" } },
       client: client as never,
@@ -115,6 +118,7 @@ describe("generateItemAssist", () => {
 
     const { usage } = await generateItemAssist({
       apiKey: "sk-ant-test",
+      model: "claude-haiku-4-5",
       item: { name: "Ship billing" },
       want: { description: { columnId: "col-desc" } },
       client,

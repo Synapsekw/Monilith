@@ -3,7 +3,6 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
-import { modelFor } from "@/lib/ai/model-map";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   generateImportMapping,
@@ -96,25 +95,19 @@ export async function suggestImportMapping(input: {
     if (!org) return fail("No organization.");
     await requireAiEntitlement(org.id, "import_mapping");
     const user = await requireUser();
-    const choice = modelFor("import_mapping");
 
     const raw = await runAi(
       { orgId: org.id, userId: user.id, feature: "import_mapping" },
-      async ({ adapter, apiKey }) => {
-        // Meter the model the adapter REPORTS, not choice.model: the adapter
-        // returns the model it actually ran, and that is what record_ai_usage
-        // must price. Every adapter now honours the requested model (the
-        // OpenAI/Google adapters used to ignore `choice` and run a fixed
-        // constant), so the two agree today — but the returned value stays the
-        // source of truth for when model resolution can substitute again.
-        // Known gap: model-map still emits Claude ids for EVERY provider, so a
-        // non-Anthropic org is asked for a model it does not have. Task 7's
-        // resolveModel closes that; it is tracked at the plan level.
-        const { suggestions, usage, model } = await generateImportMapping(
-          payload,
-          { adapter, apiKey, choice },
-        );
-        return { result: suggestions, usage, model };
+      async ({ adapter, apiKey, baseUrl, model }) => {
+        // See ai/actions.ts: the WIRE id goes to the provider, and runAi meters
+        // the catalog row it resolved.
+        const { suggestions, usage } = await generateImportMapping(payload, {
+          adapter,
+          apiKey,
+          baseUrl,
+          model: model.requestModel,
+        });
+        return { result: suggestions, usage };
       },
     );
 

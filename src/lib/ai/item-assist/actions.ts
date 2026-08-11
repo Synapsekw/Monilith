@@ -149,15 +149,16 @@ export async function generateItemAssist(input: {
 
     const proposal = await runAi(
       { orgId: org.id, userId: user.id, feature: "item_assist" },
-      async ({ provider, apiKey }) => {
+      async ({ provider, apiKey, model }) => {
         assertToolLoopCapable(provider, "item_assist");
         const r = await generateItemAssistWithAi({
           apiKey,
+          model: model.requestModel,
           item: { name: item.name, textContext: textContext || undefined },
           statusOptions,
           want: effectiveWant,
         });
-        return { result: r.proposal, usage: r.usage, model: r.model };
+        return { result: r.proposal, usage: r.usage };
       },
     );
 

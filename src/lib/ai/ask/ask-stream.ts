@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { modelFor } from "@/lib/ai/model-map";
+import { requestShapeFor } from "@/lib/ai/model-map";
 import { ASK_TOOLS, executeAskTool } from "@/lib/ai/ask/tools";
 import {
   WRITE_TOOLS,
@@ -71,6 +71,8 @@ function moveMessageBreakpoint(messages: Anthropic.MessageParam[]): void {
  */
 export async function askPulseStream(args: {
   apiKey: string;
+  /** The WIRE model id to run, resolved by runAi (`requestModel`). */
+  model: string;
   orgId: string;
   workspaceId: string;
   messages: Anthropic.MessageParam[];
@@ -90,7 +92,7 @@ export async function askPulseStream(args: {
   });
   const tools = [...ASK_TOOLS, LIST_MEMBERS_TOOL, ...WRITE_TOOLS];
   const messages = [...args.messages];
-  const choice = modelFor("ask_pulse");
+  const shape = requestShapeFor(args.model);
   const system: Anthropic.TextBlockParam[] = [
     { type: "text", text: args.system, cache_control: { type: "ephemeral" } },
   ];
@@ -105,7 +107,7 @@ export async function askPulseStream(args: {
   for (let round = 0; round < MAX_ROUNDS; round++) {
     let streamedText = "";
     const stream = client.messages.stream({
-      model: choice.model,
+      model: args.model,
       // 8192, not 4096: max_tokens caps thinking PLUS response text, and
       // thinking is deliberately ON here (a Sonnet-tier model with thinking
       // disabled reaches for tools noticeably less, which would degrade Ask).
@@ -113,7 +115,7 @@ export async function askPulseStream(args: {
       max_tokens: 8192,
       // MUST be explicit — omitting it means "adaptive at effort high" on a
       // Sonnet-tier model, which is a silent request-shape change.
-      thinking: choice.thinking,
+      thinking: shape.thinking,
       system,
       tools,
       messages,
@@ -208,7 +210,7 @@ export async function askPulseStream(args: {
   // cache and only invalidates the messages cache — exactly what we want,
   // since "answer now, no more tools" is what tool_choice: none already means.
   const capped = await client.messages.create({
-    model: choice.model,
+    model: args.model,
     // 4096, not 1024: same thinking-plus-text budget reasoning as the
     // streaming rounds above — 1024 would be consumed by the thinking block
     // and return no answer text at all.
@@ -216,7 +218,7 @@ export async function askPulseStream(args: {
     // Explicit, and the SAME value as the streaming rounds: `thinking` is part
     // of the cache key tier for system+messages, so diverging here would cost
     // cache reads on top of changing behaviour.
-    thinking: choice.thinking,
+    thinking: shape.thinking,
     system,
     tools,
     tool_choice: { type: "none" },

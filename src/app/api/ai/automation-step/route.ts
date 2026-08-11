@@ -122,9 +122,15 @@ export async function POST(req: Request): Promise<Response> {
         userId: rule?.created_by ?? job.org_id,
         feature: FEATURE,
       },
-      async ({ apiKey }) => {
-        const r = await decideAction({ apiKey, context, instruction, allow });
-        return { result: r, usage: r.usage, model: r.model };
+      async ({ apiKey, model }) => {
+        const r = await decideAction({
+          apiKey,
+          model: model.requestModel,
+          context,
+          instruction,
+          allow,
+        });
+        return { result: r, usage: r.usage };
       },
     );
 

@@ -1,6 +1,6 @@
 import type { generateObject } from "ai";
 import type { AdapterKind } from "@/lib/ai/providers/provider-rows";
-import type { ModelChoice, ThinkingConfig } from "@/lib/ai/model-map";
+import type { Effort, ThinkingConfig } from "@/lib/ai/model-map";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 
@@ -14,8 +14,7 @@ export class ProviderAuthError extends Error {
 
 // Re-exported, NOT re-declared: `model-map.ts` already owns the request-shape
 // vocabulary and is pure (no "server-only"), so both halves stay in one place.
-export type { ThinkingConfig };
-export type Effort = NonNullable<ModelChoice["effort"]>;
+export type { ThinkingConfig, Effort };
 
 /**
  * The dependency-injection seam, used ONLY by tests.

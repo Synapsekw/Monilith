@@ -87,9 +87,15 @@ export async function previewAiStep(input: {
     const user = await requireUser();
     const result = await runAi(
       { orgId: org.id, userId: user.id, feature: FEATURE },
-      async ({ apiKey }) => {
-        const r = await decideAction({ apiKey, context, instruction, allow });
-        return { result: r, usage: r.usage, model: r.model };
+      async ({ apiKey, model }) => {
+        const r = await decideAction({
+          apiKey,
+          model: model.requestModel,
+          context,
+          instruction,
+          allow,
+        });
+        return { result: r, usage: r.usage };
       },
     );
 

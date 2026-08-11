@@ -2,7 +2,6 @@ import "server-only";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import { toRequestArgs } from "@/lib/ai/providers/request";
-import type { ModelChoice } from "@/lib/ai/model-map";
 import {
   IMPORT_MAPPING_JSON_SCHEMA,
   type MappingSuggestion,
@@ -61,7 +60,8 @@ export async function generateImportMapping(
     adapter: ProviderAdapter;
     apiKey: string;
     baseUrl?: string | null;
-    choice?: ModelChoice;
+    /** The WIRE model id to run (`ResolvedModel.requestModel`). */
+    model: string;
   },
 ): Promise<{
   suggestions: MappingSuggestion[];

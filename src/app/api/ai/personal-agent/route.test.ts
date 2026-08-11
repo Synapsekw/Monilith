@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 import { signBody } from "@/lib/ai/agentic/hmac";
 import {
   AiDisabledError,
@@ -187,12 +188,23 @@ vi.mock("@/lib/agents/send", () => ({
 // wrong-provider skip. The gate reads `provider`, not the adapter: the loop
 // builds `new Anthropic()` itself, so the honest question is which provider's
 // key was resolved.
-type FakeResolved = { provider: string; apiKey: string };
+type FakeResolved = {
+  provider: string;
+  apiKey: string;
+  model: ReturnType<typeof fakeResolvedModel>;
+};
 const runAi = vi.fn(
   async (
     _args: unknown,
     fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-  ) => (await fn({ provider: "anthropic", apiKey: "k" })).result,
+  ) =>
+    (
+      await fn({
+        provider: "anthropic",
+        apiKey: "k",
+        model: fakeResolvedModel(),
+      })
+    ).result,
 );
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: (...a: Parameters<typeof runAi>) => runAi(...a),
@@ -260,7 +272,14 @@ beforeEach(() => {
     async (
       _args: unknown,
       fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-    ) => (await fn({ provider: "anthropic", apiKey: "k" })).result,
+    ) =>
+      (
+        await fn({
+          provider: "anthropic",
+          apiKey: "k",
+          model: fakeResolvedModel(),
+        })
+      ).result,
   );
 });
 
@@ -429,7 +448,14 @@ describe("POST /api/ai/personal-agent", () => {
       async (
         _args: unknown,
         fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-      ) => (await fn({ provider: "openai", apiKey: "k" })).result,
+      ) =>
+        (
+          await fn({
+            provider: "openai",
+            apiKey: "k",
+            model: fakeResolvedModel(),
+          })
+        ).result,
     );
 
     const res = await POST(post(slot));

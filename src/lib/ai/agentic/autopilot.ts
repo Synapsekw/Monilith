@@ -1,6 +1,5 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { modelFor } from "@/lib/ai/model-map";
 import type { AutomationAction } from "@/lib/validations/automations";
 import type { AutomationContext } from "@/lib/ai/automation-context";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
@@ -167,12 +166,13 @@ function systemPrompt(
  */
 export async function autopilotRun(args: {
   apiKey: string;
+  /** The WIRE model id to run, resolved by runAi (`requestModel`). */
+  model: string;
   agentContext: AutopilotContext;
   tasks: readonly AutopilotTask[];
   client?: Anthropic;
 }): Promise<AutopilotResult> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
-  const choice = modelFor("autopilot_run");
   const context = args.agentContext;
   const allow = allowedFor(args.tasks);
   const tools = allow.map((a) => TOOL_DEFS[a]);
@@ -188,9 +188,9 @@ export async function autopilotRun(args: {
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const res = await client.messages.create({
-      model: choice.model,
+      model: args.model,
       max_tokens: 1024,
-      // MUST be explicit, and deliberately NOT choice.thinking: omitting
+      // MUST be explicit, and deliberately NOT the model's own shape: omitting
       // `thinking` on a Sonnet-tier model runs adaptive thinking at effort
       // "high", and max_tokens caps thinking PLUS the tool_use blocks. A
       // thinking block would consume this 1024-token budget, leaving no
@@ -208,7 +208,7 @@ export async function autopilotRun(args: {
     );
     if (res.stop_reason !== "tool_use" || toolBlocks.length === 0) {
       // Model is done (declined / finished) — return what we have.
-      return { actions, warnings, usage, model: choice.model };
+      return { actions, warnings, usage, model: args.model };
     }
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -264,5 +264,5 @@ export async function autopilotRun(args: {
   }
 
   // Exhausted the round cap — return whatever was validated.
-  return { actions, warnings, usage, model: choice.model };
+  return { actions, warnings, usage, model: args.model };
 }

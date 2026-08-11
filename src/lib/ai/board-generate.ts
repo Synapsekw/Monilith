@@ -6,7 +6,6 @@ import {
 } from "@/lib/ai/board-gen-schema";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import { toRequestArgs } from "@/lib/ai/providers/request";
-import type { ModelChoice } from "@/lib/ai/model-map";
 
 /**
  * System prompt teaching the model how to design a starter board: the column
@@ -52,7 +51,8 @@ export async function generateBoardProposal(
     apiKey: string;
     baseUrl?: string | null;
     feedback?: string;
-    choice?: ModelChoice;
+    /** The WIRE model id to run (`ResolvedModel.requestModel`). */
+    model: string;
   },
 ): Promise<{ proposal: BoardProposal; usage: AiUsageTokens; model: string }> {
   const { data, usage, model } =

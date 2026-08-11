@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 // A resolved adapter+key, as the real gateway hands to runAi's callback.
 // `provider` is per-test so the not-capable branch is exercisable — the gate
@@ -8,6 +9,8 @@ let FAKE_RESOLVED = {
   apiKey: "k",
   mode: "managed",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (
@@ -128,6 +131,8 @@ beforeEach(() => {
     apiKey: "k",
     mode: "managed",
     provider: "anthropic",
+    baseUrl: null,
+    model: fakeResolvedModel(),
   };
   ITEM_RESULT = { data: { id: "item-1", board_id: "board-1" }, error: null };
   UPDATES_RESULT = { data: [], error: null };
@@ -204,6 +209,8 @@ describe("summarizeThread action", () => {
       apiKey: "k",
       mode: "managed",
       provider: "openai",
+      baseUrl: null,
+      model: fakeResolvedModel(),
     };
     const { summarizeThread } = await import("@/lib/ai/summarize/actions");
     const res = await summarizeThread({ itemId: ITEM_ID });

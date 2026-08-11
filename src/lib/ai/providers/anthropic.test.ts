@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { anthropicAdapter } from "@/lib/ai/providers/anthropic";
 import { toRequestArgs } from "@/lib/ai/providers/request";
-import { modelFor } from "@/lib/ai/model-map";
 import { fakeGenerateObject, type CapturedCall } from "@/test/adapter-fakes";
 
-/** Exactly what a runAi caller hands the adapter for one feature. */
-function argsFor(feature: string) {
+/** Exactly what a runAi caller hands the adapter for one resolved model. */
+function argsFor(model: string) {
   return {
-    ...toRequestArgs({ apiKey: "sk-ant-test", choice: modelFor(feature) }),
+    ...toRequestArgs({ apiKey: "sk-ant-test", model }),
     system: "s",
     user: "u",
     schema: { type: "object" },
@@ -22,7 +21,7 @@ describe("anthropicAdapter.generateStructured request shape", () => {
   it("sends the haiku model with the enabled-thinking shape and no effort key", async () => {
     const captured: CapturedCall[] = [];
     await anthropicAdapter.generateStructured({
-      ...argsFor("item_assist"),
+      ...argsFor("claude-haiku-4-5"),
       client: { generateObject: fakeGenerateObject(captured) },
     });
     expect(captured[0].model.modelId).toBe("claude-haiku-4-5");
@@ -42,7 +41,7 @@ describe("anthropicAdapter.generateStructured request shape", () => {
   it("sends the sonnet model with adaptive thinking and effort", async () => {
     const captured: CapturedCall[] = [];
     await anthropicAdapter.generateStructured({
-      ...argsFor("dashboard_gen"),
+      ...argsFor("claude-sonnet-5"),
       client: { generateObject: fakeGenerateObject(captured) },
     });
     expect(captured[0].model.modelId).toBe("claude-sonnet-5");
@@ -59,7 +58,7 @@ describe("anthropicAdapter.generateStructured request shape", () => {
     // no visible failure.
     const captured: CapturedCall[] = [];
     await anthropicAdapter.generateStructured({
-      ...argsFor("dashboard_gen"),
+      ...argsFor("claude-sonnet-5"),
       client: { generateObject: fakeGenerateObject(captured) },
     });
     const system = captured[0].messages?.[0];
@@ -77,7 +76,7 @@ describe("anthropicAdapter.generateStructured request shape", () => {
   it("bounds the output length", async () => {
     const captured: CapturedCall[] = [];
     await anthropicAdapter.generateStructured({
-      ...argsFor("dashboard_gen"),
+      ...argsFor("claude-sonnet-5"),
       client: { generateObject: fakeGenerateObject(captured) },
     });
     expect(captured[0].maxOutputTokens).toBe(16000);
@@ -85,7 +84,7 @@ describe("anthropicAdapter.generateStructured request shape", () => {
 
   it("reports the model it actually ran, so runAi meters the right rate", async () => {
     const { model } = await anthropicAdapter.generateStructured({
-      ...argsFor("item_assist"),
+      ...argsFor("claude-haiku-4-5"),
       client: { generateObject: fakeGenerateObject([]) },
     });
     expect(model).toBe("claude-haiku-4-5");
@@ -93,7 +92,7 @@ describe("anthropicAdapter.generateStructured request shape", () => {
 
   it("reports cache tokens in usage", async () => {
     const { usage } = await anthropicAdapter.generateStructured({
-      ...argsFor("dashboard_gen"),
+      ...argsFor("claude-sonnet-5"),
       client: {
         generateObject: fakeGenerateObject([], {
           usage: {

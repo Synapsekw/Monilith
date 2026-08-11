@@ -36,7 +36,6 @@ vi.mock("./write-tools", () => ({
 }));
 
 import { proposeLoop } from "./propose";
-import { modelFor } from "@/lib/ai/model-map";
 
 // Fake Anthropic: round 1 → tool_use (list_boards then propose_create_item); round 2 → end_turn.
 function fakeClient() {
@@ -75,6 +74,7 @@ describe("proposeLoop", () => {
     const client = fakeClient();
     const res = await proposeLoop({
       apiKey: "k",
+      model: "claude-sonnet-5",
       orgId: "org1",
       workspaceId: "ws1",
       instruction: "create task Ship v2 in Backlog",
@@ -103,6 +103,7 @@ describe("proposeLoop", () => {
     ];
     const res = await proposeLoop({
       apiKey: "k",
+      model: "claude-sonnet-5",
       orgId: "o",
       workspaceId: "w",
       instruction: "the Roadmap board",
@@ -140,6 +141,7 @@ describe("proposeLoop", () => {
     });
     const res = await proposeLoop({
       apiKey: "k",
+      model: "claude-sonnet-5",
       orgId: "o",
       workspaceId: "w",
       instruction: "do a thing",
@@ -170,6 +172,7 @@ describe("proposeLoop", () => {
     });
     const res = await proposeLoop({
       apiKey: "k",
+      model: "claude-sonnet-5",
       orgId: "o",
       workspaceId: "w",
       instruction: "do a thing",
@@ -203,17 +206,17 @@ describe("proposeLoop", () => {
     });
     const res = await proposeLoop({
       apiKey: "k",
+      model: "claude-sonnet-5",
       orgId: "o",
       workspaceId: "w",
       instruction: "do a thing",
       client: client as unknown as Anthropic,
     });
-    const expected = modelFor("conversational_action");
     const params = create.mock.calls[0][0];
-    expect(params.model).toBe(expected.model);
+    expect(params.model).toBe("claude-sonnet-5");
     expect(params.thinking).toEqual({ type: "disabled" });
     expect(params.max_tokens).toBe(4096);
-    // Reported back so runAi's ledger row names the model that actually ran.
-    expect(res.model).toBe(expected.model);
+    // Reported back: the model the caller resolved is the one that ran.
+    expect(res.model).toBe("claude-sonnet-5");
   });
 });

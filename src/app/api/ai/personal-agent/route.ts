@@ -280,14 +280,15 @@ export async function POST(req: Request): Promise<Response> {
     try {
       result = await runAi(
         { orgId: agent.org_id, userId: agent.owner_id, feature: FEATURE },
-        async ({ provider, apiKey }) => {
+        async ({ provider, apiKey, model }) => {
           assertToolLoopCapable(provider, FEATURE);
           const r = await summariseBriefing({
             apiKey,
+            model: model.requestModel,
             instructions: agent.instructions,
             briefing,
           });
-          return { result: r, usage: r.usage, model: r.model };
+          return { result: r, usage: r.usage };
         },
       );
     } catch (e) {

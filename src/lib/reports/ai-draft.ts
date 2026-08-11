@@ -1,4 +1,3 @@
-import type { ModelChoice } from "@/lib/ai/model-map";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import { toRequestArgs } from "@/lib/ai/providers/request";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
@@ -172,7 +171,8 @@ export async function draftReportNarrative(
     adapter: ProviderAdapter;
     apiKey: string;
     baseUrl?: string | null;
-    choice?: ModelChoice;
+    /** The WIRE model id to run (`ResolvedModel.requestModel`). */
+    model: string;
   },
 ): Promise<{
   narrative: ReportNarrative;

@@ -91,16 +91,17 @@ export async function proposeActions(input: {
 
     const result = await runAi(
       { orgId: org.id, userId: user.id, feature: "conversational_action" },
-      async ({ provider, apiKey }) => {
+      async ({ provider, apiKey, model }) => {
         assertToolLoopCapable(provider, "conversational_action");
         const r = await proposeLoop({
           apiKey,
+          model: model.requestModel,
           orgId: org.id,
           workspaceId,
           instruction: parsed.data.instruction,
           messages: history.length ? history : undefined,
         });
-        return { result: r, usage: r.usage, model: r.model };
+        return { result: r, usage: r.usage };
       },
     );
     return {

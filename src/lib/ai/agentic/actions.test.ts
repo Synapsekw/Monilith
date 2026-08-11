@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 // The AI gateway is mocked for the WHOLE suite: `runAi` never resolves a real
 // provider key and never bills a credit — it just hands the callback a fake
@@ -8,9 +9,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const runAi = vi.fn(
   async (
     _args: { orgId: string; userId: string; feature: string },
-    fn: (resolved: { apiKey: string }) => Promise<{ result: unknown }>,
+    fn: (resolved: {
+      apiKey: string;
+      model: ReturnType<typeof fakeResolvedModel>;
+    }) => Promise<{ result: unknown }>,
   ) => {
-    const { result } = await fn({ apiKey: "test-key" });
+    const { result } = await fn({
+      apiKey: "test-key",
+      model: fakeResolvedModel(),
+    });
     return result;
   },
 );
@@ -232,6 +239,8 @@ describe("previewAiStep — happy path", () => {
     });
     expect(decideAction).toHaveBeenCalledWith({
       apiKey: "test-key",
+      // The WIRE id runAi resolved — never the catalog key.
+      model: "claude-sonnet-5-20260101",
       context: CONTEXT,
       // Zod `.trim()` ran: the padded instruction is passed trimmed.
       instruction: "Move stale items to Done",

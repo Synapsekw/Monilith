@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 import { signBody } from "@/lib/ai/agentic/hmac";
 import { AiDisabledError } from "@/lib/ai/errors";
 
@@ -81,8 +82,11 @@ vi.mock("@/lib/ai/agentic/decide", () => ({
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: async (
     _args: unknown,
-    fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
-  ) => (await fn({ apiKey: "k" })).result,
+    fn: (r: {
+      apiKey: string;
+      model: ReturnType<typeof fakeResolvedModel>;
+    }) => Promise<{ result: unknown }>,
+  ) => (await fn({ apiKey: "k", model: fakeResolvedModel() })).result,
 }));
 
 import { POST } from "./route";

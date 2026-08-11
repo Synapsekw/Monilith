@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 import type { ItemAssistWant } from "@/lib/ai/item-assist/schema";
 
 // A resolved adapter+key, as the real gateway hands to runAi's callback.
@@ -9,6 +10,8 @@ let FAKE_RESOLVED = {
   apiKey: "k",
   mode: "managed",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (
@@ -139,6 +142,8 @@ beforeEach(() => {
     apiKey: "k",
     mode: "managed",
     provider: "anthropic",
+    baseUrl: null,
+    model: fakeResolvedModel(),
   };
   ITEM_RESULT = {
     data: {
@@ -258,6 +263,8 @@ describe("generateItemAssist action", () => {
       apiKey: "k",
       mode: "managed",
       provider: "openai",
+      baseUrl: null,
+      model: fakeResolvedModel(),
     };
     const { generateItemAssist } = await import("@/lib/ai/item-assist/actions");
     const res = await generateItemAssist({

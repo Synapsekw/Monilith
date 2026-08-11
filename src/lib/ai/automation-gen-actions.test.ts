@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 import {
   AiDisabledError,
@@ -28,6 +29,8 @@ const FAKE_RESOLVED = {
   apiKey: "k",
   mode: "per_user",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (

@@ -11,6 +11,7 @@
  * not merely echoed back out of the adapter's own argument.
  */
 import type { AdapterClient } from "@/lib/ai/providers/types";
+import type { ResolvedModel } from "@/lib/ai/models/resolve";
 
 /** What the adapters pass to `generateObject`, narrowed to what we assert on. */
 export type CapturedCall = {
@@ -58,4 +59,24 @@ export function fakeGenerateObject(
     return { object: result.object ?? {}, usage: result.usage ?? ZERO_USAGE };
   };
   return fn as unknown as NonNullable<AdapterClient["generateObject"]>;
+}
+
+/**
+ * A resolved model, as `runAi` hands it to its callback.
+ *
+ * Every suite that fakes `runAi` needs one, and each hand-rolled copy is a
+ * chance to make `requestModel` equal `model` — which is precisely the bug the
+ * two fields exist to prevent (the Gateway's catalog key is not the provider's
+ * wire id, so sending the key is a 404). The defaults here keep them DIFFERENT.
+ */
+export function fakeResolvedModel(over: Partial<ResolvedModel> = {}) {
+  return {
+    model: "claude-sonnet-5",
+    requestModel: "claude-sonnet-5-20260101",
+    provider: "anthropic",
+    rates: { input: 3, output: 15, cacheRead: null, cacheWrite: null },
+    supportsTools: true,
+    substituted: false,
+    ...over,
+  };
 }
