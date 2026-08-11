@@ -194,7 +194,16 @@ export async function runAi<T>(
     provider?: string;
     /** A pinned CATALOG key. Unavailable pins fall back and set `substituted`. */
     requestedModel?: string | null;
-    /** Overrides {@link tierForFeature} for a size-dependent call (column_fill). */
+    /**
+     * Overrides {@link tierForFeature} for a call whose tier depends on the
+     * SIZE of the request rather than on the feature.
+     *
+     * CURRENTLY UNCONSUMED: the one caller (`column_fill`) had its escalation
+     * removed once `COLUMN_FILL_MAX` was shown to bound the batch below the
+     * threshold. The seam is kept — it is unit-tested end to end, and it is
+     * the only way a caller can override the feature→tier map without
+     * rewriting it — but nothing in the app passes it today.
+     */
     tier?: ModelTier;
   },
   fn: (

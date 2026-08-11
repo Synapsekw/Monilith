@@ -20,15 +20,6 @@ const SYSTEM = [
 type ParsedOutput = { rows: { itemId: string; optionId: string | null }[] };
 
 /**
- * The cheap tier's context window is 200K, not 1M. classifyColumn serialises
- * every row into a single user message, so above this row count the CALLER asks
- * runAi for the `standard` tier instead — the row count is known before the
- * call, and the model has to be resolved before the key is spent. Exported so
- * the decision and the limit cannot drift apart.
- */
-export const HAIKU_ROW_LIMIT = 2000;
-
-/**
  * Classifies free-text rows against a fixed set of target options using
  * Anthropic structured output (mirrors the `messages.parse` call in
  * src/lib/ai/providers/anthropic.ts). `client` is injectable for tests so no

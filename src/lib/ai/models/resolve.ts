@@ -156,10 +156,13 @@ export async function resolveModel(args: {
   requested?: string | null;
   orgDefaultModelId?: string | null;
   /**
-   * Overrides {@link tierForFeature}. For the one caller whose tier is decided
-   * by the SIZE of the request, not by the feature: `column_fill` serialises
-   * every row into a single message, so above its row limit it has to move up
-   * a tier or risk a context overflow (see `column-fill/classify.ts`).
+   * Overrides {@link tierForFeature} for a caller whose tier is decided by the
+   * SIZE of the request rather than by the feature.
+   *
+   * CURRENTLY UNCONSUMED: `column_fill` was that caller, until its batch was
+   * shown to be bounded by `COLUMN_FILL_MAX` well below any context limit and
+   * the escalation was deleted. Kept as a tested seam rather than removed —
+   * see the note beside `COLUMN_FILL_MAX` for when it comes back.
    */
   tier?: ModelTier;
 }): Promise<ResolvedModel> {
