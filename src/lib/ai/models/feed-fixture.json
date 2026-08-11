@@ -295,6 +295,32 @@
       "tags": ["tool-use"],
       "context_window": 128000,
       "max_tokens": 16384
+    },
+    {
+      "id": "openai/gpt-image-1",
+      "owned_by": "openai",
+      "name": "GPT Image 1",
+      "type": "image",
+      "tags": [],
+      "context_window": null,
+      "max_tokens": null,
+      "pricing": {
+        "input": "0.00001",
+        "output": "0.00004"
+      }
+    },
+    {
+      "id": "google/gemini-embedding-001",
+      "owned_by": "google",
+      "name": "Gemini Embedding 001",
+      "type": "embedding",
+      "tags": [],
+      "context_window": 2048,
+      "max_tokens": null,
+      "pricing": {
+        "input": "0.00000015",
+        "output": "0"
+      }
     }
   ]
 }

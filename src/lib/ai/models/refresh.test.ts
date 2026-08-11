@@ -15,6 +15,14 @@ type FakeModelRow = {
  * a prior version of this mock ignored the predicate entirely (pushed a
  * canned list regardless of what was passed), which is why a missing
  * provider scope on the retirement query shipped undetected (finding C1/C1b).
+ *
+ * The `upsert` APPLIES too, and that is load-bearing rather than tidy. The
+ * upsert is what stamps `last_seen_at` on every row this run saw, and the
+ * retirement's `.lt("last_seen_at", seenAt)` is what spares those rows. With
+ * a write-only upsert (the prior version just pushed the payload aside),
+ * every seeded row stayed stale forever, so `.lt` was never discriminated and
+ * dropping `last_seen_at` from the upsert payload — which retires the ENTIRE
+ * catalog on the next healthy run — kept the suite green.
  */
 function fakeClient(providerIds: string[], seedRows: FakeModelRow[]) {
   const table = seedRows.map((r) => ({ ...r }));
@@ -51,8 +59,32 @@ function fakeClient(providerIds: string[], seedRows: FakeModelRow[]) {
 
       // ai_models
       return {
+        // Real upsert semantics on the composite key (provider, model_id):
+        // merge into the existing row, insert when there is none. A payload
+        // that omits `last_seen_at` therefore LEAVES the old value in place,
+        // exactly as Postgres would.
         upsert: async (rows: unknown[]) => {
           state.upserted.push(...rows);
+          for (const raw of rows) {
+            const row = raw as Record<string, unknown> & {
+              provider: string;
+              model_id: string;
+            };
+            const existing = table.find(
+              (r) => r.provider === row.provider && r.model_id === row.model_id,
+            );
+            if (existing) {
+              Object.assign(existing, row);
+              continue;
+            }
+            table.push({
+              provider: row.provider,
+              model_id: row.model_id,
+              status: typeof row.status === "string" ? row.status : "active",
+              last_seen_at:
+                typeof row.last_seen_at === "string" ? row.last_seen_at : "",
+            });
+          }
           return { error: null };
         },
         update(patch: { status: string }) {
@@ -118,6 +150,9 @@ const FEED = {
   ],
 };
 
+const statusOf = (table: FakeModelRow[], modelId: string) =>
+  table.find((r) => r.model_id === modelId)?.status;
+
 describe("refreshCatalog", () => {
   it("upserts parsed rows and retires anything not seen", async () => {
     const { client, state, table } = fakeClient(
@@ -140,14 +175,87 @@ describe("refreshCatalog", () => {
     expect(res.skipped).toBe(false);
     expect(res.upserted).toBe(1);
     expect(state.upserted).toHaveLength(1);
+    // The CONTENT of the upsert, not just its length: a payload that carried
+    // the wrong columns would satisfy a length check and still be wrong.
+    expect(state.upserted[0]).toMatchObject({
+      provider: "anthropic",
+      model_id: "claude-sonnet-5",
+      gateway_id: "anthropic/claude-sonnet-5",
+      status: "active",
+    });
     // Real telemetry, not a hardcoded 0 (finding I1): the one stale row was
     // actually flipped to retired.
     expect(res.retired).toBe(1);
-    expect(table.find((r) => r.model_id === "stale-model")?.status).toBe(
-      "retired",
-    );
+    expect(statusOf(table, "stale-model")).toBe("retired");
     // Fresh GATEWAY ids just landed, so the native-id resolution pass runs.
     expect(verifyIds).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The retirement predicate, made observable — this is the single most
+   * destructive statement on the branch, and until now nothing discriminated
+   * any part of it.
+   *
+   * Three seeded rows, each of which only survives because of ONE clause:
+   *
+   *   claude-sonnet-5   IS in this run's feed. It survives only because the
+   *                     upsert stamped `last_seen_at: seenAt` on it and
+   *                     `.lt("last_seen_at", seenAt)` then excludes it. Drop
+   *                     that one property from the upsert payload in
+   *                     refresh.ts and every model in the catalog is retired
+   *                     on the next perfectly healthy run — every picker in
+   *                     the product empties at once.
+   *   stale-model       is NOT in the feed. The one row that should flip.
+   *   already-retired   is not in the feed either, but is already `retired`.
+   *                     `.eq("status", "active")` is what keeps it out of the
+   *                     returned set, so `res.retired` stays honest instead of
+   *                     re-reporting settled rows as fresh retirements.
+   */
+  it("retires only rows this run did NOT see, and only ones still active", async () => {
+    const { client, state, table } = fakeClient(
+      ["anthropic"],
+      [
+        {
+          provider: "anthropic",
+          model_id: "claude-sonnet-5",
+          status: "active",
+          last_seen_at: STALE,
+        },
+        {
+          provider: "anthropic",
+          model_id: "stale-model",
+          status: "active",
+          last_seen_at: STALE,
+        },
+        {
+          provider: "anthropic",
+          model_id: "already-retired",
+          status: "retired",
+          last_seen_at: STALE,
+        },
+      ],
+    );
+    const res = await refreshCatalog({
+      fetchFeed: async () => FEED,
+      client: client as never,
+      verifyIds: async () => {},
+    });
+
+    // The upsert re-stamped the seen row's freshness…
+    const seen = table.find((r) => r.model_id === "claude-sonnet-5")!;
+    expect(seen.last_seen_at).not.toBe(STALE);
+    expect(Number.isNaN(Date.parse(seen.last_seen_at))).toBe(false);
+    // …and the retirement pass used that same instant as its cutoff.
+    expect(state.retireCalls).toHaveLength(1);
+    expect(state.retireCalls[0].lt).toBe(seen.last_seen_at);
+
+    expect(statusOf(table, "claude-sonnet-5")).toBe("active");
+    expect(statusOf(table, "stale-model")).toBe("retired");
+    // Exactly one row changed hands, so the count reported to the cron log is
+    // the number of models that actually left the pickers this run — the
+    // already-retired row is excluded by the status clause, not counted again.
+    expect(res.retired).toBe(1);
+    expect(state.retireCalls[0].eq).toBe("active");
   });
 
   it("still reports success when the id-verification pass throws", async () => {

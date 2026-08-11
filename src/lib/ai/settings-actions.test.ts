@@ -11,16 +11,89 @@ const svcMaybeSingle = vi.fn(
   }),
 );
 const svcUpsert = vi.fn(async () => ({ error: null }));
-// `.update(values, opts).eq(col, val)` — resolves to PostgREST's
-// `{ error, count }`, so a write that matched no row is distinguishable.
-const svcUpdateResult = vi.fn(async () => ({
-  error: null as unknown,
-  count: 1 as number | null,
-}));
-const svcUpdate = vi.fn((values: Record<string, unknown>) => {
-  svcUpdate.lastValues = values;
-  return { eq: (_c: string, _v: string) => svcUpdateResult() };
-}) as ReturnType<typeof vi.fn> & { lastValues?: Record<string, unknown> };
+
+/**
+ * `org_ai_settings` as a recording-and-APPLYING fake — the shape
+ * `src/test/ai-models-fake-client.ts` established, and for the same reason.
+ *
+ * The predecessor here took `.update(values).eq(col, val)` and threw the
+ * `.eq` arguments on the floor. That `.eq("org_id", ctx.orgId)` is the ONLY
+ * tenant boundary on these two writes: they run on the SERVICE client, which
+ * bypasses RLS entirely, so deleting the filter would set (or clear) the
+ * default model for EVERY organization in the database — and all twelve tests
+ * stayed green. Here every predicate is
+ *
+ *   RECORDED, so the full predicate set is assertable, and
+ *   APPLIED, so a missing filter makes the write stamp rows it had no
+ *   business touching, against a table seeded with a SECOND org.
+ */
+type SettingsRow = Record<string, unknown>;
+type Predicate = { column: string; value: unknown };
+type RecordedUpdate = {
+  patch: Record<string, unknown>;
+  predicates: Predicate[];
+  /** How many seeded rows the recorded predicates actually matched. */
+  matched: number;
+};
+/** PostgREST's `{ error, count }` — a write that matched no row is visible. */
+type UpdateResult = { error: { message: string } | null; count: number | null };
+
+let settingsTable: SettingsRow[] = [];
+const settingsUpdates: RecordedUpdate[] = [];
+let settingsUpdateError: { message: string } | null = null;
+
+const settingsRow = (orgId: string, over: SettingsRow = {}): SettingsRow => ({
+  org_id: orgId,
+  ai_mode: "per_user",
+  default_provider: null,
+  default_model_id: null,
+  updated_by: null,
+  ...over,
+});
+
+const rowFor = (orgId: string): SettingsRow | undefined =>
+  settingsTable.find((r) => r.org_id === orgId);
+
+function makeSettingsUpdate(patch: Record<string, unknown>) {
+  const predicates: Predicate[] = [];
+  let recorded = false;
+
+  const settle = (): UpdateResult => {
+    if (settingsUpdateError) return { error: settingsUpdateError, count: null };
+    const matched = settingsTable.filter((r) =>
+      predicates.every((p) => r[p.column] === p.value),
+    );
+    for (const row of matched) Object.assign(row, patch);
+    if (!recorded) {
+      recorded = true;
+      settingsUpdates.push({
+        patch: { ...patch },
+        predicates: [...predicates],
+        matched: matched.length,
+      });
+    }
+    return { error: null, count: matched.length };
+  };
+
+  const builder = {
+    eq(column: string, value: unknown) {
+      predicates.push({ column, value });
+      return builder;
+    },
+    // Thenable, so an update with NO `.eq` at all still resolves exactly like a
+    // PostgREST builder — which is what makes dropping the org filter a
+    // behaviour change the suite can see rather than a type error.
+    then<TResult1 = UpdateResult, TResult2 = never>(
+      onFulfilled?:
+        | ((v: UpdateResult) => TResult1 | PromiseLike<TResult1>)
+        | null,
+      onRejected?: ((r: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ): Promise<TResult1 | TResult2> {
+      return Promise.resolve(settle()).then(onFulfilled, onRejected);
+    },
+  };
+  return builder;
+}
 
 // The catalog row `setOrgDefaultModel` validates against, keyed
 // "provider/model_id". Absent => the picker offered something that is not in
@@ -92,10 +165,11 @@ vi.mock("@/lib/supabase/service", () => ({
             }),
           }),
         };
+      // org_ai_settings
       return {
         select: () => ({ eq: () => ({ maybeSingle: svcMaybeSingle }) }),
         upsert: svcUpsert,
-        update: svcUpdate,
+        update: (patch: Record<string, unknown>) => makeSettingsUpdate(patch),
       };
     },
   }),
@@ -183,7 +257,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   afterTasks.length = 0;
   verifyProviderModels.mockResolvedValue({ verified: 0, unverified: 0 });
-  svcUpdateResult.mockResolvedValue({ error: null, count: 1 });
+  // TWO orgs, always. `org-2` is the bystander: it exists so that a write
+  // which loses its `.eq("org_id", …)` visibly reaches a tenant it must never
+  // touch, instead of being invisible against a single-row table.
+  settingsTable = [
+    settingsRow("org-1"),
+    settingsRow("org-2", {
+      default_provider: "anthropic",
+      default_model_id: "claude-sonnet-5",
+      updated_by: "someone-else",
+    }),
+  ];
+  settingsUpdates.length = 0;
+  settingsUpdateError = null;
   models = {
     "anthropic/claude-sonnet-5": modelFixture("anthropic", "claude-sonnet-5"),
     "mistral/mistral-small-latest": modelFixture(
@@ -496,7 +582,7 @@ describe("setOrgDefaultModel", () => {
       ok: false,
       error: "Only organization admins can change AI settings.",
     });
-    expect(svcUpdate).not.toHaveBeenCalled();
+    expect(settingsUpdates).toHaveLength(0);
   });
 
   it("stores the provider and the CATALOG key for admins", async () => {
@@ -507,11 +593,40 @@ describe("setOrgDefaultModel", () => {
       modelId: "mistral-small-latest",
     });
     expect(res.ok).toBe(true);
-    expect(svcUpdate.lastValues).toMatchObject({
+    expect(rowFor("org-1")).toMatchObject({
       default_provider: "mistral",
       default_model_id: "mistral-small-latest",
       updated_by: "user-1",
     });
+  });
+
+  /**
+   * The tenant boundary, and the only one there is on this write.
+   *
+   * `setOrgDefaultModel` runs on the SERVICE client, which bypasses RLS — so
+   * `.eq("org_id", ctx.orgId)` is not a nicety, it is the whole of the
+   * isolation. Without it one admin's choice of default model becomes every
+   * organization's, including which provider key their members now need.
+   */
+  it("touches ONLY the caller's org row", async () => {
+    admin(true);
+    const bystander = { ...rowFor("org-2") };
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      (
+        await setOrgDefaultModel({
+          provider: "mistral",
+          modelId: "mistral-small-latest",
+        })
+      ).ok,
+    ).toBe(true);
+
+    expect(settingsUpdates).toHaveLength(1);
+    expect(settingsUpdates[0].matched).toBe(1);
+    expect(settingsUpdates[0].predicates).toEqual([
+      { column: "org_id", value: "org-1" },
+    ]);
+    expect(rowFor("org-2")).toEqual(bystander);
   });
 
   // The client sends a provider+model pair; neither is trusted. A model that is
@@ -522,7 +637,7 @@ describe("setOrgDefaultModel", () => {
     expect(
       await setOrgDefaultModel({ provider: "anthropic", modelId: "made-up" }),
     ).toEqual({ ok: false, error: "That model isn't available." });
-    expect(svcUpdate).not.toHaveBeenCalled();
+    expect(settingsUpdates).toHaveLength(0);
   });
 
   it("refuses a retired model", async () => {
@@ -534,7 +649,7 @@ describe("setOrgDefaultModel", () => {
         modelId: "mistral-retired",
       }),
     ).toEqual({ ok: false, error: "That model isn't available." });
-    expect(svcUpdate).not.toHaveBeenCalled();
+    expect(settingsUpdates).toHaveLength(0);
   });
 
   // listActiveModels does NOT join ai_providers.enabled, so "the model is
@@ -554,7 +669,7 @@ describe("setOrgDefaultModel", () => {
         modelId: "mistral-small-latest",
       }),
     ).toEqual({ ok: false, error: "Unknown provider." });
-    expect(svcUpdate).not.toHaveBeenCalled();
+    expect(settingsUpdates).toHaveLength(0);
   });
 
   // UPDATE, never UPSERT: org_ai_settings.ai_mode defaults to 'per_user', so
@@ -562,7 +677,8 @@ describe("setOrgDefaultModel", () => {
   // (mode 'off' by DEFAULT_ORG_AI_SETTINGS) into per-user AI.
   it("never creates a settings row, and says so when there is none", async () => {
     admin(true);
-    svcUpdateResult.mockResolvedValue({ error: null, count: 0 });
+    // No row for the caller's org at all — only the bystander's.
+    settingsTable = [settingsRow("org-2")];
     const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
     expect(
       await setOrgDefaultModel({
@@ -578,10 +694,7 @@ describe("setOrgDefaultModel", () => {
 
   it("reports a failed write instead of claiming success", async () => {
     admin(true);
-    svcUpdateResult.mockResolvedValue({
-      error: { message: "boom" },
-      count: null,
-    });
+    settingsUpdateError = { message: "boom" };
     const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
     expect(
       await setOrgDefaultModel({
@@ -600,7 +713,7 @@ describe("clearOrgDefaultModel", () => {
       ok: false,
       error: "Only organization admins can change AI settings.",
     });
-    expect(svcUpdate).not.toHaveBeenCalled();
+    expect(settingsUpdates).toHaveLength(0);
   });
 
   it("nulls BOTH halves of the default", async () => {
@@ -608,20 +721,28 @@ describe("clearOrgDefaultModel", () => {
     // leaving the other would store a pair that can never resolve.
     admin(true);
     const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    const bystander = { ...rowFor("org-2") };
     const res = await clearOrgDefaultModel();
     expect(res.ok).toBe(true);
-    expect(svcUpdate.lastValues).toMatchObject({
+    expect(rowFor("org-1")).toMatchObject({
       default_provider: null,
       default_model_id: null,
       updated_by: "user-1",
     });
+    // Same service-client blast radius as setOrgDefaultModel: without
+    // `.eq("org_id", …)` this would wipe every org's default in one call.
+    expect(settingsUpdates[0].predicates).toEqual([
+      { column: "org_id", value: "org-1" },
+    ]);
+    expect(settingsUpdates[0].matched).toBe(1);
+    expect(rowFor("org-2")).toEqual(bystander);
   });
 
   it("is a no-op success for an org with no settings row, and creates none", async () => {
     // Nothing to clear is the outcome the caller wanted — same reasoning as
     // removeAiKey. Still never an upsert: see setOrgDefaultModel.
     admin(true);
-    svcUpdateResult.mockResolvedValue({ error: null, count: 0 });
+    settingsTable = [settingsRow("org-2")];
     const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
     expect((await clearOrgDefaultModel()).ok).toBe(true);
     expect(svcUpsert).not.toHaveBeenCalled();
@@ -629,10 +750,7 @@ describe("clearOrgDefaultModel", () => {
 
   it("reports a failed write instead of claiming success", async () => {
     admin(true);
-    svcUpdateResult.mockResolvedValue({
-      error: { message: "boom" },
-      count: null,
-    });
+    settingsUpdateError = { message: "boom" };
     const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
     expect(await clearOrgDefaultModel()).toEqual({
       ok: false,

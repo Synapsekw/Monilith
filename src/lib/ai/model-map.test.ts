@@ -23,15 +23,21 @@ describe("tierForFeature", () => {
       expect(tierForFeature(f)).toBe("standard");
   });
 
+  // The LITERAL, not `DEFAULT_TIER` — asserting the constant against itself
+  // is true for any value it could ever hold. Flipping it to "cheap" would
+  // route every unmapped feature onto the cheapest model in the catalog
+  // (bulk-tier economics applied to a feature nobody chose that for), and the
+  // self-referential assertion would have stayed green through it.
   it("defaults an unmapped feature to the conservative middle", () => {
-    expect(tierForFeature("brand_new_feature")).toBe(DEFAULT_TIER);
+    expect(DEFAULT_TIER).toBe("standard");
+    expect(tierForFeature("brand_new_feature")).toBe("standard");
   });
 
   it("does not fall into prototype chain lookup for Object methods", () => {
     // `Object.create(null)` is what makes this true; a plain object literal
     // would return the inherited Function for these keys.
-    expect(tierForFeature("constructor")).toBe(DEFAULT_TIER);
-    expect(tierForFeature("toString")).toBe(DEFAULT_TIER);
+    expect(tierForFeature("constructor")).toBe("standard");
+    expect(tierForFeature("toString")).toBe("standard");
   });
 
   it("emits ONLY tiers — never a concrete model id", () => {

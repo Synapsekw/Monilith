@@ -94,7 +94,23 @@ describe("AiKeyList", () => {
     expect(screen.getAllByRole("button", { name: /add key/i })).toHaveLength(2);
   });
 
-  it("never renders a raw key back to the page", () => {
+  /**
+   * A key the user actually typed must never end up in the page's TEXT.
+   *
+   * The predecessor asserted `container.textContent` did not contain a string
+   * that was never supplied to the render — it passed against literally any
+   * component, including one that printed every key it was given, and
+   * `textContent` excludes input VALUES anyway, so it could not have observed
+   * the field even in principle. A green test with a security claim in its
+   * title is worse than none.
+   *
+   * So: type a real key into the field and assert (a) it never reaches
+   * `textContent` — no echo into a label, a hint, an error, or a preview —
+   * and (b) the field it does live in is masked, which is the only reason a
+   * shoulder-surfer cannot read it back.
+   */
+  it("never renders a typed key back to the page as text", () => {
+    const RAW_KEY = "sk-ant-api03-secret-value-9f3a";
     const { container } = render(
       <AiKeyList
         providers={PROVIDERS}
@@ -107,7 +123,42 @@ describe("AiKeyList", () => {
         ]}
       />,
     );
-    expect(container.textContent).not.toMatch(/sk-ant-api03/);
+
+    const mistral = rowFor("Mistral");
+    fireEvent.click(within(mistral).getByRole("button", { name: /add key/i }));
+    const field = within(mistral).getByLabelText(/api key/i);
+    fireEvent.change(field, { target: { value: RAW_KEY } });
+
+    // The value IS in the field — otherwise the assertion below is vacuous
+    // for the same reason the old one was.
+    expect(field).toHaveValue(RAW_KEY);
+    expect(container.textContent).not.toContain(RAW_KEY);
+    // …and the field itself is masked, which `textContent` cannot tell us.
+    expect(field).toHaveAttribute("type", "password");
+  });
+
+  it("does not echo a rejected key into the error it renders", async () => {
+    // The other way a raw key leaks: a failure path that quotes what was sent.
+    const RAW_KEY = "sk-ant-api03-secret-value-9f3a";
+    saveAiKey.mockResolvedValueOnce({
+      ok: false,
+      error: "That key was rejected by Mistral.",
+    });
+    const { container } = render(
+      <AiKeyList providers={PROVIDERS} initial={[]} />,
+    );
+
+    const mistral = rowFor("Mistral");
+    fireEvent.click(within(mistral).getByRole("button", { name: /add key/i }));
+    fireEvent.change(within(mistral).getByLabelText(/api key/i), {
+      target: { value: RAW_KEY },
+    });
+    fireEvent.click(within(mistral).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(within(rowFor("Mistral")).getByRole("alert")).toBeInTheDocument(),
+    );
+    expect(container.textContent).not.toContain(RAW_KEY);
   });
 
   // ---- carry-forward 9-a: more than one key is visible and removable ----

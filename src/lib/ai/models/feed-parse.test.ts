@@ -23,8 +23,25 @@ describe("tierFor", () => {
 describe("parseFeed", () => {
   const rows = parseFeed(fixture, ENABLED);
 
+  /**
+   * The `type !== "language"` filter, actually exercised.
+   *
+   * The only non-language entry in the fixture used to be `bfl/flux-2-pro`,
+   * and `bfl` is not an enabled provider — so the PROVIDER filter dropped it
+   * and deleting the type check broke nothing. `openai/gpt-image-1` and
+   * `google/gemini-embedding-001` are both fully priced entries under
+   * providers that ARE enabled: only the type check can keep them out. Without
+   * it, image and embedding models enter every model picker in the product and
+   * a "cheap" embedding model wins the bulk tier.
+   */
   it("drops non-language models", () => {
     expect(rows.find((r) => r.model_id === "flux-2-pro")).toBeUndefined();
+    expect(rows.find((r) => r.model_id === "gpt-image-1")).toBeUndefined();
+    expect(
+      rows.find((r) => r.model_id === "gemini-embedding-001"),
+    ).toBeUndefined();
+    // Stated positively too: every surviving row came from a chat model.
+    expect(rows.length).toBeGreaterThan(0);
   });
 
   it("drops models from providers that are not enabled", () => {
@@ -201,10 +218,53 @@ describe("parseFeed", () => {
     it("returns an empty array instead of throwing", () => {
       // This guard is what stops a Gateway outage (or a shape change) from
       // retiring the whole catalog: the caller treats [] as "skip the
-      // refresh," so parseFeed must never throw regardless of input shape,
-      // and one bad entry inside `data` must not poison entries around it.
+      // refresh," so parseFeed must never throw regardless of input shape.
       expect(() => parseFeed(payload, ENABLED)).not.toThrow();
       expect(parseFeed(payload, ENABLED)).toEqual([]);
     });
+  });
+
+  /**
+   * The property the all-malformed cases above CANNOT show (finding F2).
+   *
+   * An array where every entry is junk parses to `[]` whether entries are
+   * skipped individually or the whole array is abandoned at the first bad one
+   * — the two behaviours are indistinguishable. Only a MIXED batch tells them
+   * apart, and the difference is severe: abandoning the array truncates the
+   * catalog to whatever preceded the bad entry, and `refreshCatalog` then
+   * treats every model after it as "not seen this run" and RETIRES it. One
+   * malformed feed entry would empty most of the catalog.
+   */
+  it("keeps the well-formed entries around a malformed neighbour", () => {
+    const good = (id: string) => ({
+      id,
+      owned_by: id.split("/")[0],
+      name: id,
+      type: "language",
+      tags: ["tool-use"],
+      context_window: 8000,
+      max_tokens: 4000,
+      pricing: { input: "0.000001", output: "0.000002" },
+    });
+    const rows = parseFeed(
+      {
+        data: [
+          null,
+          good("anthropic/first-survivor"),
+          42,
+          { id: 17 }, // right key, wrong type — fails the entry schema
+          good("openai/middle-survivor"),
+          "not-an-object",
+          {}, // no id at all
+          good("mistral/last-survivor"),
+        ],
+      },
+      ENABLED,
+    );
+    expect(rows.map((r) => r.model_id)).toEqual([
+      "first-survivor",
+      "middle-survivor",
+      "last-survivor",
+    ]);
   });
 });
