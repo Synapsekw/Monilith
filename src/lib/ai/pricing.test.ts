@@ -78,10 +78,37 @@ describe("ratesForModel", () => {
   it("returns null for an unknown model", () => {
     expect(ratesForModel("kimi-k2")).toBeNull();
   });
+
+  it("returns null for Object.prototype property names, not the inherited function", () => {
+    // FALLBACK_RATES is an object literal, so a naive `FALLBACK_RATES[model] ?? null`
+    // lookup returns Object.prototype's members for these ids — all truthy
+    // functions, which would sail past computeCostUsd's `if (!rates)` guard.
+    expect(ratesForModel("constructor")).toBeNull();
+    expect(ratesForModel("toString")).toBeNull();
+    expect(ratesForModel("valueOf")).toBeNull();
+    expect(ratesForModel("hasOwnProperty")).toBeNull();
+  });
+
+  it("prices the embedding model input-only ($0.02/MTok, output ignored)", () => {
+    const rates = ratesForModel("text-embedding-3-small");
+    expect(
+      computeCostUsd(rates, { inputTokens: 1_000_000, outputTokens: 0 }),
+    ).toBeCloseTo(0.02, 9);
+    // output tokens carry a 0 rate — they never add cost even if present.
+    expect(
+      computeCostUsd(rates, { inputTokens: 500_000, outputTokens: 999 }),
+    ).toBeCloseTo(0.01, 9);
+  });
 });
 
 describe("costToCredits", () => {
   it("converts 1 USD to 100 credits", () => {
     expect(costToCredits(1)).toBe(100);
+  });
+
+  it("rounds to 2 decimal places", () => {
+    expect(costToCredits(0.0225)).toBe(2.25);
+    expect(costToCredits(0.02255)).toBe(2.26); // half-up
+    expect(costToCredits(0)).toBe(0);
   });
 });

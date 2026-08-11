@@ -1,9 +1,9 @@
 export type AiUsageTokens = {
   inputTokens: number;
   outputTokens: number;
-  /** Prompt-cache hits. Billed at 0.10x the model's input rate. */
+  /** Prompt-cache hits. Billed at 0.10x the model's input rate, absent an explicit cache rate. */
   cacheReadTokens?: number;
-  /** Prompt-cache writes. Billed at 1.25x the model's input rate. */
+  /** Prompt-cache writes. Billed at 1.25x the model's input rate, absent an explicit cache rate. */
   cacheWriteTokens?: number;
 };
 
@@ -64,10 +64,17 @@ export const FALLBACK_RATES: Readonly<Record<string, ModelRates>> = {
   },
 };
 
+/** Every model id the model map may emit must be priced here. */
 export const PRICED_MODELS = Object.keys(FALLBACK_RATES);
 
 export function ratesForModel(model: string): ModelRates | null {
-  return FALLBACK_RATES[model] ?? null;
+  // Object.hasOwn, not `FALLBACK_RATES[model] ?? null`: FALLBACK_RATES is an
+  // object literal, so it inherits Object.prototype. A plain index lookup for
+  // "constructor"/"toString"/"valueOf"/"hasOwnProperty" returns a Function
+  // (truthy, and TypeScript's index signature can't see the prototype chain),
+  // which would sail past computeCostUsd's `if (!rates)` guard and produce
+  // NaN cost/credits instead of the null this function promises.
+  return Object.hasOwn(FALLBACK_RATES, model) ? FALLBACK_RATES[model] : null;
 }
 
 /**
