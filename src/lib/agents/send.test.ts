@@ -83,6 +83,8 @@ const agent: UserAgentRow = {
   run_at_local_hour: 7,
   enabled: true,
   bridge_secret_id: null,
+  provider: null,
+  model_id: null,
 };
 
 const briefing: Briefing = {

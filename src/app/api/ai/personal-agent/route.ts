@@ -104,6 +104,8 @@ async function finalizeRun(
     error?: string | null;
     input_tokens?: number | null;
     output_tokens?: number | null;
+    /** True when the agent's pinned model was unavailable and runAi fell back. */
+    model_substituted?: boolean;
   },
 ): Promise<void> {
   const { error } = await svc
@@ -277,11 +279,26 @@ export async function POST(req: Request): Promise<Response> {
     //    every briefing in the org every day), so it falls through to the
     //    generic catch below and is recorded as "error", not "skipped".
     let result: BriefingSummary;
+    // Written to the run row below. `user_agent_runs.model_substituted` exists
+    // precisely so "your pinned model is gone, this ran on the default" is its
+    // own signal instead of being overloaded onto `error` — a substituted run
+    // still SUCCEEDED, and recording it as an error would tell the owner their
+    // agent is broken when it is not.
+    let modelSubstituted = false;
     try {
       result = await runAi(
-        { orgId: agent.org_id, userId: agent.owner_id, feature: FEATURE },
+        {
+          orgId: agent.org_id,
+          userId: agent.owner_id,
+          feature: FEATURE,
+          // The per-agent pin. Null on either means "org default", which is
+          // exactly what runAi does when they are omitted.
+          provider: agent.provider ?? undefined,
+          requestedModel: agent.model_id,
+        },
         async ({ provider, apiKey, model }) => {
           assertToolLoopCapable(provider, FEATURE);
+          modelSubstituted = model.substituted;
           const r = await summariseBriefing({
             apiKey,
             model: model.requestModel,
@@ -345,6 +362,7 @@ export async function POST(req: Request): Promise<Response> {
       error: null,
       input_tokens: result.usage.inputTokens,
       output_tokens: result.usage.outputTokens,
+      model_substituted: modelSubstituted,
     });
 
     return NextResponse.json({ status: "ran" });

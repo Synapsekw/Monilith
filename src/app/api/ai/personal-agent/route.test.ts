@@ -240,6 +240,10 @@ const enabledAgent = () => ({
   run_at_local_hour: 7,
   enabled: true,
   bridge_secret_id: null,
+  // The per-agent model pin. Null on both = "use the org default", which is
+  // every backfilled agent — the pinned case is exercised explicitly below.
+  provider: null,
+  model_id: null,
 });
 
 beforeEach(() => {
@@ -350,6 +354,77 @@ describe("POST /api/ai/personal-agent", () => {
       output_tokens: 2,
     });
     expect(sendBriefingEmail).toHaveBeenCalledOnce();
+  });
+
+  // ── The per-agent model pin (user_agents.provider / .model_id) ─────────
+  it("spends the PINNED provider's key and asks for the pinned model", async () => {
+    // An agent pinned to Kimi must resolve the Kimi key. Resolving whichever
+    // key the owner happens to have would POST an Anthropic key to Moonshot.
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      provider: "moonshotai",
+      model_id: "kimi-k2",
+    });
+    await POST(post(slot));
+
+    expect(runAi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: ORG,
+        userId: OWNER,
+        feature: "personal_agent_run",
+        provider: "moonshotai",
+        requestedModel: "kimi-k2",
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it("leaves the pin OFF the gateway args when the agent has none", async () => {
+    // Omitted, not null-with-a-value: an unpinned agent takes the org default,
+    // and passing a provider of `null` would be a request for a provider named
+    // null rather than "no preference".
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    await POST(post(slot));
+
+    expect(runAi.mock.calls[0]![0]).toMatchObject({ provider: undefined });
+    expect(runAi.mock.calls[0]![0]).toMatchObject({ requestedModel: null });
+  });
+
+  it("records model_substituted when the pinned model was gone", async () => {
+    // A substituted run still SUCCEEDED. It is recorded on its own column, not
+    // overloaded onto `error`, so the owner is not told a working agent broke.
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      provider: "anthropic",
+      model_id: "claude-retired-9",
+    });
+    runAi.mockImplementation(
+      async (
+        _args: unknown,
+        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+      ) =>
+        (
+          await fn({
+            provider: "anthropic",
+            apiKey: "k",
+            model: fakeResolvedModel({ substituted: true }),
+          })
+        ).result,
+    );
+    const res = await POST(post(slot));
+
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "ran",
+      error: null,
+      model_substituted: true,
+    });
+  });
+
+  it("records model_substituted: false on an ordinary run", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    await POST(post(slot));
+    expect(runUpdates[0]!.patch).toMatchObject({ model_substituted: false });
   });
 
   it("is a no-op via the claim backstop when a concurrent delivery races the fast probe", async () => {
