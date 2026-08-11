@@ -37,7 +37,7 @@
 | Task | Unit                                       | Depends on |
 | ---- | ------------------------------------------ | ---------- |
 | 1    | A — tool descriptors                       | —          |
-| 2    | B — migration 1 (grants, ceiling, cadence) | —          |
+| 2    | B — migration 1 (grants, ceiling, cadence) | 1          |
 | 3    | C — migration 2 (proposals, run effects)   | —          |
 | 4    | D — per-provider re-verification           | —          |
 | 5    | E1 — agent tool set + grant gate           | 1, 2       |
@@ -47,13 +47,12 @@
 | 9    | H — proposal review UI + decide action     | 1, 3       |
 | 10   | I — org ceiling admin UI                   | 2          |
 
-- **Batch 1 (parallel):** 1, 2, 3, 4
-- **Batch 2 (parallel):** 5, 8, 9, 10
-- **Batch 3:** 6
-- **Batch 4:** 7
-- **Critical path:** 1 → 5 → 6 → 7
+- **Order:** 1 → 2 → 5 → 6 → 7, with 3, 4, 8, 9, 10 slotted before their consumers (3 before 7 and 9; 4 anywhere; 8 and 10 after 2; 9 after 3).
+- **Critical path:** 1 → 2 → 5 → 6 → 7
 
-Tasks 2 and 3 are disjoint migrations (2 touches `user_agents` / `org_ai_settings` / the sweep function; 3 touches `user_agent_proposals` / `user_agent_runs`) and are safe to build in parallel worktrees. **Whichever lands second must re-run type generation.**
+Under subagent-driven development implementers are dispatched **serially**, so these are ordering constraints rather than concurrency.
+
+Tasks 2 and 3 are disjoint migrations (2 touches `user_agents` / `org_ai_settings` / the sweep function; 3 touches `user_agent_proposals` / `user_agent_runs`). **Whichever lands second must re-run type generation.**
 
 ---
 
@@ -100,7 +99,7 @@ Tasks 2 and 3 are disjoint migrations (2 touches `user_agents` / `org_ai_setting
 
 **Files:**
 
-- Create: `src/lib/mcp/tools/descriptor.ts`, `src/lib/mcp/tools/descriptor.test.ts`
+- Create: `src/lib/agents/capabilities.ts`, `src/lib/mcp/tools/descriptor.ts`, `src/lib/mcp/tools/descriptor.test.ts`
 - Modify: all 24 `src/lib/mcp/tools/*.ts` tool modules, `src/lib/mcp/tools/register.ts`, `src/components/settings/mcp/mcp-tools-table.tsx`
 - Test: `src/components/settings/mcp/mcp-tools-table.test.tsx` (existing — it is the regression guard)
 
@@ -108,10 +107,10 @@ Tasks 2 and 3 are disjoint migrations (2 touches `user_agents` / `org_ai_setting
 
 - Consumes: nothing.
 - Produces:
-  - `type ToolCapability = "board.write" | "files.write" | "automation.create" | "time.log"`
+  - `src/lib/agents/capabilities.ts` — the **single** declaration of the vocabulary: `const AGENT_CAPABILITIES = ["board.write","files.write","automation.create","time.log"] as const` and `type AgentCapability = (typeof AGENT_CAPABILITIES)[number]`. Deliberately its own tiny module, free of `server-only`, so both the server-side descriptor layer and the client-side agent editor import it without either depending on the other.
   - `type ToolScope = "none" | "boardId" | "itemId" | "groupId"`
   - `type ToolInvokeContext = { getClient: GetClient; actorId: string }`
-  - `type ToolDescriptor = { name: string; title: string; description: string; inputSchema: z.ZodRawShape; capability: ToolCapability | null; scope: ToolScope; agentExcluded?: true; invoke: (ctx: ToolInvokeContext, input: Record<string, unknown>) => Promise<ToolResult> }`
+  - `type ToolDescriptor = { name: string; title: string; description: string; inputSchema: z.ZodRawShape; capability: AgentCapability | null; scope: ToolScope; agentExcluded?: true; invoke: (ctx: ToolInvokeContext, input: Record<string, unknown>) => Promise<ToolResult> }`
   - `function registerDescriptor(server: McpServer, d: ToolDescriptor, ctx: ToolInvokeContext): void`
   - `const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[]` exported from `register.ts`
   - One `<toolName>Descriptor` export per tool module, e.g. `attachFileDescriptor`, `listBoardsDescriptor`.
@@ -123,7 +122,8 @@ Create `src/lib/mcp/tools/descriptor.test.ts`:
 ```ts
 import { describe, expect, it } from "vitest";
 import { ALL_TOOL_DESCRIPTORS } from "./register";
-import { TOOL_CAPABILITIES, TOOL_SCOPES } from "./descriptor";
+import { TOOL_SCOPES } from "./descriptor";
+import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
 
 describe("ALL_TOOL_DESCRIPTORS", () => {
   it("covers every tool exactly once", () => {
@@ -135,7 +135,7 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   it("classifies every tool with a legal capability and scope", () => {
     for (const d of ALL_TOOL_DESCRIPTORS) {
       expect(
-        d.capability === null || TOOL_CAPABILITIES.includes(d.capability),
+        d.capability === null || AGENT_CAPABILITIES.includes(d.capability),
       ).toBe(true);
       expect(TOOL_SCOPES).toContain(d.scope);
     }
@@ -191,6 +191,7 @@ Create `src/lib/mcp/tools/descriptor.ts`:
 import type { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetClient, ToolResult } from "./shared";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 
 /**
  * The single definition of a tool, consumed by BOTH transports: the MCP server
@@ -198,15 +199,6 @@ import type { GetClient, ToolResult } from "./shared";
  * (`src/lib/agents/tools.ts`). Two transports over one definition is the whole
  * point — a tool cannot be reachable from one and stale in the other.
  */
-
-/** Grantable capabilities. `null` on a descriptor means an always-on read. */
-export const TOOL_CAPABILITIES = [
-  "board.write",
-  "files.write",
-  "automation.create",
-  "time.log",
-] as const;
-export type ToolCapability = (typeof TOOL_CAPABILITIES)[number];
 
 /**
  * How this tool's target board is derived, for `board_scope` enforcement. The
@@ -225,7 +217,10 @@ export type ToolDescriptor = {
   description: string;
   /** MCP's raw-shape form. The agent side wraps it with `z.object(...)`. */
   inputSchema: z.ZodRawShape;
-  capability: ToolCapability | null;
+  /** `null` means an always-on read. The vocabulary lives in
+   *  `@/lib/agents/capabilities` — one declaration, imported by both the
+   *  descriptor layer and the agent editor. */
+  capability: AgentCapability | null;
   scope: ToolScope;
   /** Served over MCP but never offered to an agent. See create-attachment-upload. */
   agentExcluded?: true;
@@ -412,11 +407,11 @@ git commit -m "refactor(mcp): extract tool descriptors so mcp and agents share o
 
 **Interfaces:**
 
-- Consumes: nothing.
+- Consumes: `AGENT_CAPABILITIES` / `AgentCapability` from `src/lib/agents/capabilities.ts` (Task 1).
 - Produces:
   - `user_agents.capabilities text[]`, `user_agents.run_on_weekday int`, `user_agents.run_on_day_of_month int`, widened `cadence` check, widened `instructions` check
   - `org_ai_settings.agent_capability_ceiling text[]`
-  - `AGENT_CADENCES = ["daily","weekdays","weekly","monthly"] as const`, `AGENT_CAPABILITIES` + `AgentCapability` (the client-safe vocabulary; pinned equal to Task 1's `TOOL_CAPABILITIES` by a test in Task 5)
+  - `AGENT_CADENCES = ["daily","weekdays","weekly","monthly"] as const`
   - `INSTRUCTIONS_MAX = 8000`
   - `capabilitySchema: z.ZodArray<...>` and `PersonalAgentSettings` gaining `capabilities: AgentCapability[]`, `runOnWeekday: number | null`, `runOnDayOfMonth: number | null`
   - `UserAgentRow` gaining the same fields
@@ -627,6 +622,8 @@ Expected: FAIL — `INSTRUCTIONS_MAX` is 2000 and the new keys are unknown.
 - [ ] **Step 7: Extend `agent-config.ts`**
 
 ```ts
+import { AGENT_CAPABILITIES } from "./capabilities";
+
 export const INSTRUCTIONS_MAX = 8000;
 export const AGENT_CADENCES = [
   "daily",
@@ -635,27 +632,9 @@ export const AGENT_CADENCES = [
   "monthly",
 ] as const;
 
-/**
- * The capability vocabulary, declared HERE rather than imported from
- * `mcp/tools/descriptor.ts`, for two reasons:
- *   - `agent-config.ts` is deliberately free of `server-only` so the editor can
- *     import it; `descriptor.ts` pulls in server-side tool machinery.
- *   - it keeps this task independent of Task 1 so both can run in one batch.
- * The two declarations are held in agreement by a test in Task 5, which is the
- * first task that can see both — the same two-lists-one-test discipline
- * `mcp-tools-table.test.tsx` already uses. Do NOT let them drift.
- *
- * Mirrors the `user_agents_capabilities_known` check constraint. A set, not a
- * list: order carries no meaning and duplicates are a bug.
- */
-export const AGENT_CAPABILITIES = [
-  "board.write",
-  "files.write",
-  "automation.create",
-  "time.log",
-] as const;
-export type AgentCapability = (typeof AGENT_CAPABILITIES)[number];
-
+/** Mirrors the `user_agents_capabilities_known` check constraint. A set, not a
+ *  list: order carries no meaning and duplicates are a bug. The vocabulary
+ *  itself is imported — `src/lib/agents/capabilities.ts` is its one home. */
 export const capabilitySchema = z
   .array(z.enum(AGENT_CAPABILITIES))
   .max(AGENT_CAPABILITIES.length)
@@ -905,31 +884,15 @@ git commit -m "feat(ai): re-verify model ids for every keyed provider, not only 
 
 **Interfaces:**
 
-- Consumes: `ToolDescriptor`, `ALL_TOOL_DESCRIPTORS`, `ToolInvokeContext` (Task 1); `ToolCapability` (Task 1); `BoardScope` (`agent-config.ts`); `OrgAiSettings.agentCapabilityCeiling` (Task 2).
+- Consumes: `ToolDescriptor`, `ALL_TOOL_DESCRIPTORS`, `ToolInvokeContext` (Task 1); `AgentCapability` (Task 1, `@/lib/agents/capabilities`); `BoardScope` (`agent-config.ts`); `OrgAiSettings.agentCapabilityCeiling` (Task 2).
 - Produces:
   - `function buildAgentTools(args: { ctx: ToolInvokeContext; scope: BoardScope; client: SupabaseClient<Database>; extra?: ToolDescriptor[] }): ToolSet`
-  - `function makeGrantGate(args: { granted: ToolCapability[]; ceiling: ToolCapability[]; onPropose: (call: { toolCallId: string; toolName: string; capability: ToolCapability; input: Record<string, unknown> }) => void }): GenericToolApprovalFunction` — `import type { GenericToolApprovalFunction } from "ai"` (type-only export)
+  - `function makeGrantGate(args: { granted: AgentCapability[]; ceiling: AgentCapability[]; onPropose: (call: { toolCallId: string; toolName: string; capability: AgentCapability; input: Record<string, unknown> }) => void }): GenericToolApprovalFunction` — `import type { GenericToolApprovalFunction } from "ai"` (type-only export)
   - `const UNGRANTED_REASON = "Recorded for your approval."`
   - `async function resolveTargetBoardId(client, descriptor, input): Promise<string | null>`
   - `function isBoardInScope(scope: BoardScope, boardId: string | null): boolean`
 
-- [ ] **Step 1: Pin the two capability vocabularies together**
-
-Tasks 1 and 2 each declare the capability list — `TOOL_CAPABILITIES` in `mcp/tools/descriptor.ts` and `AGENT_CAPABILITIES` in `agents/agent-config.ts` — so that they could be built in one batch. This is the first task that imports both, so it owns the agreement test. Add to `src/lib/agents/grant-gate.test.ts`:
-
-```ts
-import { TOOL_CAPABILITIES } from "@/lib/mcp/tools/descriptor";
-import { AGENT_CAPABILITIES } from "./agent-config";
-
-it("keeps the tool and agent capability vocabularies identical", () => {
-  // Two declarations exist only so Tasks 1 and 2 could run in parallel. If
-  // they ever disagree, a capability is grantable in the editor but
-  // unrecognised by the gate (or the reverse) — a silent permission hole.
-  expect([...TOOL_CAPABILITIES].sort()).toEqual([...AGENT_CAPABILITIES].sort());
-});
-```
-
-- [ ] **Step 2: Write the failing grant-gate test**
+- [ ] **Step 1: Write the failing grant-gate test**
 
 Create `src/lib/agents/grant-gate.test.ts`:
 
@@ -1005,17 +968,17 @@ describe("makeGrantGate", () => {
 });
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [ ] **Step 2: Run it to verify it fails**
 
 Run: `pnpm vitest run src/lib/agents/grant-gate.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 4: Implement `grant-gate.ts`**
+- [ ] **Step 3: Implement `grant-gate.ts`**
 
 ```ts
 import "server-only";
 import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/register";
-import type { ToolCapability } from "@/lib/mcp/tools/descriptor";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 
 export const UNGRANTED_REASON = "Recorded for your approval.";
 
@@ -1029,12 +992,12 @@ const BY_NAME = new Map(ALL_TOOL_DESCRIPTORS.map((d) => [d.name, d]));
  * it, and the proposal path is the entire point.
  */
 export function makeGrantGate(args: {
-  granted: ToolCapability[];
-  ceiling: ToolCapability[];
+  granted: AgentCapability[];
+  ceiling: AgentCapability[];
   onPropose: (call: {
     toolCallId: string;
     toolName: string;
-    capability: ToolCapability;
+    capability: AgentCapability;
     input: Record<string, unknown>;
   }) => void;
 }) {
@@ -1071,12 +1034,12 @@ export function makeGrantGate(args: {
 }
 ```
 
-- [ ] **Step 5: Run the gate test**
+- [ ] **Step 4: Run the gate test**
 
 Run: `pnpm vitest run src/lib/agents/grant-gate.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Write the failing board-scope test**
+- [ ] **Step 5: Write the failing board-scope test**
 
 Create `src/lib/agents/board-scope-guard.test.ts` asserting:
 
@@ -1084,11 +1047,11 @@ Create `src/lib/agents/board-scope-guard.test.ts` asserting:
 - `isBoardInScope({mode:"list",boardIds:["b1"]}, null)` → **true** — a `scope: "none"` tool addresses no board, so scope cannot refuse it.
 - `resolveTargetBoardId` returns `input.boardId` for a `boardId` descriptor, resolves `itemId` through the item's board, resolves `groupId` through the group's board, and returns `null` for `scope: "none"`.
 
-- [ ] **Step 7: Implement `board-scope-guard.ts`**
+- [ ] **Step 6: Implement `board-scope-guard.ts`**
 
 `resolveTargetBoardId` switches on `descriptor.scope`. For `"itemId"` reuse `resolveItemScope` from `@/lib/collaboration/attachment-core` (it already returns `{orgId, boardId}` and is RLS-scoped through the passed client). For `"groupId"` do a single `groups` select of `board_id`. Both run on the **owner client**, so a lookup can never reveal a board the owner cannot see.
 
-- [ ] **Step 8: Write `tools.ts` and its test**
+- [ ] **Step 7: Write `tools.ts` and its test**
 
 `buildAgentTools` maps each descriptor (skipping `agentExcluded`) to:
 
@@ -1119,7 +1082,7 @@ tool({
 
 The test asserts: `create_attachment_upload` is absent from the returned `ToolSet`; an out-of-scope `boardId` returns the refusal without calling `invoke`; an in-scope call reaches `invoke` exactly once; and a throwing `invoke` yields an `error` result rather than propagating.
 
-- [ ] **Step 9: Write the security-boundary RLS integration test**
+- [ ] **Step 8: Write the security-boundary RLS integration test**
 
 This is the test that proves the central security claim, and it is deliberately separate from the grant tests: it must hold **with every capability granted**.
 
@@ -1144,12 +1107,12 @@ it("reads nothing from a board its owner can no longer access", async () => {
 
 The point is what is NOT doing the work here: `board_scope` is `all` and every capability is granted, so neither gate refuses this call. RLS does. If this test ever passes because a grant blocked it, the fixture is wrong and the real boundary is untested.
 
-- [ ] **Step 10: Run it**
+- [ ] **Step 9: Run it**
 
 Run: `PULSE_TEST_DB=1 pnpm vitest run src/lib/agents/agent-tools.rls.integration.test.ts`
 Expected: PASS. Without `PULSE_TEST_DB` it SKIPs — correct, never force it.
 
-- [ ] **Step 11: Run all suites, gates, commit**
+- [ ] **Step 10: Run all suites, gates, commit**
 
 ```bash
 pnpm vitest run src/lib/agents
