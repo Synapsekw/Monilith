@@ -581,6 +581,41 @@ describe("runAi", () => {
     expect(rpc).not.toHaveBeenCalledWith("record_ai_usage", expect.anything());
   });
 
+  it("refuses an UNPRICED model as firmly as a missing one", async () => {
+    // The other half of the same guard. computeCostUsd(null, usage) is $0, so
+    // an active, id_verified row whose price columns are null would run and
+    // meter free inference for any provider outside FALLBACK_RATES. The feed
+    // quarantines unpriced rows (feed-parse.ts), so this is not reachable
+    // THROUGH the feed — but resolve.ts's usablePrice names "a manual fix, a
+    // future importer" as its threat model, and this is the leg that was open.
+    setModels([
+      modelFixture({
+        provider: "moonshotai",
+        model_id: "kimi-k2",
+        input_price_per_mtok: null,
+        output_price_per_mtok: null,
+      }),
+    ]);
+    const { runAi } = await import("@/lib/ai/gateway");
+    const fn = vi.fn();
+    await expect(
+      runAi(
+        {
+          orgId: ORG_ID,
+          userId: USER_ID,
+          feature: "ask_pulse",
+          provider: "moonshotai",
+        },
+        fn,
+      ),
+    ).rejects.toMatchObject({
+      name: "NoUsableModelError",
+      provider: "moonshotai",
+    });
+    expect(fn).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("record_ai_usage", expect.anything());
+  });
+
   it("prefers the org's default model — but only for the org's own provider", async () => {
     settingsRow("per_user", {
       default_provider: "anthropic",

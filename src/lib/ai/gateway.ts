@@ -21,6 +21,7 @@ import {
   costToCredits,
   ratesForModel,
   type AiUsageTokens,
+  type ModelRates,
 } from "@/lib/ai/pricing";
 
 export type ResolvedAi = {
@@ -40,10 +41,18 @@ export type ResolvedAi = {
   orgDefaultModelId: string | null;
 };
 
-/** A {@link ResolvedModel} that actually has a model — see `runAi`'s null gate. */
-export type UsableModel = Omit<ResolvedModel, "model" | "requestModel"> & {
+/**
+ * A {@link ResolvedModel} that is actually runnable: it names a model AND
+ * carries a price. Both halves come from `runAi`'s gate — see it for why an
+ * unpriced model is refused rather than run.
+ */
+export type UsableModel = Omit<
+  ResolvedModel,
+  "model" | "requestModel" | "rates"
+> & {
   model: string;
   requestModel: string;
+  rates: ModelRates;
 };
 
 /** What `runAi` hands its callback: the key, the adapter, and the model to run. */
@@ -206,9 +215,19 @@ export async function runAi<T>(
     orgDefaultModelId: resolved.orgDefaultModelId,
     tier: args.tier,
   });
-  // No active, id-verified row for this provider. Throwing is the point: an
-  // unpriced model bills nothing, so "run it anyway" would buy free inference.
-  if (model.model === null || model.requestModel === null)
+  // No active, id-verified row for this provider — or one whose price is
+  // unknowable. Throwing is the point in BOTH cases: computeCostUsd(null, …)
+  // is $0, so running an unpriced model buys free inference from any provider
+  // outside FALLBACK_RATES. The feed already quarantines unpriced rows
+  // (`feed-parse.ts` → status 'needs_pricing'), so this is unreachable through
+  // a normal refresh — it is the same "a manual fix, a future importer" threat
+  // model that `resolve.ts`'s usablePrice guards, closed at the last boundary
+  // before the numbers become money.
+  if (
+    model.model === null ||
+    model.requestModel === null ||
+    model.rates === null
+  )
     throw new NoUsableModelError(resolved.provider);
   const usable = model as UsableModel;
 
