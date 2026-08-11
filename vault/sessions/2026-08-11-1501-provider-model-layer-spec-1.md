@@ -36,6 +36,13 @@ related:
 - **`/updates`:** announced three entries dated 2026-08-11 (per-provider keys, org default-model
   picker, agent model pin). They publish at the next promotion, which is also when the feature
   becomes reachable — the two land together.
+- **PROMOTED THE SAME SESSION — PR #95, `main` @ `1ebc8a44`, 47 commits.** Verified live rather than
+  assumed: Vercel `state=success`, `www.monolith.works` 200, `/settings/ai` 307, `/updates` serving
+  all three new entries, and **`/api/ai/models/refresh` returning 401 rather than 404** — the daily
+  catalog cron finally has a live, HMAC-gated target instead of a missing route.
+  `AI_PGNET_HMAC_SECRET` was confirmed present in Vercel production *before* the merge, and
+  `ANTHROPIC_API_KEY` is there too, so the refresh pass will actually re-verify Anthropic ids in
+  production. Squash divergence healed (`a0a692df`, ancestry and byte-identical tree both checked).
 
 ## Why
 
@@ -79,16 +86,11 @@ which is the live database — the steps below write only your own settings and 
 
 ## Open threads
 
-- **Promote soon — there is a live, if narrow, exposure.** `ai_credential_set` is already replaced
-  on DEV so it no longer clears other providers, while deployed production still reads keys through
-  the **1-arg `ai_credential_get`**, which selects all of a user's rows with no `ORDER BY` and no
-  `LIMIT`. A second key saved through the *deployed* UI makes production pick an arbitrary row.
-  Bounded (1 credential / 1 user) and self-healing. **The fix is to promote, not to patch** — and
-  the 1-arg overloads must stay until after promotion, then be dropped in a follow-up migration.
-- **Before promoting: `AI_PGNET_HMAC_SECRET` must exist in the Vercel production env.** The
-  `ai-models-refresh` cron is already scheduled on DEV and fires daily at 03:10 UTC against a route
-  that does not exist in deployed production. It 404s today; after promotion it **503s if the
-  secret is absent and the catalog silently freezes with no error surface**.
+- **CLOSED by the promotion:** the 1-arg `ai_credential_get` exposure (production now runs the
+  per-provider reader, so a second key is safe to add) and the missing catalog-cron route.
+- **Two post-promotion migrations are now unblocked** and can be batched: drop the unused 1-arg
+  `ai_credential_get` / `org_ai_secret_get` overloads — deployed production no longer calls them —
+  and add `CHECK (>= 0)` on the four `ai_models` price columns.
 - **Only Anthropic re-verifies after a refresh.** For the other four providers, "new models without
   a deploy" is false until a user re-saves their key. Largest functional gap; belongs in Spec 2.
 - **Six legacy arg-blind test fakes remain** outside this branch's files (see gotcha 89).
@@ -103,7 +105,8 @@ which is the live database — the steps below write only your own settings and 
 
 ## Next session entry point
 
-Promote `develop → main` (`/promote`) — it carries this branch plus the test-account-hygiene merge,
-and closes the credential-getter exposure above. Set `AI_PGNET_HMAC_SECRET` in the Vercel production
-env first. Then Spec 2 (agent capability & knowledge), which should absorb per-provider
-re-verification and the `pickModel` capability-constraint question.
+Already promoted (PR #95). Walk the "How to test" guide above against production — step 5 (a
+*second* provider key) is the one path no automated test could prove. Then Spec 2 (agent capability
+& knowledge), which should absorb per-provider re-verification and the `pickModel`
+capability-constraint question; the dashboard-widget service-client issue is still the open item
+that may be affecting users today.

@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-11 15:01",
+  "updated": "2026-08-11 16:00",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "4b6a718e",
-        "tone": "warn",
-        "note": "Two merges undeployed: the AI provider & model layer (37 commits, +11483/-1542) and the earlier test-account-hygiene work. Promotion is not optional chrome this time — it closes a live credential-getter exposure. Set AI_PGNET_HMAC_SECRET in Vercel production first."
+        "value": "a0a692df",
+        "tone": "ok",
+        "note": "Equals main. Squash divergence healed — origin/main verified an ancestor of origin/develop, heal tree byte-identical. Nothing undeployed."
       },
       {
         "name": "main",
-        "value": "896507ad",
+        "value": "1ebc8a44",
         "tone": "ok",
-        "note": "PR #93 merged 2026-08-09 — Report Builder v2: multi-board roll-ups, portfolio-following reports, org templates, new /reports section. 9 commits."
+        "note": "PR #95 merged 2026-08-11 — the AI provider & model layer (Spec 1 of 3): one key per provider, org default-model picker, per-agent pins, DB-driven registry + daily catalog refresh. 47 commits."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel state=success on 896507ad; www.monolith.works 200, /reports 307 (route exists behind auth), /updates serving the three new report entries."
+        "note": "Vercel state=success on 1ebc8a44. Verified: site 200, /settings/ai 307, /updates serving all three new AI entries, and /api/ai/models/refresh returning 401 not 404 — the catalog cron finally has a live HMAC-gated target."
       }
     ],
     "gates": [
@@ -181,12 +181,12 @@
   },
   "next": [
     {
-      "title": "Promote develop → main",
+      "title": "Walk the provider-layer test guide in production",
       "tags": [
         "critical",
-        "one session"
+        "half a session"
       ],
-      "why": "This one closes a live exposure, not just chrome. ai_credential_set is already replaced on DEV so it no longer clears a user's other providers, while deployed production still reads keys through the 1-arg ai_credential_get, which selects all of a user's rows with no ORDER BY and no LIMIT — so a second key saved through the deployed UI makes production pick an arbitrary row. Bounded to 1 credential / 1 user and self-healing. The fix is to promote, not to patch. Set AI_PGNET_HMAC_SECRET in the Vercel production env first, or the already-scheduled catalog cron 503s after promotion and the catalog silently freezes."
+      "why": "Eleven numbered steps in the session note. Step 5 — saving a SECOND provider key and confirming both rows persist — is the one path no automated test could prove, and it was impossible before this promotion. Expect google/mistral/kimi pickers to be empty until a key exists for each; that is configuration state, not a fault."
     },
     {
       "title": "Verify the dashboard widgets in the running app",
@@ -222,16 +222,6 @@
     }
   ],
   "risks": [
-    {
-      "sev": "red",
-      "title": "A second AI key in production picks an arbitrary provider",
-      "text": "The deployed 1-arg ai_credential_get returns all of a user's rows unordered and unlimited, while the DEV migration already changed the writer. Do not add a second provider key until develop is promoted. Bounded: 1 credential, 1 user."
-    },
-    {
-      "sev": "amber",
-      "title": "The catalog cron freezes silently if a secret is missing",
-      "text": "ai-models-refresh is scheduled on DEV and fires daily at 03:10 UTC against /api/ai/models/refresh, which does not exist in deployed production. It 404s today; after promotion it 503s unless AI_PGNET_HMAC_SECRET is set — with no error surface."
-    },
     {
       "sev": "open",
       "title": "Only Anthropic re-verifies its model ids",
@@ -287,12 +277,13 @@
   "session": {
     "id": "2026-08-11-1501-provider-model-layer-spec-1",
     "when": "2026-08-11 15:01",
-    "title": "Provider & model layer — Spec 1 of 3, merged",
+    "title": "Provider & model layer — Spec 1 of 3, built and promoted",
     "bullets": [
-      "13 tasks, 37 commits, 140 files, +11483/-1542. Two new tables: ai_providers (registry) and ai_models (catalog, refreshed daily from the public Vercel AI Gateway feed). One key per provider, agents pinnable to any reachable model, new models with no deploy.",
+      "13 tasks, 37 commits, +11483/-1542, merged and then promoted the same session as PR #95 (47 commits). Two new tables: ai_providers and ai_models, refreshed daily from the public Vercel AI Gateway feed. One key per provider, agents pinnable to any reachable model, new models with no deploy.",
       "The Gateway's id namespace is not the providers'. It publishes claude-haiku-4.5 where Anthropic wants claude-haiku-4-5, and only two ids happened to match — found when a refresh retired the model item_assist routes to. Each provider now judges its own ids; unmatched rows are quarantined.",
       "Two owner billing decisions: a null catalog price chains to the fallback rather than billing $0, and FALLBACK_RATES became a per-component minimum so Sonnet 5's introductory price (expiring 2026-08-31) cannot silently displace the standard rate it is deliberately billed at.",
-      "Five tests that could not fail shipped in one plan — an arg-blind query fake twice, an assertion satisfied by the bug, a scan a comment could satisfy, and a security test asserting on input never supplied. None was caught by the suite; all five by review."
+      "Five tests that could not fail shipped in one plan — an arg-blind query fake twice, an assertion satisfied by the bug, a scan a comment could satisfy, and a security test asserting on input never supplied. None was caught by the suite; all five by review.",
+      "Promotion verified rather than assumed: /api/ai/models/refresh now returns 401 instead of 404, which is the proof the daily catalog cron finally has a live HMAC-gated target."
     ]
   }
 }
