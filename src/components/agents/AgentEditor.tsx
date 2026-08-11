@@ -18,6 +18,7 @@ import {
   type ModelOption,
   type ModelValue,
 } from "@/components/settings/ModelPicker";
+import { TOOL_LOOP_PROVIDER } from "@/lib/ai/tool-capability";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -100,6 +101,12 @@ export function AgentEditor({
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  // Never an index into a fixed map — the registry is open, so a stored id can
+  // outlive the row that named it and the id beats a crash (same rule as
+  // OrgAiSettingsForm).
+  const labelOfProvider = (id: string) =>
+    providers.find((p) => p.id === id)?.label ?? id;
 
   function save() {
     setServerError(null);
@@ -293,6 +300,22 @@ export function AgentEditor({
               ? "This agent always runs on this model — the organization's default doesn't apply to it."
               : "This agent runs on the organization's default model. Pick one to keep it on a specific model instead."}
           </p>
+          {/* The pin OVERRIDES the org provider, so it is the one setting that
+              can put an agent on a provider the briefing loop cannot run on —
+              and nothing about the picker says so. Without this the owner
+              saves happily and only finds out from a stream of "skipped" runs
+              in the history below. Stated at the moment of the choice, in the
+              same inline-message vocabulary the field errors use, rather than
+              blocking the save: the capability is provider-wide today and
+              generalises in spec 2, so the pin itself stays legal. */}
+          {model && model.provider !== TOOL_LOOP_PROVIDER ? (
+            <p role="status" className="text-destructive text-xs">
+              Personal agents currently run on{" "}
+              {labelOfProvider(TOOL_LOOP_PROVIDER)} only. Pinned to{" "}
+              {labelOfProvider(model.provider)}, every run of this agent is
+              skipped rather than billed to the wrong provider.
+            </p>
+          ) : null}
           {fieldErrors.provider ? (
             <p className="text-destructive text-xs">{fieldErrors.provider}</p>
           ) : null}

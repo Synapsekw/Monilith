@@ -584,6 +584,11 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
     expect(runUpdates[0]!.patch.error).toMatch(/Anthropic/);
+    // The agent's own pin OVERRIDES the org provider, so it is reachable for
+    // an owner whose Settings → AI is correctly configured. A message naming
+    // only the org setting sends that owner to a page with nothing wrong on it.
+    expect(runUpdates[0]!.patch.error).toMatch(/model pin/i);
+    expect(runUpdates[0]!.patch.error).toMatch(/Settings → Agents/);
     // Never spends: no model call, no email.
     expect(summariseBriefing).not.toHaveBeenCalled();
     expect(sendBriefingEmail).not.toHaveBeenCalled();

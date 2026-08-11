@@ -204,6 +204,43 @@ describe("AgentEditor · model pin", () => {
     expect(screen.getByText(/organization's default/i)).toBeInTheDocument();
   });
 
+  /**
+   * The pin beating the org default is exactly what makes it dangerous: the
+   * briefing loop runs only on Anthropic (`assertToolLoopCapable`), so pinning
+   * an agent to any other provider makes EVERY run finalize as `skipped` —
+   * with the owner's Settings → AI page looking perfectly correct. The picker
+   * offers those models (33 verified OpenAI models today) and, without this
+   * line, says nothing at the moment of the choice.
+   */
+  it("warns that a non-Anthropic pin makes every run skip", async () => {
+    renderEditor({
+      initial: { ...initial, provider: "moonshotai", modelId: "kimi-k2" },
+    });
+    const warning = screen.getByRole("status");
+    expect(warning).toHaveTextContent(/every run of this agent is skipped/i);
+    // Named from the provider ROW, never a hardcoded map — the registry is open.
+    expect(warning).toHaveTextContent(/Kimi \(Moonshot AI\)/);
+    expect(warning).toHaveTextContent(/Anthropic \(Claude\)/);
+  });
+
+  it("says nothing of the sort for an Anthropic pin", () => {
+    renderEditor({
+      initial: {
+        ...initial,
+        provider: "anthropic",
+        modelId: "claude-haiku-4.5",
+      },
+    });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("says nothing of the sort for an unpinned agent", () => {
+    // Unpinned follows the org default, which the org's own settings page owns
+    // — warning here would flag a choice this owner has not made.
+    renderEditor();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("keeps saving the rest of the form working", async () => {
     const { onSaved } = renderEditor();
     await userEvent.clear(screen.getByLabelText(/name/i));

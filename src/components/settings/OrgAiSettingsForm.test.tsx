@@ -1,5 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
 import type { ModelOption } from "@/components/settings/ModelPicker";
@@ -359,4 +365,64 @@ describe("OrgAiSettingsForm — default model", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
+
+  /**
+   * The default writes `default_provider`, and gateway.ts uses that as the
+   * routing fallback for EVERY `per_user` call. So this control does not only
+   * pick a model — it decides which provider key each member has to have on
+   * file, and a member without that one gets `PersonalAiKeyMissingError`
+   * instead of a cheaper model. The behaviour is defensible; being silent
+   * about it is not.
+   */
+  it("says that choosing a default also chooses the provider members need a key for", () => {
+    renderForm();
+    expect(screen.getByText(/also chooses its provider/i)).toBeInTheDocument();
+    expect(screen.getByText(/needs a key for that provider/i)).toBeVisible();
+  });
+
+  // The picker's trigger is a combobox whose accessible name is its VALUE, so
+  // a `<label htmlFor>` would REPLACE that value in the announcement. The group
+  // label is the only thing that names the field — and AgentEditor already
+  // renders the identical picker this way.
+  it("names the field through a labelled group, not the trigger", () => {
+    renderForm();
+    const group = screen.getByRole("group", { name: /default model/i });
+    expect(within(group).getByRole("combobox")).toBeInTheDocument();
+  });
+
+  /**
+   * `disabled` on the trigger mid-save takes the focused element out of the tab
+   * order and the browser drops focus to `<body>` — on THIS consumer of the
+   * shared picker and not on AgentEditor's, which never disables it. The busy
+   * state is announced instead, and the double-submit guard lives in
+   * `chooseDefaultModel`.
+   */
+  it("stays focusable while the save is in flight, announcing busy instead", async () => {
+    let release: (v: { ok: true; data: unknown }) => void = () => {};
+    setOrgDefaultModel.mockImplementation(
+      () =>
+        new Promise<{ ok: true; data: unknown }>((resolve) => {
+          release = resolve;
+        }),
+    );
+    renderForm();
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.click(
+      await screen.findByRole("option", { name: /mistral small/i }),
+    );
+
+    const trigger = screen.getByRole("combobox");
+    expect(trigger).not.toBeDisabled();
+    expect(document.body).not.toHaveFocus();
+    expect(
+      screen.getByRole("group", { name: /default model/i }),
+    ).toHaveAttribute("aria-busy", "true");
+
+    release({ ok: true, data: {} });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("group", { name: /default model/i }),
+      ).toHaveAttribute("aria-busy", "false"),
+    );
+  }, 30_000);
 });

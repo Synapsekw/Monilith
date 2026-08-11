@@ -165,6 +165,11 @@ export function OrgAiSettingsForm({
   // feature's tier. Optimistic in both directions, reverting to the last
   // server-acknowledged value, like the mode radios above.
   function chooseDefaultModel(next: ModelValue | null) {
+    // The guard the picker's `disabled` used to provide, moved here: a second
+    // choice while the first is still in flight would race two writes and could
+    // revert to a "previous" value that was itself never acknowledged. Matches
+    // `chooseMode` above.
+    if (defaultPending) return;
     const previous = defaultModel;
     setDefaultError(null);
     setDefaultModel(next); // optimistic
@@ -352,17 +357,48 @@ export function OrgAiSettingsForm({
         )}
       </div>
 
-      <div className="border-border space-y-3 border-t pt-4">
+      {/* `role="group"` + `aria-labelledby`, not a `<label htmlFor>`: the
+          picker's trigger is a combobox whose accessible name is its current
+          VALUE, so a label pointing at it would REPLACE the value a screen
+          reader announces instead of naming the field. Same treatment as the
+          per-agent pin in AgentEditor, which renders the same picker. */}
+      <div
+        className="border-border space-y-3 border-t pt-4"
+        role="group"
+        aria-labelledby="org-default-model-label"
+        // Announces the in-flight save without taking the control away. See
+        // the picker below for why `disabled` is not used here.
+        aria-busy={defaultPending}
+      >
         <div className="space-y-0.5">
-          <p className="text-sm font-medium">Default model</p>
+          <p id="org-default-model-label" className="text-sm font-medium">
+            Default model
+          </p>
           <p className="text-muted-foreground text-xs">
             Every AI feature runs on this model when its provider is the one
             serving the request — including features that would otherwise pick a
             cheaper or stronger model for the job. Agents with their own model
             keep it.
           </p>
+          {/* The non-obvious half of this control, and the reason it needs
+              saying: the default writes `default_provider`, which gateway.ts
+              uses as the routing fallback for EVERY per-user call. So choosing
+              a model here also decides which provider key each member has to
+              have on file — and a member without that one gets no AI at all
+              rather than a cheaper model. */}
+          <p className="text-muted-foreground text-xs">
+            Choosing a default also chooses its provider: on members&rsquo; own
+            keys, everyone needs a key for that provider to use AI at all.
+          </p>
         </div>
 
+        {/* Deliberately NOT `disabled={defaultPending}`. Disabling the trigger
+            mid-save removes the focused element from the tab order, and the
+            browser drops focus to `<body>` — a keyboard or screen-reader user
+            loses their place on this surface and not on the identical picker in
+            AgentEditor, which never disables it. The save is already guarded
+            inside `chooseDefaultModel`, so the busy state can be announced
+            (`aria-busy` on the group above) instead of enforced by removal. */}
         <ModelPicker
           options={modelOptions}
           emptyProviders={emptyProviders}
@@ -370,7 +406,6 @@ export function OrgAiSettingsForm({
           onChange={chooseDefaultModel}
           allowInherit
           inheritLabel="No default — each feature picks its own tier"
-          disabled={defaultPending}
         />
 
         {inertBecause && (

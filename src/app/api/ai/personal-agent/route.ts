@@ -322,9 +322,17 @@ export async function POST(req: Request): Promise<Response> {
       if (e instanceof ProviderNotCapableError) {
         await safeFinalize(svc, key, {
           status: "skipped",
+          // Two settings can put this agent on a non-Anthropic provider, and
+          // naming only one of them sends the owner to the wrong page. The
+          // agent's OWN model pin wins over the org default (see the
+          // `provider: agent.provider` argument above), so an agent pinned to,
+          // say, a GPT model skips every run while "Settings → AI" looks
+          // perfectly fine. Both are named, pin first, because the pin is the
+          // one that overrides.
           error:
-            "Personal agents currently require an Anthropic key. The owner's " +
-            "configured AI provider (Settings → AI) is not Anthropic, so " +
+            "Personal agents currently require Anthropic. This agent resolved " +
+            "to another provider — either its own model pin (Settings → " +
+            "Agents) or the organization's AI provider (Settings → AI) — so " +
             "this run was skipped rather than billed to the wrong provider.",
         });
         return NextResponse.json({
