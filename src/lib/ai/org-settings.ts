@@ -11,6 +11,14 @@ export type OrgAiSettings = {
   monthlyCreditLimit: number;
   byoProvider: AiProvider | null;
   byoKeyLast4: string | null;
+  /**
+   * The org's default provider + model, both null until an admin picks one.
+   * They are the middle rung of `resolveModel`'s ladder: a pinned model wins,
+   * then this, then the feature's tier. `defaultModelId` is a CATALOG KEY
+   * (`ai_models.model_id`), meaningful only alongside `defaultProvider`.
+   */
+  defaultProvider: string | null;
+  defaultModelId: string | null;
   maxAgentsPerUser: number;
   maxAgentRunsPerUserPerDay: number;
 };
@@ -32,6 +40,8 @@ export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = {
   monthlyCreditLimit: 0,
   byoProvider: null,
   byoKeyLast4: null,
+  defaultProvider: null,
+  defaultModelId: null,
   maxAgentsPerUser: 3,
   maxAgentRunsPerUserPerDay: 3,
 };
@@ -43,7 +53,7 @@ export async function readOrgAiSettings(
   const { data, error } = await client
     .from("org_ai_settings")
     .select(
-      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, max_agents_per_user, max_agent_runs_per_user_per_day",
+      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, default_provider, default_model_id, max_agents_per_user, max_agent_runs_per_user_per_day",
     )
     .eq("org_id", orgId)
     .maybeSingle();
@@ -55,6 +65,8 @@ export async function readOrgAiSettings(
     monthlyCreditLimit: data.monthly_credit_limit,
     byoProvider: (data.byo_provider as AiProvider | null) ?? null,
     byoKeyLast4: data.byo_key_last4,
+    defaultProvider: data.default_provider,
+    defaultModelId: data.default_model_id,
     maxAgentsPerUser: data.max_agents_per_user,
     maxAgentRunsPerUserPerDay: data.max_agent_runs_per_user_per_day,
   };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyRateFloor,
   computeCostUsd,
   costToCredits,
   ratesForModel,
@@ -98,6 +99,72 @@ describe("ratesForModel", () => {
     expect(
       computeCostUsd(rates, { inputTokens: 500_000, outputTokens: 999 }),
     ).toBeCloseTo(0.01, 9);
+  });
+});
+
+describe("applyRateFloor", () => {
+  it("uses the floor verbatim when the catalog published no usable price", () => {
+    expect(applyRateFloor("claude-sonnet-5", null)).toEqual(SONNET);
+  });
+
+  it("bills nothing only when the model is in neither source", () => {
+    expect(applyRateFloor("kimi-k2", null)).toBeNull();
+  });
+
+  it("floors each component independently", () => {
+    // Input is below the floor and is raised; output is above it and is kept.
+    expect(
+      applyRateFloor("claude-sonnet-5", {
+        input: 2,
+        output: 20,
+        cacheRead: null,
+        cacheWrite: null,
+      }),
+    ).toEqual({ input: 3, output: 20, cacheRead: null, cacheWrite: null });
+  });
+
+  it("pins sonnet 5 to its STANDARD rate against the introductory price", () => {
+    // Anthropic's $2/$10 promo expires 2026-08-31. Billing it would cliff every
+    // user's costs the day it ends, so the floor holds $3/$15 regardless of
+    // what the Gateway feed publishes. Do not relax this without a decision.
+    const feed: ModelRates = {
+      input: 2,
+      output: 10,
+      cacheRead: null,
+      cacheWrite: null,
+    };
+    expect(applyRateFloor("claude-sonnet-5", feed)).toEqual(SONNET);
+  });
+
+  it("treats a null cache rate as absent, not as zero", () => {
+    // Zero would be a free cache read; absent means computeCostUsd's
+    // 0.1x/1.25x multipliers apply.
+    const floored = applyRateFloor("claude-haiku-4-5", {
+      input: 1,
+      output: 5,
+      cacheRead: 0.1,
+      cacheWrite: null,
+    });
+    expect(floored).toEqual({
+      input: 1,
+      output: 5,
+      cacheRead: 0.1,
+      cacheWrite: null,
+    });
+  });
+
+  it("passes an unknown model's catalog rates through untouched", () => {
+    const kimi: ModelRates = {
+      input: 0.6,
+      output: 2.5,
+      cacheRead: 0.15,
+      cacheWrite: null,
+    };
+    expect(applyRateFloor("kimi-k2", kimi)).toEqual(kimi);
+  });
+
+  it("does not treat Object.prototype names as floored models", () => {
+    expect(applyRateFloor("constructor", null)).toBeNull();
   });
 });
 

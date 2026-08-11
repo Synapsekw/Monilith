@@ -25,9 +25,25 @@ export type ModelRates = {
 };
 
 /**
- * The seeded price floor, formerly MODEL_PRICES_PER_MTOK and formerly the sole
- * source of truth. The `ai_models` catalog is authoritative now; this survives
- * so a catalog read that finds nothing still bills a known model correctly.
+ * The seeded price FLOOR, formerly MODEL_PRICES_PER_MTOK and formerly the sole
+ * source of truth. The `ai_models` catalog is authoritative now, but this table
+ * still binds it in two ways — see {@link applyRateFloor}:
+ *
+ *   1. A catalog row with no usable price for a model listed here bills at
+ *      these rates, not $0.
+ *   2. For a model listed here, each component is billed at
+ *      `max(catalogRate, floorRate)`.
+ *
+ * Rule 2 is deliberately GENERAL rather than a special case keyed on one model
+ * id, which would rot the moment someone edits this table. Its origin is
+ * concrete: Anthropic's Sonnet 5 carries an introductory $2/$10 that expires
+ * 2026-08-31, and the repo has always billed the STANDARD $3/$15 so users do
+ * not hit a price cliff the day the promo ends. Once the Gateway feed became
+ * authoritative, a published promo rate would have silently reversed that
+ * decision. Generalising it means the same protection applies to every model
+ * listed here: a feed that under-reports a price cannot quietly cut what we
+ * charge, while a genuine price RISE is still honoured (the floor is a floor,
+ * not a cap). Lowering a price on purpose therefore means editing this table.
  */
 export const FALLBACK_RATES: Readonly<Record<string, ModelRates>> = {
   "claude-opus-4-8": {
@@ -36,6 +52,9 @@ export const FALLBACK_RATES: Readonly<Record<string, ModelRates>> = {
     cacheRead: null,
     cacheWrite: null,
   },
+  // $3/$15 is the STANDARD rate. Anthropic's introductory $2/$10 expires
+  // 2026-08-31; billing the promo rate would cliff every user's costs that
+  // day. Do not "correct" this to whatever the Gateway feed publishes.
   "claude-sonnet-5": {
     input: 3,
     output: 15,
@@ -75,6 +94,40 @@ export function ratesForModel(model: string): ModelRates | null {
   // which would sail past computeCostUsd's `if (!rates)` guard and produce
   // NaN cost/credits instead of the null this function promises.
   return Object.hasOwn(FALLBACK_RATES, model) ? FALLBACK_RATES[model] : null;
+}
+
+/** `null` means "absent", so it loses to any number rather than to zero. */
+function higher(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
+}
+
+/**
+ * Bind catalog rates to {@link FALLBACK_RATES} — the two rules documented on
+ * that table, in one place so a caller cannot implement only half of them.
+ *
+ * `catalog` is null when the row published no usable price at all, in which
+ * case the floor is used verbatim. A model in neither the catalog nor the floor
+ * yields null, which `computeCostUsd` bills as $0 — the case the
+ * `needs_pricing` quarantine exists to prevent.
+ */
+export function applyRateFloor(
+  model: string,
+  catalog: ModelRates | null,
+): ModelRates | null {
+  // Object.hasOwn for the same reason ratesForModel uses it: a plain index
+  // lookup for "constructor"/"toString" returns an inherited Function.
+  const floor = ratesForModel(model);
+  if (!floor) return catalog;
+  if (!catalog) return floor;
+  return {
+    // Non-null on both sides, so `higher` cannot return null here.
+    input: higher(catalog.input, floor.input) as number,
+    output: higher(catalog.output, floor.output) as number,
+    cacheRead: higher(catalog.cacheRead, floor.cacheRead),
+    cacheWrite: higher(catalog.cacheWrite, floor.cacheWrite),
+  };
 }
 
 /**
