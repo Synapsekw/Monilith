@@ -7,45 +7,92 @@ export type AiUsageTokens = {
   cacheWriteTokens?: number;
 };
 
-/** Anthropic-wide cache multipliers, applied to each model's input rate. */
+/**
+ * Anthropic-wide cache multipliers. Retained as the FALLBACK for any model
+ * whose catalog row carries no explicit cache rate (Mistral publishes none).
+ * Falling back to the multiplier rather than to zero means a provider that
+ * returns cache tokens without publishing a cache price is still billed at
+ * today's rates instead of silently free.
+ */
 const CACHE_READ_MULTIPLIER = 0.1;
 const CACHE_WRITE_MULTIPLIER = 1.25;
 
-/**
- * USD per million tokens, by model id. Source of truth for metering.
- * Maintain alongside the provider catalog when models change.
- *
- * Sonnet 5 is listed at its STANDARD $3/$15, not the introductory $2/$10 that
- * expires 2026-08-31 — under-stating our own cost would over-charge customer
- * credits and create a cliff when the intro rate ends.
- */
-const MODEL_PRICES_PER_MTOK: Readonly<
-  Record<string, Readonly<{ input: number; output: number }>>
-> = {
-  "claude-opus-4-8": { input: 5, output: 25 },
-  "claude-sonnet-5": { input: 3, output: 15 },
-  "claude-haiku-4-5": { input: 1, output: 5 },
-  "gpt-4o": { input: 2.5, output: 10 },
-  "gemini-2.0-flash": { input: 0.1, output: 0.4 },
-  // Fixed platform embedding model (E5 · F15). Input-only: embeddings emit no
-  // completion tokens, so output is 0 and computeCostUsd is input-only arithmetic.
-  "text-embedding-3-small": { input: 0.02, output: 0 },
+export type ModelRates = {
+  input: number;
+  output: number;
+  cacheRead: number | null;
+  cacheWrite: number | null;
 };
 
-/** Every model id the model map may emit must be priced here. */
-export const PRICED_MODELS = Object.keys(MODEL_PRICES_PER_MTOK);
+/**
+ * The seeded price floor, formerly MODEL_PRICES_PER_MTOK and formerly the sole
+ * source of truth. The `ai_models` catalog is authoritative now; this survives
+ * so a catalog read that finds nothing still bills a known model correctly.
+ */
+export const FALLBACK_RATES: Readonly<Record<string, ModelRates>> = {
+  "claude-opus-4-8": {
+    input: 5,
+    output: 25,
+    cacheRead: null,
+    cacheWrite: null,
+  },
+  "claude-sonnet-5": {
+    input: 3,
+    output: 15,
+    cacheRead: null,
+    cacheWrite: null,
+  },
+  "claude-haiku-4-5": {
+    input: 1,
+    output: 5,
+    cacheRead: null,
+    cacheWrite: null,
+  },
+  "gpt-4o": { input: 2.5, output: 10, cacheRead: null, cacheWrite: null },
+  "gemini-2.0-flash": {
+    input: 0.1,
+    output: 0.4,
+    cacheRead: null,
+    cacheWrite: null,
+  },
+  // Fixed platform embedding model (E5 · F15). Input-only.
+  "text-embedding-3-small": {
+    input: 0.02,
+    output: 0,
+    cacheRead: null,
+    cacheWrite: null,
+  },
+};
 
-/** Cost in USD for one call. Unknown models cost 0 (tokens are still logged). */
-export function computeCostUsd(model: string, usage: AiUsageTokens): number {
-  const price = MODEL_PRICES_PER_MTOK[model];
-  if (!price) return 0;
+export const PRICED_MODELS = Object.keys(FALLBACK_RATES);
+
+export function ratesForModel(model: string): ModelRates | null {
+  return FALLBACK_RATES[model] ?? null;
+}
+
+/**
+ * Cost in USD for one call, from rates supplied by the caller (which reads the
+ * catalog). Deliberately PURE and SYNCHRONOUS: making it async to read the
+ * catalog itself would ripple into every metering call site.
+ *
+ * Null rates cost 0 — tokens are still logged. This is now only reachable for
+ * a model missing from BOTH the catalog and the fallback floor, which the
+ * needs_pricing quarantine is designed to prevent.
+ */
+export function computeCostUsd(
+  rates: ModelRates | null,
+  usage: AiUsageTokens,
+): number {
+  if (!rates) return 0;
   const cacheRead = usage.cacheReadTokens ?? 0;
   const cacheWrite = usage.cacheWriteTokens ?? 0;
+  const readRate = rates.cacheRead ?? rates.input * CACHE_READ_MULTIPLIER;
+  const writeRate = rates.cacheWrite ?? rates.input * CACHE_WRITE_MULTIPLIER;
   return (
-    (usage.inputTokens * price.input +
-      usage.outputTokens * price.output +
-      cacheRead * price.input * CACHE_READ_MULTIPLIER +
-      cacheWrite * price.input * CACHE_WRITE_MULTIPLIER) /
+    (usage.inputTokens * rates.input +
+      usage.outputTokens * rates.output +
+      cacheRead * readRate +
+      cacheWrite * writeRate) /
     1_000_000
   );
 }

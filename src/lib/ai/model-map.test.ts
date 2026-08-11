@@ -4,7 +4,7 @@ import {
   DEFAULT_MODEL_CHOICE,
   modelFor,
 } from "@/lib/ai/model-map";
-import { PRICED_MODELS, computeCostUsd } from "@/lib/ai/pricing";
+import { PRICED_MODELS, computeCostUsd, ratesForModel } from "@/lib/ai/pricing";
 
 describe("model-map", () => {
   it("routes conversational and agentic features to sonnet-5", () => {
@@ -49,7 +49,7 @@ describe("model-map", () => {
     for (const f of AI_FEATURES) {
       expect(PRICED_MODELS).toContain(modelFor(f).model);
       expect(
-        computeCostUsd(modelFor(f).model, {
+        computeCostUsd(ratesForModel(modelFor(f).model), {
           inputTokens: 1_000_000,
           outputTokens: 0,
         }),

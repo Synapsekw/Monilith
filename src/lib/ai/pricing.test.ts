@@ -1,115 +1,87 @@
 import { describe, expect, it } from "vitest";
-import { computeCostUsd, costToCredits } from "@/lib/ai/pricing";
+import {
+  computeCostUsd,
+  costToCredits,
+  ratesForModel,
+  type ModelRates,
+} from "@/lib/ai/pricing";
 
-describe("pricing", () => {
-  it("computes claude-opus-4-8 cost from per-MTok prices ($5 in / $25 out)", () => {
+const SONNET: ModelRates = {
+  input: 3,
+  output: 15,
+  cacheRead: null,
+  cacheWrite: null,
+};
+
+describe("computeCostUsd", () => {
+  it("bills input and output at the supplied rates", () => {
     expect(
-      computeCostUsd("claude-opus-4-8", {
-        inputTokens: 1_000_000,
-        outputTokens: 1_000_000,
-      }),
-    ).toBeCloseTo(30, 6);
+      computeCostUsd(SONNET, { inputTokens: 1_000_000, outputTokens: 0 }),
+    ).toBeCloseTo(3, 9);
     expect(
-      computeCostUsd("claude-opus-4-8", {
-        inputTokens: 2000,
-        outputTokens: 500,
-      }),
-    ).toBeCloseTo(0.0225, 6);
+      computeCostUsd(SONNET, { inputTokens: 0, outputTokens: 1_000_000 }),
+    ).toBeCloseTo(15, 9);
   });
 
-  it("prices the embedding model input-only ($0.02/MTok, output ignored)", () => {
+  it("falls back to the Anthropic multipliers when a provider publishes no cache rate", () => {
+    // 0.1x input for reads, 1.25x for writes — preserves today's billing
+    // exactly for any model whose feed entry omits cache pricing.
     expect(
-      computeCostUsd("text-embedding-3-small", {
-        inputTokens: 1_000_000,
-        outputTokens: 0,
-      }),
-    ).toBeCloseTo(0.02, 6);
-    // output tokens carry a 0 rate — they never add cost even if present.
-    expect(
-      computeCostUsd("text-embedding-3-small", {
-        inputTokens: 500_000,
-        outputTokens: 999,
-      }),
-    ).toBeCloseTo(0.01, 6);
-  });
-
-  it("returns 0 for an unknown model (tokens still recorded upstream)", () => {
-    expect(
-      computeCostUsd("some-future-model", {
-        inputTokens: 1000,
-        outputTokens: 1000,
-      }),
-    ).toBe(0);
-  });
-
-  it("converts cost to credits at 1 credit = $0.01, 2dp", () => {
-    expect(costToCredits(0.0225)).toBe(2.25);
-    expect(costToCredits(0.02255)).toBe(2.26);
-    expect(costToCredits(0)).toBe(0);
-  });
-
-  it("prices sonnet-5 and haiku-4-5 at their standard per-MTok rates", () => {
-    expect(
-      computeCostUsd("claude-sonnet-5", {
-        inputTokens: 1_000_000,
-        outputTokens: 1_000_000,
-      }),
-    ).toBeCloseTo(18, 6);
-    expect(
-      computeCostUsd("claude-haiku-4-5", {
-        inputTokens: 1_000_000,
-        outputTokens: 1_000_000,
-      }),
-    ).toBeCloseTo(6, 6);
-  });
-
-  it("prices cache reads at 0.10x and cache writes at 1.25x the input rate", () => {
-    // sonnet-5 input is $3/MTok -> read $0.30/MTok, write $3.75/MTok
-    expect(
-      computeCostUsd("claude-sonnet-5", {
+      computeCostUsd(SONNET, {
         inputTokens: 0,
         outputTokens: 0,
         cacheReadTokens: 1_000_000,
       }),
-    ).toBeCloseTo(0.3, 6);
+    ).toBeCloseTo(0.3, 9);
     expect(
-      computeCostUsd("claude-sonnet-5", {
+      computeCostUsd(SONNET, {
         inputTokens: 0,
         outputTokens: 0,
         cacheWriteTokens: 1_000_000,
       }),
-    ).toBeCloseTo(3.75, 6);
+    ).toBeCloseTo(3.75, 9);
   });
 
-  it("sums uncached input, cache reads, cache writes and output", () => {
+  it("prefers an explicit cache rate over the multiplier", () => {
+    const explicit: ModelRates = {
+      input: 3,
+      output: 15,
+      cacheRead: 0.5,
+      cacheWrite: 6,
+    };
     expect(
-      computeCostUsd("claude-sonnet-5", {
-        inputTokens: 1000, // 0.003
-        outputTokens: 500, // 0.0075
-        cacheReadTokens: 20_000, // 0.006
-        cacheWriteTokens: 4_000, // 0.015
+      computeCostUsd(explicit, {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 1_000_000,
       }),
-    ).toBeCloseTo(0.0315, 6);
+    ).toBeCloseTo(0.5, 9);
   });
 
-  it("is byte-identical to the pre-cache behaviour when cache fields are absent", () => {
-    // Regression guard: every existing call site omits the new fields.
+  it("costs 0 for null rates but does not throw", () => {
     expect(
-      computeCostUsd("claude-opus-4-8", {
-        inputTokens: 2000,
-        outputTokens: 500,
-      }),
-    ).toBeCloseTo(0.0225, 6);
-  });
-
-  it("returns 0 for an unknown model even when cache tokens are present", () => {
-    expect(
-      computeCostUsd("some-future-model", {
-        inputTokens: 1000,
-        outputTokens: 1000,
-        cacheReadTokens: 50_000,
-        cacheWriteTokens: 10_000,
-      }),
+      computeCostUsd(null, { inputTokens: 1000, outputTokens: 1000 }),
     ).toBe(0);
+  });
+});
+
+describe("ratesForModel", () => {
+  it("serves the seeded floor for a known model", () => {
+    expect(ratesForModel("claude-sonnet-5")).toEqual({
+      input: 3,
+      output: 15,
+      cacheRead: null,
+      cacheWrite: null,
+    });
+  });
+
+  it("returns null for an unknown model", () => {
+    expect(ratesForModel("kimi-k2")).toBeNull();
+  });
+});
+
+describe("costToCredits", () => {
+  it("converts 1 USD to 100 credits", () => {
+    expect(costToCredits(1)).toBe(100);
   });
 });

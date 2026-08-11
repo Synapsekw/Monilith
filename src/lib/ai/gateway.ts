@@ -19,6 +19,7 @@ import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
 import {
   computeCostUsd,
   costToCredits,
+  ratesForModel,
   type AiUsageTokens,
 } from "@/lib/ai/pricing";
 
@@ -118,7 +119,10 @@ export async function runAi<T>(
 ): Promise<T> {
   const resolved = await resolveAiAdapter(args.orgId, args.userId);
   const { result, usage, model } = await fn(resolved);
-  const costUsd = computeCostUsd(model, usage);
+  // INTERIM: rates come from the fallback floor, not the catalog — Task 7
+  // threads a catalog read through here (see docs/superpowers/plans/
+  // 2026-08-10-provider-model-layer.md Task 7).
+  const costUsd = computeCostUsd(ratesForModel(model), usage);
   const credits = costToCredits(costUsd);
   const svc = createServiceClient();
   const { error } = await svc.rpc("record_ai_usage", {
@@ -167,7 +171,8 @@ export async function runEmbedding<T>(
 ): Promise<T> {
   await requireAiEntitlement(args.orgId, args.feature);
   const { result, usage, model } = await fn();
-  const costUsd = computeCostUsd(model, usage);
+  // INTERIM: see the comment in runAi — Task 7 threads catalog rates here.
+  const costUsd = computeCostUsd(ratesForModel(model), usage);
   const credits = costToCredits(costUsd);
   const svc = createServiceClient();
   // typedRpc, not svc.rpc: p_user is `string` in the generated types but the

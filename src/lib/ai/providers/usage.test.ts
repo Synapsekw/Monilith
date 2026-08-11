@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { LanguageModelUsage } from "ai";
-import { computeCostUsd } from "@/lib/ai/pricing";
+import { computeCostUsd, ratesForModel } from "@/lib/ai/pricing";
 import { toAiUsage } from "@/lib/ai/providers/usage";
+
+const SONNET = ratesForModel("claude-sonnet-5");
 
 function usage(over: Partial<LanguageModelUsage>): LanguageModelUsage {
   return {
@@ -58,15 +60,15 @@ describe("toAiUsage", () => {
       }),
     );
     // 1_000 * $3 + 9_000 * $3 * 0.1 = $0.003 + $0.0027 per Mtok basis.
-    expect(computeCostUsd("claude-sonnet-5", metered)).toBeCloseTo(
+    expect(computeCostUsd(SONNET, metered)).toBeCloseTo(
       (1_000 * 3 + 9_000 * 3 * 0.1) / 1_000_000,
       12,
     );
     // Had we passed `inputTokens` straight through it would be 10_000 * $3
     // PLUS the same cache-read charge — 3.7x the true cost.
     const naive = { ...metered, inputTokens: 10_000 };
-    expect(computeCostUsd("claude-sonnet-5", naive)).toBeGreaterThan(
-      computeCostUsd("claude-sonnet-5", metered),
+    expect(computeCostUsd(SONNET, naive)).toBeGreaterThan(
+      computeCostUsd(SONNET, metered),
     );
   });
 
@@ -116,7 +118,7 @@ describe("toAiUsage", () => {
       }),
     );
     expect(res.inputTokens).toBe(0);
-    expect(computeCostUsd("claude-sonnet-5", res)).toBeGreaterThanOrEqual(0);
+    expect(computeCostUsd(SONNET, res)).toBeGreaterThanOrEqual(0);
   });
 
   it("never bills a negative cost for any provider-reported usage", () => {
@@ -134,7 +136,7 @@ describe("toAiUsage", () => {
         }),
       );
       expect(res.inputTokens).toBeGreaterThanOrEqual(0);
-      expect(computeCostUsd("claude-sonnet-5", res)).toBeGreaterThanOrEqual(0);
+      expect(computeCostUsd(SONNET, res)).toBeGreaterThanOrEqual(0);
     }
   });
 

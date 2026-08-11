@@ -8,8 +8,8 @@
  * `{ type: "enabled", budget_tokens }` thinking form — sending the Sonnet/Opus
  * request shape to Haiku returns a 400.
  *
- * NOTE: every model emitted here must exist in MODEL_PRICES_PER_MTOK.
- * computeCostUsd returns 0 for an unknown model, so an unpriced model bills
+ * NOTE: every model emitted here must exist in pricing.ts's FALLBACK_RATES.
+ * computeCostUsd returns 0 for null rates, so an unpriced model bills
  * nothing at all. model-map.test.ts enforces this.
  */
 
