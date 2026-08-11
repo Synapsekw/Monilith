@@ -26,15 +26,42 @@ export const boardScopeSchema = z.discriminatedUnion("mode", [
 export type BoardScope = z.infer<typeof boardScopeSchema>;
 
 /** Full settings payload the editor saves (validated at the boundary). */
-export const personalAgentSettingsSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  templateId: z.string().min(1).max(64),
-  instructions: z.string().trim().min(1).max(INSTRUCTIONS_MAX),
-  boardScope: boardScopeSchema,
-  cadence: z.enum(AGENT_CADENCES),
-  runAtLocalHour: z.number().int().min(0).max(23),
-  enabled: z.boolean(),
-});
+export const personalAgentSettingsSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    templateId: z.string().min(1).max(64),
+    instructions: z.string().trim().min(1).max(INSTRUCTIONS_MAX),
+    boardScope: boardScopeSchema,
+    cadence: z.enum(AGENT_CADENCES),
+    runAtLocalHour: z.number().int().min(0).max(23),
+    enabled: z.boolean(),
+    /**
+     * The per-agent model PIN, written to `user_agents.provider` /
+     * `user_agents.model_id`. Both null means "inherit the org default" — the
+     * backfill value of every agent that predates the pin, hence the defaults.
+     *
+     * `modelId` is the CATALOG key (`ai_models.model_id`), never the provider's
+     * wire id: `native_model_id` is resolved per run (`resolveModel`) and only
+     * an adapter ever sees it, so pinning one would be unreadable by the picker
+     * and by the usage ledger, which both speak the catalog key.
+     *
+     * Open strings rather than enums on purpose: the provider registry is
+     * DB-driven, so a fixed union here would reject a provider the deployment
+     * has legitimately enabled. `provider` carries an FK to `ai_providers`, and
+     * an unknown or retired `model_id` is a documented run-time substitution,
+     * not a save-time failure.
+     */
+    provider: z.string().trim().min(1).max(64).nullable().default(null),
+    modelId: z.string().trim().min(1).max(128).nullable().default(null),
+  })
+  // A model without a provider names nothing: `resolveModel` reads the catalog
+  // one provider at a time, so the pair is validated together. The reverse IS
+  // legal — a provider with no model resolves to that provider's cheapest
+  // model at the feature's tier.
+  .refine((v) => !(v.modelId !== null && v.provider === null), {
+    message: "Pick a provider for that model.",
+    path: ["provider"],
+  });
 export type PersonalAgentSettings = z.infer<typeof personalAgentSettingsSchema>;
 
 export type AgentTemplate = {
