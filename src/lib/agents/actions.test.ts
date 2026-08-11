@@ -81,6 +81,10 @@ const valid = {
   cadence: "daily" as const,
   runAtLocalHour: 7,
   enabled: true,
+  // Unpinned: null on both halves is "inherit the org default", the state
+  // every agent that predates the pin is in.
+  provider: null,
+  modelId: null,
 };
 
 beforeEach(() => {

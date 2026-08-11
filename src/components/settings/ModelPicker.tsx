@@ -36,6 +36,24 @@ export type ModelOption = {
 
 export type ModelValue = { provider: string; modelId: string };
 
+export type EmptyProvider = { provider: string; providerLabel: string };
+
+/**
+ * The `emptyProviders` argument, derived: every enabled provider that has no
+ * selectable model in `options`. Both surfaces that render this picker (the org
+ * default and the per-agent pin) need the same answer, so it is computed here
+ * rather than twice — and it takes a structural `{ id, label }` so a client
+ * component never has to reach into the server-only provider-row module.
+ */
+export function providersWithoutModels(
+  providers: { id: string; label: string }[],
+  options: ModelOption[],
+): EmptyProvider[] {
+  return providers
+    .filter((p) => !options.some((o) => o.provider === p.id))
+    .map((p) => ({ provider: p.id, providerLabel: p.label }));
+}
+
 /**
  * Shared provider+model picker, used by the org default (here) and, next, the
  * per-agent pin.
@@ -72,8 +90,9 @@ export function ModelPicker({
    * as their own (unselectable) group so the gap reads as a configuration state
    * — a provider's catalog is only verifiable with that provider's own key, so
    * "nothing here" means "no key yet", not "this provider is broken".
+   * Derive it with {@link providersWithoutModels}.
    */
-  emptyProviders?: { provider: string; providerLabel: string }[];
+  emptyProviders?: EmptyProvider[];
   allowInherit?: boolean;
   inheritLabel?: string;
   disabled?: boolean;

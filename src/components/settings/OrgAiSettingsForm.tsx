@@ -12,6 +12,7 @@ import { type AiMode } from "@/lib/ai/org-settings";
 import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
 import {
   ModelPicker,
+  providersWithoutModels,
   type ModelOption,
   type ModelValue,
 } from "@/components/settings/ModelPicker";
@@ -116,9 +117,7 @@ export function OrgAiSettingsForm({
   // Providers with no selectable model yet. Listed inside the picker rather than
   // hidden, because "no models" here means "nobody has saved a key for it" — a
   // provider's catalog ids are only verifiable with that provider's own key.
-  const emptyProviders = providers
-    .filter((p) => !modelOptions.some((o) => o.provider === p.id))
-    .map((p) => ({ provider: p.id, providerLabel: p.label }));
+  const emptyProviders = providersWithoutModels(providers, modelOptions);
 
   function chooseMode(next: AiMode) {
     if (next === mode || modePending) return;

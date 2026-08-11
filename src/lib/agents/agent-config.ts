@@ -54,12 +54,15 @@ export const personalAgentSettingsSchema = z
     provider: z.string().trim().min(1).max(64).nullable().default(null),
     modelId: z.string().trim().min(1).max(128).nullable().default(null),
   })
-  // A model without a provider names nothing: `resolveModel` reads the catalog
-  // one provider at a time, so the pair is validated together. The reverse IS
-  // legal — a provider with no model resolves to that provider's cheapest
-  // model at the feature's tier.
-  .refine((v) => !(v.modelId !== null && v.provider === null), {
-    message: "Pick a provider for that model.",
+  // Both halves or neither. A model without a provider names nothing —
+  // `resolveModel` reads the catalog one provider at a time. A provider
+  // without a model would be resolvable at run time, but the editor's picker
+  // can only express a concrete model, so allowing that half-state would mean
+  // the editor silently clears a pin it cannot display. The pair is therefore
+  // validated together, and the error is filed on `provider` because that is
+  // the half a picked model can be missing.
+  .refine((v) => (v.provider === null) === (v.modelId === null), {
+    message: "Pick a provider and a model together, or neither.",
     path: ["provider"],
   });
 export type PersonalAgentSettings = z.infer<typeof personalAgentSettingsSchema>;

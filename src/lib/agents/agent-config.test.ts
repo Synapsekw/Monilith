@@ -146,16 +146,17 @@ describe("personalAgentSettingsSchema", () => {
     }
   });
 
-  // A provider with no model IS resolvable: resolveModel falls back to that
-  // provider's cheapest model at the feature's tier. Pinning "run this agent
-  // on Kimi, whichever model" must therefore stay legal.
-  it("accepts a provider pinned without a model", () => {
+  // The other half-state. It WOULD resolve at run time (resolveModel falls back
+  // to that provider's cheapest model at the feature's tier), but the editor's
+  // picker can only express a concrete model — so allowing it would mean the
+  // editor silently clears a pin it is unable to show.
+  it("rejects a provider pinned without a model", () => {
     const r = personalAgentSettingsSchema.safeParse({
       ...base,
       provider: "moonshotai",
       modelId: null,
     });
-    expect(r.success).toBe(true);
+    expect(r.success).toBe(false);
   });
 
   it("rejects an empty-string provider rather than storing one", () => {

@@ -5,7 +5,7 @@ import { isOrgAdminCached } from "@/lib/org/guard";
 import { createClient } from "@/lib/supabase/server";
 import { listMyAiCredentials } from "@/lib/ai/credentials";
 import { listEnabledProviders } from "@/lib/ai/providers/provider-rows";
-import { listActiveModels } from "@/lib/ai/models/catalog-db";
+import { buildModelOptions } from "@/lib/ai/models/model-options";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingRow } from "@/components/settings/setting-row";
@@ -67,28 +67,13 @@ export default async function AiSettingsPage() {
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
 
   // Only an admin sees the org form, so only an admin pays for the catalog
-  // reads. One flat list, sorted providers-by-label (the order
-  // `listEnabledProviders` returns) and cheapest-first within a provider (the
-  // order `listActiveModels` returns) — the picker groups it without re-sorting.
+  // reads. `buildModelOptions` returns one flat list, sorted providers-by-label
+  // (the order `listEnabledProviders` returns) and cheapest-first within a
+  // provider (the order `listActiveModels` returns) — the picker groups it
+  // without re-sorting. Shared with Settings → Agents, which needs the same
+  // list for the per-agent pin.
   const modelOptions: ModelOption[] =
-    isAdmin && orgAi.ok
-      ? (
-          await Promise.all(
-            providers.map(async (p) =>
-              (await listActiveModels(supabase, p.id)).map((m) => ({
-                provider: p.id,
-                providerLabel: p.label,
-                // The CATALOG key. `native_model_id` is the wire id and is
-                // never read here — only an adapter may see it.
-                modelId: m.modelId,
-                label: m.label,
-                tier: m.tier,
-                supportsTools: m.supportsTools,
-              })),
-            ),
-          )
-        ).flat()
-      : [];
+    isAdmin && orgAi.ok ? await buildModelOptions(supabase, providers) : [];
 
   return (
     <>

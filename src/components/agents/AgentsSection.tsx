@@ -12,6 +12,7 @@ import type { AgentRunLike } from "@/lib/agents/run-status";
 import { AgentRoster, type RosterAgent } from "@/components/agents/AgentRoster";
 import { TemplateGallery } from "@/components/agents/TemplateGallery";
 import { AgentEditor, type AgentRecord } from "@/components/agents/AgentEditor";
+import type { ModelOption } from "@/components/settings/ModelPicker";
 
 type View = "roster" | "gallery" | "editor";
 
@@ -32,6 +33,8 @@ export function AgentsSection({
   agents: initial,
   lastRuns = {},
   maxAgents,
+  modelOptions,
+  providers,
 }: {
   agents: AgentRecord[];
   /** Most recent run per agent id, read once by the server component. Absent
@@ -43,6 +46,14 @@ export function AgentsSection({
    *  label read "of 20" (the column's check-constraint ceiling) while the real
    *  default is 3, so the page promised 17 agents it would refuse to create. */
   maxAgents: number;
+  /** Every selectable model, read once by the server component and threaded to
+   *  the editor. Loaded on FIRST PAINT rather than when the editor opens:
+   *  opening the editor is an in-page view switch and must cost no server round
+   *  trip (working agreement #5). */
+  modelOptions: ModelOption[];
+  /** The enabled provider registry, so the picker can name the providers that
+   *  have no models yet instead of hiding them. */
+  providers: { id: string; label: string }[];
 }) {
   const [agents, setAgents] = useState<AgentRecord[]>(initial);
   const [view, setView] = useState<View>("roster");
@@ -95,6 +106,10 @@ export function AgentsSection({
         cadence: template.cadence,
         runAtLocalHour: template.runAtLocalHour,
         enabled: true,
+        // A template seeds no pin: a new agent inherits the org default until
+        // its owner chooses otherwise.
+        provider: null,
+        modelId: null,
       },
     });
     setView("editor");
@@ -147,6 +162,8 @@ export function AgentsSection({
           editorContext.mode === "edit" ? editorContext.agentId : undefined
         }
         initial={editorContext.initial}
+        modelOptions={modelOptions}
+        providers={providers}
         onSaved={handleSaved}
         onCancel={handleEditorCancel}
         onDeleted={handleDeleted}
