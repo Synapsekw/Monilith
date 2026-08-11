@@ -20,11 +20,12 @@ export const SEEDED_PROVIDERS = [
  * @deprecated The `ai_providers` TABLE is authoritative for provider identity,
  * labels, key placeholders and key formats — read it via
  * `providers/provider-rows.ts` and pass a `ProviderRow` down from a server
- * component. This object is display-only seed data kept alive purely so the
- * two settings forms (`AiProviderForm`, `OrgAiSettingsForm`) and the
- * credential Server Actions keep compiling until Tasks 5/9/10 move them onto
- * provider rows. It covers only the three NATIVE providers and will be deleted
- * with those consumers — do not add a fourth entry here.
+ * component. This object is display-only seed data whose last consumers are the
+ * two settings FORMS (`AiProviderForm`, `OrgAiSettingsForm`), until Tasks 9/10
+ * move them onto provider rows. Both credential Server Actions are already off
+ * it — they read the row and validate against `ai_providers`. It covers only
+ * the three NATIVE providers and will be deleted with those forms — do not add
+ * a fourth entry here.
  *
  * `keyFormat` mirrors `ai_providers.key_format` (a regex source), so the swap
  * to the DB row is a one-line change at each call site.

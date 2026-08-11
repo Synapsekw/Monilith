@@ -5,12 +5,13 @@ import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
-import { getAdapterForProviderId } from "@/lib/ai/providers/registry";
+import { getAdapter } from "@/lib/ai/providers/registry";
+import { getProviderRow } from "@/lib/ai/providers/provider-rows";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
 import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
-import { PROVIDER_CATALOG, type AiProvider } from "@/lib/ai/providers/catalog";
+import type { AiProvider } from "@/lib/ai/providers/catalog";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { readOrgBillingStatus } from "@/lib/billing/status";
 import { entitlesAi } from "@/lib/billing/entitling";
@@ -127,8 +128,11 @@ export async function setAiMode(input: {
   return { ok: true, data: { mode } };
 }
 
+// The provider is validated against the ai_providers TABLE, not a hardcoded
+// enum — mirrors credentials-actions.ts. That three-member enum is why an org
+// could not put a Mistral or Kimi key on file at all.
 const keySchema = z.object({
-  provider: z.enum(["anthropic", "openai", "google"]),
+  provider: z.string().trim().min(1).max(64),
   key: z.string().trim().min(10).max(300),
 });
 
@@ -143,24 +147,28 @@ export async function setOrgByoKey(input: {
   const ctx = await requireOrgAdmin();
   if (!ctx) return fail(NOT_ADMIN);
 
-  const adapter = getAdapterForProviderId(provider);
-  const { label, keyFormat } = PROVIDER_CATALOG[provider];
+  const svc = createServiceClient();
+  const row = await getProviderRow(svc, provider);
+  if (!row || !row.enabled) return fail("Unknown provider.");
 
-  // See credentials-actions.ts: the shape check and the human label are
-  // per-PROVIDER metadata, which is why they no longer live on the adapter.
-  if (!new RegExp(keyFormat).test(key))
-    return fail(`That doesn't look like a ${label} key.`);
+  // See credentials-actions.ts: the shape check, the human label and the base
+  // url are per-PROVIDER metadata, which is why they live on the row and not on
+  // the (per-wire-format) adapter. Passing the row's base url is what lets an
+  // openai-compatible provider be verified against its OWN endpoint instead of
+  // OpenAI's.
+  if (!new RegExp(row.keyFormat).test(key))
+    return fail(`That doesn't look like a ${row.label} key.`);
 
+  const adapter = getAdapter(row.adapterKind);
   try {
-    await adapter.validateKey({ apiKey: key, baseUrl: null });
+    await adapter.validateKey({ apiKey: key, baseUrl: row.baseUrl });
   } catch (e) {
     if (e instanceof ProviderAuthError)
-      return fail(`That key was rejected by ${label}.`);
+      return fail(`That key was rejected by ${row.label}.`);
     return fail("Couldn't verify the key. Please try again.");
   }
 
   const hint = maskKey(key);
-  const svc = createServiceClient();
   const { error } = await svc.rpc("org_ai_secret_set", {
     p_org: ctx.orgId,
     p_provider: provider,

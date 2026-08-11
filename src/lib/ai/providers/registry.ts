@@ -1,8 +1,5 @@
 import "server-only";
-import {
-  ADAPTER_KINDS,
-  type AdapterKind,
-} from "@/lib/ai/providers/provider-rows";
+import type { AdapterKind } from "@/lib/ai/providers/provider-rows";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
 import { anthropicAdapter } from "@/lib/ai/providers/anthropic";
 import { openaiAdapter } from "@/lib/ai/providers/openai";
@@ -18,29 +15,14 @@ const ADAPTERS: Record<AdapterKind, ProviderAdapter> = {
   "openai-compatible": openaiCompatibleAdapter,
 };
 
+/**
+ * The ONLY adapter lookup. It takes an adapter KIND, which means every caller
+ * must hold an `ai_providers` row — there is deliberately no provider-id
+ * overload: the id-keyed helper that used to live here could only serve the
+ * three providers whose id happens to equal their wire format, and threw for
+ * Mistral and Kimi. Read the row (`provider-rows.ts`), pass `row.adapterKind`,
+ * and pass `row.baseUrl` to the adapter alongside the key.
+ */
 export function getAdapter(kind: AdapterKind): ProviderAdapter {
   return ADAPTERS[kind];
-}
-
-/**
- * INTERIM provider-id → adapter resolution, for the callers that still hold a
- * provider id and no `ai_providers` row.
- *
- * The right lookup is `getAdapter(providerRow.adapterKind)`; Task 8 threads the
- * row through the gateway. Until then the only providers those callers can
- * produce are the three NATIVE ones — the credential Server Actions still
- * validate against a three-member enum — and for exactly those three the
- * provider id happens to equal the adapter kind. Anything else throws rather
- * than guessing, because picking the wrong adapter would send a key to the
- * wrong wire format.
- */
-export function getAdapterForProviderId(providerId: string): ProviderAdapter {
-  const kind = ADAPTER_KINDS.find(
-    (k) => k === providerId && k !== "openai-compatible",
-  );
-  if (!kind)
-    throw new Error(
-      `No adapter for provider "${providerId}" without its ai_providers row`,
-    );
-  return getAdapter(kind);
 }

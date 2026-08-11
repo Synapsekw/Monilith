@@ -152,11 +152,12 @@ describe("every feature string reaching runAi is routed by the model map", () =>
     expect(AI_FEATURES.filter((f) => !used.has(f))).toEqual([]);
   });
 
-  // The direction that actually bit, in its current form. It used to be "the
-  // feature reaches runAi but nothing calls modelFor for it", so it silently
-  // landed on the default model. `modelFor` is gone — runAi itself resolves the
-  // model from the feature's tier — so the inert case moved: a callback that
-  // never READS the resolved model still gets metered against it while sending
+  // The direction that actually bit, in its current form. Until this branch, a
+  // per-feature map returned the model id, and a feature could reach runAi
+  // without ever looking that id up — it silently landed on the default. That
+  // map no longer exists: runAi resolves the model from the feature's tier and
+  // meters THAT row. So the inert case moved one step along — a callback that
+  // never READS the resolved model is still billed for it while sending
   // whatever id it hardcoded. Every callback must destructure `model`.
   it("has no inert call sites — every runAi callback reads the resolved model", () => {
     const offenders: string[] = [];

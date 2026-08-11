@@ -19,7 +19,7 @@ import { toAiUsage } from "@/lib/ai/providers/usage";
 const MAX_OUTPUT_TOKENS = 16000;
 
 /**
- * `ModelChoice.thinking` uses the RAW Anthropic wire shape (`budget_tokens`);
+ * `ThinkingConfig` uses the RAW Anthropic wire shape (`budget_tokens`);
  * `providerOptions.anthropic.thinking` uses the AI SDK's camelCase
  * (`budgetTokens`). The SDK's zod schema strips unknown keys, so handing it
  * `budget_tokens` would silently drop the budget and send `{ type: "enabled" }`

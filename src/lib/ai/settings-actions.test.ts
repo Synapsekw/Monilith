@@ -11,13 +11,42 @@ const svcMaybeSingle = vi.fn(
   }),
 );
 const svcUpsert = vi.fn(async () => ({ error: null }));
+
+// The provider registry, keyed by id — `ai_providers` is the constraint now,
+// so setOrgByoKey reads the row instead of a hardcoded three-member catalog.
+let providers: Record<string, Record<string, unknown>> = {};
+const providerFixture = (
+  id: string,
+  adapterKind: string,
+  baseUrl: string | null,
+  enabled = true,
+) => ({
+  id,
+  label: id === "anthropic" ? "Anthropic (Claude)" : id,
+  adapter_kind: adapterKind,
+  base_url: baseUrl,
+  key_placeholder: "sk-…",
+  key_format: id === "anthropic" ? "^sk-ant-" : "^sk-",
+  enabled,
+});
+
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
     rpc: svcRpc,
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: svcMaybeSingle }) }),
-      upsert: svcUpsert,
-    }),
+    from: (table: string) =>
+      table === "ai_providers"
+        ? {
+            select: () => ({
+              eq: (_c: string, id: string) => ({
+                maybeSingle: () =>
+                  Promise.resolve({ data: providers[id] ?? null, error: null }),
+              }),
+            }),
+          }
+        : {
+            select: () => ({ eq: () => ({ maybeSingle: svcMaybeSingle }) }),
+            upsert: svcUpsert,
+          },
   }),
 }));
 
@@ -63,11 +92,11 @@ const billing = (status: string, tier = "pulse", seats = 4) =>
   });
 
 // See credentials-actions.test.ts: key format + label are per-PROVIDER and no
-// longer live on the (per-wire-format) adapter.
+// longer live on the (per-wire-format) adapter — they come off the row.
 const validateKey = vi.fn();
 vi.mock("@/lib/ai/providers/registry", () => ({
-  getAdapterForProviderId: () => ({
-    kind: "anthropic",
+  getAdapter: (kind: string) => ({
+    kind,
     validateKey: (...a: unknown[]) => validateKey(...a),
   }),
 }));
@@ -75,7 +104,17 @@ vi.mock("@/lib/ai/providers/registry", () => ({
 const admin = (allowed: boolean) =>
   rlsRpc.mockResolvedValue({ data: allowed, error: null });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  providers = {
+    anthropic: providerFixture("anthropic", "anthropic", null),
+    mistral: providerFixture(
+      "mistral",
+      "openai-compatible",
+      "https://api.mistral.ai/v1",
+    ),
+  };
+});
 
 describe("org ai settings actions", () => {
   it("setOrgByoKey rejects non-admins", async () => {
@@ -113,6 +152,58 @@ describe("org ai settings actions", () => {
       }),
     );
     expect(res.ok).toBe(true);
+  });
+
+  it("setOrgByoKey accepts an openai-compatible provider and validates against ITS base url", async () => {
+    // The whole point of the registry: Mistral and Kimi are rows, not a code
+    // change. The three-member enum this replaced made them unreachable, and
+    // validating without the base url would ping OpenAI with a Mistral key.
+    admin(true);
+    validateKey.mockResolvedValue(undefined);
+    svcRpc.mockResolvedValue({ data: null, error: null });
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    const res = await setOrgByoKey({
+      provider: "mistral",
+      key: "sk-mistral-valid-key",
+    });
+    expect(validateKey).toHaveBeenCalledWith({
+      apiKey: "sk-mistral-valid-key",
+      baseUrl: "https://api.mistral.ai/v1",
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("setOrgByoKey refuses a provider that is not an enabled row", async () => {
+    admin(true);
+    providers.mistral = providerFixture(
+      "mistral",
+      "openai-compatible",
+      "https://api.mistral.ai/v1",
+      false,
+    );
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    expect(
+      await setOrgByoKey({ provider: "mistral", key: "sk-mistral-valid-key" }),
+    ).toEqual({ ok: false, error: "Unknown provider." });
+    expect(
+      await setOrgByoKey({ provider: "nope", key: "sk-whatever-key" }),
+    ).toEqual({ ok: false, error: "Unknown provider." });
+    expect(validateKey).not.toHaveBeenCalled();
+    expect(svcRpc).not.toHaveBeenCalled();
+  });
+
+  it("setOrgByoKey rejects a key whose shape does not match the row's regex", async () => {
+    admin(true);
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    const res = await setOrgByoKey({
+      provider: "anthropic",
+      key: "sk-not-an-anthropic-key",
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "That doesn't look like a Anthropic (Claude) key.",
+    });
+    expect(validateKey).not.toHaveBeenCalled();
   });
 
   it("setAiMode to org_byo without a stored key fails", async () => {
