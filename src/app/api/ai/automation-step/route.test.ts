@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 import { signBody } from "@/lib/ai/agentic/hmac";
 import { AiDisabledError } from "@/lib/ai/errors";
 
@@ -10,6 +11,7 @@ const OWNER = "00000000-0000-4000-8000-0000000000f4";
 
 // ── module mocks ────────────────────────────────────────────────────────────
 const rpcCalls: { fn: string; args: unknown }[] = [];
+const jobUpdates: Record<string, unknown>[] = [];
 let jobRow: Record<string, unknown> | null;
 
 vi.mock("@/lib/supabase/service", () => ({
@@ -22,7 +24,12 @@ vi.mock("@/lib/supabase/service", () => ({
               maybeSingle: async () => ({ data: jobRow, error: null }),
             }),
           }),
-          update: () => ({ eq: async () => ({ error: null }) }),
+          // Recorded: the job row is the only audit trail for a failed step,
+          // so a test asserting WHY a step failed has to read it.
+          update: (patch: Record<string, unknown>) => {
+            jobUpdates.push(patch);
+            return { eq: async () => ({ error: null }) };
+          },
         };
       }
       if (table === "automations") {
@@ -77,12 +84,28 @@ vi.mock("@/lib/ai/agentic/decide", () => ({
   decideAction: (...a: unknown[]) => decideAction(...(a as [])),
 }));
 
+// The provider runAi resolves for this call. Overridable per test: the tool
+// loops build `new Anthropic()` directly, so a non-Anthropic provider must be
+// refused at the boundary rather than POSTed to api.anthropic.com.
+let resolvedProvider = "anthropic";
+
 // runAi just runs the callback (metering is exercised in the gateway's own test).
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: async (
     _args: unknown,
-    fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
-  ) => (await fn({ apiKey: "k" })).result,
+    fn: (r: {
+      apiKey: string;
+      provider: string;
+      model: ReturnType<typeof fakeResolvedModel>;
+    }) => Promise<{ result: unknown }>,
+  ) =>
+    (
+      await fn({
+        apiKey: "k",
+        provider: resolvedProvider,
+        model: fakeResolvedModel(),
+      })
+    ).result,
 }));
 
 import { POST } from "./route";
@@ -110,6 +133,8 @@ const pendingJob = () => ({
 });
 
 beforeEach(() => {
+  resolvedProvider = "anthropic";
+  jobUpdates.length = 0;
   process.env.AI_PGNET_HMAC_SECRET = SECRET;
   process.env.SUPABASE_SERVICE_ROLE_KEY = "svc-role-key";
   rpcCalls.length = 0;
@@ -139,6 +164,26 @@ describe("POST /api/ai/automation-step", () => {
     const res = await POST(req(JSON.stringify({ job_id: "tampered" }), sig));
     expect(res.status).toBe(401);
     expect(decideAction).not.toHaveBeenCalled();
+  });
+
+  // ── the tool-loop capability boundary ─────────────────────────────────
+  // These loops build `new Anthropic({ apiKey })` directly and ignore baseUrl,
+  // so a non-Anthropic key must be refused HERE. Since per_user mode resolves
+  // `provider ?? org default ?? anthropic`, an org that sets a non-Anthropic
+  // default would otherwise POST that provider's key and model id to
+  // api.anthropic.com.
+  it("refuses a non-Anthropic provider before the loop spends the key", async () => {
+    resolvedProvider = "mistral";
+    const body = JSON.stringify({ job_id: JOB });
+    const res = await POST(req(body, signBody(body, SECRET)));
+    expect(res.status).toBe(500);
+    expect(decideAction).not.toHaveBeenCalled();
+    // Nothing applied, and the job records WHY.
+    expect(rpcCalls).toHaveLength(0);
+    expect(jobUpdates.at(-1)).toMatchObject({
+      status: "error",
+      error: "The configured AI provider can't run automation_ai_step.",
+    });
   });
 
   it("applies the chosen action ONLY via the confined RPC on a valid request", async () => {

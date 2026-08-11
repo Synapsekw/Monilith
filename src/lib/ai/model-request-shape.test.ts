@@ -52,16 +52,30 @@ const SOURCE_FILES = walk(SRC).map((f) => ({
  * found by brace matching. Good enough for these call sites — none of them
  * pass a string literal containing an unbalanced brace.
  */
-function objectLiteralAt(text: string, open: number): string {
+function balancedFrom(
+  text: string,
+  open: number,
+  opener: string,
+  closer: string,
+): string {
   let depth = 0;
   for (let i = open; i < text.length; i++) {
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}") {
+    if (text[i] === opener) depth++;
+    else if (text[i] === closer) {
       depth--;
       if (depth === 0) return text.slice(open, i + 1);
     }
   }
   return text.slice(open);
+}
+
+/** Drop line and block comments, so a mention in prose cannot satisfy a scan. */
+function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+}
+
+function objectLiteralAt(text: string, open: number): string {
+  return balancedFrom(text, open, "{", "}");
 }
 
 describe("every raw Anthropic message call states `thinking` explicitly", () => {
@@ -130,7 +144,7 @@ describe("every feature string reaching runAi is routed by the model map", () =>
     expect(callSites.length).toBeGreaterThanOrEqual(13);
   });
 
-  it("has a FEATURE_MODELS entry for each one", () => {
+  it("has a tier-map entry for each one", () => {
     const unrouted = callSites
       .filter((c) => !AI_FEATURES.includes(c.feature))
       .map((c) => `${c.feature} (${c.path})`);
@@ -143,14 +157,43 @@ describe("every feature string reaching runAi is routed by the model map", () =>
     expect(AI_FEATURES.filter((f) => !used.has(f))).toEqual([]);
   });
 
-  // The direction that actually bit: an entry can be METERED (its name reaches
-  // runAi) and still be INERT (nothing calls modelFor for it), so the feature
-  // never receives its ModelChoice — not its model, not its `thinking`. It
-  // lands on the default by coincidence, and remapping it tomorrow would change
-  // nothing about the request while mis-labelling the ledger row.
-  it("has no inert map entries — every routed feature calls modelFor", () => {
-    const all = SOURCE_FILES.map((f) => f.text).join("\n");
-    const inert = AI_FEATURES.filter((f) => !all.includes(`modelFor("${f}")`));
-    expect(inert).toEqual([]);
+  // The direction that actually bit, in its current form. Until this branch, a
+  // per-feature map returned the model id, and a feature could reach runAi
+  // without ever looking that id up — it silently landed on the default. That
+  // map no longer exists: runAi resolves the model from the feature's tier and
+  // meters THAT row. So the inert case moved one step along — a callback that
+  // never READS the resolved model is still billed for it while sending
+  // whatever id it hardcoded. Every callback must destructure `model`.
+  it("has no inert call sites — every runAi callback reads the resolved model", () => {
+    const offenders: string[] = [];
+    let scanned = 0;
+    for (const file of SOURCE_FILES) {
+      // `({` — the same anchor the scan above uses, so prose mentioning runAi
+      // in a doc comment is not mistaken for a call site.
+      for (const m of file.text.matchAll(/\brunAi\s*(?:<[^>]*>)?\s*\(\s*\{/g)) {
+        scanned++;
+        const openParen = m.index! + m[0].lastIndexOf("(");
+        const call = balancedFrom(file.text, openParen, "(", ")");
+        const argsOpen = call.indexOf("{");
+        const args = objectLiteralAt(call, argsOpen);
+        const callback = call.slice(argsOpen + args.length);
+        // The DESTRUCTURING PATTERN, not the callback body: `model` appearing
+        // anywhere in the body is satisfied by a comment that merely mentions
+        // it (app/api/ask/route.ts has exactly such a comment), so the looser
+        // check could not see a call site that stopped reading the model.
+        // Comments are stripped as well, so `({ apiKey /* model */ })` is not
+        // a pass either.
+        const patternOpen = callback.indexOf("{");
+        const pattern =
+          patternOpen === -1
+            ? ""
+            : stripComments(objectLiteralAt(callback, patternOpen));
+        if (!/\bmodel\b/.test(pattern))
+          offenders.push(`${file.path} (${args.match(/feature:\s*\S+/)?.[0]})`);
+      }
+    }
+    expect(offenders).toEqual([]);
+    // Guards the scan itself: a regex that matched nothing would pass silently.
+    expect(scanned).toBeGreaterThanOrEqual(13);
   });
 });

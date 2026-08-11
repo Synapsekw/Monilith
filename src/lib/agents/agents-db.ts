@@ -22,12 +22,20 @@ export type UserAgentRow = {
   run_at_local_hour: number;
   enabled: boolean;
   bridge_secret_id: string | null;
+  /**
+   * The per-agent model PIN. Null on both means "use the org default", which is
+   * every agent's backfill value. `model_id` is a CATALOG key
+   * (`ai_models.model_id`) and is meaningful only alongside `provider` — the
+   * run reads them straight into `runAi`'s `provider` / `requestedModel`.
+   */
+  provider: string | null;
+  model_id: string | null;
 };
 
 type Client = SupabaseClient<Database>;
 
 const AGENT_COLS =
-  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id";
+  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id, provider, model_id";
 
 export async function getUserAgentById(
   client: Client,
@@ -81,7 +89,7 @@ export async function listAgentRuns(
   const { data, error } = await client
     .from("user_agent_runs")
     .select(
-      "id, status, error, fire_date, fire_hour, input_tokens, output_tokens, created_at",
+      "id, status, error, fire_date, fire_hour, input_tokens, output_tokens, model_substituted, created_at",
     )
     .eq("user_agent_id", agentId)
     .order("created_at", { ascending: false })
@@ -96,6 +104,7 @@ export async function listAgentRuns(
     fireHour: r.fire_hour,
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
+    modelSubstituted: r.model_substituted,
   }));
 }
 

@@ -50,7 +50,11 @@ describe("generateImportMapping", () => {
       ],
     });
 
-    const res = await generateImportMapping(payload, { adapter, apiKey: "k" });
+    const res = await generateImportMapping(payload, {
+      adapter,
+      apiKey: "k",
+      model: "claude-sonnet-5",
+    });
 
     expect(res.suggestions).toHaveLength(2);
     expect(res.suggestions[1].targetColumnId).toBe("col-status");
@@ -68,13 +72,21 @@ describe("generateImportMapping", () => {
 
   it("returns an empty suggestions array when the model returns none", async () => {
     const { adapter } = fakeAdapter({ suggestions: [] });
-    const res = await generateImportMapping(payload, { adapter, apiKey: "k" });
+    const res = await generateImportMapping(payload, {
+      adapter,
+      apiKey: "k",
+      model: "claude-sonnet-5",
+    });
     expect(res.suggestions).toEqual([]);
   });
 
   it("tolerates a missing suggestions field", async () => {
     const { adapter } = fakeAdapter({});
-    const res = await generateImportMapping(payload, { adapter, apiKey: "k" });
+    const res = await generateImportMapping(payload, {
+      adapter,
+      apiKey: "k",
+      model: "claude-sonnet-5",
+    });
     expect(res.suggestions).toEqual([]);
   });
 });

@@ -12,6 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import {
+  ModelPicker,
+  providersWithoutModels,
+  type ModelOption,
+  type ModelValue,
+} from "@/components/settings/ModelPicker";
+import { TOOL_LOOP_PROVIDER } from "@/lib/ai/tool-capability";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -32,7 +39,7 @@ const SELECT_CLASS =
   "border-input bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20";
 
 type FieldErrors = Partial<
-  Record<"name" | "instructions" | "runAtLocalHour", string>
+  Record<"name" | "instructions" | "runAtLocalHour" | "provider", string>
 >;
 
 /**
@@ -44,11 +51,26 @@ type FieldErrors = Partial<
  * ships `{ mode: "all" }`, i.e. everything the owner's RLS already lets them
  * see) — a per-board picker needs its own bounded board-list query and is out
  * of scope for the settings editor.
+ *
+ * The model pin is the same `ModelPicker` the org default uses, fed the same
+ * flat option list. It is CLIENT STATE over a list the page already loaded:
+ * opening it, searching it, and switching provider inside it are zero server
+ * round-trips (working agreement #5). The only server call this form makes is
+ * the save itself.
+ *
+ * Authorization is the owner's, not an admin's: an agent belongs to one person,
+ * `updateAgent` filters `owner_id`, and RLS is the real boundary — so unlike
+ * the org default (which `requireOrgAdmin`s), pinning a model here needs no
+ * extra role. The pin cannot widen what the agent can reach: it selects a
+ * model, and the key that pays for it is still resolved per run from the org's
+ * mode and the owner's own credentials.
  */
 export function AgentEditor({
   mode,
   agentId,
   initial,
+  modelOptions,
+  providers,
   onSaved,
   onCancel,
   onDeleted,
@@ -56,6 +78,10 @@ export function AgentEditor({
   mode: "create" | "edit";
   agentId?: string;
   initial: PersonalAgentSettings;
+  /** Every selectable model, built server-side by the page (buildModelOptions). */
+  modelOptions: ModelOption[];
+  /** The enabled provider registry, for the "no models yet" groups. */
+  providers: { id: string; label: string }[];
   onSaved: (record: AgentRecord) => void;
   onCancel: () => void;
   onDeleted?: (id: string) => void;
@@ -64,10 +90,23 @@ export function AgentEditor({
   const [instructions, setInstructions] = useState(initial.instructions);
   const [runAtLocalHour, setRunAtLocalHour] = useState(initial.runAtLocalHour);
   const [enabled, setEnabled] = useState(initial.enabled);
+  // Null means "inherit". The two halves are stored as one value because they
+  // are only meaningful together — a model id names nothing without a provider.
+  const [model, setModel] = useState<ModelValue | null>(
+    initial.provider && initial.modelId
+      ? { provider: initial.provider, modelId: initial.modelId }
+      : null,
+  );
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  // Never an index into a fixed map — the registry is open, so a stored id can
+  // outlive the row that named it and the id beats a crash (same rule as
+  // OrgAiSettingsForm).
+  const labelOfProvider = (id: string) =>
+    providers.find((p) => p.id === id)?.label ?? id;
 
   function save() {
     setServerError(null);
@@ -79,6 +118,10 @@ export function AgentEditor({
       cadence: initial.cadence,
       runAtLocalHour,
       enabled,
+      // Both halves or neither — the schema refuses a half-pin, and null on
+      // both is what "inherit the org default" means to the run endpoint.
+      provider: model?.provider ?? null,
+      modelId: model?.modelId ?? null,
     };
 
     const parsed = personalAgentSettingsSchema.safeParse(candidate);
@@ -88,6 +131,10 @@ export function AgentEditor({
         name: flat.name?.[0],
         instructions: flat.instructions?.[0],
         runAtLocalHour: flat.runAtLocalHour?.[0],
+        // Unreachable through the picker (it only ever yields a complete pair
+        // or null) — surfaced anyway, because a validation error the form
+        // cannot render is a save button that silently does nothing.
+        provider: flat.provider?.[0],
       });
       return;
     }
@@ -219,6 +266,59 @@ export function AgentEditor({
               All boards you can see
             </p>
           </div>
+        </div>
+
+        {/* `role="group"` + `aria-labelledby`, not `htmlFor`: the picker's
+            trigger is a combobox whose accessible name is its current VALUE,
+            so a label pointing at it would replace the value a screen reader
+            announces instead of naming the field. */}
+        <div
+          className="space-y-1.5"
+          role="group"
+          aria-labelledby="agent-model-label"
+        >
+          <Label id="agent-model-label">Model</Label>
+          <ModelPicker
+            options={modelOptions}
+            emptyProviders={providersWithoutModels(providers, modelOptions)}
+            value={model}
+            onChange={(next) => {
+              setModel(next);
+              setFieldErrors((f) => ({ ...f, provider: undefined }));
+            }}
+            disabled={pending}
+            allowInherit
+            inheritLabel="Use the organization's default"
+            // Three of the seeded providers have no verified models until
+            // someone saves a key for them, so the empty list is a
+            // configuration state with a next step — never "no models
+            // available", which reads as a broken feature.
+            emptyHint="Add an API key in Settings → AI to see models."
+          />
+          <p className="text-muted-foreground text-xs">
+            {model
+              ? "This agent always runs on this model — the organization's default doesn't apply to it."
+              : "This agent runs on the organization's default model. Pick one to keep it on a specific model instead."}
+          </p>
+          {/* The pin OVERRIDES the org provider, so it is the one setting that
+              can put an agent on a provider the briefing loop cannot run on —
+              and nothing about the picker says so. Without this the owner
+              saves happily and only finds out from a stream of "skipped" runs
+              in the history below. Stated at the moment of the choice, in the
+              same inline-message vocabulary the field errors use, rather than
+              blocking the save: the capability is provider-wide today and
+              generalises in spec 2, so the pin itself stays legal. */}
+          {model && model.provider !== TOOL_LOOP_PROVIDER ? (
+            <p role="status" className="text-destructive text-xs">
+              Personal agents currently run on{" "}
+              {labelOfProvider(TOOL_LOOP_PROVIDER)} only. Pinned to{" "}
+              {labelOfProvider(model.provider)}, every run of this agent is
+              skipped rather than billed to the wrong provider.
+            </p>
+          ) : null}
+          {fieldErrors.provider ? (
+            <p className="text-destructive text-xs">{fieldErrors.provider}</p>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-between rounded-lg border p-3">

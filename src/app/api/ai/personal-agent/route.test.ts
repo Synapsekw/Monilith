@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 import { signBody } from "@/lib/ai/agentic/hmac";
 import {
   AiDisabledError,
@@ -180,17 +181,30 @@ vi.mock("@/lib/agents/send", () => ({
   sendBriefingEmail: (...a: unknown[]) => sendBriefingEmail(...(a as [])),
 }));
 
-// runAi just runs the callback by default with an Anthropic adapter (metering
+// runAi just runs the callback by default with an Anthropic PROVIDER (metering
 // exercised in the gateway's own test). A vi.fn so individual tests can
 // override it — e.g. to simulate the per_user "no key on file" path throwing
-// AiNotConfiguredError, or a non-Anthropic adapter to exercise the
-// wrong-provider skip.
-type FakeResolved = { adapter: { id: string }; apiKey: string };
+// AiNotConfiguredError, or a non-Anthropic provider to exercise the
+// wrong-provider skip. The gate reads `provider`, not the adapter: the loop
+// builds `new Anthropic()` itself, so the honest question is which provider's
+// key was resolved.
+type FakeResolved = {
+  provider: string;
+  apiKey: string;
+  model: ReturnType<typeof fakeResolvedModel>;
+};
 const runAi = vi.fn(
   async (
     _args: unknown,
     fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-  ) => (await fn({ adapter: { id: "anthropic" }, apiKey: "k" })).result,
+  ) =>
+    (
+      await fn({
+        provider: "anthropic",
+        apiKey: "k",
+        model: fakeResolvedModel(),
+      })
+    ).result,
 );
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: (...a: Parameters<typeof runAi>) => runAi(...a),
@@ -226,6 +240,10 @@ const enabledAgent = () => ({
   run_at_local_hour: 7,
   enabled: true,
   bridge_secret_id: null,
+  // The per-agent model pin. Null on both = "use the org default", which is
+  // every backfilled agent — the pinned case is exercised explicitly below.
+  provider: null,
+  model_id: null,
 });
 
 beforeEach(() => {
@@ -258,7 +276,14 @@ beforeEach(() => {
     async (
       _args: unknown,
       fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-    ) => (await fn({ adapter: { id: "anthropic" }, apiKey: "k" })).result,
+    ) =>
+      (
+        await fn({
+          provider: "anthropic",
+          apiKey: "k",
+          model: fakeResolvedModel(),
+        })
+      ).result,
   );
 });
 
@@ -331,6 +356,117 @@ describe("POST /api/ai/personal-agent", () => {
     expect(sendBriefingEmail).toHaveBeenCalledOnce();
   });
 
+  // ── The per-agent model pin (user_agents.provider / .model_id) ─────────
+  it("spends the PINNED provider's key and asks for the pinned model", async () => {
+    // An agent pinned to Kimi must resolve the Kimi key. Resolving whichever
+    // key the owner happens to have would POST an Anthropic key to Moonshot.
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      provider: "moonshotai",
+      model_id: "kimi-k2",
+    });
+    await POST(post(slot));
+
+    expect(runAi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: ORG,
+        userId: OWNER,
+        feature: "personal_agent_run",
+        provider: "moonshotai",
+        requestedModel: "kimi-k2",
+      }),
+      expect.any(Function),
+    );
+  });
+
+  it("leaves the pin OFF the gateway args when the agent has none", async () => {
+    // Omitted, not null-with-a-value: an unpinned agent takes the org default,
+    // and passing a provider of `null` would be a request for a provider named
+    // null rather than "no preference".
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    await POST(post(slot));
+
+    expect(runAi.mock.calls[0]![0]).toMatchObject({ provider: undefined });
+    expect(runAi.mock.calls[0]![0]).toMatchObject({ requestedModel: null });
+  });
+
+  // The catalog key and the wire id are two different strings on purpose: the
+  // Gateway publishes `claude-haiku-4.5` where Anthropic's API wants the dated
+  // snapshot `claude-haiku-4-5-20251001`. A pin STORES the catalog key and the
+  // picker DISPLAYS it; only `requestModel` may go on the wire. Sending the
+  // catalog key is a 404 from the provider — a scheduled agent that stops
+  // producing with no user-visible cause.
+  it("puts the WIRE id on the provider call, never the catalog key the pin stores", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      provider: "anthropic",
+      model_id: "claude-sonnet-5",
+    });
+    runAi.mockImplementation(
+      async (
+        _args: unknown,
+        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+      ) =>
+        (
+          await fn({
+            provider: "anthropic",
+            apiKey: "k",
+            model: fakeResolvedModel({
+              model: "claude-sonnet-5",
+              requestModel: "claude-sonnet-5-20260101",
+            }),
+          })
+        ).result,
+    );
+    await POST(post(slot));
+
+    expect(summariseBriefing).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "claude-sonnet-5-20260101" }),
+    );
+    // Belt and braces: the catalog key must not be what the adapter is asked
+    // for, even though it IS what the pin and the ledger store.
+    expect(summariseBriefing).not.toHaveBeenCalledWith(
+      expect.objectContaining({ model: "claude-sonnet-5" }),
+    );
+  });
+
+  it("records model_substituted when the pinned model was gone", async () => {
+    // A substituted run still SUCCEEDED. It is recorded on its own column, not
+    // overloaded onto `error`, so the owner is not told a working agent broke.
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      provider: "anthropic",
+      model_id: "claude-retired-9",
+    });
+    runAi.mockImplementation(
+      async (
+        _args: unknown,
+        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+      ) =>
+        (
+          await fn({
+            provider: "anthropic",
+            apiKey: "k",
+            model: fakeResolvedModel({ substituted: true }),
+          })
+        ).result,
+    );
+    const res = await POST(post(slot));
+
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "ran",
+      error: null,
+      model_substituted: true,
+    });
+  });
+
+  it("records model_substituted: false on an ordinary run", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    await POST(post(slot));
+    expect(runUpdates[0]!.patch).toMatchObject({ model_substituted: false });
+  });
+
   it("is a no-op via the claim backstop when a concurrent delivery races the fast probe", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
     // Simulate the race: findUserAgentRun's fast probe still sees null (the
@@ -401,10 +537,10 @@ describe("POST /api/ai/personal-agent", () => {
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 
-  // ── wrong-provider guard: an Anthropic adapter proceeds normally ───────
-  it("proceeds through summarise + send when the resolved adapter is anthropic", async () => {
+  // ── wrong-provider guard: the anthropic provider proceeds normally ─────
+  it("proceeds through summarise + send when the resolved provider is anthropic", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
-    // Default mock already resolves { adapter: { id: "anthropic" }, apiKey }.
+    // Default mock already resolves { provider: "anthropic", apiKey }.
 
     const res = await POST(post(slot));
 
@@ -418,16 +554,23 @@ describe("POST /api/ai/personal-agent", () => {
   // ── wrong-provider guard: a non-Anthropic per_user key must never be sent
   //    to api.anthropic.com. This is a CONFIGURATION state (skipped), not a
   //    fault — it must spend nothing and never call summarise or send. ──────
-  it("finalizes as skipped (not error) when the resolved adapter is not anthropic, and never calls the model or the send", async () => {
+  it("finalizes as skipped (not error) when the resolved provider is not anthropic, and never calls the model or the send", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
     // Drive the REAL callback route.ts passes to runAi (not a re-implemented
-    // stand-in) with a non-anthropic adapter — this exercises route.ts's own
-    // `adapter.id !== "anthropic"` check, not just its catch block.
+    // stand-in) with a non-anthropic provider — this exercises route.ts's own
+    // assertToolLoopCapable() call, not just its catch block.
     runAi.mockImplementation(
       async (
         _args: unknown,
         fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-      ) => (await fn({ adapter: { id: "openai" }, apiKey: "k" })).result,
+      ) =>
+        (
+          await fn({
+            provider: "openai",
+            apiKey: "k",
+            model: fakeResolvedModel(),
+          })
+        ).result,
     );
 
     const res = await POST(post(slot));
@@ -441,6 +584,11 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
     expect(runUpdates[0]!.patch.error).toMatch(/Anthropic/);
+    // The agent's own pin OVERRIDES the org provider, so it is reachable for
+    // an owner whose Settings → AI is correctly configured. A message naming
+    // only the org setting sends that owner to a page with nothing wrong on it.
+    expect(runUpdates[0]!.patch.error).toMatch(/model pin/i);
+    expect(runUpdates[0]!.patch.error).toMatch(/Settings → Agents/);
     // Never spends: no model call, no email.
     expect(summariseBriefing).not.toHaveBeenCalled();
     expect(sendBriefingEmail).not.toHaveBeenCalled();

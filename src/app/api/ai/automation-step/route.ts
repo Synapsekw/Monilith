@@ -7,6 +7,7 @@ import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { buildJobContext } from "@/lib/ai/agentic/context";
 import { decideAction } from "@/lib/ai/agentic/decide";
 import { runAi } from "@/lib/ai/gateway";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { AiDisabledError, AiQuotaExceededError } from "@/lib/ai/errors";
 import { automationActionSchema } from "@/lib/validations/automations";
@@ -122,9 +123,21 @@ export async function POST(req: Request): Promise<Response> {
         userId: rule?.created_by ?? job.org_id,
         feature: FEATURE,
       },
-      async ({ apiKey }) => {
-        const r = await decideAction({ apiKey, context, instruction, allow });
-        return { result: r, usage: r.usage, model: r.model };
+      async ({ provider, apiKey, model }) => {
+        // The loop below builds `new Anthropic({ apiKey })` directly and
+        // ignores baseUrl, so it physically cannot run on another provider.
+        // Refuse at the boundary rather than POSTing someone else's key to
+        // api.anthropic.com — per_user mode resolves the ORG DEFAULT provider
+        // when an agent pins none.
+        assertToolLoopCapable(provider, FEATURE);
+        const r = await decideAction({
+          apiKey,
+          model: model.requestModel,
+          context,
+          instruction,
+          allow,
+        });
+        return { result: r, usage: r.usage };
       },
     );
 

@@ -81,6 +81,10 @@ const valid = {
   cadence: "daily" as const,
   runAtLocalHour: 7,
   enabled: true,
+  // Unpinned: null on both halves is "inherit the org default", the state
+  // every agent that predates the pin is in.
+  provider: null,
+  modelId: null,
 };
 
 beforeEach(() => {
@@ -139,6 +143,32 @@ describe("createAgent", () => {
     const row = insert.mock.calls[0][0] as Record<string, unknown>;
     expect(row).not.toHaveProperty("bridge_secret_id");
   });
+
+  // 20260810173752 re-granted insert(provider, model_id) to authenticated
+  // specifically so the pin is writable. Not writing them would leave every
+  // new agent inheriting the org default no matter what the picker said.
+  it("persists the model pin it was given", async () => {
+    await createAgent({ ...valid, provider: "moonshotai", modelId: "kimi-k2" });
+    const row = insert.mock.calls[0][0] as Record<string, unknown>;
+    expect(row).toMatchObject({ provider: "moonshotai", model_id: "kimi-k2" });
+  });
+
+  it("writes an unpinned agent as null on both halves, not as absent", async () => {
+    await createAgent(valid);
+    const row = insert.mock.calls[0][0] as Record<string, unknown>;
+    expect(row.provider).toBeNull();
+    expect(row.model_id).toBeNull();
+  });
+
+  it("refuses a model with no provider without touching the db", async () => {
+    const r = await createAgent({
+      ...valid,
+      provider: null,
+      modelId: "kimi-k2",
+    });
+    expect(r.ok).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+  });
 });
 
 describe("updateAgent", () => {
@@ -177,11 +207,43 @@ describe("updateAgent", () => {
       "cadence",
       "enabled",
       "instructions",
+      "model_id",
       "name",
+      "provider",
       "run_at_local_hour",
       "template_id",
       "updated_at",
     ]);
+  });
+
+  it("saves a model pin", async () => {
+    await updateAgent(AGENT_ID, {
+      ...valid,
+      provider: "moonshotai",
+      modelId: "kimi-k2",
+    });
+    expect(lastUpdate).toMatchObject({
+      provider: "moonshotai",
+      model_id: "kimi-k2",
+    });
+  });
+
+  // Clearing the pin is how an owner goes back to the org default. Writing
+  // `undefined` (or omitting the columns) would leave the old pin in place and
+  // make the "Use the organization's default" option a silent no-op.
+  it("clears a pin back to null rather than leaving the old one", async () => {
+    await updateAgent(AGENT_ID, valid);
+    expect(lastUpdate).toMatchObject({ provider: null, model_id: null });
+  });
+
+  it("refuses a model with no provider without writing", async () => {
+    const r = await updateAgent(AGENT_ID, {
+      ...valid,
+      provider: null,
+      modelId: "kimi-k2",
+    });
+    expect(r.ok).toBe(false);
+    expect(lastUpdate).toBeNull();
   });
 
   it("reports a db failure without leaking the raw message", async () => {
@@ -246,6 +308,7 @@ describe("getAgentRuns", () => {
       fireHour: 7,
       inputTokens: 10,
       outputTokens: 5,
+      modelSubstituted: false,
     },
   ];
 
@@ -294,5 +357,17 @@ describe("getAgentRuns", () => {
     const r = await getAgentRuns(AGENT_ID);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).not.toContain("boom");
+  });
+
+  // The user-facing message deliberately drops the cause, so if the catch also
+  // swallows it the failure is invisible on BOTH sides — the underlying error
+  // has to reach the server log or nobody can ever diagnose it.
+  it("logs the underlying error instead of swallowing it entirely", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cause = new Error("listAgentRuns: boom");
+    listAgentRuns.mockRejectedValue(cause);
+    await getAgentRuns(AGENT_ID);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining(AGENT_ID), cause);
+    spy.mockRestore();
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 import { signBody } from "@/lib/ai/agentic/hmac";
 import { AiDisabledError } from "@/lib/ai/errors";
 
@@ -84,12 +85,28 @@ vi.mock("@/lib/ai/agentic/autopilot", async (importOriginal) => {
   };
 });
 
+// The provider runAi resolves for this call. Overridable per test: the tool
+// loops build `new Anthropic()` directly, so a non-Anthropic provider must be
+// refused at the boundary rather than POSTed to api.anthropic.com.
+let resolvedProvider = "anthropic";
+
 // runAi just runs the callback (metering exercised in the gateway's own test).
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: async (
     _args: unknown,
-    fn: (r: { apiKey: string }) => Promise<{ result: unknown }>,
-  ) => (await fn({ apiKey: "k" })).result,
+    fn: (r: {
+      apiKey: string;
+      provider: string;
+      model: ReturnType<typeof fakeResolvedModel>;
+    }) => Promise<{ result: unknown }>,
+  ) =>
+    (
+      await fn({
+        apiKey: "k",
+        provider: resolvedProvider,
+        model: fakeResolvedModel(),
+      })
+    ).result,
 }));
 
 import { POST } from "./route";
@@ -123,6 +140,7 @@ const signed = () => {
 };
 
 beforeEach(() => {
+  resolvedProvider = "anthropic";
   process.env.AI_PGNET_HMAC_SECRET = SECRET;
   process.env.SUPABASE_SERVICE_ROLE_KEY = "svc-role-key";
   rpcCalls.length = 0;
@@ -185,6 +203,25 @@ describe("POST /api/ai/autopilot", () => {
     await POST(req(body, sig));
     // The bot id is resolved for truthful attribution (runAi userId + authorship).
     expect(rpcCalls.some((c) => c.fn === "platform_agent_user_id")).toBe(true);
+  });
+
+  // ── the tool-loop capability boundary ─────────────────────────────────
+  // These loops build `new Anthropic({ apiKey })` directly and ignore baseUrl,
+  // so a non-Anthropic key must be refused HERE. Since per_user mode resolves
+  // `provider ?? org default ?? anthropic`, an org that sets a non-Anthropic
+  // default would otherwise POST that provider's key and model id to
+  // api.anthropic.com.
+  it("refuses a non-Anthropic provider before the loop spends the key", async () => {
+    resolvedProvider = "moonshotai";
+    const { body, sig } = signed();
+    const res = await POST(req(body, sig));
+    expect(res.status).toBe(500);
+    expect(autopilotRun).not.toHaveBeenCalled();
+    expect(rpcCalls.some((c) => c.fn === "board_agent_apply")).toBe(false);
+    expect(runInserts[0]).toMatchObject({
+      status: "error",
+      error: "The configured AI provider can't run autopilot_run.",
+    });
   });
 
   it("short-circuits to a skipped run with NO token spend when entitlement is off", async () => {

@@ -16,7 +16,7 @@
 - **Validate at boundaries with Zod.** TypeScript strict; avoid `any`.
 - **RLS is the security boundary.** Default-deny, org-scoped. `SUPABASE_SERVICE_ROLE_KEY` is server-only.
 - **Reuse canonical modules.** Server actions return `ActionResult` / `fail` from `src/lib/actions/result.ts`. Typed RPC goes through `src/lib/supabase/typed-rpc.ts`. Grep before writing any helper.
-- **One migration for this whole plan** (Task 1). Minted **only** via `scripts/new-migration.sh <slug>`. Applied to DEV via the `supabase-dev` MCP with the **same version + name** as the committed file, then verified with `pnpm db:ledger-check`. Do **not** mint a second migration in a later task — parallel migrations in sibling worktrees collide (gotcha-43).
+- **TWO migrations for this whole plan** (Task 1 and Task 4a) — and no more. Originally one; relaxed deliberately for Task 4a because the rule guarded against parallel worktrees colliding on version stamps (gotcha-43) and this plan executes serially in a single worktree. Each is minted only via `scripts/new-migration.sh`. Minted **only** via `scripts/new-migration.sh <slug>`. Applied to DEV via the `supabase-dev` MCP with the **same version + name** as the committed file, then verified with `pnpm db:ledger-check`. Do **not** mint a second migration in a later task — parallel migrations in sibling worktrees collide (gotcha-43).
 - **`pnpm db:types` fails inside a task worktree** (`LegacyProjectNotLinkedError`). Regenerate via the `supabase-dev` MCP `generate_typescript_types`, then run prettier on the result.
 - **All new/changed SQL functions** stay `security definer`, `set search_path = public, vault`, revoked from `public, anon, authenticated`, granted only to `service_role`.
 - **Commit identity is pinned** to `Danijel Jovanovic <info@synapse-solutions.ai>`. Stage explicitly by path — never `git add -A`.
@@ -44,7 +44,7 @@
 | 11   | Agent provider/model picker + agent columns                                         | 7, 8       |
 
 - **Batch 1 (parallel):** 1, 2, 3
-- **Batch 2 (parallel):** 4, 5, 6
+- **Batch 2 (parallel):** 3a, 4, 5, 6
 - **Batch 3 (parallel):** 7, 9
 - **Batch 4:** 8
 - **Batch 5 (parallel):** 10, 11
@@ -235,6 +235,13 @@ alter table public.org_ai_settings
 alter table public.user_agents
   add column if not exists provider text references public.ai_providers (id),
   add column if not exists model_id text;
+
+-- 6) Did this run fall back off a retired pin? A real boolean, not a prefix
+--    stuffed into `error` — the run-history UI must not string-match to avoid
+--    rendering an informational note as a hard failure (the trap
+--    CLAIM_PLACEHOLDER already documents for `status`).
+alter table public.user_agent_runs
+  add column if not exists model_substituted boolean not null default false;
 ```
 
 - [ ] **Step 4: Write the credential-function changes**
@@ -242,7 +249,7 @@ alter table public.user_agents
 Append:
 
 ```sql
--- 6) One key PER PROVIDER. The (user_id, provider) primary key already modelled
+-- 7) One key PER PROVIDER. The (user_id, provider) primary key already modelled
 --    this correctly; only the delete-everything loop below enforced "one active
 --    provider". Dropping that loop is the whole change.
 create or replace function public.ai_credential_set(
@@ -355,7 +362,7 @@ grant execute on function public.org_ai_secret_get(uuid, text) to service_role;
 Append:
 
 ```sql
--- 7) Daily catalog refresh. Same pg_net + HMAC shape as embed-sweep and
+-- 8) Daily catalog refresh. Same pg_net + HMAC shape as embed-sweep and
 --    personal-agent-sweep. cron.schedule upserts by job name => re-runnable.
 create or replace function public._ai_models_refresh_tick()
 returns void
@@ -943,8 +950,8 @@ const pricingSchema = z
   .object({
     input: z.string().optional(),
     output: z.string().optional(),
-    cachedInputTokens: z.string().optional(),
-    cacheCreationInputTokens: z.string().optional(),
+    input_cache_read: z.string().optional(),
+    input_cache_write: z.string().optional(),
   })
   .partial();
 
@@ -1008,8 +1015,8 @@ export function parseFeed(
       supports_tools: (e.tags ?? []).includes("tool-use"),
       input_price_per_mtok: input,
       output_price_per_mtok: output,
-      cache_read_price_per_mtok: perMtok(e.pricing?.cachedInputTokens),
-      cache_write_price_per_mtok: perMtok(e.pricing?.cacheCreationInputTokens),
+      cache_read_price_per_mtok: perMtok(e.pricing?.input_cache_read),
+      cache_write_price_per_mtok: perMtok(e.pricing?.input_cache_write),
       tier: tierFor(input),
       status: priced ? "active" : "needs_pricing",
     });
@@ -1196,10 +1203,19 @@ export type GenerateArgs = {
 };
 
 /**
- * One adapter per WIRE FORMAT, not per provider. `supportsTools` used to live
- * here as a per-adapter constant; it is now a per-MODEL column on ai_models,
- * because tool support varies by model within a provider (11 of Google's 17
- * language models support tools, not all 17).
+ * One adapter per WIRE FORMAT, not per provider.
+ *
+ * `supportsTools` is GONE from this interface. It was a per-adapter constant;
+ * tool support is really per-MODEL (11 of Google's 17 language models support
+ * tools, not all 17), and that now lives on ai_models.supports_tools.
+ *
+ * But note what the catalog flag does NOT buy yet: the tool-use loops in
+ * app/api/ask/route.ts and lib/ai/write/actions.ts construct `new Anthropic()`
+ * DIRECTLY, bypassing adapters entirely — so they cannot run on any other
+ * provider no matter what the catalog says. Task 3a replaces their capability
+ * checks with an explicit provider check, which is the honest description of
+ * what the code can do today. Generalizing those loops is Spec 2's tool-grant
+ * work, not this spec's.
  */
 export interface ProviderAdapter {
   kind: AdapterKind;
@@ -1213,9 +1229,7 @@ export interface ProviderAdapter {
   generateStructured<T = unknown>(
     args: GenerateArgs,
   ): Promise<{ data: T; usage: AiUsageTokens; model: string }>;
-  generateProposal(
-    args: Omit<GenerateArgs, "schema">,
-  ): Promise<{
+  generateProposal(args: Omit<GenerateArgs, "schema">): Promise<{
     proposal: DashboardProposal;
     usage: AiUsageTokens;
     model: string;
@@ -1670,6 +1684,159 @@ module-level constant, and supportsTools moves to a per-model column."
 
 ---
 
+## Task 3a: Move tool-capability gating off the adapter
+
+**Files:**
+
+- Create: `src/lib/ai/tool-capability.ts`
+- Create: `src/lib/ai/tool-capability.test.ts`
+- Modify: `src/app/api/ask/route.ts`, `src/lib/ai/write/actions.ts`, `src/lib/ai/column-fill/actions.ts`, `src/lib/ai/item-assist/actions.ts`, `src/lib/ai/summarize/actions.ts`, `src/app/api/ai/personal-agent/route.ts`
+- Modify: the matching `*.test.ts` files that stub `supportsTools`
+
+**Interfaces:**
+
+- Consumes: `ProviderNotCapableError` (existing, `src/lib/ai/errors.ts`); `ResolvedAi.provider` (Task 8 — but this task only needs the string, so it can land before Task 8 using `resolved.provider` once available, or `adapter.kind` until then).
+- Produces: `export const TOOL_LOOP_PROVIDER = "anthropic"`, `export function assertToolLoopCapable(provider: string, feature: string): void`
+
+**Why this task exists:** Task 3 deletes `supportsTools` from `ProviderAdapter`. Nine source files gate on it. They cannot simply read the catalog's per-model flag, because `app/api/ask/route.ts:208` and `lib/ai/write/actions.ts` construct `new Anthropic({ apiKey })` **directly** — those loops are hardcoded to the Anthropic SDK and cannot run on Kimi, Mistral, GPT or Gemini regardless of what any flag says. An explicit provider check is the truthful gate. The catalog's `supports_tools` column is still populated and still correct; Spec 2 consumes it when it generalizes the loops.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `src/lib/ai/tool-capability.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import {
+  assertToolLoopCapable,
+  TOOL_LOOP_PROVIDER,
+} from "@/lib/ai/tool-capability";
+import { ProviderNotCapableError } from "@/lib/ai/errors";
+
+describe("assertToolLoopCapable", () => {
+  it("permits anthropic", () => {
+    expect(() => assertToolLoopCapable("anthropic", "ask_pulse")).not.toThrow();
+  });
+
+  it("rejects every other provider, naming the feature", () => {
+    for (const p of ["openai", "google", "mistral", "moonshotai"]) {
+      expect(() => assertToolLoopCapable(p, "ask_pulse")).toThrow(
+        ProviderNotCapableError,
+      );
+    }
+  });
+
+  it("names the single capable provider as a constant, not a literal", () => {
+    // The loops construct `new Anthropic()` directly; when Spec 2 generalizes
+    // them this constant is the one place that changes.
+    expect(TOOL_LOOP_PROVIDER).toBe("anthropic");
+  });
+});
+```
+
+- [ ] **Step 2: Run it and watch it fail**
+
+Run: `pnpm vitest run src/lib/ai/tool-capability.test.ts`
+Expected: FAIL — cannot resolve `@/lib/ai/tool-capability`.
+
+- [ ] **Step 3: Implement the gate**
+
+Create `src/lib/ai/tool-capability.ts`:
+
+```ts
+import { ProviderNotCapableError } from "@/lib/ai/errors";
+
+/**
+ * The ONLY provider whose tool-use loops are implemented.
+ *
+ * This is deliberately a provider check and not a read of
+ * `ai_models.supports_tools`. The catalog flag is accurate — most models on
+ * every provider support tool calling — but the loops in
+ * `app/api/ask/route.ts` and `lib/ai/write/actions.ts` construct
+ * `new Anthropic({ apiKey })` directly rather than going through an adapter,
+ * so they physically cannot run anywhere else. Gating on the catalog flag
+ * would advertise a capability the code does not have and fail at the API
+ * call instead of at the boundary.
+ *
+ * Spec 2 generalizes those loops onto the AI SDK's provider-agnostic tool
+ * calling; at that point this module is replaced by a per-model catalog read
+ * and this constant is the single place that changes.
+ */
+export const TOOL_LOOP_PROVIDER = "anthropic";
+
+export function assertToolLoopCapable(provider: string, feature: string): void {
+  if (provider !== TOOL_LOOP_PROVIDER)
+    throw new ProviderNotCapableError(feature);
+}
+```
+
+- [ ] **Step 4: Run the test**
+
+Run: `pnpm vitest run src/lib/ai/tool-capability.test.ts`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Replace every call site**
+
+Find them all first:
+
+```bash
+grep -rn "supportsTools" --include="*.ts" --include="*.tsx" src
+```
+
+In each **source** file, replace the adapter check with the provider check. For example, in `src/app/api/ask/route.ts` (around line 206):
+
+```ts
+// before
+async ({ apiKey, adapter }) => {
+  if (!adapter.supportsTools)
+    throw new ProviderNotCapableError("ask_pulse");
+
+// after
+async ({ apiKey, provider }) => {
+  assertToolLoopCapable(provider, "ask_pulse");
+```
+
+Apply the same substitution in `write/actions.ts` (`"conversational_action"`), `column-fill/actions.ts`, `item-assist/actions.ts`, `summarize/actions.ts` and `personal-agent/route.ts`, each keeping the feature string it already passes. Add `import { assertToolLoopCapable } from "@/lib/ai/tool-capability";` and drop the now-unused `ProviderNotCapableError` import where nothing else uses it.
+
+**`provider` is already on `ResolvedAi`** (it is in the type today), so no new plumbing is needed.
+
+- [ ] **Step 6: Update the tests that stub `supportsTools`**
+
+In each `*.test.ts` that builds a fake resolved-AI object, delete `supportsTools: true/false` from the adapter stub and set `provider: "anthropic"` (or another provider id for the negative cases) on the resolved object instead. Run:
+
+```bash
+grep -rln "supportsTools" --include="*.test.ts" src
+```
+
+Expected after the edit: that command returns nothing.
+
+- [ ] **Step 7: Verify nothing references the removed property**
+
+```bash
+grep -rn "supportsTools" --include="*.ts" --include="*.tsx" src && echo "STILL PRESENT — fix before committing" || echo "clean"
+pnpm typecheck && pnpm lint && pnpm test
+```
+
+Expected: `clean`, then all three gates pass. This task exists to keep the tree green between Tasks 3 and 8 — a red typecheck here means it is not done.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/lib/ai/tool-capability.ts src/lib/ai/tool-capability.test.ts \
+        src/app/api/ask/route.ts src/lib/ai/write/actions.ts \
+        src/lib/ai/column-fill/actions.ts src/lib/ai/item-assist/actions.ts \
+        src/lib/ai/summarize/actions.ts src/app/api/ai/personal-agent/route.ts
+git add -u src
+git commit -m "refactor(ai): gate tool loops on provider, not an adapter flag
+
+The ask and write tool loops construct new Anthropic() directly, so they
+cannot run on any other provider whatever a capability flag claims. Gates
+on the provider id instead, which is what the code can actually do. The
+per-model supports_tools column stays populated for spec 2, which
+generalizes the loops onto provider-agnostic tool calling."
+```
+
+---
+
 ## Task 4: Catalog refresh endpoint
 
 **Files:**
@@ -2076,6 +2243,255 @@ git commit -m "feat(ai): daily model catalog refresh from the gateway feed
 HMAC-verified endpoint driven by the ai-models-refresh cron. Retirement
 runs only on a plausible non-empty parse, so a gateway outage leaves the
 catalog untouched rather than emptying every model picker."
+```
+
+---
+
+## Task 4a: verify catalog model ids against each provider
+
+**Files:**
+
+- Create: `supabase/migrations/<stamp>_ai_models_id_verification.sql` (**the plan's second and final migration — see the constraint note below**)
+- Create: `src/lib/ai/models/verify-ids.ts`
+- Create: `src/lib/ai/models/verify-ids.test.ts`
+- Modify: `src/lib/ai/models/catalog-db.ts`, `src/lib/ai/models/refresh.ts`, `src/lib/ai/credentials-actions.ts`
+- Modify: `src/types/database.types.ts` (regenerated)
+
+**Interfaces:**
+
+- Consumes: `parseFeed`/`CatalogRow` (Task 2); `listActiveModels`/`getModel` (Task 4); `getProviderRow`/`ProviderRow` (Task 1); `getAdapter` (Task 3).
+- Produces:
+  - `export function candidateNativeIds(gatewayModelId: string): string[]`
+  - `export function matchNativeId(candidates: string[], nativeIds: string[]): string | null`
+  - `export async function listNativeModelIds(row: ProviderRow, apiKey: string): Promise<string[]>`
+  - `export async function verifyProviderModels(args: { client, provider: string, apiKey: string }): Promise<{ verified: number; unverified: number }>`
+  - `listActiveModels` gains a `verifiedOnly` behaviour (default true).
+
+### Why this task exists
+
+The Gateway publishes **its own** model-id namespace, which is not the providers' native namespace. It lists `anthropic/claude-haiku-4.5` and `anthropic/claude-opus-4.8` (dots); Anthropic's native API ids — the ones this repo has shipped successfully in `pricing.ts` — are `claude-haiku-4-5` and `claude-opus-4-8` (hyphens). `claude-sonnet-5` and `claude-opus-5` happen to match, which is why nothing failed earlier.
+
+Because inference goes **direct to each provider with a BYO key**, a catalog id that only the Gateway recognises produces a 404 at the provider. Task 4's live refresh already retired `claude-haiku-4-5` for exactly this reason. Verified 2026-08-10: the Gateway exposes no native id anywhere — `/v1/models/{id}/endpoints` returns only a display name.
+
+**The rule: the Gateway is authoritative for pricing and capabilities; each provider is authoritative for its own ids.** Normalisation is only used to _generate candidates_; the provider's own model list is the judge. A row whose id cannot be confirmed callable is quarantined and never offered.
+
+### ⚠️ Constraint change — this plan now mints TWO migrations
+
+The plan's Global Constraints say exactly one migration. That rule existed to stop parallel worktrees minting colliding version stamps (gotcha-43). This plan is executing **serially in a single worktree**, so that risk is not present, and the alternative — overloading `status = 'needs_pricing'` to mean "unverified id" — repeats the "stuff it in the wrong column" pattern already rejected for `model_substituted`.
+
+So: mint a second migration, via `scripts/new-migration.sh` as always, apply it with the matching version+name, and verify with `pnpm db:ledger-check`. **This is the last one.** No later task may mint a third.
+
+- [ ] **Step 1: Mint the migration**
+
+```bash
+scripts/new-migration.sh ai_models_id_verification
+```
+
+- [ ] **Step 2: Write the DDL**
+
+```sql
+-- The provider-native id this catalog row resolves to. Null until verified.
+-- Adapters MUST send this, never model_id: model_id is the GATEWAY's id and
+-- is not guaranteed to be callable against the provider's own API.
+alter table public.ai_models
+  add column if not exists native_model_id text,
+  add column if not exists id_verified boolean not null default false,
+  add column if not exists id_verified_at timestamptz;
+
+-- Pickers read "active AND verified"; make that the index prefix.
+create index if not exists ai_models_selectable_idx
+  on public.ai_models (status, id_verified, provider);
+
+-- The five ids this repo has shipped successfully against the providers'
+-- own APIs are known-good; seed them verified so a fresh environment is not
+-- left with an empty picker before the first verification pass runs.
+update public.ai_models
+   set native_model_id = model_id,
+       id_verified = true,
+       id_verified_at = now()
+ where (provider, model_id) in (
+   ('anthropic','claude-sonnet-5'),
+   ('anthropic','claude-haiku-4-5'),
+   ('anthropic','claude-opus-4-8'),
+   ('openai','gpt-4o'),
+   ('google','gemini-2.0-flash')
+ );
+```
+
+- [ ] **Step 3: Apply, verify the ledger, regenerate types**
+
+Apply via the `supabase-dev` MCP with the same version+name as the filename, then `pnpm db:ledger-check` (expect exit 0). Regenerate types via the MCP `generate_typescript_types` (NOT `pnpm db:types`, which fails in a worktree), then `pnpm prettier --write src/types/database.types.ts`.
+
+- [ ] **Step 4: Write the failing test for candidate generation and matching**
+
+Create `src/lib/ai/models/verify-ids.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { candidateNativeIds, matchNativeId } from "@/lib/ai/models/verify-ids";
+
+describe("candidateNativeIds", () => {
+  it("always offers the gateway id itself first", () => {
+    expect(candidateNativeIds("claude-sonnet-5")[0]).toBe("claude-sonnet-5");
+  });
+
+  it("offers a dots-to-hyphens variant, which is the observed anthropic divergence", () => {
+    // Gateway says claude-haiku-4.5; Anthropic's own API says claude-haiku-4-5.
+    expect(candidateNativeIds("claude-haiku-4.5")).toContain(
+      "claude-haiku-4-5",
+    );
+  });
+
+  it("does not emit duplicates when the id has no dots", () => {
+    const c = candidateNativeIds("gpt-4o");
+    expect(new Set(c).size).toBe(c.length);
+  });
+});
+
+describe("matchNativeId", () => {
+  it("prefers an exact match over any transformed candidate", () => {
+    expect(
+      matchNativeId(
+        ["claude-haiku-4.5", "claude-haiku-4-5"],
+        ["claude-haiku-4.5", "claude-haiku-4-5"],
+      ),
+    ).toBe("claude-haiku-4.5");
+  });
+
+  it("falls back to the transformed candidate when only it exists natively", () => {
+    expect(
+      matchNativeId(
+        ["claude-haiku-4.5", "claude-haiku-4-5"],
+        ["claude-haiku-4-5"],
+      ),
+    ).toBe("claude-haiku-4-5");
+  });
+
+  it("matches a dated alias by prefix (claude-haiku-4-5-20251001)", () => {
+    expect(
+      matchNativeId(["claude-haiku-4-5"], ["claude-haiku-4-5-20251001"]),
+    ).toBe("claude-haiku-4-5-20251001");
+  });
+
+  it("returns null rather than guessing when nothing matches", () => {
+    // Failing closed is the whole point: an unmatched id must be quarantined,
+    // never sent to a provider on a hunch.
+    expect(matchNativeId(["kimi-k2"], ["moonshot-v1-8k"])).toBeNull();
+  });
+
+  it("never matches on a bare prefix that is not a version-suffix alias", () => {
+    // "gpt-4" must not match "gpt-4o" — that is a different model.
+    expect(matchNativeId(["gpt-4"], ["gpt-4o"])).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 5: Run it and watch it fail**
+
+Run: `pnpm vitest run src/lib/ai/models/verify-ids.test.ts`
+Expected: FAIL — cannot resolve `@/lib/ai/models/verify-ids`.
+
+- [ ] **Step 6: Implement candidate generation and matching**
+
+Create `src/lib/ai/models/verify-ids.ts`. Keep `candidateNativeIds` and `matchNativeId` PURE so the matching rules are testable without a network.
+
+```ts
+/**
+ * The Gateway's model-id namespace is not the providers' native namespace
+ * (verified 2026-08-10: it publishes claude-haiku-4.5 where Anthropic's API
+ * wants claude-haiku-4-5, and exposes no native id anywhere). We call
+ * providers DIRECTLY with BYO keys, so a gateway-only id is a 404.
+ *
+ * Normalisation here only proposes CANDIDATES. The provider's own model list
+ * is the judge — matchNativeId returns null rather than guessing, and an
+ * unmatched row is quarantined instead of being offered.
+ */
+export function candidateNativeIds(gatewayModelId: string): string[] {
+  const out = [gatewayModelId];
+  const hyphenated = gatewayModelId.replace(/\./g, "-");
+  if (hyphenated !== gatewayModelId) out.push(hyphenated);
+  return out;
+}
+
+/**
+ * Exact match wins. Otherwise accept a native id that extends a candidate with
+ * a DATE suffix only (`claude-haiku-4-5` → `claude-haiku-4-5-20251001`), which
+ * is how Anthropic publishes pinned snapshots. A bare prefix is never enough:
+ * `gpt-4` must not match `gpt-4o`.
+ */
+export function matchNativeId(
+  candidates: string[],
+  nativeIds: string[],
+): string | null {
+  const native = new Set(nativeIds);
+  for (const c of candidates) if (native.has(c)) return c;
+  for (const c of candidates) {
+    const dated = nativeIds.find((n) =>
+      new RegExp(`^${escapeRe(c)}-\\d{8}$`).test(n),
+    );
+    if (dated) return dated;
+  }
+  return null;
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+```
+
+- [ ] **Step 7: Run the tests**
+
+Run: `pnpm vitest run src/lib/ai/models/verify-ids.test.ts`
+Expected: PASS (9 tests).
+
+- [ ] **Step 8: Implement the provider model listing and the verification pass**
+
+Add to `verify-ids.ts`. `listNativeModelIds` is the only impure part — it calls the provider's own models endpoint with a real key. Each `adapterKind` has its own endpoint shape:
+
+- `anthropic` → `GET https://api.anthropic.com/v1/models?limit=100`, headers `x-api-key` + `anthropic-version: 2023-06-01`, ids at `data[].id`
+- `openai` → `GET https://api.openai.com/v1/models`, `Authorization: Bearer`, ids at `data[].id`
+- `google` → `GET https://generativelanguage.googleapis.com/v1beta/models?key=…`, ids at `models[].name` with a leading `models/` to strip
+- `openai-compatible` → `GET {baseUrl}/models`, `Authorization: Bearer`, ids at `data[].id`
+
+`verifyProviderModels` then: reads that provider's catalog rows, computes candidates per row, matches against the native list, and writes `native_model_id` + `id_verified` + `id_verified_at`. A row that fails to match is left `id_verified = false` — **never** deleted and never marked `retired`, because the model may exist and merely be named differently.
+
+**Fail closed and fail quietly:** if the provider call errors, verification is skipped entirely for that provider — do NOT flip previously-verified rows back to false, for the same reason the refresh guard exists (a provider outage must not empty the picker).
+
+- [ ] **Step 9: Call it from the two places a key is available**
+
+1. **`refresh.ts`** — after a successful upsert, if `getServerEnv().ANTHROPIC_API_KEY` is set, run `verifyProviderModels` for `anthropic`. That is the only provider with a platform key.
+2. **`credentials-actions.ts` `saveAiKey`** — after `validateKey` succeeds and the key is stored, run `verifyProviderModels` for that provider using the key just saved. This is what verifies OpenAI, Google, Mistral and Kimi. Wrap it so a verification failure never fails the save — the key is valid regardless; log and continue.
+
+- [ ] **Step 10: Make the catalog read verified-only**
+
+In `catalog-db.ts`, `listActiveModels` gains `.eq("id_verified", true)`. **This is the gate that stops an unverified id ever reaching a picker or a provider call.** `getModel` keeps returning unverified rows so callers can distinguish "retired" from "unverified" in messaging.
+
+Add `ModelRow.nativeModelId: string | null` and map it. Consumers must send `nativeModelId ?? modelId` to adapters — note this for Tasks 7 and 8.
+
+- [ ] **Step 11: Verify live against DEV**
+
+Run the refresh again and confirm with the `supabase-dev` MCP:
+
+```sql
+select provider, count(*) filter (where id_verified) as verified,
+       count(*) filter (where not id_verified) as unverified
+  from public.ai_models where status = 'active' group by provider order by provider;
+```
+
+Expected: `anthropic` has a non-zero verified count (the platform key drives it) and `claude-haiku-4.5` now carries a `native_model_id` of `claude-haiku-4-5` or a dated alias. The other four providers stay unverified until a key is saved — that is correct, not a bug. Report the actual numbers.
+
+- [ ] **Step 12: Run the gates and commit**
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test
+git add supabase/migrations src/types/database.types.ts src/lib/ai/models/ src/lib/ai/credentials-actions.ts
+git commit -m "feat(ai): verify catalog model ids against each provider
+
+The gateway publishes its own id namespace (claude-haiku-4.5) which is not
+callable against the provider's own api (claude-haiku-4-5), and we call
+providers directly with byo keys. Normalisation now only proposes
+candidates; the provider's own model list is the judge, and an unmatched
+row is quarantined rather than offered."
 ```
 
 ---
@@ -3139,7 +3555,7 @@ pnpm vitest run src/lib/ai/gateway.test.ts
 pnpm typecheck
 ```
 
-Expected: gateway tests PASS. `typecheck` will now flag every `runAi` call site whose `fn` does not return `rates` — that is fine, `rates` is optional; it will **not** flag them. It **will** flag any remaining `PROVIDER_CATALOG` / `adapter.id` / `adapter.supportsTools` usage. Fix those by threading a `ProviderRow` from the nearest server component; do not reintroduce a static catalog.
+Expected: gateway tests PASS. `rates` is optional, so existing `runAi` call sites are not flagged. Any remaining `PROVIDER_CATALOG` / `adapter.id` usage is fixed by threading a `ProviderRow` from the nearest server component — do not reintroduce a static catalog. `adapter.supportsTools` should already be gone: Task 3a owns that, and if typecheck still flags it here, Task 3a was incomplete rather than this task being wrong.
 
 - [ ] **Step 7: Commit**
 

@@ -21,7 +21,7 @@ vi.mock("@/lib/ai/write/write-tools", () => ({
 }));
 
 import { askPulseStream } from "./ask-stream";
-import { modelFor } from "@/lib/ai/model-map";
+import { requestShapeFor } from "@/lib/ai/model-map";
 
 type Round = {
   text?: string;
@@ -79,6 +79,7 @@ const run = (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- scripted structural double
     client: client as any,
     apiKey: "k",
+    model: "claude-sonnet-5",
     orgId: "org1",
     workspaceId: "ws1",
     messages,
@@ -271,6 +272,7 @@ describe("askPulseStream", () => {
 
     const { usage } = await askPulseStream({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       orgId: "org-1",
       workspaceId: "ws-1",
       messages: [{ role: "user", content: "hi" }],
@@ -325,6 +327,7 @@ describe("askPulseStream", () => {
 
     await askPulseStream({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       orgId: "org-1",
       workspaceId: "ws-1",
       messages: [{ role: "user", content: "hi" }],
@@ -374,6 +377,7 @@ describe("askPulseStream", () => {
 
     await askPulseStream({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       orgId: "org-1",
       workspaceId: "ws-1",
       messages: [{ role: "user", content: "hi" }],
@@ -439,6 +443,7 @@ describe("askPulseStream", () => {
 
     await askPulseStream({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       orgId: "org-1",
       workspaceId: "ws-1",
       messages: [{ role: "user", content: "hi" }],
@@ -447,11 +452,12 @@ describe("askPulseStream", () => {
       client,
     });
 
-    const choice = modelFor("ask_pulse");
-    expect(streamParams?.model).toBe(choice.model);
-    expect(streamParams?.thinking).toEqual(choice.thinking);
+    // The shape follows the MODEL the caller resolved, not the feature.
+    const shape = requestShapeFor("claude-sonnet-5");
+    expect(streamParams?.model).toBe("claude-sonnet-5");
+    expect(streamParams?.thinking).toEqual(shape.thinking);
     expect(streamParams?.max_tokens).toBe(8192);
-    expect(createParams?.thinking).toEqual(choice.thinking);
+    expect(createParams?.thinking).toEqual(shape.thinking);
     expect(createParams?.max_tokens).toBe(4096);
   });
 });

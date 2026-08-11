@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement, getAiEntitlement } from "@/lib/ai/entitlement";
 import { proposeLoop } from "./propose";
 import { executeAction } from "./execute";
@@ -90,17 +91,17 @@ export async function proposeActions(input: {
 
     const result = await runAi(
       { orgId: org.id, userId: user.id, feature: "conversational_action" },
-      async ({ adapter, apiKey }) => {
-        if (!adapter.supportsTools)
-          throw new ProviderNotCapableError("conversational_action");
+      async ({ provider, apiKey, model }) => {
+        assertToolLoopCapable(provider, "conversational_action");
         const r = await proposeLoop({
           apiKey,
+          model: model.requestModel,
           orgId: org.id,
           workspaceId,
           instruction: parsed.data.instruction,
           messages: history.length ? history : undefined,
         });
-        return { result: r, usage: r.usage, model: r.model };
+        return { result: r, usage: r.usage };
       },
     );
     return {

@@ -6,6 +6,7 @@ import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { buildAgentContext } from "@/lib/ai/agentic/context";
 import { autopilotRun } from "@/lib/ai/agentic/autopilot";
 import { runAi } from "@/lib/ai/gateway";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { AiDisabledError, AiQuotaExceededError } from "@/lib/ai/errors";
 import { boardAgentConfigSchema } from "@/lib/ai/agentic/autopilot-config";
@@ -124,13 +125,20 @@ export async function POST(req: Request): Promise<Response> {
 
     const decision = await runAi(
       { orgId: agent.org_id, userId: botUserId, feature: FEATURE },
-      async ({ apiKey }) => {
+      async ({ provider, apiKey, model }) => {
+        // The loop below builds `new Anthropic({ apiKey })` directly and
+        // ignores baseUrl, so it physically cannot run on another provider.
+        // Refuse at the boundary rather than POSTing someone else's key to
+        // api.anthropic.com — per_user mode resolves the ORG DEFAULT provider
+        // when an agent pins none.
+        assertToolLoopCapable(provider, FEATURE);
         const r = await autopilotRun({
           apiKey,
+          model: model.requestModel,
           agentContext: context,
           tasks,
         });
-        return { result: r, usage: r.usage, model: r.model };
+        return { result: r, usage: r.usage };
       },
     );
 

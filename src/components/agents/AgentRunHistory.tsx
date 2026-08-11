@@ -12,6 +12,7 @@ import {
   agentRunStatusColor,
   agentRunStatusLabel,
   describeAgentRun,
+  MODEL_SUBSTITUTED_NOTE,
 } from "@/lib/agents/run-status";
 
 /**
@@ -37,14 +38,36 @@ export function AgentRunHistory({
   agentName: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { data: result, isLoading } = useQuery({
+  const {
+    data: result,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["userAgentRuns", agentId],
     enabled: open,
     staleTime: 30_000,
     queryFn: () => getAgentRuns(agentId),
   });
   const runs = result?.ok ? result.data : [];
-  const loadError = result != null && !result.ok;
+  // TWO ways this read fails, and both have to land on the error branch.
+  //
+  // `isError` is the one that was missing: when the action call itself THROWS
+  // (a network drop mid-Server-Action, a deploy swapping the action id under an
+  // open tab), `result` is `undefined` and `isLoading` is already false — so
+  // reading only `!result.ok` fell through to `runs.length === 0` and rendered
+  // "No runs yet." That is the exact conflation the docstring above forbids: a
+  // broken agent looking identical to one that has never run.
+  const failed = result ?? null;
+  const loadError = isError || (failed !== null && !failed.ok);
+  // The server's own message, not a hardcoded restatement of it. `getAgentRuns`
+  // distinguishes "that agent doesn't exist" from "couldn't load the runs", and
+  // throwing that distinction away at the last hop leaves the user with the
+  // vaguer of the two. A thrown call has no message of its own, so it keeps the
+  // generic one.
+  const loadErrorMessage =
+    failed !== null && !failed.ok
+      ? failed.error
+      : "Couldn’t load this agent’s runs. Try again.";
 
   return (
     <div className="w-full">
@@ -73,7 +96,7 @@ export function AgentRunHistory({
             <p className="text-muted-foreground text-xs">Loading…</p>
           ) : loadError ? (
             <p role="alert" className="text-destructive text-xs">
-              Couldn&rsquo;t load this agent&rsquo;s runs. Try again.
+              {loadErrorMessage}
             </p>
           ) : runs.length === 0 ? (
             <p className="text-muted-foreground text-xs">
@@ -83,23 +106,40 @@ export function AgentRunHistory({
             runs.map((run) => {
               const status = agentRunDisplayStatus(run);
               return (
-                <div
-                  key={run.id}
-                  className="flex items-start gap-2 text-xs sm:items-center"
-                >
-                  <StatusPill
-                    color={agentRunStatusColor(status)}
-                    variant="soft"
-                    className="shrink-0"
-                  >
-                    {agentRunStatusLabel(status)}
-                  </StatusPill>
-                  <span className="text-muted-foreground shrink-0">
-                    {timeAgo(run.createdAt)}
-                  </span>
-                  <span className="text-muted-foreground min-w-0 flex-1 truncate">
-                    {describeAgentRun(run)}
-                  </span>
+                <div key={run.id} className="flex flex-col gap-1">
+                  <div className="flex items-start gap-2 text-xs sm:items-center">
+                    <StatusPill
+                      color={agentRunStatusColor(status)}
+                      variant="soft"
+                      className="shrink-0"
+                    >
+                      {agentRunStatusLabel(status)}
+                    </StatusPill>
+                    <span className="text-muted-foreground shrink-0">
+                      {timeAgo(run.createdAt)}
+                    </span>
+                    <span className="text-muted-foreground min-w-0 flex-1 truncate">
+                      {describeAgentRun(run)}
+                    </span>
+                  </div>
+                  {/* Its own line, and a needs-attention pill rather than a
+                      failure one: the briefing WAS sent, but on a model the
+                      owner did not choose. Pairing the colour with words keeps
+                      it readable without relying on hue (WCAG AA). */}
+                  {run.modelSubstituted ? (
+                    <div className="flex items-center gap-2 text-xs">
+                      <StatusPill
+                        color="yellow"
+                        variant="soft"
+                        className="shrink-0"
+                      >
+                        Substituted
+                      </StatusPill>
+                      <span className="text-muted-foreground min-w-0 flex-1 truncate">
+                        {MODEL_SUBSTITUTED_NOTE}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               );
             })

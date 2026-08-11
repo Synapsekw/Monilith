@@ -13,7 +13,7 @@ import {
   type ClassifyRow,
   type TargetOption,
 } from "@/lib/ai/column-fill/schema";
-import { ProviderNotCapableError } from "@/lib/ai/errors";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { mapAiError } from "@/lib/ai/action-guard";
 import { createClient } from "@/lib/supabase/server";
 import { bulkSetCell, type BulkOutcome } from "@/lib/boards/bulk-actions";
@@ -141,19 +141,20 @@ export async function classifyColumn(input: {
     const nameByItemId = new Map((items ?? []).map((i) => [i.id, i.name]));
 
     const classifications = await runAi<Classification[]>(
-      { orgId: org.id, userId: user.id, feature: "column_fill" },
-      async ({ adapter, apiKey }) => {
-        if (adapter.id !== "anthropic")
-          throw new ProviderNotCapableError("column_fill");
+      {
+        orgId: org.id,
+        userId: user.id,
+        feature: "column_fill",
+      },
+      async ({ provider, apiKey, model }) => {
+        assertToolLoopCapable(provider, "column_fill");
         const r = await classifyColumnWithAi({
           apiKey,
+          model: model.requestModel,
           rows,
           targetOptions,
         });
-        // classifyColumnWithAi reports the model it actually used (it falls
-        // back to Sonnet above the Haiku row-count limit — see classify.ts),
-        // so the ledger meters against the right price row in either case.
-        return { result: r.classifications, usage: r.usage, model: r.model };
+        return { result: r.classifications, usage: r.usage };
       },
     );
 

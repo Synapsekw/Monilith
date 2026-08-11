@@ -4,7 +4,6 @@ import { resolveActiveOrg } from "@/lib/org/active";
 import { requireUser } from "@/lib/auth/session";
 import { runAi } from "@/lib/ai/gateway";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
-import { modelFor } from "@/lib/ai/model-map";
 import {
   buildBoardSnapshot,
   type BoardSnapshot,
@@ -84,13 +83,12 @@ export async function draftReportNarrativeAction(input: {
       );
     if (snapshots.length === 0) return fail("Board not found.");
 
-    const choice = modelFor("report_narrative");
     const narrative = await runAi(
       { orgId: org.id, userId: user.id, feature: "report_narrative" },
-      async ({ adapter, apiKey }) => {
-        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
-        // adapters ignore `choice` and run their own fixed model.
-        const { narrative, usage, model } = await draftReportNarrative(
+      async ({ adapter, apiKey, baseUrl, model }) => {
+        // See lib/ai/actions.ts: the WIRE id goes to the provider, and runAi
+        // meters the catalog row it resolved.
+        const { narrative, usage } = await draftReportNarrative(
           {
             snapshots,
             scope: report.scope,
@@ -98,9 +96,9 @@ export async function draftReportNarrativeAction(input: {
             totalBoardCount: readable.length,
             omittedForAccessCount: access.omittedCount,
           },
-          { adapter, apiKey, choice },
+          { adapter, apiKey, baseUrl, model: model.requestModel },
         );
-        return { result: narrative, usage, model };
+        return { result: narrative, usage };
       },
     );
     return { ok: true, data: narrative };

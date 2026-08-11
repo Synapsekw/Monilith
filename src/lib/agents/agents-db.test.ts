@@ -260,6 +260,7 @@ describe("listAgentRuns", () => {
     fire_hour: 7,
     input_tokens: 1200,
     output_tokens: 300,
+    model_substituted: false,
     created_at: "2026-08-01T07:00:04.000Z",
   };
 
@@ -277,8 +278,23 @@ describe("listAgentRuns", () => {
         fireHour: 7,
         inputTokens: 1200,
         outputTokens: 300,
+        modelSubstituted: false,
       },
     ]);
+  });
+
+  // The column exists precisely so a substituted run is not reported as an
+  // error. Dropping it from the select would silently make every run read as
+  // un-substituted, which is the failure it was minted to prevent.
+  it("carries model_substituted through to the display shape", async () => {
+    const { client, select } = clientForRunHistory([
+      { ...dbRow, model_substituted: true },
+    ]);
+    const [run] = await listAgentRuns(client as never, "agent-1", 50);
+    expect(run.modelSubstituted).toBe(true);
+    expect(select).toHaveBeenCalledWith(
+      expect.stringContaining("model_substituted"),
+    );
   });
 
   // The read has to stay on user_agent_runs_history_idx as the table grows:

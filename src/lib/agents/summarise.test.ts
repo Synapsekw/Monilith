@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { summariseBriefing } from "./summarise";
-import { modelFor } from "@/lib/ai/model-map";
 import type { Briefing } from "./briefing";
 
 /**
@@ -65,6 +64,7 @@ describe("summariseBriefing", () => {
     const client = textClient("A short summary.");
     await summariseBriefing({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       instructions: "Be concise.",
       briefing,
       client,
@@ -92,6 +92,7 @@ describe("summariseBriefing", () => {
     const client = textClient("You have 1 overdue item.");
     const result = await summariseBriefing({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       instructions: "Be concise.",
       briefing,
       client,
@@ -100,13 +101,14 @@ describe("summariseBriefing", () => {
     expect(result.usage).toEqual({ inputTokens: 11, outputTokens: 7 });
     // Reported to runAi for the ledger — must be the model actually run, not a
     // constant that drifts from the map.
-    expect(result.model).toBe(modelFor("personal_agent_run").model);
+    expect(result.model).toBe("claude-sonnet-5");
   });
 
   it("disables thinking — a 512-token budget leaves no room for it", async () => {
     const client = textClient("A short summary.");
     await summariseBriefing({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       instructions: "Be concise.",
       briefing,
       client,
@@ -118,7 +120,7 @@ describe("summariseBriefing", () => {
     // fallbackSummary into a plausible-looking generic briefing.
     expect(params.thinking).toEqual({ type: "disabled" });
     expect(params.max_tokens).toBe(512);
-    expect(params.model).toBe(modelFor("personal_agent_run").model);
+    expect(params.model).toBe("claude-sonnet-5");
   });
 
   it("an item name containing </data> cannot close the data block early (Finding 3)", async () => {
@@ -148,6 +150,7 @@ describe("summariseBriefing", () => {
     const client = textClient("A short summary.");
     await summariseBriefing({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       instructions: "Be concise.",
       briefing: malicious,
       client,
@@ -181,6 +184,7 @@ describe("summariseBriefing", () => {
     const client = fakeClient([]); // no text block at all (e.g. truncation)
     const result = await summariseBriefing({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       instructions: "Be concise.",
       briefing,
       client,
@@ -193,6 +197,7 @@ describe("summariseBriefing", () => {
     const client = textClient("   \n  ");
     const result = await summariseBriefing({
       apiKey: "sk-ant-test",
+      model: "claude-sonnet-5",
       instructions: "Be concise.",
       briefing: {
         today: "2026-08-01",

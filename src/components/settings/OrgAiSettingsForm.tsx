@@ -5,13 +5,17 @@ import {
   setAiMode,
   setOrgByoKey,
   removeOrgByoKey,
+  setOrgDefaultModel,
+  clearOrgDefaultModel,
 } from "@/lib/ai/settings-actions";
-import {
-  ALL_PROVIDERS,
-  PROVIDER_CATALOG,
-  type AiProvider,
-} from "@/lib/ai/providers/catalog";
 import { type AiMode } from "@/lib/ai/org-settings";
+import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
+import {
+  ModelPicker,
+  providersWithoutModels,
+  type ModelOption,
+  type ModelValue,
+} from "@/components/settings/ModelPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,8 +25,10 @@ type Initial = {
   tier: string;
   creditsLimit: number;
   creditsUsed: number;
-  byoProvider: AiProvider | null;
+  byoProvider: string | null;
   byoKeyLast4: string | null;
+  defaultProvider: string | null;
+  defaultModelId: string | null;
 };
 
 const MODES: { id: AiMode; title: string; hint: string }[] = [
@@ -44,14 +50,36 @@ const MODES: { id: AiMode; title: string; hint: string }[] = [
   },
 ];
 
+/** The provider that serves `managed` mode — see gateway.ts, whose platform key
+ *  is Anthropic's, so a default on any other provider cannot apply there. */
+const MANAGED_PROVIDER = "anthropic";
+
 /**
- * Admin Settings → "AI — Organization" card. Picks how AI is powered for the
- * whole org (off / managed allowance / one shared org key / each member's own
- * key) and manages the shared org key. Mode changes are optimistic and revert
- * on failure; the org-key panel mirrors AiProviderForm's interaction + copy.
- * Inline messages only (the app has no toast primitive).
+ * Admin Settings → "Organization AI". Picks how AI is powered for the whole org
+ * (off / managed allowance / one shared org key / each member's own key),
+ * manages the shared org key, and sets the org-wide default model.
+ *
+ * Every piece of provider metadata — label, key placeholder — comes from the
+ * `ai_providers` rows passed in, exactly as `AiKeyList` does. This form used to
+ * index a hardcoded three-entry map with `byo_provider`, which is now an open
+ * `string`: a Mistral or Kimi value read `.label` off `undefined` and threw the
+ * whole settings page for every admin in the org. The map is gone, not guarded.
+ *
+ * Nothing here fetches. Mode, key state and the chosen model are client state
+ * over data the page loaded once, so every in-page interaction is 0 server
+ * round-trips (working agreement #5); only the four mutations talk to the
+ * server. Mode changes are optimistic and revert on failure; inline messages,
+ * so an error sits on the control that caused it.
  */
-export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
+export function OrgAiSettingsForm({
+  initial,
+  providers,
+  modelOptions,
+}: {
+  initial: Initial;
+  providers: ProviderRow[];
+  modelOptions: ModelOption[];
+}) {
   // `mode` is optimistic; `confirmed` is the last server-acknowledged mode we
   // revert to when a change is rejected.
   const [mode, setMode] = useState<AiMode>(initial.mode);
@@ -59,18 +87,37 @@ export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
   const [modeError, setModeError] = useState<string | null>(null);
   const [modePending, startMode] = useTransition();
 
-  const [byoProvider, setByoProvider] = useState<AiProvider | null>(
+  const [byoProvider, setByoProvider] = useState<string | null>(
     initial.byoProvider,
   );
   const [byoKeyLast4, setByoKeyLast4] = useState<string | null>(
     initial.byoKeyLast4,
   );
-  const [provider, setProvider] = useState<AiProvider>(
-    initial.byoProvider ?? "anthropic",
+  const [provider, setProvider] = useState<string>(
+    initial.byoProvider ?? providers[0]?.id ?? "",
   );
   const [key, setKey] = useState("");
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keyPending, startKey] = useTransition();
+
+  const [defaultModel, setDefaultModel] = useState<ModelValue | null>(
+    initial.defaultProvider && initial.defaultModelId
+      ? { provider: initial.defaultProvider, modelId: initial.defaultModelId }
+      : null,
+  );
+  const [defaultError, setDefaultError] = useState<string | null>(null);
+  const [defaultPending, startDefault] = useTransition();
+
+  // Never an index into a fixed map: a provider row can disappear (disabled)
+  // while a stored id still names it, and the id is a better label than a crash.
+  const labelOf = (id: string) =>
+    providers.find((p) => p.id === id)?.label ?? id;
+  const selectedProvider = providers.find((p) => p.id === provider) ?? null;
+
+  // Providers with no selectable model yet. Listed inside the picker rather than
+  // hidden, because "no models" here means "nobody has saved a key for it" — a
+  // provider's catalog ids are only verifiable with that provider's own key.
+  const emptyProviders = providersWithoutModels(providers, modelOptions);
 
   function chooseMode(next: AiMode) {
     if (next === mode || modePending) return;
@@ -113,6 +160,44 @@ export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
       }
     });
   }
+
+  // `null` is "no default" — the way back out of a default that overrides every
+  // feature's tier. Optimistic in both directions, reverting to the last
+  // server-acknowledged value, like the mode radios above.
+  function chooseDefaultModel(next: ModelValue | null) {
+    // The guard the picker's `disabled` used to provide, moved here: a second
+    // choice while the first is still in flight would race two writes and could
+    // revert to a "previous" value that was itself never acknowledged. Matches
+    // `chooseMode` above.
+    if (defaultPending) return;
+    const previous = defaultModel;
+    setDefaultError(null);
+    setDefaultModel(next); // optimistic
+    startDefault(async () => {
+      const res = next
+        ? await setOrgDefaultModel(next)
+        : await clearOrgDefaultModel();
+      if (!res.ok) {
+        setDefaultModel(previous); // revert
+        setDefaultError(res.error);
+      }
+    });
+  }
+
+  // A default only takes effect when its provider is the one actually serving
+  // the request (see gateway.ts · defaultModelIdFor). Say so rather than hiding
+  // the choice: the mode can change tomorrow, and a silently inert setting is
+  // worse than an explained one.
+  const inertBecause =
+    defaultModel === null
+      ? null
+      : mode === "managed" && defaultModel.provider !== MANAGED_PROVIDER
+        ? `Managed AI runs on ${labelOf(MANAGED_PROVIDER)}, so this applies only once the organization uses its own keys.`
+        : mode === "org_byo" &&
+            byoProvider !== null &&
+            defaultModel.provider !== byoProvider
+          ? `The organization key is a ${labelOf(byoProvider)} key, so this applies only to ${labelOf(defaultModel.provider)} runs.`
+          : null;
 
   const usedPct =
     initial.creditsLimit > 0
@@ -178,7 +263,7 @@ export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
         </div>
       )}
 
-      <div className="space-y-3 border-t pt-4">
+      <div className="border-border space-y-3 border-t pt-4">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">Organization key</p>
           <p className="text-muted-foreground text-xs">
@@ -187,28 +272,35 @@ export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
         </div>
 
         {byoKeyLast4 ? (
-          <div className="bg-muted/40 flex items-center justify-between rounded-md border px-3 py-2">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">
-                {PROVIDER_CATALOG[byoProvider ?? "anthropic"].label}
+          <div className="border-border hover:border-border-hover flex items-center justify-between rounded-lg border px-3 py-2.5 transition-colors">
+            <div className="min-w-0 space-y-0.5">
+              <p className="truncate text-sm font-medium">
+                {byoProvider ? labelOf(byoProvider) : "Organization key"}
               </p>
-              <p className="text-muted-foreground text-xs">{byoKeyLast4}</p>
+              <p className="text-muted-foreground truncate font-mono text-xs">
+                {byoKeyLast4}
+              </p>
             </div>
             <Button
               size="sm"
               variant="ghost"
+              className="text-destructive hover:bg-destructive/10 shrink-0"
               onClick={removeKey}
               disabled={keyPending}
             >
               Remove
             </Button>
           </div>
+        ) : providers.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            No AI providers are enabled for this deployment yet.
+          </p>
         ) : (
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>Provider</Label>
               <div className="flex flex-wrap gap-2">
-                {ALL_PROVIDERS.map((p) => (
+                {providers.map((p) => (
                   <Button
                     key={p.id}
                     type="button"
@@ -233,7 +325,9 @@ export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
                 type="password"
                 value={key}
                 autoComplete="off"
-                placeholder={PROVIDER_CATALOG[provider].placeholder}
+                spellCheck={false}
+                placeholder={selectedProvider?.keyPlaceholder ?? ""}
+                aria-invalid={keyError ? true : undefined}
                 disabled={keyPending}
                 onChange={(e) => {
                   setKey(e.target.value);
@@ -259,6 +353,68 @@ export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
         {keyError && (
           <p role="alert" className="text-destructive text-xs">
             {keyError}
+          </p>
+        )}
+      </div>
+
+      {/* `role="group"` + `aria-labelledby`, not a `<label htmlFor>`: the
+          picker's trigger is a combobox whose accessible name is its current
+          VALUE, so a label pointing at it would REPLACE the value a screen
+          reader announces instead of naming the field. Same treatment as the
+          per-agent pin in AgentEditor, which renders the same picker. */}
+      <div
+        className="border-border space-y-3 border-t pt-4"
+        role="group"
+        aria-labelledby="org-default-model-label"
+        // Announces the in-flight save without taking the control away. See
+        // the picker below for why `disabled` is not used here.
+        aria-busy={defaultPending}
+      >
+        <div className="space-y-0.5">
+          <p id="org-default-model-label" className="text-sm font-medium">
+            Default model
+          </p>
+          <p className="text-muted-foreground text-xs">
+            Every AI feature runs on this model when its provider is the one
+            serving the request — including features that would otherwise pick a
+            cheaper or stronger model for the job. Agents with their own model
+            keep it.
+          </p>
+          {/* The non-obvious half of this control, and the reason it needs
+              saying: the default writes `default_provider`, which gateway.ts
+              uses as the routing fallback for EVERY per-user call. So choosing
+              a model here also decides which provider key each member has to
+              have on file — and a member without that one gets no AI at all
+              rather than a cheaper model. */}
+          <p className="text-muted-foreground text-xs">
+            Choosing a default also chooses its provider: on members&rsquo; own
+            keys, everyone needs a key for that provider to use AI at all.
+          </p>
+        </div>
+
+        {/* Deliberately NOT `disabled={defaultPending}`. Disabling the trigger
+            mid-save removes the focused element from the tab order, and the
+            browser drops focus to `<body>` — a keyboard or screen-reader user
+            loses their place on this surface and not on the identical picker in
+            AgentEditor, which never disables it. The save is already guarded
+            inside `chooseDefaultModel`, so the busy state can be announced
+            (`aria-busy` on the group above) instead of enforced by removal. */}
+        <ModelPicker
+          options={modelOptions}
+          emptyProviders={emptyProviders}
+          value={defaultModel}
+          onChange={chooseDefaultModel}
+          allowInherit
+          inheritLabel="No default — each feature picks its own tier"
+        />
+
+        {inertBecause && (
+          <p className="text-muted-foreground text-xs">{inertBecause}</p>
+        )}
+
+        {defaultError && (
+          <p role="alert" className="text-destructive text-xs">
+            {defaultError}
           </p>
         )}
       </div>

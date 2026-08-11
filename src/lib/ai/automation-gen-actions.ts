@@ -3,7 +3,6 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { runAi } from "@/lib/ai/gateway";
-import { modelFor } from "@/lib/ai/model-map";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import { getBoardPayload } from "@/lib/boards/queries";
 import { listOrgMembersCached } from "@/lib/org/queries-cached";
@@ -59,18 +58,18 @@ export async function generateAutomationDraft(input: {
     });
 
     const user = await requireUser();
-    const choice = modelFor("automation_gen");
     const rawDraft = await runAi(
       { orgId: org.id, userId: user.id, feature: "automation_gen" },
-      async ({ adapter, apiKey }) => {
-        // Meter the model the ADAPTER ran, not choice.model — non-Anthropic
-        // adapters ignore `choice` and run their own fixed model.
-        const { draft, usage, model } = await generateAutomationDraftLLM(
-          prompt,
-          ctx,
-          { adapter, apiKey, choice },
-        );
-        return { result: draft, usage, model };
+      async ({ adapter, apiKey, baseUrl, model }) => {
+        // See actions.ts: the WIRE id goes to the provider, and runAi meters
+        // the catalog row it resolved.
+        const { draft, usage } = await generateAutomationDraftLLM(prompt, ctx, {
+          adapter,
+          apiKey,
+          baseUrl,
+          model: model.requestModel,
+        });
+        return { result: draft, usage };
       },
     );
 

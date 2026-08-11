@@ -3,7 +3,7 @@ import type { AiUsageTokens } from "@/lib/ai/pricing";
 import type { DashboardProposal } from "@/lib/ai/proposal-schema";
 import type { BoardSnapshot } from "@/lib/ai/board-snapshot";
 import type { ProviderAdapter } from "@/lib/ai/providers/types";
-import type { ModelChoice } from "@/lib/ai/model-map";
+import { toRequestArgs } from "@/lib/ai/providers/request";
 
 /**
  * System prompt teaching the model the widget vocabulary and grid. Frozen and
@@ -43,8 +43,10 @@ export async function generateProposal(
   opts: {
     adapter: ProviderAdapter;
     apiKey: string;
+    baseUrl?: string | null;
     feedback?: string;
-    choice?: ModelChoice;
+    /** The WIRE model id to run (`ResolvedModel.requestModel`). */
+    model: string;
   },
 ): Promise<{
   proposal: DashboardProposal;
@@ -52,9 +54,8 @@ export async function generateProposal(
   model: string;
 }> {
   return opts.adapter.generateProposal({
-    apiKey: opts.apiKey,
+    ...toRequestArgs(opts),
     system: buildSystemPrompt(),
     user: buildUserPrompt(snap, opts.feedback),
-    choice: opts.choice,
   });
 }

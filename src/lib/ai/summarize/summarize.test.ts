@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { buildTranscript, summarizeThread } from "@/lib/ai/summarize/summarize";
-import { modelFor } from "@/lib/ai/model-map";
 import type {
   ItemActivityRow,
   ItemUpdateRow,
@@ -172,6 +171,7 @@ describe("summarizeThread", () => {
     const client = fakeClient("Here's what happened.");
     const result = await summarizeThread({
       apiKey: "unused",
+      model: "claude-sonnet-5",
       updates: [update({})],
       activities: [],
       columns: [],
@@ -197,6 +197,7 @@ describe("summarizeThread", () => {
     };
     await summarizeThread({
       apiKey: "unused",
+      model: "claude-sonnet-5",
       updates: [update({ body_text: "the transcript body" })],
       activities: [],
       columns: [],
@@ -228,16 +229,17 @@ describe("summarizeThread", () => {
     };
     const res = await summarizeThread({
       apiKey: "unused",
+      model: "claude-sonnet-5",
       updates: [update({})],
       activities: [],
       columns: [],
       members: MEMBERS,
       client: client as never,
     });
-    expect(params?.model).toBe(modelFor("thread_summary").model);
+    expect(params?.model).toBe("claude-sonnet-5");
     expect(params?.thinking).toEqual({ type: "disabled" });
     expect(params?.max_tokens).toBe(1024);
-    // Reported back so runAi's ledger row names the model that actually ran.
-    expect(res.model).toBe(modelFor("thread_summary").model);
+    // Reported back: the model the caller resolved is the one that ran.
+    expect(res.model).toBe("claude-sonnet-5");
   });
 });

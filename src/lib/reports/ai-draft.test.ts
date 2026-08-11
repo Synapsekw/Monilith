@@ -45,7 +45,7 @@ describe("draftReportNarrative", () => {
     const { adapter, generateStructured } = recordingAdapter();
     const { narrative } = await draftReportNarrative(
       { snapshots: [oneBoard], scope: "board" },
-      { adapter, apiKey: "k" },
+      { adapter, apiKey: "k", model: "claude-sonnet-5" },
     );
     expect(narrative.summary).toBe("All good.");
     expect(generateStructured).toHaveBeenCalledOnce();
@@ -56,7 +56,7 @@ describe("draftReportNarrative", () => {
     await expect(
       draftReportNarrative(
         { snapshots: [oneBoard], scope: "board" },
-        { adapter, apiKey: "k" },
+        { adapter, apiKey: "k", model: "claude-sonnet-5" },
       ),
     ).rejects.toThrow();
   });
@@ -83,7 +83,7 @@ describe("draftReportNarrative", () => {
     const { adapter, generateStructured } = recordingAdapter();
     await draftReportNarrative(
       { snapshots: [a, b], scope: "boards" },
-      { adapter, apiKey: "k" },
+      { adapter, apiKey: "k", model: "claude-sonnet-5" },
     );
     const { user, system } = generateStructured.mock.calls[0][0];
     expect(user).toContain("Roadmap");
@@ -106,7 +106,7 @@ describe("draftReportNarrative", () => {
         scope: "portfolio",
         totalBoardCount: 9,
       },
-      { adapter, apiKey: "k" },
+      { adapter, apiKey: "k", model: "claude-sonnet-5" },
     );
     const { user } = generateStructured.mock.calls[0][0];
     expect(user).toContain("2 of 9");
@@ -121,7 +121,7 @@ describe("draftReportNarrative", () => {
     const { adapter, generateStructured } = recordingAdapter();
     await draftReportNarrative(
       { snapshots: [snapshot("Wide", { columns })], scope: "board" },
-      { adapter, apiKey: "k" },
+      { adapter, apiKey: "k", model: "claude-sonnet-5" },
     );
     const { user } = generateStructured.mock.calls[0][0];
     expect(user).toContain(`Col${MAX_COLUMNS_PER_BOARD - 1}`);
@@ -136,7 +136,7 @@ describe("draftReportNarrative", () => {
     const { adapter, generateStructured } = recordingAdapter();
     await draftReportNarrative(
       { snapshots: [oneBoard], scope: "board" },
-      { adapter, apiKey: "k" },
+      { adapter, apiKey: "k", model: "claude-sonnet-5" },
     );
     const { user } = generateStructured.mock.calls[0][0];
     expect(user).not.toContain("items");
@@ -148,7 +148,7 @@ describe("draftReportNarrative", () => {
     await expect(
       draftReportNarrative(
         { snapshots: [], scope: "template" },
-        { adapter, apiKey: "k" },
+        { adapter, apiKey: "k", model: "claude-sonnet-5" },
       ),
     ).rejects.toThrow();
     expect(generateStructured).not.toHaveBeenCalled();

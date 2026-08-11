@@ -1,12 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { COLUMN_FILL_MAX } from "@/lib/ai/column-fill/schema";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 // A resolved adapter+key, as the real gateway hands to runAi's callback.
-// `id` is per-test so the not-capable branch is exercisable.
+// `provider` is per-test so the not-capable branch is exercisable — the gate
+// reads the PROVIDER id, not the (per-wire-format) adapter.
 let FAKE_RESOLVED = {
-  adapter: { id: "anthropic", supportsTools: true },
+  adapter: { kind: "anthropic" },
   apiKey: "k",
   mode: "managed",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (
@@ -55,10 +60,16 @@ vi.mock("@/lib/boards/bulk-actions", () => ({
 //   .from("columns").select().eq().maybeSingle()         (apply: id only)
 //   .from("cell_values").select().eq().limit()
 //   .from("items").select().in()
+/** The `.limit(n)` the source read asked for — the bound is the whole reason
+ *  a classify batch can never outgrow the cheap tier's context window. */
+let CELLS_LIMIT: number | null = null;
 function chain(result: { data: unknown; error: unknown }) {
   const node = {
     eq: () => node,
-    limit: async () => result,
+    limit: async (n: number) => {
+      CELLS_LIMIT = n;
+      return result;
+    },
     in: async () => result,
     maybeSingle: async () => result,
   };
@@ -102,6 +113,7 @@ const STATUS_OPTIONS = [
 ];
 
 beforeEach(() => {
+  CELLS_LIMIT = null;
   runAi.mockClear();
   requireAiEntitlement.mockReset();
   getUserOrgs.mockReset();
@@ -111,10 +123,12 @@ beforeEach(() => {
   createClient.mockClear();
 
   FAKE_RESOLVED = {
-    adapter: { id: "anthropic", supportsTools: true },
+    adapter: { kind: "anthropic" },
     apiKey: "k",
     mode: "managed",
     provider: "anthropic",
+    baseUrl: null,
+    model: fakeResolvedModel(),
   };
 
   requireUser.mockResolvedValue({ id: "user-1" });
@@ -224,6 +238,50 @@ describe("classifyColumn action", () => {
         rows: [{ itemId: ITEM_1, text: "needs review" }],
       }),
     );
+  });
+
+  // ── no tier override ──────────────────────────────────────────────────
+  // `column_fill` asks for nothing but its feature name; `model-map.ts` maps
+  // that to the cheap tier and `resolveModel` picks from there. There WAS a
+  // "batch too big for the cheap context window" escalation here, keyed on a
+  // 2000-row threshold — dead on arrival, because the source read is
+  // `.limit(COLUMN_FILL_MAX)` (200) and 200 can never exceed 2000. It is gone
+  // rather than pinned-as-dead; see the note beside COLUMN_FILL_MAX for what
+  // to do if that cap is ever raised.
+  it("reads the source column bounded by COLUMN_FILL_MAX", async () => {
+    // Working agreement #5, and the reason no tier escalation is needed: the
+    // batch is capped at the read, so it cannot grow to a size the cheap
+    // tier's context window can't hold.
+    CELLS_RESULT = {
+      data: [{ item_id: ITEM_1, value: { text: "needs review" } }],
+      error: null,
+    };
+    const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
+    await classifyColumn({
+      boardId: BOARD_ID,
+      sourceColumnId: SOURCE_COLUMN_ID,
+      targetColumnId: TARGET_COLUMN_ID,
+    });
+    expect(CELLS_LIMIT).toBe(COLUMN_FILL_MAX);
+  });
+
+  it("sends no tier override, whatever the batch size", async () => {
+    CELLS_RESULT = {
+      data: [ITEM_1, ITEM_2, ITEM_3].map((id) => ({
+        item_id: id,
+        value: { text: "needs review" },
+      })),
+      error: null,
+    };
+    const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
+    await classifyColumn({
+      boardId: BOARD_ID,
+      sourceColumnId: SOURCE_COLUMN_ID,
+      targetColumnId: TARGET_COLUMN_ID,
+    });
+    expect(runAi.mock.calls[0]![0]).toMatchObject({ feature: "column_fill" });
+    // Absent, not undefined — runAi falls through to the feature's own tier.
+    expect(runAi.mock.calls[0]![0]).not.toHaveProperty("tier");
   });
 
   // FIX 4: text columns can hold up to 20,000 characters, and up to
@@ -337,10 +395,12 @@ describe("classifyColumn action", () => {
 
   it("maps a not-capable provider to the Anthropic-specific copy and never calls the lib", async () => {
     FAKE_RESOLVED = {
-      adapter: { id: "openai", supportsTools: false },
+      adapter: { kind: "openai" },
       apiKey: "k",
       mode: "managed",
       provider: "openai",
+      baseUrl: null,
+      model: fakeResolvedModel(),
     };
     const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
     const res = await classifyColumn({

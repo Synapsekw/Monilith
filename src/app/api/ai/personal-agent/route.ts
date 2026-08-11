@@ -6,6 +6,7 @@ import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { runAi } from "@/lib/ai/gateway";
+import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
 import {
   AiDisabledError,
@@ -103,6 +104,8 @@ async function finalizeRun(
     error?: string | null;
     input_tokens?: number | null;
     output_tokens?: number | null;
+    /** True when the agent's pinned model was unavailable and runAi fell back. */
+    model_substituted?: boolean;
   },
 ): Promise<void> {
   const { error } = await svc
@@ -276,19 +279,33 @@ export async function POST(req: Request): Promise<Response> {
     //    every briefing in the org every day), so it falls through to the
     //    generic catch below and is recorded as "error", not "skipped".
     let result: BriefingSummary;
+    // Written to the run row below. `user_agent_runs.model_substituted` exists
+    // precisely so "your pinned model is gone, this ran on the default" is its
+    // own signal instead of being overloaded onto `error` — a substituted run
+    // still SUCCEEDED, and recording it as an error would tell the owner their
+    // agent is broken when it is not.
+    let modelSubstituted = false;
     try {
       result = await runAi(
-        { orgId: agent.org_id, userId: agent.owner_id, feature: FEATURE },
-        async ({ adapter, apiKey }) => {
-          if (adapter.id !== "anthropic") {
-            throw new ProviderNotCapableError(FEATURE);
-          }
+        {
+          orgId: agent.org_id,
+          userId: agent.owner_id,
+          feature: FEATURE,
+          // The per-agent pin. Null on either means "org default", which is
+          // exactly what runAi does when they are omitted.
+          provider: agent.provider ?? undefined,
+          requestedModel: agent.model_id,
+        },
+        async ({ provider, apiKey, model }) => {
+          assertToolLoopCapable(provider, FEATURE);
+          modelSubstituted = model.substituted;
           const r = await summariseBriefing({
             apiKey,
+            model: model.requestModel,
             instructions: agent.instructions,
             briefing,
           });
-          return { result: r, usage: r.usage, model: r.model };
+          return { result: r, usage: r.usage };
         },
       );
     } catch (e) {
@@ -305,9 +322,17 @@ export async function POST(req: Request): Promise<Response> {
       if (e instanceof ProviderNotCapableError) {
         await safeFinalize(svc, key, {
           status: "skipped",
+          // Two settings can put this agent on a non-Anthropic provider, and
+          // naming only one of them sends the owner to the wrong page. The
+          // agent's OWN model pin wins over the org default (see the
+          // `provider: agent.provider` argument above), so an agent pinned to,
+          // say, a GPT model skips every run while "Settings → AI" looks
+          // perfectly fine. Both are named, pin first, because the pin is the
+          // one that overrides.
           error:
-            "Personal agents currently require an Anthropic key. The owner's " +
-            "configured AI provider (Settings → AI) is not Anthropic, so " +
+            "Personal agents currently require Anthropic. This agent resolved " +
+            "to another provider — either its own model pin (Settings → " +
+            "Agents) or the organization's AI provider (Settings → AI) — so " +
             "this run was skipped rather than billed to the wrong provider.",
         });
         return NextResponse.json({
@@ -345,6 +370,7 @@ export async function POST(req: Request): Promise<Response> {
       error: null,
       input_tokens: result.usage.inputTokens,
       output_tokens: result.usage.outputTokens,
+      model_substituted: modelSubstituted,
     });
 
     return NextResponse.json({ status: "ran" });

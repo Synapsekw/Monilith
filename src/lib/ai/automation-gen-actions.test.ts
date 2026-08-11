@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 import {
   AiDisabledError,
@@ -24,10 +25,12 @@ vi.mock("@/lib/ai/automation-generate", () => ({
 }));
 
 const FAKE_RESOLVED = {
-  adapter: { defaultModel: "claude-opus-4-8", supportsTools: true },
+  adapter: { kind: "anthropic" },
   apiKey: "k",
   mode: "per_user",
   provider: "anthropic",
+  baseUrl: null,
+  model: fakeResolvedModel(),
 };
 const runAi = vi.fn(
   async (
