@@ -132,7 +132,7 @@ export async function setAiMode(input: {
     .upsert(patch, { onConflict: "org_id" });
   if (error) return fail("Couldn't update the AI mode. Please try again.");
 
-  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
   return { ok: true, data: { mode } };
 }
 
@@ -216,7 +216,7 @@ export async function setOrgByoKey(input: {
     void verifyIds();
   }
 
-  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
   return { ok: true, data: { provider, hint } };
 }
 
@@ -324,6 +324,6 @@ export async function removeOrgByoKey(): Promise<
   const { error } = await svc.rpc("org_ai_secret_clear", { p_org: ctx.orgId });
   if (error) return fail("Couldn't remove the key. Please try again.");
 
-  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
   return { ok: true, data: {} };
 }

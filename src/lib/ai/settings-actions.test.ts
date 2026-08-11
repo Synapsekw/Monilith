@@ -122,7 +122,11 @@ vi.mock("@/lib/org/active", () => ({
     timezone: "UTC",
   })),
 }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// Hoisted so the PATH each mutation invalidates is assertable. `revalidatePath`
+// without a `type` is NOT recursive, so a stale path here means the org AI form
+// keeps rendering pre-mutation data until something else happens to bust it.
+const { revalidatePath } = vi.hoisted(() => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath }));
 
 // Id verification is a live third-party round-trip, so it is handed to `after`
 // instead of being awaited on the response path — same shape, and same reason,
@@ -658,5 +662,77 @@ describe("removeOrgByoKey", () => {
       p_org: "org-1",
     });
     expect(res.ok).toBe(true);
+  });
+});
+
+/**
+ * Every mutation in this module is made from the org AI form, which lives at
+ * `/settings/ai` — it moved off `/settings` in this branch.
+ *
+ * `revalidatePath(path)` with no `type` invalidates exactly ONE path and is
+ * deliberately NOT recursive, so a mutation still naming `/settings` busts a
+ * page the form is no longer on and leaves the page the admin is looking at
+ * serving its pre-mutation render. Three of these five were left behind when
+ * the page moved; this suite is what makes the next move loud.
+ */
+describe("revalidation names the page the form actually lives on", () => {
+  const AI_SETTINGS_PATH = "/settings/ai";
+
+  const paths = () => revalidatePath.mock.calls.map((c) => c[0]);
+
+  it("setAiMode", async () => {
+    admin(true);
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    expect((await setAiMode({ mode: "off" })).ok).toBe(true);
+    expect(paths()).toEqual([AI_SETTINGS_PATH]);
+  });
+
+  it("setOrgByoKey", async () => {
+    admin(true);
+    validateKey.mockResolvedValue(undefined);
+    svcRpc.mockResolvedValue({ data: null, error: null });
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    expect(
+      (await setOrgByoKey({ provider: "anthropic", key: "sk-ant-valid-key" }))
+        .ok,
+    ).toBe(true);
+    expect(paths()).toEqual([AI_SETTINGS_PATH]);
+  });
+
+  it("removeOrgByoKey", async () => {
+    admin(true);
+    svcRpc.mockResolvedValue({ data: null, error: null });
+    const { removeOrgByoKey } = await import("@/lib/ai/settings-actions");
+    expect((await removeOrgByoKey()).ok).toBe(true);
+    expect(paths()).toEqual([AI_SETTINGS_PATH]);
+  });
+
+  it("setOrgDefaultModel", async () => {
+    admin(true);
+    const { setOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(
+      (
+        await setOrgDefaultModel({
+          provider: "anthropic",
+          modelId: "claude-sonnet-5",
+        })
+      ).ok,
+    ).toBe(true);
+    expect(paths()).toEqual([AI_SETTINGS_PATH]);
+  });
+
+  it("clearOrgDefaultModel", async () => {
+    admin(true);
+    const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect((await clearOrgDefaultModel()).ok).toBe(true);
+    expect(paths()).toEqual([AI_SETTINGS_PATH]);
+  });
+
+  // A rejected mutation changed nothing, so it must not bust the page either.
+  it("does not revalidate when the mutation was refused", async () => {
+    admin(false);
+    const { setAiMode } = await import("@/lib/ai/settings-actions");
+    expect((await setAiMode({ mode: "off" })).ok).toBe(false);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
