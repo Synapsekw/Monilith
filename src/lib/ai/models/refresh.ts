@@ -57,13 +57,25 @@ export async function refreshCatalog(deps: {
   );
   if (upsertErr) throw new Error(`refreshCatalog upsert: ${upsertErr.message}`);
 
-  // Anything we did not see this run is retired, never deleted.
-  const { error: retireErr } = await deps.client
+  // Anything we did not see this run, among the providers THIS run actually
+  // covers, is retired — never deleted. Scoped to `providersSeen` (the
+  // providers present in the PARSED rows), not the full enabled list: a
+  // healthy fetch that happens to omit one provider's entries must not touch
+  // that provider's rows — the same fail-closed principle as the zero-rows
+  // guard above, just per-provider instead of catalog-wide (finding C1).
+  const providersSeen = [...new Set(rows.map((r) => r.provider))];
+  const { data: retiredRows, error: retireErr } = await deps.client
     .from("ai_models")
     .update({ status: "retired" })
+    .in("provider", providersSeen)
     .lt("last_seen_at", seenAt)
-    .eq("status", "active");
+    .eq("status", "active")
+    .select("provider,model_id");
   if (retireErr) throw new Error(`refreshCatalog retire: ${retireErr.message}`);
 
-  return { upserted: rows.length, retired: 0, skipped: false };
+  return {
+    upserted: rows.length,
+    retired: retiredRows?.length ?? 0,
+    skipped: false,
+  };
 }
