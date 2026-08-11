@@ -124,6 +124,26 @@ vi.mock("@/lib/org/active", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+// Id verification is a live third-party round-trip, so it is handed to `after`
+// instead of being awaited on the response path — same shape, and same reason,
+// as credentials-actions.test.ts. `after` throws outside a Next request scope,
+// so capturing the tasks IS the assertion that the work was deferred.
+const { afterTasks } = vi.hoisted(() => ({
+  afterTasks: [] as (() => Promise<void>)[],
+}));
+vi.mock("next/server", async (importActual) => {
+  const actual = await importActual<typeof import("next/server")>();
+  return {
+    ...actual,
+    after: (task: () => Promise<void>) => void afterTasks.push(task),
+  };
+});
+
+const verifyProviderModels = vi.fn();
+vi.mock("@/lib/ai/models/verify-ids", () => ({
+  verifyProviderModels: (...a: unknown[]) => verifyProviderModels(...a),
+}));
+
 // Mocked at the module boundary rather than through rlsRpc: readOrgBillingStatus
 // goes through the same RLS client as has_org_role, so sharing that mock would
 // make the admin check and the billing read indistinguishable.
@@ -157,6 +177,8 @@ const admin = (allowed: boolean) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  afterTasks.length = 0;
+  verifyProviderModels.mockResolvedValue({ verified: 0, unverified: 0 });
   svcUpdateResult.mockResolvedValue({ error: null, count: 1 });
   models = {
     "anthropic/claude-sonnet-5": modelFixture("anthropic", "claude-sonnet-5"),
@@ -386,6 +408,77 @@ describe("setAiMode — managed is derived from the subscription", () => {
   });
 });
 
+// An org key is the only thing that can ask ITS provider which model ids the
+// provider actually answers to — exactly like a personal key. Without this, an
+// admin saves the org's Mistral key and the model picker still says "add an API
+// key to see models" for Mistral, forever.
+describe("setOrgByoKey — id verification", () => {
+  const saveMistral = async () => {
+    admin(true);
+    validateKey.mockResolvedValue(undefined);
+    svcRpc.mockResolvedValue({ data: null, error: null });
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    return setOrgByoKey({ provider: "mistral", key: "sk-mistral-valid-key" });
+  };
+
+  it("defers verification to after() instead of awaiting it on the response path", async () => {
+    // A provider that accepts the connection and then stalls must not hold the
+    // admin's "Validate & save" open.
+    const res = await saveMistral();
+    expect(res.ok).toBe(true);
+    expect(afterTasks).toHaveLength(1);
+    expect(verifyProviderModels).not.toHaveBeenCalled();
+  });
+
+  it("resolves that provider's catalog ids with the key it just saved", async () => {
+    await saveMistral();
+    await afterTasks[0]();
+    expect(verifyProviderModels).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "mistral",
+        apiKey: "sk-mistral-valid-key",
+      }),
+    );
+  });
+
+  it("does not verify when the key never reached the vault", async () => {
+    admin(true);
+    validateKey.mockResolvedValue(undefined);
+    svcRpc.mockResolvedValue({ data: null, error: { message: "vault down" } });
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    const res = await setOrgByoKey({
+      provider: "mistral",
+      key: "sk-mistral-valid-key",
+    });
+    expect(res.ok).toBe(false);
+    expect(afterTasks).toHaveLength(0);
+  });
+
+  it("does not verify when the provider rejected the key", async () => {
+    admin(true);
+    const { ProviderAuthError } = await import("@/lib/ai/providers/types");
+    validateKey.mockRejectedValue(new ProviderAuthError("nope"));
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    const res = await setOrgByoKey({
+      provider: "mistral",
+      key: "sk-mistral-valid-key",
+    });
+    expect(res.ok).toBe(false);
+    expect(afterTasks).toHaveLength(0);
+    expect(verifyProviderModels).not.toHaveBeenCalled();
+  });
+
+  it("still saves the key when verification blows up", async () => {
+    // The key is valid regardless; an unverified row is simply not offered
+    // until the next pass. The deferred task must swallow rather than reject
+    // into the platform, because nothing is left to observe it.
+    verifyProviderModels.mockRejectedValueOnce(new Error("catalog offline"));
+    const res = await saveMistral();
+    expect(res.ok).toBe(true);
+    await expect(afterTasks[0]()).resolves.toBeUndefined();
+  });
+});
+
 describe("setOrgDefaultModel", () => {
   it("rejects non-admins", async () => {
     admin(false);
@@ -492,6 +585,55 @@ describe("setOrgDefaultModel", () => {
         modelId: "claude-sonnet-5",
       }),
     ).toEqual({ ok: false, error: "Couldn't save the default model." });
+  });
+});
+
+describe("clearOrgDefaultModel", () => {
+  it("rejects non-admins", async () => {
+    admin(false);
+    const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(await clearOrgDefaultModel()).toEqual({
+      ok: false,
+      error: "Only organization admins can change AI settings.",
+    });
+    expect(svcUpdate).not.toHaveBeenCalled();
+  });
+
+  it("nulls BOTH halves of the default", async () => {
+    // A catalog key is meaningless without its provider, so clearing one and
+    // leaving the other would store a pair that can never resolve.
+    admin(true);
+    const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    const res = await clearOrgDefaultModel();
+    expect(res.ok).toBe(true);
+    expect(svcUpdate.lastValues).toMatchObject({
+      default_provider: null,
+      default_model_id: null,
+      updated_by: "user-1",
+    });
+  });
+
+  it("is a no-op success for an org with no settings row, and creates none", async () => {
+    // Nothing to clear is the outcome the caller wanted — same reasoning as
+    // removeAiKey. Still never an upsert: see setOrgDefaultModel.
+    admin(true);
+    svcUpdateResult.mockResolvedValue({ error: null, count: 0 });
+    const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect((await clearOrgDefaultModel()).ok).toBe(true);
+    expect(svcUpsert).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed write instead of claiming success", async () => {
+    admin(true);
+    svcUpdateResult.mockResolvedValue({
+      error: { message: "boom" },
+      count: null,
+    });
+    const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
+    expect(await clearOrgDefaultModel()).toEqual({
+      ok: false,
+      error: "Couldn't clear the default model.",
+    });
   });
 });
 

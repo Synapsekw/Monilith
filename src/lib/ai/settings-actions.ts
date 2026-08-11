@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveOrg } from "@/lib/org/active";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -8,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAdapter } from "@/lib/ai/providers/registry";
 import { getProviderRow } from "@/lib/ai/providers/provider-rows";
 import { getModel } from "@/lib/ai/models/catalog-db";
+import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
 import { readOrgAiSettings, type AiMode } from "@/lib/ai/org-settings";
@@ -183,6 +185,37 @@ export async function setOrgByoKey(input: {
   });
   if (error) return fail("Couldn't save the key. Please try again.");
 
+  // Same contract as `saveAiKey`, for the same reason: this key is the only
+  // thing that can ask THIS provider which model ids it actually answers to,
+  // and the catalog's ids come from the Gateway, whose namespace is not the
+  // providers'. Saving the ORG key is therefore also the moment this provider's
+  // rows become selectable — without it an admin saves the org's Mistral key
+  // and the default-model picker still tells them to add one.
+  //
+  // Deferred via `after`, never awaited: verification is a live round-trip to a
+  // third party, and awaiting it would make "Validate & save" as slow as the
+  // slowest provider. `verifyProviderModels` already fails closed (a transport
+  // error, an unparseable payload or an empty list skips the provider and
+  // touches no row, and a verified row is never demoted), so nothing is layered
+  // on top of it here — the try/catch below only keeps a deferred task from
+  // rejecting into the platform, which nothing is left to observe.
+  const verifyIds = async () => {
+    try {
+      await verifyProviderModels({ client: svc, provider, apiKey: key });
+    } catch (e) {
+      console.error(
+        `[ai] id verification failed after saving the org ${provider} key`,
+        e,
+      );
+    }
+  };
+  try {
+    after(verifyIds);
+  } catch {
+    // No request scope — a direct call in a unit test. Still run it, detached.
+    void verifyIds();
+  }
+
   revalidatePath("/settings");
   return { ok: true, data: { provider, hint } };
 }
@@ -243,6 +276,42 @@ export async function setOrgDefaultModel(input: {
 
   revalidatePath("/settings/ai");
   return { ok: true, data: { provider, modelId } };
+}
+
+/**
+ * Drops the org default, putting every feature back on its own tier.
+ *
+ * The counterpart to {@link setOrgDefaultModel}, and the way out of it: a
+ * default overrides the tier a feature asks for, so "undo that" has to be
+ * reachable. Both columns are cleared together — a catalog key is meaningless
+ * without the provider it belongs to.
+ *
+ * An org with no settings row has no default to clear, so that is a success,
+ * not an error (same reading as `removeAiKey`). Still an UPDATE, never an
+ * UPSERT — see {@link setOrgDefaultModel} for what an insert here would do.
+ */
+export async function clearOrgDefaultModel(): Promise<
+  ActionResult<Record<never, never>>
+> {
+  const ctx = await requireOrgAdmin();
+  if (!ctx) return fail(NOT_ADMIN);
+
+  const svc = createServiceClient();
+  const { error } = await svc
+    .from("org_ai_settings")
+    .update(
+      {
+        default_provider: null,
+        default_model_id: null,
+        updated_by: ctx.userId,
+      },
+      { count: "exact" },
+    )
+    .eq("org_id", ctx.orgId);
+  if (error) return fail("Couldn't clear the default model.");
+
+  revalidatePath("/settings/ai");
+  return { ok: true, data: {} };
 }
 
 export async function removeOrgByoKey(): Promise<
