@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { COLUMN_FILL_MAX } from "@/lib/ai/column-fill/schema";
 import { fakeResolvedModel } from "@/test/adapter-fakes";
 
 // A resolved adapter+key, as the real gateway hands to runAi's callback.
@@ -45,10 +46,21 @@ vi.mock("@/lib/auth/session", () => ({
 // validate.ts is left real: it's pure join/cap logic and exercising the real
 // implementation verifies actions.ts wires it correctly.
 const classifyColumnWithAi = vi.fn();
+// The row limit is INJECTED per test, not restated: hardcoding 2000 here let
+// the mock and the real constant drift apart, which is exactly what the
+// "limit and decision cannot drift" claim was supposed to prevent. Tests that
+// care about the real number assert against the real export instead.
+// importActual, not a plain import: the module is mocked below, so a normal
+// import would read the mock's own getter back.
+const { HAIKU_ROW_LIMIT: REAL_HAIKU_ROW_LIMIT } = await vi.importActual<
+  typeof import("@/lib/ai/column-fill/classify")
+>("@/lib/ai/column-fill/classify");
+let rowLimit: number = REAL_HAIKU_ROW_LIMIT;
 vi.mock("@/lib/ai/column-fill/classify", () => ({
   classifyColumn: (...args: unknown[]) => classifyColumnWithAi(...args),
-  // Real value: the action reads it to decide whether to ask for a bigger tier.
-  HAIKU_ROW_LIMIT: 2000,
+  get HAIKU_ROW_LIMIT() {
+    return rowLimit;
+  },
 }));
 
 const bulkSetCell = vi.fn();
@@ -108,6 +120,7 @@ const STATUS_OPTIONS = [
 ];
 
 beforeEach(() => {
+  rowLimit = REAL_HAIKU_ROW_LIMIT;
   runAi.mockClear();
   requireAiEntitlement.mockReset();
   getUserOrgs.mockReset();
@@ -232,6 +245,61 @@ describe("classifyColumn action", () => {
         rows: [{ itemId: ITEM_1, text: "needs review" }],
       }),
     );
+  });
+
+  // ── the long-context tier override ────────────────────────────────────
+  // Every row is serialised into ONE message, so a big batch outgrows the
+  // cheap tier's context window. The decision is made in the ACTION, before a
+  // key is spent, and travels as `tier` on runAi's args.
+  it("asks for the standard tier once the batch outgrows the cheap one", async () => {
+    rowLimit = 2; // injected, so this test does not depend on the real number
+    CELLS_RESULT = {
+      data: [ITEM_1, ITEM_2, ITEM_3].map((id) => ({
+        item_id: id,
+        value: { text: "needs review" },
+      })),
+      error: null,
+    };
+    const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
+    await classifyColumn({
+      boardId: BOARD_ID,
+      sourceColumnId: SOURCE_COLUMN_ID,
+      targetColumnId: TARGET_COLUMN_ID,
+    });
+    expect(runAi.mock.calls[0]![0]).toMatchObject({
+      feature: "column_fill",
+      tier: "standard",
+    });
+  });
+
+  it("sends no tier override for an ordinary batch", async () => {
+    rowLimit = 2;
+    CELLS_RESULT = {
+      data: [{ item_id: ITEM_1, value: { text: "needs review" } }],
+      error: null,
+    };
+    const { classifyColumn } = await import("@/lib/ai/column-fill/actions");
+    await classifyColumn({
+      boardId: BOARD_ID,
+      sourceColumnId: SOURCE_COLUMN_ID,
+      targetColumnId: TARGET_COLUMN_ID,
+    });
+    // Absent, not undefined: the spread omits the key entirely so runAi falls
+    // through to the feature's own tier.
+    expect(runAi.mock.calls[0]![0]).not.toHaveProperty("tier");
+  });
+
+  /**
+   * The real numbers, pinned. The source read is `.limit(COLUMN_FILL_MAX)`, so
+   * `rows.length` cannot exceed 200 while the override triggers above 2000 —
+   * the branch is UNREACHABLE in production as the constants stand today. It is
+   * asserted rather than fixed because the two numbers are a deferred design
+   * question (see the task report): this test is here so nobody reads the
+   * override as live protection, and so changing either constant surfaces the
+   * relationship instead of silently switching a dead branch on.
+   */
+  it("documents that the override cannot fire with today's constants", () => {
+    expect(REAL_HAIKU_ROW_LIMIT).toBeGreaterThan(COLUMN_FILL_MAX);
   });
 
   // FIX 4: text columns can hold up to 20,000 characters, and up to

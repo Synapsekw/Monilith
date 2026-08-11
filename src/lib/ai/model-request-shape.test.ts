@@ -69,6 +69,11 @@ function balancedFrom(
   return text.slice(open);
 }
 
+/** Drop line and block comments, so a mention in prose cannot satisfy a scan. */
+function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+}
+
 function objectLiteralAt(text: string, open: number): string {
   return balancedFrom(text, open, "{", "}");
 }
@@ -172,7 +177,18 @@ describe("every feature string reaching runAi is routed by the model map", () =>
         const argsOpen = call.indexOf("{");
         const args = objectLiteralAt(call, argsOpen);
         const callback = call.slice(argsOpen + args.length);
-        if (!/\bmodel\b/.test(callback))
+        // The DESTRUCTURING PATTERN, not the callback body: `model` appearing
+        // anywhere in the body is satisfied by a comment that merely mentions
+        // it (app/api/ask/route.ts has exactly such a comment), so the looser
+        // check could not see a call site that stopped reading the model.
+        // Comments are stripped as well, so `({ apiKey /* model */ })` is not
+        // a pass either.
+        const patternOpen = callback.indexOf("{");
+        const pattern =
+          patternOpen === -1
+            ? ""
+            : stripComments(objectLiteralAt(callback, patternOpen));
+        if (!/\bmodel\b/.test(pattern))
           offenders.push(`${file.path} (${args.match(/feature:\s*\S+/)?.[0]})`);
       }
     }
