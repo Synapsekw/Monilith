@@ -31,14 +31,23 @@ export type ResolvedModel = {
 };
 
 /**
- * A catalog price column is only usable if it is a finite, non-negative
- * number. `numeric` arrives over PostgREST as a string and is coerced upstream
- * in `toModelRow`, so a malformed column reaches here as NaN — and NaN (or a
- * negative) flows straight through `computeCostUsd` into a NaN cost, which
- * serializes to `null` at the `record_ai_usage` boundary. That is spend that
- * silently vanishes rather than failing, so the column is validated at this
- * boundary and an unusable value is treated as ABSENT: the model falls to its
- * {@link applyRateFloor} floor instead of billing garbage.
+ * A catalog price column is only usable if it is a finite, non-negative number.
+ *
+ * The live threat is NEGATIVE, not NaN. Two upstream layers already handle
+ * non-finite values — `perMtok` (`models/feed-parse.ts`) nulls them at ingest,
+ * and `toModelRow`'s `num()` (`models/catalog-db.ts`) maps any non-finite
+ * PostgREST value to null — so through a real catalog read a NaN cannot reach
+ * this function. A negative can: it survives `Number.isFinite`, and while
+ * `perMtok` now quarantines it at ingest, `ai_models` has no CHECK constraint,
+ * so a row written by any other path (a manual fix, a future importer) still
+ * arrives here signed. A negative rate produces a negative cost — a silent
+ * quota refund — and the `resolveModel` caller has no other guard.
+ *
+ * This is the last boundary before the numbers become money, so it validates
+ * the full contract rather than only the reachable half, and treats an
+ * unusable value as ABSENT: the model falls to its {@link applyRateFloor}
+ * floor instead of billing garbage. The NaN cases are kept as unit contracts
+ * so the guard cannot be narrowed on the assumption that upstream still holds.
  */
 const priceSchema = z.number().finite().nonnegative();
 

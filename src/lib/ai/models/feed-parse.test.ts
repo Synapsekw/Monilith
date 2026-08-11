@@ -105,6 +105,61 @@ describe("parseFeed", () => {
     expect(row.output_price_per_mtok).toBeCloseTo(2, 6);
   });
 
+  it("quarantines a negative price instead of letting it go active", () => {
+    // A negative rate is malformed feed data, but `Number.isFinite(-1)` is
+    // true — so without a non-negative check this became a fully `active` row
+    // priced at -$1/Mtok. Downstream that is either a negative cost (a silent
+    // quota refund) or, once resolveModel rejects the value, a silent $0 for
+    // any model absent from the fallback floor. It belongs in quarantine.
+    const feed = {
+      data: [
+        {
+          id: "moonshotai/negative-price-test",
+          owned_by: "moonshotai",
+          name: "Negative Price Test",
+          type: "language",
+          tags: ["tool-use"],
+          context_window: 8000,
+          max_tokens: 4000,
+          pricing: { input: "-0.000001", output: "0.000002" },
+        },
+      ],
+    };
+    const [row] = parseFeed(feed, ENABLED);
+    expect(row.status).toBe("needs_pricing");
+    expect(row.input_price_per_mtok).toBeNull();
+    // An unpriced model must not read as "cheap" — it would win the bulk-tier
+    // pick while billing nothing.
+    expect(row.tier).toBe("standard");
+    // The usable half of the pair still comes through, as with any other
+    // asymmetric row.
+    expect(row.output_price_per_mtok).toBeCloseTo(2, 6);
+  });
+
+  it("drops a negative cache price without quarantining the row", () => {
+    const feed = {
+      data: [
+        {
+          id: "moonshotai/negative-cache-test",
+          owned_by: "moonshotai",
+          name: "Negative Cache Test",
+          type: "language",
+          tags: ["tool-use"],
+          context_window: 8000,
+          max_tokens: 4000,
+          pricing: {
+            input: "0.000001",
+            output: "0.000002",
+            input_cache_read: "-0.0000001",
+          },
+        },
+      ],
+    };
+    const [row] = parseFeed(feed, ENABLED);
+    expect(row.status).toBe("active");
+    expect(row.cache_read_price_per_mtok).toBeNull();
+  });
+
   it("leaves cache prices null when the provider publishes none", () => {
     const mistral = rows.find((r) => r.provider === "mistral");
     expect(mistral).toBeDefined();

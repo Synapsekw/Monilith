@@ -70,11 +70,24 @@ const entrySchema = z.object({
 
 const feedSchema = z.object({ data: z.array(z.unknown()) });
 
-/** Per-token decimal string → per-Mtok number. */
+/**
+ * Per-token decimal string → per-Mtok number.
+ *
+ * A value that is not a finite, NON-NEGATIVE number is treated as ABSENT
+ * rather than passed through. Negative matters as much as NaN: a feed value of
+ * `"-1"` would otherwise become a fully-priced `active` row, and a negative
+ * rate produces a negative cost — a silent quota refund for a model in the
+ * floor, and (once `resolveModel` rejects the value at its own boundary) a
+ * silent $0 for a model that is not. Nulling it here quarantines the row as
+ * `needs_pricing` instead, which is the layer where a bad feed belongs.
+ *
+ * This is deliberately the SAME rule `usablePrice` applies in
+ * `models/resolve.ts`; the two are defence in depth over the same columns.
+ */
 function perMtok(v: string | undefined): number | null {
   if (v === undefined) return null;
   const n = Number(v);
-  return Number.isFinite(n) ? n * 1_000_000 : null;
+  return Number.isFinite(n) && n >= 0 ? n * 1_000_000 : null;
 }
 
 export function parseFeed(
@@ -103,8 +116,9 @@ export function parseFeed(
 
     const input = perMtok(e.pricing?.input);
     const output = perMtok(e.pricing?.output);
-    // Both rates are required to meter a call; either one missing means we
-    // cannot bill it correctly, so the row is quarantined rather than shown.
+    // Both rates are required to meter a call; either one missing OR unusable
+    // (see perMtok) means we cannot bill it correctly, so the row is
+    // quarantined rather than shown.
     const priced = input !== null && output !== null;
 
     rows.push({

@@ -26,7 +26,16 @@ function row(over: Partial<ModelRow>): ModelRow {
   };
 }
 
+/**
+ * Ordered cheapest input rate first, which is the precondition `pickModel`
+ * documents and `listActiveModels` guarantees via its `.order()`.
+ *
+ * The cheap tier deliberately has TWO members: with one row per tier, "picks
+ * the cheapest of the tier" and "picks any row of the tier" are the same
+ * assertion, and the ordering precondition is never exercised.
+ */
 const CATALOG = [
+  row({ modelId: "claude-mini-1", tier: "cheap", inputPricePerMtok: 0.5 }),
   row({ modelId: "claude-haiku-4-5", tier: "cheap", inputPricePerMtok: 1 }),
   row({ modelId: "claude-sonnet-5", tier: "standard", inputPricePerMtok: 3 }),
   row({ modelId: "claude-opus-4-8", tier: "strong", inputPricePerMtok: 5 }),
@@ -75,6 +84,22 @@ describe("pickModel", () => {
       orgDefaultModelId: null,
       tier: "cheap",
     });
+    // The CHEAPER of the two cheap-tier rows, not merely a cheap-tier row.
+    expect(r.model).toBe("claude-mini-1");
+    expect(r.model).not.toBe("claude-haiku-4-5");
+  });
+
+  it("respects the cheapest-first ordering rather than re-sorting", () => {
+    // `pickModel` takes the ordering as a precondition (listActiveModels
+    // supplies it). Hand it a mis-ordered array and the first matching row
+    // wins — proving the contract is the ORDER, so a dropped `.order()` in
+    // catalog-db would change which model every unpinned org runs on.
+    const r = pickModel({
+      active: [CATALOG[1], CATALOG[0], CATALOG[2], CATALOG[3]],
+      requested: null,
+      orgDefaultModelId: null,
+      tier: "cheap",
+    });
     expect(r.model).toBe("claude-haiku-4-5");
   });
 
@@ -108,11 +133,14 @@ describe("pickModel", () => {
       orgDefaultModelId: null,
       tier: "cheap",
     });
+    // cacheRead/cacheWrite are materialised at the floor's derived multipliers
+    // (input x 0.1 / x 1.25) — the same numbers computeCostUsd would have
+    // derived from a null, so this is the row's price, not a markup.
     expect(r.rates).toEqual({
       input: 1,
       output: 15,
-      cacheRead: null,
-      cacheWrite: null,
+      cacheRead: 0.1,
+      cacheWrite: 1.25,
     });
     expect(r.supportsTools).toBe(true);
   });
@@ -205,6 +233,11 @@ describe("pickModel — the floor is a per-component MINIMUM", () => {
           modelId: "claude-sonnet-5",
           inputPricePerMtok: 2,
           outputPricePerMtok: 10,
+          // The promo's cache rates, which the feed already parses
+          // (`input_cache_read` / `input_cache_write`). All four components
+          // have to clear the floor, not just the first two.
+          cacheReadPricePerMtok: 0.2,
+          cacheWritePricePerMtok: 2.5,
         }),
       ],
       requested: "claude-sonnet-5",
@@ -214,8 +247,11 @@ describe("pickModel — the floor is a per-component MINIMUM", () => {
     expect(r.rates).toEqual({
       input: 3,
       output: 15,
-      cacheRead: null,
-      cacheWrite: null,
+      // 3 * 0.1 is 0.30000000000000004 in IEEE-754 — the same value
+      // computeCostUsd derives from a null cache rate, so a float artefact
+      // rather than a pricing difference.
+      cacheRead: expect.closeTo(0.3, 9),
+      cacheWrite: 3.75,
     });
   });
 
@@ -276,8 +312,17 @@ describe("pickModel — the floor is a per-component MINIMUM", () => {
 });
 
 describe("pickModel — unusable catalog prices never reach the ledger", () => {
-  // A NaN or negative rate produces a NaN cost, which serializes to null at
-  // the record_ai_usage boundary — spend that vanishes instead of failing.
+  // These pin `usablePrice`'s full contract, which is deliberately wider than
+  // what a real catalog read can currently deliver:
+  //
+  //   NaN      — unreachable through the pipeline. `perMtok` (feed-parse) and
+  //              `num()` (catalog-db) each map a non-finite value to null
+  //              before it gets here. Kept so the guard cannot be narrowed on
+  //              the assumption that both upstream layers still hold.
+  //   negative — reachable. It survives `Number.isFinite`, and although
+  //              `perMtok` now quarantines such a feed row as needs_pricing,
+  //              `ai_models` carries no CHECK constraint, so any other writer
+  //              can still land one. A negative rate bills a NEGATIVE cost.
   it("treats a NaN price as absent and chains to the floor", () => {
     const r = pickModel({
       active: [
@@ -401,6 +446,26 @@ describe("resolveModel", () => {
       cache_write_price_per_mtok: null,
       tier: "cheap",
     },
+    // ACTIVE but UNVERIFIED — the live state of mistral, google and moonshotai
+    // until someone saves a key for them. The row exists, so a resolver that
+    // dropped `verifiedOnly` would happily return it and send a Gateway id to
+    // Mistral's own API.
+    {
+      provider: "mistral",
+      model_id: "mistral-large-latest",
+      native_model_id: null,
+      id_verified: false,
+      status: "active",
+      label: "Mistral Large",
+      context_length: 128_000,
+      max_output_tokens: 32_000,
+      supports_tools: true,
+      input_price_per_mtok: 2,
+      output_price_per_mtok: 6,
+      cache_read_price_per_mtok: null,
+      cache_write_price_per_mtok: null,
+      tier: "standard",
+    },
   ];
 
   it("resolves a feature's tier against the requested provider's catalog", async () => {
@@ -442,7 +507,10 @@ describe("resolveModel", () => {
     expect(r.substituted).toBe(true);
   });
 
-  it("returns a null model when the provider has no verified active models", async () => {
+  it("returns a null model when the provider's only active models are UNVERIFIED", async () => {
+    // mistral HAS an active row in FIXTURES — it is just id_verified: false.
+    // So this fails if `verifiedOnly` is ever dropped, rather than passing
+    // vacuously because the provider is absent from the fixture table.
     const { client } = fakeAiModelsClient(FIXTURES);
     const r = await resolveModel({
       client,
@@ -450,6 +518,19 @@ describe("resolveModel", () => {
       feature: "ask_pulse",
     });
     expect(r.model).toBeNull();
+    expect(r.requestModel).toBeNull();
     expect(r.provider).toBe("mistral");
+  });
+
+  it("gates on id_verified, which is what keeps an unverified id off the wire", async () => {
+    const { client, selects } = fakeAiModelsClient(FIXTURES);
+    await resolveModel({ client, provider: "mistral", feature: "ask_pulse" });
+    // Assert the predicate itself, not just its effect: the fake records every
+    // .eq(), so a silently-dropped filter is visible here.
+    expect(selects[0].predicates).toContainEqual({
+      op: "eq",
+      column: "id_verified",
+      value: true,
+    });
   });
 });

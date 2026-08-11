@@ -31,8 +31,10 @@ export type ModelRates = {
  *
  *   1. A catalog row with no usable price for a model listed here bills at
  *      these rates, not $0.
- *   2. For a model listed here, each component is billed at
- *      `max(catalogRate, floorRate)`.
+ *   2. For a model listed here, each of the four components is billed at
+ *      `max(catalogRate, floorRate)` — including the two CACHE components,
+ *      whose floor is derived (`floorInput x 0.1` / `x 1.25`) when this table
+ *      states none, because every entry below leaves them null.
  *
  * Rule 2 is deliberately GENERAL rather than a special case keyed on one model
  * id, which would rot the moment someone edits this table. Its origin is
@@ -44,6 +46,14 @@ export type ModelRates = {
  * listed here: a feed that under-reports a price cannot quietly cut what we
  * charge, while a genuine price RISE is still honoured (the floor is a floor,
  * not a cap). Lowering a price on purpose therefore means editing this table.
+ *
+ * The cache components matter as much as input/output — a tool loop's tokens
+ * are mostly cache reads — so a floor that stopped at input/output would let
+ * the promo rate back in through the biggest component. Since every entry here
+ * leaves `cacheRead`/`cacheWrite` null, their floor is DERIVED from the floored
+ * input at the same multipliers `computeCostUsd` uses. If you ever add a model
+ * whose provider charges LESS than 0.1x input for a cached read, state its
+ * `cacheRead` explicitly here rather than letting the derivation over-bill it.
  */
 export const FALLBACK_RATES: Readonly<Record<string, ModelRates>> = {
   "claude-opus-4-8": {
@@ -120,13 +130,27 @@ export function applyRateFloor(
   // lookup for "constructor"/"toString" returns an inherited Function.
   const floor = ratesForModel(model);
   if (!floor) return catalog;
+  // The floor's own cache components are null, so computeCostUsd derives them
+  // from floor.input at the same multipliers used below — the two branches
+  // agree by construction.
   if (!catalog) return floor;
+
+  const input = Math.max(catalog.input, floor.input);
+
+  // Derived from the FLOORED input, not from `floor.input`. Using the raw
+  // floor would make a genuine price RISE cut the cache rate: a feed reporting
+  // input 4 against a floor of 3 would pin cache reads at 0.30 when this
+  // model's own (risen) input implies 0.40 — the opposite of rule 2. Deriving
+  // from `input` keeps a null-cache row billing exactly what computeCostUsd
+  // would have computed for it, so materialising the value changes nothing.
+  const cacheReadFloor = floor.cacheRead ?? input * CACHE_READ_MULTIPLIER;
+  const cacheWriteFloor = floor.cacheWrite ?? input * CACHE_WRITE_MULTIPLIER;
+
   return {
-    // Non-null on both sides, so `higher` cannot return null here.
-    input: higher(catalog.input, floor.input) as number,
-    output: higher(catalog.output, floor.output) as number,
-    cacheRead: higher(catalog.cacheRead, floor.cacheRead),
-    cacheWrite: higher(catalog.cacheWrite, floor.cacheWrite),
+    input,
+    output: Math.max(catalog.output, floor.output),
+    cacheRead: higher(catalog.cacheRead, cacheReadFloor),
+    cacheWrite: higher(catalog.cacheWrite, cacheWriteFloor),
   };
 }
 
