@@ -308,6 +308,7 @@ describe("getAgentRuns", () => {
       fireHour: 7,
       inputTokens: 10,
       outputTokens: 5,
+      modelSubstituted: false,
     },
   ];
 

@@ -390,6 +390,46 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runAi.mock.calls[0]![0]).toMatchObject({ requestedModel: null });
   });
 
+  // The catalog key and the wire id are two different strings on purpose: the
+  // Gateway publishes `claude-haiku-4.5` where Anthropic's API wants the dated
+  // snapshot `claude-haiku-4-5-20251001`. A pin STORES the catalog key and the
+  // picker DISPLAYS it; only `requestModel` may go on the wire. Sending the
+  // catalog key is a 404 from the provider — a scheduled agent that stops
+  // producing with no user-visible cause.
+  it("puts the WIRE id on the provider call, never the catalog key the pin stores", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      provider: "anthropic",
+      model_id: "claude-sonnet-5",
+    });
+    runAi.mockImplementation(
+      async (
+        _args: unknown,
+        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+      ) =>
+        (
+          await fn({
+            provider: "anthropic",
+            apiKey: "k",
+            model: fakeResolvedModel({
+              model: "claude-sonnet-5",
+              requestModel: "claude-sonnet-5-20260101",
+            }),
+          })
+        ).result,
+    );
+    await POST(post(slot));
+
+    expect(summariseBriefing).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "claude-sonnet-5-20260101" }),
+    );
+    // Belt and braces: the catalog key must not be what the adapter is asked
+    // for, even though it IS what the pin and the ledger store.
+    expect(summariseBriefing).not.toHaveBeenCalledWith(
+      expect.objectContaining({ model: "claude-sonnet-5" }),
+    );
+  });
+
   it("records model_substituted when the pinned model was gone", async () => {
     // A substituted run still SUCCEEDED. It is recorded on its own column, not
     // overloaded onto `error`, so the owner is not told a working agent broke.

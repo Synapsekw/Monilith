@@ -26,6 +26,7 @@ function row(over: Record<string, unknown> = {}) {
     fireHour: 7,
     inputTokens: 1200,
     outputTokens: 300,
+    modelSubstituted: false,
     ...over,
   };
 }
@@ -144,5 +145,29 @@ describe("AgentRunHistory", () => {
     expect(
       screen.getByRole("button", { name: /recent runs for risk spotter/i }),
     ).toBeInTheDocument();
+  });
+
+  // `user_agent_runs.model_substituted` exists so "your pinned model is gone,
+  // this ran on the default" is its OWN signal rather than being overloaded
+  // onto `error`, which every reader renders as a failure. A run that
+  // substituted still SUCCEEDED — it must read as a run that needs attention,
+  // not as one that broke.
+  it("says when a run fell back off its pinned model", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ modelSubstituted: true })],
+    });
+    wrap(<AgentRunHistory agentId="a9" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(screen.getByText(/pinned model/i)).toBeInTheDocument();
+  });
+
+  it("says nothing about substitution on an ordinary run", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    wrap(<AgentRunHistory agentId="a10" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(screen.queryByText(/pinned model/i)).not.toBeInTheDocument();
   });
 });

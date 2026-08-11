@@ -12,6 +12,7 @@ import {
   agentRunStatusColor,
   agentRunStatusLabel,
   describeAgentRun,
+  MODEL_SUBSTITUTED_NOTE,
 } from "@/lib/agents/run-status";
 
 /**
@@ -83,23 +84,40 @@ export function AgentRunHistory({
             runs.map((run) => {
               const status = agentRunDisplayStatus(run);
               return (
-                <div
-                  key={run.id}
-                  className="flex items-start gap-2 text-xs sm:items-center"
-                >
-                  <StatusPill
-                    color={agentRunStatusColor(status)}
-                    variant="soft"
-                    className="shrink-0"
-                  >
-                    {agentRunStatusLabel(status)}
-                  </StatusPill>
-                  <span className="text-muted-foreground shrink-0">
-                    {timeAgo(run.createdAt)}
-                  </span>
-                  <span className="text-muted-foreground min-w-0 flex-1 truncate">
-                    {describeAgentRun(run)}
-                  </span>
+                <div key={run.id} className="flex flex-col gap-1">
+                  <div className="flex items-start gap-2 text-xs sm:items-center">
+                    <StatusPill
+                      color={agentRunStatusColor(status)}
+                      variant="soft"
+                      className="shrink-0"
+                    >
+                      {agentRunStatusLabel(status)}
+                    </StatusPill>
+                    <span className="text-muted-foreground shrink-0">
+                      {timeAgo(run.createdAt)}
+                    </span>
+                    <span className="text-muted-foreground min-w-0 flex-1 truncate">
+                      {describeAgentRun(run)}
+                    </span>
+                  </div>
+                  {/* Its own line, and a needs-attention pill rather than a
+                      failure one: the briefing WAS sent, but on a model the
+                      owner did not choose. Pairing the colour with words keeps
+                      it readable without relying on hue (WCAG AA). */}
+                  {run.modelSubstituted ? (
+                    <div className="flex items-center gap-2 text-xs">
+                      <StatusPill
+                        color="yellow"
+                        variant="soft"
+                        className="shrink-0"
+                      >
+                        Substituted
+                      </StatusPill>
+                      <span className="text-muted-foreground min-w-0 flex-1 truncate">
+                        {MODEL_SUBSTITUTED_NOTE}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               );
             })
