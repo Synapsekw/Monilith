@@ -48,8 +48,8 @@ const MODES: { id: AiMode; title: string; hint: string }[] = [
  * Admin Settings → "AI — Organization" card. Picks how AI is powered for the
  * whole org (off / managed allowance / one shared org key / each member's own
  * key) and manages the shared org key. Mode changes are optimistic and revert
- * on failure; the org-key panel mirrors AiProviderForm's interaction + copy.
- * Inline messages only (the app has no toast primitive).
+ * on failure; the org-key panel mirrors AiKeyList's interaction + copy.
+ * Inline messages, so an error sits on the control that caused it.
  */
 export function OrgAiSettingsForm({ initial }: { initial: Initial }) {
   // `mode` is optimistic; `confirmed` is the last server-acknowledged mode we
