@@ -5,11 +5,13 @@ import { isOrgAdminCached } from "@/lib/org/guard";
 import { createClient } from "@/lib/supabase/server";
 import { listMyAiCredentials } from "@/lib/ai/credentials";
 import { listEnabledProviders } from "@/lib/ai/providers/provider-rows";
+import { listActiveModels } from "@/lib/ai/models/catalog-db";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingRow } from "@/components/settings/setting-row";
 import { AiKeyList } from "@/components/settings/AiKeyList";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
+import type { ModelOption } from "@/components/settings/ModelPicker";
 
 export const metadata = { title: "AI · Settings" };
 
@@ -29,11 +31,24 @@ export const metadata = { title: "AI · Settings" };
  * that select one (org default, per-agent), where the list is read after the
  * fact and an empty one can be explained.
  *
- * Data budget: two bounded reads. `user_ai_credentials` is at most one row per
- * provider for one user (indexed on `user_id`); `ai_providers` is the registry
- * itself, filtered to `enabled`. Every in-page interaction — opening a key
- * field, cancelling, switching rows — is client state in `AiKeyList` and costs
- * zero server round-trips; only the two mutations talk to the server.
+ * The org default-model picker is the one place model state IS shown, and that
+ * is consistent with the paragraph above: it is read long after any key was
+ * saved (a page load, not a post-save re-render), and an empty list here has a
+ * true, actionable explanation — a provider's catalog ids can only be verified
+ * with that provider's own key, so "no models yet" means "no key yet" and says
+ * so, per provider.
+ *
+ * Data budget: bounded reads, all on first paint. `user_ai_credentials` is at
+ * most one row per provider for one user (indexed on `user_id`); `ai_providers`
+ * is the registry itself, filtered to `enabled`; the catalog read is one
+ * `listActiveModels` per enabled provider, run in parallel and served by
+ * `ai_models_selectable_idx` (status + provider + id_verified) — tens of rows
+ * each, and only for an admin, who is the only one who sees the org form.
+ * Every in-page interaction — opening a key field, cancelling, switching rows,
+ * opening the model picker, searching it, switching provider inside it — is
+ * client state and costs zero server round-trips. Only the mutations talk to
+ * the server. No `<Link>`/`router` navigation is involved anywhere in this
+ * page's interactions, so no query is ever re-run to change a view.
  */
 export default async function AiSettingsPage() {
   const user = await requireUser();
@@ -51,6 +66,30 @@ export default async function AiSettingsPage() {
   const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
 
+  // Only an admin sees the org form, so only an admin pays for the catalog
+  // reads. One flat list, sorted providers-by-label (the order
+  // `listEnabledProviders` returns) and cheapest-first within a provider (the
+  // order `listActiveModels` returns) — the picker groups it without re-sorting.
+  const modelOptions: ModelOption[] =
+    isAdmin && orgAi.ok
+      ? (
+          await Promise.all(
+            providers.map(async (p) =>
+              (await listActiveModels(supabase, p.id)).map((m) => ({
+                provider: p.id,
+                providerLabel: p.label,
+                // The CATALOG key. `native_model_id` is the wire id and is
+                // never read here — only an adapter may see it.
+                modelId: m.modelId,
+                label: m.label,
+                tier: m.tier,
+                supportsTools: m.supportsTools,
+              })),
+            ),
+          )
+        ).flat()
+      : [];
+
   return (
     <>
       {isAdmin && orgAi.ok && (
@@ -59,7 +98,11 @@ export default async function AiSettingsPage() {
           description="How AI features are powered for everyone in this org."
         >
           <div className="pt-4">
-            <OrgAiSettingsForm initial={orgAi.data} />
+            <OrgAiSettingsForm
+              initial={orgAi.data}
+              providers={providers}
+              modelOptions={modelOptions}
+            />
           </div>
         </SettingsSection>
       )}

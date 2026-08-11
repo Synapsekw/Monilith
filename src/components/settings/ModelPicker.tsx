@@ -58,6 +58,7 @@ export function ModelPicker({
   options,
   value,
   onChange,
+  emptyProviders = [],
   allowInherit = false,
   inheritLabel = "Use org default",
   disabled = false,
@@ -66,6 +67,13 @@ export function ModelPicker({
   options: ModelOption[];
   value: ModelValue | null;
   onChange: (v: ModelValue | null) => void;
+  /**
+   * Enabled providers that currently have NO selectable model. They are listed
+   * as their own (unselectable) group so the gap reads as a configuration state
+   * — a provider's catalog is only verifiable with that provider's own key, so
+   * "nothing here" means "no key yet", not "this provider is broken".
+   */
+  emptyProviders?: { provider: string; providerLabel: string }[];
   allowInherit?: boolean;
   inheritLabel?: string;
   disabled?: boolean;
@@ -208,6 +216,15 @@ export function ModelPicker({
                       </span>
                     </CommandItem>
                   ))}
+                </CommandGroup>
+              ))}
+              {emptyProviders.map((p) => (
+                <CommandGroup key={p.provider} heading={p.providerLabel}>
+                  <CommandItem disabled value={`${p.providerLabel} no models`}>
+                    <span className="text-muted-foreground text-xs">
+                      Add an API key to see models
+                    </span>
+                  </CommandItem>
                 </CommandGroup>
               ))}
             </CommandList>

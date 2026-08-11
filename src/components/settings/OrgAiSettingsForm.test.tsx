@@ -1,18 +1,78 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
+import type { ModelOption } from "@/components/settings/ModelPicker";
 
 const setAiMode = vi.fn();
 const setOrgByoKey = vi.fn();
 const removeOrgByoKey = vi.fn();
+const setOrgDefaultModel = vi.fn();
 vi.mock("@/lib/ai/settings-actions", () => ({
   setAiMode: (...a: unknown[]) => setAiMode(...a),
   setOrgByoKey: (...a: unknown[]) => setOrgByoKey(...a),
   removeOrgByoKey: (...a: unknown[]) => removeOrgByoKey(...a),
+  setOrgDefaultModel: (...a: unknown[]) => setOrgDefaultModel(...a),
 }));
 
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
 
 type Initial = React.ComponentProps<typeof OrgAiSettingsForm>["initial"];
+
+/**
+ * Two fixtures are providers the deleted PROVIDER_CATALOG never covered. The
+ * form used to index that three-entry map with `byo_provider`, so a stored
+ * `mistral` threw and took the whole settings page down for every admin in the
+ * org — the tests below render exactly that state.
+ */
+const PROVIDERS: ProviderRow[] = [
+  {
+    id: "anthropic",
+    label: "Anthropic (Claude)",
+    adapterKind: "anthropic",
+    baseUrl: null,
+    keyPlaceholder: "sk-ant-…",
+    keyFormat: "^sk-ant-",
+    enabled: true,
+  },
+  {
+    id: "mistral",
+    label: "Mistral",
+    adapterKind: "openai-compatible",
+    baseUrl: "https://api.mistral.ai/v1",
+    keyPlaceholder: "your-mistral-key",
+    keyFormat: "^.{16,}$",
+    enabled: true,
+  },
+  {
+    id: "moonshotai",
+    label: "Kimi (Moonshot AI)",
+    adapterKind: "openai-compatible",
+    baseUrl: "https://api.moonshot.ai/v1",
+    keyPlaceholder: "sk-…",
+    keyFormat: "^sk-",
+    enabled: true,
+  },
+];
+
+const MODELS: ModelOption[] = [
+  {
+    provider: "anthropic",
+    providerLabel: "Anthropic (Claude)",
+    modelId: "claude-sonnet-5",
+    label: "Claude Sonnet 5",
+    tier: "standard",
+    supportsTools: true,
+  },
+  {
+    provider: "mistral",
+    providerLabel: "Mistral",
+    modelId: "mistral-small-latest",
+    label: "Mistral Small",
+    tier: "cheap",
+    supportsTools: true,
+  },
+];
 
 const base: Initial = {
   mode: "per_user",
@@ -21,17 +81,30 @@ const base: Initial = {
   creditsUsed: 100,
   byoProvider: null,
   byoKeyLast4: null,
+  defaultProvider: null,
+  defaultModelId: null,
 };
+
+function renderForm(initial: Initial = base, modelOptions = MODELS) {
+  return render(
+    <OrgAiSettingsForm
+      initial={initial}
+      providers={PROVIDERS}
+      modelOptions={modelOptions}
+    />,
+  );
+}
 
 beforeEach(() => {
   setAiMode.mockReset();
   setOrgByoKey.mockReset();
   removeOrgByoKey.mockReset();
+  setOrgDefaultModel.mockReset();
 });
 
 describe("OrgAiSettingsForm", () => {
   it("renders four mode options with the current one selected", () => {
-    render(<OrgAiSettingsForm initial={base} />);
+    renderForm();
     const radios = screen.getAllByRole("radio");
     expect(radios).toHaveLength(4);
     const selected = screen.getByRole("radio", {
@@ -41,7 +114,7 @@ describe("OrgAiSettingsForm", () => {
   });
 
   it("shows the credit meter when the mode is managed", () => {
-    render(<OrgAiSettingsForm initial={{ ...base, mode: "managed" }} />);
+    renderForm({ ...base, mode: "managed" });
     expect(
       screen.getByText(/100 \/ 500 credits this month/i),
     ).toBeInTheDocument();
@@ -49,7 +122,7 @@ describe("OrgAiSettingsForm", () => {
 
   it("calls setAiMode with the chosen mode when a different one is picked", async () => {
     setAiMode.mockResolvedValueOnce({ ok: true, data: { mode: "off" } });
-    render(<OrgAiSettingsForm initial={base} />);
+    renderForm();
     fireEvent.click(screen.getByRole("radio", { name: /^off/i }));
     await waitFor(() =>
       expect(setAiMode).toHaveBeenCalledWith({ mode: "off" }),
@@ -61,7 +134,7 @@ describe("OrgAiSettingsForm", () => {
       ok: false,
       error: "Add an organization key before switching to it.",
     });
-    render(<OrgAiSettingsForm initial={base} />);
+    renderForm();
     fireEvent.click(screen.getByRole("radio", { name: /organization key/i }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -77,17 +150,13 @@ describe("OrgAiSettingsForm", () => {
 
   it("shows the configured org key and removes it", async () => {
     removeOrgByoKey.mockResolvedValueOnce({ ok: true, data: {} });
-    render(
-      <OrgAiSettingsForm
-        initial={{
-          ...base,
-          mode: "org_byo",
-          byoProvider: "openai",
-          byoKeyLast4: "WXYZ",
-        }}
-      />,
-    );
-    expect(screen.getByText(/OpenAI/)).toBeInTheDocument();
+    renderForm({
+      ...base,
+      mode: "org_byo",
+      byoProvider: "anthropic",
+      byoKeyLast4: "sk-ant-…WXYZ",
+    });
+    expect(screen.getByText("Anthropic (Claude)")).toBeInTheDocument();
     expect(screen.getByText(/WXYZ/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /remove/i }));
     await waitFor(() => expect(removeOrgByoKey).toHaveBeenCalled());
@@ -98,7 +167,7 @@ describe("OrgAiSettingsForm", () => {
       ok: true,
       data: { provider: "anthropic", hint: "sk-ant-…AB12" },
     });
-    render(<OrgAiSettingsForm initial={base} />);
+    renderForm();
     const save = screen.getByRole("button", { name: /validate & save/i });
     expect(save).toBeDisabled();
 
@@ -114,5 +183,127 @@ describe("OrgAiSettingsForm", () => {
         key: "sk-ant-abcdefAB12",
       }),
     );
+  });
+});
+
+// ---- carry-forward 9-b/10: provider metadata comes from the row, never a map ----
+
+describe("OrgAiSettingsForm — providers come from the registry", () => {
+  it("renders a stored org key for a provider no static catalog knew about", () => {
+    // This is the page-500: PROVIDER_CATALOG had three entries and this value
+    // is a fourth, so the old form read `.label` off `undefined` and threw.
+    renderForm({
+      ...base,
+      mode: "org_byo",
+      byoProvider: "mistral",
+      byoKeyLast4: "abcdefg…7890",
+    });
+    expect(screen.getByText("Mistral")).toBeInTheDocument();
+    expect(screen.getByText(/abcdefg…7890/)).toBeInTheDocument();
+  });
+
+  it("offers every enabled provider, not just the native three", () => {
+    renderForm();
+    for (const label of ["Anthropic (Claude)", "Mistral", "Kimi (Moonshot AI)"])
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+  });
+
+  it("takes the key placeholder from the chosen provider's row", () => {
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "Mistral" }));
+    expect(screen.getByLabelText(/organization api key/i)).toHaveAttribute(
+      "placeholder",
+      "your-mistral-key",
+    );
+  });
+
+  it("still renders when the registry has no enabled providers", () => {
+    render(
+      <OrgAiSettingsForm initial={base} providers={[]} modelOptions={[]} />,
+    );
+    expect(
+      screen.getByText(/no ai providers are enabled/i),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("OrgAiSettingsForm — default model", () => {
+  it("saves the chosen provider and model", async () => {
+    setOrgDefaultModel.mockResolvedValueOnce({
+      ok: true,
+      data: { provider: "mistral", modelId: "mistral-small-latest" },
+    });
+    renderForm();
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.click(
+      await screen.findByRole("option", { name: /mistral small/i }),
+    );
+    await waitFor(() =>
+      expect(setOrgDefaultModel).toHaveBeenCalledWith({
+        provider: "mistral",
+        modelId: "mistral-small-latest",
+      }),
+    );
+  }, 30_000);
+
+  it("reverts and explains when the save is rejected", async () => {
+    setOrgDefaultModel.mockResolvedValueOnce({
+      ok: false,
+      error: "That model isn't available.",
+    });
+    renderForm({
+      ...base,
+      defaultProvider: "anthropic",
+      defaultModelId: "claude-sonnet-5",
+    });
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: /mistral small/i }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "That model isn't available.",
+      ),
+    );
+    // reverted to the last confirmed model
+    expect(
+      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+    ).toBeInTheDocument();
+  }, 30_000);
+
+  it("tells the admin when the default cannot apply in the current mode", () => {
+    renderForm({
+      ...base,
+      mode: "org_byo",
+      byoProvider: "anthropic",
+      byoKeyLast4: "sk-ant-…WXYZ",
+      defaultProvider: "mistral",
+      defaultModelId: "mistral-small-latest",
+    });
+    expect(
+      screen.getByText(/organization key is a Anthropic \(Claude\) key/i),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing about reach when the default matches the org key", () => {
+    renderForm({
+      ...base,
+      mode: "org_byo",
+      byoProvider: "mistral",
+      byoKeyLast4: "abcdefg…7890",
+      defaultProvider: "mistral",
+      defaultModelId: "mistral-small-latest",
+    });
+    expect(screen.queryByText(/applies only/i)).not.toBeInTheDocument();
+  });
+
+  it("points at the keys section when no provider has models yet", () => {
+    renderForm(base, []);
+    expect(
+      screen.getByText(/add an api key to see models/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

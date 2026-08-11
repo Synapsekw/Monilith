@@ -129,6 +129,25 @@ describe("ModelPicker", () => {
     ).not.toBeInTheDocument();
   }, 30_000);
 
+  it("lists a provider that has no models yet, and says what unlocks them", async () => {
+    render(
+      <ModelPicker
+        options={OPTIONS}
+        value={null}
+        onChange={vi.fn()}
+        emptyProviders={[
+          { provider: "google", providerLabel: "Google Gemini" },
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("combobox"));
+    expect(await screen.findByText("Google Gemini")).toBeInTheDocument();
+    const row = screen.getByRole("option", {
+      name: /add an api key to see models/i,
+    });
+    expect(row).toHaveAttribute("aria-disabled", "true");
+  }, 30_000);
+
   it("says which models cannot run tools", async () => {
     render(<ModelPicker options={OPTIONS} value={null} onChange={vi.fn()} />);
     await userEvent.click(screen.getByRole("combobox"));
