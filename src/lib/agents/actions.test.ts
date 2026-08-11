@@ -358,4 +358,16 @@ describe("getAgentRuns", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).not.toContain("boom");
   });
+
+  // The user-facing message deliberately drops the cause, so if the catch also
+  // swallows it the failure is invisible on BOTH sides — the underlying error
+  // has to reach the server log or nobody can ever diagnose it.
+  it("logs the underlying error instead of swallowing it entirely", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cause = new Error("listAgentRuns: boom");
+    listAgentRuns.mockRejectedValue(cause);
+    await getAgentRuns(AGENT_ID);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining(AGENT_ID), cause);
+    spy.mockRestore();
+  });
 });

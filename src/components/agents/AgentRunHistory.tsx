@@ -38,14 +38,36 @@ export function AgentRunHistory({
   agentName: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { data: result, isLoading } = useQuery({
+  const {
+    data: result,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["userAgentRuns", agentId],
     enabled: open,
     staleTime: 30_000,
     queryFn: () => getAgentRuns(agentId),
   });
   const runs = result?.ok ? result.data : [];
-  const loadError = result != null && !result.ok;
+  // TWO ways this read fails, and both have to land on the error branch.
+  //
+  // `isError` is the one that was missing: when the action call itself THROWS
+  // (a network drop mid-Server-Action, a deploy swapping the action id under an
+  // open tab), `result` is `undefined` and `isLoading` is already false — so
+  // reading only `!result.ok` fell through to `runs.length === 0` and rendered
+  // "No runs yet." That is the exact conflation the docstring above forbids: a
+  // broken agent looking identical to one that has never run.
+  const failed = result ?? null;
+  const loadError = isError || (failed !== null && !failed.ok);
+  // The server's own message, not a hardcoded restatement of it. `getAgentRuns`
+  // distinguishes "that agent doesn't exist" from "couldn't load the runs", and
+  // throwing that distinction away at the last hop leaves the user with the
+  // vaguer of the two. A thrown call has no message of its own, so it keeps the
+  // generic one.
+  const loadErrorMessage =
+    failed !== null && !failed.ok
+      ? failed.error
+      : "Couldn’t load this agent’s runs. Try again.";
 
   return (
     <div className="w-full">
@@ -74,7 +96,7 @@ export function AgentRunHistory({
             <p className="text-muted-foreground text-xs">Loading…</p>
           ) : loadError ? (
             <p role="alert" className="text-destructive text-xs">
-              Couldn&rsquo;t load this agent&rsquo;s runs. Try again.
+              {loadErrorMessage}
             </p>
           ) : runs.length === 0 ? (
             <p className="text-muted-foreground text-xs">

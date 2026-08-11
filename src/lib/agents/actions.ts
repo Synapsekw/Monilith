@@ -184,7 +184,12 @@ export async function getAgentRuns(
         runsLimitSchema.parse(limit),
       ),
     };
-  } catch {
+  } catch (e) {
+    // Logged, not just swallowed: this is the ONE read that makes a failing
+    // agent visible, so a query that throws here has to leave a trace on the
+    // server too — otherwise the only evidence anything went wrong is a red
+    // line in one user's browser that nobody is watching.
+    console.error(`[agents] run history read failed for ${agentId}`, e);
     return fail("Couldn't load this agent's runs.");
   }
 }
