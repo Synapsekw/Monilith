@@ -120,19 +120,36 @@ function pickGoogleIds(json: unknown): string[] {
 }
 
 /**
+ * Deadline for a provider's model-list call. A provider that accepts the TCP
+ * connection and then stalls would otherwise hang for undici's default (in the
+ * minutes), and `fetch` without a signal has no deadline of its own. Ten
+ * seconds is generous for a single GET that returns a few KB of ids.
+ */
+export const MODEL_LIST_TIMEOUT_MS = 10_000;
+
+/**
  * The provider's own list of callable model ids. The ONLY impure part of the
  * matching path — kept separate so the rules above stay testable without a
- * network. Throws on any transport or shape failure; the caller decides that
- * a throw means "skip this provider", never "mark everything unverified".
+ * network. Throws on any transport, timeout or shape failure; the caller
+ * decides that a throw means "skip this provider", never "mark everything
+ * unverified".
+ *
+ * `timeoutMs` is injectable so the deadline itself is testable in
+ * milliseconds rather than in ten real seconds.
  */
 export async function listNativeModelIds(
   row: ProviderRow,
   apiKey: string,
+  timeoutMs: number = MODEL_LIST_TIMEOUT_MS,
 ): Promise<string[]> {
   const spec = listSpec(row, apiKey);
   const res = await fetch(spec.url, {
     headers: spec.headers,
     cache: "no-store",
+    // Without this a stalled provider holds the caller open indefinitely. The
+    // abort rejects, which verifyProviderModels already turns into a clean
+    // "skip this provider" rather than a demotion.
+    signal: AbortSignal.timeout(timeoutMs),
   });
   // Status only — the URL carries a key for Google and the headers carry one
   // for everybody else.

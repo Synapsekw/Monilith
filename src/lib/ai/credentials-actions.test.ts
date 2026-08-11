@@ -9,6 +9,23 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
+// Verification is a live third-party round-trip, so it is handed to `after`
+// instead of being awaited on the response path — a provider that stalls must
+// not hold the user's "Save key" open. `after` throws outside a Next request
+// scope, so a direct saveAiKey() call in a unit test can never run the real
+// one; capturing the tasks IS the assertion that the work was deferred
+// (same shape as src/app/api/ask/route.test.ts).
+const { afterTasks } = vi.hoisted(() => ({
+  afterTasks: [] as (() => Promise<void>)[],
+}));
+vi.mock("next/server", async (importActual) => {
+  const actual = await importActual<typeof import("next/server")>();
+  return {
+    ...actual,
+    after: (task: () => Promise<void>) => void afterTasks.push(task),
+  };
+});
+
 // The provider is validated against the ai_providers TABLE now, not a
 // hardcoded enum — getProviderRow is the seam credentials-actions reads it
 // through.
@@ -57,6 +74,7 @@ beforeEach(() => {
   getProviderRow.mockReset();
   verifyProviderModels.mockReset();
   verifyProviderModels.mockResolvedValue({ verified: 0, unverified: 0 });
+  afterTasks.length = 0;
 });
 
 describe("saveAiKey", () => {
@@ -177,6 +195,24 @@ describe("saveAiKey", () => {
       key: "sk-ant-abcdefAB12",
     });
     expect(res.ok).toBe(false);
+    expect(afterTasks).toHaveLength(0);
+    expect(verifyProviderModels).not.toHaveBeenCalled();
+  });
+
+  it("defers id verification to after() instead of awaiting it on the response path", async () => {
+    // The save must return the moment the key is stored. A provider that
+    // accepts the connection and then stalls would otherwise hold the user's
+    // action open for undici's default timeout.
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockResolvedValueOnce(undefined);
+    rpc.mockResolvedValueOnce({ error: null });
+    const res = await saveAiKey({
+      provider: "anthropic",
+      key: "sk-ant-abcdefAB12",
+    });
+    expect(res.ok).toBe(true);
+    expect(afterTasks).toHaveLength(1);
+    // Not yet — it runs once the response has been sent.
     expect(verifyProviderModels).not.toHaveBeenCalled();
   });
 
@@ -185,6 +221,7 @@ describe("saveAiKey", () => {
     validateKey.mockResolvedValueOnce(undefined);
     rpc.mockResolvedValueOnce({ error: null });
     await saveAiKey({ provider: "anthropic", key: "sk-ant-abcdefAB12" });
+    await afterTasks[0]();
     expect(verifyProviderModels).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: "anthropic",
@@ -195,7 +232,9 @@ describe("saveAiKey", () => {
 
   it("still saves the key when id verification blows up", async () => {
     // The key is valid regardless; an unverified row is simply not offered
-    // until the next pass. A catalog problem must never look like a bad key.
+    // until the next pass. A catalog problem must never look like a bad key —
+    // and now it cannot even be observed by the response, so the deferred task
+    // must swallow the failure rather than reject into the platform.
     getProviderRow.mockResolvedValueOnce(anthropicRow());
     validateKey.mockResolvedValueOnce(undefined);
     rpc.mockResolvedValueOnce({ error: null });
@@ -205,6 +244,7 @@ describe("saveAiKey", () => {
       key: "sk-ant-abcdefAB12",
     });
     expect(res.ok).toBe(true);
+    await expect(afterTasks[0]()).resolves.toBeUndefined();
   });
 });
 

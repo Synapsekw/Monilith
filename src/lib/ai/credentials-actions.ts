@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getAdapter } from "@/lib/ai/providers/registry";
@@ -58,15 +59,29 @@ export async function saveAiKey(input: {
   // namespace is not the providers'. Saving a key is therefore also the moment
   // this provider's catalog rows become selectable.
   //
-  // Never allowed to fail the save: the key is valid regardless, and an
-  // unverified row is simply not offered until the next pass.
+  // It is NOT on the response path. Verification is a live round-trip to a
+  // third party we do not control; awaiting it made "Save key" as slow as the
+  // slowest provider, and a provider that accepts the connection and then
+  // stalls would hold the user's action open. `after` hands it to the
+  // platform's keep-alive (on Vercel, waitUntil) so the save returns as soon
+  // as the key is stored. Never allowed to fail the save either: the key is
+  // valid regardless, and an unverified row is simply not offered until the
+  // next pass.
+  const verifyIds = async () => {
+    try {
+      await verifyProviderModels({ client: svc, provider, apiKey: key });
+    } catch (e) {
+      console.error(
+        `[ai] id verification failed after saving ${provider} key`,
+        e,
+      );
+    }
+  };
   try {
-    await verifyProviderModels({ client: svc, provider, apiKey: key });
-  } catch (e) {
-    console.error(
-      `[ai] id verification failed after saving ${provider} key`,
-      e,
-    );
+    after(verifyIds);
+  } catch {
+    // No request scope — a direct call in a unit test. Still run it, detached.
+    void verifyIds();
   }
 
   revalidatePath("/settings/ai");

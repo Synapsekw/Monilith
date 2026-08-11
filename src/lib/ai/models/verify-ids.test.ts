@@ -6,12 +6,14 @@ vi.mock("@/lib/ai/providers/provider-rows", () => ({
 }));
 
 import {
+  MODEL_LIST_TIMEOUT_MS,
   candidateNativeIds,
   listNativeModelIds,
   matchNativeId,
   verifyProviderModels,
 } from "@/lib/ai/models/verify-ids";
 import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
+import { fakeAiModelsClient, rowOf } from "@/test/ai-models-fake-client";
 
 describe("candidateNativeIds", () => {
   it("always offers the gateway id itself first", () => {
@@ -85,7 +87,11 @@ function providerRow(overrides: Partial<ProviderRow> = {}): ProviderRow {
   };
 }
 
-type FetchCall = { url: string; headers: Record<string, string> };
+type FetchCall = {
+  url: string;
+  headers: Record<string, string>;
+  signal: AbortSignal | null;
+};
 
 function stubFetch(
   responder: (url: string) => { ok: boolean; status?: number; body?: unknown },
@@ -95,6 +101,7 @@ function stubFetch(
     calls.push({
       url,
       headers: (init?.headers ?? {}) as Record<string, string>,
+      signal: init?.signal ?? null,
     });
     const r = responder(url);
     return {
@@ -180,110 +187,200 @@ describe("listNativeModelIds", () => {
   });
 });
 
-type FakeCatalogRow = {
-  model_id: string;
-  native_model_id: string | null;
-  id_verified: boolean;
+// Every fixture below carries NOISE the query is required to exclude. The fake
+// client APPLIES the predicates it records, so deleting `.eq("provider", …)`
+// or flipping `.neq("status","retired")` changes the rows returned and these
+// assertions fail. That non-vacuity is the whole point: the fake this replaced
+// ignored its arguments, and every one of these tests passed against a query
+// with no filters at all.
+
+/**
+ * Another provider carrying the SAME model_id. Realistic — Bedrock serves
+ * Claude under Anthropic's own names — and it is the row that proves both
+ * predicates matter: `ai_models` is keyed on `(provider, model_id)`, so a read
+ * or an update that forgets `provider` reaches this row too.
+ */
+const OTHER_PROVIDER_ROW = {
+  provider: "bedrock",
+  model_id: "claude-sonnet-5",
+  native_model_id: null,
+  id_verified: false,
+  status: "active",
 };
 
-function fakeClient(rows: FakeCatalogRow[]) {
-  const table = rows.map((r) => ({ ...r }));
-  const writes: { modelId: string; patch: Record<string, unknown> }[] = [];
-  const client = {
-    from() {
-      return {
-        select: () => ({
-          eq: () => ({
-            neq: async () => ({
-              data: table.map((r) => ({ ...r })),
-              error: null,
-            }),
-          }),
-        }),
-        update(patch: Record<string, unknown>) {
-          const builder = {
-            eq(col: string, val: string) {
-              if (col === "model_id") {
-                writes.push({ modelId: val, patch });
-                const row = table.find((r) => r.model_id === val);
-                if (row) {
-                  row.native_model_id = patch.native_model_id as string;
-                  row.id_verified = true;
-                }
-                return Promise.resolve({ error: null });
-              }
-              return builder;
-            },
-          };
-          return builder;
-        },
-      };
-    },
-  };
-  return { client, table, writes };
+/**
+ * Retired, and deliberately PRESENT in the native lists the anthropic tests
+ * stub — so if `.neq("status","retired")` were dropped it would match, be
+ * counted, and be written, changing both the counts and the write set.
+ */
+const RETIRED_ROW = {
+  provider: "anthropic",
+  model_id: "claude-legacy-2",
+  native_model_id: null,
+  id_verified: false,
+  status: "retired",
+};
+
+/** The anthropic native list every test below stubs, unless it says otherwise. */
+function anthropicNativeIds(ids: string[]) {
+  return { data: [...ids, RETIRED_ROW.model_id].map((id) => ({ id })) };
 }
 
 beforeEach(() => {
   getProviderRow.mockReset();
 });
 
+describe("listNativeModelIds · deadline", () => {
+  it("defaults to a ten-second deadline", () => {
+    expect(MODEL_LIST_TIMEOUT_MS).toBe(10_000);
+  });
+
+  it("passes an abort signal to fetch", async () => {
+    const calls = stubFetch(() => ({
+      ok: true,
+      body: { data: [{ id: "claude-sonnet-5" }] },
+    }));
+    await listNativeModelIds(providerRow(), "sk-ant-x");
+    expect(calls[0].signal).toBeInstanceOf(AbortSignal);
+    expect(calls[0].signal?.aborted).toBe(false);
+  });
+
+  it("rejects once the deadline passes, rather than hanging on a stalled provider", async () => {
+    // `credentials-actions` used to AWAIT this on the user's save path, and
+    // fetch has no deadline of its own — a provider that accepts the
+    // connection and then never answers would hold the action open for
+    // undici's default. This stub stalls exactly like that, and is aborted by
+    // the very signal listNativeModelIds passes in.
+    vi.stubGlobal(
+      "fetch",
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(init.signal?.reason ?? new Error("aborted"));
+          });
+        }),
+    );
+    await expect(
+      listNativeModelIds(providerRow(), "sk-ant-x", 5),
+    ).rejects.toThrow(/abort|timeout/i);
+  });
+});
+
 describe("verifyProviderModels", () => {
+  it("reads exactly this provider's non-retired rows — the whole predicate set", async () => {
+    getProviderRow.mockResolvedValueOnce(providerRow());
+    stubFetch(() => ({
+      ok: true,
+      body: anthropicNativeIds(["claude-sonnet-5"]),
+    }));
+    const { client, selects } = fakeAiModelsClient([
+      { provider: "anthropic", model_id: "claude-sonnet-5" },
+      OTHER_PROVIDER_ROW,
+      RETIRED_ROW,
+    ]);
+    await verifyProviderModels({
+      client,
+      provider: "anthropic",
+      apiKey: "sk-ant-x",
+    });
+    expect(selects).toHaveLength(1);
+    expect(selects[0].columns).toBe("model_id, native_model_id, id_verified");
+    expect(selects[0].predicates).toEqual([
+      { op: "eq", column: "provider", value: "anthropic" },
+      { op: "neq", column: "status", value: "retired" },
+    ]);
+  });
+
   it("resolves the gateway's dotted id to the provider's hyphenated native id", async () => {
     getProviderRow.mockResolvedValueOnce(providerRow());
     stubFetch(() => ({
       ok: true,
-      body: { data: [{ id: "claude-haiku-4-5" }, { id: "claude-sonnet-5" }] },
+      body: anthropicNativeIds(["claude-haiku-4-5", "claude-sonnet-5"]),
     }));
-    const { client, table, writes } = fakeClient([
-      {
-        model_id: "claude-haiku-4.5",
-        native_model_id: null,
-        id_verified: false,
-      },
-      {
-        model_id: "claude-sonnet-5",
-        native_model_id: null,
-        id_verified: false,
-      },
+    const { client, table, updates } = fakeAiModelsClient([
+      { provider: "anthropic", model_id: "claude-haiku-4.5" },
+      { provider: "anthropic", model_id: "claude-sonnet-5" },
+      OTHER_PROVIDER_ROW,
+      RETIRED_ROW,
     ]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
+    // Two anthropic rows — NOT the bedrock row that shares a model_id, and NOT
+    // the retired row, even though both would match the native list.
     expect(res).toEqual({ verified: 2, unverified: 0 });
-    expect(
-      table.find((r) => r.model_id === "claude-haiku-4.5")?.native_model_id,
-    ).toBe("claude-haiku-4-5");
-    expect(writes).toHaveLength(2);
+    expect(rowOf(table, "anthropic", "claude-haiku-4.5")?.native_model_id).toBe(
+      "claude-haiku-4-5",
+    );
+    expect(updates).toHaveLength(2);
+    expect(rowOf(table, "bedrock", "claude-sonnet-5")?.id_verified).toBe(false);
+    expect(rowOf(table, "anthropic", "claude-legacy-2")?.id_verified).toBe(
+      false,
+    );
+  });
+
+  it("scopes every write to (provider, model_id), never stamping another provider's same-named row", async () => {
+    // `ai_models` is keyed on (provider, model_id). An update that filters on
+    // model_id alone would stamp bedrock's claude-sonnet-5 with a native id
+    // verified against Anthropic's API — silently wrong, then offered to a
+    // picker.
+    getProviderRow.mockResolvedValueOnce(providerRow());
+    stubFetch(() => ({
+      ok: true,
+      body: anthropicNativeIds(["claude-sonnet-5"]),
+    }));
+    const { client, table, updates } = fakeAiModelsClient([
+      { provider: "anthropic", model_id: "claude-sonnet-5" },
+      OTHER_PROVIDER_ROW,
+    ]);
+    await verifyProviderModels({
+      client,
+      provider: "anthropic",
+      apiKey: "sk-ant-x",
+    });
+    expect(updates).toHaveLength(1);
+    expect(updates[0].predicates).toEqual([
+      { op: "eq", column: "provider", value: "anthropic" },
+      { op: "eq", column: "model_id", value: "claude-sonnet-5" },
+    ]);
+    // The predicates matched ONE row, and it is the anthropic one.
+    expect(updates[0].matched).toBe(1);
+    expect(updates[0].patch).toMatchObject({
+      native_model_id: "claude-sonnet-5",
+      id_verified: true,
+    });
+    const bedrock = rowOf(table, "bedrock", "claude-sonnet-5");
+    expect(bedrock?.id_verified).toBe(false);
+    expect(bedrock?.native_model_id).toBeNull();
   });
 
   it("quarantines an unmatched row instead of guessing — it is not written at all", async () => {
     getProviderRow.mockResolvedValueOnce(providerRow());
     stubFetch(() => ({
       ok: true,
-      body: { data: [{ id: "claude-sonnet-5" }] },
+      body: anthropicNativeIds(["claude-sonnet-5"]),
     }));
-    const { client, table, writes } = fakeClient([
-      {
-        model_id: "claude-sonnet-5",
-        native_model_id: null,
-        id_verified: false,
-      },
-      {
-        model_id: "claude-mystery-9",
-        native_model_id: null,
-        id_verified: false,
-      },
+    const { client, table, updates } = fakeAiModelsClient([
+      { provider: "anthropic", model_id: "claude-sonnet-5" },
+      { provider: "anthropic", model_id: "claude-mystery-9" },
+      OTHER_PROVIDER_ROW,
+      RETIRED_ROW,
     ]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
     expect(res).toEqual({ verified: 1, unverified: 1 });
-    expect(writes.map((w) => w.modelId)).toEqual(["claude-sonnet-5"]);
-    const mystery = table.find((r) => r.model_id === "claude-mystery-9");
+    expect(updates.map((u) => u.predicates)).toEqual([
+      [
+        { op: "eq", column: "provider", value: "anthropic" },
+        { op: "eq", column: "model_id", value: "claude-sonnet-5" },
+      ],
+    ]);
+    const mystery = rowOf(table, "anthropic", "claude-mystery-9");
     expect(mystery?.id_verified).toBe(false);
     expect(mystery?.native_model_id).toBeNull();
   });
@@ -291,40 +388,78 @@ describe("verifyProviderModels", () => {
   it("SKIPS the whole provider when its model list errors — no row is demoted", async () => {
     getProviderRow.mockResolvedValueOnce(providerRow());
     stubFetch(() => ({ ok: false, status: 503 }));
-    const { client, table, writes } = fakeClient([
+    const { client, table, selects, updates } = fakeAiModelsClient([
       {
+        provider: "anthropic",
         model_id: "claude-sonnet-5",
         native_model_id: "claude-sonnet-5",
         id_verified: true,
       },
     ]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
     expect(res).toEqual({ verified: 0, unverified: 0 });
-    expect(writes).toEqual([]);
-    expect(table[0].id_verified).toBe(true);
+    expect(selects).toEqual([]);
+    expect(updates).toEqual([]);
+    expect(rowOf(table, "anthropic", "claude-sonnet-5")?.id_verified).toBe(
+      true,
+    );
+  });
+
+  it("SKIPS the provider when its model list stalls past the deadline", async () => {
+    // The deadline turns a hang into a rejection, and the existing catch turns
+    // that rejection into a clean skip — no demotion, no write.
+    getProviderRow.mockResolvedValueOnce(providerRow());
+    vi.stubGlobal("fetch", () =>
+      Promise.reject(
+        new DOMException(
+          "The operation was aborted due to timeout",
+          "TimeoutError",
+        ),
+      ),
+    );
+    const { client, table, selects, updates } = fakeAiModelsClient([
+      {
+        provider: "anthropic",
+        model_id: "claude-sonnet-5",
+        native_model_id: "claude-sonnet-5",
+        id_verified: true,
+      },
+    ]);
+    const res = await verifyProviderModels({
+      client,
+      provider: "anthropic",
+      apiKey: "sk-ant-x",
+    });
+    expect(res).toEqual({ verified: 0, unverified: 0 });
+    expect(selects).toEqual([]);
+    expect(updates).toEqual([]);
+    expect(rowOf(table, "anthropic", "claude-sonnet-5")?.id_verified).toBe(
+      true,
+    );
   });
 
   it("SKIPS on an empty model list — an outage must not empty the picker", async () => {
     getProviderRow.mockResolvedValueOnce(providerRow());
     stubFetch(() => ({ ok: true, body: { data: [] } }));
-    const { client, writes } = fakeClient([
+    const { client, updates } = fakeAiModelsClient([
       {
+        provider: "anthropic",
         model_id: "claude-sonnet-5",
         native_model_id: "claude-sonnet-5",
         id_verified: true,
       },
     ]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
     expect(res).toEqual({ verified: 0, unverified: 0 });
-    expect(writes).toEqual([]);
+    expect(updates).toEqual([]);
   });
 
   it("never demotes a previously-verified row that this list happens to omit", async () => {
@@ -334,77 +469,83 @@ describe("verifyProviderModels", () => {
     getProviderRow.mockResolvedValueOnce(providerRow());
     stubFetch(() => ({
       ok: true,
-      body: { data: [{ id: "claude-sonnet-5" }] },
+      body: anthropicNativeIds(["claude-sonnet-5"]),
     }));
-    const { client, table, writes } = fakeClient([
+    const { client, table, updates } = fakeAiModelsClient([
+      { provider: "anthropic", model_id: "claude-sonnet-5" },
       {
-        model_id: "claude-sonnet-5",
-        native_model_id: null,
-        id_verified: false,
-      },
-      {
+        provider: "anthropic",
         model_id: "claude-opus-4-8",
         native_model_id: "claude-opus-4-8",
         id_verified: true,
       },
+      OTHER_PROVIDER_ROW,
+      RETIRED_ROW,
     ]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
     expect(res).toEqual({ verified: 2, unverified: 0 });
-    expect(writes.map((w) => w.modelId)).toEqual(["claude-sonnet-5"]);
-    expect(
-      table.find((r) => r.model_id === "claude-opus-4-8")?.id_verified,
-    ).toBe(true);
+    expect(updates).toHaveLength(1);
+    expect(updates[0].predicates).toEqual([
+      { op: "eq", column: "provider", value: "anthropic" },
+      { op: "eq", column: "model_id", value: "claude-sonnet-5" },
+    ]);
+    expect(rowOf(table, "anthropic", "claude-opus-4-8")?.id_verified).toBe(
+      true,
+    );
   });
 
-  it("does nothing for an unknown or disabled provider, and never calls out", async () => {
+  it("does nothing for an unknown provider, and never calls out", async () => {
     getProviderRow.mockResolvedValueOnce(null);
     const calls = stubFetch(() => ({ ok: true, body: { data: [] } }));
-    const { client } = fakeClient([]);
+    const { client, selects, updates } = fakeAiModelsClient([]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "nope",
       apiKey: "sk-x",
     });
     expect(res).toEqual({ verified: 0, unverified: 0 });
     expect(calls).toEqual([]);
+    expect(selects).toEqual([]);
+    expect(updates).toEqual([]);
   });
 
   it("skips a disabled provider row too", async () => {
     getProviderRow.mockResolvedValueOnce(providerRow({ enabled: false }));
     const calls = stubFetch(() => ({ ok: true, body: { data: [] } }));
-    const { client } = fakeClient([]);
+    const { client, selects } = fakeAiModelsClient([]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
     expect(res).toEqual({ verified: 0, unverified: 0 });
     expect(calls).toEqual([]);
+    expect(selects).toEqual([]);
   });
 
   it("accepts a dated snapshot alias as the native id", async () => {
     getProviderRow.mockResolvedValueOnce(providerRow());
     stubFetch(() => ({
       ok: true,
-      body: { data: [{ id: "claude-haiku-4-5-20251001" }] },
+      body: anthropicNativeIds(["claude-haiku-4-5-20251001"]),
     }));
-    const { client, table } = fakeClient([
-      {
-        model_id: "claude-haiku-4.5",
-        native_model_id: null,
-        id_verified: false,
-      },
+    const { client, table } = fakeAiModelsClient([
+      { provider: "anthropic", model_id: "claude-haiku-4.5" },
+      OTHER_PROVIDER_ROW,
+      RETIRED_ROW,
     ]);
     const res = await verifyProviderModels({
-      client: client as never,
+      client,
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
     expect(res).toEqual({ verified: 1, unverified: 0 });
-    expect(table[0].native_model_id).toBe("claude-haiku-4-5-20251001");
+    expect(rowOf(table, "anthropic", "claude-haiku-4.5")?.native_model_id).toBe(
+      "claude-haiku-4-5-20251001",
+    );
   });
 });
