@@ -39,3 +39,18 @@ export function candidateNativeIds(gatewayModelId: string): string[] {
 export function stripDateSuffix(modelId: string): string {
   return modelId.replace(DATE_SUFFIX, "");
 }
+
+/**
+ * Is `nativeId` exactly `base` plus a date snapshot?
+ *
+ * The same knowledge as {@link stripDateSuffix}, read the other way round —
+ * `verify-ids` matches a provider's list FORWARD (does anything extend my
+ * candidate?) while `pricing` normalises BACKWARD (what is this id without its
+ * date?). Defining the forward direction in terms of the backward one is what
+ * keeps `\d{8}` in one place: change the snapshot format here and both
+ * directions follow. It also needs no regex escaping of `base`, which the
+ * hand-built pattern did.
+ */
+export function isDatedSnapshotOf(base: string, nativeId: string): boolean {
+  return nativeId !== base && stripDateSuffix(nativeId) === base;
+}

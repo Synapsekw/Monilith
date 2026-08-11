@@ -6,7 +6,10 @@ import {
   getProviderRow,
   type ProviderRow,
 } from "@/lib/ai/providers/provider-rows";
-import { candidateNativeIds } from "@/lib/ai/models/model-ids";
+import {
+  candidateNativeIds,
+  isDatedSnapshotOf,
+} from "@/lib/ai/models/model-ids";
 
 /**
  * The Gateway's model-id namespace is not the providers' native namespace
@@ -33,16 +36,12 @@ export function matchNativeId(
   const native = new Set(nativeIds);
   for (const c of candidates) if (native.has(c)) return c;
   for (const c of candidates) {
-    const dated = nativeIds.find((n) =>
-      new RegExp(`^${escapeRe(c)}-\\d{8}$`).test(n),
-    );
+    // The date rule itself lives in models/model-ids.ts, so a change to how
+    // providers spell snapshots is one edit, not two.
+    const dated = nativeIds.find((n) => isDatedSnapshotOf(c, n));
     if (dated) return dated;
   }
   return null;
-}
-
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ---------------------------------------------------------------------------
