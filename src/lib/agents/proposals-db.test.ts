@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
+import { readMigrationSources } from "@/test/anon-conformance";
 import {
+  PROPOSAL_STATUSES,
   PROPOSAL_TTL_DAYS,
   PENDING_PROPOSAL_SCAN_LIMIT,
   insertProposals,
@@ -296,5 +298,86 @@ describe("getProposalForDecision", () => {
     await expect(
       getProposalForDecision(client as never, "p-1"),
     ).rejects.toThrow("getProposalForDecision: boom");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PROPOSAL_STATUSES vs. the database's own vocabulary
+// ---------------------------------------------------------------------------
+//
+// `PROPOSAL_STATUSES` mirrors `user_agent_proposals_status_check`, and until
+// this block the only thing holding the two together was a comment. That is a
+// silent-divergence trap with a user-facing failure: `pnpm db:types` cannot
+// catch it (codegen renders `Row.status` as plain `string` because it does not
+// read check constraints), so a later migration that adds a sixth status —
+// say 'executing' — and forgets the TS array would make `getProposalForDecision`
+// throw `unreadable proposal row` on that row, 500-ing the approve page instead
+// of rendering a sensible state. `listPendingProposalsForRun` is only partly
+// shielded: it filters `status='pending'`, but it throws on the first offending
+// row rather than skipping it, killing the whole list.
+//
+// The direct assertion would be `pg_get_constraintdef` over `pg_constraint`.
+// Nothing in this repo's test process can run that: there is no pg driver and
+// no `DATABASE_URL` in the test path, supabase-js speaks only PostgREST, and
+// PostgREST exposes `public` — never `pg_catalog`. There is no generic
+// SQL-executing RPC either (checked the generated `Functions` list). So the
+// pin is split in two, and BOTH halves are needed because each catches a
+// direction the other cannot:
+//
+//   * THIS test — the corpus half — catches the reviewer's exact scenario
+//     (DB grows a status the TS array lacks). `supabase/migrations/` is the
+//     declared source of truth for the schema (AGENTS.md), a sixth status can
+//     only arrive through a migration file, and `pnpm db:ledger-check` is what
+//     keeps those files and the live ledger one-to-one. It scans the WHOLE
+//     corpus in version order rather than this task's file, so a LATER
+//     migration redefining the constraint is what the assertion reads.
+//   * The live half — `user_agent_proposals.rls.integration.test.ts` — proves
+//     every value in the TS array is actually accepted by the running
+//     constraint, and that an unknown one is refused by the constraint OF THAT
+//     NAME. That catches the opposite drift (TS lists a status the DB rejects)
+//     against the real database.
+//
+// Deliberately NOT solved by making the row mapper tolerant of unknown
+// statuses: swallowing one would hide exactly the drift this exists to surface.
+
+/** Quoted literals of the LAST `status` vocabulary any migration declares for
+ *  `user_agent_proposals`. Handles both spellings Postgres accepts — the
+ *  `in (…)` form this migration writes and the `= any (array[…])` form
+ *  `pg_get_constraintdef` echoes back, which a later hand-written migration
+ *  might well copy. Returns null when no declaration exists at all, so the
+ *  test fails loudly instead of passing vacuously. */
+function latestDeclaredStatusVocabulary(): string[] | null {
+  let found: string[] | null = null;
+  for (const source of readMigrationSources()) {
+    // Strip `--` comments first: these migrations discuss the vocabulary in
+    // prose above the DDL, and a regex over raw text would read the commentary
+    // instead of the statement (same precedent as board-threads.schema.test.ts).
+    const sql = source.replace(/--[^\n]*/g, "");
+    for (const statement of sql.split(";")) {
+      if (!/user_agent_proposals/i.test(statement)) continue;
+      const clause =
+        statement.match(/status\s+in\s*\(([^)]*)\)/i) ??
+        statement.match(/status\s*=\s*any\s*\(\s*array\s*\[([^\]]*)\]/i);
+      if (!clause?.[1]) continue;
+      const literals = [...clause[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
+      if (literals.length > 0) found = literals;
+    }
+  }
+  return found;
+}
+
+describe("PROPOSAL_STATUSES", () => {
+  it("matches the status vocabulary the migrations declare, as a set", () => {
+    const declared = latestDeclaredStatusVocabulary();
+    expect(
+      declared,
+      "no migration declares a status vocabulary for user_agent_proposals — " +
+        "this assertion would otherwise pass vacuously",
+    ).not.toBeNull();
+    expect([...declared!].sort()).toEqual([...PROPOSAL_STATUSES].sort());
+  });
+
+  it("declares each status exactly once", () => {
+    expect(new Set(PROPOSAL_STATUSES).size).toBe(PROPOSAL_STATUSES.length);
   });
 });

@@ -10,6 +10,7 @@ import {
 } from "@/test/tenant-fixtures";
 import type { Database } from "@/types/database.types";
 import {
+  PROPOSAL_STATUSES,
   countPendingProposalsByAgent,
   listPendingProposalsForRun,
 } from "./proposals-db";
@@ -372,6 +373,81 @@ describe.skipIf(!resolution.ok)(
         (await userB.auth.getUser()).data.user!.id,
       );
       expect(counts[agentId]).toBeUndefined();
+    });
+
+    // ── Property: PROPOSAL_STATUSES is the vocabulary the LIVE constraint
+    //    enforces ─────────────────────────────────────────────────────────
+    //
+    // The TS array and `user_agent_proposals_status_check` are coupled with
+    // nothing but a comment between them, and codegen cannot help: the
+    // generated `Row.status` is plain `string`, because check constraints are
+    // invisible to it. Divergence surfaces as `getProposalForDecision`
+    // throwing `unreadable proposal row` on a real row — a 500 on the approve
+    // page, not a degraded render.
+    //
+    // This is the LIVE half of the pin: every value the TS array claims is
+    // actually accepted by the running database, and a value outside it is
+    // refused by the constraint OF THAT NAME — which is what ties this to the
+    // corpus half in `proposals-db.test.ts`, where the vocabulary of the
+    // statement declaring that named constraint is asserted set-equal to the
+    // array. (Reading `pg_get_constraintdef` directly would be the one-step
+    // version; nothing in the test process can run SQL — no pg driver, and
+    // PostgREST never exposes `pg_catalog`. See the note in the corpus half.)
+    //
+    // Each probe row is deleted immediately, so the fixture state the
+    // properties above assert on is untouched regardless of ordering.
+    it("accepts every PROPOSAL_STATUSES value and refuses one outside it", async () => {
+      const future = new Date(Date.now() + 7 * DAY_MS).toISOString();
+
+      for (const status of PROPOSAL_STATUSES) {
+        const { data, error } = await admin
+          .from("user_agent_proposals")
+          .insert({
+            user_agent_id: agentId,
+            run_id: runId,
+            org_id: ORG_A.orgId,
+            owner_id: ownerAId,
+            capability: "board.write",
+            tool_name: "create_item",
+            tool_call_id: `call-vocab-${status}-${tag}`,
+            input: {},
+            summary: `vocabulary probe: ${status}`,
+            status,
+            expires_at: future,
+          })
+          .select("id")
+          .single();
+        expect(
+          error,
+          `the live constraint must accept the declared status '${status}'`,
+        ).toBeNull();
+        await admin
+          .from("user_agent_proposals")
+          .delete()
+          .eq("id", (data as { id: string }).id);
+      }
+
+      const { error: refused } = await admin
+        .from("user_agent_proposals")
+        .insert({
+          user_agent_id: agentId,
+          run_id: runId,
+          org_id: ORG_A.orgId,
+          owner_id: ownerAId,
+          capability: "board.write",
+          tool_name: "create_item",
+          tool_call_id: `call-vocab-unknown-${tag}`,
+          input: {},
+          summary: "vocabulary probe: outside the vocabulary",
+          // Not in PROPOSAL_STATUSES. If this ever STOPS failing, the database
+          // has grown a status the TS array does not know about — exactly the
+          // drift that 500s the approve page.
+          status: "executing",
+          expires_at: future,
+        })
+        .select("id");
+      expect(refused?.code, "check-constraint violation").toBe("23514");
+      expect(refused?.message).toContain("user_agent_proposals_status_check");
     });
   },
 );
