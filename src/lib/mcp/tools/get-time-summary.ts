@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   listTimeAllocationsCore,
   TIME_ALLOCATIONS_LIMIT,
@@ -8,6 +7,7 @@ import {
 import { summarizeAllocations, type SummaryGroupBy } from "@/lib/time/summary";
 import { validateRange } from "./range";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use `YYYY-MM-DD`.");
 
@@ -61,18 +61,17 @@ export async function getTimeSummaryHandler(
   }
 }
 
-export function registerGetTimeSummaryTool(
-  server: McpServer,
-  getClient: GetClient,
-  actorId: string,
-): void {
-  server.registerTool(
-    "get_time_summary",
-    {
-      title: "Get time summary",
-      description: `Totals of the connected user's manually logged time between two dates, grouped by item, category or day. Returns \`{ buckets, ungroupedSecs }\`. Time is logged against EITHER an item OR a category, so grouping by one excludes the other: \`ungroupedSecs\` is the excluded seconds (always 0 for \`day\`) — if it is above 0, say so rather than reporting the buckets as the whole total. Range must be at most ${TIME_RANGE_MAX_DAYS} days and the window's rows at most ${TIME_ALLOCATIONS_LIMIT} — if exceeded, returns an error instead of a partial total, so narrow the window.`,
-      inputSchema: getTimeSummaryInput,
-    },
-    async (args) => getTimeSummaryHandler(getClient, actorId, args),
-  );
-}
+export const getTimeSummaryDescriptor: ToolDescriptor = {
+  name: "get_time_summary",
+  title: "Get time summary",
+  description: `Totals of the connected user's manually logged time between two dates, grouped by item, category or day. Returns \`{ buckets, ungroupedSecs }\`. Time is logged against EITHER an item OR a category, so grouping by one excludes the other: \`ungroupedSecs\` is the excluded seconds (always 0 for \`day\`) — if it is above 0, say so rather than reporting the buckets as the whole total. Range must be at most ${TIME_RANGE_MAX_DAYS} days and the window's rows at most ${TIME_ALLOCATIONS_LIMIT} — if exceeded, returns an error instead of a partial total, so narrow the window.`,
+  inputSchema: getTimeSummaryInput,
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    getTimeSummaryHandler(
+      ctx.getClient,
+      ctx.actorId,
+      input as { from: string; to: string; groupBy: SummaryGroupBy },
+    ),
+};

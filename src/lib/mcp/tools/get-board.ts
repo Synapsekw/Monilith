@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetClient } from "./shared";
 import { describeColumn } from "./column-meta";
+import type { ToolDescriptor } from "./descriptor";
 
 const getBoardInput = { boardId: z.string().uuid() };
 
@@ -48,22 +48,18 @@ export async function getBoardHandler(
   };
 }
 
-export function registerGetBoardTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_board",
-    {
-      title: "Get board",
-      description:
-        "Get a board's metadata, columns, and groups. Each column reports " +
-        "`writable`, a `valueShape` string for create_item/update_item field " +
-        "values, `options` (status/dropdown: use an option's `id` as `optionId`), " +
-        "and any settings that affect writes. Columns with `writable: false` " +
-        "cannot be set via `fields` — use `attach_file` for `files` columns.",
-      inputSchema: getBoardInput,
-    },
-    async (input) => getBoardHandler(getClient, input),
-  );
-}
+export const getBoardDescriptor: ToolDescriptor = {
+  name: "get_board",
+  title: "Get board",
+  description:
+    "Get a board's metadata, columns, and groups. Each column reports " +
+    "`writable`, a `valueShape` string for create_item/update_item field " +
+    "values, `options` (status/dropdown: use an option's `id` as `optionId`), " +
+    "and any settings that affect writes. Columns with `writable: false` " +
+    "cannot be set via `fields` — use `attach_file` for `files` columns.",
+  inputSchema: getBoardInput,
+  capability: null,
+  scope: "boardId",
+  invoke: (ctx, input) =>
+    getBoardHandler(ctx.getClient, input as { boardId: string }),
+};

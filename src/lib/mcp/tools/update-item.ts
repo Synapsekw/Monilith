@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   fieldInput,
   writeCellValue,
   type FieldInput,
   type GetClient,
 } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 const updateItemInput = {
   itemId: z.string().uuid(),
@@ -61,19 +61,16 @@ export async function updateItemHandler(
   };
 }
 
-export function registerUpdateItemTool(
-  server: McpServer,
-  getClient: GetClient,
-  actorId: string,
-): void {
-  server.registerTool(
-    "update_item",
-    {
-      title: "Update item",
-      description:
-        "Rename an item and/or update its field values. No delete/archive/move.",
-      inputSchema: updateItemInput,
-    },
-    async (input) => updateItemHandler(getClient, input, actorId),
-  );
-}
+type UpdateItemArgs = { itemId: string; name?: string; fields?: FieldInput[] };
+
+export const updateItemDescriptor: ToolDescriptor = {
+  name: "update_item",
+  title: "Update item",
+  description:
+    "Rename an item and/or update its field values. No delete/archive/move.",
+  inputSchema: updateItemInput,
+  capability: "board.write",
+  scope: "itemId",
+  invoke: (ctx, input) =>
+    updateItemHandler(ctx.getClient, input as UpdateItemArgs, ctx.actorId),
+};

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { upsertTimeAllocationCore } from "@/lib/time/allocation-core";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use `YYYY-MM-DD`.");
 
@@ -92,19 +92,14 @@ export async function logTimeAllocationHandler(
   };
 }
 
-export function registerLogTimeAllocationTool(
-  server: McpServer,
-  getClient: GetClient,
-  actorId: string,
-): void {
-  server.registerTool(
-    "log_time_allocation",
-    {
-      title: "Log time",
-      description:
-        "Record manually logged time for the connected user on one day. Provide exactly one of `itemId` (get ids from query/search tools) or `category` (free text). This UPSERTS: calling it again for the same day and target replaces the value rather than adding to it; `secs: 0` clears the entry. Writes only the caller's own time. `orgId` is optional and DEFAULTS TO YOUR FIRST ORGANIZATION BY NAME — pass it explicitly if you belong to more than one (list_organizations); the response always echoes the `orgId`/`orgName` the entry was written to.",
-      inputSchema: logTimeAllocationInput,
-    },
-    async (args) => logTimeAllocationHandler(getClient, actorId, args as Args),
-  );
-}
+export const logTimeAllocationDescriptor: ToolDescriptor = {
+  name: "log_time_allocation",
+  title: "Log time",
+  description:
+    "Record manually logged time for the connected user on one day. Provide exactly one of `itemId` (get ids from query/search tools) or `category` (free text). This UPSERTS: calling it again for the same day and target replaces the value rather than adding to it; `secs: 0` clears the entry. Writes only the caller's own time. `orgId` is optional and DEFAULTS TO YOUR FIRST ORGANIZATION BY NAME — pass it explicitly if you belong to more than one (list_organizations); the response always echoes the `orgId`/`orgName` the entry was written to.",
+  inputSchema: logTimeAllocationInput,
+  capability: "time.log",
+  scope: "itemId",
+  invoke: (ctx, input) =>
+    logTimeAllocationHandler(ctx.getClient, ctx.actorId, input as Args),
+};

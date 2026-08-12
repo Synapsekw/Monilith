@@ -1,6 +1,6 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listToolOrgs } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function listOrganizationsHandler(
   getClient: GetClient,
@@ -17,18 +17,13 @@ export async function listOrganizationsHandler(
   }
 }
 
-export function registerListOrganizationsTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "list_organizations",
-    {
-      title: "List organizations",
-      description:
-        "List the organizations the connected user belongs to. Use the returned id as the optional `orgId` argument on org-scoped tools.",
-      inputSchema: {},
-    },
-    async () => listOrganizationsHandler(getClient),
-  );
-}
+export const listOrganizationsDescriptor: ToolDescriptor = {
+  name: "list_organizations",
+  title: "List organizations",
+  description:
+    "List the organizations the connected user belongs to. Use the returned id as the optional `orgId` argument on org-scoped tools.",
+  inputSchema: {},
+  capability: null,
+  scope: "none",
+  invoke: (ctx) => listOrganizationsHandler(ctx.getClient),
+};

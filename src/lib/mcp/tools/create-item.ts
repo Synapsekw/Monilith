@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   fieldInput,
   writeCellValue,
   type FieldInput,
   type GetClient,
 } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 const createItemInput = {
   groupId: z.string().uuid(),
@@ -55,19 +55,16 @@ export async function createItemHandler(
   };
 }
 
-export function registerCreateItemTool(
-  server: McpServer,
-  getClient: GetClient,
-  actorId: string,
-): void {
-  server.registerTool(
-    "create_item",
-    {
-      title: "Create item",
-      description:
-        "Create a new item in a group, optionally setting initial field values.",
-      inputSchema: createItemInput,
-    },
-    async (input) => createItemHandler(getClient, input, actorId),
-  );
-}
+type CreateItemArgs = { groupId: string; name: string; fields?: FieldInput[] };
+
+export const createItemDescriptor: ToolDescriptor = {
+  name: "create_item",
+  title: "Create item",
+  description:
+    "Create a new item in a group, optionally setting initial field values.",
+  inputSchema: createItemInput,
+  capability: "board.write",
+  scope: "groupId",
+  invoke: (ctx, input) =>
+    createItemHandler(ctx.getClient, input as CreateItemArgs, ctx.actorId),
+};

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   listReportsForBoardCore,
   resolveReportBoardIdsCore,
@@ -10,6 +9,7 @@ import {
 import type { Database } from "@/types/database.types";
 import { canReadBoard } from "./board-access";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 /**
  * How many boards a report spans — with no membership read at all in the
@@ -91,17 +91,13 @@ export async function listReportsHandler(
   }
 }
 
-export function registerListReportsTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "list_reports",
-    {
-      title: "List reports",
-      description: `Reports that include this board, newest first — the ones bound to it alone plus any multi-board or portfolio roll-up that covers it. Each entry says how many boards it spans; templates are not listed. Returns at most ${REPORTS_LIMIT}. Get board ids from list_boards.`,
-      inputSchema: { boardId: z.string().uuid() },
-    },
-    async (args) => listReportsHandler(getClient, args),
-  );
-}
+export const listReportsDescriptor: ToolDescriptor = {
+  name: "list_reports",
+  title: "List reports",
+  description: `Reports that include this board, newest first — the ones bound to it alone plus any multi-board or portfolio roll-up that covers it. Each entry says how many boards it spans; templates are not listed. Returns at most ${REPORTS_LIMIT}. Get board ids from list_boards.`,
+  inputSchema: { boardId: z.string().uuid() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    listReportsHandler(ctx.getClient, input as { boardId: string }),
+};

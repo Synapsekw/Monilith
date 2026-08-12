@@ -1,10 +1,10 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getPortfolioRowsCore } from "@/lib/portfolios/queries";
 import { serverToday } from "@/lib/portfolios/rollup";
 import { listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import type { RowOwner } from "@/lib/portfolios/types";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function getPortfolioHandler(
   getClient: GetClient,
@@ -81,18 +81,14 @@ export async function getPortfolioHandler(
   }
 }
 
-export function registerGetPortfolioTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_portfolio",
-    {
-      title: "Get portfolio",
-      description:
-        "One portfolio's board rollup — item totals, done counts, overdue counts, health and owner per board. Get ids from list_portfolios.",
-      inputSchema: { portfolioId: z.string().uuid() },
-    },
-    async (args) => getPortfolioHandler(getClient, args),
-  );
-}
+export const getPortfolioDescriptor: ToolDescriptor = {
+  name: "get_portfolio",
+  title: "Get portfolio",
+  description:
+    "One portfolio's board rollup — item totals, done counts, overdue counts, health and owner per board. Get ids from list_portfolios.",
+  inputSchema: { portfolioId: z.string().uuid() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    getPortfolioHandler(ctx.getClient, input as { portfolioId: string }),
+};
