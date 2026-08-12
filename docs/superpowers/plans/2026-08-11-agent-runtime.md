@@ -1339,7 +1339,8 @@ git commit -m "feat(agents): create_file and create_automation tools over extrac
 **Interfaces:**
 
 - Consumes: `buildAgentTools`, `makeGrantGate` (Task 5); `AGENT_ONLY_DESCRIPTORS` (Task 6); `insertProposals`, `PROPOSAL_TTL_DAYS` (Task 3); `toAiUsage` (existing); `runAi` (existing).
-- Produces: `async function runAgentLoop(args: { model: LanguageModel; instructions: string; tools: ToolSet; gate: GrantGate; maxOutputTokens: number | null }): Promise<{ text: string; usage: AiUsageTokens; steps: number; toolsUsed: string[] }>`, `const AGENT_MAX_STEPS = 12`, `class ModelNotToolCapableError extends Error`.
+- Produces: `async function runAgentLoop(args: { model: LanguageModel; instructions: string; tools: ToolSet; gate: GrantGate; maxOutputTokens: number | null }): Promise<{ text: string; usage: AiUsageTokens; steps: number; toolsUsed: string[] }>`
+  - **`function buildAgentRuntime(args): { tools: ToolSet; gate: GrantGate }`** — added in this task, from Task 5's review. `buildAgentTools` and `makeGrantGate` are each a pure function of the same `extra` list, so today they agree only because the caller passes the same list to both. That is a _caller obligation, not a structural guarantee_ — and it is the identical shape as the bug Task 5's review caught, where the tool set and the gate were built from different lists and an `extra` could execute ungated. Constructing both from one call makes the disagreement unrepresentable. Task 7 is the only assembler, so it owns this., `const AGENT_MAX_STEPS = 12`, `class ModelNotToolCapableError extends Error`.
 - **`GenericToolApprovalFunction` is unusable here** (verified 2026-08-12 with `tsc`). Task 5 exports `GrantGate` from `src/lib/agents/grant-gate.ts` instead — a structural type `(options: { toolCall: {...} }) => Promise<ToolApprovalStatus>`, assignable to every `toolApproval` instantiation and pinned by a type-level test against a concrete tool set. Pass `makeGrantGate(...)` straight into `generateText`.
 
 - [ ] **Step 1: Write the failing loop test — the central claim of this spec**
@@ -1596,6 +1597,14 @@ In `src/app/api/ai/personal-agent/route.ts`, keep **everything** outside the mod
 > **N actions await your approval.** Open the run in Settings → Agents to review them.
 
 Delete `buildBriefing`, `applyBoardScope` and `summarise.ts`. Keep `bucketMyWork` (`/my-work` shares it). Update the four `AGENT_TEMPLATES` instructions to name the tools to call — e.g. Morning Brief: `"Call get_my_work, then write a brief, friendly summary…"`.
+
+- [ ] **Step 6b: Three tests carried over from Task 5's review**
+
+These close gaps Task 5 could not close from inside its own module:
+
+1. **The assembled run has the gate installed.** `buildAgentTools` returns fully executable write tools; a run that forgets `toolApproval` gets ungated writes and no Task 5 test fails. Assert the object `buildAgentRuntime` produces carries a gate, and that the route passes it to `generateText`.
+2. **`isError` is not silently flattened.** Task 5's wrapper joins handler text, which drops `isError` — so an MCP handler returning `{isError:true, text:"Board not found."}` reaches the model as an ordinary success string, while a _thrown_ handler reaches it as `{error: "..."}`. Same failure class, two shapes. Pick one shape, apply it to both paths, and test both. Do this before writing the system prompt, since the prompt's wording depends on what a failure looks like.
+3. **A retried denied call does not create a second proposal.** A model that re-proposes the same denied write in a later step must not produce two rows. Dedupe on `toolCallId` where proposals are collected, and test the retry.
 
 - [ ] **Step 7: Add the zero-grant regression test**
 
