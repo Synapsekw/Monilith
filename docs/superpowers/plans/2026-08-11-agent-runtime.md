@@ -20,7 +20,7 @@
 - **Migrations are minted only via `scripts/new-migration.sh <slug>`.** Never hand-write a version stamp. Apply to DEV via the `supabase-dev` MCP `apply_migration` with the **same version + name** as the committed file, then verify with `pnpm db:ledger-check`.
 - **Regenerate types via the `supabase-dev` MCP** `generate_typescript_types`, then `pnpm prettier --write src/types/database.types.ts`. `pnpm db:types` throws `LegacyProjectNotLinkedError` inside a worktree.
 - **Reuse canonical modules — grep before writing a helper.** `ActionResult` / `fail` from `src/lib/actions/result.ts`; typed RPC through `src/lib/supabase/typed-rpc.ts`.
-- **RLS integration suites SKIP without `PULSE_TEST_DB`** (gotcha-81). That is correct. Never force them.
+- **RLS integration suites are opt-in and skip by default. That is correct — never force one, and never weaken its guard to make it run.** The guard is NOT uniform, so copy the harness of the sibling suite nearest your table rather than assuming: `user_agent_runs.rls.integration.test.ts` gates on `allowsTier2Fixtures(url)` from `@/lib/supabase/project-refs` (DEV URL + service-role key), while `PULSE_TEST_DB` gates a different set (`mcp/tools/attachments`, `ai/ask/board-threads`, `rate-limit/auth-rate-limit`) and the destructive global teardown.
 - **Commits:** authored as `Danijel Jovanovic <info@synapse-solutions.ai>`, lowercase subjects, **stage explicitly by path** — never `git add -A`.
 - **Gates:** `pnpm typecheck && pnpm lint && pnpm test && pnpm build` must all pass before `scripts/finish-task.sh`.
 - **Capability vocabulary, exact strings:** `board.write`, `files.write`, `automation.create`, `time.log`.
