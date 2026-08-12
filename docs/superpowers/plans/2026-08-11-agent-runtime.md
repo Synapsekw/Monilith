@@ -379,11 +379,17 @@ import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
  * the descriptor's `capability`, so a new write tool cannot appear on the
  * consent screen labelled "read".
  *
- * The KEY TYPE is what keeps prose mandatory. Typing it
- * `Record<ToolName, string>` (not `Record<string, string>`) makes a missing
- * entry a compile error; with `Record<string, string>` and a `?? ""` fallback,
- * a 25th tool added later would render on the consent screen with a name, a
- * Read/Write pill and an EMPTY description, and every test would still pass.
+ * What keeps prose mandatory is the RUNTIME TEST, not the type. Verified
+ * 2026-08-12: `ToolDescriptor.name` is `string`, so
+ * `(typeof ALL_TOOL_DESCRIPTORS)[number]["name"]` widens to `string` too and
+ * `Record<ToolName, string>` does NOT make a missing entry a compile error.
+ * Recovering literal types would mean declaring all 24 descriptors with
+ * `satisfies ToolDescriptor` instead of `: ToolDescriptor` — rejected as churn
+ * for a guarantee the test already gives in CI. Keep the annotation (it states
+ * intent) and keep the `?? ""` fallback REMOVED, so a missing entry surfaces as
+ * `undefined` for the test to catch instead of being papered over with an empty
+ * string. Do not delete that test: without it, a 25th tool added later renders
+ * on the consent screen with a name, a Read/Write pill and no description.
  */
 type ToolName = (typeof ALL_TOOL_DESCRIPTORS)[number]["name"];
 const TOOL_PROSE: Record<ToolName, string> = {
