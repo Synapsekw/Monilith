@@ -97,7 +97,7 @@ export const listReportsDescriptor: ToolDescriptor = {
   description: `Reports that include this board, newest first — the ones bound to it alone plus any multi-board or portfolio roll-up that covers it. Each entry says how many boards it spans; templates are not listed. Returns at most ${REPORTS_LIMIT}. Get board ids from list_boards.`,
   inputSchema: { boardId: z.string().uuid() },
   capability: null,
-  scope: "none",
+  scope: "boardId",
   invoke: (ctx, input) =>
     listReportsHandler(ctx.getClient, input as { boardId: string }),
 };

@@ -14,7 +14,18 @@ import type { AgentCapability } from "@/lib/agents/capabilities";
  * How this tool's target board is derived, for `board_scope` enforcement. The
  * field name on the input matches the value: a `"boardId"` tool has a
  * `boardId` input, and so on. `"none"` means the call addresses no single
- * board (`list_boards`, `get_my_work`, org/goal/portfolio reads).
+ * board — either it takes no board-shaped input at all (`list_boards`,
+ * `get_my_work`), or it reaches board data through an id of another kind
+ * (`get_report` by `reportId`, `get_dashboard` by `dashboardId`,
+ * `get_portfolio` by `portfolioId`, `get_widget_data` by `widgetId`).
+ *
+ * THE LIMIT THIS IMPLIES, stated plainly: `board_scope` narrows board-ADDRESSED
+ * reads only. For the `"none"` tools RLS is the sole boundary — it already
+ * stops cross-org and unshared-board access, but it does NOT honour an agent's
+ * "limit to these boards" preference. Resolving a portfolio or dashboard to a
+ * board set was rejected deliberately: they span many boards, so "in scope"
+ * becomes an all-or-any question this design does not answer. The agent
+ * editor's board-scope help text must therefore not overpromise (Task 8).
  */
 export const TOOL_SCOPES = ["none", "boardId", "itemId", "groupId"] as const;
 export type ToolScope = (typeof TOOL_SCOPES)[number];

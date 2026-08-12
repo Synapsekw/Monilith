@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_TOOL_DESCRIPTORS } from "./register";
+import { ALL_TOOL_DESCRIPTORS } from "./catalog";
 import { TOOL_SCOPES } from "./descriptor";
 import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
 

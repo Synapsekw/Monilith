@@ -2,13 +2,18 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { McpToolsTable, MCP_TOOLS_TABLE_ROWS } from "./mcp-tools-table";
+import {
+  McpToolsTable,
+  MCP_TOOLS_TABLE_ROWS,
+  TOOL_PROSE,
+} from "./mcp-tools-table";
 import { registerTools } from "@/lib/mcp/tools/register";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 
 /**
- * Structural stub of the one `McpServer` method every `register…Tool` helper
- * calls. `registerTools` never touches anything else on `server`, so this is
- * enough to drive the REAL registration code path without a live SDK server.
+ * Structural stub of the one `McpServer` method `registerDescriptor` calls.
+ * `registerTools` never touches anything else on `server`, so this is enough
+ * to drive the REAL registration code path without a live SDK server.
  */
 interface RegisterToolStub {
   registerTool: (name: string, config: unknown, cb: unknown) => unknown;
@@ -32,10 +37,11 @@ const fakeAuth: AuthInfo = {
 
 /**
  * Runs the REAL `registerTools` against a recording stub and returns every
- * name it registered, in registration order. This is the derivation the sync
- * test relies on — it fails if a tool is registered without a table row (or
- * vice versa), because it reads the actual registration call, not a second
- * hand-maintained list that could drift in lockstep with the table.
+ * name it registered, in registration order. `MCP_TOOLS_TABLE_ROWS` and
+ * `registerTools` both iterate the same `ALL_TOOL_DESCRIPTORS` list
+ * (`src/lib/mcp/tools/catalog.ts`), so their name sets cannot drift apart —
+ * this helper exists to prove the render actually surfaces every registered
+ * tool, not to catch a divergence that structurally cannot happen anymore.
  */
 function deriveRegisteredToolNames(): string[] {
   const names: string[] = [];
@@ -50,13 +56,15 @@ function deriveRegisteredToolNames(): string[] {
 }
 
 describe("McpToolsTable", () => {
-  it("lists exactly the registered tools — no more, no fewer", () => {
-    // This table is the user's ONLY account of what a connected client may do.
-    // A tool registered without a row here understates the access being granted.
-    const registered = deriveRegisteredToolNames();
-    expect([...MCP_TOOLS_TABLE_ROWS.map((r) => r.name)].sort()).toEqual(
-      [...registered].sort(),
+  it("carries consent prose for every registered tool", () => {
+    // `access` is derived and cannot drift; `what` is written by hand. A tool
+    // rendered with an empty description understates the access being granted,
+    // which is the exact hazard this table exists to prevent.
+    expect(Object.keys(TOOL_PROSE).sort()).toEqual(
+      ALL_TOOL_DESCRIPTORS.map((d) => d.name).sort(),
     );
+    for (const row of MCP_TOOLS_TABLE_ROWS)
+      expect(row.what.length).toBeGreaterThan(0);
   });
 
   it("marks exactly the write tools as writes", () => {

@@ -1,22 +1,25 @@
 import { StatusPill } from "@/components/ui/status-pill";
-import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/register";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 
 /**
  * The tools a connected client can call.
  *
- * Kept in sync with `src/lib/mcp/tools/register.ts` BY TEST
- * (`mcp-tools-table.test.tsx` runs the REAL `registerTools` against a stub
- * server that records every `registerTool(name, …)` call, then compares the
- * recorded names against this list) — not by a second hand-maintained list,
- * which could drift in step with this one and still pass. This is the user's
- * only account of what they are granting, so a registered tool missing here
- * understates the access being approved.
+ * `name` and `access` are DERIVED from `ALL_TOOL_DESCRIPTORS`
+ * (`src/lib/mcp/tools/catalog.ts`), the same list `registerTools` iterates to
+ * register tools on the MCP server — so a registered tool can never be
+ * missing from this table, and `access` can never mislabel a write as a
+ * read. `mcp-tools-table.test.tsx` covers the one thing still hand-maintained:
+ * that every descriptor has non-empty prose in `TOOL_PROSE` below, and that
+ * the write classification is exactly the five tools it should be.
  *
- * `access` is NOT hand-maintained — it is derived from the descriptor's
- * `capability`, so a new write tool cannot appear on the consent screen
- * labelled "read".
+ * `what` is NOT derived — it is hand-written prose per tool. The KEY TYPE is
+ * what keeps it mandatory: `TOOL_PROSE` is typed `Record<ToolName, string>`
+ * (not `Record<string, string>`), so a 25th tool added to the catalog without
+ * a matching `TOOL_PROSE` entry is a COMPILE error, not a silently blank
+ * description on the consent screen.
  */
-const TOOL_PROSE: Record<string, string> = {
+type ToolName = (typeof ALL_TOOL_DESCRIPTORS)[number]["name"];
+export const TOOL_PROSE: Record<ToolName, string> = {
   list_boards: "List the boards you can see.",
   get_board: "Read a board's metadata, columns, and groups.",
   list_items: "Read a board's items and their cell values.",
@@ -52,7 +55,7 @@ const TOOL_PROSE: Record<string, string> = {
 export const MCP_TOOLS_TABLE_ROWS = ALL_TOOL_DESCRIPTORS.map((d) => ({
   name: d.name,
   access: d.capability === null ? ("read" as const) : ("write" as const),
-  what: TOOL_PROSE[d.name] ?? "",
+  what: TOOL_PROSE[d.name],
 }));
 
 export function McpToolsTable() {
