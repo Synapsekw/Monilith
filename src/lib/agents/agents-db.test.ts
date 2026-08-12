@@ -54,9 +54,11 @@ function clientForGetAgent(data: unknown, error: unknown = null) {
   const chain = makeEqChain(1, calls, () => ({
     maybeSingle: vi.fn().mockResolvedValue({ data, error }),
   }));
-  const select = vi.fn(() => chain);
+  // Typed with its `cols` parameter so tests can assert WHICH columns the read
+  // selects — a bare `vi.fn(() => …)` records calls as an empty tuple.
+  const select = vi.fn((_cols: string) => chain);
   const from = vi.fn(() => ({ select }));
-  return { client: { from } as never, calls };
+  return { client: { from } as never, calls, select };
 }
 
 /** update().eq() — setAgentBridgeSecret. `.eq()` here is itself the thenable
@@ -164,6 +166,18 @@ describe("getUserAgentById", () => {
     await expect(getUserAgentById(client as never, "agent-1")).rejects.toThrow(
       "getUserAgentById: boom",
     );
+  });
+
+  // The run reads the agent through THIS select. A column missing from the list
+  // arrives as `undefined` rather than as an error — for `capabilities` that
+  // would be an agent whose grant set silently reads as "nothing", and for the
+  // cadence day fields a run that cannot tell which day it was meant to fire.
+  it("selects the grant set and the cadence day fields", () => {
+    const { client, select } = clientForGetAgent(null);
+    void getUserAgentById(client as never, "agent-1");
+    const cols = String(select.mock.calls[0]?.[0]);
+    for (const col of ["capabilities", "run_on_weekday", "run_on_day_of_month"])
+      expect(cols, `${col} must be selected`).toContain(col);
   });
 });
 

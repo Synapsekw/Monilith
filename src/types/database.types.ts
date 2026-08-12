@@ -2254,6 +2254,7 @@ export type Database = {
       };
       org_ai_settings: {
         Row: {
+          agent_capability_ceiling: string[];
           ai_mode: Database["public"]["Enums"]["ai_mode"];
           byo_key_last4: string | null;
           byo_provider: string | null;
@@ -2269,6 +2270,7 @@ export type Database = {
           updated_by: string | null;
         };
         Insert: {
+          agent_capability_ceiling?: string[];
           ai_mode?: Database["public"]["Enums"]["ai_mode"];
           byo_key_last4?: string | null;
           byo_provider?: string | null;
@@ -2284,6 +2286,7 @@ export type Database = {
           updated_by?: string | null;
         };
         Update: {
+          agent_capability_ceiling?: string[];
           ai_mode?: Database["public"]["Enums"]["ai_mode"];
           byo_key_last4?: string | null;
           byo_provider?: string | null;
@@ -3109,6 +3112,7 @@ export type Database = {
           board_scope: Json;
           bridge_secret_id: string | null;
           cadence: string;
+          capabilities: string[];
           created_at: string;
           enabled: boolean;
           id: string;
@@ -3119,6 +3123,8 @@ export type Database = {
           owner_id: string;
           provider: string | null;
           run_at_local_hour: number;
+          run_on_day_of_month: number | null;
+          run_on_weekday: number | null;
           template_id: string;
           updated_at: string;
         };
@@ -3126,6 +3132,7 @@ export type Database = {
           board_scope?: Json;
           bridge_secret_id?: string | null;
           cadence?: string;
+          capabilities?: string[];
           created_at?: string;
           enabled?: boolean;
           id?: string;
@@ -3136,6 +3143,8 @@ export type Database = {
           owner_id: string;
           provider?: string | null;
           run_at_local_hour?: number;
+          run_on_day_of_month?: number | null;
+          run_on_weekday?: number | null;
           template_id: string;
           updated_at?: string;
         };
@@ -3143,6 +3152,7 @@ export type Database = {
           board_scope?: Json;
           bridge_secret_id?: string | null;
           cadence?: string;
+          capabilities?: string[];
           created_at?: string;
           enabled?: boolean;
           id?: string;
@@ -3153,6 +3163,8 @@ export type Database = {
           owner_id?: string;
           provider?: string | null;
           run_at_local_hour?: number;
+          run_on_day_of_month?: number | null;
+          run_on_weekday?: number | null;
           template_id?: string;
           updated_at?: string;
         };

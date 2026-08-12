@@ -5,6 +5,7 @@ import { SettingsSection } from "@/components/settings/settings-section";
 import { AgentsSection } from "@/components/agents/AgentsSection";
 import type { AgentRecord } from "@/components/agents/AgentEditor";
 import type { AgentCadence, BoardScope } from "@/lib/agents/agent-config";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 import { getMyAgentLastRuns } from "@/lib/agents/agents-db";
 import {
   readOrgAiSettings,
@@ -64,7 +65,7 @@ export default async function AgentsSettingsPage() {
     supabase
       .from("user_agents")
       .select(
-        "id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, provider, model_id",
+        "id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month",
       )
       .eq("owner_id", user.id)
       .order("created_at", { ascending: true })
@@ -102,6 +103,14 @@ export default async function AgentsSettingsPage() {
     // "inherit the org default" — the editor renders exactly that state.
     provider: a.provider,
     modelId: a.model_id,
+    // The grant set and the cadence day operand. Part of the ROSTER read, not a
+    // second query on edit: the editor re-sends the whole row on every save, so
+    // an agent whose grants were not loaded would have them revoked by an edit
+    // to its name. `capabilities` is `text[]` in the generated types and is
+    // narrowed here — `user_agents_capabilities_known` is what enforces it.
+    capabilities: a.capabilities as AgentCapability[],
+    runOnWeekday: a.run_on_weekday,
+    runOnDayOfMonth: a.run_on_day_of_month,
   }));
 
   return (

@@ -110,6 +110,12 @@ export function AgentsSection({
         // its owner chooses otherwise.
         provider: null,
         modelId: null,
+        // And no capabilities. A template is a starting point, never a grant —
+        // every new agent begins read-only and is widened deliberately.
+        capabilities: [],
+        // Every template is daily, whose cadence shape is both day fields null.
+        runOnWeekday: null,
+        runOnDayOfMonth: null,
       },
     });
     setView("editor");

@@ -63,6 +63,9 @@ const initial: PersonalAgentSettings = {
   enabled: true,
   provider: null,
   modelId: null,
+  capabilities: [],
+  runOnWeekday: null,
+  runOnDayOfMonth: null,
 };
 
 function renderEditor(over: Partial<Parameters<typeof AgentEditor>[0]> = {}) {

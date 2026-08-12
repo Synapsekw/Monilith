@@ -11,12 +11,17 @@ import {
   agentRunStatusLabel,
   type AgentRunLike,
 } from "@/lib/agents/run-status";
+import type { AgentCadence } from "@/lib/agents/agent-config";
 
 export type RosterAgent = {
   id: string;
   name: string;
   templateId: string;
-  cadence: "daily";
+  /** Carried, not yet rendered: the roster shows only the hour today. Typed as
+   *  the full `AgentCadence` union rather than the `"daily"` literal so a
+   *  weekly or monthly agent can reach this component at all — labelling the
+   *  cadence in the row is a UI change of its own. */
+  cadence: AgentCadence;
   runAtLocalHour: number;
   enabled: boolean;
   /** The agent's most recent run, or null if it has never run. Carries the raw

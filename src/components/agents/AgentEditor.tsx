@@ -122,6 +122,13 @@ export function AgentEditor({
       // both is what "inherit the org default" means to the run endpoint.
       provider: model?.provider ?? null,
       modelId: model?.modelId ?? null,
+      // Carried through untouched: this form has no capability picker and no
+      // cadence control yet, and every save writes the whole row. Re-sending
+      // what the agent already has is what stops an edit to the NAME from
+      // silently revoking a grant or resetting a weekly agent to daily.
+      capabilities: initial.capabilities,
+      runOnWeekday: initial.runOnWeekday,
+      runOnDayOfMonth: initial.runOnDayOfMonth,
     };
 
     const parsed = personalAgentSettingsSchema.safeParse(candidate);
