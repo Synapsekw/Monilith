@@ -226,7 +226,21 @@ export function AiKeyList({
                 />
                 <p className="text-muted-foreground text-xs">
                   Stored encrypted. Checked against {p.label} before it is
-                  saved, and used only to run AI features for your account.
+                  saved, and used to run AI features for your account.
+                </p>
+                {/*
+                  Verbatim, and it ships with the daily sweep that made it
+                  true: once a day the model-catalog refresh borrows ONE stored
+                  key per provider for a single read-only GET /v1/models, so
+                  new models appear without a deploy. Someone entering a key
+                  reads this before they hand it over, not buried in a doc —
+                  which is why it sits inside the open field, under the
+                  storage note, rather than in the section description.
+                */}
+                <p className="text-muted-foreground text-xs">
+                  This key is also used once a day to keep this provider&apos;s
+                  model list up to date. It is never used to generate anything
+                  you did not ask for.
                 </p>
                 <div className="flex items-center gap-2 pt-1">
                   <Button

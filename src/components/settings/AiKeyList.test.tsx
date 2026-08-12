@@ -281,6 +281,41 @@ describe("AiKeyList", () => {
     );
   });
 
+  // ---- consent: the daily catalog sweep borrows this key ----
+
+  /**
+   * The sweep in `verifyAllProviders` uses ONE stored key per provider for a
+   * daily read-only GET /v1/models. The user is told that where they hand the
+   * key over — not in a doc they will never open — so this assertion is on the
+   * exact sentence, and it lives in the OPEN key field.
+   */
+  it("discloses the daily model-list use under the key field", () => {
+    render(<AiKeyList providers={PROVIDERS} initial={[]} />);
+    const mistral = rowFor("Mistral");
+    // Not shown until the field is open — this is entry-time disclosure.
+    expect(within(mistral).queryByText(/once a day/i)).not.toBeInTheDocument();
+
+    fireEvent.click(within(mistral).getByRole("button", { name: /add key/i }));
+    expect(
+      within(mistral).getByText(
+        "This key is also used once a day to keep this provider's model list up to date. It is never used to generate anything you did not ask for.",
+      ),
+    ).toBeInTheDocument();
+    // Only the row being edited shows it — one field, one disclosure.
+    expect(
+      within(rowFor("Anthropic (Claude)")).queryByText(/once a day/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("no longer claims the key is used ONLY for the user's own AI features", () => {
+    // That sentence predates the sweep and is now false; the disclosure above
+    // replaces the "only" with the truth.
+    render(<AiKeyList providers={PROVIDERS} initial={[]} />);
+    const mistral = rowFor("Mistral");
+    fireEvent.click(within(mistral).getByRole("button", { name: /add key/i }));
+    expect(mistral.textContent).not.toContain("used only to run AI features");
+  });
+
   it("renders a configured provider that no static catalog knows about", () => {
     render(
       <AiKeyList

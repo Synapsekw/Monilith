@@ -2,8 +2,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { parseFeed } from "@/lib/ai/models/feed-parse";
-import { listEnabledProviders } from "@/lib/ai/providers/provider-rows";
+import {
+  listEnabledProviders,
+  type ProviderRow,
+} from "@/lib/ai/providers/provider-rows";
 import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
+import { readSweepCredential } from "@/lib/ai/credentials";
 import { getServerEnv } from "@/lib/env.server";
 
 export const GATEWAY_MODELS_URL = "https://ai-gateway.vercel.sh/v1/models";
@@ -18,28 +22,91 @@ export async function fetchGatewayFeed(): Promise<unknown> {
 }
 
 /**
- * The default id-verification pass. Anthropic is the one provider we hold a
- * key for outside a user's BYO credential, so it is the only one this path can
- * verify; the other four are verified when their key is saved (see
- * credentials-actions.saveAiKey).
+ * The platform key for a provider, when the deployment holds one. Anthropic is
+ * the only such provider today. Preferred over any user's key wherever it
+ * exists — a platform key belongs to us, so verifying with it borrows nothing
+ * from anybody.
+ *
+ * Reads the env lazily and per-provider: `getServerEnv()` throws on an invalid
+ * environment, and that throw belongs inside the sweep's per-provider
+ * try/catch (one skipped provider) rather than at module load.
  */
-async function verifyAnthropicIds(
+function platformKeyFor(provider: string): string | undefined {
+  return provider === "anthropic"
+    ? getServerEnv().ANTHROPIC_API_KEY
+    : undefined;
+}
+
+export type VerifyAllProvidersDeps = {
+  /** Injected seam so the sweep is testable without a network. */
+  verify?: typeof verifyProviderModels;
+  /** Injected seam for the stored-credential read. */
+  readKey?: typeof readSweepCredential;
+  /** Injected seam for the platform-key lookup. */
+  platformKey?: (provider: string) => string | undefined;
+};
+
+/**
+ * Re-verify EVERY enabled provider's model ids against that provider's own
+ * `/v1/models`, once per run.
+ *
+ * The catalog is populated from the Vercel AI Gateway feed, whose id namespace
+ * is not the providers' native one — an unverified id is a 404 at inference
+ * time. Only Anthropic has a platform key, so until now the other providers
+ * were re-verified only when a user happened to re-save a key by hand, which
+ * made "new models appear without a deploy" true for exactly one provider.
+ *
+ * ## Borrowing a user's key
+ *
+ * For a provider with no platform key the sweep uses ONE stored BYO credential
+ * — see `readSweepCredential` for the selection rule and the full contract.
+ * What matters here: this is a single read-only GET per provider per run (the
+ * job runs daily), it can never bill the key's owner, and the same use is
+ * disclosed under the key field in Personal Settings → AI.
+ *
+ * ## Failure is always local
+ *
+ * Every provider is isolated: a revoked key, a 401, a stalled endpoint or a
+ * malformed env is caught, logged and stepped over, so one user's dead
+ * credential can never stop the other four providers from refreshing. And a
+ * failure never retires anything — `verifyProviderModels` leaves every row
+ * untouched when a provider is unreachable, the same fail-closed rule as
+ * `refreshCatalog`'s retirement guard. Providers run concurrently so the whole
+ * sweep is bounded by the slowest single provider, not by their sum.
+ */
+export async function verifyAllProviders(
   client: SupabaseClient<Database>,
+  deps: VerifyAllProvidersDeps = {},
 ): Promise<void> {
-  const apiKey = getServerEnv().ANTHROPIC_API_KEY;
-  if (!apiKey) return;
+  const verify = deps.verify ?? verifyProviderModels;
+  const readKey = deps.readKey ?? readSweepCredential;
+  const platformKey = deps.platformKey ?? platformKeyFor;
+
+  let providers: ProviderRow[];
   try {
-    const res = await verifyProviderModels({
-      client,
-      provider: "anthropic",
-      apiKey,
-    });
-    console.info(
-      `[ai] anthropic id verification: ${res.verified} verified, ${res.unverified} unverified`,
-    );
+    providers = await listEnabledProviders(client);
   } catch (e) {
-    console.error("[ai] anthropic id verification failed", e);
+    console.error("[ai] id verification sweep: provider list unavailable", e);
+    return;
   }
+
+  await Promise.all(
+    providers.map(async (p) => {
+      try {
+        // Exactly one key resolution and one verify call per provider, so the
+        // sweep is one outbound GET per provider per run.
+        const apiKey = platformKey(p.id) ?? (await readKey(client, p.id));
+        if (!apiKey) return;
+        const res = await verify({ client, provider: p.id, apiKey });
+        console.info(
+          `[ai] ${p.id} id verification: ${res.verified} verified, ${res.unverified} unverified`,
+        );
+      } catch (e) {
+        // Local to this provider by design — never abort the sweep.
+        console.error(`[ai] ${p.id} id verification failed`, e);
+      }
+    }),
+  );
 }
 
 /**
@@ -58,11 +125,10 @@ export async function refreshCatalog(deps: {
   fetchFeed: () => Promise<unknown>;
   client: SupabaseClient<Database>;
   /**
-   * Injected seam for the id-verification pass. Defaults to the real one,
-   * which runs only when the platform ANTHROPIC_API_KEY is set — Anthropic is
-   * the one provider we hold a key for outside a user's BYO credential, so it
-   * is the only one this path can verify. The other four are verified when
-   * their key is saved (see credentials-actions.saveAiKey).
+   * Injected seam for the id-verification pass. Defaults to the real sweep,
+   * which covers EVERY enabled provider that has a key we may use — the
+   * platform key where one exists, otherwise one stored BYO credential. See
+   * `verifyAllProviders` for the borrowing contract and the failure isolation.
    */
   verifyIds?: (client: SupabaseClient<Database>) => Promise<void>;
 }): Promise<{ upserted: number; retired: number; skipped: boolean }> {
@@ -112,7 +178,7 @@ export async function refreshCatalog(deps: {
   // provider-native ids. Never allowed to fail the refresh — the rows are
   // already correct for pricing, and an unverified row is simply not offered.
   try {
-    await (deps.verifyIds ?? verifyAnthropicIds)(deps.client);
+    await (deps.verifyIds ?? verifyAllProviders)(deps.client);
   } catch (e) {
     console.error("[ai] model catalog refresh: id verification failed", e);
   }
