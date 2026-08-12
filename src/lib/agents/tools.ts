@@ -3,13 +3,13 @@ import { z } from "zod";
 import { tool, type ToolSet } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import type {
   ToolDescriptor,
   ToolInvokeContext,
 } from "@/lib/mcp/tools/descriptor";
 import type { BoardScope } from "./agent-config";
 import { isBoardInScope, resolveTargetBoardId } from "./board-scope-guard";
+import { descriptorsFor } from "./tool-descriptors";
 
 /** What the model is told when a call names a board outside this agent's
  *  configured scope. A refusal it can act on — pick another board — not a
@@ -24,9 +24,11 @@ const OPAQUE_FAILURE = "Tool failed.";
 /**
  * The AI SDK tool set a personal agent runs with.
  *
- * Built from `ALL_TOOL_DESCRIPTORS` — the SAME definitions the MCP server
- * registers — so a tool can never be reachable over one transport and stale on
- * the other. `create_attachment_upload` is the one exclusion: it hands back a
+ * Built from `descriptorsFor()` — which starts from `ALL_TOOL_DESCRIPTORS`, the
+ * SAME definitions the MCP server registers, so a tool can never be reachable
+ * over one transport and stale on the other, and which `makeGrantGate` reads
+ * too so the set and the gate cannot disagree.
+ * `create_attachment_upload` is the one catalog exclusion: it hands back a
  * signed URL the caller must PUT bytes to, which a model inside a tool loop
  * cannot do (`agentExcluded`).
  *
@@ -50,12 +52,12 @@ export function buildAgentTools(args: {
    *  see. */
   client: SupabaseClient<Database>;
   /** Descriptors outside the MCP catalog (Task 7's run-local tools). Same
-   *  wrapper, same guard — a later entry wins on a name collision. */
-  extra?: ToolDescriptor[];
+   *  wrapper, same guard, same classification — pass the IDENTICAL array to
+   *  `makeGrantGate`, or the gate will not recognise these tools. Reusing a
+   *  catalog name throws (`DuplicateToolNameError`). */
+  extra?: readonly ToolDescriptor[];
 }): ToolSet {
-  const descriptors = [...ALL_TOOL_DESCRIPTORS, ...(args.extra ?? [])].filter(
-    (d) => !d.agentExcluded,
-  );
+  const descriptors = descriptorsFor({ extra: args.extra });
 
   return Object.fromEntries(
     descriptors.map((d) => [

@@ -8,6 +8,7 @@ import type {
   ToolInvokeContext,
 } from "@/lib/mcp/tools/descriptor";
 import { executeAgentTool } from "@/test/agent-tool-exec";
+import { DuplicateToolNameError } from "./tool-descriptors";
 import { OUT_OF_SCOPE_ERROR, buildAgentTools } from "./tools";
 
 const BOARD_1 = "11111111-1111-4111-8111-111111111111";
@@ -88,6 +89,27 @@ describe("buildAgentTools", () => {
       extra: [probe(async () => ({ content: [{ type: "text", text: "x" }] }))],
     });
     expect(Object.keys(tools)).toContain("probe_tool");
+  });
+
+  // Last-wins would let an extra write tool run under a capability-free
+  // catalog name: the tool set would call the extra's handler while the grant
+  // gate classified it from the catalog entry. Fail at construction instead.
+  it("throws rather than letting an extra shadow a catalog tool", () => {
+    expect(() =>
+      buildAgentTools({
+        ctx,
+        scope: { mode: "all" },
+        client: noClient,
+        extra: [
+          {
+            ...probe(async () => ({
+              content: [{ type: "text", text: "shadow" }],
+            })),
+            name: "get_board",
+          },
+        ],
+      }),
+    ).toThrow(DuplicateToolNameError);
   });
 
   it("refuses an out-of-scope board WITHOUT invoking the handler", async () => {

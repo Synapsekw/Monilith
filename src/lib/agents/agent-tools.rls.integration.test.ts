@@ -175,6 +175,11 @@ describe.skipIf(!resolution.ok)(
         boardId: ORG_B.boardId,
       });
       const text = JSON.stringify(result);
+      // Pin the REFUSAL, not just the absence of two strings: fixture B's board
+      // has no items (the seed deliberately creates none), so an "empty page"
+      // assertion would hold with RLS switched off. `list-items.ts` returns
+      // "Board not found." only because the board row is invisible.
+      expect(text).toContain("Board not found.");
       expect(text).not.toContain(ORG_B.boardName);
       expect(text).not.toContain(ORG_B.groupId);
     });
@@ -187,13 +192,11 @@ describe.skipIf(!resolution.ok)(
       expect(text).not.toContain(ORG_B.boardName);
     });
 
-    it("finds nothing on that board through search_items", async () => {
-      const result = await executeAgentTool(tools, "search_items", {
-        boardId: ORG_B.boardId,
-        query: "Beta",
-      });
-      expect(JSON.stringify(result)).not.toContain(ORG_B.boardName);
-    });
+    // NOTE — there is deliberately no `search_items` probe. Its handler never
+    // emits a board name under any circumstance, and fixture B's board has no
+    // items (the seed creates none, on purpose), so every assertion available
+    // to it holds identically with RLS switched off. A probe that cannot fail
+    // is worse than no probe: it advertises coverage that does not exist.
 
     // ── The same boundary on the WRITE path ──────────────────────────────
     //

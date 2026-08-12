@@ -1,16 +1,13 @@
 import "server-only";
 import type { ToolApprovalStatus } from "ai";
-import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
+import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import type { AgentCapability } from "@/lib/agents/capabilities";
+import { descriptorsFor } from "./tool-descriptors";
 
 /** The denial the model sees for a tool the owner has not granted. Phrased for
  *  the MODEL: it is the sentence that tells it the call was recorded rather
  *  than lost, so it reports the request instead of retrying it. */
 export const UNGRANTED_REASON = "Recorded for your approval.";
-
-/** Descriptors are keyed by name once, at module load: the gate runs on every
- *  tool call in every agent run, and the catalog is immutable. */
-const BY_NAME = new Map(ALL_TOOL_DESCRIPTORS.map((d) => [d.name, d]));
 
 /** One recorded, denied write. The shape Task 7 persists as a proposal row. */
 export type ProposedCall = {
@@ -56,14 +53,23 @@ export function makeGrantGate(args: {
   granted: AgentCapability[];
   ceiling: AgentCapability[];
   onPropose: (call: ProposedCall) => void;
+  /** The run-local descriptors, IDENTICAL to what `buildAgentTools` was given.
+   *  Both derive their view of the run from `descriptorsFor`, so a tool the
+   *  model can see is a tool this gate can classify — an `extra` tool missing
+   *  here would be offered and then denied "Unknown tool." on every call. */
+  extra?: readonly ToolDescriptor[];
 }): GrantGate {
   const granted = new Set(args.granted);
   const ceiling = new Set(args.ceiling);
+  const byName = new Map(
+    descriptorsFor({ extra: args.extra }).map((d) => [d.name, d]),
+  );
 
   return async ({ toolCall }) => {
-    const d = BY_NAME.get(toolCall.toolName);
-    // Fail closed. An unrecognised name is either a hallucinated tool or one
-    // added without a descriptor; neither should execute.
+    const d = byName.get(toolCall.toolName);
+    // Fail closed. An unrecognised name is a hallucinated tool, an
+    // `agentExcluded` one, or a tool added without a descriptor; none should
+    // execute.
     if (!d) return { type: "denied" as const, reason: "Unknown tool." };
     if (d.capability === null) return undefined;
 
