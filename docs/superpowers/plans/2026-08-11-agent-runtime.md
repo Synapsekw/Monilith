@@ -1279,16 +1279,16 @@ Move the body of `createAutomation` (`src/lib/boards/automation-actions.ts:85`) 
 
 - [ ] **Step 5: Write the failing webhook-guard test**
 
-Fixtures: build `nonAdminClient` with the same stub-client pattern the existing `src/lib/boards/automation-actions.test.ts` uses — its `is_org_member`-family RPC resolves true and its org-role lookup resolves a non-admin role. Take `someTrigger` from that file's existing valid-trigger fixture rather than inventing a new shape; `createAutomationSchema` will reject anything else and the test would fail for the wrong reason.
+Fixtures: **`src/lib/boards/automation-actions.test.ts` does not exist** — verified 2026-08-12; that module has no unit suite. Build the fixtures directly against `createAutomationSchema` and read the real shapes from `src/lib/validations/automations.ts`. Two specifics that will otherwise make the test fail for the wrong reason: `boardId` must be a **UUID** (not `"b1"`), and the webhook action's discriminator is **`call_webhook`**, not `webhook`.
 
 ```ts
 it("refuses a webhook automation when the actor is not an org admin", async () => {
   const r = await createAutomationCore(
     nonAdminClient,
     {
-      boardId: "b1",
+      boardId: BOARD_UUID,
       trigger: someTrigger,
-      actions: [{ type: "webhook", url: "https://example.com" }],
+      actions: [webhookAction], // discriminator is `call_webhook` — see src/lib/validations/automations.ts
     },
     "user-1",
   );
@@ -1299,7 +1299,7 @@ it("refuses a webhook automation when the actor is not an org admin", async () =
 it("creates a non-webhook automation for a non-admin", async () => {
   const r = await createAutomationCore(
     nonAdminClient,
-    { boardId: "b1", trigger: someTrigger, actions: [notifyAction] },
+    { boardId: BOARD_UUID, trigger: someTrigger, actions: [notifyAction] },
     "user-1",
   );
   expect(r.ok).toBe(true);
