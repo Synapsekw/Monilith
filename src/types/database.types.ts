@@ -3047,19 +3047,102 @@ export type Database = {
           },
         ];
       };
+      user_agent_proposals: {
+        Row: {
+          capability: string;
+          created_at: string;
+          decided_at: string | null;
+          decided_by: string | null;
+          expires_at: string;
+          id: string;
+          input: Json;
+          org_id: string;
+          owner_id: string;
+          result: Json | null;
+          run_id: string;
+          status: string;
+          summary: string;
+          tool_call_id: string;
+          tool_name: string;
+          user_agent_id: string;
+        };
+        Insert: {
+          capability: string;
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          expires_at: string;
+          id?: string;
+          input: Json;
+          org_id: string;
+          owner_id: string;
+          result?: Json | null;
+          run_id: string;
+          status?: string;
+          summary: string;
+          tool_call_id: string;
+          tool_name: string;
+          user_agent_id: string;
+        };
+        Update: {
+          capability?: string;
+          created_at?: string;
+          decided_at?: string | null;
+          decided_by?: string | null;
+          expires_at?: string;
+          id?: string;
+          input?: Json;
+          org_id?: string;
+          owner_id?: string;
+          result?: Json | null;
+          run_id?: string;
+          status?: string;
+          summary?: string;
+          tool_call_id?: string;
+          tool_name?: string;
+          user_agent_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agent_proposals_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_proposals_run_id_fkey";
+            columns: ["run_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agent_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_proposals_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_agent_runs: {
         Row: {
           created_at: string;
           error: string | null;
           fire_date: string;
           fire_hour: number;
+          grants: Json | null;
           id: string;
           input_tokens: number | null;
           model_substituted: boolean;
           org_id: string;
+          output: string | null;
           output_tokens: number | null;
           owner_id: string;
           status: string;
+          steps: number | null;
+          tools_used: string[] | null;
           user_agent_id: string;
         };
         Insert: {
@@ -3067,13 +3150,17 @@ export type Database = {
           error?: string | null;
           fire_date: string;
           fire_hour: number;
+          grants?: Json | null;
           id?: string;
           input_tokens?: number | null;
           model_substituted?: boolean;
           org_id: string;
+          output?: string | null;
           output_tokens?: number | null;
           owner_id: string;
           status: string;
+          steps?: number | null;
+          tools_used?: string[] | null;
           user_agent_id: string;
         };
         Update: {
@@ -3081,13 +3168,17 @@ export type Database = {
           error?: string | null;
           fire_date?: string;
           fire_hour?: number;
+          grants?: Json | null;
           id?: string;
           input_tokens?: number | null;
           model_substituted?: boolean;
           org_id?: string;
+          output?: string | null;
           output_tokens?: number | null;
           owner_id?: string;
           status?: string;
+          steps?: number | null;
+          tools_used?: string[] | null;
           user_agent_id?: string;
         };
         Relationships: [
