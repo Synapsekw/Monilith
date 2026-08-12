@@ -935,7 +935,7 @@ git commit -m "feat(ai): re-verify model ids for every keyed provider, not only 
 - Consumes: `ToolDescriptor`, `ALL_TOOL_DESCRIPTORS`, `ToolInvokeContext` (Task 1); `AgentCapability` (Task 1, `@/lib/agents/capabilities`); `BoardScope` (`agent-config.ts`); `OrgAiSettings.agentCapabilityCeiling` (Task 2).
 - Produces:
   - `function buildAgentTools(args: { ctx: ToolInvokeContext; scope: BoardScope; client: SupabaseClient<Database>; extra?: ToolDescriptor[] }): ToolSet`
-  - `function makeGrantGate(args: { granted: AgentCapability[]; ceiling: AgentCapability[]; onPropose: (call: { toolCallId: string; toolName: string; capability: AgentCapability; input: Record<string, unknown> }) => void }): GenericToolApprovalFunction` — `import type { GenericToolApprovalFunction } from "ai"` (type-only export)
+  - `function makeGrantGate(args: { granted: AgentCapability[]; ceiling: AgentCapability[]; onPropose: (call: { toolCallId: string; toolName: string; capability: AgentCapability; input: Record<string, unknown> }) => void }): GrantGate` — **`GrantGate`**, a structural type exported from `grant-gate.ts` as `(options: { toolCall: {...} }) => Promise<ToolApprovalStatus>` (`ToolApprovalStatus` is a real `ai` export). **Do NOT use `GenericToolApprovalFunction`** — verified 2026-08-12 with `tsc`: the only instantiation writable in this repo (`InferToolSetContext` is not re-exported from `ai`, and `@ai-sdk/provider-utils` is not a direct dependency) is _not assignable_ to `ToolApprovalConfiguration<ConcreteTools, unknown>` because of its `toolsContext` member. It compiles in isolation and fails at `generateText({ tools, toolApproval })`
   - `const UNGRANTED_REASON = "Recorded for your approval."`
   - `async function resolveTargetBoardId(client, descriptor, input): Promise<string | null>`
   - `function isBoardInScope(scope: BoardScope, boardId: string | null): boolean`
@@ -1033,7 +1033,8 @@ export const UNGRANTED_REASON = "Recorded for your approval.";
 const BY_NAME = new Map(ALL_TOOL_DESCRIPTORS.map((d) => [d.name, d]));
 
 /**
- * The capability gate, as an AI SDK `GenericToolApprovalFunction`.
+ * The capability gate. Typed as the locally-declared `GrantGate`, NOT the
+ * SDK's `GenericToolApprovalFunction` — see the Interfaces note above.
  *
  * Ungranted tools stay VISIBLE to the model on purpose — `activeTools` is not
  * the mechanism here. A model that cannot see `attach_file` can never propose
@@ -1338,8 +1339,8 @@ git commit -m "feat(agents): create_file and create_automation tools over extrac
 **Interfaces:**
 
 - Consumes: `buildAgentTools`, `makeGrantGate` (Task 5); `AGENT_ONLY_DESCRIPTORS` (Task 6); `insertProposals`, `PROPOSAL_TTL_DAYS` (Task 3); `toAiUsage` (existing); `runAi` (existing).
-- Produces: `async function runAgentLoop(args: { model: LanguageModel; instructions: string; tools: ToolSet; gate: GenericToolApprovalFunction; maxOutputTokens: number | null }): Promise<{ text: string; usage: AiUsageTokens; steps: number; toolsUsed: string[] }>`, `const AGENT_MAX_STEPS = 12`, `class ModelNotToolCapableError extends Error`.
-- `GenericToolApprovalFunction` is a **type-only** export of `ai` (verified 2026-08-11: present in the package's `export { … }` type list, absent from the runtime namespace). Import it as `import type { GenericToolApprovalFunction } from "ai"` — a value import will fail at runtime.
+- Produces: `async function runAgentLoop(args: { model: LanguageModel; instructions: string; tools: ToolSet; gate: GrantGate; maxOutputTokens: number | null }): Promise<{ text: string; usage: AiUsageTokens; steps: number; toolsUsed: string[] }>`, `const AGENT_MAX_STEPS = 12`, `class ModelNotToolCapableError extends Error`.
+- **`GenericToolApprovalFunction` is unusable here** (verified 2026-08-12 with `tsc`). Task 5 exports `GrantGate` from `src/lib/agents/grant-gate.ts` instead — a structural type `(options: { toolCall: {...} }) => Promise<ToolApprovalStatus>`, assignable to every `toolApproval` instantiation and pinned by a type-level test against a concrete tool set. Pass `makeGrantGate(...)` straight into `generateText`.
 
 - [ ] **Step 1: Write the failing loop test — the central claim of this spec**
 
@@ -1548,7 +1549,7 @@ export async function runAgentLoop(args: {
   model: LanguageModel;
   instructions: string;
   tools: ToolSet;
-  gate: Parameters<typeof generateText>[0]["toolApproval"];
+  gate: GrantGate;
   maxOutputTokens: number | null;
 }): Promise<{ text: string; usage: AiUsageTokens; steps: number; toolsUsed: string[] }> {
   const result = await generateText({
