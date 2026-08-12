@@ -7,16 +7,25 @@ import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
  * `name` and `access` are DERIVED from `ALL_TOOL_DESCRIPTORS`
  * (`src/lib/mcp/tools/catalog.ts`), the same list `registerTools` iterates to
  * register tools on the MCP server — so a registered tool can never be
- * missing from this table, and `access` can never mislabel a write as a
- * read. `mcp-tools-table.test.tsx` covers the one thing still hand-maintained:
- * that every descriptor has non-empty prose in `TOOL_PROSE` below, and that
- * the write classification is exactly the five tools it should be.
+ * missing from this table, and `access` (from the descriptor's `capability`)
+ * can never mislabel a write as a read.
  *
- * `what` is NOT derived — it is hand-written prose per tool. The KEY TYPE is
- * what keeps it mandatory: `TOOL_PROSE` is typed `Record<ToolName, string>`
- * (not `Record<string, string>`), so a 25th tool added to the catalog without
- * a matching `TOOL_PROSE` entry is a COMPILE error, not a silently blank
- * description on the consent screen.
+ * `what` is NOT derived — it is hand-written prose per tool, and the thing
+ * that keeps it mandatory is the RUNTIME TEST in `mcp-tools-table.test.tsx`
+ * ("carries consent prose for every registered tool"), not the type below.
+ *
+ * `TOOL_PROSE` is typed `Record<ToolName, string>` where `ToolName =
+ * (typeof ALL_TOOL_DESCRIPTORS)[number]["name"]`. This LOOKS like it forces
+ * every tool to have an entry, but it does not: `ToolDescriptor.name` is
+ * declared as plain `string`, so `ToolName` resolves to `string`, and
+ * `Record<string, string>` is not checked for completeness — TypeScript
+ * happily compiles a `TOOL_PROSE` object literal missing an entry for a 25th
+ * tool. (Verified empirically: assigning a bogus string to `ToolName`
+ * produces no `tsc --noEmit` error.) The annotation and the removed `?? ""`
+ * fallback below are kept anyway because they still express intent, and
+ * because without the fallback a missing entry surfaces as `undefined` — for
+ * the runtime test to catch — rather than being silently papered over with an
+ * empty description. Do not delete that test on the strength of this type.
  */
 type ToolName = (typeof ALL_TOOL_DESCRIPTORS)[number]["name"];
 export const TOOL_PROSE: Record<ToolName, string> = {
