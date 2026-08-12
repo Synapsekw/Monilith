@@ -79,19 +79,20 @@ Tasks 2 and 3 are disjoint migrations (2 touches `user_agents` / `org_ai_setting
 
 **Modified**
 
-| Path                                              | Change                                                                                            |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `src/lib/mcp/tools/*.ts` (24 files)               | Export a descriptor; delete the per-tool `registerXTool`                                          |
-| `src/lib/mcp/tools/register.ts`                   | Loop over `ALL_TOOL_DESCRIPTORS` via `registerDescriptor`                                         |
-| `src/components/settings/mcp/mcp-tools-table.tsx` | Derive `access` from `capability` instead of hand-maintaining it                                  |
-| `src/app/api/ai/personal-agent/route.ts`          | Pipeline → loop; persist effects and proposals                                                    |
-| `src/lib/agents/agent-config.ts`                  | `INSTRUCTIONS_MAX` 2000→8000; cadence enum; capability schema                                     |
-| `src/lib/agents/agents-db.ts`                     | `UserAgentRow` gains `capabilities` / cadence fields; select list                                 |
-| `src/lib/agents/actions.ts`                       | Persist capabilities + cadence                                                                    |
-| `src/lib/ai/org-settings.ts`                      | `OrgAiSettings` gains `agentCapabilityCeiling`                                                    |
-| `src/lib/ai/models/refresh.ts`                    | Verify all five providers, not only Anthropic                                                     |
-| `src/components/agents/AgentEditor.tsx`           | Capability toggles, cadence controls, `supports_tools` warning                                    |
-| `src/lib/agents/briefing.ts`                      | Delete `buildBriefing` / `applyBoardScope` (keep the file only if `Briefing` is still referenced) |
+| Path                                              | Change                                                                                              |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `src/lib/mcp/tools/*.ts` (24 files)               | Export a descriptor; delete the per-tool `registerXTool`                                            |
+| `src/lib/mcp/tools/register.ts`                   | Loop over `ALL_TOOL_DESCRIPTORS` via `registerDescriptor`                                           |
+| `src/lib/mcp/tools/catalog.ts`                    | **Created.** Holds `ALL_TOOL_DESCRIPTORS`, free of `server-only` so client components may import it |
+| `src/components/settings/mcp/mcp-tools-table.tsx` | Derive `access` from `capability` instead of hand-maintaining it                                    |
+| `src/app/api/ai/personal-agent/route.ts`          | Pipeline → loop; persist effects and proposals                                                      |
+| `src/lib/agents/agent-config.ts`                  | `INSTRUCTIONS_MAX` 2000→8000; cadence enum; capability schema                                       |
+| `src/lib/agents/agents-db.ts`                     | `UserAgentRow` gains `capabilities` / cadence fields; select list                                   |
+| `src/lib/agents/actions.ts`                       | Persist capabilities + cadence                                                                      |
+| `src/lib/ai/org-settings.ts`                      | `OrgAiSettings` gains `agentCapabilityCeiling`                                                      |
+| `src/lib/ai/models/refresh.ts`                    | Verify all five providers, not only Anthropic                                                       |
+| `src/components/agents/AgentEditor.tsx`           | Capability toggles, cadence controls, `supports_tools` warning                                      |
+| `src/lib/agents/briefing.ts`                      | Delete `buildBriefing` / `applyBoardScope` (keep the file only if `Briefing` is still referenced)   |
 
 ---
 
@@ -112,7 +113,7 @@ Tasks 2 and 3 are disjoint migrations (2 touches `user_agents` / `org_ai_setting
   - `type ToolInvokeContext = { getClient: GetClient; actorId: string }`
   - `type ToolDescriptor = { name: string; title: string; description: string; inputSchema: z.ZodRawShape; capability: AgentCapability | null; scope: ToolScope; agentExcluded?: true; invoke: (ctx: ToolInvokeContext, input: Record<string, unknown>) => Promise<ToolResult> }`
   - `function registerDescriptor(server: McpServer, d: ToolDescriptor, ctx: ToolInvokeContext): void`
-  - `const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[]` exported from `register.ts`
+  - `const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[]` exported from **`src/lib/mcp/tools/catalog.ts`** — deliberately NOT from `register.ts`, which imports `mcp/context.ts` and is therefore `server-only`-tainted. The consent table and the agent editor are client-reachable; the same reasoning that gave `capabilities.ts` its own module applies here. `register.ts` imports the catalog and keeps only the request-auth closure.
   - One `<toolName>Descriptor` export per tool module, e.g. `attachFileDescriptor`, `listBoardsDescriptor`.
 
 - [ ] **Step 1: Write the failing completeness test**
@@ -121,7 +122,7 @@ Create `src/lib/mcp/tools/descriptor.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { ALL_TOOL_DESCRIPTORS } from "./register";
+import { ALL_TOOL_DESCRIPTORS } from "./catalog";
 import { TOOL_SCOPES } from "./descriptor";
 import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
 
@@ -204,7 +205,18 @@ import type { AgentCapability } from "@/lib/agents/capabilities";
  * How this tool's target board is derived, for `board_scope` enforcement. The
  * field name on the input matches the value: a `"boardId"` tool has a
  * `boardId` input, and so on. `"none"` means the call addresses no single
- * board (`list_boards`, `get_my_work`, org/goal/portfolio reads).
+ * board — either it takes no board-shaped input at all (`list_boards`,
+ * `get_my_work`), or it reaches board data through an id of another kind
+ * (`get_report` by `reportId`, `get_dashboard` by `dashboardId`,
+ * `get_portfolio` by `portfolioId`, `get_widget_data` by `widgetId`).
+ *
+ * THE LIMIT THIS IMPLIES, stated plainly: `board_scope` narrows board-ADDRESSED
+ * reads only. For the `"none"` tools RLS is the sole boundary — it already
+ * stops cross-org and unshared-board access, but it does NOT honour an agent's
+ * "limit to these boards" preference. Resolving a portfolio or dashboard to a
+ * board set was rejected deliberately: they span many boards, so "in scope"
+ * becomes an all-or-any question this design does not answer. The agent
+ * editor's board-scope help text must therefore not overpromise (Task 8).
  */
 export const TOOL_SCOPES = ["none", "boardId", "itemId", "groupId"] as const;
 export type ToolScope = (typeof TOOL_SCOPES)[number];
@@ -322,7 +334,7 @@ For each, move `title`, `description` and `inputSchema` **verbatim** out of the 
 | `get_dashboard`            | `null`        | `none`                             |
 | `get_widget_data`          | `null`        | `none`                             |
 | `get_workload`             | `null`        | `none`                             |
-| `list_reports`             | `null`        | `none`                             |
+| `list_reports`             | `null`        | `boardId`                          |
 | `get_report`               | `null`        | `none`                             |
 
 - [ ] **Step 6: Rewrite `register.ts` as a loop**
@@ -360,12 +372,21 @@ export function registerTools(server: McpServer, auth: AuthInfo): void {
 In `src/components/settings/mcp/mcp-tools-table.tsx`, keep the `what` prose per tool but stop hand-maintaining `access`. Replace the literal array with a derivation, keeping the export name and shape:
 
 ```ts
-import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/register";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 
-/** Human prose per tool. `access` is NOT hand-maintained — it is derived from
- *  the descriptor's `capability`, so a new write tool cannot appear on the
- *  consent screen labelled "read". */
-const TOOL_PROSE: Record<string, string> = {
+/**
+ * Human prose per tool. `access` is NOT hand-maintained — it is derived from
+ * the descriptor's `capability`, so a new write tool cannot appear on the
+ * consent screen labelled "read".
+ *
+ * The KEY TYPE is what keeps prose mandatory. Typing it
+ * `Record<ToolName, string>` (not `Record<string, string>`) makes a missing
+ * entry a compile error; with `Record<string, string>` and a `?? ""` fallback,
+ * a 25th tool added later would render on the consent screen with a name, a
+ * Read/Write pill and an EMPTY description, and every test would still pass.
+ */
+type ToolName = (typeof ALL_TOOL_DESCRIPTORS)[number]["name"];
+const TOOL_PROSE: Record<ToolName, string> = {
   list_boards: "List the boards you can see.",
   // …one entry per tool, copied verbatim from the previous rows…
 };
@@ -373,14 +394,35 @@ const TOOL_PROSE: Record<string, string> = {
 export const MCP_TOOLS_TABLE_ROWS = ALL_TOOL_DESCRIPTORS.map((d) => ({
   name: d.name,
   access: d.capability === null ? ("read" as const) : ("write" as const),
-  what: TOOL_PROSE[d.name] ?? "",
+  what: TOOL_PROSE[d.name],
 }));
 ```
 
-- [ ] **Step 8: Run the full guard suite**
+- [ ] **Step 8: Re-point the consent-table guard at what is still hand-maintained**
+
+`mcp-tools-table.test.tsx`'s write-classification assertion stays **unchanged** and must keep passing — if it fails, a classification drifted during the move; fix the descriptor, not the test.
+
+Its _name-sync_ assertion, however, becomes tautological the moment both sides derive from `ALL_TOOL_DESCRIPTORS`: it can no longer fail, and its docstring ("not a second hand-maintained list that could drift") stops being true. Replace it with an assertion over the one thing still hand-maintained — the prose:
+
+```ts
+it("carries consent prose for every registered tool", () => {
+  // `access` is derived and cannot drift; `what` is written by hand. A tool
+  // rendered with an empty description understates the access being granted,
+  // which is the exact hazard this table exists to prevent.
+  expect(Object.keys(TOOL_PROSE).sort()).toEqual(
+    ALL_TOOL_DESCRIPTORS.map((d) => d.name).sort(),
+  );
+  for (const row of MCP_TOOLS_TABLE_ROWS)
+    expect(row.what.length).toBeGreaterThan(0);
+});
+```
+
+Export `TOOL_PROSE` from `mcp-tools-table.tsx` so the test can read it. Also update the file's leading docstring, which still describes the old two-list arrangement.
+
+- [ ] **Step 8b: Run the full guard suite**
 
 Run: `pnpm vitest run src/lib/mcp/tools src/components/settings/mcp`
-Expected: PASS. `mcp-tools-table.test.tsx`'s two existing assertions — that the table lists exactly the registered tools, and that exactly `attach_file, create_attachment_upload, create_item, log_time_allocation, update_item` are writes — must pass **unchanged**. If either fails, a description or classification drifted during the move; fix the descriptor, not the test.
+Expected: PASS.
 
 - [ ] **Step 9: Verify no `register…Tool` symbols survive**
 
@@ -977,7 +1019,7 @@ Expected: FAIL — module not found.
 
 ```ts
 import "server-only";
-import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/register";
+import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import type { AgentCapability } from "@/lib/agents/capabilities";
 
 export const UNGRANTED_REASON = "Recorded for your approval.";
