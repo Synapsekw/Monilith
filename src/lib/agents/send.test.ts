@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { UserAgentRow } from "./agents-db";
-import type { Briefing } from "./briefing";
 
 const ORG = "00000000-0000-4000-8000-0000000000f1";
 const OWNER = "00000000-0000-4000-8000-0000000000f2";
@@ -90,11 +89,7 @@ const agent: UserAgentRow = {
   model_id: null,
 };
 
-const briefing: Briefing = {
-  today: "2026-08-01",
-  totals: { overdue: 1, today: 2, week: 3 },
-  groups: [],
-};
+const FIRE_DATE = "2026-08-01";
 
 beforeEach(() => {
   env = {
@@ -148,7 +143,8 @@ describe("sendBriefingEmail", () => {
 
     const result = await sendBriefingEmail(svc, {
       agent,
-      briefing,
+      fireDate: FIRE_DATE,
+      proposalCount: 0,
       summary: "You have 1 overdue item.",
     });
 
@@ -158,7 +154,12 @@ describe("sendBriefingEmail", () => {
 
   it("writes the notification to `recipient_id` (not `user_id`) with kind 'agent_briefing'", async () => {
     const svc = fakeClient();
-    await sendBriefingEmail(svc, { agent, briefing, summary: "sum" });
+    await sendBriefingEmail(svc, {
+      agent,
+      fireDate: FIRE_DATE,
+      proposalCount: 0,
+      summary: "sum",
+    });
 
     expect(notificationInserts).toHaveLength(1);
     expect(notificationInserts[0]).toMatchObject({
@@ -166,12 +167,7 @@ describe("sendBriefingEmail", () => {
       org_id: ORG,
       actor_id: null,
       kind: "agent_briefing",
-      payload: {
-        agentName: agent.name,
-        overdue: briefing.totals.overdue,
-        today: briefing.totals.today,
-        week: briefing.totals.week,
-      },
+      payload: { agentName: agent.name, proposalCount: 0 },
     });
     expect(notificationInserts[0]).not.toHaveProperty("user_id");
   });
@@ -182,7 +178,8 @@ describe("sendBriefingEmail", () => {
 
     const result = await sendBriefingEmail(svc, {
       agent,
-      briefing,
+      fireDate: FIRE_DATE,
+      proposalCount: 0,
       summary: "sum",
     });
 
@@ -197,7 +194,8 @@ describe("sendBriefingEmail", () => {
 
     const result = await sendBriefingEmail(svc, {
       agent,
-      briefing,
+      fireDate: FIRE_DATE,
+      proposalCount: 0,
       summary: "sum",
     });
 
@@ -215,7 +213,12 @@ describe("sendBriefingEmail", () => {
     const svc = fakeClient();
 
     await expect(
-      sendBriefingEmail(svc, { agent, briefing, summary: "sum" }),
+      sendBriefingEmail(svc, {
+        agent,
+        fireDate: FIRE_DATE,
+        proposalCount: 0,
+        summary: "sum",
+      }),
     ).rejects.toThrow("resend failed");
     expect(notificationInserts).toHaveLength(0);
   });
@@ -225,7 +228,12 @@ describe("sendBriefingEmail", () => {
     const svc = fakeClient();
 
     await expect(
-      sendBriefingEmail(svc, { agent, briefing, summary: "sum" }),
+      sendBriefingEmail(svc, {
+        agent,
+        fireDate: FIRE_DATE,
+        proposalCount: 0,
+        summary: "sum",
+      }),
     ).rejects.toThrow("insert boom");
   });
 
@@ -234,7 +242,8 @@ describe("sendBriefingEmail", () => {
 
     const result = await sendBriefingEmail(svc, {
       agent,
-      briefing,
+      fireDate: FIRE_DATE,
+      proposalCount: 0,
       summary: "sum",
       threadId: "conv-123",
     });
@@ -257,7 +266,8 @@ describe("sendBriefingEmail", () => {
 
     const result = await sendBriefingEmail(svc, {
       agent,
-      briefing,
+      fireDate: FIRE_DATE,
+      proposalCount: 0,
       summary: "sum",
       threadId: null,
     });
@@ -270,9 +280,10 @@ describe("sendBriefingEmail", () => {
     // Everything else about the call is unchanged.
     expect(htmlArgs).toMatchObject({
       agentName: agent.name,
-      briefing,
+      today: FIRE_DATE,
       appBaseUrl: "https://app.example.com",
       summary: "sum",
+      proposalCount: 0,
     });
   });
 });

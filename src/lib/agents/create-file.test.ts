@@ -68,6 +68,46 @@ describe("create_file", () => {
     expect(r.content[0].text).toContain('"bytes":5');
   });
 
+  // Without this the model has just written a file it cannot then reference:
+  // it knows only the name it picked, and every follow-up tool wants an id.
+  it("forwards the attachment id attach-file minted", async () => {
+    const attach: Attach = async () => ({
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify({ attachmentId: "att-1", sizeBytes: 5 }),
+        },
+      ],
+    });
+    const r = await makeCreateFileDescriptor({ attach }).invoke(ctx, {
+      itemId: ITEM,
+      fileName: "brief",
+      format: "md",
+      content: "hello",
+    });
+    expect(JSON.parse(r.content[0].text)).toMatchObject({
+      ok: true,
+      attachmentId: "att-1",
+      fileName: "brief.md",
+    });
+  });
+
+  // The write has already succeeded by then, so an unreadable handler result
+  // must degrade to "no id", never fail the call.
+  it("omits the id rather than failing when attach-file returns an unexpected shape", async () => {
+    const attach: Attach = async () => ({
+      content: [{ type: "text" as const, text: "not json" }],
+    });
+    const r = await makeCreateFileDescriptor({ attach }).invoke(ctx, {
+      itemId: ITEM,
+      fileName: "brief",
+      format: "md",
+      content: "hello",
+    });
+    expect(r.isError).toBeUndefined();
+    expect(r.content[0].text).not.toContain("attachmentId");
+  });
+
   it("counts UTF-8 bytes, not characters", async () => {
     const attach = spyAttach();
     const r = await makeCreateFileDescriptor({ attach }).invoke(ctx, {

@@ -179,6 +179,76 @@ describe("buildAgentTools", () => {
     ).resolves.toEqual({ error: "boom" });
   });
 
+  // ── ONE failure shape, both paths ──────────────────────────────────────
+  // A descriptor that REFUSES (`isError: true` — attach-file's "Board not
+  // found.", create_file's size ceiling) used to have its text joined by the
+  // success path and reach the model as an ordinary string, indistinguishable
+  // from a successful read, while a THROWN handler reached it as
+  // `{ error: … }`. Same failure class, two shapes: the model reported the
+  // refusal as a completed action. Both now produce `{ error: … }`, which is
+  // the shape run-loop.ts's system prompt names.
+  it("returns an isError handler result in the SAME shape as a thrown one", async () => {
+    const tools = buildAgentTools({
+      ctx,
+      scope: { mode: "all" },
+      client: noClient,
+      extra: [
+        probe(async () => ({
+          content: [{ type: "text", text: "Board not found." }],
+          isError: true,
+        })),
+      ],
+    });
+    await expect(
+      executeAgentTool(tools, "probe_tool", { boardId: BOARD_1 }),
+    ).resolves.toEqual({ error: "Board not found." });
+  });
+
+  it("never lets an isError result reach the model as a plain success string", async () => {
+    const tools = buildAgentTools({
+      ctx,
+      scope: { mode: "all" },
+      client: noClient,
+      extra: [
+        probe(async () => ({
+          content: [{ type: "text", text: "Board not found." }],
+          isError: true,
+        })),
+      ],
+    });
+    const r = await executeAgentTool(tools, "probe_tool", { boardId: BOARD_1 });
+    expect(typeof r).not.toBe("string");
+  });
+
+  it("falls back to the opaque message when an isError result carries no text", async () => {
+    const tools = buildAgentTools({
+      ctx,
+      scope: { mode: "all" },
+      client: noClient,
+      extra: [probe(async () => ({ content: [], isError: true }))],
+    });
+    await expect(
+      executeAgentTool(tools, "probe_tool", { boardId: BOARD_1 }),
+    ).resolves.toEqual({ error: "Tool failed." });
+  });
+
+  it("still returns a plain string for a successful handler", async () => {
+    const tools = buildAgentTools({
+      ctx,
+      scope: { mode: "all" },
+      client: noClient,
+      extra: [
+        probe(async () => ({
+          content: [{ type: "text", text: "ok" }],
+          isError: false,
+        })),
+      ],
+    });
+    await expect(
+      executeAgentTool(tools, "probe_tool", { boardId: BOARD_1 }),
+    ).resolves.toBe("ok");
+  });
+
   it("handles a non-Error throw", async () => {
     const tools = buildAgentTools({
       ctx,

@@ -45,6 +45,24 @@ function err(text: string): ToolResult {
 }
 
 /**
+ * The id `attachFileHandler` minted, lifted out of its JSON text block.
+ *
+ * Without it the model has just written a file it cannot then reference — it
+ * knows only the name it chose, and every follow-up tool wants an id. Read
+ * defensively: the write has ALREADY succeeded by the time this runs, so a
+ * shape change upstream must degrade to "no id" rather than fail the call.
+ */
+function readAttachmentId(result: ToolResult): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(result.content[0]?.text ?? "");
+    const id = (parsed as { attachmentId?: unknown }).attachmentId;
+    return typeof id === "string" ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Builds the `create_file` descriptor over an injected `attach`.
  *
  * The factory IS the dependency seam: `ToolDescriptor.invoke` takes exactly
@@ -62,6 +80,8 @@ export function makeCreateFileDescriptor(deps: {
       "TEXT in `content` — do not base64-encode it, the server does that. " +
       "`format` picks the extension and mime type (md, txt, csv, html, " +
       "json); it is appended to `fileName` unless you already included it. " +
+      "The result reports the new attachment's `attachmentId` — use it to " +
+      "refer to this file in any later call. " +
       "Omit `columnId` for an item-level attachment, or pass a Files " +
       "column's id to write into that cell. Content is limited to 128 KB of " +
       "UTF-8. The result reports the stored byte count — compare it against " +
@@ -108,6 +128,9 @@ export function makeCreateFileDescriptor(deps: {
             type: "text",
             text: JSON.stringify({
               ok: true,
+              // Omitted (JSON.stringify drops undefined) rather than sent as
+              // null, so the model never sees an id-shaped field it cannot use.
+              attachmentId: readAttachmentId(attached),
               fileName,
               bytes: bytes.byteLength,
             }),

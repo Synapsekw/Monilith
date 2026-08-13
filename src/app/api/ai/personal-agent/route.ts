@@ -6,22 +6,25 @@ import { getServerEnv } from "@/lib/env.server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { verifyBody } from "@/lib/ai/agentic/hmac";
 import { runAi } from "@/lib/ai/gateway";
-import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
+import { readOrgAiSettings } from "@/lib/ai/org-settings";
+import { languageModelFor } from "@/lib/ai/providers/language-model";
 import {
   AiDisabledError,
   AiQuotaExceededError,
   PersonalAiKeyMissingError,
   ByoKeyMissingError,
-  ProviderNotCapableError,
 } from "@/lib/ai/errors";
 import { getUserAgentById, findUserAgentRun } from "@/lib/agents/agents-db";
 import { getAgentOwnerClient } from "@/lib/agents/owner-client";
-import { buildBriefing } from "@/lib/agents/briefing";
 import {
-  summariseBriefing,
-  type BriefingSummary,
-} from "@/lib/agents/summarise";
+  buildAgentRuntime,
+  runAgentLoop,
+  ModelNotToolCapableError,
+} from "@/lib/agents/run-loop";
+import { AGENT_ONLY_DESCRIPTORS } from "@/lib/agents/agent-only-tools";
+import type { ProposedCall } from "@/lib/agents/grant-gate";
+import { insertProposals } from "@/lib/agents/proposals-db";
 import { sendBriefingEmail } from "@/lib/agents/send";
 import { writeBriefingThread } from "@/lib/agents/briefing-thread";
 import {
@@ -106,6 +109,15 @@ async function finalizeRun(
     output_tokens?: number | null;
     /** True when the agent's pinned model was unavailable and runAi fell back. */
     model_substituted?: boolean;
+    /** What the run was EFFECTIVELY permitted to do — the agent's own grants
+     *  intersected with the org ceiling, as it stood at run time. */
+    grants?: string[];
+    /** Model round-trips consumed, out of AGENT_MAX_STEPS. */
+    steps?: number;
+    /** The tools that actually EXECUTED (denied calls are not "used"). */
+    tools_used?: string[];
+    /** The agent's own report — the same text the email and thread carry. */
+    output?: string | null;
   },
 ): Promise<void> {
   const { error } = await svc
@@ -147,11 +159,18 @@ async function safeFinalize(
  * (`20260801094820_personal_agent_sweep.sql`) inserts a fire-ledger row
  * (once per agent per local slot) and fires a signed
  * `net.http_post { agent_id, fire_date, fire_hour }` here. This handler
- * (service-role, HMAC-verified) resolves an OWNER-SCOPED client, builds the
- * briefing under that owner's RLS, summarises it, emails it, and writes ONE
+ * (service-role, HMAC-verified) resolves an OWNER-SCOPED client, runs a
+ * BOUNDED TOOL LOOP under that owner's RLS, queues anything the agent had no
+ * grant for as a proposal, emails the agent's report, and writes ONE
  * `user_agent_runs` audit row. Idempotent: a redelivered fire slot is a
  * no-op — see `claimRun` for why that holds even under concurrent delivery,
  * not just sequential redelivery.
+ *
+ * The loop replaced a fixed briefing pipeline (build a payload → one
+ * tool-less summarise call → email). Everything OUTSIDE the model call is
+ * unchanged and deliberately so: the claim, the entitlement and per-user caps,
+ * the owner-client resolution, the safe finalize, and the config-state error
+ * taxonomy were all load-bearing before and remain so.
  */
 export async function POST(req: Request): Promise<Response> {
   const secret = getServerEnv().AI_PGNET_HMAC_SECRET;
@@ -251,34 +270,49 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     // 6. Read AS THE OWNER. There is no service-client fallback here by design.
+    //    Everything the agent sees and does this run goes through this client,
+    //    so the owner's RLS remains the real boundary.
     const ownerClient = await getAgentOwnerClient(svc, agent);
-    const briefing = await buildBriefing(
-      ownerClient,
-      agent.board_scope,
-      fireDate,
+
+    // The ADMIN half of the two-key gate. Read at RUN time, not at write time:
+    // an admin who lowers the ceiling clamps every existing agent at once,
+    // without anyone editing them. `agentCapabilityCeiling` may be the module
+    // singleton `DEFAULT_ORG_AI_SETTINGS` returns by identity — never mutate
+    // it in place (no push/sort/splice); `.filter` below copies.
+    const { agentCapabilityCeiling } = await readOrgAiSettings(
+      svc,
+      agent.org_id,
+    );
+    const effectiveGrants = agent.capabilities.filter((c) =>
+      agentCapabilityCeiling.includes(c),
     );
 
-    // 7. Summarise (metered), then send. Three distinct states are
-    //    CONFIGURATION states, not faults, and are caught separately from the
-    //    generic error path below so they land in `user_agent_runs` as
-    //    "skipped" with a clear reason:
+    // Denied-but-recordable calls, collected as the loop runs. The gate hands
+    // them over one at a time and the run CONTINUES — an unattended 07:00 job
+    // must never suspend on a human who is asleep — so they are persisted
+    // after the loop, together, as proposals the owner decides later.
+    const proposals: ProposedCall[] = [];
+
+    // 7. Run the bounded tool loop (metered). Two states are CONFIGURATION
+    //    states, not faults, and are caught separately from the generic error
+    //    path below so they land in `user_agent_runs` as "skipped" with a
+    //    clear reason:
     //      - PersonalAiKeyMissingError: the owner has no per_user key on file.
     //      - ByoKeyMissingError: the org's org_byo mode has no vault secret.
-    //      - ProviderNotCapableError: the owner's resolved key IS present but
-    //        is for a non-Anthropic provider (per_user mode allows OpenAI/
-    //        Gemini keys, and summariseBriefing hard-codes the Anthropic SDK
-    //        — see summarise.ts). Without this guard, a wrong-provider key
-    //        gets POSTed to api.anthropic.com, 401s, and silently kills the
-    //        agent every day as an opaque "error" row with no way for the
-    //        owner to learn why. Detected INSIDE the runAi callback (only
-    //        there is `adapter` available) and thrown before summariseBriefing
-    //        is ever called, so nothing is spent.
+    //    A third — ModelNotToolCapableError — is raised INSIDE the callback
+    //    (only there is the resolved model known) and handled the same way:
+    //    the agent's pinned model, or the org default, cannot call tools, so
+    //    there is no loop to run. The old ProviderNotCapableError guard is
+    //    GONE with it: this loop is provider-agnostic (the AI SDK drives it
+    //    through whichever adapter the key resolved to), so the honest
+    //    question is no longer "is this Anthropic?" but "can THIS model call
+    //    tools?", which `ai_models.supports_tools` answers per model.
     //    Deliberately NOT caught here: a plain (non-Personal) AiNotConfiguredError
     //    — e.g. `managed` mode's platform ANTHROPIC_API_KEY missing — is an
     //    OPERATIONAL fault (nobody but ops can fix it, and it silently kills
     //    every briefing in the org every day), so it falls through to the
     //    generic catch below and is recorded as "error", not "skipped".
-    let result: BriefingSummary;
+    let result: Awaited<ReturnType<typeof runAgentLoop>>;
     // Written to the run row below. `user_agent_runs.model_substituted` exists
     // precisely so "your pinned model is gone, this ran on the default" is its
     // own signal instead of being overloaded onto `error` — a substituted run
@@ -296,14 +330,46 @@ export async function POST(req: Request): Promise<Response> {
           provider: agent.provider ?? undefined,
           requestedModel: agent.model_id,
         },
-        async ({ provider, apiKey, model }) => {
-          assertToolLoopCapable(provider, FEATURE);
+        async ({ adapter, apiKey, baseUrl, model }) => {
+          if (!model.supportsTools)
+            throw new ModelNotToolCapableError(model.model);
           modelSubstituted = model.substituted;
-          const r = await summariseBriefing({
-            apiKey,
-            model: model.requestModel,
+
+          // ONE call assembles BOTH halves. `buildAgentTools` and
+          // `makeGrantGate` are each a pure function of the same descriptor
+          // list, and building them separately is exactly how a tool once
+          // ended up executable but unclassified — see buildAgentRuntime.
+          const { tools, gate } = buildAgentRuntime({
+            ctx: {
+              getClient: async () => ownerClient,
+              actorId: agent.owner_id,
+            },
+            scope: agent.board_scope,
+            client: ownerClient,
+            extra: AGENT_ONLY_DESCRIPTORS,
+            granted: effectiveGrants,
+            ceiling: agentCapabilityCeiling,
+            onPropose: (call) => proposals.push(call),
+          });
+
+          const r = await runAgentLoop({
+            // The WIRE id, never the catalog key the pin stores: the Gateway
+            // publishes `claude-haiku-4.5` where Anthropic's API wants the
+            // dated snapshot, and sending the key is a 404.
+            model: languageModelFor({
+              kind: adapter.kind,
+              apiKey,
+              baseUrl,
+              model: model.requestModel,
+            }),
             instructions: agent.instructions,
-            briefing,
+            tools,
+            gate,
+            // No per-run output ceiling: the loop is bounded by
+            // AGENT_MAX_STEPS, and a token cap that truncates mid-report
+            // emails a half-sentence. The seam stays for when the catalog's
+            // per-model `max_output_tokens` is threaded through.
+            maxOutputTokens: null,
           });
           return { result: r, usage: r.usage };
         },
@@ -319,29 +385,43 @@ export async function POST(req: Request): Promise<Response> {
         });
         return NextResponse.json({ status: "skipped", reason: "no_key" });
       }
-      if (e instanceof ProviderNotCapableError) {
-        await safeFinalize(svc, key, {
-          status: "skipped",
-          // Two settings can put this agent on a non-Anthropic provider, and
-          // naming only one of them sends the owner to the wrong page. The
-          // agent's OWN model pin wins over the org default (see the
-          // `provider: agent.provider` argument above), so an agent pinned to,
-          // say, a GPT model skips every run while "Settings → AI" looks
-          // perfectly fine. Both are named, pin first, because the pin is the
-          // one that overrides.
-          error:
-            "Personal agents currently require Anthropic. This agent resolved " +
-            "to another provider — either its own model pin (Settings → " +
-            "Agents) or the organization's AI provider (Settings → AI) — so " +
-            "this run was skipped rather than billed to the wrong provider.",
-        });
+      if (e instanceof ModelNotToolCapableError) {
+        // A configuration state the OWNER can fix, so it is recorded as
+        // "skipped" with a message naming the model and both places a model
+        // can come from. Nothing was spent — the throw happens before the
+        // first model call.
+        await safeFinalize(svc, key, { status: "skipped", error: e.message });
         return NextResponse.json({
           status: "skipped",
-          reason: "wrong_provider",
+          reason: "model_not_tool_capable",
         });
       }
       throw e;
     }
+
+    // 8. Persist what the agent asked permission for. BEFORE the email, so the
+    //    "N actions await your approval" line can never name rows that do not
+    //    exist yet. `insertProposals` stamps `status` and `expires_at`
+    //    (now + PROPOSAL_TTL_DAYS) itself — no caller can queue a proposal
+    //    that is born approved or born immortal.
+    await insertProposals(
+      svc,
+      proposals.map((p) => ({
+        userAgentId: agent.id,
+        runId: claim.runId,
+        orgId: agent.org_id,
+        ownerId: agent.owner_id,
+        capability: p.capability,
+        toolName: p.toolName,
+        toolCallId: p.toolCallId,
+        input: p.input,
+        // SERVER-derived, never model text. Task 9 replaces this with
+        // `summariseProposal(toolName, input)`, which renders a sentence per
+        // tool; until then this is that function's own documented fallback for
+        // an unknown tool, so the approval card's copy never regresses.
+        summary: `Run ${p.toolName}.`,
+      })),
+    );
 
     // Thread BEFORE email, so the email can link to it. Never gates the run: a
     // failed write returns null and the email simply omits the link.
@@ -352,17 +432,18 @@ export async function POST(req: Request): Promise<Response> {
       agentName: agent.name,
       runId: claim.runId,
       fireDate,
-      summary: result.summary,
+      summary: result.text,
     });
 
     await sendBriefingEmail(svc, {
       agent,
-      briefing,
-      summary: result.summary,
+      fireDate,
+      summary: result.text,
+      proposalCount: proposals.length,
       threadId,
     });
 
-    // 8. Finalize the single audit row for this fire (Finding 2: never let
+    // 9. Finalize the single audit row for this fire (Finding 2: never let
     //    a bookkeeping-write failure crash a response whose real outcome —
     //    the email — already succeeded).
     await safeFinalize(svc, key, {
@@ -371,6 +452,10 @@ export async function POST(req: Request): Promise<Response> {
       input_tokens: result.usage.inputTokens,
       output_tokens: result.usage.outputTokens,
       model_substituted: modelSubstituted,
+      grants: effectiveGrants,
+      steps: result.steps,
+      tools_used: result.toolsUsed,
+      output: result.text,
     });
 
     return NextResponse.json({ status: "ran" });

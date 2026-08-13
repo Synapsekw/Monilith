@@ -146,14 +146,22 @@ export type AgentTemplate = {
   runAtLocalHour: number;
 };
 
-/** The four starter roles. Seeds only — everything stays editable afterwards. */
+/**
+ * The four starter roles. Seeds only — everything stays editable afterwards.
+ *
+ * Each instruction now NAMES the tool to call. The run is a tool loop, not a
+ * pre-built briefing handed to a summariser: an instruction that says "look at
+ * what is due today" leaves the model to guess which of two dozen tools that
+ * means, and a scheduled agent that guesses wrong produces an empty report
+ * every morning with nothing in the run row to explain it.
+ */
 export const AGENT_TEMPLATES: AgentTemplate[] = [
   {
     id: "morning-brief",
     name: "Morning Brief",
     blurb: "A short summary of what's pending, every morning.",
     instructions:
-      "Write a brief, friendly summary of what I need to do today. Lead with anything overdue, then what's due today, then the rest of the week. Be concise — no more than a short paragraph per section. Do not invent items that are not in the data.",
+      "Call get_my_work, then write a brief, friendly summary of what I need to do today. Lead with anything overdue, then what's due today, then the rest of the week. Be concise — no more than a short paragraph per section. Do not invent items that get_my_work did not return.",
     boardScope: { mode: "all" },
     cadence: "daily",
     runAtLocalHour: 7,
@@ -163,7 +171,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     name: "Overdue Chaser",
     blurb: "Focuses only on what has already slipped.",
     instructions:
-      "List only overdue items, most overdue first. For each, state how late it is and which board it's on. Be direct and short. If nothing is overdue, say so in one line and stop.",
+      "Call get_my_work, then list only the overdue items, most overdue first. For each, state how late it is and which board it's on. Be direct and short. If nothing is overdue, say so in one line and stop.",
     boardScope: { mode: "all" },
     cadence: "daily",
     runAtLocalHour: 8,
@@ -173,7 +181,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     name: "Risk Spotter",
     blurb: "Flags what looks likely to slip next.",
     instructions:
-      "Look at what is due today and this week and call out what is most at risk of slipping, with a one-line reason each. Prioritise by due date and how much is stacked on the same day. Do not speculate beyond the data given.",
+      "Call get_my_work, then call out what is most at risk of slipping among the items due today and this week, with a one-line reason each. Prioritise by due date and how much is stacked on the same day. Do not speculate beyond what the tools returned.",
     boardScope: { mode: "all" },
     cadence: "daily",
     runAtLocalHour: 7,
@@ -183,7 +191,7 @@ export const AGENT_TEMPLATES: AgentTemplate[] = [
     name: "Standup Writer",
     blurb: "Drafts your standup update from your assigned work.",
     instructions:
-      "Draft a standup update in three short sections: what's due today, what's overdue, and what's coming this week. Write it in the first person, as bullet points I could paste into a chat.",
+      "Call get_my_work, then draft a standup update in three short sections: what's due today, what's overdue, and what's coming this week. Write it in the first person, as bullet points I could paste into a chat.",
     boardScope: { mode: "all" },
     cadence: "daily",
     runAtLocalHour: 9,

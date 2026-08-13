@@ -22,6 +22,23 @@ export const OUT_OF_SCOPE_ERROR =
 const OPAQUE_FAILURE = "Tool failed.";
 
 /**
+ * THE ONE FAILURE SHAPE. Every way a tool call can fail — out of scope, a
+ * handler that THREW, and a handler that returned `isError: true` — reaches the
+ * model as `{ error: string }` and nothing else.
+ *
+ * It is a function rather than three inline object literals because the three
+ * paths previously disagreed: a thrown handler produced `{ error }` while an
+ * `isError` handler had its text joined by the success path and arrived as an
+ * ordinary success STRING ("Board not found."), indistinguishable from a
+ * successful read. The model then reported the failure as a completed action.
+ * Same failure class, one shape — and the system prompt in `run-loop.ts` names
+ * this field explicitly, so the two must not drift.
+ */
+function toolFailure(message: string): { error: string } {
+  return { error: message };
+}
+
+/**
  * The AI SDK tool set a personal agent runs with.
  *
  * Built from `descriptorsFor()` — which starts from `ALL_TOOL_DESCRIPTORS`, the
@@ -69,17 +86,22 @@ export function buildAgentTools(args: {
         execute: async (input: Record<string, unknown>) => {
           const boardId = await resolveTargetBoardId(args.client, d, input);
           if (!isBoardInScope(args.scope, boardId)) {
-            return { error: OUT_OF_SCOPE_ERROR };
+            return toolFailure(OUT_OF_SCOPE_ERROR);
           }
           try {
             const r = await d.invoke(args.ctx, input);
-            return r.content.map((c) => c.text).join("\n");
+            const text = r.content.map((c) => c.text).join("\n");
+            // A descriptor's OWN refusal (`isError: true` — "Board not found.",
+            // "That document is 200000 bytes…") is a failure, not a result. It
+            // must not reach the model as an ordinary success string: the model
+            // would report the action as done. Same shape as the thrown path.
+            return r.isError ? toolFailure(text || OPAQUE_FAILURE) : text;
           } catch (e) {
             // A handler that throws (transient DB error, an RLS refusal
             // surfacing as an exception) must NOT abort the run — this is an
             // unattended 07:00 job. Hand the message back as a tool result and
             // let the model adapt.
-            return { error: e instanceof Error ? e.message : OPAQUE_FAILURE };
+            return toolFailure(e instanceof Error ? e.message : OPAQUE_FAILURE);
           }
         },
       }),

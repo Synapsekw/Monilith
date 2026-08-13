@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { LanguageModel } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
 import { fakeResolvedModel } from "@/test/adapter-fakes";
 import { signBody } from "@/lib/ai/agentic/hmac";
 import {
@@ -7,6 +9,7 @@ import {
   PersonalAiKeyMissingError,
   ByoKeyMissingError,
 } from "@/lib/ai/errors";
+import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
 
 const SECRET = "test-secret";
 const ORG = "00000000-0000-4000-8000-0000000000f1";
@@ -100,6 +103,18 @@ vi.mock("@/lib/ai/entitlement", () => ({
   requireAiEntitlement: (...a: unknown[]) => requireAiEntitlement(...(a as [])),
 }));
 
+// ── org settings ────────────────────────────────────────────────────────
+// The route reads `agentCapabilityCeiling` at RUN time — an admin lowering the
+// ceiling clamps every existing agent without editing any of them, so the
+// value has to come from here rather than from the agent row.
+let ceiling: string[] = [...AGENT_CAPABILITIES];
+const readOrgAiSettings = vi.fn(async () => ({
+  agentCapabilityCeiling: ceiling,
+}));
+vi.mock("@/lib/ai/org-settings", () => ({
+  readOrgAiSettings: (...a: unknown[]) => readOrgAiSettings(...(a as [])),
+}));
+
 // Real AgentCapExceededError export is preserved (route.ts does `instanceof`
 // on it); only the DB-hitting function is replaced.
 const assertRunAllowedToday = vi.fn(async () => {});
@@ -127,7 +142,24 @@ let forceThreadInsertError: { code?: string; message: string } | null = null;
 
 function ownerClientDouble() {
   return {
+    // `create_item` runs `rpc("create_item")`; the tool wrapper first resolves
+    // its `groupId` to a board for the scope guard. Both are stubbed so a
+    // GRANTED write genuinely EXECUTES here — the positive control that proves
+    // the gate is a gate and not a blanket refusal.
+    rpc: async () => ({ data: { id: "item-1" }, error: null }),
     from(table: string) {
+      if (table === "groups") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { board_id: "44444444-4444-4444-8444-444444444444" },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
       if (table === "ai_conversations") {
         return {
           insert: (row: OwnerRow) => {
@@ -158,22 +190,17 @@ vi.mock("@/lib/agents/owner-client", () => ({
   getAgentOwnerClient: (...a: unknown[]) => getAgentOwnerClient(...(a as [])),
 }));
 
-const fakeBriefing = {
-  today: "2026-08-01",
-  totals: { overdue: 1, today: 0, week: 0 },
-  groups: [],
-};
-const buildBriefing = vi.fn(async () => fakeBriefing);
-vi.mock("@/lib/agents/briefing", () => ({
-  buildBriefing: (...a: unknown[]) => buildBriefing(...(a as [])),
-}));
-
-const summariseBriefing = vi.fn(async () => ({
-  summary: "You have 1 overdue item.",
-  usage: { inputTokens: 5, outputTokens: 2 },
-}));
-vi.mock("@/lib/agents/summarise", () => ({
-  summariseBriefing: (...a: unknown[]) => summariseBriefing(...(a as [])),
+// ── proposals ───────────────────────────────────────────────────────────
+// `insertProposals` is the only DB write on the refusal path; the rows it is
+// handed are what the approval UI later reads, so they are captured rather
+// than executed.
+const insertProposals = vi.fn(async () => {});
+let proposalRows: Record<string, unknown>[] = [];
+vi.mock("@/lib/agents/proposals-db", () => ({
+  insertProposals: (_svc: unknown, rows: Record<string, unknown>[]) => {
+    proposalRows = rows;
+    return insertProposals();
+  },
 }));
 
 const sendBriefingEmail = vi.fn(async () => ({ emailed: true }));
@@ -181,30 +208,93 @@ vi.mock("@/lib/agents/send", () => ({
   sendBriefingEmail: (...a: unknown[]) => sendBriefingEmail(...(a as [])),
 }));
 
-// runAi just runs the callback by default with an Anthropic PROVIDER (metering
-// exercised in the gateway's own test). A vi.fn so individual tests can
+// ── the model ───────────────────────────────────────────────────────────
+// `run-loop.ts` is deliberately NOT mocked. The route drives the REAL
+// `buildAgentRuntime` + `runAgentLoop` + `generateText`, with only the
+// LanguageModel swapped — so these tests exercise the assembled tool set and
+// the installed grant gate, not a stand-in for them. That is the only way the
+// "a run built without `toolApproval` would be ungated" gap can be closed from
+// outside the gate's own module.
+const languageModelFor = vi.fn();
+let nextModel: () => LanguageModel = () => textOnlyModel("You did the thing.");
+vi.mock("@/lib/ai/providers/language-model", () => ({
+  languageModelFor: (a: unknown) => {
+    languageModelFor(a);
+    return nextModel();
+  },
+}));
+
+const USAGE = {
+  inputTokens: { total: 5, noCache: 5, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: 2, text: 2, reasoning: undefined },
+};
+
+function textOnlyModel(text: string): LanguageModel {
+  return new MockLanguageModelV4({
+    doGenerate: async () => ({
+      content: [{ type: "text", text }],
+      finishReason: { unified: "stop", raw: undefined },
+      usage: USAGE,
+      warnings: [],
+    }),
+  });
+}
+
+/** Step 1 calls `create_item`; step 2 reports. The write is the interesting
+ *  half — whether it runs is entirely the grant gate's decision. */
+function writeThenReportModel(): LanguageModel {
+  let step = 0;
+  return new MockLanguageModelV4({
+    doGenerate: async () => {
+      step++;
+      if (step === 1) {
+        return {
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: "call-1",
+              toolName: "create_item",
+              input: JSON.stringify({ groupId: GROUP, name: "Draft" }),
+            },
+          ],
+          finishReason: { unified: "tool-calls", raw: undefined },
+          usage: USAGE,
+          warnings: [],
+        };
+      }
+      return {
+        content: [{ type: "text", text: "You have 1 overdue item." }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage: USAGE,
+        warnings: [],
+      };
+    },
+  });
+}
+
+// runAi just runs the callback by default with an Anthropic adapter (metering
+// is exercised in the gateway's own test). A vi.fn so individual tests can
 // override it — e.g. to simulate the per_user "no key on file" path throwing
-// AiNotConfiguredError, or a non-Anthropic provider to exercise the
-// wrong-provider skip. The gate reads `provider`, not the adapter: the loop
-// builds `new Anthropic()` itself, so the honest question is which provider's
-// key was resolved.
+// AiNotConfiguredError, or a model whose catalog row is not tool-capable.
 type FakeResolved = {
+  adapter: { kind: string };
   provider: string;
   apiKey: string;
+  baseUrl: string | null;
   model: ReturnType<typeof fakeResolvedModel>;
 };
+const resolvedDefaults = (): FakeResolved => ({
+  adapter: { kind: "anthropic" },
+  provider: "anthropic",
+  apiKey: "k",
+  baseUrl: null,
+  model: fakeResolvedModel(),
+});
 const runAi = vi.fn(
   async (
     _args: unknown,
     fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-  ) =>
-    (
-      await fn({
-        provider: "anthropic",
-        apiKey: "k",
-        model: fakeResolvedModel(),
-      })
-    ).result,
+  ) => (await fn(resolvedDefaults())).result,
 );
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: (...a: Parameters<typeof runAi>) => runAi(...a),
@@ -221,7 +311,21 @@ function post(body: object, sig?: string) {
   });
 }
 
+/** Drive the real callback route.ts hands runAi, with one field overridden. */
+function resolveWith(over: Partial<FakeResolved>) {
+  runAi.mockImplementation(
+    async (
+      _args: unknown,
+      fn: (r: FakeResolved) => Promise<{ result: unknown }>,
+    ) => (await fn({ ...resolvedDefaults(), ...over })).result,
+  );
+}
+
 const AGENT_ID = "00000000-0000-4000-8000-0000000000aa";
+// A REAL uuid: `create_item`'s inputSchema is `groupId: z.string().uuid()`, and
+// the AI SDK validates tool input BEFORE consulting the approval gate — an
+// invalid id would be swallowed as a tool-input error and never reach it.
+const GROUP = "33333333-3333-4333-8333-333333333333";
 const slot = {
   agent_id: AGENT_ID,
   fire_date: "2026-08-01",
@@ -240,6 +344,9 @@ const enabledAgent = () => ({
   run_at_local_hour: 7,
   enabled: true,
   bridge_secret_id: null,
+  // Empty is the DEFAULT and the backfill value of every existing agent: the
+  // relaxation is opt-in, and an agent nobody has edited stays read-only.
+  capabilities: [] as string[],
   // The per-agent model pin. Null on both = "use the org default", which is
   // every backfilled agent — the pinned case is exercised explicitly below.
   provider: null,
@@ -262,28 +369,20 @@ beforeEach(() => {
   ownerConversationInsert.mockReset();
   ownerMessageInsert.mockReset();
   forceThreadInsertError = null;
-  buildBriefing.mockReset();
-  buildBriefing.mockResolvedValue(fakeBriefing);
-  summariseBriefing.mockReset();
-  summariseBriefing.mockResolvedValue({
-    summary: "You have 1 overdue item.",
-    usage: { inputTokens: 5, outputTokens: 2 },
-  });
+  ceiling = [...AGENT_CAPABILITIES];
+  readOrgAiSettings.mockClear();
+  insertProposals.mockClear();
+  proposalRows = [];
   sendBriefingEmail.mockReset();
   sendBriefingEmail.mockResolvedValue({ emailed: true });
+  languageModelFor.mockClear();
+  nextModel = () => textOnlyModel("You have 1 overdue item.");
   runAi.mockReset();
   runAi.mockImplementation(
     async (
       _args: unknown,
       fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-    ) =>
-      (
-        await fn({
-          provider: "anthropic",
-          apiKey: "k",
-          model: fakeResolvedModel(),
-        })
-      ).result,
+    ) => (await fn(resolvedDefaults())).result,
   );
 });
 
@@ -356,6 +455,155 @@ describe("POST /api/ai/personal-agent", () => {
     expect(sendBriefingEmail).toHaveBeenCalledOnce();
   });
 
+  // ── the loop's own audit columns ───────────────────────────────────────
+  it("records the run's effect: steps, tools used, grants and the agent's own report", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      capabilities: ["board.write"],
+    });
+    nextModel = writeThenReportModel;
+
+    const res = await POST(post(slot));
+
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "ran",
+      steps: 2,
+      grants: ["board.write"],
+      // The GRANTED write really executed — the positive control for the gate.
+      tools_used: ["create_item"],
+      output: "You have 1 overdue item.",
+    });
+    expect(proposalRows).toHaveLength(0);
+  });
+
+  // ── the zero-grant regression (Task 2's `default '{}'` backfill) ────────
+  // Every agent that predates capabilities carries `capabilities: []`. Such an
+  // agent must still COMPLETE and still email — it simply performs no writes.
+  // If this ever fails, the relaxation stopped being opt-in.
+  it("completes and still emails for an agent with NO capabilities, performing zero writes", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent()); // capabilities: []
+    nextModel = writeThenReportModel;
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "ran",
+      grants: [],
+      // The write was DENIED, so nothing executed. `tools_used` is an audit of
+      // what happened, not of what was asked for.
+      tools_used: [],
+    });
+    expect(sendBriefingEmail).toHaveBeenCalledOnce();
+  });
+
+  // ── the gate really is installed in the assembled run ──────────────────
+  // `buildAgentTools` returns fully executable write tools. A run that forgot
+  // `toolApproval` would execute them and no unit test of the gate alone would
+  // notice — so this asserts the DENIAL end to end, through the real loop.
+  it("denies an ungranted write and queues it as a proposal instead", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    nextModel = writeThenReportModel;
+
+    await POST(post(slot));
+
+    expect(insertProposals).toHaveBeenCalledOnce();
+    expect(proposalRows).toHaveLength(1);
+    expect(proposalRows[0]).toMatchObject({
+      userAgentId: AGENT_ID,
+      runId: "run-1",
+      orgId: ORG,
+      ownerId: OWNER,
+      capability: "board.write",
+      toolName: "create_item",
+      toolCallId: "call-1",
+      input: { groupId: GROUP, name: "Draft" },
+    });
+    // Never model-written text.
+    expect(proposalRows[0]!.summary).toBe("Run create_item.");
+  });
+
+  it("tells the email how many actions await approval", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    nextModel = writeThenReportModel;
+
+    await POST(post(slot));
+
+    expect(sendBriefingEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        proposalCount: 1,
+        fireDate: slot.fire_date,
+        summary: "You have 1 overdue item.",
+      }),
+    );
+  });
+
+  it("queues nothing, and says nothing, on a run with no refusals", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+
+    await POST(post(slot));
+
+    expect(proposalRows).toHaveLength(0);
+    expect(sendBriefingEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ proposalCount: 0 }),
+    );
+  });
+
+  // ── the ORG ceiling is the admin half of the two-key gate ──────────────
+  it("intersects the agent's grants with the org ceiling at RUN time", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      capabilities: ["board.write", "files.write"],
+    });
+    ceiling = ["files.write"];
+    nextModel = writeThenReportModel;
+
+    await POST(post(slot));
+
+    // board.write was granted on the agent but is above the ceiling, so the
+    // effective set is the intersection — and the write did not run.
+    expect(runUpdates[0]!.patch).toMatchObject({
+      grants: ["files.write"],
+      tools_used: [],
+    });
+  });
+
+  // Over-ceiling means DENY WITH NO PROPOSAL: a proposal nobody in the org is
+  // permitted to approve renders a button that can only ever fail.
+  it("records NO proposal for a call above the org ceiling", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      capabilities: ["board.write"],
+    });
+    ceiling = [];
+    nextModel = writeThenReportModel;
+
+    const res = await POST(post(slot));
+
+    await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+    expect(proposalRows).toHaveLength(0);
+  });
+
+  // `DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling` is a module singleton
+  // returned BY IDENTITY, so an in-place mutation here would silently rewrite
+  // the default for every org in the process.
+  it("never mutates the ceiling array it was handed", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      capabilities: ["board.write"],
+    });
+    const shared = ["files.write"];
+    ceiling = shared;
+
+    await POST(post(slot));
+
+    expect(shared).toEqual(["files.write"]);
+  });
+
   // ── The per-agent model pin (user_agents.provider / .model_id) ─────────
   it("spends the PINNED provider's key and asks for the pinned model", async () => {
     // An agent pinned to Kimi must resolve the Kimi key. Resolving whichever
@@ -402,31 +650,42 @@ describe("POST /api/ai/personal-agent", () => {
       provider: "anthropic",
       model_id: "claude-sonnet-5",
     });
-    runAi.mockImplementation(
-      async (
-        _args: unknown,
-        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-      ) =>
-        (
-          await fn({
-            provider: "anthropic",
-            apiKey: "k",
-            model: fakeResolvedModel({
-              model: "claude-sonnet-5",
-              requestModel: "claude-sonnet-5-20260101",
-            }),
-          })
-        ).result,
-    );
+    resolveWith({
+      model: fakeResolvedModel({
+        model: "claude-sonnet-5",
+        requestModel: "claude-sonnet-5-20260101",
+      }),
+    });
     await POST(post(slot));
 
-    expect(summariseBriefing).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "claude-sonnet-5-20260101" }),
+    expect(languageModelFor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "anthropic",
+        model: "claude-sonnet-5-20260101",
+      }),
     );
-    // Belt and braces: the catalog key must not be what the adapter is asked
+    // Belt and braces: the catalog key must not be what the provider is asked
     // for, even though it IS what the pin and the ledger store.
-    expect(summariseBriefing).not.toHaveBeenCalledWith(
+    expect(languageModelFor).not.toHaveBeenCalledWith(
       expect.objectContaining({ model: "claude-sonnet-5" }),
+    );
+  });
+
+  it("passes the openai-compatible baseUrl through to the model factory", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    resolveWith({
+      adapter: { kind: "openai-compatible" },
+      provider: "moonshotai",
+      baseUrl: "https://api.moonshot.ai/v1",
+    });
+
+    await POST(post(slot));
+
+    expect(languageModelFor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "openai-compatible",
+        baseUrl: "https://api.moonshot.ai/v1",
+      }),
     );
   });
 
@@ -438,19 +697,7 @@ describe("POST /api/ai/personal-agent", () => {
       provider: "anthropic",
       model_id: "claude-retired-9",
     });
-    runAi.mockImplementation(
-      async (
-        _args: unknown,
-        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-      ) =>
-        (
-          await fn({
-            provider: "anthropic",
-            apiKey: "k",
-            model: fakeResolvedModel({ substituted: true }),
-          })
-        ).result,
-    );
+    resolveWith({ model: fakeResolvedModel({ substituted: true }) });
     const res = await POST(post(slot));
 
     await expect(res.json()).resolves.toMatchObject({ status: "ran" });
@@ -479,7 +726,7 @@ describe("POST /api/ai/personal-agent", () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({ status: "noop" });
     // No token spend, no email — the loser does NOTHING beyond the failed claim.
-    expect(summariseBriefing).not.toHaveBeenCalled();
+    expect(languageModelFor).not.toHaveBeenCalled();
     expect(sendBriefingEmail).not.toHaveBeenCalled();
     expect(runInserts).toHaveLength(0);
     expect(runUpdates).toHaveLength(0);
@@ -497,7 +744,7 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runInserts).toHaveLength(1);
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
-    expect(summariseBriefing).not.toHaveBeenCalled();
+    expect(languageModelFor).not.toHaveBeenCalled();
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 
@@ -537,60 +784,53 @@ describe("POST /api/ai/personal-agent", () => {
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 
-  // ── wrong-provider guard: the anthropic provider proceeds normally ─────
-  it("proceeds through summarise + send when the resolved provider is anthropic", async () => {
+  // ── the model-capability gate, which REPLACED the Anthropic-only one ────
+  // The loop is provider-agnostic now, so the honest question is no longer
+  // "is this Anthropic?" but "can THIS model call tools?".
+  it("runs the loop on a NON-Anthropic provider whose model is tool-capable", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
-    // Default mock already resolves { provider: "anthropic", apiKey }.
+    resolveWith({
+      adapter: { kind: "openai" },
+      provider: "openai",
+      model: fakeResolvedModel({ provider: "openai", supportsTools: true }),
+    });
 
     const res = await POST(post(slot));
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({ status: "ran" });
-    expect(summariseBriefing).toHaveBeenCalledOnce();
     expect(sendBriefingEmail).toHaveBeenCalledOnce();
-    expect(runUpdates[0]!.patch).toMatchObject({ status: "ran" });
   });
 
-  // ── wrong-provider guard: a non-Anthropic per_user key must never be sent
-  //    to api.anthropic.com. This is a CONFIGURATION state (skipped), not a
-  //    fault — it must spend nothing and never call summarise or send. ──────
-  it("finalizes as skipped (not error) when the resolved provider is not anthropic, and never calls the model or the send", async () => {
+  // A model that cannot call tools is a CONFIGURATION state the owner can fix
+  // — skipped, with a message naming the model and where to change it. Nothing
+  // is spent: the throw happens before the first model call.
+  it("finalizes as skipped when the resolved model cannot use tools, and never calls the model", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
-    // Drive the REAL callback route.ts passes to runAi (not a re-implemented
-    // stand-in) with a non-anthropic provider — this exercises route.ts's own
-    // assertToolLoopCapable() call, not just its catch block.
-    runAi.mockImplementation(
-      async (
-        _args: unknown,
-        fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-      ) =>
-        (
-          await fn({
-            provider: "openai",
-            apiKey: "k",
-            model: fakeResolvedModel(),
-          })
-        ).result,
-    );
+    resolveWith({
+      model: fakeResolvedModel({
+        model: "claude-legacy-1",
+        supportsTools: false,
+      }),
+    });
 
     const res = await POST(post(slot));
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({
       status: "skipped",
-      reason: "wrong_provider",
+      reason: "model_not_tool_capable",
     });
     expect(runInserts).toHaveLength(1);
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({ status: "skipped" });
-    expect(runUpdates[0]!.patch.error).toMatch(/Anthropic/);
-    // The agent's own pin OVERRIDES the org provider, so it is reachable for
-    // an owner whose Settings → AI is correctly configured. A message naming
-    // only the org setting sends that owner to a page with nothing wrong on it.
-    expect(runUpdates[0]!.patch.error).toMatch(/model pin/i);
+    // The message has to name the model AND both places a model can come from
+    // — the agent's own pin overrides the org default, so naming only one of
+    // them sends the owner to a page with nothing wrong on it.
+    expect(runUpdates[0]!.patch.error).toMatch(/claude-legacy-1/);
     expect(runUpdates[0]!.patch.error).toMatch(/Settings → Agents/);
-    // Never spends: no model call, no email.
-    expect(summariseBriefing).not.toHaveBeenCalled();
+    expect(runUpdates[0]!.patch.error).toMatch(/Settings → AI/);
+    expect(languageModelFor).not.toHaveBeenCalled();
     expect(sendBriefingEmail).not.toHaveBeenCalled();
   });
 
@@ -633,7 +873,7 @@ describe("POST /api/ai/personal-agent", () => {
         board_id: null,
       }),
     );
-    // The summary is the thread's first (assistant) turn.
+    // The agent's own report is the thread's first (assistant) turn.
     expect(ownerMessageInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         conversation_id: "conv-1",
@@ -673,7 +913,7 @@ describe("POST /api/ai/personal-agent", () => {
   // ── error path still finalizes, and reports the real HTTP outcome ──────
   it("finalizes as error and 500s when the run throws after being claimed", async () => {
     getUserAgentById.mockResolvedValue(enabledAgent());
-    buildBriefing.mockRejectedValue(new Error("rpc boom"));
+    getAgentOwnerClient.mockRejectedValueOnce(new Error("bridge boom"));
 
     const res = await POST(post(slot));
 
@@ -682,7 +922,7 @@ describe("POST /api/ai/personal-agent", () => {
     expect(runUpdates).toHaveLength(1);
     expect(runUpdates[0]!.patch).toMatchObject({
       status: "error",
-      error: "rpc boom",
+      error: "bridge boom",
     });
   });
 
