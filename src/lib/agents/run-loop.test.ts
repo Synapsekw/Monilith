@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { tool } from "ai";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -29,6 +30,18 @@ const tools = {
     execute: async () => "ok",
   }),
 };
+
+/** A model that answers once, with text, and calls nothing. */
+function textModel(text: string) {
+  return new MockLanguageModelV4({
+    doGenerate: async () => ({
+      content: [{ type: "text", text }],
+      finishReason: { unified: "stop", raw: undefined },
+      usage,
+      warnings: [],
+    }),
+  });
+}
 
 function twoStepModel() {
   let step = 0;
@@ -153,6 +166,109 @@ describe("runAgentLoop", () => {
       maxOutputTokens: null,
     });
     expect(r.steps).toBe(AGENT_MAX_STEPS);
+
+    // `GenerateTextResult.text` is the FINAL STEP's text, and this run spent
+    // its last step calling a tool — so the SDK's own `text` is "". Emailing,
+    // threading and storing that empty string is exactly what happened before
+    // the fallback existed, on the one run that most needed explaining.
+    expect(r.text).not.toBe("");
+    expect(r.text).toContain("12-step limit");
+    expect(r.text).toContain("list_items");
+  });
+
+  it("falls back to a server-derived line when a run stops early with no text", async () => {
+    // Stops of its own accord (no tool call, no text) — not the step cap. The
+    // wording must not claim a limit that was never reached.
+    const silent = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [],
+        finishReason: { unified: "stop", raw: undefined },
+        usage,
+        warnings: [],
+      }),
+    });
+    const r = await runAgentLoop({
+      model: silent,
+      instructions: "go",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+    });
+    expect(r.steps).toBe(1);
+    expect(r.text).toBe(
+      "This run finished without writing a summary. It completed no tool calls.",
+    );
+  });
+
+  it("never returns whitespace-only text", async () => {
+    const blank = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [{ type: "text", text: "   \n  " }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage,
+        warnings: [],
+      }),
+    });
+    const r = await runAgentLoop({
+      model: blank,
+      instructions: "go",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+    });
+    expect(r.text.trim()).not.toBe("");
+    expect(r.text).toMatch(/without writing a summary/);
+  });
+
+  it("trims the model's own text rather than passing it through raw", async () => {
+    const r = await runAgentLoop({
+      model: textModel("  Done.  "),
+      instructions: "go",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+    });
+    expect(r.text).toBe("Done.");
+  });
+
+  // The audit trail for a run that DIES mid-loop: `generateText` rejects and
+  // its result object — every tool the run got through — goes with it.
+  it("reports progress per step, so a caller can audit a run that later throws", async () => {
+    const progress: { steps: number; toolsUsed: string[] }[] = [];
+    let step = 0;
+    const throwsAtStepThree = new MockLanguageModelV4({
+      doGenerate: async () => {
+        step++;
+        if (step === 3) throw new Error("provider 503");
+        return {
+          content: [
+            {
+              type: "tool-call",
+              toolCallId: `c${step}`,
+              toolName: "list_items",
+              input: JSON.stringify({ boardId: "b-1" }),
+            },
+          ],
+          finishReason: { unified: "tool-calls", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      },
+    });
+
+    await expect(
+      runAgentLoop({
+        model: throwsAtStepThree,
+        instructions: "go",
+        tools,
+        gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+        maxOutputTokens: null,
+        onStep: (p) => progress.push(p),
+      }),
+    ).rejects.toThrow(/provider 503/);
+
+    // Two steps completed before the throw, and the caller knows it.
+    expect(progress.at(-1)).toEqual({ steps: 2, toolsUsed: ["list_items"] });
   });
 
   // `tools_used` is an audit column on `user_agent_runs`. A DENIED call is a
@@ -350,6 +466,94 @@ describe("buildAgentRuntime", () => {
     expect(offered).toContain("create_file");
     // Every tool converted — no silent drop, no warning-only omission.
     expect(offered.sort()).toEqual(Object.keys(assembled).sort());
+  });
+});
+
+// ── Anthropic prompt caching ─────────────────────────────────────────────
+// The prefix — the tool definitions plus the system prompt, ~6–9k tokens — is
+// re-sent on every one of up to twelve steps. Anthropic caching is OPT-IN, so
+// with no breakpoint there is no caching at all, which is what this loop
+// shipped with. Verified against the REAL @ai-sdk/anthropic provider over a
+// fake transport rather than by inspecting our own arguments: the question is
+// whether `cache_control` reaches the wire, and only the request body answers
+// it.
+describe("prompt caching", () => {
+  function anthropicOverFakeFetch(bodies: unknown[]) {
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(
+        JSON.stringify({
+          id: "msg_1",
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-5-20260101",
+          content: [{ type: "text", text: "Done." }],
+          stop_reason: "end_turn",
+          stop_sequence: null,
+          usage: { input_tokens: 10, output_tokens: 5 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as unknown as typeof globalThis.fetch;
+    return createAnthropic({ apiKey: "k", fetch: fetchImpl })(
+      "claude-sonnet-5-20260101",
+    );
+  }
+
+  it("emits a cache_control breakpoint on the system block", async () => {
+    const bodies: unknown[] = [];
+    const r = await runAgentLoop({
+      model: anthropicOverFakeFetch(bodies),
+      instructions: "Be concise.",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+    });
+
+    expect(r.text).toBe("Done.");
+    expect(bodies).toHaveLength(1);
+    const body = bodies[0] as {
+      system?: { type: string; text: string; cache_control?: unknown }[];
+      tools?: { name: string }[];
+    };
+    // The breakpoint is on the system block, which in Anthropic's request
+    // ordering (tools → system → messages) caches the TOOL DEFINITIONS too —
+    // and those are the bulk of the prefix.
+    expect(body.system?.[0]).toMatchObject({
+      type: "text",
+      cache_control: { type: "ephemeral" },
+    });
+    expect(body.system?.[0]?.text).toContain("scheduled work agent");
+    expect(body.system?.[0]?.text).toContain("Be concise.");
+    expect(body.tools?.length).toBeGreaterThan(0);
+  });
+
+  // A provider that does not own the `anthropic` namespace must ignore it, not
+  // choke on it or spread it into the request body.
+  it("is inert on a provider that does not own the namespace", async () => {
+    const seen: unknown[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        seen.push(prompt);
+        return {
+          content: [{ type: "text", text: "Done." }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      },
+    });
+    const r = await runAgentLoop({
+      model,
+      instructions: "go",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+    });
+    expect(r.text).toBe("Done.");
+    // The system prompt still arrives — a caching option must never cost the
+    // instructions.
+    expect(JSON.stringify(seen)).toContain("scheduled work agent");
   });
 });
 

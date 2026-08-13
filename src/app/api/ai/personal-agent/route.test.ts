@@ -272,6 +272,33 @@ function writeThenReportModel(): LanguageModel {
   });
 }
 
+/** Step 1 calls `create_item`; step 2 dies. The interesting half is what
+ *  survives the throw — the proposal (or the executed write) from step 1. */
+function writeThenThrowModel(): LanguageModel {
+  let step = 0;
+  return new MockLanguageModelV4({
+    doGenerate: async () => {
+      step++;
+      // A plain Error is not `isRetryable`, so the SDK rejects immediately
+      // rather than backing off — see retryWithExponentialBackoff.
+      if (step > 1) throw new Error("provider 503");
+      return {
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "call-1",
+            toolName: "create_item",
+            input: JSON.stringify({ groupId: GROUP, name: "Draft" }),
+          },
+        ],
+        finishReason: { unified: "tool-calls", raw: undefined },
+        usage: USAGE,
+        warnings: [],
+      };
+    },
+  });
+}
+
 // runAi just runs the callback by default with an Anthropic adapter (metering
 // is exercised in the gateway's own test). A vi.fn so individual tests can
 // override it — e.g. to simulate the per_user "no key on file" path throwing
@@ -371,7 +398,10 @@ beforeEach(() => {
   forceThreadInsertError = null;
   ceiling = [...AGENT_CAPABILITIES];
   readOrgAiSettings.mockClear();
-  insertProposals.mockClear();
+  // mockReset, not mockClear: several tests queue a one-shot rejection, and a
+  // leftover one would fail an unrelated test further down the file.
+  insertProposals.mockReset();
+  insertProposals.mockResolvedValue(undefined);
   proposalRows = [];
   sendBriefingEmail.mockReset();
   sendBriefingEmail.mockResolvedValue({ emailed: true });
@@ -924,6 +954,107 @@ describe("POST /api/ai/personal-agent", () => {
       status: "error",
       error: "bridge boom",
     });
+  });
+
+  // ── a run that DIES mid-loop still tells the truth ─────────────────────
+  // The model was already told "Recorded for your approval." and may have said
+  // so to the owner. Dropping the proposal because a LATER step threw breaks a
+  // promise the model already made, and the text that made it is gone too.
+  it("still queues proposals when the loop throws after a denial", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent()); // capabilities: []
+    nextModel = writeThenThrowModel;
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(500);
+    expect(insertProposals).toHaveBeenCalledOnce();
+    expect(proposalRows).toHaveLength(1);
+    expect(proposalRows[0]).toMatchObject({
+      toolName: "create_item",
+      toolCallId: "call-1",
+      capability: "board.write",
+      runId: "run-1",
+    });
+    // Still a failed run — the proposal survives, the run does not pretend.
+    expect(runUpdates[0]!.patch).toMatchObject({ status: "error" });
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // "What did my agent do to my boards" is the question that matters most on
+  // the run that failed. It used to record `{status, error}` and nothing else.
+  it("records the PARTIAL audit trail when the loop throws after executing a write", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      capabilities: ["board.write"],
+    });
+    nextModel = writeThenThrowModel;
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(500);
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "error",
+      error: expect.stringContaining("provider 503"),
+      // The granted write really executed at step 1, before the throw.
+      steps: 1,
+      tools_used: ["create_item"],
+      grants: ["board.write"],
+    });
+    // No report exists, and inventing one would be worse than an empty column.
+    expect(runUpdates[0]!.patch.output).toBeUndefined();
+  });
+
+  it("records zero steps, not silence, when the run dies before the loop starts", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    getAgentOwnerClient.mockRejectedValueOnce(new Error("bridge boom"));
+
+    await POST(post(slot));
+
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "error",
+      steps: 0,
+      tools_used: [],
+      grants: [],
+    });
+  });
+
+  // The owner's ruling: a FAILING insert fails the whole run loudly. The catch
+  // must not then retry it — a second attempt cannot succeed and would replace
+  // the real cause of death with a bookkeeping error.
+  it("fails the run loudly when the proposal insert itself fails, and does not retry it", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    nextModel = writeThenReportModel;
+    insertProposals.mockRejectedValueOnce(new Error("insertProposals: boom"));
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(500);
+    expect(insertProposals).toHaveBeenCalledOnce(); // not retried
+    expect(runUpdates[0]!.patch).toMatchObject({
+      status: "error",
+      error: expect.stringContaining("insertProposals"),
+    });
+    expect(sendBriefingEmail).not.toHaveBeenCalled();
+  });
+
+  // Already on the failure path: a second failure must be logged, never
+  // thrown, or it replaces the real cause of the run's death.
+  it("logs rather than throws when the error-path proposal write also fails", async () => {
+    getUserAgentById.mockResolvedValue(enabledAgent());
+    nextModel = writeThenThrowModel;
+    insertProposals.mockRejectedValueOnce(new Error("db down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(post(slot));
+
+    expect(res.status).toBe(500);
+    // The ORIGINAL cause survives — not "db down".
+    expect(runUpdates[0]!.patch.error).toMatch(/provider 503/);
+    expect(errSpy).toHaveBeenCalledWith(
+      "[personal-agent] proposal persist on error path failed:",
+      expect.objectContaining({ cause: "db down" }),
+    );
+    errSpy.mockRestore();
   });
 
   // ── Finding 2: a finalize write failure must not crash the response ────

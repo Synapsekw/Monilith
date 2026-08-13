@@ -24,6 +24,7 @@ import {
 } from "@/lib/agents/run-loop";
 import { AGENT_ONLY_DESCRIPTORS } from "@/lib/agents/agent-only-tools";
 import type { ProposedCall } from "@/lib/agents/grant-gate";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 import { insertProposals } from "@/lib/agents/proposals-db";
 import { sendBriefingEmail } from "@/lib/agents/send";
 import { writeBriefingThread } from "@/lib/agents/briefing-thread";
@@ -252,6 +253,55 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ status: "noop", reason: "already_ran" });
   }
 
+  // ── Hoisted above the try so the CATCH can see them ────────────────────
+  // A run that dies at step 5 still did whatever steps 1–4 did: granted writes
+  // that really landed on the owner's boards, and denied calls the model was
+  // already told were "Recorded for your approval." All of that used to be
+  // discarded with the rejected promise, leaving `user_agent_runs` unable to
+  // answer "what did my agent do to my boards" for the one run where the
+  // question matters most.
+  const proposals: ProposedCall[] = [];
+  let effectiveGrants: AgentCapability[] = [];
+  // High-water marks, updated by `runAgentLoop`'s onStep after every completed
+  // step — the last values before a throw are what that run actually achieved.
+  let loopSteps = 0;
+  let loopToolsUsed: string[] = [];
+
+  /**
+   * Persist the run's proposals, at most once.
+   *
+   * The flag is set BEFORE the await on purpose. The owner's ruling is that a
+   * FAILING insert fails the whole run loudly (it throws, the outer catch
+   * records "error", no email) — so a retry from that catch would be pointless
+   * and would mask the original error. What the flag does NOT cover, and what
+   * this function exists for, is never REACHING the insert: a provider 5xx or
+   * timeout mid-loop used to drop every proposal on the floor while the model
+   * had already told the owner they were recorded.
+   */
+  let proposalsPersisted = false;
+  const persistProposals = async (): Promise<void> => {
+    if (proposalsPersisted) return;
+    proposalsPersisted = true;
+    await insertProposals(
+      svc,
+      proposals.map((p) => ({
+        userAgentId: agent.id,
+        runId: claim.runId,
+        orgId: agent.org_id,
+        ownerId: agent.owner_id,
+        capability: p.capability,
+        toolName: p.toolName,
+        toolCallId: p.toolCallId,
+        input: p.input,
+        // SERVER-derived, never model text. Task 9 replaces this with
+        // `summariseProposal(toolName, input)`, which renders a sentence per
+        // tool; until then this is that function's own documented fallback for
+        // an unknown tool, so the approval card's copy never regresses.
+        summary: `Run ${p.toolName}.`,
+      })),
+    );
+  };
+
   try {
     // 5. Entitlement + per-user caps BEFORE any token spend.
     try {
@@ -283,15 +333,9 @@ export async function POST(req: Request): Promise<Response> {
       svc,
       agent.org_id,
     );
-    const effectiveGrants = agent.capabilities.filter((c) =>
+    effectiveGrants = agent.capabilities.filter((c) =>
       agentCapabilityCeiling.includes(c),
     );
-
-    // Denied-but-recordable calls, collected as the loop runs. The gate hands
-    // them over one at a time and the run CONTINUES — an unattended 07:00 job
-    // must never suspend on a human who is asleep — so they are persisted
-    // after the loop, together, as proposals the owner decides later.
-    const proposals: ProposedCall[] = [];
 
     // 7. Run the bounded tool loop (metered). Two states are CONFIGURATION
     //    states, not faults, and are caught separately from the generic error
@@ -349,6 +393,10 @@ export async function POST(req: Request): Promise<Response> {
             extra: AGENT_ONLY_DESCRIPTORS,
             granted: effectiveGrants,
             ceiling: agentCapabilityCeiling,
+            // Collected, not written through per call: `insertProposals` is
+            // one bounded insert for the whole run, and the run is the unit
+            // that either produced these or died trying. The error path
+            // persists them too — see `persistProposals`.
             onPropose: (call) => proposals.push(call),
           });
 
@@ -370,6 +418,12 @@ export async function POST(req: Request): Promise<Response> {
             // emails a half-sentence. The seam stays for when the catalog's
             // per-model `max_output_tokens` is threaded through.
             maxOutputTokens: null,
+            // The audit trail for a run that dies mid-loop. Without this, a
+            // throw at step 5 discards everything steps 1–4 did.
+            onStep: ({ steps, toolsUsed }) => {
+              loopSteps = steps;
+              loopToolsUsed = toolsUsed;
+            },
           });
           return { result: r, usage: r.usage };
         },
@@ -403,25 +457,10 @@ export async function POST(req: Request): Promise<Response> {
     //    "N actions await your approval" line can never name rows that do not
     //    exist yet. `insertProposals` stamps `status` and `expires_at`
     //    (now + PROPOSAL_TTL_DAYS) itself — no caller can queue a proposal
-    //    that is born approved or born immortal.
-    await insertProposals(
-      svc,
-      proposals.map((p) => ({
-        userAgentId: agent.id,
-        runId: claim.runId,
-        orgId: agent.org_id,
-        ownerId: agent.owner_id,
-        capability: p.capability,
-        toolName: p.toolName,
-        toolCallId: p.toolCallId,
-        input: p.input,
-        // SERVER-derived, never model text. Task 9 replaces this with
-        // `summariseProposal(toolName, input)`, which renders a sentence per
-        // tool; until then this is that function's own documented fallback for
-        // an unknown tool, so the approval card's copy never regresses.
-        summary: `Run ${p.toolName}.`,
-      })),
-    );
+    //    that is born approved or born immortal. A failure here throws, by
+    //    design: it lands in the catch below as a loud "error" run rather than
+    //    an email promising approvals that were never queued.
+    await persistProposals();
 
     // Thread BEFORE email, so the email can link to it. Never gates the run: a
     // failed write returns null and the email simply omits the link.
@@ -461,7 +500,38 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ status: "ran" });
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown";
-    await safeFinalize(svc, key, { status: "error", error: message });
+
+    // The model was told "Recorded for your approval." before this run died,
+    // and may have said so to the owner in text that is now lost. Queueing the
+    // proposals anyway keeps that promise: the owner finds them under the
+    // failed run and can still approve them. BEST EFFORT here and only here —
+    // we are already on the failure path, so a second failure must be logged
+    // rather than thrown, or it would replace the real cause of the run's
+    // death with a bookkeeping error. (No-op when the success path already
+    // persisted them, including when THAT insert is what threw.)
+    try {
+      await persistProposals();
+    } catch (pe) {
+      console.error("[personal-agent] proposal persist on error path failed:", {
+        agentId: key.user_agent_id,
+        runId: claim.runId,
+        proposals: proposals.length,
+        cause: pe instanceof Error ? pe.message : String(pe),
+      });
+    }
+
+    // The partial audit trail. A run that wrote to three boards and then threw
+    // must not record silence — `grants` says what it was permitted to do,
+    // `steps`/`tools_used` what it got through before it died. `output` is
+    // deliberately absent: there is no report, and inventing one would be
+    // worse than the empty column.
+    await safeFinalize(svc, key, {
+      status: "error",
+      error: message,
+      grants: effectiveGrants,
+      steps: loopSteps,
+      tools_used: loopToolsUsed,
+    });
     return NextResponse.json({ error: "agent run failed" }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { LanguageModel } from "ai";
 import type { AdapterKind } from "@/lib/ai/providers/provider-rows";
+import { PROVIDER_NAME } from "@/lib/ai/providers/openai-compatible";
 
 /**
  * A `LanguageModel` instance for one resolved provider + model, keyed by WIRE
@@ -47,11 +48,15 @@ export function languageModelFor(args: {
             "from its ai_providers row",
         );
       // The name decides the `providerOptions` namespace the SDK reads
-      // (`config.provider.split(".")[0]`). Kept identical to the adapter's so
-      // an option set for one path is not silently ignored on the other.
-      return createOpenAICompatible({ name: "byo", baseURL: baseUrl, apiKey })(
-        model,
-      );
+      // (`config.provider.split(".")[0]`). IMPORTED from the adapter rather
+      // than restated, so an option set for one path can never be silently
+      // ignored on the other — the mismatch does not error, it is spread into
+      // the request body and dropped.
+      return createOpenAICompatible({
+        name: PROVIDER_NAME,
+        baseURL: baseUrl,
+        apiKey,
+      })(model);
     }
   }
 }

@@ -135,6 +135,34 @@ export function buildAgentRuntime(args: {
 }
 
 /**
+ * What the run reports when the model produced no closing text at all.
+ *
+ * `GenerateTextResult.text` is the FINAL STEP's text, so a run that spends its
+ * last step calling tools — exactly the runaway case AGENT_MAX_STEPS exists to
+ * stop — ends with `text === ""`. That empty string used to flow straight into
+ * the email body, the thread's first assistant message, and
+ * `user_agent_runs.output`, so the one run that most needs explaining explained
+ * nothing anywhere. The `summariseBriefing` this loop replaced had
+ * `fallbackSummary()` for precisely this reason; this is its replacement.
+ *
+ * SERVER-derived, from the loop's own accounting — never model text, and never
+ * a cheerful placeholder that hides a truncated run.
+ */
+export function fallbackReport(args: {
+  toolsUsed: string[];
+  hitStepCap: boolean;
+}): string {
+  const used =
+    args.toolsUsed.length > 0
+      ? `It used: ${args.toolsUsed.join(", ")}.`
+      : "It completed no tool calls.";
+  return args.hitStepCap
+    ? `This run stopped at its ${AGENT_MAX_STEPS}-step limit before writing a ` +
+        `summary. ${used}`
+    : `This run finished without writing a summary. ${used}`;
+}
+
+/**
  * ONE bounded tool loop, metered.
  *
  * `gate` is passed straight into `toolApproval`: denials come back as tool
@@ -147,32 +175,80 @@ export async function runAgentLoop(args: {
   tools: ToolSet;
   gate: GrantGate;
   maxOutputTokens: number | null;
+  /**
+   * Progress reported after EVERY completed step.
+   *
+   * The whole point is the failure path: if step 5 throws, `generateText`
+   * rejects and everything steps 1–4 achieved is lost with the result object —
+   * including granted writes that really landed on the owner's boards. A caller
+   * that records this can still write an honest audit row for a run that died
+   * halfway. Never called after the throw; the last call before it is the high
+   * water mark.
+   */
+  onStep?: (progress: { steps: number; toolsUsed: string[] }) => void;
 }): Promise<{
   text: string;
   usage: AiUsageTokens;
   steps: number;
   toolsUsed: string[];
 }> {
+  // toolRESULTS, not toolCalls: a denied call is a call the model MADE but
+  // never executed, and `user_agent_runs.tools_used` is an audit of what the
+  // agent actually did. A denied write listed here would read as a write that
+  // happened.
+  const used = new Set<string>();
+  let steps = 0;
+
   const result = await generateText({
     model: args.model,
-    system: `${PREAMBLE}\n\nYOUR OWNER'S INSTRUCTIONS:\n${args.instructions}`,
-    prompt: "Do your work for today. Report what you did in a short summary.",
+    // The system prompt is sent as an explicit system MESSAGE rather than the
+    // `system` string because `cache_control` can only be attached through a
+    // message's `providerOptions` — and this prefix (the tool definitions plus
+    // this text, ~6–9k tokens) is re-sent on EVERY one of up to twelve steps.
+    // Anthropic caching is opt-in, so without a breakpoint there is none at
+    // all; other providers cache automatically and ignore a namespace they do
+    // not own. Mirrors `providers/anthropic.ts`, deliberately — the two are the
+    // only places in the app that set a breakpoint, and they must not drift.
+    allowSystemInMessages: true,
+    messages: [
+      {
+        role: "system",
+        content: `${PREAMBLE}\n\nYOUR OWNER'S INSTRUCTIONS:\n${args.instructions}`,
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+      },
+      {
+        role: "user",
+        content:
+          "Do your work for today. Report what you did in a short summary.",
+      },
+    ],
     tools: args.tools,
     toolApproval: args.gate,
     stopWhen: stepCountIs(AGENT_MAX_STEPS),
     ...(args.maxOutputTokens ? { maxOutputTokens: args.maxOutputTokens } : {}),
+    onStepFinish: (step) => {
+      steps++;
+      for (const r of step.toolResults) used.add(r.toolName);
+      args.onStep?.({ steps, toolsUsed: [...used] });
+    },
   });
 
+  const toolsUsed = [...used];
+  const text = result.text.trim();
   return {
-    text: result.text,
+    // NEVER the raw `result.text`: see fallbackReport. An empty body would be
+    // emailed, threaded and stored verbatim.
+    text:
+      text.length > 0
+        ? text
+        : fallbackReport({
+            toolsUsed,
+            hitStepCap: result.steps.length >= AGENT_MAX_STEPS,
+          }),
     // MUST go through toAiUsage — see its doc comment. The SDK's inputTokens
     // is cache-INCLUSIVE and computeCostUsd prices cache separately.
     usage: toAiUsage(result.totalUsage),
     steps: result.steps.length,
-    // toolRESULTS, not toolCalls: a denied call is a call the model MADE but
-    // never executed, and `user_agent_runs.tools_used` is an audit of what the
-    // agent actually did. A denied write listed here would read as a write
-    // that happened.
-    toolsUsed: [...new Set(result.toolResults.map((r) => r.toolName))],
+    toolsUsed,
   };
 }
