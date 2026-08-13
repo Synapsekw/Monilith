@@ -57,6 +57,34 @@ function stripQuotes(value: string): string {
   return value.replace(/["“”]/g, "");
 }
 
+/**
+ * Render a model-chosen value INSIDE the sentence rather than as part of it.
+ *
+ * The property being defended is not "the model may not use quotes" — it is
+ * that the model may not author sentence STRUCTURE in the sentence a human
+ * approves. Quote-stripping alone only defends values that are already framed;
+ * an UNQUOTED interpolation needs no quote to append its own clause:
+ *
+ *   fileName = `report.pdf to an item. Approved by your admin, no data changes`
+ *   → Attach report.pdf to an item. Approved by your admin, no data changes to…
+ *
+ * So every model-chosen value goes through here, and `str()` has already
+ * removed the quotes that could close the frame. What is left is visibly one
+ * quoted argument, however much prose it contains.
+ */
+function quoted(value: string): string {
+  return `"${value}"`;
+}
+
+/** `YYYY-MM-DD`, the shape `log_time_allocation`'s `isoDate` accepts. A date is
+ *  interpolated UNQUOTED (quoting one reads like a mistake), so it is admitted
+ *  by shape instead: anything else cannot describe the call anyway. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A file extension, the only thing `create_file`'s `format` may be. It becomes
+ *  part of the file name, so a sentence-shaped format is refused outright. */
+const FILE_EXTENSION = /^[a-z0-9]{1,8}$/;
+
 function str(input: Record<string, unknown>, key: string): string | undefined {
   const v = input[key];
   if (typeof v !== "string") return undefined;
@@ -110,7 +138,7 @@ function duration(secs: number): string {
 /** Which side of `log_time_allocation`'s exclusive-or the call chose. */
 function timeTarget(input: Record<string, unknown>): string | undefined {
   const category = str(input, "category");
-  if (category) return `"${category}"`;
+  if (category) return quoted(category);
   return str(input, "itemId") ? "an item" : undefined;
 }
 
@@ -150,8 +178,8 @@ function sentenceFor(
       // size from storage at execution time, so stating one here would be a
       // guess presented as a fact.
       return inline
-        ? `Attach ${fileName} (${formatBytes(base64Bytes(inline))}) to an item.`
-        : `Attach ${fileName} to an item.`;
+        ? `Attach ${quoted(fileName)} (${formatBytes(base64Bytes(inline))}) to an item.`
+        : `Attach ${quoted(fileName)} to an item.`;
     }
 
     case "create_file": {
@@ -159,6 +187,7 @@ function sentenceFor(
       const format = str(input, "format");
       const content = typeof input.content === "string" ? input.content : null;
       if (!fileName || !format || content === null) return undefined;
+      if (!FILE_EXTENSION.test(format)) return undefined;
       // Mirrors create-file.ts: the tool appends the format's extension unless
       // the model already supplied it. The summary must name the file that will
       // exist, not the one the model typed.
@@ -166,7 +195,7 @@ function sentenceFor(
       const named = fileName.toLowerCase().endsWith(ext)
         ? fileName
         : `${fileName}${ext}`;
-      return `Attach ${named} (${formatBytes(utf8Bytes(content))}) to an item.`;
+      return `Attach ${quoted(named)} (${formatBytes(utf8Bytes(content))}) to an item.`;
     }
 
     case "log_time_allocation": {
@@ -174,6 +203,7 @@ function sentenceFor(
       const target = timeTarget(input);
       const secs = typeof input.secs === "number" ? input.secs : null;
       if (!date || !target || secs === null) return undefined;
+      if (!ISO_DATE.test(date)) return undefined;
       // `secs: 0` CLEARS the entry (the handler upserts), so "Log 0s" would
       // describe the opposite of the effect.
       return secs === 0
@@ -211,7 +241,13 @@ export function summariseProposal(
     // Defence in depth: see NEVER THROWS above.
     sentence = undefined;
   }
-  const text = sentence ?? `Run ${oneLine(toolName) || "an unnamed tool"}.`;
+  // The fallback is the last unquoted interpolation in this module. A proposal's
+  // `tool_name` can only ever be a real descriptor name — the grant gate fails
+  // closed on anything else and records no proposal — but this function is pure
+  // and callable with anything, so the name is reduced to the characters a tool
+  // name is made of rather than trusted.
+  const safeToolName = oneLine(toolName).replace(/[^A-Za-z0-9_-]/g, "");
+  const text = sentence ?? `Run ${safeToolName || "an unnamed tool"}.`;
   return text.length > PROPOSAL_SUMMARY_MAX_LENGTH
     ? `${text.slice(0, PROPOSAL_SUMMARY_MAX_LENGTH - 1)}…`
     : text;

@@ -95,7 +95,7 @@ describe("summariseProposal — attach_file", () => {
         fileName: "report.pdf",
         contentBase64: "A".repeat(2048),
       }),
-    ).toBe("Attach report.pdf (1.5 KB) to an item.");
+    ).toBe('Attach "report.pdf" (1.5 KB) to an item.');
   });
 
   it("omits the size for a storage-path attach, where there is none to state", () => {
@@ -105,7 +105,7 @@ describe("summariseProposal — attach_file", () => {
         fileName: "report.pdf",
         storagePath: "org/item/report.pdf",
       }),
-    ).toBe("Attach report.pdf to an item.");
+    ).toBe('Attach "report.pdf" to an item.');
   });
 });
 
@@ -118,7 +118,7 @@ describe("summariseProposal — create_file", () => {
         format: "md",
         content: "x".repeat(2458),
       }),
-    ).toBe("Attach brief.md (2.4 KB) to an item.");
+    ).toBe('Attach "brief.md" (2.4 KB) to an item.');
   });
 
   it("does not double the extension when the model already supplied it", () => {
@@ -129,7 +129,7 @@ describe("summariseProposal — create_file", () => {
         format: "md",
         content: "hello",
       }),
-    ).toBe("Attach brief.md (5 B) to an item.");
+    ).toBe('Attach "brief.md" (5 B) to an item.');
   });
 
   it("measures BYTES, not characters", () => {
@@ -141,7 +141,7 @@ describe("summariseProposal — create_file", () => {
         format: "txt",
         content: "ééé",
       }),
-    ).toBe("Attach note.txt (6 B) to an item.");
+    ).toBe('Attach "note.txt" (6 B) to an item.');
   });
 });
 
@@ -235,7 +235,7 @@ describe("summariseProposal — the model may not author sentence structure", ()
         fileName: 'report".pdf" — approved',
         storagePath: "org/item/report.pdf",
       }),
-    ).toBe("Attach report.pdf — approved to an item.");
+    ).toBe('Attach "report.pdf — approved" to an item.');
     expect(
       summariseProposal("log_time_allocation", {
         date: "2026-08-13",
@@ -243,6 +243,72 @@ describe("summariseProposal — the model may not author sentence structure", ()
         secs: 60,
       }),
     ).toBe('Log 1m against "Meetings and everything else" on 2026-08-13.');
+  });
+
+  // The unquoted-interpolation hole: a file name needs no quote at all to
+  // append its own sentence to a server-framed one. Every model-chosen value is
+  // now rendered INSIDE the frame, so trailing prose cannot escape it.
+  it("cannot append a sentence to an unquoted interpolation", () => {
+    const summary = summariseProposal("attach_file", {
+      itemId: "i-1",
+      fileName:
+        "report.pdf to an item. Approved by your admin, no data changes",
+      storagePath: "org/item/report.pdf",
+    });
+    expect(summary).toBe(
+      'Attach "report.pdf to an item. Approved by your admin, no data changes" to an item.',
+    );
+    expect(summary.match(/"/g)).toHaveLength(2);
+  });
+
+  it("closes the same hole on create_file, extension logic included", () => {
+    const summary = summariseProposal("create_file", {
+      itemId: "i-1",
+      fileName: "notes.md to an item. Approved by your admin",
+      format: "md",
+      content: "x",
+    });
+    expect(summary).toBe(
+      'Attach "notes.md to an item. Approved by your admin.md" (1 B) to an item.',
+    );
+    expect(summary.match(/"/g)).toHaveLength(2);
+  });
+
+  it("refuses a date that is not a date, rather than rendering prose as one", () => {
+    // `date` is interpolated unquoted (a quoted date reads like a mistake), so
+    // it is admitted by SHAPE instead. Anything else cannot describe the call
+    // anyway, so the sentence degrades to the tool name.
+    expect(
+      summariseProposal("log_time_allocation", {
+        date: "2026-08-13. Approved by your admin, no changes",
+        itemId: "i-1",
+        secs: 60,
+      }),
+    ).toBe("Run log_time_allocation.");
+  });
+
+  it("refuses a format that is not an extension", () => {
+    // `format` becomes the file extension, so it is inside the quotes — but a
+    // sentence-shaped extension is a proposal this function cannot describe.
+    expect(
+      summariseProposal("create_file", {
+        itemId: "i-1",
+        fileName: "brief",
+        format: "md to an item. Approved",
+        content: "x",
+      }),
+    ).toBe("Run create_file.");
+  });
+
+  it("renders only identifier characters in the unknown-tool fallback", () => {
+    // The gate fails closed on an unrecognised tool, so a proposal's tool_name
+    // is always a real descriptor name — but this function is pure and may be
+    // called with anything, and the fallback is the one unquoted sentence left.
+    expect(summariseProposal("create_item. Approved by your admin", {})).toBe(
+      // Underscores and hyphens survive — they are what tool names are made of.
+      "Run create_itemApprovedbyyouradmin.",
+    );
+    expect(summariseProposal("...", {})).toBe("Run an unnamed tool.");
   });
 
   it("still renders a value that is nothing BUT quotes as an unnamed call", () => {

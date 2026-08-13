@@ -330,21 +330,25 @@ async function settle(
     console.error(`[agents] proposal outcome write failed for ${id}`, e);
     written = false;
   }
-  // The tool ALREADY ran. There is nothing to undo, so this reports the outcome
-  // either way; a lost write leaves the claim's own "did not finish" placeholder
-  // on the row, which is the honest reading of an outcome nobody recorded.
+  // The tool ALREADY ran. There is nothing to undo, so this reports the real
+  // outcome either way, and a lost write leaves the claim's own "did not
+  // finish" placeholder on the row — the honest reading of an outcome nobody
+  // recorded.
+  //
+  // KNOWN, ACCEPTED DIVERGENCE: in that one case the card renders "Approved"
+  // (the truth — the call executed) while the ROW still says `failed` until
+  // someone reloads. This is not a bug to fix by returning a failure: telling
+  // the owner their approval failed when the item was created would send them
+  // to create it a second time. The log line above is the trace that explains a
+  // row whose status and effect disagree.
   if (!written) {
     console.error(`[agents] proposal ${id} executed but its outcome was lost`);
   }
 
   revalidatePath(SETTINGS_PATH);
-  return status === "approved"
-    ? { ok: true, data: { status } }
-    : fail(
-        typeof (result as { error?: unknown })?.error === "string"
-          ? ((result as { error: string }).error ?? EXECUTION_FALLBACK)
-          : EXECUTION_FALLBACK,
-      );
+  if (status === "approved") return { ok: true, data: { status } };
+  const reason = (result as { error?: unknown })?.error;
+  return fail(typeof reason === "string" ? reason : EXECUTION_FALLBACK);
 }
 
 /**
