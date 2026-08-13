@@ -47,13 +47,24 @@ function escapeHtml(s: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** The one sentence that tells an owner a run is waiting on them. Shared by
- *  both renderers so the HTML and text alternatives cannot drift. */
+/**
+ * The one sentence that tells an owner a run is waiting on them, in two halves
+ * because the HTML emphasises the first and the text alternative cannot.
+ *
+ * BOTH renderers build from these — the HTML used to inline the same words and
+ * the shared helper's "cannot drift" claim was simply false, which is worse
+ * than no helper at all: it invites an edit here on the belief that both
+ * alternatives of the email will follow.
+ */
+export function approvalHeadline(count: number): string {
+  return `${count} actions await your approval.`;
+}
+
+export const APPROVAL_CTA = "Open the run in Settings → Agents to review them.";
+
+/** The plain-text form: both halves, one sentence. */
 export function approvalLine(count: number): string {
-  return (
-    `${count} actions await your approval. ` +
-    "Open the run in Settings → Agents to review them."
-  );
+  return `${approvalHeadline(count)} ${APPROVAL_CTA}`;
 }
 
 export function renderBriefingHtml(input: BriefingEmailInput): string {
@@ -69,7 +80,7 @@ export function renderBriefingHtml(input: BriefingEmailInput): string {
 
   const approval =
     proposalCount > 0
-      ? `\n  <p style="font-size:14px;color:#333;line-height:1.5;background:#f6f6fb;border-left:3px solid #5b6fd6;padding:10px 12px;margin:16px 0;"><strong>${proposalCount} actions await your approval.</strong> Open the run in Settings → Agents to review them.</p>`
+      ? `\n  <p style="font-size:14px;color:#333;line-height:1.5;background:#f6f6fb;border-left:3px solid #5b6fd6;padding:10px 12px;margin:16px 0;"><strong>${escapeHtml(approvalHeadline(proposalCount))}</strong> ${escapeHtml(APPROVAL_CTA)}</p>`
       : "";
 
   return `<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:640px;margin:0 auto;padding:24px;background:#fff;">

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { renderBriefingHtml, renderBriefingText } from "./briefing-render";
+import {
+  APPROVAL_CTA,
+  approvalHeadline,
+  approvalLine,
+  renderBriefingHtml,
+  renderBriefingText,
+} from "./briefing-render";
 
 const input = {
   agentName: "Morning Brief",
@@ -91,6 +97,19 @@ describe("renderBriefingText", () => {
     expect(text).toContain("One item is overdue.");
     expect(text).not.toContain("<td");
     expect(text).not.toContain("<p");
+  });
+
+  // Both renderers build from `approvalHeadline` + `APPROVAL_CTA` — the helper
+  // claimed the HTML and text alternatives could not drift while the HTML
+  // inlined its own copy of the words, which is worse than no helper: it
+  // invites an edit made in the belief that both halves will follow.
+  it("is built from the shared halves, in both alternatives", () => {
+    const html = renderBriefingHtml({ ...input, proposalCount: 3 });
+    expect(html).toContain(`<strong>${approvalHeadline(3)}</strong>`);
+    expect(html).toContain(APPROVAL_CTA);
+    expect(renderBriefingText({ ...input, proposalCount: 3 })).toContain(
+      approvalLine(3),
+    );
   });
 
   it("carries the SAME approval sentence as the HTML", () => {
