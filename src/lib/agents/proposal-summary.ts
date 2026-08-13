@@ -85,6 +85,70 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  *  part of the file name, so a sentence-shaped format is refused outright. */
 const FILE_EXTENSION = /^[a-z0-9]{1,8}$/;
 
+/**
+ * A discriminator token — `status_changed`, `call_webhook`, and the rest of the
+ * automation trigger/action vocabulary.
+ *
+ * Interpolated UNQUOTED, so it is admitted by SHAPE, exactly like `ISO_DATE`:
+ * a snake_case identifier of at most 32 characters cannot append a clause or
+ * close a frame. Deliberately NOT checked against an imported allow-list —
+ * this module is pure and dependency-free by design, and a token outside the
+ * schema's vocabulary could not have validated anyway. What matters here is
+ * that whatever the input really carries is what the owner reads.
+ */
+const TYPE_TOKEN = /^[a-z][a-z0-9_]{0,31}$/;
+
+/** How many action types the sentence names before it summarises the rest. The
+ *  actions array has a `.min(1)` and no maximum, so a 200-action rule would
+ *  otherwise be silently cut by the 500-character clamp — which is the exact
+ *  "the card conceals what it does" failure this branch exists to fix. */
+const MAX_LISTED_ACTIONS = 6;
+
+function typeToken(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const type = (value as { type?: unknown }).type;
+  if (typeof type !== "string") return undefined;
+  return TYPE_TOKEN.test(type) ? type : undefined;
+}
+
+/** The action types a rule would run, in order, or `undefined` when the input
+ *  does not carry a describable action list at all. */
+function actionTypes(value: unknown): string[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const types = value.map(typeToken);
+  // ALL or nothing: an unreadable entry means the sentence cannot faithfully
+  // say what the rule does, and listing the readable ones would understate it.
+  return types.every((t): t is string => t !== undefined) ? types : undefined;
+}
+
+function actionsPhrase(types: string[]): string {
+  if (types.length <= MAX_LISTED_ACTIONS) return types.join(", ");
+  const shown = types.slice(0, MAX_LISTED_ACTIONS).join(", ");
+  return `${shown} and ${types.length - MAX_LISTED_ACTIONS} more`;
+}
+
+/**
+ * The egress destinations of any `call_webhook` action in the rule.
+ *
+ * The agent tool no longer offers `call_webhook` at all
+ * (`AGENT_FORBIDDEN_AUTOMATION_ACTIONS`), so this is unreachable from an agent
+ * run today. It is here because this function must never be the reason a
+ * webhook is invisible: a proposal row outlives the schema that produced it,
+ * and a stored row from before that narrowing — or from a future tool that
+ * re-admits the action — must still be DESCRIBED, never silently omitted.
+ * The url is model-chosen, so it is quoted like every other such value.
+ */
+function webhookTargets(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const urls: string[] = [];
+  for (const action of value) {
+    if (typeToken(action) !== "call_webhook") continue;
+    const url = str(action as Record<string, unknown>, "url");
+    urls.push(url ? quoted(url) : "an unnamed address");
+  }
+  return urls;
+}
+
 function str(input: Record<string, unknown>, key: string): string | undefined {
   const v = input[key];
   if (typeof v !== "string") return undefined;
@@ -211,11 +275,27 @@ function sentenceFor(
         : `Log ${duration(secs)} against ${target} on ${date}.`;
     }
 
+    // The one proposal whose effect OUTLIVES the approval: a rule fires for
+    // everyone on the board, on every matching change, from now on. A card that
+    // said only `Create the automation "X" on a board.` told the owner nothing
+    // about what they were signing off — which is the whole job of this module.
     case "create_automation": {
       const name = str(input, "name");
-      return name
-        ? `Create the automation "${name}" on a board.`
-        : "Create an automation on a board.";
+      const opening = name
+        ? `Create the automation ${quoted(name)} on a board`
+        : "Create an automation on a board";
+      const trigger = typeToken(input.trigger);
+      const actions = actionTypes(input.actions);
+      // Degrade to the shape-only sentence rather than describe a rule this
+      // function could not read. Naming a trigger it is guessing at would be
+      // worse than naming none.
+      if (!trigger || !actions) return `${opening}.`;
+      const egress = webhookTargets(input.actions);
+      const sends =
+        egress.length > 0
+          ? ` It sends board and item data to ${egress.join(", ")}.`
+          : "";
+      return `${opening}: on ${trigger}, run ${actionsPhrase(actions)}.${sends}`;
     }
 
     default:
