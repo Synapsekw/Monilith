@@ -3,6 +3,10 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PersonalAgentSettings } from "@/lib/agents/agent-config";
 import type { ModelOption } from "@/components/settings/ModelPicker";
+import {
+  AGENT_CAPABILITIES,
+  type AgentCapability,
+} from "@/lib/agents/capabilities";
 
 const createAgent = vi.fn();
 const updateAgent = vi.fn();
@@ -45,7 +49,19 @@ const OPTIONS: ModelOption[] = [
     tier: "cheap",
     supportsTools: true,
   },
+  // The one model in the fixture catalog that cannot run a tool loop — the
+  // fixture the tool-capability warning tests pin to.
+  {
+    provider: "moonshotai",
+    providerLabel: "Kimi (Moonshot AI)",
+    modelId: "kimi-k1-legacy",
+    label: "Kimi K1 (legacy)",
+    tier: "cheap",
+    supportsTools: false,
+  },
 ];
+
+const FULL_CEILING: AgentCapability[] = [...AGENT_CAPABILITIES];
 
 const PROVIDERS = [
   { id: "anthropic", label: "Anthropic (Claude)" },
@@ -76,6 +92,7 @@ function renderEditor(over: Partial<Parameters<typeof AgentEditor>[0]> = {}) {
       initial={initial}
       modelOptions={OPTIONS}
       providers={PROVIDERS}
+      capabilityCeiling={FULL_CEILING}
       onSaved={onSaved}
       onCancel={vi.fn()}
       {...over}
@@ -208,30 +225,32 @@ describe("AgentEditor · model pin", () => {
   });
 
   /**
-   * The pin beating the org default is exactly what makes it dangerous: the
-   * briefing loop runs only on Anthropic (`assertToolLoopCapable`), so pinning
-   * an agent to any other provider makes EVERY run finalize as `skipped` —
-   * with the owner's Settings → AI page looking perfectly correct. The picker
-   * offers those models (33 verified OpenAI models today) and, without this
-   * line, says nothing at the moment of the choice.
+   * The run loop is provider-agnostic (Task 7) — what actually determines
+   * whether a pinned agent can act is the selected model's OWN
+   * `supportsTools` flag, not which provider it belongs to. A model that
+   * can't call tools still runs, but degrades to writing a summary, so the
+   * warning has to name that consequence rather than "skipped".
    */
-  it("warns that a non-Anthropic pin makes every run skip", async () => {
-    renderEditor({
-      initial: { ...initial, provider: "moonshotai", modelId: "kimi-k2" },
-    });
-    const warning = screen.getByRole("status");
-    expect(warning).toHaveTextContent(/every run of this agent is skipped/i);
-    // Named from the provider ROW, never a hardcoded map — the registry is open.
-    expect(warning).toHaveTextContent(/Kimi \(Moonshot AI\)/);
-    expect(warning).toHaveTextContent(/Anthropic \(Claude\)/);
-  });
-
-  it("says nothing of the sort for an Anthropic pin", () => {
+  it("warns when the pinned model can't use tools", async () => {
     renderEditor({
       initial: {
         ...initial,
-        provider: "anthropic",
-        modelId: "claude-haiku-4.5",
+        provider: "moonshotai",
+        modelId: "kimi-k1-legacy",
+      },
+    });
+    const warning = screen.getByRole("status");
+    expect(warning).toHaveTextContent(
+      "This model can't use tools, so this agent can only write a summary. Pick a tool-capable model to let it act.",
+    );
+  });
+
+  it("says nothing of the sort for a tool-capable pin, Anthropic or otherwise", () => {
+    renderEditor({
+      initial: {
+        ...initial,
+        provider: "moonshotai",
+        modelId: "kimi-k2",
       },
     });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -239,7 +258,8 @@ describe("AgentEditor · model pin", () => {
 
   it("says nothing of the sort for an unpinned agent", () => {
     // Unpinned follows the org default, which the org's own settings page owns
-    // — warning here would flag a choice this owner has not made.
+    // — warning here would flag a choice this owner has not made, and this
+    // form has no way to know whether the org default supports tools.
     renderEditor();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
@@ -264,5 +284,109 @@ describe("AgentEditor · model pin", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "at most 3 agents",
     );
+  }, 30_000);
+});
+
+describe("AgentEditor · capabilities", () => {
+  it("renders the capability toggles the agent already has, and saves a change", async () => {
+    renderEditor({
+      initial: { ...initial, capabilities: ["board.write"] },
+    });
+
+    const boardToggle = screen.getByRole("switch", {
+      name: /create and update items/i,
+    });
+    expect(boardToggle).toBeChecked();
+
+    await userEvent.click(screen.getByRole("switch", { name: /log time/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await waitFor(() => expect(createAgent).toHaveBeenCalled());
+    expect(createAgent.mock.calls[0][0].capabilities).toEqual(
+      expect.arrayContaining(["board.write", "time.log"]),
+    );
+    expect(createAgent.mock.calls[0][0].capabilities).toHaveLength(2);
+  }, 30_000);
+
+  // Grants intersect the org's ceiling again at RUN time — this is only about
+  // not letting the owner set a grant that would be silently dropped.
+  it("disables a capability outside the org's capability ceiling", () => {
+    renderEditor({
+      capabilityCeiling: FULL_CEILING.filter((c) => c !== "automation.create"),
+    });
+    const automationToggle = screen.getByRole("switch", {
+      name: /create board automations/i,
+    });
+    expect(automationToggle).toBeDisabled();
+    expect(
+      screen.getByText("Disabled for this organization by an admin."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("AgentEditor · cadence", () => {
+  function cadenceField(): HTMLElement {
+    return screen.getByLabelText(/^runs$/i);
+  }
+
+  it("reveals neither a weekday nor a day-of-month select for daily", () => {
+    renderEditor({ initial: { ...initial, cadence: "daily" } });
+    expect(screen.queryByLabelText(/weekday/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/day of month/i)).not.toBeInTheDocument();
+  });
+
+  it("reveals neither a weekday nor a day-of-month select for weekdays", () => {
+    renderEditor({
+      initial: { ...initial, cadence: "weekdays" },
+    });
+    expect(screen.queryByLabelText(/weekday/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/day of month/i)).not.toBeInTheDocument();
+  });
+
+  it("reveals a weekday select for weekly, and no day-of-month select", () => {
+    renderEditor({
+      initial: { ...initial, cadence: "weekly", runOnWeekday: 2 },
+    });
+    expect(screen.getByLabelText(/weekday/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/day of month/i)).not.toBeInTheDocument();
+  });
+
+  it("reveals a day-of-month select for monthly, and no weekday select", () => {
+    renderEditor({
+      initial: { ...initial, cadence: "monthly", runOnDayOfMonth: 15 },
+    });
+    expect(screen.getByLabelText(/day of month/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/weekday/i)).not.toBeInTheDocument();
+  });
+
+  it("switches which select is revealed live as the cadence changes", async () => {
+    renderEditor({ initial: { ...initial, cadence: "daily" } });
+    expect(screen.queryByLabelText(/weekday/i)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(cadenceField(), "weekly");
+    expect(screen.getByLabelText(/weekday/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/day of month/i)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(cadenceField(), "monthly");
+    expect(screen.getByLabelText(/day of month/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/weekday/i)).not.toBeInTheDocument();
+  });
+
+  it("saves the cadence and day operand chosen through the controls", async () => {
+    const { onSaved } = renderEditor({
+      initial: { ...initial, cadence: "daily" },
+    });
+    await userEvent.selectOptions(cadenceField(), "weekly");
+    await userEvent.selectOptions(screen.getByLabelText(/weekday/i), "3");
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(createAgent.mock.calls[0][0]).toMatchObject({
+      cadence: "weekly",
+      runOnWeekday: 3,
+      runOnDayOfMonth: null,
+    });
   }, 30_000);
 });

@@ -13,6 +13,7 @@ import { AgentRoster, type RosterAgent } from "@/components/agents/AgentRoster";
 import { TemplateGallery } from "@/components/agents/TemplateGallery";
 import { AgentEditor, type AgentRecord } from "@/components/agents/AgentEditor";
 import type { ModelOption } from "@/components/settings/ModelPicker";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 
 type View = "roster" | "gallery" | "editor";
 
@@ -35,6 +36,7 @@ export function AgentsSection({
   maxAgents,
   modelOptions,
   providers,
+  capabilityCeiling,
 }: {
   agents: AgentRecord[];
   /** Most recent run per agent id, read once by the server component. Absent
@@ -54,6 +56,10 @@ export function AgentsSection({
   /** The enabled provider registry, so the picker can name the providers that
    *  have no models yet instead of hiding them. */
   providers: { id: string; label: string }[];
+  /** `OrgAiSettings.agentCapabilityCeiling`, read once by the server page and
+   *  threaded to the editor's capability toggles — same first-paint reasoning
+   *  as `modelOptions` above. */
+  capabilityCeiling: AgentCapability[];
 }) {
   const [agents, setAgents] = useState<AgentRecord[]>(initial);
   const [view, setView] = useState<View>("roster");
@@ -170,6 +176,7 @@ export function AgentsSection({
         initial={editorContext.initial}
         modelOptions={modelOptions}
         providers={providers}
+        capabilityCeiling={capabilityCeiling}
         onSaved={handleSaved}
         onCancel={handleEditorCancel}
         onDeleted={handleDeleted}

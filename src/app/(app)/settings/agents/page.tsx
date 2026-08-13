@@ -31,7 +31,9 @@ export const metadata = { title: "Agents · Settings" };
  *   2. `get_my_agent_last_runs()` — one `distinct on` over
  *      user_agent_runs_history_idx for every agent's most recent run, so the
  *      roster's status pills cost one query rather than one per agent;
- *   3. the org's AI settings, for the REAL per-user agent cap;
+ *   3. the org's AI settings, for the REAL per-user agent cap AND the
+ *      capability ceiling (`agentCapabilityCeiling`) the editor's toggles are
+ *      disabled against — one read backs both, never two;
  *   4. the model catalog for the editor's pin — `listEnabledProviders` plus one
  *      `listActiveModels` per enabled provider, each served by
  *      `ai_models_selectable_idx` (tens of rows apiece, never an unbounded
@@ -61,7 +63,7 @@ export default async function AgentsSettingsPage() {
   const user = await requireUser();
   const supabase = await createClient();
 
-  const [rosterResult, lastRuns, maxAgents, catalog] = await Promise.all([
+  const [rosterResult, lastRuns, orgAiSettings, catalog] = await Promise.all([
     supabase
       .from("user_agents")
       .select(
@@ -73,12 +75,15 @@ export default async function AgentsSettingsPage() {
     getMyAgentLastRuns(supabase).catch(
       (): Record<string, AgentRunLike> => ({}),
     ),
+    // One read backs both the per-user agent cap AND the capability ceiling
+    // the editor disables toggles against — the same degrade-open posture as
+    // before (an org whose settings can't be read falls back to the full
+    // shipped default, never a silently locked-down page).
     resolveActiveOrg()
       .then((org) =>
         org ? readOrgAiSettings(supabase, org.id) : DEFAULT_ORG_AI_SETTINGS,
       )
-      .then((s) => s.maxAgentsPerUser)
-      .catch(() => DEFAULT_ORG_AI_SETTINGS.maxAgentsPerUser),
+      .catch(() => DEFAULT_ORG_AI_SETTINGS),
     listEnabledProviders(supabase)
       .then(async (providers) => ({
         providers,
@@ -89,6 +94,8 @@ export default async function AgentsSettingsPage() {
         modelOptions: [],
       })),
   ]);
+  const maxAgents = orgAiSettings.maxAgentsPerUser;
+  const capabilityCeiling = orgAiSettings.agentCapabilityCeiling;
 
   const agents: AgentRecord[] = (rosterResult.data ?? []).map((a) => ({
     id: a.id,
@@ -125,6 +132,7 @@ export default async function AgentsSettingsPage() {
           maxAgents={maxAgents}
           modelOptions={catalog.modelOptions}
           providers={catalog.providers}
+          capabilityCeiling={capabilityCeiling}
         />
       </div>
     </SettingsSection>

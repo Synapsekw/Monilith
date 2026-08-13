@@ -4,9 +4,12 @@ import { useState, useTransition } from "react";
 import { ArrowLeft } from "lucide-react";
 import { createAgent, deleteAgent, updateAgent } from "@/lib/agents/actions";
 import {
+  AGENT_CADENCES,
   personalAgentSettingsSchema,
+  type AgentCadence,
   type PersonalAgentSettings,
 } from "@/lib/agents/agent-config";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +21,7 @@ import {
   type ModelOption,
   type ModelValue,
 } from "@/components/settings/ModelPicker";
-import { TOOL_LOOP_PROVIDER } from "@/lib/ai/tool-capability";
+import { CapabilityToggles } from "@/components/agents/CapabilityToggles";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -35,11 +38,37 @@ export type AgentRecord = PersonalAgentSettings & { id: string };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
+/** 0-6, Sunday-first — matches the `runOnWeekday` column (Postgres
+ *  `extract(dow …)`), so the option VALUE needs no translation on save. */
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+/** 1-28 — the day-of-month ceiling `agent-config.ts` documents: the largest
+ *  day present in every month, so no agent silently skips February. */
+const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, i) => i + 1);
+
+const CADENCE_LABELS: Record<AgentCadence, string> = {
+  daily: "Every day",
+  weekdays: "Weekdays",
+  weekly: "Weekly",
+  monthly: "Monthly",
+};
+
 const SELECT_CLASS =
   "border-input bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20";
 
 type FieldErrors = Partial<
-  Record<"name" | "instructions" | "runAtLocalHour" | "provider", string>
+  Record<
+    "name" | "instructions" | "runAtLocalHour" | "provider" | "cadence",
+    string
+  >
 >;
 
 /**
@@ -64,6 +93,13 @@ type FieldErrors = Partial<
  * extra role. The pin cannot widen what the agent can reach: it selects a
  * model, and the key that pays for it is still resolved per run from the org's
  * mode and the owner's own credentials.
+ *
+ * Capabilities are the write side of that same ladder: `CapabilityToggles`
+ * renders the agent's own grant set against `capabilityCeiling` (the org
+ * admin's clamp, `OrgAiSettings.agentCapabilityCeiling`) and disables anything
+ * outside it. The intersection happens again at RUN time regardless of what
+ * gets saved here — disabling is only so the owner never sets a grant that
+ * would be silently dropped at 07:00.
  */
 export function AgentEditor({
   mode,
@@ -71,6 +107,7 @@ export function AgentEditor({
   initial,
   modelOptions,
   providers,
+  capabilityCeiling,
   onSaved,
   onCancel,
   onDeleted,
@@ -82,6 +119,8 @@ export function AgentEditor({
   modelOptions: ModelOption[];
   /** The enabled provider registry, for the "no models yet" groups. */
   providers: { id: string; label: string }[];
+  /** `OrgAiSettings.agentCapabilityCeiling`, read once by the server page. */
+  capabilityCeiling: AgentCapability[];
   onSaved: (record: AgentRecord) => void;
   onCancel: () => void;
   onDeleted?: (id: string) => void;
@@ -97,16 +136,40 @@ export function AgentEditor({
       ? { provider: initial.provider, modelId: initial.modelId }
       : null,
   );
+  const [cadence, setCadence] = useState<AgentCadence>(initial.cadence);
+  const [runOnWeekday, setRunOnWeekday] = useState(initial.runOnWeekday);
+  const [runOnDayOfMonth, setRunOnDayOfMonth] = useState(
+    initial.runOnDayOfMonth,
+  );
+  const [capabilities, setCapabilities] = useState<AgentCapability[]>(
+    initial.capabilities,
+  );
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  // Never an index into a fixed map — the registry is open, so a stored id can
-  // outlive the row that named it and the id beats a crash (same rule as
-  // OrgAiSettingsForm).
-  const labelOfProvider = (id: string) =>
-    providers.find((p) => p.id === id)?.label ?? id;
+  // The catalog entry behind the current pin, if any — the source of truth
+  // for whether this agent's run can use tools at all. `undefined` when the
+  // pin names a model that has been retired out from under the owner (see
+  // the "shows an existing pin" doc above the picker): there is no evidence
+  // either way then, so the warning stays silent rather than guessing.
+  const selectedModelOption = model
+    ? modelOptions.find(
+        (o) => o.provider === model.provider && o.modelId === model.modelId,
+      )
+    : undefined;
+
+  function cadenceChanged(next: AgentCadence) {
+    setCadence(next);
+    // Each cadence has exactly one day operand (`cadenceFieldsMatch`) — reset
+    // both, then set only the one the new cadence needs. `?? 1` on entry
+    // (Sunday isn't a sensible silent default here) keeps a value the owner
+    // picked before if they switch back and forth.
+    setRunOnWeekday(next === "weekly" ? (runOnWeekday ?? 1) : null);
+    setRunOnDayOfMonth(next === "monthly" ? (runOnDayOfMonth ?? 1) : null);
+    setFieldErrors((f) => ({ ...f, cadence: undefined }));
+  }
 
   function save() {
     setServerError(null);
@@ -115,20 +178,16 @@ export function AgentEditor({
       templateId: initial.templateId,
       instructions: instructions.trim(),
       boardScope: initial.boardScope,
-      cadence: initial.cadence,
+      cadence,
       runAtLocalHour,
       enabled,
       // Both halves or neither — the schema refuses a half-pin, and null on
       // both is what "inherit the org default" means to the run endpoint.
       provider: model?.provider ?? null,
       modelId: model?.modelId ?? null,
-      // Carried through untouched: this form has no capability picker and no
-      // cadence control yet, and every save writes the whole row. Re-sending
-      // what the agent already has is what stops an edit to the NAME from
-      // silently revoking a grant or resetting a weekly agent to daily.
-      capabilities: initial.capabilities,
-      runOnWeekday: initial.runOnWeekday,
-      runOnDayOfMonth: initial.runOnDayOfMonth,
+      capabilities,
+      runOnWeekday,
+      runOnDayOfMonth,
     };
 
     const parsed = personalAgentSettingsSchema.safeParse(candidate);
@@ -142,6 +201,9 @@ export function AgentEditor({
         // or null) — surfaced anyway, because a validation error the form
         // cannot render is a save button that silently does nothing.
         provider: flat.provider?.[0],
+        // Unreachable through `cadenceChanged` (it always sets the matching
+        // day operand) — surfaced for the same reason as `provider` above.
+        cadence: flat.cadence?.[0],
       });
       return;
     }
@@ -239,7 +301,28 @@ export function AgentEditor({
 
         <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex-1 space-y-1.5">
-            <Label htmlFor="agent-hour">Runs daily at</Label>
+            <Label htmlFor="agent-cadence">Runs</Label>
+            <select
+              id="agent-cadence"
+              className={cn(SELECT_CLASS)}
+              value={cadence}
+              disabled={pending}
+              aria-invalid={Boolean(fieldErrors.cadence)}
+              onChange={(e) => cadenceChanged(e.target.value as AgentCadence)}
+            >
+              {AGENT_CADENCES.map((c) => (
+                <option key={c} value={c}>
+                  {CADENCE_LABELS[c]}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.cadence ? (
+              <p className="text-destructive text-xs">{fieldErrors.cadence}</p>
+            ) : null}
+          </div>
+
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="agent-hour">At</Label>
             <select
               id="agent-hour"
               className={cn(SELECT_CLASS)}
@@ -263,16 +346,60 @@ export function AgentEditor({
               </p>
             ) : null}
           </div>
+        </div>
 
-          <div className="flex-1 space-y-1.5">
-            <Label htmlFor="agent-boards">Reads from</Label>
-            <p
-              id="agent-boards"
-              className="text-muted-foreground flex h-8 items-center text-sm"
+        {/* Only ever one of these two — mirrors `cadenceFieldsMatch`: weekly
+            needs a weekday and no day-of-month, monthly the reverse, and
+            daily/weekdays need neither. */}
+        {cadence === "weekly" ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-weekday">Weekday</Label>
+            <select
+              id="agent-weekday"
+              className={cn(SELECT_CLASS)}
+              value={runOnWeekday ?? 1}
+              disabled={pending}
+              onChange={(e) => setRunOnWeekday(Number(e.target.value))}
             >
-              All boards you can see
+              {WEEKDAYS.map((label, day) => (
+                <option key={day} value={day}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {cadence === "monthly" ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-day-of-month">Day of month</Label>
+            <select
+              id="agent-day-of-month"
+              className={cn(SELECT_CLASS)}
+              value={runOnDayOfMonth ?? 1}
+              disabled={pending}
+              onChange={(e) => setRunOnDayOfMonth(Number(e.target.value))}
+            >
+              {DAYS_OF_MONTH.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <p className="text-muted-foreground text-xs">
+              Capped at 28 so this agent never silently skips February.
             </p>
           </div>
+        ) : null}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-boards">Reads from</Label>
+          <p
+            id="agent-boards"
+            className="text-muted-foreground flex h-8 items-center text-sm"
+          >
+            All boards you can see
+          </p>
         </div>
 
         {/* `role="group"` + `aria-labelledby`, not `htmlFor`: the picker's
@@ -307,25 +434,37 @@ export function AgentEditor({
               ? "This agent always runs on this model — the organization's default doesn't apply to it."
               : "This agent runs on the organization's default model. Pick one to keep it on a specific model instead."}
           </p>
-          {/* The pin OVERRIDES the org provider, so it is the one setting that
-              can put an agent on a provider the briefing loop cannot run on —
-              and nothing about the picker says so. Without this the owner
-              saves happily and only finds out from a stream of "skipped" runs
-              in the history below. Stated at the moment of the choice, in the
-              same inline-message vocabulary the field errors use, rather than
-              blocking the save: the capability is provider-wide today and
-              generalises in spec 2, so the pin itself stays legal. */}
-          {model && model.provider !== TOOL_LOOP_PROVIDER ? (
+          {/* The run loop is provider-agnostic (Task 7) — what actually limits
+              an agent is the selected model's OWN `supportsTools` flag, not
+              its provider. A tool-incapable model still runs; it just cannot
+              call `get_my_work` or anything else, so the loop degrades to a
+              plain summary instead of skipping. Silent about a retired pin
+              (`selectedModelOption` undefined) — no evidence either way. */}
+          {model &&
+          selectedModelOption &&
+          !selectedModelOption.supportsTools ? (
             <p role="status" className="text-destructive text-xs">
-              Personal agents currently run on{" "}
-              {labelOfProvider(TOOL_LOOP_PROVIDER)} only. Pinned to{" "}
-              {labelOfProvider(model.provider)}, every run of this agent is
-              skipped rather than billed to the wrong provider.
+              This model can&apos;t use tools, so this agent can only write a
+              summary. Pick a tool-capable model to let it act.
             </p>
           ) : null}
           {fieldErrors.provider ? (
             <p className="text-destructive text-xs">{fieldErrors.provider}</p>
           ) : null}
+        </div>
+
+        <div
+          className="space-y-1.5"
+          role="group"
+          aria-labelledby="agent-capabilities-label"
+        >
+          <Label id="agent-capabilities-label">What this agent can do</Label>
+          <CapabilityToggles
+            value={capabilities}
+            ceiling={capabilityCeiling}
+            onChange={setCapabilities}
+            disabled={pending}
+          />
         </div>
 
         <div className="flex items-center justify-between rounded-lg border p-3">
