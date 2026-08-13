@@ -16,6 +16,27 @@ import type { StatusPillColor } from "@/components/ui/status-pill";
  * Deliberately free of `server-only` — the card is a client component.
  */
 
+/**
+ * The two decision failures that are worth another click, named once and shared
+ * by the Server Action that produces them and the card that reads them.
+ *
+ * Everything else a decision can fail with is TERMINAL: every execution-failure
+ * branch has already written the row `failed`, and the claim-lost branch means
+ * someone else decided it. Retaining an Approve button for those produces a
+ * control whose only possible outcome is "That proposal was already failed."
+ */
+export const LOAD_FAILED = "Couldn't load that proposal.";
+export const WRITE_FAILED = "Couldn't record that decision.";
+
+/** Is this failure worth offering the buttons again? */
+export function isRetryableDecisionError(message: string): boolean {
+  return message === LOAD_FAILED || message === WRITE_FAILED;
+}
+
+/** What the owner is told when a decision failed for a reason that is NOT worth
+ *  retrying: the row moved on, and only a reload can show where it landed. */
+export const RELOAD_FOR_OUTCOME = "Reload to see where this ended up.";
+
 export type ProposalDisplayState =
   | "pending"
   | "approved"

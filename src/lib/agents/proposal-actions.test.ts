@@ -22,7 +22,8 @@ const requireUser = vi.fn();
 const createClientCalls: number[] = [];
 const revalidatePath = vi.fn();
 const getProposalForDecision = vi.fn();
-const recordProposalDecision = vi.fn();
+const claimProposalDecision = vi.fn();
+const settleProposalOutcome = vi.fn();
 const listPendingProposalsForRuns = vi.fn();
 const invoke = vi.fn();
 const descriptorsForArgs: unknown[] = [];
@@ -44,7 +45,8 @@ vi.mock("next/cache", () => ({
 vi.mock("./proposals-db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./proposals-db")>()),
   getProposalForDecision: (...a: unknown[]) => getProposalForDecision(...a),
-  recordProposalDecision: (...a: unknown[]) => recordProposalDecision(...a),
+  claimProposalDecision: (...a: unknown[]) => claimProposalDecision(...a),
+  settleProposalOutcome: (...a: unknown[]) => settleProposalOutcome(...a),
   listPendingProposalsForRuns: (...a: unknown[]) =>
     listPendingProposalsForRuns(...a),
 }));
@@ -99,17 +101,32 @@ function proposal(over: Record<string, unknown> = {}) {
   };
 }
 
-/** The status the action WROTE — the test's stand-in for re-reading the row. */
+/** The status the row ENDED on — the last thing either writer wrote, which is
+ *  the test's stand-in for re-reading the row. */
 function writtenStatus(): string | undefined {
-  const last = recordProposalDecision.mock.calls.at(-1);
+  const writes = [
+    ...claimProposalDecision.mock.calls,
+    ...settleProposalOutcome.mock.calls,
+  ];
+  const last = writes.at(-1);
   return (last?.[1] as { status?: string } | undefined)?.status;
+}
+
+/** Every status written, in order — so a test can see the claim AND the
+ *  outcome, not just where the row came to rest. */
+function writtenStatuses(): string[] {
+  return [
+    ...claimProposalDecision.mock.calls,
+    ...settleProposalOutcome.mock.calls,
+  ].map((c) => (c[1] as { status: string }).status);
 }
 
 beforeEach(() => {
   requireUser.mockReset().mockResolvedValue({ id: USER_ID });
   revalidatePath.mockReset();
   getProposalForDecision.mockReset().mockResolvedValue(proposal());
-  recordProposalDecision.mockReset().mockResolvedValue(true);
+  claimProposalDecision.mockReset().mockResolvedValue(true);
+  settleProposalOutcome.mockReset().mockResolvedValue(true);
   listPendingProposalsForRuns.mockReset().mockResolvedValue([]);
   invoke
     .mockReset()
@@ -147,7 +164,8 @@ describe("decideProposal", () => {
     expect(invoke).not.toHaveBeenCalled();
     // And it is not silently rewritten either: with no sweep, the row's own
     // status stays the historical truth of what the agent asked for.
-    expect(recordProposalDecision).not.toHaveBeenCalled();
+    expect(claimProposalDecision).not.toHaveBeenCalled();
+    expect(settleProposalOutcome).not.toHaveBeenCalled();
   });
 
   it("executes as the approver and records the result", async () => {
@@ -188,7 +206,7 @@ describe("decideProposal — refusals before execution", () => {
     expect(r.ok).toBe(false);
     expect(!r.ok && r.error).toMatch(/already/i);
     expect(invoke).not.toHaveBeenCalled();
-    expect(recordProposalDecision).not.toHaveBeenCalled();
+    expect(claimProposalDecision).not.toHaveBeenCalled();
   });
 
   it("treats a row RLS will not show as simply not there", async () => {
@@ -200,7 +218,7 @@ describe("decideProposal — refusals before execution", () => {
     const r = await decideProposal({ id: PROPOSAL_ID, approve: true });
 
     expect(r.ok).toBe(false);
-    expect(recordProposalDecision).not.toHaveBeenCalled();
+    expect(claimProposalDecision).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -227,7 +245,8 @@ describe("decideProposal — refusals before execution", () => {
   it("reads the row through the request-scoped client", async () => {
     await decideProposal({ id: PROPOSAL_ID, approve: true });
     expect(getProposalForDecision).toHaveBeenCalledWith(CLIENT, PROPOSAL_ID);
-    expect(recordProposalDecision.mock.calls[0]?.[0]).toBe(CLIENT);
+    expect(claimProposalDecision.mock.calls[0]?.[0]).toBe(CLIENT);
+    expect(settleProposalOutcome.mock.calls[0]?.[0]).toBe(CLIENT);
   });
 });
 
@@ -256,7 +275,7 @@ describe("decideProposal — execution outcomes", () => {
 
   it("reports a decision RLS refused as a failure, not a success", async () => {
     // 0 rows affected and no error: the row was hidden or already gone.
-    recordProposalDecision.mockResolvedValue(false);
+    claimProposalDecision.mockResolvedValue(false);
 
     const r = await decideProposal({ id: PROPOSAL_ID, approve: false });
 
@@ -266,6 +285,113 @@ describe("decideProposal — execution outcomes", () => {
   it("revalidates the settings page so the roster badge stops counting it", async () => {
     await decideProposal({ id: PROPOSAL_ID, approve: true });
     expect(revalidatePath).toHaveBeenCalledWith("/settings/agents");
+  });
+});
+
+// ── Concurrency: the DATABASE picks the winner, not a prior read ─────────────
+
+describe("decideProposal — two deciders racing on one row", () => {
+  /**
+   * Both requests read the row while it is still `pending` — that is the whole
+   * point, and it is what the two-tab case really looks like. The claim is
+   * modelled exactly as the `status = 'pending'` predicate behaves: the FIRST
+   * update to reach the row matches, every later one affects 0 rows.
+   */
+  function oneShotClaim() {
+    let taken = false;
+    claimProposalDecision.mockImplementation(async () => {
+      if (taken) return false;
+      taken = true;
+      return true;
+    });
+  }
+
+  /** A slow tool, so the second request is genuinely inside the first one's
+   *  execution window rather than politely after it. */
+  function slowInvoke() {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    invoke.mockImplementation(async () => {
+      await gate;
+      return { content: [{ type: "text", text: "Item created." }] };
+    });
+    return release;
+  }
+
+  it("executes the tool EXACTLY ONCE when two approvals race", async () => {
+    oneShotClaim();
+    const release = slowInvoke();
+
+    const first = decideProposal({ id: PROPOSAL_ID, approve: true });
+    // Second request lands while the first is still inside `invoke`.
+    const second = decideProposal({ id: PROPOSAL_ID, approve: true });
+    release();
+    const [a, b] = await Promise.all([first, second]);
+
+    // The assertion that matters: one execution, not two. Without the claim
+    // both requests reach `invoke` and the item is created twice.
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const outcomes = [a.ok, b.ok].sort();
+    expect(outcomes).toEqual([false, true]);
+    const loser = a.ok ? b : a;
+    expect(!loser.ok && loser.error).toMatch(/just decided|already/i);
+    // And the loser wrote nothing at all — no result overwriting the winner's.
+    expect(settleProposalOutcome).toHaveBeenCalledTimes(1);
+  });
+
+  it("declines exactly once when a decline races an approval", async () => {
+    oneShotClaim();
+    const release = slowInvoke();
+
+    const approve = decideProposal({ id: PROPOSAL_ID, approve: true });
+    const decline = decideProposal({ id: PROPOSAL_ID, approve: false });
+    release();
+    const [a, d] = await Promise.all([approve, decline]);
+
+    expect(claimProposalDecision).toHaveBeenCalledTimes(2); // both tried
+    expect([a.ok, d.ok].filter(Boolean)).toHaveLength(1); // one won
+    expect(invoke.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+
+  it("claims BEFORE executing, never after", async () => {
+    // Ordering is the property; a claim taken after the call has already run
+    // arbitrates nothing.
+    const order: string[] = [];
+    claimProposalDecision.mockImplementation(async () => {
+      order.push("claim");
+      return true;
+    });
+    invoke.mockImplementation(async () => {
+      order.push("invoke");
+      return { content: [{ type: "text", text: "ok" }] };
+    });
+    settleProposalOutcome.mockImplementation(async () => {
+      order.push("settle");
+      return true;
+    });
+
+    await decideProposal({ id: PROPOSAL_ID, approve: true });
+    expect(order).toEqual(["claim", "invoke", "settle"]);
+  });
+
+  it("claims conservatively, then upgrades — a run that dies mid-execution reads as unfinished", async () => {
+    // Same posture as `claimRun`'s placeholder in the run route: the row must
+    // never read `approved` while the tool call is still in flight.
+    await decideProposal({ id: PROPOSAL_ID, approve: true });
+    expect(writtenStatuses()).toEqual(["failed", "approved"]);
+    expect(claimProposalDecision.mock.calls[0]?.[1]).toMatchObject({
+      status: "failed",
+      decidedBy: USER_ID,
+    });
+  });
+
+  it("does not execute when the claim itself fails", async () => {
+    claimProposalDecision.mockRejectedValue(new Error("db down"));
+
+    const r = await decideProposal({ id: PROPOSAL_ID, approve: true });
+
+    expect(r.ok).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
 

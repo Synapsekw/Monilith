@@ -7,6 +7,8 @@ import { Kicker } from "@/components/ui/kicker";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
   PROPOSAL_STATE_PILL,
+  RELOAD_FOR_OUTCOME,
+  isRetryableDecisionError,
   proposalDisplayState,
   proposalExpiryLabel,
 } from "@/lib/agents/proposal-display";
@@ -44,6 +46,16 @@ export function ProposalCard({
 }) {
   const [status, setStatus] = useState<string>(proposal.status);
   const [note, setNote] = useState<string | null>(null);
+  /**
+   * A decision that failed for a reason that is NOT worth retrying.
+   *
+   * Every execution-failure branch has already written the row terminal
+   * `failed`, and a lost claim means another window decided it — so keeping the
+   * buttons offers a control whose only possible outcome is "That proposal was
+   * already failed." The card cannot know the row's new status without a read
+   * it deliberately does not do, so it says so instead of guessing.
+   */
+  const [unresolved, setUnresolved] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // Stored status is not display state: with no sweep job, an undecided row
@@ -52,6 +64,7 @@ export function ProposalCard({
   // as `agentRunDisplayStatus` next door.
   const state = proposalDisplayState({ ...proposal, status });
   const terminal = state === "pending" ? null : PROPOSAL_STATE_PILL[state];
+  const decidable = state === "pending" && !unresolved;
 
   function decide(approve: boolean) {
     if (pending) return;
@@ -59,10 +72,12 @@ export function ProposalCard({
     startTransition(async () => {
       const res = await decideProposal({ id: proposal.id, approve });
       if (!res.ok) {
-        // Left decidable on purpose: the server refuses anything that is no
-        // longer `pending`, so a retry cannot double-execute, and a transient
-        // failure should not need a page reload to recover from.
         setNote(res.error);
+        // The buttons survive ONLY the two genuinely transient failures — the
+        // read and the decision write. A retry there cannot double-execute (the
+        // server claims the row under a `status = 'pending'` predicate) and
+        // should not cost a page reload. Anything else already moved the row.
+        if (!isRetryableDecisionError(res.error)) setUnresolved(true);
         return;
       }
       setStatus(res.data.status);
@@ -72,7 +87,7 @@ export function ProposalCard({
 
   // A decided card must not still say "Awaiting approval" above its Approved
   // pill — the eyebrow states what the row IS, not what it was.
-  const label = state === "pending" ? "Awaiting approval" : "Agent action";
+  const label = decidable ? "Awaiting approval" : "Agent action";
 
   return (
     <div
@@ -100,7 +115,7 @@ export function ProposalCard({
           (dedupe is keyed on the call id, so that produces two rows). */}
       <p className="text-muted-foreground mt-1 font-mono text-xs">
         {proposal.toolName}
-        {state === "pending" ? (
+        {decidable ? (
           <span> · {proposalExpiryLabel(proposal.expiresAt)}</span>
         ) : null}
       </p>
@@ -108,10 +123,13 @@ export function ProposalCard({
       {note ? (
         <p role="alert" className="text-destructive mt-2 text-xs">
           {note}
+          {unresolved ? (
+            <span className="text-muted-foreground"> {RELOAD_FOR_OUTCOME}</span>
+          ) : null}
         </p>
       ) : null}
 
-      {state === "pending" ? (
+      {decidable ? (
         <div className="mt-3 flex items-center justify-end gap-2">
           <Button
             size="sm"

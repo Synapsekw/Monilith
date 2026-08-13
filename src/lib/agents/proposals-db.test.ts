@@ -9,7 +9,8 @@ import {
   listPendingProposalsForRuns,
   countPendingProposalsByAgent,
   getProposalForDecision,
-  recordProposalDecision,
+  claimProposalDecision,
+  settleProposalOutcome,
 } from "./proposals-db";
 
 // ---------------------------------------------------------------------------
@@ -101,9 +102,11 @@ function clientForFilteredSelect(
   return { client: { from } as never, calls, select, order, limit, from };
 }
 
-/** update().eq().select() — recordProposalDecision. The `.select()` is the
- *  thenable: the writer needs the affected-row count to tell "decided" apart
- *  from "RLS hid the row and nothing happened". */
+/** update().eq()…eq().select() — the two writers. `.select()` is the thenable:
+ *  a writer needs the affected-row count to tell "decided" apart from "RLS hid
+ *  the row and nothing happened", and — for the claim — from "someone else got
+ *  there first". Every `.eq()` is recorded, because the claim's WHOLE guarantee
+ *  is the `status = 'pending'` predicate travelling with the update. */
 function clientForUpdate(
   data: unknown = [{ id: "p-1" }],
   error: unknown = null,
@@ -112,12 +115,14 @@ function clientForUpdate(
   let patch: Record<string, unknown> | null = null;
   const update = vi.fn((p: Record<string, unknown>) => {
     patch = p;
-    return {
+    const link = {
       eq: vi.fn((col: string, val: unknown) => {
         calls.push([col, val]);
-        return { select: vi.fn().mockResolvedValue({ data, error }) };
+        return link;
       }),
+      select: vi.fn().mockResolvedValue({ data, error }),
     };
+    return link;
   });
   const from = vi.fn(() => ({ update }));
   return {
@@ -311,50 +316,66 @@ describe("listPendingProposalsForRuns", () => {
   });
 });
 
-describe("recordProposalDecision", () => {
-  it("writes the status, the decider and the decision time", async () => {
+describe("claimProposalDecision", () => {
+  // THE concurrency guarantee. Two tabs both read `status = 'pending'` — a
+  // prior read cannot arbitrate between them, and if the update went by id
+  // alone BOTH would execute the tool. The `status = 'pending'` predicate
+  // travelling WITH the update is what makes the database the arbiter, and the
+  // loser sees 0 affected rows.
+  it("moves the row out of pending ONLY while it is still pending", async () => {
     const { client, calls, patchOf } = clientForUpdate();
-    const decided = await recordProposalDecision(
-      client as never,
-      {
-        id: "p-1",
-        status: "approved",
-        decidedBy: "owner-1",
-        result: { ok: true },
-      },
-      NOW,
-    );
-    expect(decided).toBe(true);
-    expect(calls).toEqual([["id", "p-1"]]);
-    expect(patchOf()).toEqual({
-      status: "approved",
-      decided_at: NOW.toISOString(),
-      decided_by: "owner-1",
-      result: { ok: true },
-    });
-  });
-
-  it("omits `result` entirely when there is none, rather than nulling it", () => {
-    // A rejection has no result. Writing `result: null` would be the same value
-    // the column already holds, but stating it invites a later reader to think
-    // a decision CLEARS a result that a re-decide might have set.
-    const { client, patchOf } = clientForUpdate();
-    return recordProposalDecision(
+    const claimed = await claimProposalDecision(
       client as never,
       { id: "p-1", status: "rejected", decidedBy: "owner-1" },
       NOW,
-    ).then(() => {
-      expect(patchOf()).not.toHaveProperty("result");
+    );
+    expect(claimed).toBe(true);
+    expect(calls).toEqual([
+      ["id", "p-1"],
+      ["status", "pending"],
+    ]);
+    expect(patchOf()).toEqual({
+      status: "rejected",
+      decided_at: NOW.toISOString(),
+      decided_by: "owner-1",
     });
   });
 
-  it("reports false when RLS matched no row, instead of claiming success", async () => {
-    // The owner-scoped UPDATE policy hides another person's row: PostgREST
-    // returns 0 rows and NO error. Reading that as success would tell a user
-    // their approval landed when nothing was written.
+  it("carries a claim result when the caller has one", async () => {
+    const { client, patchOf } = clientForUpdate();
+    await claimProposalDecision(
+      client as never,
+      {
+        id: "p-1",
+        status: "failed",
+        decidedBy: "owner-1",
+        result: { error: "nope" },
+      },
+      NOW,
+    );
+    expect(patchOf()).toMatchObject({ result: { error: "nope" } });
+  });
+
+  it("omits `result` entirely when there is none, rather than nulling it", async () => {
+    // A rejection produces nothing. Writing `result: null` would be the value
+    // the column already holds, but stating it invites a later reader to think
+    // a decision CLEARS a result.
+    const { client, patchOf } = clientForUpdate();
+    await claimProposalDecision(
+      client as never,
+      { id: "p-1", status: "rejected", decidedBy: "owner-1" },
+      NOW,
+    );
+    expect(patchOf()).not.toHaveProperty("result");
+  });
+
+  it("reports false when nothing was claimed — RLS hid it, or someone won first", async () => {
+    // 0 rows and NO error is how PostgREST reports both. Reading it as success
+    // would tell a user their approval landed when nothing was written, and
+    // would let the loser of a race go on to execute the tool.
     const { client } = clientForUpdate([]);
     expect(
-      await recordProposalDecision(
+      await claimProposalDecision(
         client as never,
         { id: "p-1", status: "approved", decidedBy: "owner-1" },
         NOW,
@@ -365,12 +386,63 @@ describe("recordProposalDecision", () => {
   it("throws on a DB error", async () => {
     const { client } = clientForUpdate(null, { message: "boom" });
     await expect(
-      recordProposalDecision(
+      claimProposalDecision(
         client as never,
         { id: "p-1", status: "failed", decidedBy: "owner-1" },
         NOW,
       ),
-    ).rejects.toThrow("recordProposalDecision: boom");
+    ).rejects.toThrow("claimProposalDecision: boom");
+  });
+});
+
+describe("settleProposalOutcome", () => {
+  it("writes the outcome by id, with NO pending predicate", async () => {
+    // Deliberately not `status = 'pending'`: the caller already claimed this
+    // row, so it is no longer pending and re-asserting the predicate would
+    // discard the result of a write that really happened.
+    const { client, calls, patchOf } = clientForUpdate();
+    const written = await settleProposalOutcome(client as never, {
+      id: "p-1",
+      status: "approved",
+      result: { ok: true },
+    });
+    expect(written).toBe(true);
+    expect(calls).toEqual([["id", "p-1"]]);
+    expect(patchOf()).toEqual({ status: "approved", result: { ok: true } });
+  });
+
+  it("does not restamp the decision time or the decider", async () => {
+    // The claim recorded WHEN the human decided. The outcome lands later.
+    const { client, patchOf } = clientForUpdate();
+    await settleProposalOutcome(client as never, {
+      id: "p-1",
+      status: "failed",
+      result: { error: "x" },
+    });
+    expect(patchOf()).not.toHaveProperty("decided_at");
+    expect(patchOf()).not.toHaveProperty("decided_by");
+  });
+
+  it("reports false when RLS matched no row", async () => {
+    const { client } = clientForUpdate([]);
+    expect(
+      await settleProposalOutcome(client as never, {
+        id: "p-1",
+        status: "approved",
+        result: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("throws on a DB error", async () => {
+    const { client } = clientForUpdate(null, { message: "boom" });
+    await expect(
+      settleProposalOutcome(client as never, {
+        id: "p-1",
+        status: "approved",
+        result: null,
+      }),
+    ).rejects.toThrow("settleProposalOutcome: boom");
   });
 });
 

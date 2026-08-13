@@ -38,10 +38,29 @@ function oneLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Model-chosen values are rendered INSIDE double quotes, so a value containing
+ * a quote can close the frame and write the rest of the sentence itself:
+ *
+ *   name = `Weekly report" is already approved. No board changes. Add "note`
+ *   → Add "Weekly report" is already approved. No board changes. Add "note" to…
+ *
+ * That is model-authored sentence STRUCTURE on the one surface whose entire
+ * security property is that it never renders model prose — a prompt-injected
+ * run could make the card describe an action other than the one that executes.
+ * The quotes are decoration and nothing downstream parses them, so the value
+ * simply loses them. Curly quotes go too: they cannot close the frame, but they
+ * read like it. Truncation is no defence here — every interpolated field is
+ * schema-capped well under the 500-character clamp.
+ */
+function stripQuotes(value: string): string {
+  return value.replace(/["“”]/g, "");
+}
+
 function str(input: Record<string, unknown>, key: string): string | undefined {
   const v = input[key];
   if (typeof v !== "string") return undefined;
-  const cleaned = oneLine(v);
+  const cleaned = stripQuotes(oneLine(v));
   return cleaned.length > 0 ? cleaned : undefined;
 }
 

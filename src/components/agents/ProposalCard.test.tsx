@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PendingProposal } from "@/lib/agents/proposal-actions";
+import { WRITE_FAILED } from "@/lib/agents/proposal-display";
 import { ProposalCard } from "./ProposalCard";
 
 const decideProposal = vi.fn();
@@ -68,17 +69,54 @@ describe("ProposalCard", () => {
     expect(onDecided).toHaveBeenCalledWith("p-1", "approved");
   });
 
-  it("keeps the decision available after a failed attempt, and says why", async () => {
+  it("keeps the decision available after a TRANSIENT failure", async () => {
+    // The read and the decision write are the only two failures worth another
+    // click. A retry cannot double-execute: the server claims the row under a
+    // `status = 'pending'` predicate.
+    decideProposal.mockResolvedValue({ ok: false, error: WRITE_FAILED });
+    render(<ProposalCard proposal={proposal()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    expect(
+      await screen.findByText(new RegExp(WRITE_FAILED, "i")),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /approve/i })).toBeEnabled();
+  });
+
+  it("withdraws the decision after an EXECUTION failure, which already wrote the row", async () => {
+    // Every execution-failure branch writes the row terminal `failed`, so a
+    // retained Approve button can only ever produce "already failed".
     decideProposal.mockResolvedValue({ ok: false, error: "Board not found." });
     render(<ProposalCard proposal={proposal()} />);
 
     await userEvent.click(screen.getByRole("button", { name: /approve/i }));
 
     expect(await screen.findByText(/Board not found\./)).toBeInTheDocument();
-    // The server refuses anything not `pending`, so a retry can never
-    // double-execute — leaving the buttons is safe and a transient failure is
-    // recoverable without a reload.
-    expect(screen.getByRole("button", { name: /approve/i })).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: /approve/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /decline/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/reload/i)).toBeInTheDocument();
+  });
+
+  it("withdraws the decision when another window won the claim", async () => {
+    decideProposal.mockResolvedValue({
+      ok: false,
+      error:
+        "That proposal was just decided in another window. Reload to see the outcome.",
+    });
+    render(<ProposalCard proposal={proposal()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: /approve/i }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it.each(["approved", "rejected", "failed", "expired"] as const)(

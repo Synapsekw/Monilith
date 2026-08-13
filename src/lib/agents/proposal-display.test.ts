@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  LOAD_FAILED,
   PROPOSAL_STATE_PILL,
+  WRITE_FAILED,
+  isRetryableDecisionError,
   proposalDisplayState,
   proposalExpiryLabel,
 } from "./proposal-display";
@@ -66,5 +69,28 @@ describe("proposalExpiryLabel", () => {
     expect(proposalExpiryLabel(at(DAY_MS), NOW)).toBe("Expires tomorrow");
     expect(proposalExpiryLabel(at(60_000), NOW)).toBe("Expires today");
     expect(proposalExpiryLabel(at(-DAY_MS), NOW)).toBe("Expires today");
+  });
+});
+
+describe("isRetryableDecisionError", () => {
+  // The two failures that leave the row untouched are the only ones worth
+  // another click. Everything else has already moved it: every execution
+  // failure writes `failed`, and a lost claim means another window decided it.
+  it("is true for the two transient failures", () => {
+    expect(isRetryableDecisionError(LOAD_FAILED)).toBe(true);
+    expect(isRetryableDecisionError(WRITE_FAILED)).toBe(true);
+  });
+
+  it("is false for an execution failure, a lost claim and anything else", () => {
+    expect(isRetryableDecisionError("Board not found.")).toBe(false);
+    expect(
+      isRetryableDecisionError(
+        "That proposal was just decided in another window. Reload to see the outcome.",
+      ),
+    ).toBe(false);
+    expect(isRetryableDecisionError("That proposal was already failed.")).toBe(
+      false,
+    );
+    expect(isRetryableDecisionError("")).toBe(false);
   });
 });

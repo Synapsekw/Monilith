@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -85,6 +85,7 @@ export function AgentRunHistory({
    * silent BY DESIGN: run history is the signal this surface exists for, and a
    * proposal read that fails must not replace it with an error.
    */
+  const queryClient = useQueryClient();
   const runIds = runs.map((r) => r.id);
   const { data: proposalResult } = useQuery({
     queryKey: ["userAgentProposals", agentId, runIds],
@@ -175,7 +176,21 @@ export function AgentRunHistory({
                   {proposals.length > 0 ? (
                     <div className="mt-1 flex flex-col gap-1.5">
                       {proposals.map((p) => (
-                        <ProposalCard key={p.id} proposal={p} />
+                        <ProposalCard
+                          key={p.id}
+                          proposal={p}
+                          // Without this the cached list still says `pending`:
+                          // collapsing and re-expanding inside the 30s
+                          // staleTime remounts the card from cache with fresh
+                          // buttons on a row that is already decided.
+                          // `revalidatePath` refreshes the roster badge on the
+                          // server; it cannot touch this client cache.
+                          onDecided={() =>
+                            void queryClient.invalidateQueries({
+                              queryKey: ["userAgentProposals", agentId],
+                            })
+                          }
+                        />
                       ))}
                     </div>
                   ) : null}

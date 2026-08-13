@@ -23,9 +23,10 @@ vi.mock("@/lib/agents/actions", () => ({
 }));
 
 const getPendingProposals = vi.fn();
+const decideProposal = vi.fn();
 vi.mock("@/lib/agents/proposal-actions", () => ({
   getPendingProposals: (...a: unknown[]) => getPendingProposals(...a),
-  decideProposal: vi.fn(),
+  decideProposal: (...a: unknown[]) => decideProposal(...a),
 }));
 
 function pendingProposal(over: Record<string, unknown> = {}) {
@@ -70,6 +71,9 @@ async function expand() {
 beforeEach(() => {
   getAgentRuns.mockReset();
   getPendingProposals.mockReset().mockResolvedValue({ ok: true, data: [] });
+  decideProposal
+    .mockReset()
+    .mockResolvedValue({ ok: true, data: { status: "approved" } });
   throwWith = null;
 });
 
@@ -275,6 +279,27 @@ describe("AgentRunHistory — proposals", () => {
     await expand();
     await screen.findByText(/no runs yet/i);
     expect(getPendingProposals).not.toHaveBeenCalled();
+  });
+
+  // Otherwise the decided row comes back as `pending` with fresh buttons the
+  // moment the disclosure is collapsed and re-expanded inside the 30s
+  // staleTime — and clicking those is the most likely real-world way to send
+  // two deciders at one row.
+  it("refetches the list after a decision, so a decided row cannot come back pending", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row({ id: "r1" })] });
+    getPendingProposals.mockResolvedValue({
+      ok: true,
+      data: [pendingProposal()],
+    });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    await screen.findByText(/Add "Draft proposal"/);
+    expect(getPendingProposals).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() => expect(decideProposal).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getPendingProposals).toHaveBeenCalledTimes(2));
   });
 
   it("still shows the run history when the proposal read fails", async () => {

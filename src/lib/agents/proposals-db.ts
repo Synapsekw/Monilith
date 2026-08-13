@@ -312,39 +312,43 @@ export async function countPendingProposalsByAgent(
 }
 
 /**
- * One proposal, for the approve/reject path. Deliberately NOT filtered by
- * status or expiry: the decision path has to be able to LOAD a stale or
- * already-decided row so it can refuse it with an honest reason. Filtering here
- * would turn "this expired last Tuesday" into "not found".
+ * CLAIM one pending proposal for a decision — the only way a row leaves
+ * `pending`, and the concurrency boundary of the whole approve path.
  *
- * Called with the REQUEST-scoped client — `user_agent_proposals_owner_read` is
- * the access boundary, so a non-owner's id simply resolves to null.
- */
-/**
- * Write one proposal's outcome. The ONLY authenticated write in this module,
- * and the only one there can be: `user_agent_proposals_owner_decide` is an
- * UPDATE policy whose `with check` re-asserts `owner_id`, so a decision can
- * neither reach another person's row nor re-parent this one.
+ * WHY THIS IS A CLAIM AND NOT A WRITE. A prior `select` of `status` cannot
+ * arbitrate between two concurrent deciders: the owner with the same proposal
+ * open in two tabs (or a slow first request and an impatient second click) has
+ * both requests read `pending`, both pass every guard, and — when the update
+ * goes by id alone — both go on to execute the tool. The item is created twice
+ * and the second write overwrites the first one's result. The RLS UPDATE policy
+ * cannot help; it says nothing about `status`.
+ *
+ * So the check travels WITH the update: `id = ? AND status = 'pending'`. Postgres
+ * evaluates it under the row lock, exactly one statement matches, and the loser
+ * gets 0 affected rows. The database is the arbiter, not a prior read.
+ *
+ * Returns whether this caller won. `false` covers both "someone else decided it
+ * first" and "RLS hid the row" — PostgREST reports each as 0 rows and NO error,
+ * and either way this caller must not execute anything.
  *
  * Called with the REQUEST-scoped client, never the service client — the whole
- * security story of the approve path is that it runs as the approver.
- *
- * Returns whether a row was actually written. RLS hiding a row is not an error
- * in PostgREST: the update simply affects nothing and returns `[]`, and reading
- * that as success would report an approval that never happened.
+ * security story of the approve path is that it runs as the approver. RLS
+ * (`user_agent_proposals_owner_decide`, whose `with check` re-asserts
+ * `owner_id`) remains the ownership boundary on top of this predicate.
  *
  * `decided_at`/`decided_by` are stamped here rather than by the caller so no
  * decision path can forget the audit half of the write.
  */
-export async function recordProposalDecision(
+export async function claimProposalDecision(
   client: Client,
   args: {
     id: string;
     status: ProposalStatus;
     /** The approver — `auth.uid()`, which the policy independently enforces. */
     decidedBy: string;
-    /** What executing produced, or the reason it did not. Omitted for a plain
-     *  rejection, which produces nothing. */
+    /** Set on the paths that already know their outcome, and on the approve
+     *  path as a placeholder for a claim whose execution never returns.
+     *  Omitted for a plain rejection, which produces nothing. */
     result?: unknown;
   },
   now: Date = new Date(),
@@ -360,11 +364,51 @@ export async function recordProposalDecision(
     .from("user_agent_proposals")
     .update(patch as never)
     .eq("id", args.id)
+    // THE predicate. Without it two concurrent approvals both execute.
+    .eq("status", "pending")
     .select("id");
-  if (error) throw new Error(`recordProposalDecision: ${error.message}`);
+  if (error) throw new Error(`claimProposalDecision: ${error.message}`);
   return (data ?? []).length > 0;
 }
 
+/**
+ * Write the OUTCOME of a decision this request already claimed.
+ *
+ * Deliberately by id alone, with no `status = 'pending'` predicate: the claim
+ * above already moved the row out of `pending`, so re-asserting it here would
+ * throw away the result of a tool call that really happened. This is safe only
+ * because a caller reaches it exclusively after winning a claim — there is no
+ * other call site, and there must not be.
+ *
+ * `decided_at`/`decided_by` are NOT restamped. The claim recorded when the
+ * human decided; the outcome merely lands later.
+ */
+export async function settleProposalOutcome(
+  client: Client,
+  args: { id: string; status: ProposalStatus; result: unknown },
+): Promise<boolean> {
+  const { data, error } = await client
+    .from("user_agent_proposals")
+    .update({ status: args.status, result: args.result } as never)
+    .eq("id", args.id)
+    .select("id");
+  if (error) throw new Error(`settleProposalOutcome: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+/**
+ * One proposal, for the approve/reject path. Deliberately NOT filtered by
+ * status or expiry: the decision path has to be able to LOAD a stale or
+ * already-decided row so it can refuse it with an honest reason. Filtering here
+ * would turn "this expired last Tuesday" into "not found".
+ *
+ * This read is for the MESSAGE, never for the decision — `claimProposalDecision`
+ * is what actually arbitrates. Anything decided between this read and that claim
+ * is caught there.
+ *
+ * Called with the REQUEST-scoped client — `user_agent_proposals_owner_read` is
+ * the access boundary, so a non-owner's id simply resolves to null.
+ */
 export async function getProposalForDecision(
   client: Client,
   id: string,
