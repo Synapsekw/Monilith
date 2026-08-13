@@ -16,6 +16,8 @@ import { useApplyBoardEffects } from "@/lib/boards/use-ai-effects";
 import type { ValidatedAction } from "@/lib/ai/write/schema";
 import { useAskStream } from "./use-ask-stream";
 import { MessageList, type UIMessage } from "./MessageList";
+import { ProposalCard } from "@/components/agents/ProposalCard";
+import type { PendingProposal } from "@/lib/agents/proposal-actions";
 import type { DropState } from "./StreamDropNotice";
 import { Composer } from "./Composer";
 
@@ -61,11 +63,18 @@ export function AskChat({
   initialMessages,
   boardId,
   agentId,
+  agentProposals = [],
   onStarted,
   onTurnComplete,
 }: {
   conversationId: string | null;
   initialMessages: UIMessage[];
+  /** Undecided proposals from the agent run that wrote this thread, read
+   *  server-side on first paint. Empty for every ordinary chat, which is why
+   *  the block below renders nothing at all rather than an empty container.
+   *  Deciding one is a Server Action that flips the card in place — no refetch
+   *  and no navigation (working agreement #5). */
+  agentProposals?: PendingProposal[];
   /** Board this thread belongs to. Set by the dock; absent on /ask. */
   boardId?: string;
   /** Persona for a NEW thread. Ignored once the thread exists — `/api/ask`
@@ -272,6 +281,15 @@ export function AskChat({
           if (activeId) void recoverAfterDrop(activeId);
         }}
       />
+      {/* The run's queued approvals, between the report and the composer: the
+          owner reads what the agent did, then decides what it could not. */}
+      {agentProposals.length > 0 ? (
+        <div className="flex flex-col gap-2 px-4 pb-2">
+          {agentProposals.map((p) => (
+            <ProposalCard key={p.id} proposal={p} />
+          ))}
+        </div>
+      ) : null}
       {/* Never stranded: the composer is dead only while a turn or a recovery
           check is genuinely in flight — but for ALL of a turn, `turnBusy`
           covering the pre-stream round-trips that `streaming` misses. */}

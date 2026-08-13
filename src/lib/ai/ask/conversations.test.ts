@@ -8,6 +8,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import {
   listConversations,
   getMessages,
+  getConversationRunId,
   toThreadMessages,
 } from "./conversations";
 
@@ -137,5 +138,32 @@ describe("toThreadMessages", () => {
         },
       ]),
     ).toEqual([{ id: "m1", role: "assistant", content: "hi", trace: null }]);
+  });
+});
+
+describe("getConversationRunId", () => {
+  function clientReturning(data: unknown, error: unknown = null) {
+    const maybeSingle = vi.fn().mockResolvedValue({ data, error });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+    return { eq, maybeSingle };
+  }
+
+  it("returns the run a briefing thread reports on", async () => {
+    const { eq } = clientReturning({ run_id: "run-1" });
+    expect(await getConversationRunId("c1")).toBe("run-1");
+    expect(eq).toHaveBeenCalledWith("id", "c1");
+  });
+
+  it("returns null for an ordinary chat", async () => {
+    clientReturning({ run_id: null });
+    expect(await getConversationRunId("c1")).toBeNull();
+  });
+
+  it("degrades to null on a read failure rather than 500-ing the thread", async () => {
+    // The approval cards are an addition to the page; the transcript is the
+    // page. A failure here must never take the thread down with it.
+    clientReturning(null, { message: "boom" });
+    expect(await getConversationRunId("c1")).toBeNull();
   });
 });

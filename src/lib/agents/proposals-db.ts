@@ -66,6 +66,41 @@ export type ProposalRow = {
 };
 
 /**
+ * The subset a REVIEW SURFACE may see. `input` and `result` are deliberately
+ * absent: the input can carry a whole document body (`create_file`), the client
+ * has no use for it, and the server-derived `summary` is the thing being
+ * approved. Shipped from here rather than from the card so both surfaces and
+ * the Server Action project the row identically.
+ */
+export type PendingProposal = {
+  id: string;
+  runId: string;
+  userAgentId: string;
+  toolName: string;
+  capability: string;
+  summary: string;
+  status: ProposalStatus;
+  expiresAt: string;
+  createdAt: string;
+};
+
+/** Project a row for review. One mapper, so the two surfaces cannot disagree
+ *  about what a card is allowed to know. */
+export function toPendingProposal(row: ProposalRow): PendingProposal {
+  return {
+    id: row.id,
+    runId: row.runId,
+    userAgentId: row.userAgentId,
+    toolName: row.toolName,
+    capability: row.capability,
+    summary: row.summary,
+    status: row.status,
+    expiresAt: row.expiresAt,
+    createdAt: row.createdAt,
+  };
+}
+
+/**
  * What a run hands in. `status` and `expires_at` are absent on purpose: they
  * are stamped by `insertProposals`, so no caller can queue a proposal that is
  * born approved or born immortal.
@@ -200,10 +235,47 @@ export async function listPendingProposalsForRun(
     .eq("run_id", runId)
     .eq("status", "pending")
     .gt("expires_at", now.toISOString())
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    // Bounded for the same reason its sibling counter is: one run can propose
+    // up to AGENT_MAX_STEPS × parallel tool calls, and a runaway agent must not
+    // turn a page render into an unbounded read.
+    .limit(PENDING_PROPOSAL_SCAN_LIMIT);
   if (error) throw new Error(`listPendingProposalsForRun: ${error.message}`);
   return (data ?? []).map((r) =>
     toProposalRow(r, "listPendingProposalsForRun"),
+  );
+}
+
+/**
+ * The same undecided proposals, for SEVERAL runs at once.
+ *
+ * Exists for the run-history surface, which renders a page of runs and needs
+ * each one's pending proposals: calling the singular reader per row is the N+1
+ * that working agreement #5 exists to prevent. `run_id IN (…)` is served by the
+ * leading column of `user_agent_proposals_call_uniq (run_id, tool_call_id)`, so
+ * this is still an index scan.
+ *
+ * The predicate is deliberately IDENTICAL to the singular reader's — status AND
+ * expiry — because the two feed the same card, and a surface that listed a row
+ * the decision path would refuse renders an Approve button that can only fail.
+ */
+export async function listPendingProposalsForRuns(
+  client: Client,
+  runIds: string[],
+  now: Date = new Date(),
+): Promise<ProposalRow[]> {
+  if (runIds.length === 0) return []; // no round trip for a runless agent
+  const { data, error } = await client
+    .from("user_agent_proposals")
+    .select(PROPOSAL_COLS)
+    .in("run_id", runIds)
+    .eq("status", "pending")
+    .gt("expires_at", now.toISOString())
+    .order("created_at", { ascending: true })
+    .limit(PENDING_PROPOSAL_SCAN_LIMIT);
+  if (error) throw new Error(`listPendingProposalsForRuns: ${error.message}`);
+  return (data ?? []).map((r) =>
+    toProposalRow(r, "listPendingProposalsForRuns"),
   );
 }
 
@@ -248,6 +320,51 @@ export async function countPendingProposalsByAgent(
  * Called with the REQUEST-scoped client — `user_agent_proposals_owner_read` is
  * the access boundary, so a non-owner's id simply resolves to null.
  */
+/**
+ * Write one proposal's outcome. The ONLY authenticated write in this module,
+ * and the only one there can be: `user_agent_proposals_owner_decide` is an
+ * UPDATE policy whose `with check` re-asserts `owner_id`, so a decision can
+ * neither reach another person's row nor re-parent this one.
+ *
+ * Called with the REQUEST-scoped client, never the service client — the whole
+ * security story of the approve path is that it runs as the approver.
+ *
+ * Returns whether a row was actually written. RLS hiding a row is not an error
+ * in PostgREST: the update simply affects nothing and returns `[]`, and reading
+ * that as success would report an approval that never happened.
+ *
+ * `decided_at`/`decided_by` are stamped here rather than by the caller so no
+ * decision path can forget the audit half of the write.
+ */
+export async function recordProposalDecision(
+  client: Client,
+  args: {
+    id: string;
+    status: ProposalStatus;
+    /** The approver — `auth.uid()`, which the policy independently enforces. */
+    decidedBy: string;
+    /** What executing produced, or the reason it did not. Omitted for a plain
+     *  rejection, which produces nothing. */
+    result?: unknown;
+  },
+  now: Date = new Date(),
+): Promise<boolean> {
+  const patch: Record<string, unknown> = {
+    status: args.status,
+    decided_at: now.toISOString(),
+    decided_by: args.decidedBy,
+  };
+  if (args.result !== undefined) patch.result = args.result;
+
+  const { data, error } = await client
+    .from("user_agent_proposals")
+    .update(patch as never)
+    .eq("id", args.id)
+    .select("id");
+  if (error) throw new Error(`recordProposalDecision: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
 export async function getProposalForDecision(
   client: Client,
   id: string,

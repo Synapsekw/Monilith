@@ -26,6 +26,7 @@ import { AGENT_ONLY_DESCRIPTORS } from "@/lib/agents/agent-only-tools";
 import type { ProposedCall } from "@/lib/agents/grant-gate";
 import type { AgentCapability } from "@/lib/agents/capabilities";
 import { insertProposals } from "@/lib/agents/proposals-db";
+import { summariseProposal } from "@/lib/agents/proposal-summary";
 import { sendBriefingEmail } from "@/lib/agents/send";
 import { writeBriefingThread } from "@/lib/agents/briefing-thread";
 import {
@@ -293,11 +294,12 @@ export async function POST(req: Request): Promise<Response> {
         toolName: p.toolName,
         toolCallId: p.toolCallId,
         input: p.input,
-        // SERVER-derived, never model text. Task 9 replaces this with
-        // `summariseProposal(toolName, input)`, which renders a sentence per
-        // tool; until then this is that function's own documented fallback for
-        // an unknown tool, so the approval card's copy never regresses.
-        summary: `Run ${p.toolName}.`,
+        // SERVER-derived, never model text — the security property the column's
+        // own comment states. `summariseProposal` builds its sentence from the
+        // tool input alone, so what the owner approves is a description of what
+        // will actually execute. It never throws: a bad shape degrades to
+        // `Run <tool>.` rather than failing the whole batch insert.
+        summary: summariseProposal(p.toolName, p.input),
       })),
     );
   };

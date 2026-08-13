@@ -33,6 +33,7 @@ type EditorContext =
 export function AgentsSection({
   agents: initial,
   lastRuns = {},
+  pendingProposals = {},
   maxAgents,
   modelOptions,
   providers,
@@ -43,6 +44,10 @@ export function AgentsSection({
    *  keys mean "never ran", which is why this is a plain lookup and not part of
    *  `AgentRecord` — the editor's shape has no business carrying run data. */
   lastRuns?: Record<string, AgentRunLike>;
+  /** Undecided proposals per agent id, from ONE tally the server component
+   *  reads for the whole roster. Absent keys mean "nothing waiting", which is
+   *  why this is a plain lookup rather than a field on `AgentRecord`. */
+  pendingProposals?: Record<string, number>;
   /** `org_ai_settings.max_agents_per_user` — the cap the server ACTUALLY
    *  enforces in `assertCanCreateAgent`. Passed in rather than hardcoded: this
    *  label read "of 20" (the column's check-constraint ceiling) while the real
@@ -81,6 +86,7 @@ export function AgentsSection({
     // failure mode silent. The full history behind it is what defers
     // (working agreement #5): `AgentRunHistory` fetches only on expand.
     lastRun: lastRuns[a.id] ?? null,
+    pendingProposals: pendingProposals[a.id] ?? 0,
   }));
 
   function handleToggle(id: string, enabled: boolean) {

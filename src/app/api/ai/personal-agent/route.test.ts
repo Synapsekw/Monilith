@@ -551,8 +551,9 @@ describe("POST /api/ai/personal-agent", () => {
       toolCallId: "call-1",
       input: { groupId: GROUP, name: "Draft" },
     });
-    // Never model-written text.
-    expect(proposalRows[0]!.summary).toBe("Run create_item.");
+    // Never model-written text: `summariseProposal` derives the sentence from
+    // the tool INPUT, so what the owner approves describes what would execute.
+    expect(proposalRows[0]!.summary).toBe('Add "Draft" to a board group.');
   });
 
   it("tells the email how many actions await approval", async () => {

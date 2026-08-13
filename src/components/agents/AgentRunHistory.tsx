@@ -6,6 +6,11 @@ import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getAgentRuns } from "@/lib/agents/actions";
+import {
+  getPendingProposals,
+  type PendingProposal,
+} from "@/lib/agents/proposal-actions";
+import { ProposalCard } from "@/components/agents/ProposalCard";
 import { timeAgo } from "@/lib/boards/automation-runs";
 import {
   agentRunDisplayStatus,
@@ -69,6 +74,29 @@ export function AgentRunHistory({
       ? failed.error
       : "Couldn’t load this agent’s runs. Try again.";
 
+  /**
+   * The undecided proposals for the runs just listed — ONE indexed read for the
+   * whole page of runs, never one per row (working agreement #5; the query is
+   * `run_id IN (…)` over the leading column of
+   * `user_agent_proposals_call_uniq`).
+   *
+   * It runs only after the runs land, and only when there are runs to ask
+   * about, so an unexpanded roster still costs zero round trips. A failure is
+   * silent BY DESIGN: run history is the signal this surface exists for, and a
+   * proposal read that fails must not replace it with an error.
+   */
+  const runIds = runs.map((r) => r.id);
+  const { data: proposalResult } = useQuery({
+    queryKey: ["userAgentProposals", agentId, runIds],
+    enabled: open && runIds.length > 0,
+    staleTime: 30_000,
+    queryFn: () => getPendingProposals(runIds),
+  });
+  const proposalsByRun = new Map<string, PendingProposal[]>();
+  for (const p of proposalResult?.ok ? proposalResult.data : []) {
+    proposalsByRun.set(p.runId, [...(proposalsByRun.get(p.runId) ?? []), p]);
+  }
+
   return (
     <div className="w-full">
       <button
@@ -105,6 +133,7 @@ export function AgentRunHistory({
           ) : (
             runs.map((run) => {
               const status = agentRunDisplayStatus(run);
+              const proposals = proposalsByRun.get(run.id) ?? [];
               return (
                 <div key={run.id} className="flex flex-col gap-1">
                   <div className="flex items-start gap-2 text-xs sm:items-center">
@@ -138,6 +167,16 @@ export function AgentRunHistory({
                       <span className="text-muted-foreground min-w-0 flex-1 truncate">
                         {MODEL_SUBSTITUTED_NOTE}
                       </span>
+                    </div>
+                  ) : null}
+                  {/* What this run asked permission for. Rendered under the run
+                      that produced it: the proposal only makes sense next to
+                      the report that explains why the agent wanted it. */}
+                  {proposals.length > 0 ? (
+                    <div className="mt-1 flex flex-col gap-1.5">
+                      {proposals.map((p) => (
+                        <ProposalCard key={p.id} proposal={p} />
+                      ))}
                     </div>
                   ) : null}
                 </div>

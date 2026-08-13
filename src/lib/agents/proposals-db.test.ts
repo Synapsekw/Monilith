@@ -6,8 +6,10 @@ import {
   PENDING_PROPOSAL_SCAN_LIMIT,
   insertProposals,
   listPendingProposalsForRun,
+  listPendingProposalsForRuns,
   countPendingProposalsByAgent,
   getProposalForDecision,
+  recordProposalDecision,
 } from "./proposals-db";
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,10 @@ function clientForFilteredSelect(
       calls.push([col, val]);
       return link;
     }),
+    in: vi.fn((col: string, val: unknown) => {
+      calls.push([col, val]);
+      return link;
+    }),
     gt: vi.fn((col: string, val: unknown) => {
       calls.push([col, val]);
       return terminal;
@@ -93,6 +99,33 @@ function clientForFilteredSelect(
   const select = vi.fn((_cols: string) => link);
   const from = vi.fn(() => ({ select }));
   return { client: { from } as never, calls, select, order, limit, from };
+}
+
+/** update().eq().select() — recordProposalDecision. The `.select()` is the
+ *  thenable: the writer needs the affected-row count to tell "decided" apart
+ *  from "RLS hid the row and nothing happened". */
+function clientForUpdate(
+  data: unknown = [{ id: "p-1" }],
+  error: unknown = null,
+) {
+  const calls: FilterCall[] = [];
+  let patch: Record<string, unknown> | null = null;
+  const update = vi.fn((p: Record<string, unknown>) => {
+    patch = p;
+    return {
+      eq: vi.fn((col: string, val: unknown) => {
+        calls.push([col, val]);
+        return { select: vi.fn().mockResolvedValue({ data, error }) };
+      }),
+    };
+  });
+  const from = vi.fn(() => ({ update }));
+  return {
+    client: { from } as never,
+    calls,
+    patchOf: () => patch,
+    from,
+  };
 }
 
 /** select().eq().maybeSingle() — getProposalForDecision. */
@@ -162,7 +195,9 @@ describe("insertProposals", () => {
 
 describe("listPendingProposalsForRun", () => {
   it("filters on run, pending status AND unexpired — all three", async () => {
-    const { client, calls } = clientForFilteredSelect([dbRow()]);
+    const { client, calls } = clientForFilteredSelect([dbRow()], null, {
+      withLimit: true,
+    });
     await listPendingProposalsForRun(client as never, "run-1", NOW);
     expect(calls).toEqual([
       ["run_id", "run-1"],
@@ -171,8 +206,18 @@ describe("listPendingProposalsForRun", () => {
     ]);
   });
 
+  it("stays bounded — a runaway agent's run is not an unbounded read", async () => {
+    const { client, limit } = clientForFilteredSelect([dbRow()], null, {
+      withLimit: true,
+    });
+    await listPendingProposalsForRun(client as never, "run-1", NOW);
+    expect(limit).toHaveBeenCalledWith(PENDING_PROPOSAL_SCAN_LIMIT);
+  });
+
   it("maps the row to camelCase at the boundary", async () => {
-    const { client } = clientForFilteredSelect([dbRow()]);
+    const { client } = clientForFilteredSelect([dbRow()], null, {
+      withLimit: true,
+    });
     const rows = await listPendingProposalsForRun(
       client as never,
       "run-1",
@@ -199,17 +244,133 @@ describe("listPendingProposalsForRun", () => {
   });
 
   it("throws on a DB error", async () => {
-    const { client } = clientForFilteredSelect(null, { message: "boom" });
+    const { client } = clientForFilteredSelect(
+      null,
+      { message: "boom" },
+      {
+        withLimit: true,
+      },
+    );
     await expect(
       listPendingProposalsForRun(client as never, "run-1", NOW),
     ).rejects.toThrow("listPendingProposalsForRun: boom");
   });
 
   it("rejects a row whose status is outside the vocabulary instead of widening it", async () => {
-    const { client } = clientForFilteredSelect([dbRow({ status: "queued" })]);
+    const { client } = clientForFilteredSelect(
+      [dbRow({ status: "queued" })],
+      null,
+      {
+        withLimit: true,
+      },
+    );
     await expect(
       listPendingProposalsForRun(client as never, "run-1", NOW),
     ).rejects.toThrow(/listPendingProposalsForRun/);
+  });
+});
+
+describe("listPendingProposalsForRuns", () => {
+  // The many-runs sibling. It exists so the run-history surface costs ONE
+  // indexed read for the whole expanded list rather than one per run — the
+  // singular reader in a loop is exactly the N+1 working agreement #5 forbids.
+  it("carries the same three predicates, over a set of runs", async () => {
+    const { client, calls, limit } = clientForFilteredSelect([dbRow()], null, {
+      withLimit: true,
+    });
+    await listPendingProposalsForRuns(client as never, ["run-1", "run-2"], NOW);
+    expect(calls).toEqual([
+      ["run_id", ["run-1", "run-2"]],
+      ["status", "pending"],
+      ["expires_at", NOW.toISOString()],
+    ]);
+    expect(limit).toHaveBeenCalledWith(PENDING_PROPOSAL_SCAN_LIMIT);
+  });
+
+  it("does not touch the database for an empty run list", async () => {
+    const { client, from } = clientForFilteredSelect([], null, {
+      withLimit: true,
+    });
+    expect(await listPendingProposalsForRuns(client as never, [], NOW)).toEqual(
+      [],
+    );
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("throws on a DB error", async () => {
+    const { client } = clientForFilteredSelect(
+      null,
+      { message: "boom" },
+      {
+        withLimit: true,
+      },
+    );
+    await expect(
+      listPendingProposalsForRuns(client as never, ["run-1"], NOW),
+    ).rejects.toThrow("listPendingProposalsForRuns: boom");
+  });
+});
+
+describe("recordProposalDecision", () => {
+  it("writes the status, the decider and the decision time", async () => {
+    const { client, calls, patchOf } = clientForUpdate();
+    const decided = await recordProposalDecision(
+      client as never,
+      {
+        id: "p-1",
+        status: "approved",
+        decidedBy: "owner-1",
+        result: { ok: true },
+      },
+      NOW,
+    );
+    expect(decided).toBe(true);
+    expect(calls).toEqual([["id", "p-1"]]);
+    expect(patchOf()).toEqual({
+      status: "approved",
+      decided_at: NOW.toISOString(),
+      decided_by: "owner-1",
+      result: { ok: true },
+    });
+  });
+
+  it("omits `result` entirely when there is none, rather than nulling it", () => {
+    // A rejection has no result. Writing `result: null` would be the same value
+    // the column already holds, but stating it invites a later reader to think
+    // a decision CLEARS a result that a re-decide might have set.
+    const { client, patchOf } = clientForUpdate();
+    return recordProposalDecision(
+      client as never,
+      { id: "p-1", status: "rejected", decidedBy: "owner-1" },
+      NOW,
+    ).then(() => {
+      expect(patchOf()).not.toHaveProperty("result");
+    });
+  });
+
+  it("reports false when RLS matched no row, instead of claiming success", async () => {
+    // The owner-scoped UPDATE policy hides another person's row: PostgREST
+    // returns 0 rows and NO error. Reading that as success would tell a user
+    // their approval landed when nothing was written.
+    const { client } = clientForUpdate([]);
+    expect(
+      await recordProposalDecision(
+        client as never,
+        { id: "p-1", status: "approved", decidedBy: "owner-1" },
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it("throws on a DB error", async () => {
+    const { client } = clientForUpdate(null, { message: "boom" });
+    await expect(
+      recordProposalDecision(
+        client as never,
+        { id: "p-1", status: "failed", decidedBy: "owner-1" },
+        NOW,
+      ),
+    ).rejects.toThrow("recordProposalDecision: boom");
   });
 });
 
