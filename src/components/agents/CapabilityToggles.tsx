@@ -4,36 +4,9 @@ import {
   AGENT_CAPABILITIES,
   type AgentCapability,
 } from "@/lib/agents/capabilities";
+import { CAPABILITY_COPY } from "@/lib/agents/capability-copy";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-
-/**
- * The plain-language copy for each capability — label, id, and the caption
- * beneath it in the labels table are verbatim, per the task brief. This is
- * the ONE place that copy lives; nothing else in the editor restates it.
- */
-const CAPABILITY_COPY: Record<
-  AgentCapability,
-  { label: string; consequence: string }
-> = {
-  "board.write": {
-    label: "Create and update items",
-    consequence:
-      "This agent can add items and change field values on boards in its scope.",
-  },
-  "files.write": {
-    label: "Create and attach files",
-    consequence: "This agent can write documents and attach them to items.",
-  },
-  "automation.create": {
-    label: "Create board automations",
-    consequence: "This agent can create rules that later run on their own.",
-  },
-  "time.log": {
-    label: "Log time",
-    consequence: "This agent can record time allocations against items.",
-  },
-};
 
 /** Shown on a toggle the org's `agentCapabilityCeiling` does not include. The
  *  grant/ceiling intersection happens again at RUN time regardless of what

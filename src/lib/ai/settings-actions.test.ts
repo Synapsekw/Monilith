@@ -759,6 +759,124 @@ describe("clearOrgDefaultModel", () => {
   });
 });
 
+// The org-wide clamp on what ANY personal agent may be granted — Task 8's
+// per-agent `CapabilityToggles` disables anything outside this set, and the
+// run loop re-intersects it at run time (see `route.test.ts`); this action is
+// only the persistence half.
+describe("setAgentCapabilityCeiling", () => {
+  it("rejects non-admins", async () => {
+    admin(false);
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    const res = await setAgentCapabilityCeiling({
+      capabilities: ["board.write"],
+    });
+    expect(res).toEqual({
+      ok: false,
+      error: "Only organization admins can change AI settings.",
+    });
+    expect(settingsUpdates).toHaveLength(0);
+  });
+
+  // capabilitySchema is z.enum(AGENT_CAPABILITIES) — an unknown string must
+  // never reach the update, and must be refused before the admin check even
+  // runs a query, exactly like `keySchema`/`modeSchema` above.
+  it("rejects an unknown capability before any write", async () => {
+    admin(true);
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    const res = await setAgentCapabilityCeiling({
+      // @ts-expect-error — deliberately outside the vocabulary
+      capabilities: ["board.write", "sudo.everything"],
+    });
+    expect(res.ok).toBe(false);
+    expect(settingsUpdates).toHaveLength(0);
+    expect(rlsRpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects a duplicate capability", async () => {
+    admin(true);
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    const res = await setAgentCapabilityCeiling({
+      capabilities: ["board.write", "board.write"],
+    });
+    expect(res.ok).toBe(false);
+    expect(settingsUpdates).toHaveLength(0);
+  });
+
+  it("stores the narrowed set for admins", async () => {
+    admin(true);
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    const res = await setAgentCapabilityCeiling({
+      capabilities: ["board.write", "time.log"],
+    });
+    expect(res.ok).toBe(true);
+    expect(rowFor("org-1")).toMatchObject({
+      agent_capability_ceiling: ["board.write", "time.log"],
+      updated_by: "user-1",
+    });
+  });
+
+  // An admin closing the gate entirely is a valid, deliberate choice — the
+  // schema has no minimum length.
+  it("accepts an empty set, closing the gate for every agent in the org", async () => {
+    admin(true);
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    const res = await setAgentCapabilityCeiling({ capabilities: [] });
+    expect(res.ok).toBe(true);
+    expect(rowFor("org-1")).toMatchObject({ agent_capability_ceiling: [] });
+  });
+
+  // Same tenant-boundary shape as setOrgDefaultModel: this write runs on the
+  // SERVICE client, which bypasses RLS, so `.eq("org_id", …)` is the only
+  // thing stopping one org's ceiling from becoming every org's.
+  it("touches ONLY the caller's org row", async () => {
+    admin(true);
+    const bystander = { ...rowFor("org-2") };
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    expect(
+      (await setAgentCapabilityCeiling({ capabilities: ["time.log"] })).ok,
+    ).toBe(true);
+    expect(settingsUpdates).toHaveLength(1);
+    expect(settingsUpdates[0].matched).toBe(1);
+    expect(settingsUpdates[0].predicates).toEqual([
+      { column: "org_id", value: "org-1" },
+    ]);
+    expect(rowFor("org-2")).toEqual(bystander);
+  });
+
+  it("never creates a settings row, and says so when there is none", async () => {
+    admin(true);
+    settingsTable = [settingsRow("org-2")];
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    expect(
+      await setAgentCapabilityCeiling({ capabilities: ["board.write"] }),
+    ).toEqual({
+      ok: false,
+      error: "Choose how AI is powered for this organization first.",
+    });
+    expect(svcUpsert).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed write instead of claiming success", async () => {
+    admin(true);
+    settingsUpdateError = { message: "boom" };
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    expect(
+      await setAgentCapabilityCeiling({ capabilities: ["board.write"] }),
+    ).toEqual({
+      ok: false,
+      error: "Couldn't update the capability ceiling. Please try again.",
+    });
+  });
+});
+
 describe("removeOrgByoKey", () => {
   it("rejects non-admins", async () => {
     admin(false);
@@ -843,6 +961,16 @@ describe("revalidation names the page the form actually lives on", () => {
     admin(true);
     const { clearOrgDefaultModel } = await import("@/lib/ai/settings-actions");
     expect((await clearOrgDefaultModel()).ok).toBe(true);
+    expect(paths()).toEqual([AI_SETTINGS_PATH]);
+  });
+
+  it("setAgentCapabilityCeiling", async () => {
+    admin(true);
+    const { setAgentCapabilityCeiling } =
+      await import("@/lib/ai/settings-actions");
+    expect(
+      (await setAgentCapabilityCeiling({ capabilities: ["board.write"] })).ok,
+    ).toBe(true);
     expect(paths()).toEqual([AI_SETTINGS_PATH]);
   });
 
