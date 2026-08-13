@@ -23,6 +23,7 @@ function proposal(over: Partial<PendingProposal> = {}): PendingProposal {
     status: "pending",
     expiresAt: new Date(Date.now() + 6 * DAY_MS).toISOString(),
     createdAt: new Date(Date.now() - DAY_MS).toISOString(),
+    target: null,
     ...over,
   };
 }
@@ -41,6 +42,36 @@ describe("ProposalCard", () => {
     expect(screen.getByText(/Add "Draft proposal"/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /approve/i }));
     expect(decideProposal).toHaveBeenCalledWith({ id: "p-1", approve: true });
+  });
+
+  // `Rename an item to "X".` — WHICH item? The summary is pure and holds only
+  // ids, and every id in a proposal is model-chosen. The resolved name is the
+  // difference between approving a rename of your own draft and approving one
+  // of a colleague's item an injected run pointed at.
+  it("names the object the call would act on", () => {
+    render(
+      <ProposalCard
+        proposal={proposal({ target: { kind: "item", name: "Q3 roadmap" } })}
+      />,
+    );
+    expect(screen.getByText("Item: Q3 roadmap")).toBeInTheDocument();
+  });
+
+  // Honest degradation: a name that could not be found must be said out loud,
+  // not silently rendered as the id-less sentence with nothing missing.
+  it("says when the object could not be found", () => {
+    render(
+      <ProposalCard
+        proposal={proposal({ target: { kind: "board", name: null } })}
+      />,
+    );
+    expect(screen.getByText(/Board not found/)).toBeInTheDocument();
+  });
+
+  it("shows no target line when there is no claim to make", () => {
+    render(<ProposalCard proposal={proposal({ target: null })} />);
+    expect(screen.queryByText(/not found/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Item:/)).not.toBeInTheDocument();
   });
 
   it("declines without approving", async () => {

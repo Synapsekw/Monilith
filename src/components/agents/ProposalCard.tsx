@@ -11,6 +11,7 @@ import {
   isRetryableDecisionError,
   proposalDisplayState,
   proposalExpiryLabel,
+  proposalTargetLabel,
 } from "@/lib/agents/proposal-display";
 import {
   decideProposal,
@@ -109,6 +110,23 @@ export function ProposalCard({
       </div>
 
       <p className="text-foreground mt-1.5 font-medium">{proposal.summary}</p>
+
+      {/* WHICH item / board / group. The summary is pure and holds only ids, so
+          it can only say "an item" — and every id in a proposal is model-chosen.
+          Resolved server-side on the owner's own RLS-scoped client
+          (`proposal-targets.ts`); a name that could not be found says so rather
+          than leaving the sentence reading as if nothing were missing. */}
+      {proposal.target ? (
+        <p
+          className={
+            proposal.target.name === null
+              ? "text-muted-foreground mt-1 text-xs italic"
+              : "text-muted-foreground mt-1 text-xs"
+          }
+        >
+          {proposalTargetLabel(proposal.target)}
+        </p>
+      ) : null}
 
       {/* The tool name and the deadline. The name is what tells two proposals
           apart when a model re-proposed one denied write under a fresh call id

@@ -40,6 +40,7 @@ function pendingProposal(over: Record<string, unknown> = {}) {
     status: "pending",
     expiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
     createdAt: new Date().toISOString(),
+    target: null,
     ...over,
   };
 }

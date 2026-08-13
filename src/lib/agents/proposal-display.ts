@@ -1,4 +1,8 @@
 import type { StatusPillColor } from "@/components/ui/status-pill";
+import type {
+  ProposalTarget,
+  ProposalTargetKind,
+} from "@/lib/agents/proposals-db";
 
 /**
  * How a proposal READS on screen, as opposed to how it is stored.
@@ -36,6 +40,31 @@ export function isRetryableDecisionError(message: string): boolean {
 /** What the owner is told when a decision failed for a reason that is NOT worth
  *  retrying: the row moved on, and only a reload can show where it landed. */
 export const RELOAD_FOR_OUTCOME = "Reload to see where this ended up.";
+
+/**
+ * How a resolved target READS on the card.
+ *
+ * The summary can only say "an item"; every id in a proposal is model-chosen,
+ * and under injection the attacker chooses it — so WHICH item is exactly what
+ * the owner needs before approving. `proposal-targets.ts` resolves it on the
+ * reader's own RLS-scoped client; this turns the result into words.
+ *
+ * `null` name is NOT the same as no target: it means the object was looked for
+ * and is not there, which the owner must be told rather than left to infer from
+ * a sentence that reads as if nothing were missing.
+ */
+const TARGET_NOUN: Record<ProposalTargetKind, string> = {
+  item: "Item",
+  board: "Board",
+  group: "Group",
+};
+
+export function proposalTargetLabel(target: ProposalTarget): string {
+  const noun = TARGET_NOUN[target.kind];
+  return target.name === null
+    ? `${noun} not found — it may have been deleted, or you may no longer have access.`
+    : `${noun}: ${target.name}`;
+}
 
 export type ProposalDisplayState =
   | "pending"

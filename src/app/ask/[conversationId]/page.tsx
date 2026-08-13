@@ -7,9 +7,9 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import {
   listPendingProposalsForRun,
-  toPendingProposal,
   type PendingProposal,
 } from "@/lib/agents/proposals-db";
+import { withResolvedTargets } from "@/lib/agents/proposal-targets";
 import { AskChat } from "@/components/ai/ask/AskChat";
 
 /**
@@ -41,8 +41,10 @@ export default async function AskConversationPage({
   if (runId) {
     const supabase = await createClient();
     // Degrades rather than 500s: the briefing itself is the point of the page.
+    // Same projection AND the same id→name resolution the run-history surface
+    // uses, so a card says which item it would act on wherever it appears.
     proposals = await listPendingProposalsForRun(supabase, runId)
-      .then((list) => list.map(toPendingProposal))
+      .then((list) => withResolvedTargets(supabase, list))
       .catch((e: unknown) => {
         console.error(`[ask] proposal read failed for run ${runId}`, e);
         return [];

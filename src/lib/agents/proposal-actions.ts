@@ -18,10 +18,10 @@ import {
   getProposalForDecision,
   listPendingProposalsForRuns,
   settleProposalOutcome,
-  toPendingProposal,
   type PendingProposal,
   type ProposalStatus,
 } from "./proposals-db";
+import { withResolvedTargets } from "./proposal-targets";
 
 // Re-exported so a client component can type its props without importing a
 // `server-only` module. Type-only, therefore erased — nothing about the row
@@ -71,6 +71,25 @@ export type { PendingProposal };
  * unattended; this path is a person doing a thing they are already permitted to
  * do in the UI, under their own RLS. Re-imposing the agent's ceiling here would
  * refuse an owner an action they can perform by hand two clicks away.
+ *
+ * NOR THE AGENT'S `board_scope`, and for the same reason — but note the
+ * asymmetry, because it is not obvious. The RUN path enforces scope in the tool
+ * wrapper (`buildAgentTools` → `isBoardInScope`), so an ungranted call is
+ * recorded as a proposal only if it was in scope at the time. This path applies
+ * no scope check at all, which makes the un-granted route momentarily LESS
+ * constrained than the granted one: an approval executes wherever the approver's
+ * RLS reaches.
+ *
+ * That is the intended reading. `board_scope` is the OWNER's own stated
+ * preference about their agent, not a security boundary (`board-scope-guard.ts`
+ * says so outright) — and this is the owner, in a browser, deciding one action
+ * by hand. It is also inert today: the agent editor hard-codes `mode: "all"`,
+ * so only a hand-crafted `createAgent` can store `mode: "list"`. THE DAY A
+ * SCOPE PICKER SHIPS, revisit this paragraph rather than the code by reflex:
+ * the question to answer is whether "limit this agent to these boards" is meant
+ * to constrain the AGENT (leave this as is) or the WORK IT PROPOSES (then a
+ * scope check belongs here, and the proposal must carry the scope it was
+ * recorded under, since the agent's own may have changed since).
  */
 
 const SETTINGS_PATH = "/settings/agents";
@@ -373,7 +392,12 @@ export async function getPendingProposals(
       // `input` and `result` are dropped by the shared projection, not by an
       // inline literal here: the briefing-thread surface reads the same rows,
       // and a card must never receive a document body it has no use for.
-      data: rows.map(toPendingProposal),
+      //
+      // `withResolvedTargets` wraps that projection and adds the ONE thing the
+      // server-derived summary cannot say — WHICH item, board or group the call
+      // names. At most three further indexed reads for the whole page, on this
+      // same request-scoped client, so RLS decides what can be named.
+      data: await withResolvedTargets(supabase, rows),
     };
   } catch (e) {
     // Logged, not swallowed: this read is what makes a queued approval

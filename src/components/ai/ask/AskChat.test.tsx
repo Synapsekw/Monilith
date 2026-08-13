@@ -619,6 +619,7 @@ describe("AskChat — an agent briefing thread", () => {
     status: "pending" as const,
     expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
     createdAt: new Date().toISOString(),
+    target: null,
   };
 
   it("renders the run's queued approvals under the report", () => {

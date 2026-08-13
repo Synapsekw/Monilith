@@ -65,12 +65,34 @@ export type ProposalRow = {
   result: unknown;
 };
 
+/** The kinds of object a proposal can address — one per non-`"none"`
+ *  `ToolScope`. See `proposal-targets.ts`. */
+export type ProposalTargetKind = "item" | "board" | "group";
+
+/**
+ * WHICH object the stored call names, resolved for display.
+ *
+ * `name: null` means the read SUCCEEDED and the object was not in it — deleted,
+ * or no longer visible to this reader. A target of `null` on the proposal
+ * itself means no claim is being made at all: the tool addresses no single
+ * object, or the resolving read failed. The two must not be conflated.
+ */
+export type ProposalTarget = {
+  kind: ProposalTargetKind;
+  name: string | null;
+};
+
 /**
  * The subset a REVIEW SURFACE may see. `input` and `result` are deliberately
  * absent: the input can carry a whole document body (`create_file`), the client
  * has no use for it, and the server-derived `summary` is the thing being
  * approved. Shipped from here rather than from the card so both surfaces and
  * the Server Action project the row identically.
+ *
+ * `target` is the ONE thing the summary cannot say, because
+ * `proposal-summary.ts` is pure and holds only ids. It is filled in by
+ * `withResolvedTargets` on the reader's own RLS-scoped client — see
+ * `proposal-targets.ts` for why that is the right side of the wall.
  */
 export type PendingProposal = {
   id: string;
@@ -82,10 +104,15 @@ export type PendingProposal = {
   status: ProposalStatus;
   expiresAt: string;
   createdAt: string;
+  target: ProposalTarget | null;
 };
 
 /** Project a row for review. One mapper, so the two surfaces cannot disagree
- *  about what a card is allowed to know. */
+ *  about what a card is allowed to know.
+ *
+ *  `target` is `null` here BY CONSTRUCTION: this function is pure and has
+ *  nothing to resolve an id against. A display surface calls
+ *  `withResolvedTargets` (which wraps this) rather than this directly. */
 export function toPendingProposal(row: ProposalRow): PendingProposal {
   return {
     id: row.id,
@@ -97,6 +124,7 @@ export function toPendingProposal(row: ProposalRow): PendingProposal {
     status: row.status,
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,
+    target: null,
   };
 }
 
