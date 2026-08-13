@@ -317,11 +317,26 @@ const resolvedDefaults = (): FakeResolved => ({
   baseUrl: null,
   model: fakeResolvedModel(),
 });
+/**
+ * What the route reported it had spent, through `runAi`'s `reportUsage`. The
+ * gateway meters this on the error path; here it stands in for "the run row and
+ * the ledger both know what a run that died mid-loop cost".
+ */
+let reportedUsage: { inputTokens: number; outputTokens: number } | null = null;
+type ReportUsage = (u: {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}) => void;
+const captureUsage: ReportUsage = (u) => {
+  reportedUsage = u;
+};
 const runAi = vi.fn(
   async (
     _args: unknown,
-    fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-  ) => (await fn(resolvedDefaults())).result,
+    fn: (r: FakeResolved, report: ReportUsage) => Promise<{ result: unknown }>,
+  ) => (await fn(resolvedDefaults(), captureUsage)).result,
 );
 vi.mock("@/lib/ai/gateway", () => ({
   runAi: (...a: Parameters<typeof runAi>) => runAi(...a),
@@ -343,8 +358,11 @@ function resolveWith(over: Partial<FakeResolved>) {
   runAi.mockImplementation(
     async (
       _args: unknown,
-      fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-    ) => (await fn({ ...resolvedDefaults(), ...over })).result,
+      fn: (
+        r: FakeResolved,
+        report: ReportUsage,
+      ) => Promise<{ result: unknown }>,
+    ) => (await fn({ ...resolvedDefaults(), ...over }, captureUsage)).result,
   );
 }
 
@@ -408,11 +426,15 @@ beforeEach(() => {
   languageModelFor.mockClear();
   nextModel = () => textOnlyModel("You have 1 overdue item.");
   runAi.mockReset();
+  reportedUsage = null;
   runAi.mockImplementation(
     async (
       _args: unknown,
-      fn: (r: FakeResolved) => Promise<{ result: unknown }>,
-    ) => (await fn(resolvedDefaults())).result,
+      fn: (
+        r: FakeResolved,
+        report: ReportUsage,
+      ) => Promise<{ result: unknown }>,
+    ) => (await fn(resolvedDefaults(), captureUsage)).result,
   );
 });
 
@@ -1003,6 +1025,25 @@ describe("POST /api/ai/personal-agent", () => {
     });
     // No report exists, and inventing one would be worse than an empty column.
     expect(runUpdates[0]!.patch.output).toBeUndefined();
+  });
+
+  // The MONEY half of that same partial trail. Step 1 was a real, billed
+  // provider round-trip; `runAi` meters only what its callback resolves with,
+  // so without this report the tokens that run really spent reach no ledger row
+  // at all — managed-mode spend nobody is charged for, and a monthly credit
+  // ceiling that under-counts by exactly the runs that failed.
+  it("reports the tokens a run spent before it threw, so the gateway can meter them", async () => {
+    getUserAgentById.mockResolvedValue({
+      ...enabledAgent(),
+      capabilities: ["board.write"],
+    });
+    nextModel = writeThenThrowModel;
+
+    await POST(post(slot));
+
+    expect(reportedUsage).not.toBeNull();
+    expect(reportedUsage!.inputTokens).toBeGreaterThan(0);
+    expect(reportedUsage!.outputTokens).toBeGreaterThan(0);
   });
 
   it("records zero steps, not silence, when the run dies before the loop starts", async () => {

@@ -163,6 +163,33 @@ export function fallbackReport(args: {
 }
 
 /**
+ * THE ONE FAILURE SHAPE, read back. `buildAgentTools` returns `{ error }` and
+ * nothing else for every way a call can fail; a successful call returns the
+ * tool's joined text (a string). A PREDICATE over the shape, not a re-derivation
+ * of it: `tools.ts` owns producing `{ error }` (and the system prompt names the
+ * same field), so if that shape ever moves, all three move together.
+ */
+function isToolFailure(output: unknown): boolean {
+  return (
+    typeof output === "object" &&
+    output !== null &&
+    !Array.isArray(output) &&
+    typeof (output as { error?: unknown }).error === "string"
+  );
+}
+
+/** Component-wise sum of two usage readings. Cache counts are optional on the
+ *  type and default to 0, exactly as `computeCostUsd` reads them. */
+function addUsage(a: AiUsageTokens, b: AiUsageTokens): AiUsageTokens {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    cacheReadTokens: (a.cacheReadTokens ?? 0) + (b.cacheReadTokens ?? 0),
+    cacheWriteTokens: (a.cacheWriteTokens ?? 0) + (b.cacheWriteTokens ?? 0),
+  };
+}
+
+/**
  * ONE bounded tool loop, metered.
  *
  * `gate` is passed straight into `toolApproval`: denials come back as tool
@@ -180,12 +207,20 @@ export async function runAgentLoop(args: {
    *
    * The whole point is the failure path: if step 5 throws, `generateText`
    * rejects and everything steps 1–4 achieved is lost with the result object —
-   * including granted writes that really landed on the owner's boards. A caller
-   * that records this can still write an honest audit row for a run that died
-   * halfway. Never called after the throw; the last call before it is the high
-   * water mark.
+   * including granted writes that really landed on the owner's boards AND the
+   * tokens those steps really spent. A caller that records this can still write
+   * an honest audit row, and meter the spend, for a run that died halfway.
+   * Never called after the throw; the last call before it is the high water
+   * mark.
+   *
+   * `usage` is a RUNNING TOTAL across completed steps, not a delta — a caller
+   * keeps the last value rather than accumulating one of its own.
    */
-  onStep?: (progress: { steps: number; toolsUsed: string[] }) => void;
+  onStep?: (progress: {
+    steps: number;
+    toolsUsed: string[];
+    usage: AiUsageTokens;
+  }) => void;
 }): Promise<{
   text: string;
   usage: AiUsageTokens;
@@ -198,6 +233,15 @@ export async function runAgentLoop(args: {
   // happened.
   const used = new Set<string>();
   let steps = 0;
+  // The running usage total, kept step by step so a run that dies mid-loop can
+  // still be metered for what it really spent. `result.totalUsage` — the
+  // authority on the success path — only exists if `generateText` resolves.
+  let spent: AiUsageTokens = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  };
 
   const result = await generateText({
     model: args.model,
@@ -226,10 +270,23 @@ export async function runAgentLoop(args: {
     toolApproval: args.gate,
     stopWhen: stepCountIs(AGENT_MAX_STEPS),
     ...(args.maxOutputTokens ? { maxOutputTokens: args.maxOutputTokens } : {}),
-    onStepFinish: (step) => {
+    // `onStepEnd`, not the deprecated `onStepFinish` alias (ai@7.0.58).
+    onStepEnd: (step) => {
       steps++;
-      for (const r of step.toolResults) used.add(r.toolName);
-      args.onStep?.({ steps, toolsUsed: [...used] });
+      for (const r of step.toolResults) {
+        // `buildAgentTools` funnels EVERY failure — out of scope, a thrown
+        // handler, a handler that refused — into `{ error }`, and nothing else
+        // returns that shape. A call that came back an error changed nothing,
+        // so listing it would make `tools_used` say a write happened. Denied
+        // calls never produce a result at all and are already excluded.
+        if (isToolFailure(r.output)) continue;
+        used.add(r.toolName);
+      }
+      // MUST go through toAiUsage — see its doc comment. The SDK's inputTokens
+      // is cache-INCLUSIVE and computeCostUsd prices cache separately, so a
+      // hand-rolled mapping double-bills every cached token.
+      spent = addUsage(spent, toAiUsage(step.usage));
+      args.onStep?.({ steps, toolsUsed: [...used], usage: spent });
     },
   });
 

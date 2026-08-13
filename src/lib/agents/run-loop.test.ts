@@ -234,7 +234,9 @@ describe("runAgentLoop", () => {
   // The audit trail for a run that DIES mid-loop: `generateText` rejects and
   // its result object — every tool the run got through — goes with it.
   it("reports progress per step, so a caller can audit a run that later throws", async () => {
-    const progress: { steps: number; toolsUsed: string[] }[] = [];
+    const progress: Parameters<
+      NonNullable<Parameters<typeof runAgentLoop>[0]["onStep"]>
+    >[0][] = [];
     let step = 0;
     const throwsAtStepThree = new MockLanguageModelV4({
       doGenerate: async () => {
@@ -268,7 +270,72 @@ describe("runAgentLoop", () => {
     ).rejects.toThrow(/provider 503/);
 
     // Two steps completed before the throw, and the caller knows it.
-    expect(progress.at(-1)).toEqual({ steps: 2, toolsUsed: ["list_items"] });
+    expect(progress.at(-1)).toMatchObject({
+      steps: 2,
+      toolsUsed: ["list_items"],
+    });
+    // …INCLUDING what those two steps cost. Without this the route's error path
+    // records zero usage for a run that made two real, billed provider calls:
+    // managed-mode money spent against no ledger row, and a monthly credit
+    // ceiling that silently under-counts. Cache-exclusive (`toAiUsage`), so
+    // 2 x noCache 10 — never 2 x the SDK's cache-inclusive 30.
+    expect(progress.at(-1)?.usage).toEqual({
+      inputTokens: 20,
+      outputTokens: 40,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 0,
+    });
+  });
+
+  // The accumulator and `result.totalUsage` must agree, or a run metered on the
+  // error path would bill differently from the same run metered on success.
+  it("accumulates the same usage the success path reports", async () => {
+    let last: { inputTokens: number } | undefined;
+    const r = await runAgentLoop({
+      model: twoStepModel(),
+      instructions: "go",
+      tools,
+      gate: makeGrantGate({
+        granted: ["board.write"],
+        ceiling: ["board.write"],
+        onPropose: () => {},
+      }),
+      maxOutputTokens: null,
+      onStep: ({ usage }) => {
+        last = usage;
+      },
+    });
+    expect(last).toEqual(r.usage);
+  });
+
+  // `tools_used` says the run EXECUTED these tools. `buildAgentTools` funnels
+  // every failure into `{ error }`, and a call that came back an error changed
+  // nothing — listing it would read as a write that happened.
+  it("excludes a tool whose call came back an error", async () => {
+    const failing = {
+      list_items: tool({
+        inputSchema: z.object({ boardId: z.string() }),
+        execute: async () => "ok",
+      }),
+      create_item: tool({
+        inputSchema: z.object({ groupId: z.string(), name: z.string() }),
+        // The exact shape tools.ts returns for an out-of-scope board, a thrown
+        // handler, or a handler that refused.
+        execute: async () => ({ error: "That board is outside scope." }),
+      }),
+    };
+    const r = await runAgentLoop({
+      model: twoStepModel(),
+      instructions: "go",
+      tools: failing,
+      gate: makeGrantGate({
+        granted: ["board.write"],
+        ceiling: ["board.write"],
+        onPropose: () => {},
+      }),
+      maxOutputTokens: null,
+    });
+    expect(r.toolsUsed).toEqual(["list_items"]);
   });
 
   // `tools_used` is an audit column on `user_agent_runs`. A DENIED call is a

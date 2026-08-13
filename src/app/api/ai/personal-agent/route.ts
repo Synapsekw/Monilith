@@ -376,7 +376,7 @@ export async function POST(req: Request): Promise<Response> {
           provider: agent.provider ?? undefined,
           requestedModel: agent.model_id,
         },
-        async ({ adapter, apiKey, baseUrl, model }) => {
+        async ({ adapter, apiKey, baseUrl, model }, reportUsage) => {
           if (!model.supportsTools)
             throw new ModelNotToolCapableError(model.model);
           modelSubstituted = model.substituted;
@@ -421,10 +421,16 @@ export async function POST(req: Request): Promise<Response> {
             // per-model `max_output_tokens` is threaded through.
             maxOutputTokens: null,
             // The audit trail for a run that dies mid-loop. Without this, a
-            // throw at step 5 discards everything steps 1–4 did.
-            onStep: ({ steps, toolsUsed }) => {
+            // throw at step 5 discards everything steps 1–4 did — including
+            // the tokens those steps really spent, which `reportUsage` hands
+            // to `runAi` so its catch can still write the ledger row. Steps
+            // 1–11 of a run that dies at step 12 are real, billed provider
+            // round-trips; metering only on success spends managed-mode money
+            // against no ledger row and under-counts the monthly ceiling.
+            onStep: ({ steps, toolsUsed, usage }) => {
               loopSteps = steps;
               loopToolsUsed = toolsUsed;
+              reportUsage(usage);
             },
           });
           return { result: r, usage: r.usage };
