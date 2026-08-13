@@ -1,9 +1,4 @@
-import { z } from "zod";
-import {
-  automationActionsSchema,
-  automationConditionSchema,
-  automationTriggerSchema,
-} from "@/lib/validations/automations";
+import { createAutomationSchema } from "@/lib/validations/automations";
 import {
   createAutomationCore,
   type CreateAutomationCoreInput,
@@ -12,19 +7,16 @@ import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import type { ToolResult } from "@/lib/mcp/tools/shared";
 
 /**
- * The rule shapes are the app's OWN schemas, not a hand-written restatement:
- * the model is shown the same trigger/action/condition vocabulary the
- * Automations dialog writes, and `createAutomationCore` re-validates with
- * `createAutomationSchema` regardless. A local paraphrase would drift the
- * moment a new trigger ships.
+ * `.shape` of the app's OWN `createAutomationSchema`, not a hand-written
+ * restatement: the model is shown exactly the trigger/action/condition
+ * vocabulary the Automations dialog writes, and `createAutomationCore`
+ * re-validates with the same `createAutomationSchema` regardless. Because
+ * `createAutomationSchema` is a plain `z.object` (no object-level `.refine`/
+ * `.superRefine`), `.shape` is a lossless `ZodRawShape` view of it — so this
+ * cannot drift from the core's accepted schema the way a hand-copied field
+ * list could.
  */
-const createAutomationInput = {
-  boardId: z.string().uuid(),
-  name: z.string().trim().max(120).optional(),
-  trigger: automationTriggerSchema,
-  actions: automationActionsSchema,
-  condition: automationConditionSchema.nullish(),
-};
+const createAutomationInput = createAutomationSchema.shape;
 
 /**
  * `create_automation` — the agent-only tool that files a board automation rule.

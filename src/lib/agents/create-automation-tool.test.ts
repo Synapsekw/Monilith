@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ToolInvokeContext } from "@/lib/mcp/tools/descriptor";
+import { createAutomationSchema } from "@/lib/validations/automations";
 import {
   FAKE_ACTOR,
   FAKE_BOARD,
@@ -28,6 +29,19 @@ const validInput = {
 };
 
 describe("create_automation descriptor", () => {
+  // Regression guard for the review finding: the tool must advertise the
+  // SAME shape `createAutomationCore` accepts, by construction — not a
+  // hand-copied restatement that can silently drift. Reference equality
+  // (not a deep-equal of keys) is deliberate: it fails the instant this
+  // stops being `createAutomationSchema.shape` itself, e.g. if a future
+  // edit reintroduces a separate literal object that merely happens to
+  // match today.
+  it("derives its input schema from createAutomationSchema.shape, not a restatement", () => {
+    expect(createAutomationDescriptor.inputSchema).toBe(
+      createAutomationSchema.shape,
+    );
+  });
+
   it("is declared as a board-scoped automation.create write", () => {
     expect(createAutomationDescriptor).toMatchObject({
       name: "create_automation",
