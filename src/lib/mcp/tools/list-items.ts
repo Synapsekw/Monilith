@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 /** Page size when the caller does not ask for one. Most boards fit in one page. */
 export const LIST_ITEMS_DEFAULT_LIMIT = 100;
@@ -189,23 +189,19 @@ export async function listItemsHandler(
   };
 }
 
-export function registerListItemsTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "list_items",
-    {
-      title: "List items",
-      description:
-        `List a board's items together with their cell values, plus the board's columns and groups — ` +
-        `everything needed to answer "what's on this board?" in one call. ` +
-        `Prefer this over calling get_item repeatedly. ` +
-        `Returns up to ${LIST_ITEMS_DEFAULT_LIMIT} items by default (max ${LIST_ITEMS_MAX_LIMIT}); ` +
-        `when "hasMore" is true, call again passing "nextCursor" as "cursor" to get the next page. ` +
-        `Optionally filter to one group with "groupId".`,
-      inputSchema: listItemsInput,
-    },
-    async (input) => listItemsHandler(getClient, input),
-  );
-}
+export const listItemsDescriptor: ToolDescriptor = {
+  name: "list_items",
+  title: "List items",
+  description:
+    `List a board's items together with their cell values, plus the board's columns and groups — ` +
+    `everything needed to answer "what's on this board?" in one call. ` +
+    `Prefer this over calling get_item repeatedly. ` +
+    `Returns up to ${LIST_ITEMS_DEFAULT_LIMIT} items by default (max ${LIST_ITEMS_MAX_LIMIT}); ` +
+    `when "hasMore" is true, call again passing "nextCursor" as "cursor" to get the next page. ` +
+    `Optionally filter to one group with "groupId".`,
+  inputSchema: listItemsInput,
+  capability: null,
+  scope: "boardId",
+  invoke: (ctx, input) =>
+    listItemsHandler(ctx.getClient, input as ListItemsArgs),
+};

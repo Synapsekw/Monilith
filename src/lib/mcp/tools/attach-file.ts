@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   buildColumnFilePath,
   buildStoragePath,
@@ -10,6 +9,7 @@ import {
   resolveItemScope,
 } from "@/lib/collaboration/attachment-core";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 /** Decoded-bytes ceiling for the inline branch. Base64 costs ~1.37 tokens/byte,
  *  so 128 KB is ~44k tokens in one tool call — the point where a bigger file
@@ -168,24 +168,19 @@ export async function attachFileHandler(
   };
 }
 
-export function registerAttachFileTool(
-  server: McpServer,
-  getClient: GetClient,
-  actorId: string,
-): void {
-  server.registerTool(
-    "attach_file",
-    {
-      title: "Attach file",
-      description:
-        "Attach a file to an item. Provide EITHER `contentBase64` (files under " +
-        "128 KB, uploaded inline) OR `storagePath` returned by " +
-        "create_attachment_upload after you PUT the bytes to its `uploadUrl`. " +
-        "Omit `columnId` for an item-level attachment; pass a Files column's id " +
-        "to attach into that cell. Size and type are read from storage, not " +
-        "from you. Attachments cannot be deleted through this server.",
-      inputSchema: attachFileInput,
-    },
-    async (input) => attachFileHandler(getClient, input, actorId),
-  );
-}
+export const attachFileDescriptor: ToolDescriptor = {
+  name: "attach_file",
+  title: "Attach file",
+  description:
+    "Attach a file to an item. Provide EITHER `contentBase64` (files under " +
+    "128 KB, uploaded inline) OR `storagePath` returned by " +
+    "create_attachment_upload after you PUT the bytes to its `uploadUrl`. " +
+    "Omit `columnId` for an item-level attachment; pass a Files column's id " +
+    "to attach into that cell. Size and type are read from storage, not " +
+    "from you. Attachments cannot be deleted through this server.",
+  inputSchema: attachFileInput,
+  capability: "files.write",
+  scope: "itemId",
+  invoke: (ctx, input) =>
+    attachFileHandler(ctx.getClient, input as AttachFileInput, ctx.actorId),
+};

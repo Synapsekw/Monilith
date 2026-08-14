@@ -35,6 +35,33 @@ export async function listConversations(
   return data ?? [];
 }
 
+/**
+ * The agent run this thread reports on, or null for an ordinary chat.
+ *
+ * `ai_conversations.run_id` is set only by `writeBriefingThread`, so a non-null
+ * answer means "this thread is a briefing" — which is what lets the thread page
+ * show the run's queued approvals next to the report that asked for them. A
+ * single-row primary-key read, issued in parallel with the messages, and RLS
+ * scopes it to the owner exactly as `getMessages` is scoped.
+ */
+export async function getConversationRunId(
+  conversationId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_conversations")
+    .select("run_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  // Never throws: a briefing that renders without its approval cards is a
+  // degraded thread; a 500 is no thread at all.
+  if (error) {
+    console.error(`[ask] run id read failed for ${conversationId}`, error);
+    return null;
+  }
+  return data?.run_id ?? null;
+}
+
 /** Load a conversation's turns oldest-first, bounded. RLS returns empty rows for
  *  a non-owner (used by the page to 404). */
 export async function getMessages(

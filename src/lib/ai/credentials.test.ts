@@ -65,6 +65,7 @@ import {
   listMyAiCredentials,
   asTrustedUserId,
   maskKey,
+  readSweepCredential,
 } from "@/lib/ai/credentials";
 
 function providerRow(overrides: Partial<Record<string, unknown>> = {}) {
@@ -259,5 +260,89 @@ describe("listMyAiCredentials", () => {
     postgrestResult.mockReturnValueOnce({ data: [], error: null });
     await listMyAiCredentials();
     expect(requireUser).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * THE BORROWED-KEY SELECTION RULE. `readSweepCredential` picks ONE user's key
+ * to re-verify a provider's model ids with — someone else's credential, spent
+ * on the org's behalf. The owner's condition for approving that was that the
+ * choice be DETERMINISTIC: the same key on every run over unchanged data, not
+ * whichever row Postgres happened to hand back first.
+ *
+ * `updated_at desc` alone does not deliver that. Two keys saved in the same
+ * second — a scripted setup, a bulk import, a coarse clock — tie, and the
+ * winner is then whatever order the plan produced. `user_id asc` is the
+ * tiebreak that closes it, and until now no test seeded a tie, so deleting that
+ * `.order("user_id")` line kept every test green.
+ */
+function sweepClient(rows: { user_id: string; updated_at: string }[]) {
+  const rpcCalls: { p_user: string; p_provider: string }[] = [];
+  const client = {
+    from() {
+      const sorts: { col: "updated_at" | "user_id"; asc: boolean }[] = [];
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        order(col: "updated_at" | "user_id", opts?: { ascending?: boolean }) {
+          sorts.push({ col, asc: opts?.ascending !== false });
+          return builder;
+        },
+        // Array.prototype.sort is STABLE, so with no tiebreak the tied rows
+        // come back in seed order — which is exactly how a non-deterministic
+        // rule shows itself here.
+        limit: async (n: number) => {
+          const sorted = [...rows].sort((a, b) => {
+            for (const s of sorts) {
+              if (a[s.col] === b[s.col]) continue;
+              return (a[s.col] < b[s.col] ? -1 : 1) * (s.asc ? 1 : -1);
+            }
+            return 0;
+          });
+          return { data: sorted.slice(0, n), error: null };
+        },
+      };
+      return builder;
+    },
+    rpc: async (_fn: string, args: { p_user: string; p_provider: string }) => {
+      rpcCalls.push(args);
+      return { data: [{ secret: `key-${args.p_user}` }], error: null };
+    },
+  };
+  return { client: client as never, rpcCalls };
+}
+
+describe("readSweepCredential", () => {
+  it("breaks an updated_at tie deterministically on user_id", async () => {
+    const SAME = "2026-08-01T00:00:00Z";
+    // Seeded HIGHEST user_id first: without the `user_id` tiebreak the stable
+    // sort returns u9 here and u1 below, so the rule would depend on row order.
+    const a = sweepClient([
+      { user_id: "u9", updated_at: SAME },
+      { user_id: "u1", updated_at: SAME },
+    ]);
+    const b = sweepClient([
+      { user_id: "u1", updated_at: SAME },
+      { user_id: "u9", updated_at: SAME },
+    ]);
+
+    await expect(readSweepCredential(a.client, "mistral")).resolves.toBe(
+      "key-u1",
+    );
+    await expect(readSweepCredential(b.client, "mistral")).resolves.toBe(
+      "key-u1",
+    );
+    expect(a.rpcCalls).toEqual([{ p_user: "u1", p_provider: "mistral" }]);
+    expect(b.rpcCalls).toEqual([{ p_user: "u1", p_provider: "mistral" }]);
+  });
+
+  it("still prefers the most recently updated key when there is no tie", async () => {
+    const { client } = sweepClient([
+      { user_id: "u1", updated_at: "2026-08-01T00:00:00Z" },
+      { user_id: "u9", updated_at: "2026-08-02T00:00:00Z" },
+    ]);
+    await expect(readSweepCredential(client, "mistral")).resolves.toBe(
+      "key-u9",
+    );
   });
 });

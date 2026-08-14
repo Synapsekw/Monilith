@@ -11,12 +11,17 @@ import {
   agentRunStatusLabel,
   type AgentRunLike,
 } from "@/lib/agents/run-status";
+import type { AgentCadence } from "@/lib/agents/agent-config";
 
 export type RosterAgent = {
   id: string;
   name: string;
   templateId: string;
-  cadence: "daily";
+  /** Carried, not yet rendered: the roster shows only the hour today. Typed as
+   *  the full `AgentCadence` union rather than the `"daily"` literal so a
+   *  weekly or monthly agent can reach this component at all — labelling the
+   *  cadence in the row is a UI change of its own. */
+  cadence: AgentCadence;
   runAtLocalHour: number;
   enabled: boolean;
   /** The agent's most recent run, or null if it has never run. Carries the raw
@@ -24,6 +29,10 @@ export type RosterAgent = {
    *  stored as `error` and only `run-status.ts` — reading the sentinel and the
    *  timestamp together — can tell that apart from a real failure. */
   lastRun: AgentRunLike | null;
+  /** Undecided proposals waiting on this agent's owner. Comes from ONE tally
+   *  over the whole roster (`countPendingProposalsByAgent`), never a query per
+   *  row. Optional so a surface with no tally in hand simply shows no badge. */
+  pendingProposals?: number;
 };
 
 function hourLabel(h: number): string {
@@ -79,6 +88,14 @@ export function AgentRoster({
                 </p>
               </button>
               <div className="flex shrink-0 items-center gap-3">
+                {/* The ONLY way a queued approval is discoverable without
+                    opening the run that produced it. Colour is never the sole
+                    signal — the count carries the word with it (WCAG AA). */}
+                {a.pendingProposals && a.pendingProposals > 0 ? (
+                  <StatusPill color="yellow" variant="soft">
+                    {a.pendingProposals} awaiting approval
+                  </StatusPill>
+                ) : null}
                 {status ? (
                   <StatusPill
                     color={agentRunStatusColor(status)}

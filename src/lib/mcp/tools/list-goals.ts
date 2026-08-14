@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getGoalsTreeCore, GOALS_LIMIT } from "@/lib/goals/queries";
 import { resolveOrgForTool, listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import type { GoalNode, RowOwner } from "@/lib/goals/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export type FlatGoal = {
   id: string;
@@ -89,17 +89,13 @@ export async function listGoalsHandler(
   };
 }
 
-export function registerListGoalsTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "list_goals",
-    {
-      title: "List goals",
-      description: `Every goal visible to the connected user, flattened depth-first with a \`depth\` field preserving the hierarchy. Returns at most ${GOALS_LIMIT} goals.`,
-      inputSchema: { orgId: z.string().uuid().optional() },
-    },
-    async (args) => listGoalsHandler(getClient, args),
-  );
-}
+export const listGoalsDescriptor: ToolDescriptor = {
+  name: "list_goals",
+  title: "List goals",
+  description: `Every goal visible to the connected user, flattened depth-first with a \`depth\` field preserving the hierarchy. Returns at most ${GOALS_LIMIT} goals.`,
+  inputSchema: { orgId: z.string().uuid().optional() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    listGoalsHandler(ctx.getClient, input as { orgId?: string }),
+};

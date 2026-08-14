@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-11 15:01",
+  "updated": "2026-08-14 08:08",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -119,9 +119,9 @@
     },
     {
       "name": "AI & agents",
-      "pct": 88,
-      "have": "One metered gateway (managed or bring-your-own key), Ask Monolith with confirm-before-execute writes, a board agent dock, semantic search, a hosted MCP server (24 tools behind real OAuth 2.1) — and now a DB-driven provider registry: one key per provider across five providers, agents pinnable to any model, new models with no deploy.",
-      "left": "E6 Stripe billing — the last open AI epic, needs no migration. Spec 2 (agent capability) and Spec 3 (orchestration) follow the provider layer."
+      "pct": 93,
+      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer (one key per provider, DB-driven catalog), and now an agent runtime: bounded tool loop, capability grants, an org ceiling and durable proposals.",
+      "left": "E6 Stripe; Spec 2b (agent knowledge) and Spec 3 (orchestration)."
     },
     {
       "name": "Platform & craft",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "4b6a718e",
+        "value": "939b0c1d",
         "tone": "warn",
-        "note": "Two merges undeployed: the AI provider & model layer (37 commits, +11483/-1542) and the earlier test-account-hygiene work. Promotion is not optional chrome this time — it closes a live credential-getter exposure. Set AI_PGNET_HMAC_SECRET in Vercel production first."
+        "note": "AHEAD of main by 30 commits — Spec 2a (agent runtime) merged 2026-08-14 and is unpromoted. The feature and its /updates entries go live together on the next promotion."
       },
       {
         "name": "main",
-        "value": "896507ad",
+        "value": "1ebc8a44",
         "tone": "ok",
-        "note": "PR #93 merged 2026-08-09 — Report Builder v2: multi-board roll-ups, portfolio-following reports, org templates, new /reports section. 9 commits."
+        "note": "PR #95 merged 2026-08-11 — the AI provider & model layer (Spec 1 of 3): one key per provider, org default-model picker, per-agent pins, DB-driven registry + daily catalog refresh. 47 commits."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel state=success on 896507ad; www.monolith.works 200, /reports 307 (route exists behind auth), /updates serving the three new report entries."
+        "note": "Vercel state=success on 1ebc8a44. Serving Spec 1; does NOT yet have the agent runtime."
       }
     ],
     "gates": [
@@ -181,61 +181,59 @@
   },
   "next": [
     {
-      "title": "Promote develop → main",
+      "title": "Promote Spec 2a to main",
+      "why": "30 commits sit merged on develop and unpromoted, so agents still cannot act for any real user. Both migrations are already applied to DEV — which is what production reads — so the DB half is live while the code half is not. The /updates entries publish with it.",
       "tags": [
-        "critical",
-        "one session"
-      ],
-      "why": "This one closes a live exposure, not just chrome. ai_credential_set is already replaced on DEV so it no longer clears a user's other providers, while deployed production still reads keys through the 1-arg ai_credential_get, which selects all of a user's rows with no ORDER BY and no LIMIT — so a second key saved through the deployed UI makes production pick an arbitrary row. Bounded to 1 credential / 1 user and self-healing. The fix is to promote, not to patch. Set AI_PGNET_HMAC_SECRET in the Vercel production env first, or the already-scheduled catalog cron 503s after promotion and the catalog silently freezes."
+        "promote",
+        "agents"
+      ]
     },
     {
-      "title": "Verify the dashboard widgets in the running app",
+      "title": "Brainstorm Spec 2b — agent knowledge",
+      "why": "Owner chose 2b (reference templates + memory) over Spec 3, depth before breadth. There is no spec yet; start with superpowers:brainstorming. Spec 3 (orchestration, @handle addressing, the renameable built-in assistant, agent.create/schedule.create) follows it.",
       "tags": [
-        "critical",
-        "half a session"
-      ],
-      "why": "Number, battery, completion and health widgets call SECURITY DEFINER RPCs through the service client, where auth.uid() is null and the can_read_board guard denies — so they should have been raising 42501 since 2026-07-04. Confirmed on DEV that all five carry the guard and it returns false with no auth context. This may be affecting users today. Look at a real dashboard before changing anything."
+        "spec",
+        "brainstorm"
+      ]
+    },
+    {
+      "title": "Re-read every org-admin gate against an AI actor",
+      "why": "gotcha-91: create_automation handed the model call_webhook, the one action the codebase had already ruled AI may never choose. The org-admin guard survived the extraction intact and was simply never a defence — it authorises the actor, and a model's actor is trusted by construction. Every 'requires an org admin' gate predates AI reaching it.",
+      "tags": [
+        "security",
+        "critical"
+      ]
     },
     {
       "title": "E6 Stripe — units B, C, E–H",
+      "why": "The only open AI epic. Sequence the six npm dependabot branches either side of the Stripe SDK install, never during — they contend over the lockfile.",
       "tags": [
-        "last AI epic",
-        "no migration"
-      ],
-      "why": "The final open epic in Phase 10, and the safest large task to run beside a migration-bearing one because it carries no migration of its own. Only end-to-end verification waits on credentials. Sequence the 6 npm dependabot branches either side of it — never during; they contend over the lockfile."
-    },
-    {
-      "title": "Personal Agents Phase 2 — second half",
-      "tags": [
-        "specced",
-        "unscheduled"
-      ],
-      "why": "@mentionable agents inside item threads, agent-initiated proposals, per-agent principals, and PDF documents. The board dock half already shipped and is live."
+        "billing"
+      ]
     },
     {
       "title": "Buy the $99 Apple Developer account",
+      "why": "The only blocker left on desktop signing. Nothing has been signed or notarized, so cert import through whether auto-update installs is untested by construction.",
       "tags": [
-        "owner's track",
-        "a purchase, not a task"
-      ],
-      "why": "The only thing between here and installable auto-update. Everything downstream is built and waiting: adding six secrets to monolith-desktop turns the existing tag-triggered CI into a signed, notarized, published release with no code edit. It also retires the xattr dance and the \"damaged\" warning. Runbook: .github/RELEASING.md."
+        "desktop"
+      ]
     }
   ],
   "risks": [
     {
-      "sev": "red",
-      "title": "A second AI key in production picks an arbitrary provider",
-      "text": "The deployed 1-arg ai_credential_get returns all of a user's rows unordered and unlimited, while the DEV migration already changed the writer. Do not add a second provider key until develop is promoted. Bounded: 1 credential, 1 user."
-    },
-    {
       "sev": "amber",
-      "title": "The catalog cron freezes silently if a secret is missing",
-      "text": "ai-models-refresh is scheduled on DEV and fires daily at 03:10 UTC against /api/ai/models/refresh, which does not exist in deployed production. It 404s today; after promotion it 503s unless AI_PGNET_HMAC_SECRET is set — with no error surface."
+      "title": "An agent can write to real boards unattended",
+      "text": "Spec 2a's loop runs at 07:00 with no human in it. Grants default to empty and the org ceiling clamps further, but every tool result is untrusted text written by other people, flowing back into a model that holds write tools. The gate bounds which capability, not which object."
     },
     {
       "sev": "open",
-      "title": "Only Anthropic re-verifies its model ids",
-      "text": "For the other four providers, 'new models without a deploy' is false until a user re-saves their key. Largest functional gap in the provider layer; belongs in Spec 2."
+      "title": "The models-refresh replay window is 300s and unmeasured",
+      "text": "The signed body now carries ts + nonce, but the nonce is not a replay detector — no store was built — so a captured body replays for the full window. 300s was reasoned, not measured: net._http_response rows had aged out. Sub-5s real latency would tighten it to 60s with no migration."
+    },
+    {
+      "sev": "open",
+      "title": "gotcha-55 now fires on every migration",
+      "text": "The supabase-dev MCP re-stamped its own version on 4 of 4 migrations this session, despite a correct name. It is no longer an occasional trap — budget the ledger check and reconcile-migration-version.sh every single time."
     },
     {
       "sev": "open",
@@ -285,14 +283,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-11-1501-provider-model-layer-spec-1",
-    "when": "2026-08-11 15:01",
-    "title": "Provider & model layer — Spec 1 of 3, merged",
+    "id": "2026-08-14-0808-agent-runtime-spec-2a",
+    "when": "2026-08-14 08:08",
+    "title": "Agent runtime — Spec 2a merged",
     "bullets": [
-      "13 tasks, 37 commits, 140 files, +11483/-1542. Two new tables: ai_providers (registry) and ai_models (catalog, refreshed daily from the public Vercel AI Gateway feed). One key per provider, agents pinnable to any reachable model, new models with no deploy.",
-      "The Gateway's id namespace is not the providers'. It publishes claude-haiku-4.5 where Anthropic wants claude-haiku-4-5, and only two ids happened to match — found when a refresh retired the model item_assist routes to. Each provider now judges its own ids; unmatched rows are quarantined.",
-      "Two owner billing decisions: a null catalog price chains to the fallback rather than billing $0, and FALLBACK_RATES became a per-component minimum so Sonnet 5's introductory price (expiring 2026-08-31) cannot silently displace the standard rate it is deliberately billed at.",
-      "Five tests that could not fail shipped in one plan — an arg-blind query fake twice, an assertion satisfied by the bug, a scan a comment could satisfy, and a security test asserting on input never supplied. None was caught by the suite; all five by review."
+      "30 commits merged as 939b0c1d. personal-agent/route.ts moved off the briefing pipeline onto generateText with a 12-step cap; the 24 MCP handlers now export descriptors both transports share, plus create_file and create_automation.",
+      "Per-agent capability grants intersect an org ceiling at run time. Ungranted calls are denied in-loop and written as durable proposals so an unattended run still finishes — never suspended.",
+      "capabilities defaults to '{}', so every pre-existing agent stays exactly as read-only as it was: opt-in by construction, not by vigilance. Three additive migrations, ledger 141/141.",
+      "The final whole-branch review found one Critical no task review could see — create_automation exposed call_webhook to the model. Recorded as gotcha-91: a guard written for a human actor does not survive an AI actor."
     ]
   }
 }

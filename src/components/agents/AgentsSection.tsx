@@ -13,6 +13,7 @@ import { AgentRoster, type RosterAgent } from "@/components/agents/AgentRoster";
 import { TemplateGallery } from "@/components/agents/TemplateGallery";
 import { AgentEditor, type AgentRecord } from "@/components/agents/AgentEditor";
 import type { ModelOption } from "@/components/settings/ModelPicker";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 
 type View = "roster" | "gallery" | "editor";
 
@@ -32,15 +33,21 @@ type EditorContext =
 export function AgentsSection({
   agents: initial,
   lastRuns = {},
+  pendingProposals = {},
   maxAgents,
   modelOptions,
   providers,
+  capabilityCeiling,
 }: {
   agents: AgentRecord[];
   /** Most recent run per agent id, read once by the server component. Absent
    *  keys mean "never ran", which is why this is a plain lookup and not part of
    *  `AgentRecord` — the editor's shape has no business carrying run data. */
   lastRuns?: Record<string, AgentRunLike>;
+  /** Undecided proposals per agent id, from ONE tally the server component
+   *  reads for the whole roster. Absent keys mean "nothing waiting", which is
+   *  why this is a plain lookup rather than a field on `AgentRecord`. */
+  pendingProposals?: Record<string, number>;
   /** `org_ai_settings.max_agents_per_user` — the cap the server ACTUALLY
    *  enforces in `assertCanCreateAgent`. Passed in rather than hardcoded: this
    *  label read "of 20" (the column's check-constraint ceiling) while the real
@@ -54,6 +61,10 @@ export function AgentsSection({
   /** The enabled provider registry, so the picker can name the providers that
    *  have no models yet instead of hiding them. */
   providers: { id: string; label: string }[];
+  /** `OrgAiSettings.agentCapabilityCeiling`, read once by the server page and
+   *  threaded to the editor's capability toggles — same first-paint reasoning
+   *  as `modelOptions` above. */
+  capabilityCeiling: AgentCapability[];
 }) {
   const [agents, setAgents] = useState<AgentRecord[]>(initial);
   const [view, setView] = useState<View>("roster");
@@ -75,6 +86,7 @@ export function AgentsSection({
     // failure mode silent. The full history behind it is what defers
     // (working agreement #5): `AgentRunHistory` fetches only on expand.
     lastRun: lastRuns[a.id] ?? null,
+    pendingProposals: pendingProposals[a.id] ?? 0,
   }));
 
   function handleToggle(id: string, enabled: boolean) {
@@ -110,6 +122,12 @@ export function AgentsSection({
         // its owner chooses otherwise.
         provider: null,
         modelId: null,
+        // And no capabilities. A template is a starting point, never a grant —
+        // every new agent begins read-only and is widened deliberately.
+        capabilities: [],
+        // Every template is daily, whose cadence shape is both day fields null.
+        runOnWeekday: null,
+        runOnDayOfMonth: null,
       },
     });
     setView("editor");
@@ -164,6 +182,7 @@ export function AgentsSection({
         initial={editorContext.initial}
         modelOptions={modelOptions}
         providers={providers}
+        capabilityCeiling={capabilityCeiling}
         onSaved={handleSaved}
         onCancel={handleEditorCancel}
         onDeleted={handleDeleted}

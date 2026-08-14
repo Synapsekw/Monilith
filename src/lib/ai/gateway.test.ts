@@ -723,6 +723,84 @@ describe("runAi", () => {
     );
   });
 
+  // A callback that spends tokens and THEN throws — the agent tool loop, where
+  // steps 1–11 are real billed round-trips and a step-12 provider 5xx rejects
+  // the whole call. Metering only on resolution spends managed-mode money
+  // against no ledger row and under-counts the monthly credit ceiling.
+  it("meters what a throwing callback reported it had already spent", async () => {
+    const { runAi } = await import("@/lib/ai/gateway");
+
+    await expect(
+      runAi(
+        { orgId: ORG_ID, userId: "user-1", feature: "personal_agent_run" },
+        async (_resolved, reportUsage) => {
+          reportUsage({ inputTokens: 100, outputTokens: 50 });
+          reportUsage({
+            inputTokens: 1000,
+            outputTokens: 500,
+            cacheReadTokens: 20_000,
+            cacheWriteTokens: 4_000,
+          });
+          throw new Error("provider 503");
+        },
+      ),
+    ).rejects.toThrow("provider 503");
+
+    // The LAST report wins — a running total, not a delta to accumulate.
+    const ledgerWrites = rpc.mock.calls.filter(
+      (c) => c[0] === "record_ai_usage",
+    );
+    expect(ledgerWrites).toHaveLength(1);
+    expect(ledgerWrites[0]?.[1]).toMatchObject({
+      p_feature: "personal_agent_run",
+      p_input_tokens: 1000,
+      p_output_tokens: 500,
+      p_cache_read_tokens: 20_000,
+      p_cache_write_tokens: 4_000,
+    });
+  });
+
+  it("records nothing when a throwing callback reported no spend", async () => {
+    const { runAi } = await import("@/lib/ai/gateway");
+
+    await expect(
+      runAi(
+        { orgId: ORG_ID, userId: "user-1", feature: "ask_pulse" },
+        async () => {
+          throw new Error("died before the first call");
+        },
+      ),
+    ).rejects.toThrow("died before the first call");
+
+    expect(rpc).not.toHaveBeenCalledWith("record_ai_usage", expect.anything());
+  });
+
+  // The other half: a successful run must still be metered EXACTLY once, from
+  // the usage it returned — never once for the report and again for the result.
+  it("meters a successful run once, from the returned usage", async () => {
+    const { runAi } = await import("@/lib/ai/gateway");
+
+    await runAi(
+      { orgId: ORG_ID, userId: "user-1", feature: "personal_agent_run" },
+      async (_resolved, reportUsage) => {
+        reportUsage({ inputTokens: 999, outputTokens: 999 });
+        return {
+          result: "ok",
+          usage: { inputTokens: 1000, outputTokens: 500 },
+        };
+      },
+    );
+
+    const ledgerWrites = rpc.mock.calls.filter(
+      (c) => c[0] === "record_ai_usage",
+    );
+    expect(ledgerWrites).toHaveLength(1);
+    expect(ledgerWrites[0]?.[1]).toMatchObject({
+      p_input_tokens: 1000,
+      p_output_tokens: 500,
+    });
+  });
+
   it("defaults cache token counts to 0 when the adapter omits them", async () => {
     const { runAi } = await import("@/lib/ai/gateway");
 

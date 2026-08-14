@@ -1,54 +1,64 @@
 import { describe, it, expect } from "vitest";
-import { renderBriefingHtml, renderBriefingText } from "./briefing-render";
-import type { Briefing } from "./briefing";
-
-const briefing: Briefing = {
-  today: "2026-08-01",
-  totals: { overdue: 1, today: 0, week: 0 },
-  groups: [
-    {
-      bucket: "overdue",
-      label: "Overdue",
-      items: [
-        {
-          itemId: "i1",
-          itemName: "<script>alert(1)</script>",
-          boardId: "b1",
-          boardName: "Sprint 24",
-          groupName: null,
-          status: null,
-          dueDate: "2026-07-30",
-        },
-      ],
-    },
-  ],
-};
+import {
+  APPROVAL_CTA,
+  approvalHeadline,
+  approvalLine,
+  renderBriefingHtml,
+  renderBriefingText,
+} from "./briefing-render";
 
 const input = {
   agentName: "Morning Brief",
-  briefing,
+  today: "2026-08-01",
+  summary: "One item is overdue.",
+  proposalCount: 0,
   appBaseUrl: "https://app.example.com",
   unsubscribeUrl: "https://app.example.com/api/digest/unsubscribe?uid=u&sig=s",
-  summary: "One item is overdue.",
 };
 
 const threadUrl = "https://app.example.com/ask/conv-1";
 
 describe("renderBriefingHtml", () => {
-  it("escapes user-provided item names", () => {
-    const html = renderBriefingHtml(input);
+  // The summary is MODEL output over item names authored by other people, so
+  // it is untrusted for exactly the same reason the old item table was.
+  it("escapes the model-written summary", () => {
+    const html = renderBriefingHtml({
+      ...input,
+      summary: "<script>alert(1)</script>",
+    });
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
   });
 
-  it("includes the agent name and the unsubscribe url", () => {
+  it("escapes the agent name", () => {
+    const html = renderBriefingHtml({ ...input, agentName: "<b>Bold</b>" });
+    expect(html).not.toContain("<b>Bold</b>");
+    expect(html).toContain("&lt;b&gt;Bold&lt;/b&gt;");
+  });
+
+  it("includes the agent name, the date and the unsubscribe url", () => {
     const html = renderBriefingHtml(input);
     expect(html).toContain("Morning Brief");
+    expect(html).toContain("2026-08-01");
     expect(html).toContain(input.unsubscribeUrl);
   });
 
   it("includes the model summary", () => {
     expect(renderBriefingHtml(input)).toContain("One item is overdue.");
+  });
+
+  // Verbatim copy from the spec. An owner who never reads this line never
+  // discovers the proposal queue.
+  it("carries the approval line verbatim when actions are pending", () => {
+    const html = renderBriefingHtml({ ...input, proposalCount: 3 });
+    expect(html).toContain(
+      "<strong>3 actions await your approval.</strong> Open the run in Settings → Agents to review them.",
+    );
+  });
+
+  it("omits the approval block entirely at zero", () => {
+    const html = renderBriefingHtml(input);
+    expect(html).not.toContain("await your approval");
   });
 
   it("omits the thread link entirely when no threadUrl is given", () => {
@@ -81,11 +91,36 @@ describe("renderBriefingHtml", () => {
 });
 
 describe("renderBriefingText", () => {
-  it("renders a plain-text alternative with the bucket label", () => {
+  it("renders a plain-text alternative with no markup", () => {
     const text = renderBriefingText(input);
-    expect(text).toContain("Overdue");
-    expect(text).toContain("Sprint 24");
+    expect(text).toContain("Morning Brief — briefing for 2026-08-01");
+    expect(text).toContain("One item is overdue.");
     expect(text).not.toContain("<td");
+    expect(text).not.toContain("<p");
+  });
+
+  // Both renderers build from `approvalHeadline` + `APPROVAL_CTA` — the helper
+  // claimed the HTML and text alternatives could not drift while the HTML
+  // inlined its own copy of the words, which is worse than no helper: it
+  // invites an edit made in the belief that both halves will follow.
+  it("is built from the shared halves, in both alternatives", () => {
+    const html = renderBriefingHtml({ ...input, proposalCount: 3 });
+    expect(html).toContain(`<strong>${approvalHeadline(3)}</strong>`);
+    expect(html).toContain(APPROVAL_CTA);
+    expect(renderBriefingText({ ...input, proposalCount: 3 })).toContain(
+      approvalLine(3),
+    );
+  });
+
+  it("carries the SAME approval sentence as the HTML", () => {
+    const text = renderBriefingText({ ...input, proposalCount: 3 });
+    expect(text).toContain(
+      "3 actions await your approval. Open the run in Settings → Agents to review them.",
+    );
+  });
+
+  it("omits the approval line at zero", () => {
+    expect(renderBriefingText(input)).not.toContain("await your approval");
   });
 
   it("omits the thread link line entirely when no threadUrl is given", () => {

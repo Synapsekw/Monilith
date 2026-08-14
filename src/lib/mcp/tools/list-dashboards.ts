@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   listDashboardsCore,
   DASHBOARD_LIST_LIMIT,
 } from "@/lib/dashboards/queries";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function listDashboardsHandler(
   getClient: GetClient,
@@ -27,17 +27,13 @@ export async function listDashboardsHandler(
   }
 }
 
-export function registerListDashboardsTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "list_dashboards",
-    {
-      title: "List dashboards",
-      description: `Dashboards visible to the connected user in one organization. Returns at most ${DASHBOARD_LIST_LIMIT}.`,
-      inputSchema: { orgId: z.string().uuid().optional() },
-    },
-    async (args) => listDashboardsHandler(getClient, args),
-  );
-}
+export const listDashboardsDescriptor: ToolDescriptor = {
+  name: "list_dashboards",
+  title: "List dashboards",
+  description: `Dashboards visible to the connected user in one organization. Returns at most ${DASHBOARD_LIST_LIMIT}.`,
+  inputSchema: { orgId: z.string().uuid().optional() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    listDashboardsHandler(ctx.getClient, input as { orgId?: string }),
+};

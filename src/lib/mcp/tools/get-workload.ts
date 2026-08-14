@@ -1,9 +1,9 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getWorkloadSummaryCore } from "@/lib/workload/queries";
 import { resolveOrgForTool, listOrgMemberProfiles } from "@/lib/mcp/org-scope";
 import { validateRange } from "./range";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use `YYYY-MM-DD`.");
 
@@ -76,21 +76,20 @@ export async function getWorkloadHandler(
   }
 }
 
-export function registerGetWorkloadTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_workload",
-    {
-      title: "Get workload",
-      description: `Planned load per team member over a date window: allocated seconds from item estimates, item count, and capacity seconds. Defaults to the next four weeks. Range must be at most ${WORKLOAD_RANGE_MAX_DAYS} days. Pass both \`from\` and \`to\` together, or neither.`,
-      inputSchema: {
-        orgId: z.string().uuid().optional(),
-        from: isoDate.optional(),
-        to: isoDate.optional(),
-      },
-    },
-    async (args) => getWorkloadHandler(getClient, args),
-  );
-}
+export const getWorkloadDescriptor: ToolDescriptor = {
+  name: "get_workload",
+  title: "Get workload",
+  description: `Planned load per team member over a date window: allocated seconds from item estimates, item count, and capacity seconds. Defaults to the next four weeks. Range must be at most ${WORKLOAD_RANGE_MAX_DAYS} days. Pass both \`from\` and \`to\` together, or neither.`,
+  inputSchema: {
+    orgId: z.string().uuid().optional(),
+    from: isoDate.optional(),
+    to: isoDate.optional(),
+  },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    getWorkloadHandler(
+      ctx.getClient,
+      input as { orgId?: string; from?: string; to?: string },
+    ),
+};

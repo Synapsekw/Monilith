@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listPortfoliosCore, PORTFOLIO_LIMIT } from "@/lib/portfolios/queries";
 import { resolveOrgForTool } from "@/lib/mcp/org-scope";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function listPortfoliosHandler(
   getClient: GetClient,
@@ -58,17 +58,13 @@ export async function listPortfoliosHandler(
   }
 }
 
-export function registerListPortfoliosTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "list_portfolios",
-    {
-      title: "List portfolios",
-      description: `Portfolios visible to the connected user in one organization, with how many boards each contains. Returns at most ${PORTFOLIO_LIMIT}.`,
-      inputSchema: { orgId: z.string().uuid().optional() },
-    },
-    async (args) => listPortfoliosHandler(getClient, args),
-  );
-}
+export const listPortfoliosDescriptor: ToolDescriptor = {
+  name: "list_portfolios",
+  title: "List portfolios",
+  description: `Portfolios visible to the connected user in one organization, with how many boards each contains. Returns at most ${PORTFOLIO_LIMIT}.`,
+  inputSchema: { orgId: z.string().uuid().optional() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    listPortfoliosHandler(ctx.getClient, input as { orgId?: string }),
+};

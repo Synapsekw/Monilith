@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { refreshCatalog } from "@/lib/ai/models/refresh";
+import { refreshCatalog, verifyAllProviders } from "@/lib/ai/models/refresh";
 
 type FakeModelRow = {
   provider: string;
@@ -384,5 +384,247 @@ describe("refreshCatalog", () => {
     expect(verifyIds).not.toHaveBeenCalled();
     expect(res.skipped).toBe(true);
     expect(state.retireCalls).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// verifyAllProviders — the daily per-provider re-verification sweep.
+// ---------------------------------------------------------------------------
+
+const ADAPTER_KIND: Record<string, string> = {
+  anthropic: "anthropic",
+  google: "google",
+  mistral: "openai-compatible",
+};
+
+/** The enabled registry every sweep test runs against. */
+const ENABLED = ["anthropic", "google", "mistral"];
+
+/**
+ * A service-role client holding `ai_providers` plus a `user_ai_credentials`
+ * table seeded with one row per entry of `credentialProviders` (repeat a
+ * provider to give it several users' keys). Rows get ASCENDING `updated_at` in
+ * argument order, so the LAST entry for a provider is its most recently
+ * updated credential — which is the one the selection rule must pick.
+ *
+ * The credential read is NOT stubbed: these tests drive the real
+ * `readSweepCredential` through this fake so the ordering, the `limit(1)` and
+ * the decrypt RPC are all actually exercised. `rpcCalls` records every decrypt
+ * so "at most one credential per provider per run" is observable rather than
+ * asserted by hand-waving. Only the network call (`verify`) is faked.
+ */
+function fakeSvcWithCredentials(
+  credentialProviders: string[],
+  enabled: string[] = ENABLED,
+) {
+  const creds = credentialProviders.map((provider, i) => ({
+    user_id: `u${i + 1}`,
+    provider,
+    updated_at: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+  }));
+  const rpcCalls: { p_user: string; p_provider: string }[] = [];
+
+  const client = {
+    from(table: string) {
+      if (table === "ai_providers")
+        return {
+          select: () => ({
+            eq: () => ({
+              order: async () => ({
+                data: enabled.map((id) => ({
+                  id,
+                  label: id,
+                  adapter_kind: ADAPTER_KIND[id],
+                  base_url:
+                    ADAPTER_KIND[id] === "openai-compatible"
+                      ? `https://api.${id}.ai/v1`
+                      : null,
+                  key_placeholder: "x",
+                  key_format: "^x",
+                  enabled: true,
+                })),
+                error: null,
+              }),
+            }),
+          }),
+        };
+
+      if (table !== "user_ai_credentials")
+        throw new Error(`unexpected table "${table}"`);
+
+      // PostgREST semantics that matter to the selection rule: `.eq` filters,
+      // successive `.order` calls compose (first call is the PRIMARY key), and
+      // `.limit(n)` resolves the query.
+      let rows = creds.map((r) => ({ ...r }));
+      const sorts: { col: "updated_at" | "user_id"; asc: boolean }[] = [];
+      const builder = {
+        select: () => builder,
+        eq(col: "provider", val: string) {
+          rows = rows.filter((r) => r[col] === val);
+          return builder;
+        },
+        order(col: "updated_at" | "user_id", opts?: { ascending?: boolean }) {
+          sorts.push({ col, asc: opts?.ascending !== false });
+          return builder;
+        },
+        limit: async (n: number) => {
+          const sorted = [...rows].sort((a, b) => {
+            for (const s of sorts) {
+              if (a[s.col] === b[s.col]) continue;
+              return (a[s.col] < b[s.col] ? -1 : 1) * (s.asc ? 1 : -1);
+            }
+            return 0;
+          });
+          return { data: sorted.slice(0, n), error: null };
+        },
+      };
+      return builder;
+    },
+    rpc: async (
+      _fn: string,
+      args: { p_user: string; p_provider: string },
+    ): Promise<{
+      data: { provider: string; secret: string }[];
+      error: null;
+    }> => {
+      rpcCalls.push(args);
+      const row = creds.find(
+        (c) => c.user_id === args.p_user && c.provider === args.p_provider,
+      );
+      return {
+        data: row
+          ? [{ provider: row.provider, secret: `key-${row.user_id}` }]
+          : [],
+        error: null,
+      };
+    },
+  };
+
+  return { client, rpcCalls, creds };
+}
+
+/** No platform key anywhere, so every test states its own key sources rather
+ *  than inheriting whatever ANTHROPIC_API_KEY the ambient env happens to hold. */
+const noPlatformKey = () => undefined;
+
+describe("verifyAllProviders", () => {
+  it("verifies every provider that has a stored credential, not just anthropic", async () => {
+    // Two providers hold a key; google holds none.
+    const { client } = fakeSvcWithCredentials(["anthropic", "mistral"]);
+    const verified: string[] = [];
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      verify: async ({ provider }) => {
+        verified.push(provider);
+        return { verified: 1, unverified: 0 };
+      },
+    });
+    expect(verified.sort()).toEqual(["anthropic", "mistral"]);
+  });
+
+  it("skips a provider nobody has connected rather than calling it keyless", async () => {
+    const { client, rpcCalls } = fakeSvcWithCredentials(["mistral"]);
+    const verified: string[] = [];
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      verify: async ({ provider }) => {
+        verified.push(provider);
+        return { verified: 0, unverified: 0 };
+      },
+    });
+    expect(verified).toEqual(["mistral"]);
+    // google and anthropic were never even decrypted — no key, no read.
+    expect(rpcCalls.map((c) => c.p_provider)).toEqual(["mistral"]);
+  });
+
+  it("uses at most one credential per provider, deterministically the most recently updated", async () => {
+    // Two users hold a Mistral key. u2's is the newer one.
+    const { client, rpcCalls } = fakeSvcWithCredentials(["mistral", "mistral"]);
+    const calls: { provider: string; apiKey: string }[] = [];
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      verify: async ({ provider, apiKey }) => {
+        calls.push({ provider, apiKey });
+        return { verified: 0, unverified: 0 };
+      },
+    });
+    expect(calls).toEqual([{ provider: "mistral", apiKey: "key-u2" }]);
+    // One decrypt, one outbound call: the sweep borrows exactly one key per
+    // provider per run, and the same one on every run over unchanged data.
+    expect(rpcCalls).toEqual([{ p_user: "u2", p_provider: "mistral" }]);
+  });
+
+  it("prefers the platform key over any user's stored credential", async () => {
+    const { client, rpcCalls } = fakeSvcWithCredentials([
+      "anthropic",
+      "mistral",
+    ]);
+    const calls: { provider: string; apiKey: string }[] = [];
+    await verifyAllProviders(client as never, {
+      platformKey: (p) =>
+        p === "anthropic" ? "platform-anthropic" : undefined,
+      verify: async ({ provider, apiKey }) => {
+        calls.push({ provider, apiKey });
+        return { verified: 0, unverified: 0 };
+      },
+    });
+    expect(calls.find((c) => c.provider === "anthropic")?.apiKey).toBe(
+      "platform-anthropic",
+    );
+    // Nobody's anthropic key was touched — a platform key borrows nothing.
+    expect(rpcCalls.map((c) => c.p_provider)).toEqual(["mistral"]);
+  });
+
+  it("one provider failing does not abort the others", async () => {
+    const { client } = fakeSvcWithCredentials(["anthropic", "mistral"]);
+    const verified: string[] = [];
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      verify: async ({ provider }) => {
+        // A revoked key on one provider — the everyday failure this sweep must
+        // survive, since the credentials are users' own.
+        if (provider === "anthropic") throw new Error("401");
+        verified.push(provider);
+        return { verified: 0, unverified: 0 };
+      },
+    });
+    expect(verified).toEqual(["mistral"]);
+  });
+
+  it("a credential read that throws skips only that provider", async () => {
+    const { client } = fakeSvcWithCredentials(["anthropic", "mistral"]);
+    const verified: string[] = [];
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      readKey: async (_c, provider) => {
+        if (provider === "anthropic") throw new Error("vault unavailable");
+        return provider === "mistral" ? "key-u2" : null;
+      },
+      verify: async ({ provider }) => {
+        verified.push(provider);
+        return { verified: 0, unverified: 0 };
+      },
+    });
+    expect(verified).toEqual(["mistral"]);
+  });
+
+  it("returns quietly when the provider registry itself is unreadable", async () => {
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: async () => ({ data: null, error: { message: "boom" } }),
+          }),
+        }),
+      }),
+    };
+    const verify = vi.fn();
+    await expect(
+      verifyAllProviders(client as never, {
+        platformKey: noPlatformKey,
+        verify,
+      }),
+    ).resolves.toBeUndefined();
+    expect(verify).not.toHaveBeenCalled();
   });
 });

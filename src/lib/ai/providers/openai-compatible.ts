@@ -25,8 +25,14 @@ import { MODEL_LIST_TIMEOUT_MS } from "@/lib/ai/models/verify-ids";
  * (`config.provider.split(".")[0]`), so the two uses below must agree — a
  * mismatched key is silently spread into the request body instead of being
  * read as an option.
+ *
+ * EXPORTED because `providers/language-model.ts` builds a provider on this same
+ * wire format for the agent tool loop. Two hardcoded `"byo"` strings would be
+ * two chances for one of them to drift, and the failure is silent by
+ * construction — a mismatched namespace does not error, it just gets spread
+ * into the body and ignored.
  */
-const PROVIDER_NAME = "byo";
+export const PROVIDER_NAME = "byo";
 
 function requireBaseUrl(baseUrl: string | null): string {
   if (!baseUrl)
