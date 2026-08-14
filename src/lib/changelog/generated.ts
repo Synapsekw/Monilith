@@ -4,6 +4,41 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-08-13",
+    kind: "new",
+    title: "Agents can act on your boards",
+    description:
+      "Give an agent permission to create items, attach files, log time or set up automations — and it does the work on its schedule instead of only writing you a summary.",
+  },
+  {
+    date: "2026-08-13",
+    kind: "new",
+    title: "Approve what an agent wanted to do",
+    description:
+      "Anything you have not granted an agent is recorded as a proposal instead of being blocked. Review it on the run, or in the agent's thread, and approve it with one click.",
+  },
+  {
+    date: "2026-08-13",
+    kind: "new",
+    title: "Choose what each agent may do",
+    description:
+      "Every agent has its own permission toggles, so you can let one attach files without letting it change items. Nothing is granted by default.",
+  },
+  {
+    date: "2026-08-13",
+    kind: "new",
+    title: "Weekly and monthly agents",
+    description:
+      "Agents can now run on a chosen weekday or day of the month, not only daily.",
+  },
+  {
+    date: "2026-08-13",
+    kind: "improved",
+    title: "Org-wide limit on agent permissions",
+    description:
+      "Admins can cap what any agent in the organization may be granted, from Settings then AI.",
+  },
+  {
     date: "2026-08-11",
     kind: "new",
     title: "Connect an AI key for each provider",
