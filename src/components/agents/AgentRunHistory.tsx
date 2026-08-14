@@ -6,10 +6,8 @@ import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getAgentRuns } from "@/lib/agents/actions";
-import {
-  getPendingProposals,
-  type PendingProposal,
-} from "@/lib/agents/proposal-actions";
+import { getPendingProposals } from "@/lib/agents/proposal-actions";
+import type { PendingProposal } from "@/lib/agents/proposal-display";
 import { ProposalCard } from "@/components/agents/ProposalCard";
 import { timeAgo } from "@/lib/boards/automation-runs";
 import {

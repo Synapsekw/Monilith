@@ -1,8 +1,26 @@
 import type { StatusPillColor } from "@/components/ui/status-pill";
 import type {
+  PendingProposal,
   ProposalTarget,
   ProposalTargetKind,
 } from "@/lib/agents/proposals-db";
+
+/**
+ * The card's row shape, re-exported HERE rather than from `proposal-actions.ts`.
+ *
+ * It cannot live on the Server Action module: a `"use server"` file's export
+ * CLAUSES are enumerated by Next's server-actions transform without regard for
+ * TypeScript's `type` modifier, so `export type { PendingProposal }` there
+ * compiled to `registerServerReference(PendingProposal, …)` against a binding
+ * the type pass had already erased — a `ReferenceError` at module evaluation
+ * that took down every route importing it. `src/test/use-server-exports.test.ts`
+ * is the guard.
+ *
+ * This module is the right home regardless: it is already the client-safe seam
+ * the card and the action share, and an `import type` from the `server-only`
+ * row module is erased at build, so nothing server-side reaches the browser.
+ */
+export type { PendingProposal };
 
 /**
  * How a proposal READS on screen, as opposed to how it is stored.

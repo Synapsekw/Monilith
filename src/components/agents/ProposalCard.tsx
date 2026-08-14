@@ -12,11 +12,9 @@ import {
   proposalDisplayState,
   proposalExpiryLabel,
   proposalTargetLabel,
-} from "@/lib/agents/proposal-display";
-import {
-  decideProposal,
   type PendingProposal,
-} from "@/lib/agents/proposal-actions";
+} from "@/lib/agents/proposal-display";
+import { decideProposal } from "@/lib/agents/proposal-actions";
 
 /**
  * One action an agent asked permission for, and the owner's decision on it.

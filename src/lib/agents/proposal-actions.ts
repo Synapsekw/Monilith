@@ -23,10 +23,12 @@ import {
 } from "./proposals-db";
 import { withResolvedTargets } from "./proposal-targets";
 
-// Re-exported so a client component can type its props without importing a
-// `server-only` module. Type-only, therefore erased — nothing about the row
-// module reaches the browser bundle.
-export type { PendingProposal };
+// `PendingProposal` is re-exported from `./proposal-display`, NOT from here.
+// A `"use server"` module may export only async functions: its export clauses
+// are enumerated by the server-actions transform regardless of TypeScript's
+// `type` modifier, so re-exporting a type here registers a server reference to
+// a binding the type pass erases — a ReferenceError at module evaluation.
+// Guard: src/test/use-server-exports.test.ts.
 
 /**
  * The human half of the propose-then-approve loop.
