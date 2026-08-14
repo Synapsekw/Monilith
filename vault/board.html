@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-14 08:08",
+  "updated": "2026-08-14 09:30",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "939b0c1d",
-        "tone": "warn",
-        "note": "AHEAD of main by 30 commits — Spec 2a (agent runtime) merged 2026-08-14 and is unpromoted. The feature and its /updates entries go live together on the next promotion."
+        "value": "6769421f",
+        "tone": "ok",
+        "note": "Equals main. Squash divergence healed — origin/main verified an ancestor of origin/develop, heal tree byte-identical. Unpromoted delta 0."
       },
       {
         "name": "main",
-        "value": "1ebc8a44",
+        "value": "461cadb0",
         "tone": "ok",
-        "note": "PR #95 merged 2026-08-11 — the AI provider & model layer (Spec 1 of 3): one key per provider, org default-model picker, per-agent pins, DB-driven registry + daily catalog refresh. 47 commits."
+        "note": "PR #96 merged 2026-08-14 — the agent runtime (Spec 2a): capability-gated tool loop, durable proposals, org ceiling, weekly/monthly cadences. 37 commits."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel state=success on 1ebc8a44. Serving Spec 1; does NOT yet have the agent runtime."
+        "note": "Vercel state=success on 461cadb0. Verified: site 200, /settings/agents 307, and /updates serving all five new agent entries — the cheapest proof the new build is the one being served."
       }
     ],
     "gates": [
@@ -164,7 +164,7 @@
       },
       {
         "label": "test",
-        "value": "5452",
+        "value": "5809",
         "tone": "ok"
       },
       {
@@ -174,20 +174,12 @@
       },
       {
         "label": "migration ledger",
-        "value": "138/138",
+        "value": "141/141",
         "tone": "ok"
       }
     ]
   },
   "next": [
-    {
-      "title": "Promote Spec 2a to main",
-      "why": "30 commits sit merged on develop and unpromoted, so agents still cannot act for any real user. Both migrations are already applied to DEV — which is what production reads — so the DB half is live while the code half is not. The /updates entries publish with it.",
-      "tags": [
-        "promote",
-        "agents"
-      ]
-    },
     {
       "title": "Brainstorm Spec 2b — agent knowledge",
       "why": "Owner chose 2b (reference templates + memory) over Spec 3, depth before breadth. There is no spec yet; start with superpowers:brainstorming. Spec 3 (orchestration, @handle addressing, the renameable built-in assistant, agent.create/schedule.create) follows it.",
