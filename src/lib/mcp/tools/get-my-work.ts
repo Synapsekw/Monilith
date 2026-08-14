@@ -1,8 +1,8 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getMyWorkItemsCore } from "@/lib/my-work/queries";
 import { bucketMyWork } from "@/lib/my-work/bucket";
 import { serverToday } from "@/lib/portfolios/rollup";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 /** Tool-side cap — well under MY_WORK_ITEM_LIMIT (500), which sizes a scrollable
  *  page. An agent reading 200 assigned items already has more than it can use. */
@@ -39,17 +39,12 @@ export async function getMyWorkHandler(
   };
 }
 
-export function registerGetMyWorkTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_my_work",
-    {
-      title: "Get my work",
-      description: `Every item assigned to the connected user across all boards, grouped by due date (overdue, today, this week, later, no date). Returns at most ${MY_WORK_TOOL_LIMIT} items. Scoped to the user automatically — no organization argument.`,
-      inputSchema: {},
-    },
-    async () => getMyWorkHandler(getClient),
-  );
-}
+export const getMyWorkDescriptor: ToolDescriptor = {
+  name: "get_my_work",
+  title: "Get my work",
+  description: `Every item assigned to the connected user across all boards, grouped by due date (overdue, today, this week, later, no date). Returns at most ${MY_WORK_TOOL_LIMIT} items. Scoped to the user automatically — no organization argument.`,
+  inputSchema: {},
+  capability: null,
+  scope: "none",
+  invoke: (ctx) => getMyWorkHandler(ctx.getClient),
+};

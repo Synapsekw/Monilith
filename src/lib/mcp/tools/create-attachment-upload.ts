@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   buildColumnFilePath,
   buildStoragePath,
 } from "@/lib/collaboration/attachments-path";
 import { resolveItemScope } from "@/lib/collaboration/attachment-core";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 /** The `attachments` bucket ceiling, mirrored from the bucket + check constraint. */
 const MAX_BYTES = 52_428_800;
@@ -85,23 +85,23 @@ export async function createAttachmentUploadHandler(
   };
 }
 
-export function registerCreateAttachmentUploadTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "create_attachment_upload",
-    {
-      title: "Create attachment upload",
-      description:
-        "Start a file upload for an item. Returns a signed `uploadUrl` valid " +
-        "for 2 hours and the `storagePath` to pass to `attach_file` after you " +
-        "PUT the bytes. Omit `columnId` for an item-level attachment; pass a " +
-        "Files column's id to attach into that cell. Max 50 MB. For files " +
-        "under 128 KB you can skip this and pass `contentBase64` to " +
-        "`attach_file` directly.",
-      inputSchema: createAttachmentUploadInput,
-    },
-    async (input) => createAttachmentUploadHandler(getClient, input),
-  );
-}
+export const createAttachmentUploadDescriptor: ToolDescriptor = {
+  name: "create_attachment_upload",
+  title: "Create attachment upload",
+  description:
+    "Start a file upload for an item. Returns a signed `uploadUrl` valid " +
+    "for 2 hours and the `storagePath` to pass to `attach_file` after you " +
+    "PUT the bytes. Omit `columnId` for an item-level attachment; pass a " +
+    "Files column's id to attach into that cell. Max 50 MB. For files " +
+    "under 128 KB you can skip this and pass `contentBase64` to " +
+    "`attach_file` directly.",
+  inputSchema: createAttachmentUploadInput,
+  capability: "files.write",
+  scope: "itemId",
+  agentExcluded: true,
+  invoke: (ctx, input) =>
+    createAttachmentUploadHandler(
+      ctx.getClient,
+      input as { itemId: string; columnId?: string; fileName: string },
+    ),
+};

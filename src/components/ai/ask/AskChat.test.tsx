@@ -65,6 +65,15 @@ const applyEffects = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/boards/use-ai-effects", () => ({
   useApplyBoardEffects: () => applyEffects,
 }));
+// The briefing thread renders the run's queued approvals. Their decide path is
+// its own Server Action, mocked here so this file stays about the chat.
+const decideProposal = vi.fn(async () => ({
+  ok: true as const,
+  data: { status: "approved" as const },
+}));
+vi.mock("@/lib/agents/proposal-actions", () => ({
+  decideProposal: () => decideProposal(),
+}));
 
 import { AskChat } from "./AskChat";
 import { createConversation } from "@/lib/ai/ask/conversation-actions";
@@ -596,5 +605,41 @@ describe("AskChat — severed stream (gotcha-61)", () => {
         screen.getByText('Done — Create task "Ship v2" in Backlog.'),
       ).toBeInTheDocument(),
     );
+  });
+});
+
+describe("AskChat — an agent briefing thread", () => {
+  const PROPOSAL = {
+    id: "p1",
+    runId: "run-1",
+    userAgentId: "agent-1",
+    toolName: "create_item",
+    capability: "board.write",
+    summary: 'Add "Draft proposal" to a board group.',
+    status: "pending" as const,
+    expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+    createdAt: new Date().toISOString(),
+    target: null,
+  };
+
+  it("renders the run's queued approvals under the report", () => {
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[ANSWER_ROW]}
+        agentProposals={[PROPOSAL]}
+      />,
+    );
+    expect(screen.getByText(/Add "Draft proposal"/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /approve/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders nothing extra for an ordinary chat", () => {
+    render(<AskChat conversationId="c1" initialMessages={[ANSWER_ROW]} />);
+    expect(
+      screen.queryByRole("group", { name: /awaiting approval/i }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -69,6 +69,16 @@ export async function createAgent(
       // Postgres failure rather than a silent no-op.
       provider: s.provider,
       model_id: s.modelId,
+      // The grant set and the cadence day operand. Written explicitly — an
+      // empty grant set stated is not the same as one left to a column default,
+      // and this is the one field on the row where "what did we actually mean"
+      // has to be answerable from the insert. All three were added to
+      // `authenticated`'s column-level INSERT grant by 20260812060142; that
+      // table has NO table-level INSERT for `authenticated`, so a column
+      // outside the grant list is a hard Postgres failure, not a silent no-op.
+      capabilities: s.capabilities,
+      run_on_weekday: s.runOnWeekday,
+      run_on_day_of_month: s.runOnDayOfMonth,
     } as never)
     .select("id")
     .single();
@@ -105,6 +115,15 @@ export async function updateAgent(
       // silently keeps the old pin.
       provider: s.provider,
       model_id: s.modelId,
+      // Always written, all three — revoking a capability and stepping a weekly
+      // agent back to daily are both expressed as a SMALLER value, so omitting
+      // the columns when they empty out would make revocation a silent no-op.
+      // Stale day fields are worse than stale: `user_agents_cadence_fields`
+      // rejects a daily row that still carries a weekday, so the whole save
+      // would fail on a constraint the user never chose.
+      capabilities: s.capabilities,
+      run_on_weekday: s.runOnWeekday,
+      run_on_day_of_month: s.runOnDayOfMonth,
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", id)

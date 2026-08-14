@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import {
   DEFAULT_ORG_AI_SETTINGS,
   readOrgAiSettings,
@@ -40,6 +40,7 @@ describe("readOrgAiSettings", () => {
         byo_key_last4: null,
         max_agents_per_user: 5,
         max_agent_runs_per_user_per_day: 10,
+        agent_capability_ceiling: ["board.write", "time.log"],
       }),
       "org-1",
     );
@@ -51,7 +52,55 @@ describe("readOrgAiSettings", () => {
       byoKeyLast4: null,
       maxAgentsPerUser: 5,
       maxAgentRunsPerUserPerDay: 10,
+      agentCapabilityCeiling: ["board.write", "time.log"],
     });
+  });
+
+  // The ceiling is the ADMIN half of the two-key gate: an agent may only use a
+  // capability its own grant set AND this list both contain. Reading it is
+  // therefore a column, not an inference — and a column that is not in the
+  // select list arrives as `undefined`, which would read as "no ceiling" at
+  // every call site that spreads it.
+  it("selects the capability ceiling column", async () => {
+    const client = clientReturning(null);
+    await readOrgAiSettings(client, "org-1");
+    const select = (
+      client as unknown as { from: () => { select: Mock } }
+    ).from().select as Mock;
+    expect(select.mock.calls[0]?.[0]).toContain("agent_capability_ceiling");
+  });
+
+  // The DEFAULT (no settings row) matches the column default: all four. Such an
+  // org is `mode: "off"`, so no agent runs there whatever the ceiling says —
+  // but the two must not disagree, or an org would silently lose capabilities
+  // the moment its first settings row appeared.
+  it("defaults a row-less org to the full ceiling, matching the column default", () => {
+    expect(DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling).toEqual([
+      "board.write",
+      "files.write",
+      "automation.create",
+      "time.log",
+    ]);
+  });
+
+  // Belt and braces: the column is NOT NULL with a default, so this cannot
+  // happen through any supported path — but if it ever did, an unreadable
+  // ceiling must clamp to nothing rather than open the gate.
+  it("treats a missing ceiling as no capabilities, not as all of them", async () => {
+    const settings = await readOrgAiSettings(
+      clientReturning({
+        ai_mode: "managed",
+        tier: "pulse",
+        monthly_credit_limit: 500,
+        byo_provider: null,
+        byo_key_last4: null,
+        max_agents_per_user: 5,
+        max_agent_runs_per_user_per_day: 10,
+        agent_capability_ceiling: null,
+      }),
+      "org-1",
+    );
+    expect(settings.agentCapabilityCeiling).toEqual([]);
   });
 
   it("throws on a DB error (fail closed, not fail open)", async () => {

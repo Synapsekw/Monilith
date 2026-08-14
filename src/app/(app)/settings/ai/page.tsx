@@ -11,6 +11,7 @@ import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingRow } from "@/components/settings/setting-row";
 import { AiKeyList } from "@/components/settings/AiKeyList";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
+import { OrgAgentCeiling } from "@/components/settings/OrgAgentCeiling";
 import type { ModelOption } from "@/components/settings/ModelPicker";
 
 export const metadata = { title: "AI · Settings" };
@@ -88,6 +89,17 @@ export default async function AiSettingsPage() {
               providers={providers}
               modelOptions={modelOptions}
             />
+          </div>
+        </SettingsSection>
+      )}
+
+      {isAdmin && orgAi.ok && (
+        <SettingsSection
+          title="Agent capabilities"
+          description="The most any personal agent in this organization may ever be granted."
+        >
+          <div className="pt-4">
+            <OrgAgentCeiling initial={orgAi.data.agentCapabilityCeiling} />
           </div>
         </SettingsSection>
       )}

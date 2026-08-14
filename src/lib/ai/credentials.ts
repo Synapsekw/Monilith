@@ -1,4 +1,6 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
@@ -67,6 +69,58 @@ export async function resolveUserAdapterById(
     apiKey: secret.secret,
     baseUrl: row.baseUrl,
   };
+}
+
+/**
+ * The ONE stored BYO credential the daily catalog sweep may borrow for
+ * `provider`, or null when nobody has connected that provider.
+ *
+ * This is the only place in the product that reads a user's key for work the
+ * user did not personally trigger, so the contract is deliberately narrow and
+ * stated here rather than at the call site:
+ *
+ *   - It exists solely so `verifyAllProviders` can make ONE read-only
+ *     `GET /v1/models` per provider per daily run. Never an inference call,
+ *     never a write, never anything that can bill the key's owner. Callers
+ *     that want a key to GENERATE with must go through
+ *     `resolveUserAdapterById`, which is scoped to that user's own request.
+ *   - Selection is deterministic: **most recently updated key wins**, ties
+ *     broken by user id ascending. Two runs over unchanged data pick the same
+ *     credential every time — never a random or "first row Postgres felt like"
+ *     key. Most-recently-updated is also the key most likely to still be
+ *     valid, which keeps the sweep off revoked credentials.
+ *   - The key never leaves the server and is never logged; the disclosure
+ *     shown under the key field in Personal Settings → AI is the user-facing
+ *     half of this contract.
+ *
+ * Requires a service-role client: `ai_credential_get` is `security definer`
+ * and granted to `service_role` only. Decryption goes through that RPC — the
+ * same reader `resolveUserAdapterById` uses — never a direct vault read.
+ */
+export async function readSweepCredential(
+  svc: SupabaseClient<Database>,
+  provider: string,
+): Promise<string | null> {
+  const { data, error } = await svc
+    .from("user_ai_credentials")
+    .select("user_id, updated_at")
+    .eq("provider", provider)
+    .order("updated_at", { ascending: false })
+    .order("user_id", { ascending: true })
+    .limit(1);
+  if (error) throw new Error(`readSweepCredential select: ${error.message}`);
+
+  const userId = data?.[0]?.user_id;
+  if (!userId) return null;
+
+  // Same call shape as resolveUserAdapterById above (the 2-arg overload is a
+  // union in the generated types, which typedRpc's mapped Args cannot narrow).
+  const { data: secrets, error: rpcErr } = await svc.rpc("ai_credential_get", {
+    p_user: userId,
+    p_provider: provider,
+  });
+  if (rpcErr) throw new Error(`readSweepCredential decrypt: ${rpcErr.message}`);
+  return secrets?.[0]?.secret ?? null;
 }
 
 /** Masked preview safe to persist/show, e.g. "sk-ant-…AB12". */

@@ -85,6 +85,11 @@ const valid = {
   // every agent that predates the pin is in.
   provider: null,
   modelId: null,
+  // Read-only and daily — the shape every agent that predates the grant set
+  // and the extra cadences is in.
+  capabilities: [],
+  runOnWeekday: null,
+  runOnDayOfMonth: null,
 };
 
 beforeEach(() => {
@@ -114,6 +119,44 @@ describe("createAgent", () => {
 
   it("rejects an invalid payload without touching the db", async () => {
     const r = await createAgent({ ...valid, runAtLocalHour: 99 });
+    expect(r.ok).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  // A new agent starts with NO capabilities. The empty array is written
+  // explicitly rather than left to the column default, so the insert states the
+  // grant set it means — the one thing on this row that must never be implicit.
+  it("creates an agent with an empty grant set and no day fields", async () => {
+    await createAgent(valid);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilities: [],
+        cadence: "daily",
+        run_on_weekday: null,
+        run_on_day_of_month: null,
+      }),
+    );
+  });
+
+  it("persists a granted capability and a monthly cadence", async () => {
+    await createAgent({
+      ...valid,
+      cadence: "monthly",
+      runOnDayOfMonth: 28,
+      capabilities: ["files.write"],
+    });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilities: ["files.write"],
+        cadence: "monthly",
+        run_on_weekday: null,
+        run_on_day_of_month: 28,
+      }),
+    );
+  });
+
+  it("refuses a cadence with no day setting without touching the db", async () => {
+    const r = await createAgent({ ...valid, cadence: "weekly" });
     expect(r.ok).toBe(false);
     expect(insert).not.toHaveBeenCalled();
   });
@@ -205,15 +248,62 @@ describe("updateAgent", () => {
     expect(Object.keys(lastUpdate ?? {}).sort()).toEqual([
       "board_scope",
       "cadence",
+      "capabilities",
       "enabled",
       "instructions",
       "model_id",
       "name",
       "provider",
       "run_at_local_hour",
+      "run_on_day_of_month",
+      "run_on_weekday",
       "template_id",
       "updated_at",
     ]);
+  });
+
+  // `authenticated` holds no TABLE-level UPDATE on user_agents — every column
+  // is granted individually, and a column-scoped grant does not extend to
+  // columns added later. 20260812060142 grants these three; naming one that
+  // was not granted is a hard "permission denied for table user_agents", not a
+  // silent no-op, so this list is a real contract with the migration.
+  it("persists the capability grant set and the cadence day fields", async () => {
+    await updateAgent(AGENT_ID, {
+      ...valid,
+      cadence: "weekly",
+      runOnWeekday: 3,
+      capabilities: ["board.write", "time.log"],
+    });
+    expect(lastUpdate).toMatchObject({
+      cadence: "weekly",
+      capabilities: ["board.write", "time.log"],
+      run_on_weekday: 3,
+      run_on_day_of_month: null,
+    });
+  });
+
+  // Clearing back to the daily shape must WRITE the nulls. Omitting the columns
+  // when unset would leave a weekly agent's stale weekday in place, and the
+  // `user_agents_cadence_fields` constraint would then reject the row outright.
+  it("clears the day fields rather than leaving stale ones", async () => {
+    await updateAgent(AGENT_ID, valid);
+    expect(lastUpdate).toMatchObject({
+      cadence: "daily",
+      run_on_weekday: null,
+      run_on_day_of_month: null,
+    });
+  });
+
+  // The grant set is the security-relevant field on this row: a payload Zod
+  // refuses must never reach the DB, where only the check constraint stands
+  // between it and a stored grant nobody chose.
+  it("refuses an unknown capability without touching the db", async () => {
+    const r = await updateAgent(AGENT_ID, {
+      ...valid,
+      capabilities: ["board.delete"] as never,
+    });
+    expect(r.ok).toBe(false);
+    expect(lastUpdate).toBeNull();
   });
 
   it("saves a model pin", async () => {

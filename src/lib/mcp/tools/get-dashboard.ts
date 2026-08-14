@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getDashboardPayloadCore } from "@/lib/dashboards/queries";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function getDashboardHandler(
   getClient: GetClient,
@@ -46,18 +46,14 @@ export async function getDashboardHandler(
   }
 }
 
-export function registerGetDashboardTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_dashboard",
-    {
-      title: "Get dashboard",
-      description:
-        "One dashboard's widgets as descriptors (id, title, kind, source board) — no data. Call get_widget_data with a widgetId to resolve one widget's numbers.",
-      inputSchema: { dashboardId: z.string().uuid() },
-    },
-    async (args) => getDashboardHandler(getClient, args),
-  );
-}
+export const getDashboardDescriptor: ToolDescriptor = {
+  name: "get_dashboard",
+  title: "Get dashboard",
+  description:
+    "One dashboard's widgets as descriptors (id, title, kind, source board) — no data. Call get_widget_data with a widgetId to resolve one widget's numbers.",
+  inputSchema: { dashboardId: z.string().uuid() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    getDashboardHandler(ctx.getClient, input as { dashboardId: string }),
+};

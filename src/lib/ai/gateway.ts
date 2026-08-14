@@ -181,9 +181,19 @@ export async function resolveAiAdapter(
  * callback that reported its own model could name a row whose price was never
  * read — and `computeCostUsd(null, …)` bills that at $0.
  *
- * Usage is only metered when fn resolves — a provider call that consumes
- * tokens and then throws during post-processing is not billed (no usage is
- * available on the error path).
+ * METERING ON THE ERROR PATH. A callback that resolves is metered from its
+ * returned `usage`, as it always was. A callback that THROWS is metered from
+ * whatever it last reported through `reportUsage` — and if it reported nothing,
+ * not at all. That second argument exists for the agent tool loop: a run can
+ * spend eleven real, billed provider round-trips and then reject on a step-12
+ * 5xx, and metering only on resolution means that spend never reaches
+ * `ai_usage`. Managed mode then pays for tokens no ledger row records, and
+ * `requireAiEntitlement`'s monthly credit ceiling under-counts by exactly the
+ * runs that failed. A one-shot caller ignores the argument and behaves as
+ * before: no report, no throw-path meter.
+ *
+ * Exactly ONE ledger write per call either way — the success path meters the
+ * returned usage and never the reported one.
  */
 export async function runAi<T>(
   args: {
@@ -208,6 +218,13 @@ export async function runAi<T>(
   },
   fn: (
     resolved: ResolvedAiCall,
+    /**
+     * Report the tokens spent SO FAR, for a callback that can die after
+     * spending them. Called any number of times; the LAST report wins, so a
+     * caller passes a running total, never a delta. Ignored entirely unless the
+     * callback throws.
+     */
+    reportUsage: (usage: AiUsageTokens) => void,
   ) => Promise<{ result: T; usage: AiUsageTokens }>,
 ): Promise<T> {
   const resolved = await resolveAiAdapter(
@@ -240,36 +257,55 @@ export async function runAi<T>(
     throw new NoUsableModelError(resolved.provider);
   const usable = model as UsableModel;
 
-  const { result, usage } = await fn({ ...resolved, model: usable });
-  // resolved.rates, never a re-derivation: the fallback floor and the price
-  // validation in resolveModel apply to THIS row, and re-reading rates by model
-  // id here would silently drop both (see pricing.ts · applyRateFloor).
-  const costUsd = computeCostUsd(usable.rates, usage);
-  const credits = costToCredits(costUsd);
-  const { error } = await svc.rpc("record_ai_usage", {
-    p_org: args.orgId,
-    p_user: args.userId,
-    p_feature: args.feature,
-    p_provider: resolved.provider,
-    // The CATALOG key, not the wire id: pins, pickers and the ledger all speak
-    // `ai_models.model_id`.
-    p_model: usable.model,
-    p_input_tokens: usage.inputTokens,
-    p_output_tokens: usage.outputTokens,
-    p_cache_read_tokens: usage.cacheReadTokens ?? 0,
-    p_cache_write_tokens: usage.cacheWriteTokens ?? 0,
-    p_cost_usd: costUsd,
-    p_credits: credits,
-  });
-  if (error)
-    console.error("[ai] record_ai_usage failed:", {
-      org: args.orgId,
-      feature: args.feature,
-      model: usable.model,
-      credits,
-      cause: error.message,
+  const meter = async (usage: AiUsageTokens): Promise<void> => {
+    // resolved.rates, never a re-derivation: the fallback floor and the price
+    // validation in resolveModel apply to THIS row, and re-reading rates by
+    // model id here would silently drop both (see pricing.ts · applyRateFloor).
+    const costUsd = computeCostUsd(usable.rates, usage);
+    const credits = costToCredits(costUsd);
+    const { error } = await svc.rpc("record_ai_usage", {
+      p_org: args.orgId,
+      p_user: args.userId,
+      p_feature: args.feature,
+      p_provider: resolved.provider,
+      // The CATALOG key, not the wire id: pins, pickers and the ledger all
+      // speak `ai_models.model_id`.
+      p_model: usable.model,
+      p_input_tokens: usage.inputTokens,
+      p_output_tokens: usage.outputTokens,
+      p_cache_read_tokens: usage.cacheReadTokens ?? 0,
+      p_cache_write_tokens: usage.cacheWriteTokens ?? 0,
+      p_cost_usd: costUsd,
+      p_credits: credits,
     });
-  return result;
+    if (error)
+      console.error("[ai] record_ai_usage failed:", {
+        org: args.orgId,
+        feature: args.feature,
+        model: usable.model,
+        credits,
+        cause: error.message,
+      });
+  };
+
+  // A box rather than a bare `let`: the callback assigns it, and reading the
+  // property back gives its declared type without fighting narrowing.
+  const reported: { usage: AiUsageTokens | null } = { usage: null };
+  let outcome: { result: T; usage: AiUsageTokens };
+  try {
+    outcome = await fn({ ...resolved, model: usable }, (usage) => {
+      reported.usage = usage;
+    });
+  } catch (e) {
+    // Spend that really happened, on a call that will never return it. Best
+    // effort and logged inside `meter` — a ledger failure must not replace the
+    // real cause of the callback's death with a bookkeeping error.
+    const partial = reported.usage;
+    if (partial) await meter(partial);
+    throw e;
+  }
+  await meter(outcome.usage);
+  return outcome.result;
 }
 
 /**

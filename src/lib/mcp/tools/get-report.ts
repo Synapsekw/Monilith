@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   getReportCore,
   resolveReportBoardIdsCore,
 } from "@/lib/reports/queries";
 import { readableBoardIds } from "./board-access";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function getReportHandler(
   getClient: GetClient,
@@ -93,18 +93,14 @@ export async function getReportHandler(
   }
 }
 
-export function registerGetReportTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_report",
-    {
-      title: "Get report",
-      description:
-        "One report's structure — its name, scope, the board(s) it is bound to, and the ordered blocks it is built from. A report can span one board, many boards, a whole portfolio, or none at all (a template). Does not resolve the blocks' data; use list_items or get_widget_data for numbers. Get ids from list_reports.",
-      inputSchema: { reportId: z.string().uuid() },
-    },
-    async (args) => getReportHandler(getClient, args),
-  );
-}
+export const getReportDescriptor: ToolDescriptor = {
+  name: "get_report",
+  title: "Get report",
+  description:
+    "One report's structure — its name, scope, the board(s) it is bound to, and the ordered blocks it is built from. A report can span one board, many boards, a whole portfolio, or none at all (a template). Does not resolve the blocks' data; use list_items or get_widget_data for numbers. Get ids from list_reports.",
+  inputSchema: { reportId: z.string().uuid() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    getReportHandler(ctx.getClient, input as { reportId: string }),
+};

@@ -119,6 +119,28 @@ describe("AgentRoster", () => {
     expect(screen.queryByText("Failed")).not.toBeInTheDocument();
   });
 
+  // The badge is the ONLY place a queued approval is discoverable without
+  // opening the run that produced it.
+  it("badges an agent that has proposals waiting", () => {
+    wrap(
+      <AgentRoster
+        agents={[{ ...base, pendingProposals: 3 }]}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/3 awaiting approval/i)).toBeInTheDocument();
+  });
+
+  it("shows no badge when nothing is waiting", () => {
+    wrap(
+      <AgentRoster
+        agents={[{ ...base, pendingProposals: 0 }]}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/awaiting approval/i)).not.toBeInTheDocument();
+  });
+
   // Working agreement #5: the roster's first paint must not pull run history.
   it("does not fetch run history until a row is expanded", () => {
     wrap(<AgentRoster agents={agents} onToggle={vi.fn()} />);

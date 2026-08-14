@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetClient } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function listBoardsHandler(getClient: GetClient) {
   const supabase = await getClient();
@@ -23,17 +23,12 @@ export async function listBoardsHandler(getClient: GetClient) {
   return { content: [{ type: "text" as const, text: JSON.stringify(boards) }] };
 }
 
-export function registerListBoardsTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "list_boards",
-    {
-      title: "List boards",
-      description: "List boards visible to the connected user.",
-      inputSchema: {},
-    },
-    async () => listBoardsHandler(getClient),
-  );
-}
+export const listBoardsDescriptor: ToolDescriptor = {
+  name: "list_boards",
+  title: "List boards",
+  description: "List boards visible to the connected user.",
+  inputSchema: {},
+  capability: null,
+  scope: "none",
+  invoke: (ctx) => listBoardsHandler(ctx.getClient),
+};

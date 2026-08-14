@@ -52,8 +52,9 @@ import type { Database } from "@/types/database.types";
 //
 // No board-access-loss case here either, for the same reason as the sibling
 // file: this table doesn't touch board access at all (it is a pure audit
-// row), and the case belongs conceptually to `buildBriefing`/RLS on `boards`
-// /`items`, not to this table's own RLS.
+// row), and the case belongs conceptually to the agent run's own tool calls —
+// which execute on the owner's client, so RLS on `boards`/`items` is what
+// decides them — not to this table's own RLS.
 
 loadFixtureEnv();
 

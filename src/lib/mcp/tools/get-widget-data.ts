@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { resolveWidgetSlot } from "@/lib/dashboards/widget-slot-core";
 import { canReadBoard } from "./board-access";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export async function getWidgetDataHandler(
   getClient: GetClient,
@@ -56,18 +56,14 @@ export async function getWidgetDataHandler(
   }
 }
 
-export function registerGetWidgetDataTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_widget_data",
-    {
-      title: "Get widget data",
-      description:
-        "Resolve one dashboard widget's data — a chart's series, a list widget's rows, or an aggregate number. Row and series counts are bounded by the widget's own configuration. Get ids from get_dashboard.",
-      inputSchema: { widgetId: z.string().uuid() },
-    },
-    async (args) => getWidgetDataHandler(getClient, args),
-  );
-}
+export const getWidgetDataDescriptor: ToolDescriptor = {
+  name: "get_widget_data",
+  title: "Get widget data",
+  description:
+    "Resolve one dashboard widget's data — a chart's series, a list widget's rows, or an aggregate number. Row and series counts are bounded by the widget's own configuration. Get ids from get_dashboard.",
+  inputSchema: { widgetId: z.string().uuid() },
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    getWidgetDataHandler(ctx.getClient, input as { widgetId: string }),
+};

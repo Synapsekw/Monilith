@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   listTimeAllocationsCore,
   TIME_ALLOCATIONS_LIMIT,
@@ -7,6 +6,7 @@ import {
 } from "@/lib/time/queries";
 import { validateRange } from "./range";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use `YYYY-MM-DD`.");
 
@@ -54,18 +54,17 @@ export async function listTimeAllocationsHandler(
   }
 }
 
-export function registerListTimeAllocationsTool(
-  server: McpServer,
-  getClient: GetClient,
-  actorId: string,
-): void {
-  server.registerTool(
-    "list_time_allocations",
-    {
-      title: "List time allocations",
-      description: `The connected user's manually logged time between two dates, as flat rows. Range must be at most ${TIME_RANGE_MAX_DAYS} days; returns at most ${TIME_ALLOCATIONS_LIMIT} rows, with \`truncated: true\` in the payload if more exist — narrow the window to see them. Does not include running-timer entries.`,
-      inputSchema: listTimeAllocationsInput,
-    },
-    async (args) => listTimeAllocationsHandler(getClient, actorId, args),
-  );
-}
+export const listTimeAllocationsDescriptor: ToolDescriptor = {
+  name: "list_time_allocations",
+  title: "List time allocations",
+  description: `The connected user's manually logged time between two dates, as flat rows. Range must be at most ${TIME_RANGE_MAX_DAYS} days; returns at most ${TIME_ALLOCATIONS_LIMIT} rows, with \`truncated: true\` in the payload if more exist — narrow the window to see them. Does not include running-timer entries.`,
+  inputSchema: listTimeAllocationsInput,
+  capability: null,
+  scope: "none",
+  invoke: (ctx, input) =>
+    listTimeAllocationsHandler(
+      ctx.getClient,
+      ctx.actorId,
+      input as { from: string; to: string },
+    ),
+};

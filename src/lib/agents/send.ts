@@ -4,7 +4,6 @@ import type { Database } from "@/types/database.types";
 import { getServerEnv } from "@/lib/env.server";
 import { unsubscribeSignature } from "@/lib/digest/token";
 import { renderBriefingHtml, renderBriefingText } from "./briefing-render";
-import type { Briefing } from "./briefing";
 import type { UserAgentRow } from "./agents-db";
 
 /**
@@ -26,12 +25,16 @@ export async function sendBriefingEmail(
   svc: SupabaseClient<Database>,
   args: {
     agent: UserAgentRow;
-    briefing: Briefing;
+    /** The fire date this run covers, `YYYY-MM-DD`. Was `briefing.today`. */
+    fireDate: string;
+    /** The agent's OWN report of what it did — `runAgentLoop`'s text. */
     summary: string;
+    /** How many actions the run queued for the owner to approve. */
+    proposalCount: number;
     threadId?: string | null;
   },
 ): Promise<{ emailed: boolean }> {
-  const { agent, briefing, summary, threadId } = args;
+  const { agent, fireDate, summary, proposalCount, threadId } = args;
   const { RESEND_API_KEY, DIGEST_SECRET, APP_BASE_URL, DIGEST_FROM_EMAIL } =
     getServerEnv();
 
@@ -63,11 +66,12 @@ export async function sendBriefingEmail(
     const threadUrl = threadId ? `${APP_BASE_URL}/ask/${threadId}` : undefined;
     const input = {
       agentName: agent.name,
-      briefing,
+      today: fireDate,
       appBaseUrl: APP_BASE_URL as string,
       unsubscribeUrl,
       threadUrl,
       summary,
+      proposalCount,
     };
     const from =
       DIGEST_FROM_EMAIL ?? `digest@${new URL(APP_BASE_URL as string).hostname}`;
@@ -81,7 +85,7 @@ export async function sendBriefingEmail(
       body: JSON.stringify({
         from,
         to: [profile!.email],
-        subject: `${agent.name}: your briefing for ${briefing.today}`,
+        subject: `${agent.name}: your briefing for ${fireDate}`,
         html: renderBriefingHtml(input),
         text: renderBriefingText(input),
         headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
@@ -103,12 +107,11 @@ export async function sendBriefingEmail(
     org_id: agent.org_id,
     actor_id: null,
     kind: "agent_briefing",
-    payload: {
-      agentName: agent.name,
-      overdue: briefing.totals.overdue,
-      today: briefing.totals.today,
-      week: briefing.totals.week,
-    },
+    // The overdue/today/week tallies are gone with the fixed briefing payload:
+    // the agent now decides what its run is ABOUT, so there is no longer a
+    // fixed set of counts to report. `proposalCount` replaces them because it
+    // is the one number that demands an action from the recipient.
+    payload: { agentName: agent.name, proposalCount },
   });
   if (notifyError) throw new Error(`sendBriefingEmail: ${notifyError.message}`);
 

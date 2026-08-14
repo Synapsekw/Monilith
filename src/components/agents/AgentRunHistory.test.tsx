@@ -22,6 +22,29 @@ vi.mock("@/lib/agents/actions", () => ({
     throwWith ? Promise.reject(throwWith) : getAgentRuns(...a),
 }));
 
+const getPendingProposals = vi.fn();
+const decideProposal = vi.fn();
+vi.mock("@/lib/agents/proposal-actions", () => ({
+  getPendingProposals: (...a: unknown[]) => getPendingProposals(...a),
+  decideProposal: (...a: unknown[]) => decideProposal(...a),
+}));
+
+function pendingProposal(over: Record<string, unknown> = {}) {
+  return {
+    id: "p1",
+    runId: "r1",
+    userAgentId: "a1",
+    toolName: "create_item",
+    capability: "board.write",
+    summary: 'Add "Draft proposal" to a board group.',
+    status: "pending",
+    expiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date().toISOString(),
+    target: null,
+    ...over,
+  };
+}
+
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
@@ -48,6 +71,10 @@ async function expand() {
 
 beforeEach(() => {
   getAgentRuns.mockReset();
+  getPendingProposals.mockReset().mockResolvedValue({ ok: true, data: [] });
+  decideProposal
+    .mockReset()
+    .mockResolvedValue({ ok: true, data: { status: "approved" } });
   throwWith = null;
 });
 
@@ -216,5 +243,73 @@ describe("AgentRunHistory", () => {
     await expand();
     expect(await screen.findByText("Ran")).toBeInTheDocument();
     expect(screen.queryByText(/pinned model/i)).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Queued approvals, under the run that asked for them
+// ---------------------------------------------------------------------------
+
+describe("AgentRunHistory — proposals", () => {
+  it("asks for the listed runs' proposals in ONE read, not one per run", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ id: "r1" }), row({ id: "r2" })],
+    });
+    getPendingProposals.mockResolvedValue({
+      ok: true,
+      data: [pendingProposal()],
+    });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+
+    await waitFor(() => expect(getPendingProposals).toHaveBeenCalledTimes(1));
+    expect(getPendingProposals).toHaveBeenCalledWith(["r1", "r2"]);
+    expect(await screen.findByText(/Add "Draft proposal"/)).toBeInTheDocument();
+  });
+
+  it("costs no proposal read at all until the row is expanded", () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    expect(getPendingProposals).not.toHaveBeenCalled();
+  });
+
+  it("does not query for an agent that has never run", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [] });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    await screen.findByText(/no runs yet/i);
+    expect(getPendingProposals).not.toHaveBeenCalled();
+  });
+
+  // Otherwise the decided row comes back as `pending` with fresh buttons the
+  // moment the disclosure is collapsed and re-expanded inside the 30s
+  // staleTime — and clicking those is the most likely real-world way to send
+  // two deciders at one row.
+  it("refetches the list after a decision, so a decided row cannot come back pending", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row({ id: "r1" })] });
+    getPendingProposals.mockResolvedValue({
+      ok: true,
+      data: [pendingProposal()],
+    });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    await screen.findByText(/Add "Draft proposal"/);
+    expect(getPendingProposals).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() => expect(decideProposal).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getPendingProposals).toHaveBeenCalledTimes(2));
+  });
+
+  it("still shows the run history when the proposal read fails", async () => {
+    // Run history is the signal this surface exists for; a failed side read
+    // must not replace it with an error.
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    getPendingProposals.mockResolvedValue({ ok: false, error: "nope" });
+    wrap(<AgentRunHistory agentId="a1" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
   });
 });

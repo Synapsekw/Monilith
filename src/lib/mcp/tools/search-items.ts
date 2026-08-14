@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetClient, ToolResult } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 export const SEARCH_LIMIT = 50;
 
@@ -63,17 +63,16 @@ export async function searchItemsHandler(
   };
 }
 
-export function registerSearchItemsTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "search_items",
-    {
-      title: "Search items",
-      description: `Search items by name within a board (bounded to ${SEARCH_LIMIT} results).`,
-      inputSchema: searchItemsInput,
-    },
-    async (input) => searchItemsHandler(getClient, input),
-  );
-}
+export const searchItemsDescriptor: ToolDescriptor = {
+  name: "search_items",
+  title: "Search items",
+  description: `Search items by name within a board (bounded to ${SEARCH_LIMIT} results).`,
+  inputSchema: searchItemsInput,
+  capability: null,
+  scope: "boardId",
+  invoke: (ctx, input) =>
+    searchItemsHandler(
+      ctx.getClient,
+      input as { boardId: string; query: string },
+    ),
+};

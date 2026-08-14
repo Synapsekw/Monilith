@@ -1,7 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import type { BoardScope } from "./agent-config";
+import type { AgentCadence, BoardScope } from "./agent-config";
+import type { AgentCapability } from "./capabilities";
 import type { AgentRunLike, AgentRunSummary } from "./run-status";
 
 /**
@@ -18,9 +19,24 @@ export type UserAgentRow = {
   template_id: string;
   instructions: string;
   board_scope: BoardScope;
-  cadence: "daily";
+  cadence: AgentCadence;
   run_at_local_hour: number;
+  /**
+   * The cadence's day operand, and only ever the one its cadence names:
+   * `user_agents_cadence_fields` guarantees weekly rows carry a weekday, monthly
+   * rows a day-of-month, and daily/weekdays rows neither. 0-6 is
+   * Sunday-Saturday, matching Postgres `extract(dow …)`.
+   */
+  run_on_weekday: number | null;
+  run_on_day_of_month: number | null;
   enabled: boolean;
+  /**
+   * What this agent may DO. Empty for every agent that predates the grant set,
+   * and empty is the default — reading capabilities is never the permission
+   * check on its own: the effective set is this INTERSECT the org's
+   * `agent_capability_ceiling` INTERSECT the owner's RLS.
+   */
+  capabilities: AgentCapability[];
   bridge_secret_id: string | null;
   /**
    * The per-agent model PIN. Null on both means "use the org default", which is
@@ -35,7 +51,7 @@ export type UserAgentRow = {
 type Client = SupabaseClient<Database>;
 
 const AGENT_COLS =
-  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id, provider, model_id";
+  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month";
 
 export async function getUserAgentById(
   client: Client,
@@ -47,9 +63,12 @@ export async function getUserAgentById(
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`getUserAgentById: ${error.message}`);
-  // The generated Row type has `board_scope: Json` / `cadence: string` — narrower
-  // than the app-level `BoardScope` / `"daily"` literal validated at the boundary
-  // (agent-config.ts). No column list or shape mismatch here, just that widening.
+  // The generated Row type has `board_scope: Json` / `cadence: string` /
+  // `capabilities: string[]` — wider than the app-level `BoardScope` /
+  // `AgentCadence` / `AgentCapability[]` validated at the boundary
+  // (agent-config.ts) and enforced by `user_agents_cadence_check` and
+  // `user_agents_capabilities_known`. No column list or shape mismatch here,
+  // just that narrowing.
   return (data as UserAgentRow | null) ?? null;
 }
 

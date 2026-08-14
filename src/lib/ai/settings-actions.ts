@@ -18,6 +18,8 @@ import type { AiProvider } from "@/lib/ai/providers/catalog";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { readOrgBillingStatus } from "@/lib/billing/status";
 import { entitlesAi } from "@/lib/billing/entitling";
+import { capabilitySchema } from "@/lib/agents/agent-config";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 
 const NOT_ADMIN = "Only organization admins can change AI settings.";
 
@@ -54,6 +56,9 @@ export async function getOrgAiSettings(): Promise<
     /** The org-wide default, as a provider + CATALOG key pair. */
     defaultProvider: string | null;
     defaultModelId: string | null;
+    /** The org-wide ceiling on what a personal agent may be granted — see
+     *  `OrgAgentCeiling`, the admin control that writes it. */
+    agentCapabilityCeiling: AgentCapability[];
   }>
 > {
   await requireUser();
@@ -75,6 +80,7 @@ export async function getOrgAiSettings(): Promise<
       byoKeyLast4: settings.byoKeyLast4,
       defaultProvider: settings.defaultProvider,
       defaultModelId: settings.defaultModelId,
+      agentCapabilityCeiling: settings.agentCapabilityCeiling,
     },
   };
 }
@@ -326,4 +332,64 @@ export async function removeOrgByoKey(): Promise<
 
   revalidatePath("/settings/ai");
   return { ok: true, data: {} };
+}
+
+const capabilityCeilingSchema = z.object({
+  // Reused, not re-declared: `capabilitySchema` is the same
+  // `z.array(z.enum(AGENT_CAPABILITIES))` (duplicate-rejecting, capped at the
+  // vocabulary length) that validates a per-agent grant in `agent-config.ts`.
+  // An unknown or duplicate capability is refused here, before any write —
+  // the ceiling is a set drawn from the identical vocabulary, just written by
+  // an admin instead of an agent's owner.
+  capabilities: capabilitySchema,
+});
+
+/**
+ * Persists the org-wide CEILING on what any personal agent may be granted —
+ * the admin half of the two-key gate `org-settings.ts` documents. An agent's
+ * effective permission is its own grant INTERSECT this ceiling INTERSECT the
+ * owner's RLS, enforced at RUN time (the agent tool loop) and reflected at
+ * EDIT time (`CapabilityToggles` disables anything outside it).
+ *
+ * This action only writes the value. It deliberately does NOT reconcile any
+ * agent's already-stored `capabilities` — an agent whose grant now exceeds a
+ * lowered ceiling keeps that grant on file, and simply has it dropped the
+ * next time it runs. Rewriting every agent's row here would silently destroy
+ * data the owner never touched, for a clamp that already applies without it.
+ *
+ * UPDATE, never UPSERT, for the same reason as `setOrgDefaultModel`: an org
+ * with no `org_ai_settings` row is `mode: "off"` by
+ * `DEFAULT_ORG_AI_SETTINGS`, and inserting one here would silently switch an
+ * org that has never subscribed into `per_user`'s default row shape. An org
+ * with no row is told to choose how AI is powered first.
+ */
+export async function setAgentCapabilityCeiling(input: {
+  capabilities: AgentCapability[];
+}): Promise<ActionResult<{ capabilities: AgentCapability[] }>> {
+  const parsed = capabilityCeilingSchema.safeParse(input);
+  if (!parsed.success)
+    return fail("Couldn't update the capability ceiling. Please try again.");
+  const { capabilities } = parsed.data;
+
+  const ctx = await requireOrgAdmin();
+  if (!ctx) return fail(NOT_ADMIN);
+
+  const svc = createServiceClient();
+  const { error, count } = await svc
+    .from("org_ai_settings")
+    .update(
+      {
+        agent_capability_ceiling: capabilities,
+        updated_by: ctx.userId,
+      },
+      { count: "exact" },
+    )
+    .eq("org_id", ctx.orgId);
+  if (error)
+    return fail("Couldn't update the capability ceiling. Please try again.");
+  if (count === 0)
+    return fail("Choose how AI is powered for this organization first.");
+
+  revalidatePath("/settings/ai");
+  return { ok: true, data: { capabilities } };
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetClient } from "./shared";
+import type { ToolDescriptor } from "./descriptor";
 
 const getItemInput = { itemId: z.string().uuid() };
 
@@ -46,17 +46,13 @@ export async function getItemHandler(
   };
 }
 
-export function registerGetItemTool(
-  server: McpServer,
-  getClient: GetClient,
-): void {
-  server.registerTool(
-    "get_item",
-    {
-      title: "Get item",
-      description: "Get an item's fields and cell values.",
-      inputSchema: getItemInput,
-    },
-    async (input) => getItemHandler(getClient, input),
-  );
-}
+export const getItemDescriptor: ToolDescriptor = {
+  name: "get_item",
+  title: "Get item",
+  description: "Get an item's fields and cell values.",
+  inputSchema: getItemInput,
+  capability: null,
+  scope: "itemId",
+  invoke: (ctx, input) =>
+    getItemHandler(ctx.getClient, input as { itemId: string }),
+};
