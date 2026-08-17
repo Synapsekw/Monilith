@@ -17,7 +17,7 @@ import type { ValidatedAction } from "@/lib/ai/write/schema";
 import { useAskStream } from "./use-ask-stream";
 import { MessageList, type UIMessage } from "./MessageList";
 import { ProposalCard } from "@/components/agents/ProposalCard";
-import type { PendingProposal } from "@/lib/agents/proposal-actions";
+import type { PendingProposal } from "@/lib/agents/proposal-display";
 import type { DropState } from "./StreamDropNotice";
 import { Composer } from "./Composer";
 
