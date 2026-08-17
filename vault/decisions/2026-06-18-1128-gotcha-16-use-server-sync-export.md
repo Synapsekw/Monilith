@@ -25,10 +25,20 @@ runtime/build — a failure neither the test runner nor the type-checker surface
 
 ## Decision
 
-Keep `"use server"` action files to **async server actions only** (plus type exports, which are
-erased). Any synchronous helper — even one you want to unit-test in isolation — lives in a separate
-plain module and is imported by the action. Here: `buildTemplatePayload` + `TemplatePayload` moved to
-`src/lib/boards/template-payload.ts`; `actions.ts` imports it.
+Keep `"use server"` action files to **async server actions only**. Any synchronous helper — even one
+you want to unit-test in isolation — lives in a separate plain module and is imported by the action.
+Here: `buildTemplatePayload` + `TemplatePayload` moved to `src/lib/boards/template-payload.ts`;
+`actions.ts` imports it.
+
+> **⚠️ CORRECTED 2026-08-17.** This sentence originally ended "(plus type exports, which are
+> erased)". That is true only of type **alias declarations** (`export type Foo = { … }`, which are
+> fine and used widely here). It is **false** of type **re-export clauses**: `export type { Foo };`
+> and `export { type Foo };` are export clauses, and Next's server-actions transform enumerates
+> clauses without regard for the `type` modifier — producing `registerServerReference(Foo, …)`
+> against a binding the type pass erases, i.e. a `ReferenceError` at module evaluation. That shipped
+> to production and broke the boards page for three days. `pnpm build` exits 0 on it. See
+> [[2026-08-17-gotcha-92-a-fix-merged-to-develop-is-not-a-fix-in-production]]; the guard is
+> `src/test/use-server-exports.test.ts`.
 
 ## Rationale
 
