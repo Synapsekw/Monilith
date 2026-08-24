@@ -181,11 +181,11 @@ Promise.try ??= function tryPolyfill<T>(
 
 // `Uint8Array.prototype.toHex`/`.toBase64` (TC39 stage-4, also newer than this
 // repo's Node 22 runtime) are what pdf.js uses to stringify its computed MD5
-// document fingerprint — hit on every document load, not just exotic PDF
-// features. `fromHex`/`fromBase64`/`setFromHex`/`setFromBase64` are added
-// alongside for the same reason `toBase64` is: other pdf.js internals (fonts,
-// XFA, signatures) reach for the decode side of this same proposal, and it's
-// the same five-line shim either way.
+// document fingerprint — hit on every document load. Encode direction only:
+// a grep of src/ found no caller of the decode side (setFromHex/setFromBase64/
+// fromHex/fromBase64) anywhere, including in pdf.js's own usage, which only
+// ever stringifies bytes it already has. A polyfill for an API nothing calls
+// is a landmine, not a convenience — don't add it back without a real caller.
 if (typeof Uint8Array.prototype.toHex !== "function") {
   const bytesOf = (u8: Uint8Array) =>
     Buffer.from(u8.buffer, u8.byteOffset, u8.byteLength);
@@ -195,21 +195,6 @@ if (typeof Uint8Array.prototype.toHex !== "function") {
   Uint8Array.prototype.toBase64 = function () {
     return bytesOf(this).toString("base64");
   };
-  Uint8Array.prototype.setFromHex = function (hex: string) {
-    const decoded = Buffer.from(hex, "hex");
-    const written = Math.min(decoded.length, this.length);
-    this.set(decoded.subarray(0, written));
-    return { read: written * 2, written };
-  };
-  Uint8Array.prototype.setFromBase64 = function (b64: string) {
-    const decoded = Buffer.from(b64, "base64");
-    const written = Math.min(decoded.length, this.length);
-    this.set(decoded.subarray(0, written));
-    return { read: b64.length, written };
-  };
-  Uint8Array.fromHex = (hex: string) => new Uint8Array(Buffer.from(hex, "hex"));
-  Uint8Array.fromBase64 = (b64: string) =>
-    new Uint8Array(Buffer.from(b64, "base64"));
 }
 
 // Provide placeholder public env vars so modules that import the validated env
