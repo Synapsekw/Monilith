@@ -1,7 +1,7 @@
 # Agent Reference Documents — design
 
 **Date:** 2026-08-24
-**Status:** draft (brainstorming — awaiting owner approval)
+**Status:** approved (brainstorming)
 **Scope:** Spec 2b of 4. Spec 1 (provider & model layer) shipped in PR #95; Spec 2a (agent runtime)
 shipped in PR #96 and is live. This spec covers **reference documents only**. The memory layer —
 originally bundled into "2b — agent knowledge" — is **split out into a new Spec 2c** and is out of
