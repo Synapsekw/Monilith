@@ -58,6 +58,53 @@ export type Database = {
           },
         ];
       };
+      agent_documents: {
+        Row: {
+          body: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          owner_id: string;
+          source_file_name: string | null;
+          source_format: string;
+          title: string;
+          token_estimate: number;
+          updated_at: string;
+        };
+        Insert: {
+          body: string;
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          owner_id: string;
+          source_file_name?: string | null;
+          source_format: string;
+          title: string;
+          token_estimate: number;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          owner_id?: string;
+          source_file_name?: string | null;
+          source_format?: string;
+          title?: string;
+          token_estimate?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agent_documents_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_conversations: {
         Row: {
           agent_id: string | null;
@@ -3008,6 +3055,39 @@ export type Database = {
           },
         ];
       };
+      user_agent_documents: {
+        Row: {
+          document_id: string;
+          position: number;
+          user_agent_id: string;
+        };
+        Insert: {
+          document_id: string;
+          position?: number;
+          user_agent_id: string;
+        };
+        Update: {
+          document_id?: string;
+          position?: number;
+          user_agent_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agent_documents_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "agent_documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_documents_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_agent_fires: {
         Row: {
           fire_date: string;
@@ -3129,6 +3209,7 @@ export type Database = {
       user_agent_runs: {
         Row: {
           created_at: string;
+          documents_omitted: boolean;
           error: string | null;
           fire_date: string;
           fire_hour: number;
@@ -3147,6 +3228,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          documents_omitted?: boolean;
           error?: string | null;
           fire_date: string;
           fire_hour: number;
@@ -3165,6 +3247,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          documents_omitted?: boolean;
           error?: string | null;
           fire_date?: string;
           fire_hour?: number;
