@@ -1,4 +1,5 @@
 import { parseColumnOptions } from "@/lib/boards/column-options";
+import { estimateTokens } from "@/lib/agents/document-budget";
 
 type RawColumn = { id: string; name: string; kind: string; settings: unknown };
 type RawGroup = { id: string; name: string };
@@ -168,7 +169,7 @@ export function buildBoardSnapshot(input: {
     columns: snapColumns,
     columnStats,
   };
-  const estimatedTokens = Math.ceil(JSON.stringify(snapshot).length / 4);
+  const estimatedTokens = estimateTokens(JSON.stringify(snapshot));
 
   return {
     ...snapshot,
