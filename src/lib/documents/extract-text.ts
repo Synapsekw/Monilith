@@ -57,23 +57,29 @@ async function extractPdf(file: File): Promise<string> {
 
   const buf = await file.arrayBuffer();
   // The loading task owns teardown in pdfjs v6 (destroy() lives here, not on
-  // the resolved document proxy) — same as PdfPreview.tsx.
+  // the resolved document proxy) — same as PdfPreview.tsx. It must run on
+  // BOTH paths: a getDocument() that resolves fine can still throw later, out
+  // of getPage()/getTextContent() on a page with a corrupt content stream —
+  // without try/finally the worker leaks for the tab's lifetime.
   const loadingTask = pdfjsLib.getDocument({ data: buf });
-  const doc = await loadingTask.promise;
-  const pages: string[] = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    pages.push(
-      content.items
-        .map((it) => ("str" in it ? it.str : ""))
-        .join(" ")
-        .replace(/[ \t]+/g, " ")
-        .trim(),
-    );
+  try {
+    const doc = await loadingTask.promise;
+    const pages: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      pages.push(
+        content.items
+          .map((it) => ("str" in it ? it.str : ""))
+          .join(" ")
+          .replace(/[ \t]+/g, " ")
+          .trim(),
+      );
+    }
+    return pages.filter(Boolean).join("\n\n");
+  } finally {
+    await loadingTask.destroy();
   }
-  await loadingTask.destroy();
-  return pages.filter(Boolean).join("\n\n");
 }
 
 async function extractDocx(file: File): Promise<string> {
