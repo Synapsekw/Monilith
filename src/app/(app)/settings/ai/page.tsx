@@ -7,11 +7,13 @@ import { listMyAiCredentials } from "@/lib/ai/credentials";
 import { listEnabledProviders } from "@/lib/ai/providers/provider-rows";
 import { buildModelOptions } from "@/lib/ai/models/model-options";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
+import { getUsageSummary } from "@/lib/ai/usage-summary";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { SettingRow } from "@/components/settings/setting-row";
 import { AiKeyList } from "@/components/settings/AiKeyList";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
 import { OrgAgentCeiling } from "@/components/settings/OrgAgentCeiling";
+import { UsageBreakdown } from "@/components/settings/UsageBreakdown";
 import type { ModelOption } from "@/components/settings/ModelPicker";
 
 export const metadata = { title: "AI · Settings" };
@@ -76,6 +78,11 @@ export default async function AiSettingsPage() {
   const modelOptions: ModelOption[] =
     isAdmin && orgAi.ok ? await buildModelOptions(supabase, providers) : [];
 
+  // Same "only an admin pays for the extra read" pattern as `modelOptions`
+  // above — `getUsageSummary` is a bounded, admin-only read folded into this
+  // page's existing first-paint data, not a client fetch.
+  const usage = isAdmin && orgAi.ok ? await getUsageSummary(org.id) : null;
+
   return (
     <>
       {isAdmin && orgAi.ok && (
@@ -89,6 +96,17 @@ export default async function AiSettingsPage() {
               providers={providers}
               modelOptions={modelOptions}
             />
+          </div>
+        </SettingsSection>
+      )}
+
+      {isAdmin && orgAi.ok && usage && (
+        <SettingsSection
+          title="Usage"
+          description="Where this month's AI spend is going."
+        >
+          <div className="pt-4">
+            <UsageBreakdown summary={usage} />
           </div>
         </SettingsSection>
       )}
