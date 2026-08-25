@@ -3575,21 +3575,13 @@ export type Database = {
         Args: { p_provider: string; p_user: string };
         Returns: undefined;
       };
-      ai_credential_get:
-        | {
-            Args: { p_user: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          }
-        | {
-            Args: { p_provider: string; p_user: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          };
+      ai_credential_get: {
+        Args: { p_provider: string; p_user: string };
+        Returns: {
+          provider: string;
+          secret: string;
+        }[];
+      };
       ai_credential_set: {
         Args: {
           p_hint: string;
@@ -4109,21 +4101,13 @@ export type Database = {
         Returns: string;
       };
       org_ai_secret_clear: { Args: { p_org: string }; Returns: undefined };
-      org_ai_secret_get:
-        | {
-            Args: { p_org: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          }
-        | {
-            Args: { p_org: string; p_provider: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          };
+      org_ai_secret_get: {
+        Args: { p_org: string; p_provider: string };
+        Returns: {
+          provider: string;
+          secret: string;
+        }[];
+      };
       org_ai_secret_set: {
         Args: {
           p_hint: string;
