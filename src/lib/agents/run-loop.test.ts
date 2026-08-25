@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { MockLanguageModelV4 } from "ai/test";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { tool } from "ai";
+import { tool, type LanguageModel } from "ai";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
@@ -12,6 +12,7 @@ import {
   buildAgentRuntime,
   AGENT_MAX_STEPS,
   ModelNotToolCapableError,
+  PREAMBLE,
 } from "./run-loop";
 import { makeGrantGate, UNGRANTED_REASON } from "./grant-gate";
 
@@ -621,6 +622,122 @@ describe("prompt caching", () => {
     // The system prompt still arrives — a caching option must never cost the
     // instructions.
     expect(JSON.stringify(seen)).toContain("scheduled work agent");
+  });
+});
+
+// ── Reference documents ──────────────────────────────────────────────────
+// THE MOST IMPORTANT TEST IN THIS FILE. The system message is the Anthropic
+// cache PREFIX, re-sent on every one of up to twelve steps of every existing
+// agent's every run. If attaching this feature changes so much as one byte
+// of that prefix for an agent that has zero documents, every existing
+// agent's cache breaks silently and every run gets more expensive — a cost
+// regression nothing else in the suite would catch.
+describe("reference documents in the system prompt", () => {
+  /** Captures the exact converted prompt `generateText` hands the model —
+   *  the same value `run-loop.ts` produced from `composeSystemPrompt`, after
+   *  the AI SDK's own conversion (which passes a system message's `content`
+   *  and `providerOptions` through UNCHANGED — see `convertToLanguageModelPrompt`
+   *  in `ai/dist/index.js`). This is a more direct assertion than inspecting
+   *  the wire body: it is exactly the `messages` array run-loop.ts built. */
+  function capturingModel(sink: { prompt?: unknown }): LanguageModel {
+    return new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        sink.prompt = prompt;
+        return {
+          content: [{ type: "text", text: "Done." }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      },
+    });
+  }
+
+  it("keeps the system message byte-identical when no documents are attached", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      model: capturingModel(sink),
+      instructions: "Do the thing.",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+    });
+    const system = (sink.prompt as { role: string; content: string }[])[0];
+    expect(system.role).toBe("system");
+    expect(system.content).toBe(
+      `${PREAMBLE}\n\nYOUR OWNER'S INSTRUCTIONS:\nDo the thing.`,
+    );
+  });
+
+  it("also keeps it byte-identical when `documents` is explicitly an empty array", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      model: capturingModel(sink),
+      instructions: "Do the thing.",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+      documents: [],
+    });
+    const system = (sink.prompt as { role: string; content: string }[])[0];
+    expect(system.content).toBe(
+      `${PREAMBLE}\n\nYOUR OWNER'S INSTRUCTIONS:\nDo the thing.`,
+    );
+  });
+
+  it("injects the documents inside the SAME system message, with owner instructions last", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      model: capturingModel(sink),
+      instructions: "Do the thing.",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+      documents: [{ title: "Standup format", body: "Y/T/B, one line each." }],
+    });
+    const prompt = sink.prompt as {
+      role: string;
+      content: string;
+      providerOptions?: Record<string, Record<string, unknown>>;
+    }[];
+    // Still exactly ONE system message and one user message — never a second
+    // message for the documents, because `cache_control` can only be
+    // attached through a message's own `providerOptions`.
+    expect(prompt).toHaveLength(2);
+    const system = prompt[0]!;
+    expect(system.role).toBe("system");
+    expect(system.content).toContain("REFERENCE DOCUMENTS");
+    expect(system.content).toContain("Standup format");
+    expect(system.content).toContain("Y/T/B, one line each.");
+    expect(system.content.indexOf("REFERENCE DOCUMENTS")).toBeLessThan(
+      system.content.indexOf("YOUR OWNER'S INSTRUCTIONS"),
+    );
+    expect(system.content.trimEnd().endsWith("Do the thing.")).toBe(true);
+    // The cache breakpoint stays on THIS message even with documents present.
+    expect(system.providerOptions).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+  });
+
+  it("reports documentsOmitted back on the result, defaulting to false", async () => {
+    const r1 = await runAgentLoop({
+      model: textModel("Done."),
+      instructions: "go",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+    });
+    expect(r1.documentsOmitted).toBe(false);
+
+    const r2 = await runAgentLoop({
+      model: textModel("Done."),
+      instructions: "go",
+      tools,
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      maxOutputTokens: null,
+      documentsOmitted: true,
+    });
+    expect(r2.documentsOmitted).toBe(true);
   });
 });
 

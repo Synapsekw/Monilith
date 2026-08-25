@@ -61,6 +61,7 @@ function row(over: Record<string, unknown> = {}) {
     inputTokens: 1200,
     outputTokens: 300,
     modelSubstituted: false,
+    documentsOmitted: false,
     ...over,
   };
 }
@@ -243,6 +244,32 @@ describe("AgentRunHistory", () => {
     await expand();
     expect(await screen.findByText("Ran")).toBeInTheDocument();
     expect(screen.queryByText(/pinned model/i)).not.toBeInTheDocument();
+  });
+
+  // `user_agent_runs.documents_omitted`: a run whose reference documents did
+  // not fit and were dropped still SUCCEEDED — same rationale as
+  // modelSubstituted above, so it reads as informational, not a failure.
+  it("says when a run dropped its reference documents", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ documentsOmitted: true })],
+    });
+    wrap(<AgentRunHistory agentId="a11" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(
+      screen.getByText(/reference documents omitted/i),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing about documents on an ordinary run", async () => {
+    getAgentRuns.mockResolvedValue({ ok: true, data: [row()] });
+    wrap(<AgentRunHistory agentId="a12" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/reference documents omitted/i),
+    ).not.toBeInTheDocument();
   });
 });
 

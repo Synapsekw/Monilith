@@ -275,6 +275,7 @@ describe("listAgentRuns", () => {
     input_tokens: 1200,
     output_tokens: 300,
     model_substituted: false,
+    documents_omitted: false,
     created_at: "2026-08-01T07:00:04.000Z",
   };
 
@@ -293,6 +294,7 @@ describe("listAgentRuns", () => {
         inputTokens: 1200,
         outputTokens: 300,
         modelSubstituted: false,
+        documentsOmitted: false,
       },
     ]);
   });
@@ -308,6 +310,20 @@ describe("listAgentRuns", () => {
     expect(run.modelSubstituted).toBe(true);
     expect(select).toHaveBeenCalledWith(
       expect.stringContaining("model_substituted"),
+    );
+  });
+
+  // Same rationale, same failure mode: dropping this column from the select
+  // would silently make every run read as "kept all its documents", which is
+  // exactly the run this column exists to flag.
+  it("carries documents_omitted through to the display shape", async () => {
+    const { client, select } = clientForRunHistory([
+      { ...dbRow, documents_omitted: true },
+    ]);
+    const [run] = await listAgentRuns(client as never, "agent-1", 50);
+    expect(run.documentsOmitted).toBe(true);
+    expect(select).toHaveBeenCalledWith(
+      expect.stringContaining("documents_omitted"),
     );
   });
 

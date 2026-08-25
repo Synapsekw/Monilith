@@ -77,6 +77,10 @@ export function fakeResolvedModel(over: Partial<ResolvedModel> = {}) {
     rates: { input: 3, output: 15, cacheRead: null, cacheWrite: null },
     supportsTools: true,
     substituted: false,
+    // A realistic window, not null — the reference-document budget's
+    // `assumedContext` (NULL_CONTEXT_FALLBACK) fallback path is its own
+    // explicit test case, not the silent default every other suite gets.
+    contextLength: 200_000,
     ...over,
   };
 }

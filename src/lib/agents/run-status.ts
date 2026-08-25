@@ -75,6 +75,13 @@ export type AgentRunSummary = AgentRunLike & {
    * broke, which is exactly why the column was minted separately.
    */
   modelSubstituted: boolean;
+  /**
+   * The run succeeded, but its reference documents did not fit and were ALL
+   * dropped. Like `modelSubstituted` and for the same reason, this is neither
+   * a `status` nor an `error`: the run worked. It also rides on the expanded
+   * history row only — `get_my_agent_last_runs()` has fixed SQL columns.
+   */
+  documentsOmitted: boolean;
 };
 
 const PRESENTATION: Record<
