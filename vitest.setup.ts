@@ -2,6 +2,49 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+// Node 22.4+ ships an experimental global `localStorage`/`sessionStorage`
+// (WHATWG Storage API, file-backed via `--localstorage-file`). Unset, Node
+// still defines the global as `undefined`, and by the time this setup file
+// runs that definition has already clobbered jsdom's own per-window Storage
+// implementation on BOTH `window.localStorage` and the bare global -- every
+// test touching `localStorage`/`sessionStorage` fails with "Cannot read
+// properties of undefined" instead of getting a working store. A CLI flag
+// fix (`--no-experimental-webstorage`) doesn't exist before Node 22.4, which
+// is older than this repo's stated `engines.node` floor, so it can't be the
+// fix here. A minimal in-memory Storage polyfill sidesteps the conflict
+// entirely and works on every Node version.
+class MemoryStorage implements Storage {
+  #store = new Map<string, string>();
+  get length() {
+    return this.#store.size;
+  }
+  clear(): void {
+    this.#store.clear();
+  }
+  getItem(key: string): string | null {
+    return this.#store.has(key) ? this.#store.get(key)! : null;
+  }
+  key(index: number): string | null {
+    return Array.from(this.#store.keys())[index] ?? null;
+  }
+  removeItem(key: string): void {
+    this.#store.delete(key);
+  }
+  setItem(key: string, value: string): void {
+    this.#store.set(key, String(value));
+  }
+}
+for (const key of ["localStorage", "sessionStorage"] as const) {
+  const storage = new MemoryStorage();
+  for (const target of [globalThis, window]) {
+    Object.defineProperty(target, key, {
+      value: storage,
+      configurable: true,
+      writable: true,
+    });
+  }
+}
+
 // next/font/google requires the Next build loader and throws under jsdom. Stub
 // the font factories the app uses so components importing a font render in
 // tests without per-file mocks.

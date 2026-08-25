@@ -175,7 +175,7 @@ describe("ErrorFallback", () => {
   it("does not reload when sessionStorage is unavailable", () => {
     onlineManager.setOnline(false);
     const getItem = vi
-      .spyOn(Storage.prototype, "getItem")
+      .spyOn(window.sessionStorage, "getItem")
       .mockImplementation(() => {
         throw new Error("storage disabled");
       });
