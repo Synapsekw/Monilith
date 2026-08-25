@@ -11,18 +11,24 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => currentClient,
 }));
 
-// queries-cached pulls in `server-only` + a `use cache` scope that can't run
-// under Vitest; stub the one fn actions.ts consumes.
-const getWidgetAggregationCached = vi.fn();
-const getWidgetCompletionCached = vi.fn();
-const getWidgetHealthCached = vi.fn();
-vi.mock("./queries-cached", () => ({
-  getWidgetAggregationCached: (...args: unknown[]) =>
-    getWidgetAggregationCached(...args),
-  getWidgetCompletionCached: (...args: unknown[]) =>
-    getWidgetCompletionCached(...args),
-  getWidgetHealthCached: (...args: unknown[]) => getWidgetHealthCached(...args),
-}));
+// The aggregate family (number/battery/completion/health) now resolves over
+// the request's own RLS client via widget-resolve.ts's resolveAggregate/
+// resolveCompletion/resolveHealth (see widget-slot-core.ts) instead of the
+// old queries-cached.ts service-client path. Stub just those three; keep
+// resolveSeries/resolveRows real so the chart/list tests below still exercise
+// the genuine implementation.
+const resolveAggregate = vi.fn();
+const resolveCompletion = vi.fn();
+const resolveHealth = vi.fn();
+vi.mock("./widget-resolve", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./widget-resolve")>();
+  return {
+    ...actual,
+    resolveAggregate: (...args: unknown[]) => resolveAggregate(...args),
+    resolveCompletion: (...args: unknown[]) => resolveCompletion(...args),
+    resolveHealth: (...args: unknown[]) => resolveHealth(...args),
+  };
+});
 
 import {
   createDashboard,
@@ -44,9 +50,9 @@ const WIDGET_2 = "55555555-5555-4555-8555-555555555555";
 
 beforeEach(() => {
   updateTag.mockReset();
-  getWidgetAggregationCached.mockReset();
-  getWidgetCompletionCached.mockReset();
-  getWidgetHealthCached.mockReset();
+  resolveAggregate.mockReset();
+  resolveCompletion.mockReset();
+  resolveHealth.mockReset();
 });
 
 describe("dashboard mutation invalidation", () => {
@@ -164,8 +170,8 @@ describe("widget mutation invalidation (per-widget aggregation tag)", () => {
   });
 });
 
-describe("getWidgetData delegates to the cached aggregation read", () => {
-  it("passes the widget's resolved org + board into the cached fn", async () => {
+describe("getWidgetData delegates to the RLS-client aggregate resolve", () => {
+  it("passes the request's own client + the widget's resolved board into resolveAggregate", async () => {
     const maybeSingle = vi.fn(async () => ({
       data: {
         kind: "number",
@@ -179,7 +185,7 @@ describe("getWidgetData delegates to the cached aggregation read", () => {
       select: () => ({ eq: () => ({ maybeSingle }) }),
     }));
     currentClient = { from };
-    getWidgetAggregationCached.mockResolvedValue({
+    resolveAggregate.mockResolvedValue({
       ok: true,
       buckets: [{ group_key: "g", metric: 5 }],
       columnMeta: null,
@@ -187,18 +193,15 @@ describe("getWidgetData delegates to the cached aggregation read", () => {
 
     const res = await getWidgetData({ widgetId: WIDGET });
     expect(res.ok).toBe(true);
-    expect(getWidgetAggregationCached).toHaveBeenCalledWith(
-      expect.objectContaining({
-        widgetId: WIDGET,
-        orgId: "org-9",
-        boardId: BOARD,
-      }),
+    expect(resolveAggregate).toHaveBeenCalledWith(
+      currentClient,
+      expect.objectContaining({ boardId: BOARD, config: { agg: "count" } }),
     );
     if (res.ok)
       expect(res.data.buckets).toEqual([{ group_key: "g", metric: 5 }]);
   });
 
-  it("propagates a cached-read error", async () => {
+  it("propagates a resolve error", async () => {
     const maybeSingle = vi.fn(async () => ({
       data: {
         kind: "number",
@@ -212,7 +215,7 @@ describe("getWidgetData delegates to the cached aggregation read", () => {
       select: () => ({ eq: () => ({ maybeSingle }) }),
     }));
     currentClient = { from };
-    getWidgetAggregationCached.mockResolvedValue({
+    resolveAggregate.mockResolvedValue({
       ok: false,
       error: "rpc boom",
     });
@@ -229,7 +232,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     currentClient = {};
     const res = await getWidgetsData({ widgetIds: ["not-a-uuid"] });
     expect(res.ok).toBe(false);
-    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    expect(resolveAggregate).not.toHaveBeenCalled();
   });
 
   it("short-circuits an empty id list with an empty map (no query)", async () => {
@@ -264,7 +267,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const select = vi.fn(() => ({ in: inFn }));
     const from = vi.fn(() => ({ select }));
     currentClient = { from };
-    getWidgetAggregationCached.mockResolvedValue({
+    resolveAggregate.mockResolvedValue({
       ok: true,
       buckets: [{ group_key: "g", metric: 3 }],
       columnMeta: null,
@@ -277,7 +280,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     expect(from).toHaveBeenCalledWith("dashboard_widgets");
     expect(inFn).toHaveBeenCalledWith("id", [WIDGET, WIDGET_2]);
     // One aggregation per widget, computed concurrently (Promise.all).
-    expect(getWidgetAggregationCached).toHaveBeenCalledTimes(2);
+    expect(resolveAggregate).toHaveBeenCalledTimes(2);
 
     expect(res.ok).toBe(true);
     if (res.ok) {
@@ -316,16 +319,17 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const select = vi.fn(() => ({ in: inFn }));
     const from = vi.fn(() => ({ select }));
     currentClient = { from };
-    getWidgetAggregationCached.mockImplementation(
-      async (arg: { widgetId: string }) =>
-        arg.widgetId === WIDGET_2
-          ? { ok: false, error: "boom" }
-          : {
-              ok: true,
-              buckets: [{ group_key: null, metric: 7 }],
-              columnMeta: null,
-            },
-    );
+    // Both widgets share the same board/config, so nothing in the call args
+    // tells them apart — resolveWidgetAggregate invokes resolveAggregate
+    // synchronously in `.map()` array order (WIDGET then WIDGET_2), so the
+    // resolution order of the two calls is deterministic here too.
+    resolveAggregate
+      .mockResolvedValueOnce({
+        ok: true,
+        buckets: [{ group_key: null, metric: 7 }],
+        columnMeta: null,
+      })
+      .mockResolvedValueOnce({ ok: false, error: "boom" });
 
     const res = await getWidgetsData({ widgetIds: [WIDGET, WIDGET_2] });
     expect(res.ok).toBe(true);
@@ -340,7 +344,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     }
   });
 
-  it("resolves a completion widget slot via the completion cached read", async () => {
+  it("resolves a completion widget slot via the completion RLS-client read", async () => {
     const STATUS_COL = "66666666-6666-4666-8666-666666666666";
     const DONE_OPT = "77777777-7777-4777-8777-777777777777";
     const config = {
@@ -363,7 +367,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const select = vi.fn(() => ({ in: inFn }));
     const from = vi.fn(() => ({ select }));
     currentClient = { from };
-    getWidgetCompletionCached.mockResolvedValue({
+    resolveCompletion.mockResolvedValue({
       ok: true,
       rows: [{ groupKey: "g1", itemCount: 2, completion: 50 }],
       groups: [{ id: "g1", label: "WS A", color: "#0073ea" }],
@@ -372,15 +376,11 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const res = await getWidgetsData({ widgetIds: [WIDGET] });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(getWidgetCompletionCached).toHaveBeenCalledWith(
-      expect.objectContaining({
-        widgetId: WIDGET,
-        orgId: "org-9",
-        boardId: BOARD,
-        config,
-      }),
+    expect(resolveCompletion).toHaveBeenCalledWith(
+      currentClient,
+      expect.objectContaining({ boardId: BOARD, config }),
     );
-    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    expect(resolveAggregate).not.toHaveBeenCalled();
     const slot = res.data.results[WIDGET];
     expect(slot.ok).toBe(true);
     if (!slot.ok || !("buckets" in slot)) return;
@@ -417,8 +417,8 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const select = vi.fn(() => ({ in: inFn }));
     const from = vi.fn(() => ({ select }));
     currentClient = { from };
-    getWidgetCompletionCached.mockResolvedValue({ ok: false, error: "boom" });
-    getWidgetAggregationCached.mockResolvedValue({
+    resolveCompletion.mockResolvedValue({ ok: false, error: "boom" });
+    resolveAggregate.mockResolvedValue({
       ok: true,
       buckets: [{ group_key: null, metric: 7 }],
       columnMeta: null,
@@ -431,7 +431,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     expect(res.data.results[WIDGET_2].ok).toBe(true);
   });
 
-  it("resolves a health widget slot via the health cached read", async () => {
+  it("resolves a health widget slot via the health RLS-client read", async () => {
     const inFn = vi.fn(async () => ({
       data: [
         {
@@ -447,7 +447,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const select = vi.fn(() => ({ in: inFn }));
     const from = vi.fn(() => ({ select }));
     currentClient = { from };
-    getWidgetHealthCached.mockResolvedValue({
+    resolveHealth.mockResolvedValue({
       ok: true,
       counts: {
         totalItems: 8,
@@ -461,14 +461,11 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const res = await getWidgetsData({ widgetIds: [WIDGET] });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(getWidgetHealthCached).toHaveBeenCalledWith(
-      expect.objectContaining({
-        widgetId: WIDGET,
-        orgId: "org-9",
-        boardId: BOARD,
-      }),
+    expect(resolveHealth).toHaveBeenCalledWith(
+      currentClient,
+      expect.objectContaining({ boardId: BOARD }),
     );
-    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    expect(resolveAggregate).not.toHaveBeenCalled();
     const slot = res.data.results[WIDGET];
     expect(slot.ok).toBe(true);
     if (!slot.ok || !("buckets" in slot)) return;
@@ -500,8 +497,8 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     const select = vi.fn(() => ({ in: inFn }));
     const from = vi.fn(() => ({ select }));
     currentClient = { from };
-    getWidgetHealthCached.mockResolvedValue({ ok: false, error: "boom" });
-    getWidgetAggregationCached.mockResolvedValue({
+    resolveHealth.mockResolvedValue({ ok: false, error: "boom" });
+    resolveAggregate.mockResolvedValue({
       ok: true,
       buckets: [{ group_key: null, metric: 7 }],
       columnMeta: null,
@@ -518,7 +515,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     // Chart + list widgets now ride the same batched fetch as the aggregate
     // family (fold of the old per-widget getWidgetSeries/getWidgetRows). A chart
     // with no source board short-circuits resolveSeries to empty points without
-    // touching the aggregate cached read.
+    // touching the aggregate resolve.
     const inFn = vi.fn(async () => ({
       data: [
         {
@@ -543,7 +540,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
     if (!slot.ok) return;
     expect("shape" in slot && slot.shape).toBe("series");
     if ("series" in slot) expect(slot.series.points).toEqual([]);
-    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    expect(resolveAggregate).not.toHaveBeenCalled();
   });
 
   it("resolves a list widget into a `rows`-shaped slot via the list-rows RPC", async () => {
@@ -584,7 +581,7 @@ describe("getWidgetsData (batched, one round-trip)", () => {
       "dashboard_list_rows",
       expect.objectContaining({ p_board_id: BOARD }),
     );
-    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    expect(resolveAggregate).not.toHaveBeenCalled();
   });
 
   it("returns empty buckets for a widget with no source board (no aggregation call)", async () => {
@@ -611,6 +608,6 @@ describe("getWidgetsData (batched, one round-trip)", () => {
       expect(slot.ok).toBe(true);
       if (slot.ok && "buckets" in slot) expect(slot.buckets).toEqual([]);
     }
-    expect(getWidgetAggregationCached).not.toHaveBeenCalled();
+    expect(resolveAggregate).not.toHaveBeenCalled();
   });
 });

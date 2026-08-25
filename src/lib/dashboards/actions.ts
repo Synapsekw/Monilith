@@ -330,7 +330,7 @@ export async function getWidgetData(input: {
     .maybeSingle();
   if (!widget) return fail("Widget not found.");
 
-  return resolveWidgetAggregate(parsed.data.widgetId, widget);
+  return resolveWidgetAggregate(supabase, widget);
 }
 
 /**
