@@ -33,18 +33,34 @@ beforeEach(() => {
 
 describe("DocumentLibrary", () => {
   it("lists documents with their token cost", () => {
-    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    render(
+      <DocumentLibrary documents={DOCS} total={DOCS.length} attachedBy={{}} />,
+    );
     expect(screen.getByText("Standup format")).toBeInTheDocument();
     expect(screen.getByText(/120 tokens/i)).toBeInTheDocument();
   });
 
+  it("says how many it is showing when the library is capped at a page", () => {
+    // LIBRARY_PAGE_SIZE bounds the read (working agreement #5). Rendering
+    // `documents.length` as the count made a 137-document library read "100
+    // documents" forever, with no hint the 101st existed.
+    render(<DocumentLibrary documents={DOCS} total={137} attachedBy={{}} />);
+    expect(screen.getByText(/showing 1 of 137 documents/i)).toBeInTheDocument();
+  });
+
+  it("thousands-separates a large token count, like the picker does", () => {
+    const big = [{ ...DOCS[0]!, tokenEstimate: 12_345 }];
+    render(<DocumentLibrary documents={big} total={1} attachedBy={{}} />);
+    expect(screen.getByText(/12,345 tokens/i)).toBeInTheDocument();
+  });
+
   it("shows an empty state when the library is empty", () => {
-    render(<DocumentLibrary documents={[]} attachedBy={{}} />);
+    render(<DocumentLibrary documents={[]} total={0} attachedBy={{}} />);
     expect(screen.getByText(/no reference documents/i)).toBeInTheDocument();
   });
 
   it("requires the review step before saving a pasted document", async () => {
-    render(<DocumentLibrary documents={[]} attachedBy={{}} />);
+    render(<DocumentLibrary documents={[]} total={0} attachedBy={{}} />);
     fireEvent.click(screen.getByRole("button", { name: /add document/i }));
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "Vocab" },
@@ -65,7 +81,7 @@ describe("DocumentLibrary", () => {
   });
 
   it("shows a live token estimate as the owner types", () => {
-    render(<DocumentLibrary documents={[]} attachedBy={{}} />);
+    render(<DocumentLibrary documents={[]} total={0} attachedBy={{}} />);
     fireEvent.click(screen.getByRole("button", { name: /add document/i }));
     fireEvent.change(screen.getByLabelText(/content/i), {
       target: { value: "abcdefgh" }, // 8 chars -> 2 tokens
@@ -77,6 +93,7 @@ describe("DocumentLibrary", () => {
     render(
       <DocumentLibrary
         documents={DOCS}
+        total={DOCS.length}
         attachedBy={{ d1: ["Morning brief", "Standup writer"] }}
       />,
     );
@@ -89,13 +106,13 @@ describe("DocumentLibrary", () => {
   });
 
   it("flags PDF as lossy on the upload control", () => {
-    render(<DocumentLibrary documents={[]} attachedBy={{}} />);
+    render(<DocumentLibrary documents={[]} total={0} attachedBy={{}} />);
     fireEvent.click(screen.getByRole("button", { name: /add document/i }));
     expect(screen.getByText(/PDF.*lossy/i)).toBeInTheDocument();
   });
 
   it("surfaces an empty-extraction failure as an inline error", async () => {
-    render(<DocumentLibrary documents={[]} attachedBy={{}} />);
+    render(<DocumentLibrary documents={[]} total={0} attachedBy={{}} />);
     fireEvent.click(screen.getByRole("button", { name: /add document/i }));
     const input = screen.getByLabelText(/upload/i);
     fireEvent.change(input, {
@@ -110,7 +127,9 @@ describe("DocumentLibrary", () => {
 
 describe("DocumentLibrary · editing an existing document", () => {
   it("never fetches a body on first paint", () => {
-    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    render(
+      <DocumentLibrary documents={DOCS} total={DOCS.length} attachedBy={{}} />,
+    );
     expect(getDocumentBody).not.toHaveBeenCalled();
   });
 
@@ -119,7 +138,9 @@ describe("DocumentLibrary · editing an existing document", () => {
       ok: true,
       data: { body: "full body text" },
     });
-    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    render(
+      <DocumentLibrary documents={DOCS} total={DOCS.length} attachedBy={{}} />,
+    );
     fireEvent.click(screen.getByText("Standup format"));
     expect(getDocumentBody).toHaveBeenCalledWith("d1");
     // The title is known already (it's in the row) and needs no fetch.
@@ -134,7 +155,9 @@ describe("DocumentLibrary · editing an existing document", () => {
       ok: true,
       data: { body: "abcdefgh" }, // 8 chars -> 2 tokens
     });
-    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    render(
+      <DocumentLibrary documents={DOCS} total={DOCS.length} attachedBy={{}} />,
+    );
     fireEvent.click(screen.getByText("Standup format"));
     await waitFor(() =>
       expect(screen.getByText(/2 tokens/i)).toBeInTheDocument(),
@@ -146,7 +169,9 @@ describe("DocumentLibrary · editing an existing document", () => {
       ok: false,
       error: "Couldn't load that document.",
     });
-    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    render(
+      <DocumentLibrary documents={DOCS} total={DOCS.length} attachedBy={{}} />,
+    );
     fireEvent.click(screen.getByText("Standup format"));
     await waitFor(() =>
       expect(
@@ -191,7 +216,13 @@ describe("DocumentLibrary · editing an existing document", () => {
         : Promise.resolve({ ok: true, data: { body: "B's original body" } }),
     );
 
-    render(<DocumentLibrary documents={[DOCS[0], DOC_B]} attachedBy={{}} />);
+    render(
+      <DocumentLibrary
+        documents={[DOCS[0], DOC_B]}
+        total={2}
+        attachedBy={{}}
+      />,
+    );
 
     // Open A — its fetch is deferred and never resolves during this test
     // until we explicitly settle it, below.
@@ -246,7 +277,9 @@ describe("DocumentLibrary · editing an existing document", () => {
       ok: true,
       data: { body: "line one\nline two\nline three" },
     });
-    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    render(
+      <DocumentLibrary documents={DOCS} total={DOCS.length} attachedBy={{}} />,
+    );
     fireEvent.click(screen.getByText("Standup format"));
     await waitFor(() =>
       expect(screen.getByLabelText(/content/i)).toHaveValue(

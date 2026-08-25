@@ -375,10 +375,6 @@ export async function POST(req: Request): Promise<Response> {
     // still SUCCEEDED, and recording it as an error would tell the owner their
     // agent is broken when it is not.
     let modelSubstituted = false;
-    // Written to the run row below, same rationale as `modelSubstituted`: a
-    // run whose documents did not fit still SUCCEEDED — `documents_omitted`
-    // is its own signal, never folded into `error`.
-    let documentsOmitted = false;
     try {
       result = await runAi(
         {
@@ -413,7 +409,6 @@ export async function POST(req: Request): Promise<Response> {
             instructionTokens: estimateTokens(agent.instructions),
           });
           const { included, omitted } = selectDocuments(attached, budget);
-          documentsOmitted = omitted;
 
           // ONE call assembles BOTH halves. `buildAgentTools` and
           // `makeGrantGate` are each a pure function of the same descriptor
@@ -535,7 +530,12 @@ export async function POST(req: Request): Promise<Response> {
       input_tokens: result.usage.inputTokens,
       output_tokens: result.usage.outputTokens,
       model_substituted: modelSubstituted,
-      documents_omitted: documentsOmitted,
+      // Straight off the loop's own result, not a local mirror of it. Same
+      // rationale as `modelSubstituted`: a run whose documents did not fit
+      // still SUCCEEDED — `documents_omitted` is its own signal, never folded
+      // into `error`. `runAgentLoop` echoes the flag back precisely so the
+      // caller persists what the loop actually ran with.
+      documents_omitted: result.documentsOmitted,
       grants: effectiveGrants,
       steps: result.steps,
       tools_used: result.toolsUsed,

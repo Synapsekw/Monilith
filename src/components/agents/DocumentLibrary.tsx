@@ -102,9 +102,15 @@ function fileToBase64(file: File): Promise<string> {
  */
 export function DocumentLibrary({
   documents,
+  total,
   attachedBy,
 }: {
   documents: AgentDocumentRow[];
+  /** How many documents the owner ACTUALLY has. `documents` is ONE PAGE
+   *  (`LIBRARY_PAGE_SIZE`), so once the library outgrows a page these two
+   *  diverge — and a count rendered from `documents.length` alone would read
+   *  "100 documents" forever while the 101st sat invisible. */
+  total: number;
   /** Document id -> the names of every agent that currently reads it, so a
    *  delete confirmation can say who is affected instead of deleting silently. */
   attachedBy: Record<string, string[]>;
@@ -400,7 +406,7 @@ export function DocumentLibrary({
           <div className="flex items-center justify-between">
             <Label htmlFor="doc-content">Content</Label>
             <span className="text-muted-foreground text-xs">
-              {estimateTokens(body)} tokens
+              {estimateTokens(body).toLocaleString()} tokens
             </span>
           </div>
           <Textarea
@@ -451,7 +457,9 @@ export function DocumentLibrary({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground text-sm">
-          {documents.length} {documents.length === 1 ? "document" : "documents"}
+          {total > documents.length
+            ? `Showing ${documents.length.toLocaleString()} of ${total.toLocaleString()} documents`
+            : `${total.toLocaleString()} ${total === 1 ? "document" : "documents"}`}
         </p>
         <Button type="button" size="sm" onClick={openCreate}>
           <Plus aria-hidden className="size-4" />
@@ -489,7 +497,7 @@ export function DocumentLibrary({
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate font-medium">{doc.title}</span>
                   <span className="text-muted-foreground text-xs">
-                    {doc.tokenEstimate} tokens ·{" "}
+                    {doc.tokenEstimate.toLocaleString()} tokens ·{" "}
                     {SOURCE_LABELS[doc.sourceFormat]}
                     {" · "}
                     {formatUpdatedAt(doc.updatedAt)}

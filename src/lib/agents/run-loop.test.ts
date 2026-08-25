@@ -719,6 +719,10 @@ describe("reference documents in the system prompt", () => {
     });
   });
 
+  // NOT a dead seam: the cron route persists `result.documentsOmitted` onto
+  // `user_agent_runs.documents_omitted` (route.ts, `safeFinalize`), which is
+  // what the run-history badge reads. The loop echoing the flag back is the
+  // only reason the route does not have to keep its own copy of it.
   it("reports documentsOmitted back on the result, defaulting to false", async () => {
     const r1 = await runAgentLoop({
       model: textModel("Done."),
@@ -729,15 +733,23 @@ describe("reference documents in the system prompt", () => {
     });
     expect(r1.documentsOmitted).toBe(false);
 
+    const sink: { prompt?: unknown } = {};
     const r2 = await runAgentLoop({
-      model: textModel("Done."),
+      model: capturingModel(sink),
       instructions: "go",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
+      // What the route passes when `selectDocuments` dropped the whole set:
+      // omitted, and therefore nothing to inject.
+      documents: [],
       documentsOmitted: true,
     });
     expect(r2.documentsOmitted).toBe(true);
+    // The flag and the prompt must agree — a run recorded as "documents
+    // omitted" that nonetheless injected some would make the badge a lie.
+    const system = (sink.prompt as { role: string; content: string }[])[0]!;
+    expect(system.content).not.toContain("REFERENCE DOCUMENTS");
   });
 });
 

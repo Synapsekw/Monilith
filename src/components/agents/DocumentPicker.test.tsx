@@ -112,13 +112,41 @@ describe("DocumentPicker", () => {
     ).toBeInTheDocument();
   });
 
-  it("selecting is client state — it does NOT call a server action", () => {
-    const setAgentDocuments = vi.fn();
-    render(
+  it("selecting is CONTROLLED client state — it reports up and fetches nothing", () => {
+    // The old version of this test asserted that a locally-declared `vi.fn()`
+    // — a mock of nothing, imported by nobody — had not been called, which no
+    // change to this component could ever have falsified. What actually needs
+    // proving is working agreement #5: toggling a document is 0 server
+    // round-trips, and this component holds no selection state of its own.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("no request may leave this component"));
+    const { rerender } = render(
       <DocumentPicker {...base} documents={[doc("a", 10)]} selectedIds={[]} />,
     );
+
     fireEvent.click(screen.getByRole("checkbox", { name: /Doc a/ }));
     expect(base.onChange).toHaveBeenCalledWith(["a"]);
-    expect(setAgentDocuments).not.toHaveBeenCalled();
+    // No Server Action, no route handler, no refetch — every Server Action
+    // call in a client component goes out over fetch.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // Still unchecked: the parent form owns the selection and calls
+    // `setAgentDocuments` once, on save, like every other field in it.
+    expect(screen.getByRole("checkbox", { name: /Doc a/ })).not.toBeChecked();
+    // Only the parent's re-render moves the meter — and it moves without any
+    // new data arriving from the server.
+    rerender(
+      <DocumentPicker
+        {...base}
+        documents={[doc("a", 10)]}
+        selectedIds={["a"]}
+      />,
+    );
+    expect(screen.getByRole("checkbox", { name: /Doc a/ })).toBeChecked();
+    expect(screen.getByTestId("document-budget-meter").textContent).toContain(
+      "10 used",
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });

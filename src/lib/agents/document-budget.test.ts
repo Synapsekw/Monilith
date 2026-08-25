@@ -77,8 +77,21 @@ describe("documentBudget", () => {
     expect(r.usable).toBe(false);
   });
 
-  it("exposes the fallback constant it used", () => {
-    expect(NULL_CONTEXT_FALLBACK).toBe(32_000);
+  it("a null context is EXACTLY the fallback context, only flagged", () => {
+    // The property, rather than restating the constant: `null` must produce
+    // the same arithmetic as passing NULL_CONTEXT_FALLBACK explicitly, and
+    // differ ONLY in `assumedContext` — which is what tells the picker to
+    // disclose that it is guessing.
+    const args = { prefixTokens: 8_000, instructionTokens: 500 };
+    const assumed = documentBudget({ contextLength: null, ...args });
+    const explicit = documentBudget({
+      contextLength: NULL_CONTEXT_FALLBACK,
+      ...args,
+    });
+    expect(assumed.budget).toBe(explicit.budget);
+    expect(assumed.usable).toBe(explicit.usable);
+    expect(assumed.assumedContext).toBe(true);
+    expect(explicit.assumedContext).toBe(false);
   });
 });
 

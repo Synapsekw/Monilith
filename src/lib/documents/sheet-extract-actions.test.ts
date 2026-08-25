@@ -5,11 +5,20 @@ vi.mock("@/lib/boards/spreadsheet/parse-workbook", () => ({
   parseWorkbookSheets: (...a: unknown[]) => parseWorkbookSheets(...a),
 }));
 
+const requireUser = vi.fn();
+vi.mock("@/lib/auth/session", () => ({
+  requireUser: () => requireUser(),
+}));
+
 import { extractSheetText } from "./sheet-extract-actions";
 
 const b64 = (s: string) => Buffer.from(s).toString("base64");
 
-beforeEach(() => parseWorkbookSheets.mockReset());
+beforeEach(() => {
+  parseWorkbookSheets.mockReset();
+  requireUser.mockReset();
+  requireUser.mockResolvedValue({ id: "user-1" });
+});
 
 describe("extractSheetText", () => {
   it("flattens sheets to tab-delimited rows with a sheet heading", async () => {
@@ -70,5 +79,28 @@ describe("extractSheetText", () => {
     const r = await extractSheetText({ fileName: "v.xlsx", bytes: big });
     expect(r.ok).toBe(false);
     expect(parseWorkbookSheets).not.toHaveBeenCalled();
+  });
+});
+
+describe("extractSheetText · authentication", () => {
+  it("refuses an anonymous caller BEFORE handing bytes to the parser", async () => {
+    // requireUser() redirects (which throws) when there is no session — the
+    // gate has to be the first thing that happens, or an anonymous caller can
+    // spend server CPU on up to MAX_BYTES of attacker-supplied zip.
+    requireUser.mockRejectedValue(new Error("NEXT_REDIRECT"));
+    await expect(
+      extractSheetText({ fileName: "v.xlsx", bytes: b64("x") }),
+    ).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(parseWorkbookSheets).not.toHaveBeenCalled();
+  });
+
+  it("checks the session before the input schema, not after", async () => {
+    requireUser.mockRejectedValue(new Error("NEXT_REDIRECT"));
+    // Input so malformed the schema would reject it outright. An anonymous
+    // caller must still be turned away by the session gate, not handed a
+    // validation message that confirms the endpoint exists and its shape.
+    await expect(extractSheetText({ fileName: "", bytes: "" })).rejects.toThrow(
+      /NEXT_REDIRECT/,
+    );
   });
 });

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { requireUser } from "@/lib/auth/session";
 import { parseWorkbookSheets } from "@/lib/boards/spreadsheet/parse-workbook";
 import { MAX_BYTES } from "@/lib/boards/spreadsheet/types";
 import { isSheetParseable } from "@/lib/collaboration/attachments-format";
@@ -29,6 +30,13 @@ export async function extractSheetText(input: {
   fileName: string;
   bytes: string;
 }): Promise<ActionResult<{ text: string }>> {
+  // AUTHENTICATED CALLERS ONLY. This action takes base64 off the wire and
+  // hands up to MAX_BYTES of it to exceljs — a parser with a zip-bomb guard
+  // precisely because the input is hostile-by-assumption. Reading no data and
+  // writing none is not a reason to leave it open to anonymous callers: it is
+  // real server CPU and memory, reachable from anywhere, for free.
+  await requireUser();
+
   const parsed = schema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid input.");

@@ -50,6 +50,7 @@ export function AgentsSection({
   providers,
   capabilityCeiling,
   documents,
+  documentTotal,
   attachmentsByAgent,
   orgDefaultContextLength,
 }: {
@@ -82,6 +83,10 @@ export function AgentsSection({
   /** The owner's reference-document library, METADATA ONLY (no `body`) —
    *  read 6 on the page. Passed straight through to `DocumentLibrary`. */
   documents: AgentDocumentRow[];
+  /** How many documents the owner ACTUALLY has, which is not `documents.length`
+   *  once the library passes `LIBRARY_PAGE_SIZE`. Passed through so the list can
+   *  say "showing 100 of 137" instead of silently capping at 100 forever. */
+  documentTotal: number;
   /** Every user_agent's attached document ids, keyed by AGENT id — read 7 on
    *  the page (`listAttachmentsByAgent`). Inverted below into document id ->
    *  agent NAMES using the roster already in props, so the library's delete
@@ -245,7 +250,11 @@ export function AgentsSection({
           <ArrowLeft aria-hidden className="size-4" />
           Back
         </Button>
-        <DocumentLibrary documents={documents} attachedBy={attachedBy} />
+        <DocumentLibrary
+          documents={documents}
+          total={documentTotal}
+          attachedBy={attachedBy}
+        />
       </div>
     );
   }
