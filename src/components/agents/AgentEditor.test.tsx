@@ -17,7 +17,16 @@ vi.mock("@/lib/agents/actions", () => ({
   deleteAgent: (...a: unknown[]) => deleteAgent(...a),
 }));
 
+// `DocumentPicker` itself never calls this (proven in its own test file) —
+// these mocks are for the ONE call site that does: `AgentEditor.save`, after
+// the agent itself is created/updated.
+const setAgentDocuments = vi.fn();
+vi.mock("@/lib/agents/document-actions", () => ({
+  setAgentDocuments: (...a: unknown[]) => setAgentDocuments(...a),
+}));
+
 import { AgentEditor } from "@/components/agents/AgentEditor";
+import type { AgentDocumentRow } from "@/lib/agents/documents-db";
 
 /**
  * The agent editor's model pin.
@@ -40,6 +49,7 @@ const OPTIONS: ModelOption[] = [
     label: "Claude Haiku 4.5",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 200_000,
   },
   {
     provider: "moonshotai",
@@ -48,6 +58,7 @@ const OPTIONS: ModelOption[] = [
     label: "Kimi K2 Instruct",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 128_000,
   },
   // The one model in the fixture catalog that cannot run a tool loop — the
   // fixture the tool-capability warning tests pin to.
@@ -58,6 +69,7 @@ const OPTIONS: ModelOption[] = [
     label: "Kimi K1 (legacy)",
     tier: "cheap",
     supportsTools: false,
+    contextLength: 16_385,
   },
 ];
 
@@ -93,6 +105,7 @@ function renderEditor(over: Partial<Parameters<typeof AgentEditor>[0]> = {}) {
       modelOptions={OPTIONS}
       providers={PROVIDERS}
       capabilityCeiling={FULL_CEILING}
+      documents={[]}
       onSaved={onSaved}
       onCancel={vi.fn()}
       {...over}
@@ -114,12 +127,25 @@ function modelField(): HTMLElement {
   );
 }
 
+const DOCS: AgentDocumentRow[] = [
+  {
+    id: "doc-1",
+    title: "Runbook",
+    tokenEstimate: 500,
+    sourceFormat: "pasted",
+    sourceFileName: null,
+    updatedAt: "2026-08-24T10:00:00Z",
+  },
+];
+
 beforeEach(() => {
   createAgent.mockReset();
   updateAgent.mockReset();
   deleteAgent.mockReset();
+  setAgentDocuments.mockReset();
   createAgent.mockResolvedValue({ ok: true, data: { id: "agent-1" } });
   updateAgent.mockResolvedValue({ ok: true, data: undefined });
+  setAgentDocuments.mockResolvedValue({ ok: true, data: undefined });
 });
 
 describe("AgentEditor · model pin", () => {
@@ -388,5 +414,67 @@ describe("AgentEditor · cadence", () => {
       runOnWeekday: 3,
       runOnDayOfMonth: null,
     });
+  }, 30_000);
+});
+
+describe("AgentEditor · reference documents", () => {
+  it("does not call setAgentDocuments when nothing is attached and nothing was picked", async () => {
+    renderEditor();
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await waitFor(() => expect(createAgent).toHaveBeenCalled());
+    expect(setAgentDocuments).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("attaches a picked document, after the agent itself is created", async () => {
+    renderEditor({ documents: DOCS });
+    await userEvent.click(screen.getByRole("checkbox", { name: /runbook/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await waitFor(() => expect(setAgentDocuments).toHaveBeenCalled());
+    expect(setAgentDocuments).toHaveBeenCalledWith({
+      userAgentId: "agent-1",
+      documentIds: ["doc-1"],
+    });
+    // The agent was created BEFORE its attachments were saved — a new agent
+    // has no `user_agent_id` for `setAgentDocuments` until `createAgent`
+    // returns one.
+    expect(createAgent.mock.invocationCallOrder[0]).toBeLessThan(
+      setAgentDocuments.mock.invocationCallOrder[0],
+    );
+  }, 30_000);
+
+  // The skip in `saveDocuments` (AgentEditor.tsx) is what keeps an unrelated
+  // rename from costing the owner an extra server round trip.
+  it("skips the call when the attachment set was not touched", async () => {
+    renderEditor({
+      mode: "edit",
+      agentId: "11111111-1111-4111-8111-111111111111",
+      documents: DOCS,
+      initialDocumentIds: ["doc-1"],
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: /save changes/i }),
+    );
+    await waitFor(() => expect(updateAgent).toHaveBeenCalled());
+    expect(setAgentDocuments).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("surfaces a setAgentDocuments failure inline instead of reporting a clean save", async () => {
+    setAgentDocuments.mockResolvedValue({
+      ok: false,
+      error: "Couldn't update the attached documents.",
+    });
+    const { onSaved } = renderEditor({ documents: DOCS });
+    await userEvent.click(screen.getByRole("checkbox", { name: /runbook/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't update the attached documents.",
+    );
+    expect(onSaved).not.toHaveBeenCalled();
   }, 30_000);
 });

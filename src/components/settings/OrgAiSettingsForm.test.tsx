@@ -71,6 +71,7 @@ const MODELS: ModelOption[] = [
     label: "Claude Sonnet 5",
     tier: "standard",
     supportsTools: true,
+    contextLength: 200_000,
   },
   {
     provider: "mistral",
@@ -79,6 +80,7 @@ const MODELS: ModelOption[] = [
     label: "Mistral Small",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 32_000,
   },
 ];
 

@@ -21,7 +21,12 @@ type View = "roster" | "gallery" | "editor" | "library";
 
 type EditorContext =
   | { mode: "create"; initial: PersonalAgentSettings }
-  | { mode: "edit"; agentId: string; initial: PersonalAgentSettings };
+  | {
+      mode: "edit";
+      agentId: string;
+      initial: PersonalAgentSettings;
+      initialDocumentIds: string[];
+    };
 
 /**
  * The one client boundary for this page: it owns which view is showing
@@ -171,7 +176,15 @@ export function AgentsSection({
     const agent = agents.find((a) => a.id === id);
     if (!agent) return;
     const { id: _id, ...settings } = agent;
-    setEditorContext({ mode: "edit", agentId: id, initial: settings });
+    setEditorContext({
+      mode: "edit",
+      agentId: id,
+      initial: settings,
+      // From the same first-paint read the roster and the library came from
+      // (`listAttachmentsByAgent`) — opening the editor is a view switch over
+      // data already in hand, never a fetch (working agreement #5).
+      initialDocumentIds: attachmentsByAgent[id] ?? [],
+    });
     setView("editor");
   }
 
@@ -239,6 +252,12 @@ export function AgentsSection({
         modelOptions={modelOptions}
         providers={providers}
         capabilityCeiling={capabilityCeiling}
+        documents={documents}
+        initialDocumentIds={
+          editorContext.mode === "edit"
+            ? editorContext.initialDocumentIds
+            : undefined
+        }
         onSaved={handleSaved}
         onCancel={handleEditorCancel}
         onDeleted={handleDeleted}

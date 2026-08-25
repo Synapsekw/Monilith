@@ -32,6 +32,16 @@ export type ModelOption = {
   label: string;
   tier: ModelTier;
   supportsTools: boolean;
+  /**
+   * `ai_models.context_length`, straight from the catalog row — null only for
+   * the handful of rows the daily feed refresh has not backfilled yet. Same
+   * field, same nullability as `ResolvedModel.contextLength`
+   * (`src/lib/ai/models/resolve.ts`); threaded through here so the per-agent
+   * reference-document budget meter (`DocumentPicker`) can compute the same
+   * number the run loop will, from the model the owner has actually selected,
+   * with zero extra server round-trips.
+   */
+  contextLength: number | null;
 };
 
 export type ModelValue = { provider: string; modelId: string };
