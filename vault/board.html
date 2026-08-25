@@ -9,10 +9,9 @@
   where we stand, what's next, and the percentages behind each.
 -->
 
-<script type="application/json" id="board-data">
-{
+<script type="application/json" id="board-data">{
   "schema": 2,
-  "updated": "2026-08-14 09:30",
+  "updated": "2026-08-25 19:32",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,55 +133,66 @@
     "stages": [
       {
         "name": "develop",
-        "value": "6769421f",
-        "tone": "ok",
-        "note": "Equals main. Squash divergence healed — origin/main verified an ancestor of origin/develop, heal tree byte-identical. Unpromoted delta 0."
+        "value": "fede1f69",
+        "tone": "warn",
+        "note": "AHEAD of main. Spec 2b (reference documents) merged 2026-08-25 — 15 commits, 51 files, +5313/-77 — and is UNSHIPPED until promoted. Owner has walked the test guide on develop and confirmed it works."
       },
       {
         "name": "main",
         "value": "461cadb0",
         "tone": "ok",
-        "note": "PR #96 merged 2026-08-14 — the agent runtime (Spec 2a): capability-gated tool loop, durable proposals, org ceiling, weekly/monthly cadences. 37 commits."
+        "note": "PR #96 merged 2026-08-14 — the agent runtime (Spec 2a): capability-gated tool loop, durable proposals, org ceiling, weekly/monthly cadences. 37 commits. Does not yet carry Spec 2b."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Vercel state=success on 461cadb0. Verified: site 200, /settings/agents 307, and /updates serving all five new agent entries — the cheapest proof the new build is the one being served."
+        "note": "Serving 461cadb0. Healthy, but running the build BEFORE reference documents — develop never deploys, so merged is not shipped (gotcha-92)."
       }
     ],
     "gates": [
       {
-        "label": "typecheck",
+        "name": "typecheck",
         "value": "pass",
         "tone": "ok"
       },
       {
-        "label": "lint",
+        "name": "lint",
+        "value": "pass",
+        "tone": "ok",
+        "note": "1 pre-existing unrelated warning (apple-icon.tsx)"
+      },
+      {
+        "name": "test",
+        "value": "5929 pass",
+        "tone": "ok",
+        "note": "689 files, 1 pre-existing skip. Plus live-DEV integration suites for RLS and the atomic attach RPC."
+      },
+      {
+        "name": "build",
         "value": "pass",
         "tone": "ok"
       },
       {
-        "label": "test",
-        "value": "5809",
-        "tone": "ok"
-      },
-      {
-        "label": "build",
-        "value": "pass",
-        "tone": "ok"
-      },
-      {
-        "label": "migration ledger",
-        "value": "141/141",
-        "tone": "ok"
+        "name": "ledger",
+        "value": "143/143",
+        "tone": "ok",
+        "note": "Two migrations this session; gotcha-55 reconcile needed on both."
       }
     ]
   },
   "next": [
     {
-      "title": "Brainstorm Spec 2b — agent knowledge",
-      "why": "Owner chose 2b (reference templates + memory) over Spec 3, depth before breadth. There is no spec yet; start with superpowers:brainstorming. Spec 3 (orchestration, @handle addressing, the renameable built-in assistant, agent.create/schedule.create) follows it.",
+      "title": "Promote develop → main — Spec 2b is merged and unshipped",
+      "why": "Reference documents is done, gated and owner-tested on develop, and reaches nobody until a promotion PR merges. develop never deploys. This is exactly the shape that cost three days of outage on 2026-08-14. Note origin/main..origin/develop reads 2649 — squash accumulation, not work.",
+      "tags": [
+        "promote",
+        "critical"
+      ]
+    },
+    {
+      "title": "Brainstorm Spec 2c — agent memory",
+      "why": "Spec 2 was split during 2b: reference documents shipped, the memory layer became 2c. It consumes document-budget.ts and must not re-derive the arithmetic — that shared module is the only coupling between them.",
       "tags": [
         "spec",
         "brainstorm"
@@ -190,7 +200,7 @@
     },
     {
       "title": "Re-read every org-admin gate against an AI actor",
-      "why": "gotcha-91: create_automation handed the model call_webhook, the one action the codebase had already ruled AI may never choose. The org-admin guard survived the extraction intact and was simply never a defence — it authorises the actor, and a model's actor is trusted by construction. Every 'requires an org admin' gate predates AI reaching it.",
+      "why": "gotcha-91: an org-admin gate authorises the actor, and a model's actor is trusted by construction, so the gate was never a defence. Found once in create_automation; nothing has swept the rest.",
       "tags": [
         "security",
         "critical"
@@ -198,20 +208,25 @@
     },
     {
       "title": "E6 Stripe — units B, C, E–H",
-      "why": "The only open AI epic. Sequence the six npm dependabot branches either side of the Stripe SDK install, never during — they contend over the lockfile.",
+      "why": "The only open AI epic. Not blocked on credentials (only end-to-end verification is) and needs no migration, which makes it the safest large task to run beside a migration-bearing one.",
       "tags": [
         "billing"
       ]
     },
     {
       "title": "Buy the $99 Apple Developer account",
-      "why": "The only blocker left on desktop signing. Nothing has been signed or notarized, so cert import through whether auto-update installs is untested by construction.",
+      "why": "The desktop signing path is code-complete and has never run signed. Owner's move, not schedulable work.",
       "tags": [
         "desktop"
       ]
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "A merged feature is not a shipped feature",
+      "text": "Spec 2b sits on develop, fully gated and owner-tested, reaching no user. develop never deploys to production; only a develop → main promotion does. gotcha-92 records the three-day outage this same confusion caused on 2026-08-14."
+    },
     {
       "sev": "amber",
       "title": "An agent can write to real boards unattended",
@@ -221,11 +236,6 @@
       "sev": "open",
       "title": "The models-refresh replay window is 300s and unmeasured",
       "text": "The signed body now carries ts + nonce, but the nonce is not a replay detector — no store was built — so a captured body replays for the full window. 300s was reasoned, not measured: net._http_response rows had aged out. Sub-5s real latency would tighten it to 60s with no migration."
-    },
-    {
-      "sev": "open",
-      "title": "gotcha-55 now fires on every migration",
-      "text": "The supabase-dev MCP re-stamped its own version on 4 of 4 migrations this session, despite a correct name. It is no longer an occasional trap — budget the ledger check and reconcile-migration-version.sh every single time."
     },
     {
       "sev": "open",
@@ -271,22 +281,31 @@
       "sev": "open",
       "title": "PPTX has no inline preview",
       "text": "Decks get a 16:9 card and Download only. Every in-browser renderer surveyed is immature and echarts-heavy; the alternative that also keeps data in-house is self-hosted LibreOffice to PDF. Deferred as its own decision."
+    },
+    {
+      "sev": "open",
+      "title": "gotcha-55 fires on every migration",
+      "text": "Six for six across Spec 2a and 2b: MCP apply_migration stamps its own version and the ledger drifts from the committed filename. Budget the reconcile; pnpm db:ledger-check is the only thing that catches it."
+    },
+    {
+      "sev": "open",
+      "title": "The reference-document sentinel check has a known false positive",
+      "text": "Bodies containing REFERENCE DOCUMENTS are refused at save — a standard all-caps heading in SOP/ISO/RFP documents, precisely the corpus the feature attracts. By our own analysis that sentinel cannot escape the prompt block anyway, so it buys no security. Narrow it to the instructions sentinel only."
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-14-0808-agent-runtime-spec-2a",
-    "when": "2026-08-14 08:08",
-    "title": "Agent runtime — Spec 2a merged",
+    "id": "2026-08-25-1932-agent-reference-documents-spec-2b",
+    "when": "2026-08-25 19:32",
+    "title": "Agent reference documents — Spec 2b",
     "bullets": [
-      "30 commits merged as 939b0c1d. personal-agent/route.ts moved off the briefing pipeline onto generateText with a 12-step cap; the 24 MCP handlers now export descriptors both transports share, plus create_file and create_automation.",
-      "Per-agent capability grants intersect an org ceiling at run time. Ungranted calls are denied in-loop and written as durable proposals so an unattended run still finishes — never suspended.",
-      "capabilities defaults to '{}', so every pre-existing agent stays exactly as read-only as it was: opt-in by construction, not by vigilance. Three additive migrations, ledger 141/141.",
-      "The final whole-branch review found one Critical no task review could see — create_automation exposed call_webhook to the model. Recorded as gotcha-91: a guard written for a human actor does not survive an AI actor."
+      "8 tasks, 15 commits, merged as fede1f69. A personal library of documents — pasted or extracted from md/txt/pdf/docx/xlsx — attaches many-to-many to an owner's agents and is injected verbatim into the cached system message.",
+      "No retrieval, by decision: a structural example must arrive whole and a policy list complete, so the correct retrieval result is always all of it. Nothing truncates — an over-budget set is dropped entirely and the run is flagged documents_omitted.",
+      "The three parsers were already installed and already used by the file-preview lightbox, so no new dependency. xlsx alone parses server-side, because parseWorkbookSheets owns the zip-bomb guard.",
+      "Two lessons: gotcha-93, a budget meter that imported the same function and the same constant as the run loop and still lied because an unpinned agent fed it a null context that fell back optimistically; and gotcha-94, nine wrong signatures in one carefully-written plan, none of which shipped."
     ]
   }
-}
-</script>
+}</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────
