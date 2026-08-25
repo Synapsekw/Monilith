@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Plus } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { ArrowLeft, FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setAgentEnabled } from "@/lib/agents/actions";
 import type {
@@ -12,10 +12,12 @@ import type { AgentRunLike } from "@/lib/agents/run-status";
 import { AgentRoster, type RosterAgent } from "@/components/agents/AgentRoster";
 import { TemplateGallery } from "@/components/agents/TemplateGallery";
 import { AgentEditor, type AgentRecord } from "@/components/agents/AgentEditor";
+import { DocumentLibrary } from "@/components/agents/DocumentLibrary";
 import type { ModelOption } from "@/components/settings/ModelPicker";
 import type { AgentCapability } from "@/lib/agents/capabilities";
+import type { AgentDocumentRow } from "@/lib/agents/documents-db";
 
-type View = "roster" | "gallery" | "editor";
+type View = "roster" | "gallery" | "editor" | "library";
 
 type EditorContext =
   | { mode: "create"; initial: PersonalAgentSettings }
@@ -23,12 +25,16 @@ type EditorContext =
 
 /**
  * The one client boundary for this page: it owns which view is showing
- * (roster / template gallery / editor) as plain React state. Switching views
- * is an in-page toggle over data already loaded by the server component — no
- * `<Link>`, no `router.push`, zero new server round-trips (working agreement
- * #5 / gotcha-09: a router navigation here would re-run every query on the
- * page). Mutations (`createAgent`/`updateAgent`/`setAgentEnabled`/
- * `deleteAgent`) go through the Server Actions in `src/lib/agents/actions.ts`.
+ * (roster / template gallery / editor / reference-document library) as plain
+ * React state. Switching views is an in-page toggle over data already loaded
+ * by the server component — no `<Link>`, no `router.push`, zero new server
+ * round-trips (working agreement #5 / gotcha-09: a router navigation here
+ * would re-run every query on the page). Mutations
+ * (`createAgent`/`updateAgent`/`setAgentEnabled`/`deleteAgent`) go through the
+ * Server Actions in `src/lib/agents/actions.ts`; the library's own mutations
+ * (`createDocument`/`updateDocument`/`deleteDocument`) live in
+ * `src/lib/agents/document-actions.ts` and are called from `DocumentLibrary`
+ * itself.
  */
 export function AgentsSection({
   agents: initial,
@@ -38,6 +44,8 @@ export function AgentsSection({
   modelOptions,
   providers,
   capabilityCeiling,
+  documents,
+  attachmentsByAgent,
 }: {
   agents: AgentRecord[];
   /** Most recent run per agent id, read once by the server component. Absent
@@ -65,9 +73,30 @@ export function AgentsSection({
    *  threaded to the editor's capability toggles — same first-paint reasoning
    *  as `modelOptions` above. */
   capabilityCeiling: AgentCapability[];
+  /** The owner's reference-document library, METADATA ONLY (no `body`) —
+   *  read 6 on the page. Passed straight through to `DocumentLibrary`. */
+  documents: AgentDocumentRow[];
+  /** Every user_agent's attached document ids, keyed by AGENT id — read 7 on
+   *  the page (`listAttachmentsByAgent`). Inverted below into document id ->
+   *  agent NAMES using the roster already in props, so the library's delete
+   *  confirmation can name affected agents with no extra query. */
+  attachmentsByAgent: Record<string, string[]>;
 }) {
   const [agents, setAgents] = useState<AgentRecord[]>(initial);
   const [view, setView] = useState<View>("roster");
+
+  // Document id -> the names of every agent that currently reads it.
+  // Recomputed from the LIVE agents array (not the initial prop) so a rename
+  // or a newly-created agent is reflected without a re-fetch.
+  const attachedBy = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const agent of agents) {
+      for (const docId of attachmentsByAgent[agent.id] ?? []) {
+        (out[docId] ??= []).push(agent.name);
+      }
+    }
+    return out;
+  }, [agents, attachmentsByAgent]);
   const [editorContext, setEditorContext] = useState<EditorContext | null>(
     null,
   );
@@ -105,6 +134,11 @@ export function AgentsSection({
   function openGallery() {
     setToggleError(null);
     setView("gallery");
+  }
+
+  function openLibrary() {
+    setToggleError(null);
+    setView("library");
   }
 
   function openEditorFromTemplate(template: AgentTemplate) {
@@ -172,6 +206,28 @@ export function AgentsSection({
     );
   }
 
+  if (view === "library") {
+    // `DocumentLibrary` itself has no "back" affordance — its view state is
+    // scoped to list <-> add-document form, both still inside the library.
+    // Leaving THIS section is the same view switch as leaving the gallery or
+    // editor, so it belongs here, one level up, exactly like theirs.
+    return (
+      <div className="flex flex-col gap-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setView("roster")}
+          className="w-fit"
+        >
+          <ArrowLeft aria-hidden className="size-4" />
+          Back
+        </Button>
+        <DocumentLibrary documents={documents} attachedBy={attachedBy} />
+      </div>
+    );
+  }
+
   if (view === "editor" && editorContext) {
     return (
       <AgentEditor
@@ -201,10 +257,21 @@ export function AgentsSection({
         <p className="text-muted-foreground text-sm">
           {agents.length} of {maxAgents} {maxAgents === 1 ? "agent" : "agents"}
         </p>
-        <Button type="button" size="sm" onClick={openGallery}>
-          <Plus aria-hidden className="size-4" />
-          New agent
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={openLibrary}
+          >
+            <FileText aria-hidden className="size-4" />
+            Reference documents
+          </Button>
+          <Button type="button" size="sm" onClick={openGallery}>
+            <Plus aria-hidden className="size-4" />
+            New agent
+          </Button>
+        </div>
       </div>
       {toggleError ? (
         <p role="alert" className="text-destructive text-sm">
