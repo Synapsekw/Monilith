@@ -60,7 +60,7 @@ import type { Database } from "@/types/database.types";
 
 loadFixtureEnv();
 
-const [ORG_A] = TIER2_FIXTURE_TENANTS;
+const [ORG_A, ORG_B] = TIER2_FIXTURE_TENANTS;
 
 type Target = { url: string; anonKey: string; serviceRoleKey: string };
 type Resolution = { ok: true; target: Target } | { ok: false; reason: string };
@@ -376,6 +376,174 @@ describe.skipIf(!resolution.ok)(
         .eq("id", docId);
       expect(error).toBeNull();
       expect(data).toHaveLength(1);
+    });
+
+    // ── Property 6: a same-org non-owner cannot UPDATE your document ─────
+    it("refuses a foreign UPDATE — it changes nothing, silently", async () => {
+      const docId = await insertDocument(alice, aliceId, `NoEdit ${tag}`);
+      // RLS `using` FILTERS rather than errors: the row is simply not visible
+      // to bob's update, so this comes back with no error and no rows. The
+      // assertion that matters is the one after it — the body is untouched.
+      const { data: changed, error } = await bob
+        .from("agent_documents")
+        .update({ title: `pwned ${tag}` })
+        .eq("id", docId)
+        .select("id");
+      expect(error).toBeNull();
+      expect(changed).toEqual([]);
+
+      const { data: after } = await alice
+        .from("agent_documents")
+        .select("title")
+        .eq("id", docId)
+        .single();
+      expect((after as { title: string }).title).toBe(`NoEdit ${tag}`);
+    });
+
+    // ── Property 7: a same-org non-owner cannot DELETE your document ─────
+    it("refuses a foreign DELETE — the document survives", async () => {
+      const docId = await insertDocument(alice, aliceId, `NoDelete ${tag}`);
+      const { data: deleted, error } = await bob
+        .from("agent_documents")
+        .delete()
+        .eq("id", docId)
+        .select("id");
+      expect(error).toBeNull();
+      expect(deleted).toEqual([]);
+
+      const { data: after } = await alice
+        .from("agent_documents")
+        .select("id")
+        .eq("id", docId);
+      expect(after).toHaveLength(1);
+    });
+
+    // ── Property 8: `with check` blocks re-parenting owner_id ────────────
+    it("refuses re-parenting a document to another owner", async () => {
+      const docId = await insertDocument(alice, aliceId, `MyRow ${tag}`);
+      // `using` lets alice reach her own row; `with check` is what refuses the
+      // NEW row. Without it she could hand a document to bob's library — and
+      // then never see or delete it again.
+      const { error } = await alice
+        .from("agent_documents")
+        .update({ owner_id: bobId })
+        .eq("id", docId);
+      expect(error).not.toBeNull();
+
+      const { data: after } = await alice
+        .from("agent_documents")
+        .select("owner_id")
+        .eq("id", docId)
+        .single();
+      expect((after as { owner_id: string }).owner_id).toBe(aliceId);
+    });
+
+    // ── Property 9: `with check` pins org_id on INSERT ───────────────────
+    it("refuses an INSERT into an org the caller does not belong to", async () => {
+      // 20260825113635 added `is_org_member(org_id)` here. Before it, alice
+      // could file her own document under org B's id — no read leak, but
+      // org_id became worthless for any org-scoped count, quota or export.
+      const { error } = await alice
+        .from("agent_documents")
+        .insert({
+          org_id: ORG_B.orgId,
+          owner_id: aliceId,
+          title: `Foreign org ${tag}`,
+          body: "Should never land.",
+          token_estimate: 4,
+          source_format: "pasted",
+        })
+        .select("id");
+      expect(error).not.toBeNull();
+    });
+
+    // ── Property 10: `with check` pins org_id on UPDATE too ──────────────
+    it("refuses re-parenting a document into a foreign org", async () => {
+      const docId = await insertDocument(alice, aliceId, `StayHome ${tag}`);
+      const { error } = await alice
+        .from("agent_documents")
+        .update({ org_id: ORG_B.orgId })
+        .eq("id", docId);
+      expect(error).not.toBeNull();
+
+      const { data: after } = await alice
+        .from("agent_documents")
+        .select("org_id")
+        .eq("id", docId)
+        .single();
+      expect((after as { org_id: string }).org_id).toBe(ORG_A.orgId);
+    });
+
+    // ── Property 11: the mirror of Property 3 ────────────────────────────
+    it("refuses attaching your OWN document to someone else's agent", async () => {
+      // Property 3 proves the DOCUMENT half of the join's `with check`; this
+      // proves the AGENT half. Both parents have to resolve to the caller.
+      const docId = await insertDocument(alice, aliceId, `Mine ${tag}`);
+      const { error } = await alice.from("user_agent_documents").insert({
+        user_agent_id: bobAgentId,
+        document_id: docId,
+      });
+      expect(error).not.toBeNull();
+    });
+
+    // ── Property 12: replace_agent_documents is ATOMIC ───────────────────
+    it("keeps the PRIOR attachment set when the replacement insert fails", async () => {
+      const keep = await insertDocument(alice, aliceId, `Keep ${tag}`);
+      const { error: seedErr } = await alice.rpc("replace_agent_documents", {
+        p_user_agent_id: aliceAgentId,
+        p_document_ids: [keep],
+      });
+      expect(seedErr).toBeNull();
+
+      // A document id that does not exist — exactly what another tab deleting
+      // a selected document looks like by the time this call lands. The FK
+      // trips, and because the delete and the insert share ONE transaction the
+      // delete must roll back with it.
+      const { error: failErr } = await alice.rpc("replace_agent_documents", {
+        p_user_agent_id: aliceAgentId,
+        p_document_ids: [keep, randomUUID()],
+      });
+      expect(failErr).not.toBeNull();
+
+      const { data: after, error: readErr } = await alice
+        .from("user_agent_documents")
+        .select("document_id")
+        .eq("user_agent_id", aliceAgentId);
+      expect(readErr).toBeNull();
+      // Not [] — that is the bug the function exists to prevent.
+      expect(after).toEqual([{ document_id: keep }]);
+    });
+
+    it("replaces the set in array order, deduping repeats", async () => {
+      const first = await insertDocument(alice, aliceId, `First ${tag}`);
+      const second = await insertDocument(alice, aliceId, `Second ${tag}`);
+      const { error } = await alice.rpc("replace_agent_documents", {
+        p_user_agent_id: aliceAgentId,
+        // The duplicate would trip the composite primary key unfiltered.
+        p_document_ids: [second, first, second],
+      });
+      expect(error).toBeNull();
+
+      const { data } = await alice
+        .from("user_agent_documents")
+        .select("document_id, position")
+        .eq("user_agent_id", aliceAgentId)
+        .order("position", { ascending: true });
+      expect(data).toEqual([
+        { document_id: second, position: 0 },
+        { document_id: first, position: 1 },
+      ]);
+    });
+
+    it("refuses to touch an agent that is not the caller's", async () => {
+      // SECURITY INVOKER, so the caller's RLS still decides. A DEFINER
+      // function here would let alice wipe bob's attachment set.
+      const mine = await insertDocument(alice, aliceId, `NotYours ${tag}`);
+      const { error } = await alice.rpc("replace_agent_documents", {
+        p_user_agent_id: bobAgentId,
+        p_document_ids: [mine],
+      });
+      expect(error).not.toBeNull();
     });
   },
 );
