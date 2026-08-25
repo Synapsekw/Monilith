@@ -153,9 +153,92 @@ describe("DocumentLibrary · editing an existing document", () => {
         screen.getByText(/couldn't load that document/i),
       ).toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    const saveButton = screen.getByRole("button", {
+      name: /^save$/i,
+    }) as HTMLButtonElement;
+    // The disabled attribute is the primary protection an owner meets, and
+    // it's asserted first. But jsdom (like every real browser) never
+    // dispatches a click on a disabled control, so a click here would pass
+    // trivially without ever reaching `handleSave`'s OWN guard
+    // (`if (editingDoc && !bodyLoaded)`) — proving nothing about that second
+    // layer. Force-enabling the DOM node directly (simulating a bypass of the
+    // disabled attribute — a stale render, a devtools edit, anything) is what
+    // actually exercises it.
+    expect(saveButton).toBeDisabled();
+    saveButton.disabled = false;
+    fireEvent.click(saveButton);
     expect(updateDocument).not.toHaveBeenCalled();
+  });
+
+  it("drops a stale body fetch if the owner has already moved to a different document", async () => {
+    const DOC_B = {
+      id: "d2",
+      title: "Doc B",
+      tokenEstimate: 10,
+      sourceFormat: "pasted" as const,
+      sourceFileName: null,
+      updatedAt: "2026-08-24T11:00:00Z",
+    };
+    let resolveA!: (value: { ok: true; data: { body: string } }) => void;
+    const deferredA = new Promise<{ ok: true; data: { body: string } }>(
+      (resolve) => {
+        resolveA = resolve;
+      },
+    );
+    getDocumentBody.mockImplementation((id: string) =>
+      id === "d1"
+        ? deferredA
+        : Promise.resolve({ ok: true, data: { body: "B's original body" } }),
+    );
+
+    render(<DocumentLibrary documents={[DOCS[0], DOC_B]} attachedBy={{}} />);
+
+    // Open A — its fetch is deferred and never resolves during this test
+    // until we explicitly settle it, below.
+    fireEvent.click(screen.getByText("Standup format"));
+    expect(getDocumentBody).toHaveBeenCalledWith("d1");
+
+    // Leave before A's fetch settles.
+    fireEvent.click(screen.getByRole("button", { name: /^back$/i }));
+
+    // Open B — its own fetch resolves normally.
+    fireEvent.click(screen.getByText("Doc B"));
+    await waitFor(() =>
+      expect(screen.getByLabelText(/content/i)).toHaveValue(
+        "B's original body",
+      ),
+    );
+
+    // The owner edits B.
+    fireEvent.change(screen.getByLabelText(/content/i), {
+      target: { value: "B's original body, with an edit" },
+    });
+
+    // NOW A's stale fetch resolves — after B is open and already edited.
+    resolveA({ ok: true, data: { body: "A's body" } });
+    // Flush the microtask queue AND a macrotask tick so the (stale)
+    // continuation, if it were to run, has had its chance.
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+
+    // A's stale response must not have clobbered what the owner typed into B.
+    expect(screen.getByLabelText(/content/i)).toHaveValue(
+      "B's original body, with an edit",
+    );
+
+    // Saving now must submit B's id with B's edited body — never A's content
+    // under B's id.
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(updateDocument).toHaveBeenCalled());
+    expect(updateDocument).toHaveBeenCalledWith({
+      id: "d2",
+      title: "Doc B",
+      body: "B's original body, with an edit",
+    });
+    expect(updateDocument).not.toHaveBeenCalledWith(
+      expect.objectContaining({ body: "A's body" }),
+    );
   });
 
   it("saves the full amended body after editing one line", async () => {

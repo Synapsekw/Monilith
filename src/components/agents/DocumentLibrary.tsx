@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,6 +89,16 @@ function fileToBase64(file: File): Promise<string> {
  * owner who hits Save before (or during a failed) load cannot silently blank
  * out their document. A failed load renders inline (`loadError`) with a
  * Retry, never leaves the form in a "looks empty, will overwrite" state.
+ *
+ * A stale fetch is a SEPARATE hazard from an unfinished one: the owner can
+ * leave a slow `openEdit` (Back/Cancel are never disabled — the load is not
+ * allowed to trap them) and open a different document, or a fresh "create",
+ * before the first fetch settles. `generationRef` is a counter bumped by
+ * every `openCreate`/`openEdit`/`backToList` call; each in-flight
+ * `getDocumentBody` continuation captures the generation it was started
+ * under and checks it against the CURRENT generation before touching state.
+ * A response that arrives after the owner has moved on is simply dropped —
+ * it must never land in whatever document is open by the time it resolves.
  */
 export function DocumentLibrary({
   documents,
@@ -125,7 +135,13 @@ export function DocumentLibrary({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Bumped by every `openCreate`/`openEdit`/`backToList` — the "which session
+  // is this" counter an in-flight `getDocumentBody` continuation checks
+  // itself against before touching state. See the file-level doc comment.
+  const generationRef = useRef(0);
+
   function openCreate() {
+    generationRef.current += 1;
     setEditingDoc(null);
     setTitle("");
     setBody("");
@@ -144,8 +160,15 @@ export function DocumentLibrary({
    *  immediately from the row already in props — no fetch needed for that
    *  half. The body is fetched ON DEMAND via `getDocumentBody`, exactly one
    *  document, only because the owner just asked to open exactly this one
-   *  (never on first paint, never for the whole library). */
+   *  (never on first paint, never for the whole library).
+   *
+   *  `myGeneration` pins this call to the session it started under. If the
+   *  owner leaves (Back/Cancel/another `openEdit`/`openCreate`) before this
+   *  resolves, `generationRef.current` has moved on by the time the promise
+   *  settles, and every branch below (including `finally`) becomes a no-op —
+   *  the response is dropped instead of landing in whatever is open by then. */
   async function openEdit(doc: AgentDocumentRow) {
+    const myGeneration = (generationRef.current += 1);
     setEditingDoc(doc);
     setTitle(doc.title);
     setBody("");
@@ -160,6 +183,7 @@ export function DocumentLibrary({
     setLoadingBody(true);
     try {
       const res = await getDocumentBody(doc.id);
+      if (generationRef.current !== myGeneration) return; // stale: moved on
       if (!res.ok) {
         setLoadError(res.error);
         return;
@@ -167,9 +191,10 @@ export function DocumentLibrary({
       setBody(res.data.body);
       setBodyLoaded(true);
     } catch {
+      if (generationRef.current !== myGeneration) return; // stale: moved on
       setLoadError("Couldn't load that document.");
     } finally {
-      setLoadingBody(false);
+      if (generationRef.current === myGeneration) setLoadingBody(false);
     }
   }
 
@@ -178,8 +203,12 @@ export function DocumentLibrary({
   }
 
   function backToList() {
+    generationRef.current += 1;
     setView("list");
     setEditingDoc(null);
+    setLoadingBody(false);
+    setLoadError(null);
+    setBodyLoaded(true);
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -297,6 +326,10 @@ export function DocumentLibrary({
   if (view === "form") {
     return (
       <div className="flex flex-col gap-4">
+        {/* Deliberately NOT disabled by `loadingBody` — trapping the owner
+            behind a slow fetch is worse than letting them leave. `backToList`
+            bumps `generationRef`, which is what actually makes a load the
+            owner walked away from harmless once it resolves. */}
         <Button
           type="button"
           variant="ghost"
