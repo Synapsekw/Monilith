@@ -7,6 +7,10 @@ export type DigestEmailInput = {
   boards: DigestBoardRow[];
   appBaseUrl: string;
   unsubscribeUrl: string;
+  /** AI-generated weekly summary (Task 4) — absent when narrative
+   *  generation was skipped/failed; the digest renders identically to
+   *  before in that case. */
+  narrative?: string;
 };
 
 function escapeHtml(s: string): string {
@@ -52,6 +56,11 @@ export function renderDigestHtml(input: DigestEmailInput): string {
     <table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;border:1px solid #e5e5e5;">
       <tr><td style="padding:24px;">
         <h1 style="margin:0 0 4px;font-size:18px;color:#111;">Weekly plan health &mdash; ${escapeHtml(input.orgName)}</h1>
+        ${
+          input.narrative
+            ? `<p style="margin:0 0 16px;font-size:14px;color:#333;">${escapeHtml(input.narrative)}</p>`
+            : ""
+        }
         <p style="margin:0 0 16px;font-size:13px;color:#777;">Week of ${escapeHtml(input.periodStart)}</p>
         <p style="margin:0 0 16px;font-size:14px;color:#333;">
           <strong>${totals.newCount}</strong> new activities &middot;
@@ -83,6 +92,7 @@ export function renderDigestHtml(input: DigestEmailInput): string {
 export function renderDigestText(input: DigestEmailInput): string {
   const { totals } = input;
   const lines = [
+    ...(input.narrative ? [input.narrative, ``] : []),
     `Weekly plan health - ${input.orgName} (week of ${input.periodStart})`,
     ``,
     `${totals.newCount} new activities, ${totals.incompleteCount} structurally incomplete, ${totals.overdueCount} overdue`,
