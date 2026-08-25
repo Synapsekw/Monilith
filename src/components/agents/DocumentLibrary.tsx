@@ -20,6 +20,7 @@ import {
 import {
   createDocument,
   deleteDocument,
+  getDocumentBody,
   updateDocument,
 } from "@/lib/agents/document-actions";
 import {
@@ -77,16 +78,17 @@ function fileToBase64(file: File): Promise<string> {
  * fields are client state too, recomputed from `estimateTokens` on every
  * keystroke rather than asking the server.
  *
- * There is no "edit an existing document's body" flow here on purpose: first
- * paint deliberately never selects `body` (`listDocumentsForOwner`'s own
- * contract), and no Server Action exists to fetch one document's body back to
- * the client either — adding one only to populate an edit form would be a
- * second body-bearing read this feature explicitly avoids. `updateDocument`
- * is instead wired to "replace this document's content": opening a document
- * from the list pre-fills its title and lets the owner paste or upload NEW
- * content to overwrite what's saved, going through the exact same
- * review-before-save textarea as creating one. The owner always sees, and can
- * edit, byte-for-byte what is about to be written.
+ * Editing an existing document loads its body ON DEMAND, via
+ * `getDocumentBody` — a single-document read, fetched only when the owner
+ * deliberately opens ONE row. This does not violate the first-paint rule:
+ * that rule is about `listDocumentsForOwner` never shipping 30 bodies to
+ * render 30 titles, not about forbidding a body read altogether. The title
+ * is filled in immediately from the row already in props (no fetch needed
+ * for that half); the body arrives once the fetch resolves. Until it does,
+ * `bodyLoaded` is false and the textarea + Save button stay disabled — an
+ * owner who hits Save before (or during a failed) load cannot silently blank
+ * out their document. A failed load renders inline (`loadError`) with a
+ * Retry, never leaves the form in a "looks empty, will overwrite" state.
  */
 export function DocumentLibrary({
   documents,
@@ -110,6 +112,15 @@ export function DocumentLibrary({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Whether `body` reflects a document actually loaded (or a fresh, empty
+  // "create" form, where there's nothing to lose). False only while an
+  // existing document's body is in flight or failed to load — Save is
+  // disabled the whole time, so a load-in-progress or a failed load can
+  // never be typed over and saved as an accidental blank-out.
+  const [bodyLoaded, setBodyLoaded] = useState(true);
+  const [loadingBody, setLoadingBody] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -123,10 +134,18 @@ export function DocumentLibrary({
     setExtractError(null);
     setTitleError(null);
     setSaveError(null);
+    setBodyLoaded(true);
+    setLoadingBody(false);
+    setLoadError(null);
     setView("form");
   }
 
-  function openReplace(doc: AgentDocumentRow) {
+  /** Opens an existing document for editing. The title is filled in
+   *  immediately from the row already in props — no fetch needed for that
+   *  half. The body is fetched ON DEMAND via `getDocumentBody`, exactly one
+   *  document, only because the owner just asked to open exactly this one
+   *  (never on first paint, never for the whole library). */
+  async function openEdit(doc: AgentDocumentRow) {
     setEditingDoc(doc);
     setTitle(doc.title);
     setBody("");
@@ -135,7 +154,27 @@ export function DocumentLibrary({
     setExtractError(null);
     setTitleError(null);
     setSaveError(null);
+    setBodyLoaded(false);
+    setLoadError(null);
     setView("form");
+    setLoadingBody(true);
+    try {
+      const res = await getDocumentBody(doc.id);
+      if (!res.ok) {
+        setLoadError(res.error);
+        return;
+      }
+      setBody(res.data.body);
+      setBodyLoaded(true);
+    } catch {
+      setLoadError("Couldn't load that document.");
+    } finally {
+      setLoadingBody(false);
+    }
+  }
+
+  function retryLoad() {
+    if (editingDoc) openEdit(editingDoc);
   }
 
   function backToList() {
@@ -182,6 +221,15 @@ export function DocumentLibrary({
 
   async function handleSave() {
     setSaveError(null);
+    // Belt-and-suspenders alongside the disabled Save button: an edit whose
+    // body never finished loading (or failed to) must never be saved over —
+    // that would silently blank out the document. `bodyLoaded` is true for a
+    // fresh "create" form (nothing to lose there), so this only blocks the
+    // edit path.
+    if (editingDoc && !bodyLoaded) {
+      setSaveError("Wait for the document to finish loading before saving.");
+      return;
+    }
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       setTitleError("Give it a title.");
@@ -277,13 +325,27 @@ export function DocumentLibrary({
           ) : null}
         </div>
 
+        {loadingBody ? (
+          <p className="text-muted-foreground text-xs">Loading document…</p>
+        ) : null}
+        {loadError ? (
+          <div className="flex items-center gap-2">
+            <p role="alert" className="text-destructive text-xs">
+              {loadError}
+            </p>
+            <Button type="button" variant="ghost" size="xs" onClick={retryLoad}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
+
         <div className="space-y-1.5">
           <Label htmlFor="doc-upload">Upload</Label>
           <input
             id="doc-upload"
             type="file"
             accept=".md,.markdown,.txt,.pdf,.docx,.xlsx"
-            disabled={extracting || saving}
+            disabled={extracting || saving || loadingBody || !bodyLoaded}
             onChange={handleFileChange}
             className="text-muted-foreground file:text-foreground file:bg-surface-muted hover:file:bg-accent w-full text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border file:px-2.5 file:py-1 file:text-sm file:font-medium"
           />
@@ -312,7 +374,9 @@ export function DocumentLibrary({
             id="doc-content"
             rows={12}
             value={body}
-            disabled={saving}
+            disabled={
+              saving || loadingBody || (editingDoc !== null && !bodyLoaded)
+            }
             onChange={(e) => setBody(e.target.value)}
             placeholder="Paste text, or upload a file above to extract it here. Review it before saving — this is exactly what gets injected into a prompt."
           />
@@ -332,7 +396,7 @@ export function DocumentLibrary({
             type="button"
             size="sm"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || (editingDoc !== null && !bodyLoaded)}
           >
             {saving ? "Saving…" : "Save"}
           </Button>
@@ -382,7 +446,7 @@ export function DocumentLibrary({
             >
               <button
                 type="button"
-                onClick={() => openReplace(doc)}
+                onClick={() => openEdit(doc)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
                 <FileText

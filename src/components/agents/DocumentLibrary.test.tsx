@@ -3,11 +3,14 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { DocumentLibrary } from "./DocumentLibrary";
 
 const createDocument = vi.fn();
+const updateDocument = vi.fn();
 const deleteDocument = vi.fn();
+const getDocumentBody = vi.fn();
 vi.mock("@/lib/agents/document-actions", () => ({
   createDocument: (...a: unknown[]) => createDocument(...a),
-  updateDocument: vi.fn(),
+  updateDocument: (...a: unknown[]) => updateDocument(...a),
   deleteDocument: (...a: unknown[]) => deleteDocument(...a),
+  getDocumentBody: (...a: unknown[]) => getDocumentBody(...a),
 }));
 
 const DOCS = [
@@ -24,6 +27,7 @@ const DOCS = [
 beforeEach(() => {
   vi.clearAllMocks();
   createDocument.mockResolvedValue({ ok: true, data: { id: "d2" } });
+  updateDocument.mockResolvedValue({ ok: true, data: undefined });
   deleteDocument.mockResolvedValue({ ok: true, data: undefined });
 });
 
@@ -101,5 +105,81 @@ describe("DocumentLibrary", () => {
       expect(screen.getByText(/couldn't read any text/i)).toBeInTheDocument(),
     );
     expect(createDocument).not.toHaveBeenCalled();
+  });
+});
+
+describe("DocumentLibrary · editing an existing document", () => {
+  it("never fetches a body on first paint", () => {
+    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    expect(getDocumentBody).not.toHaveBeenCalled();
+  });
+
+  it("fetches and pre-fills the body, and the title, when opening a document", async () => {
+    getDocumentBody.mockResolvedValue({
+      ok: true,
+      data: { body: "full body text" },
+    });
+    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    fireEvent.click(screen.getByText("Standup format"));
+    expect(getDocumentBody).toHaveBeenCalledWith("d1");
+    // The title is known already (it's in the row) and needs no fetch.
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Standup format");
+    await waitFor(() =>
+      expect(screen.getByLabelText(/content/i)).toHaveValue("full body text"),
+    );
+  });
+
+  it("reflects a live token count for the freshly loaded body", async () => {
+    getDocumentBody.mockResolvedValue({
+      ok: true,
+      data: { body: "abcdefgh" }, // 8 chars -> 2 tokens
+    });
+    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    fireEvent.click(screen.getByText("Standup format"));
+    await waitFor(() =>
+      expect(screen.getByText(/2 tokens/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("surfaces a failed load inline and blocks saving over the document", async () => {
+    getDocumentBody.mockResolvedValue({
+      ok: false,
+      error: "Couldn't load that document.",
+    });
+    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    fireEvent.click(screen.getByText("Standup format"));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/couldn't load that document/i),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(updateDocument).not.toHaveBeenCalled();
+  });
+
+  it("saves the full amended body after editing one line", async () => {
+    getDocumentBody.mockResolvedValue({
+      ok: true,
+      data: { body: "line one\nline two\nline three" },
+    });
+    render(<DocumentLibrary documents={DOCS} attachedBy={{}} />);
+    fireEvent.click(screen.getByText("Standup format"));
+    await waitFor(() =>
+      expect(screen.getByLabelText(/content/i)).toHaveValue(
+        "line one\nline two\nline three",
+      ),
+    );
+    fireEvent.change(screen.getByLabelText(/content/i), {
+      target: { value: "line one\nAMENDED\nline three" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() =>
+      expect(updateDocument).toHaveBeenCalledWith({
+        id: "d1",
+        title: "Standup format",
+        body: "line one\nAMENDED\nline three",
+      }),
+    );
   });
 });

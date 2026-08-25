@@ -11,6 +11,7 @@ import {
   setAgentDocumentsSchema,
 } from "@/lib/validations/agent-documents";
 import {
+  getDocument,
   insertDocument,
   updateDocumentRow,
   deleteDocumentRow,
@@ -23,6 +24,31 @@ import {
 
 const AGENTS_ROUTE = "/settings/agents";
 const NO_ORG = "No organization.";
+
+/**
+ * The on-demand counterpart to `listDocumentsForOwner`'s metadata-only
+ * first-paint read. That read never selects `body` on purpose — 30 documents
+ * must not ship 30 bodies to render 30 titles (working agreement #5). This
+ * action is the other half: ONE body, fetched only when the owner
+ * deliberately opens ONE document to edit it. Wired to `getDocument`
+ * (`documents-db.ts`), which Task 5 built and left unused until now.
+ *
+ * RLS on `agent_documents` is what actually scopes this read to the caller —
+ * no ownership check is duplicated here, same as `updateDocument` and
+ * `deleteDocument` below never re-check `owner_id` in TypeScript.
+ */
+export async function getDocumentBody(
+  id: string,
+): Promise<ActionResult<{ body: string }>> {
+  try {
+    const supabase = await createClient();
+    const doc = await getDocument(supabase, id);
+    if (!doc) return fail("That document is gone. Refresh the library.");
+    return { ok: true, data: { body: doc.body } };
+  } catch {
+    return fail("Couldn't load that document.");
+  }
+}
 
 export async function createDocument(input: {
   title: string;
