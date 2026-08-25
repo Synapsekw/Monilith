@@ -1377,6 +1377,7 @@ export type Database = {
           email_sent_count: number | null;
           error: string | null;
           id: string;
+          narrative: string | null;
           org_id: string | null;
           period_end: string;
           period_start: string;
@@ -1389,6 +1390,7 @@ export type Database = {
           email_sent_count?: number | null;
           error?: string | null;
           id?: string;
+          narrative?: string | null;
           org_id?: string | null;
           period_end: string;
           period_start: string;
@@ -1401,6 +1403,7 @@ export type Database = {
           email_sent_count?: number | null;
           error?: string | null;
           id?: string;
+          narrative?: string | null;
           org_id?: string | null;
           period_end?: string;
           period_start?: string;
@@ -3592,6 +3595,23 @@ export type Database = {
         Returns: undefined;
       };
       ai_credits_used_this_month: { Args: { p_org: string }; Returns: number };
+      ai_usage_by_feature_this_month: {
+        Args: { p_org: string };
+        Returns: {
+          calls: number;
+          credits: number;
+          feature: string;
+        }[];
+      };
+      ai_usage_summary: {
+        Args: { p_from: string; p_org: string; p_to: string };
+        Returns: {
+          calls: number;
+          cost_usd: number;
+          credits: number;
+          month: string;
+        }[];
+      };
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };
       auth_user_orgs: { Args: never; Returns: string[] };
