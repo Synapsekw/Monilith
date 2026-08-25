@@ -66,6 +66,50 @@ export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = {
   agentCapabilityCeiling: [...AGENT_CAPABILITIES],
 };
 
+/**
+ * The org default model an UNPINNED call will REALLY run on — or null.
+ *
+ * `defaultProvider`/`defaultModelId` are only half a pin: `resolveAiAdapter`
+ * (gateway.ts) honours `defaultModelId` ONLY when `defaultProvider` equals the
+ * provider the mode itself resolves, and each mode resolves its own:
+ *
+ *   - `managed`  — always `anthropic` (the platform key is Anthropic's; any
+ *                  other provider is refused outright).
+ *   - `org_byo`  — `byoProvider`, the single key the org stores.
+ *   - `per_user` — `defaultProvider` itself, falling back to `anthropic`.
+ *   - `off`      — nothing runs at all.
+ *
+ * An admin may perfectly legally leave the org default pointing at, say, an
+ * OpenAI model while the mode is `managed` (OrgAiSettingsForm allows it) — and
+ * then the default is INERT: the run resolves an Anthropic tier default
+ * instead. Anything that predicts the run's model from these two columns alone
+ * — the reference-document budget meter, above all — must go through here, or
+ * it will size a budget against a context window the run never gets.
+ *
+ * Returns null on mismatch rather than guessing, so the caller can fall back
+ * to its own conservative assumption AND disclose that it is assuming.
+ */
+export function unpinnedDefaultModel(
+  settings: OrgAiSettings,
+): { provider: string; modelId: string } | null {
+  if (!settings.defaultProvider || !settings.defaultModelId) return null;
+
+  const resolved: string | null =
+    settings.mode === "managed"
+      ? "anthropic"
+      : settings.mode === "org_byo"
+        ? settings.byoProvider
+        : settings.mode === "per_user"
+          ? (settings.defaultProvider ?? "anthropic")
+          : null; // "off" — no call resolves at all.
+
+  if (resolved !== settings.defaultProvider) return null;
+  return {
+    provider: settings.defaultProvider,
+    modelId: settings.defaultModelId,
+  };
+}
+
 export async function readOrgAiSettings(
   client: SupabaseClient<Database>,
   orgId: string,

@@ -10,6 +10,7 @@ import { getMyAgentLastRuns } from "@/lib/agents/agents-db";
 import { countPendingProposalsByAgent } from "@/lib/agents/proposals-db";
 import {
   readOrgAiSettings,
+  unpinnedDefaultModel,
   DEFAULT_ORG_AI_SETTINGS,
 } from "@/lib/ai/org-settings";
 import { listEnabledProviders } from "@/lib/ai/providers/provider-rows";
@@ -95,7 +96,7 @@ export default async function AgentsSettingsPage() {
     pendingProposals,
     orgAiSettings,
     catalog,
-    documents,
+    documentPage,
     attachmentsByAgent,
   ] = await Promise.all([
     supabase
@@ -136,7 +137,10 @@ export default async function AgentsSettingsPage() {
     // Metadata only — see read 6 above. Degrades to an empty library rather
     // than 500-ing the page, like every other supporting read here.
     listDocumentsForOwner(supabase, user.id).catch(
-      (): Awaited<ReturnType<typeof listDocumentsForOwner>> => [],
+      (): Awaited<ReturnType<typeof listDocumentsForOwner>> => ({
+        rows: [],
+        total: 0,
+      }),
     ),
     // See read 7 above. Degrades to "nothing attached anywhere", which only
     // costs the delete confirmation its agent names — never a 500.
@@ -153,16 +157,30 @@ export default async function AgentsSettingsPage() {
   // further to a tier default. Both catalog reads that back it
   // (`readOrgAiSettings`, `buildModelOptions`) are already in this
   // `Promise.all` for other reasons — this is a lookup over data already in
-  // hand, not a new read. Null when the org has no default set (or the
-  // default itself named a model the catalog no longer has): the run's
-  // eventual fallback then depends on the feature's tier, which this page has
-  // no way to predict, so the meter stays conservative rather than guessing.
-  const orgDefaultContextLength =
-    catalog.modelOptions.find(
-      (m) =>
-        m.provider === orgAiSettings.defaultProvider &&
-        m.modelId === orgAiSettings.defaultModelId,
-    )?.contextLength ?? null;
+  // hand, not a new read.
+  //
+  // It goes through `unpinnedDefaultModel`, NEVER through
+  // `defaultProvider`/`defaultModelId` directly: the gateway honours the
+  // default model only when its provider matches the one the MODE resolves,
+  // and an org may legally sit in `managed` mode with an OpenAI default. Read
+  // straight, that configuration would size the meter against a 1M-token
+  // OpenAI window, accept a 200k document set, and then watch the run resolve
+  // an Anthropic 200k default and drop every document — the exact silent
+  // failure this meter exists to prevent.
+  //
+  // Null when the org has no usable default (none set, provider mismatch, or
+  // a model the catalog no longer has): the run's eventual fallback then
+  // depends on the feature's tier, which this page has no way to predict, so
+  // the picker falls back to NULL_CONTEXT_FALLBACK and SAYS SO rather than
+  // guessing.
+  const unpinnedDefault = unpinnedDefaultModel(orgAiSettings);
+  const orgDefaultContextLength = unpinnedDefault
+    ? (catalog.modelOptions.find(
+        (m) =>
+          m.provider === unpinnedDefault.provider &&
+          m.modelId === unpinnedDefault.modelId,
+      )?.contextLength ?? null)
+    : null;
 
   const agents: AgentRecord[] = (rosterResult.data ?? []).map((a) => ({
     id: a.id,
@@ -201,7 +219,8 @@ export default async function AgentsSettingsPage() {
           modelOptions={catalog.modelOptions}
           providers={catalog.providers}
           capabilityCeiling={capabilityCeiling}
-          documents={documents}
+          documents={documentPage.rows}
+          documentTotal={documentPage.total}
           attachmentsByAgent={attachmentsByAgent}
           orgDefaultContextLength={orgDefaultContextLength}
         />
