@@ -401,7 +401,7 @@ git commit -m "feat(agents): agent_documents schema, rls and grants"
 - Consumes: nothing.
 - Produces:
   - `estimateTokens(text: string): number`
-  - `MIN_USEFUL_BUDGET: 4000`, `NULL_CONTEXT_FALLBACK: 32000`, `MAX_OUTPUT_RESERVE: 16000`
+  - `MIN_USEFUL_BUDGET: 4000`, `NULL_CONTEXT_FALLBACK: 32000`, `MAX_OUTPUT_RESERVE: 16000`, `ASSUMED_PREFIX_TOKENS: 9000`
   - `documentBudget(args: { contextLength: number | null; prefixTokens: number; instructionTokens: number }): { budget: number; usable: boolean; assumedContext: boolean }`
   - `selectDocuments<T extends { tokenEstimate: number }>(docs: readonly T[], budget: number): { included: T[]; omitted: boolean }`
 
@@ -572,6 +572,20 @@ export const NULL_CONTEXT_FALLBACK = 32_000;
 
 /** Ceiling on the output reserve, in tokens. */
 export const MAX_OUTPUT_RESERVE = 16_000;
+
+/**
+ * What the tool definitions plus PREAMBLE cost, in tokens.
+ *
+ * run-loop.ts's own comment measures this prefix at "~6-9k tokens" for the 25
+ * descriptors a run passes. Take the PESSIMISTIC end: a meter that promises
+ * room the run does not have is worse than one that under-promises, because
+ * the owner only discovers the difference at 07:00.
+ *
+ * Lives here, not at the call sites, so the run loop and the attach-time meter
+ * cannot drift — they must compute the same budget from the same inputs or the
+ * meter's guarantee is void.
+ */
+export const ASSUMED_PREFIX_TOKENS = 9_000;
 
 /**
  * How many tokens of reference documents this run can afford.
@@ -1963,10 +1977,10 @@ In `src/app/api/ai/personal-agent/route.ts`, before calling the run loop, add:
 const attached = await listDocumentsForAgent(ownerClient, agent.id);
 const { budget } = documentBudget({
   contextLength: resolved.contextLength,
-  // The prefix is the tool definitions plus PREAMBLE. run-loop.ts's own comment
-  // measures it at ~6-9k tokens; take the pessimistic end so the meter never
-  // promises room the run does not have.
-  prefixTokens: 9_000,
+  // ASSUMED_PREFIX_TOKENS, imported from document-budget — the attach-time
+  // meter uses the identical constant. A local 9_000 here would let the two
+  // drift, and the meter's whole guarantee is that they cannot.
+  prefixTokens: ASSUMED_PREFIX_TOKENS,
   instructionTokens: estimateTokens(agent.instructions),
 });
 const { included, omitted } = selectDocuments(attached, budget);
@@ -2335,7 +2349,7 @@ Expected: FAIL — module not found.
 
 A `"use client"` component. Requirements, all asserted above:
 
-- Compute `documentBudget({ contextLength, prefixTokens: 9_000, instructionTokens: estimateTokens(instructions) })` on every render — pure, no round trip. Use the **same** `prefixTokens: 9_000` constant the run-loop call site uses in Task 6 Step 8; extract it to `document-budget.ts` as `ASSUMED_PREFIX_TOKENS = 9_000` and import it in both places so they cannot drift.
+- Compute `documentBudget({ contextLength, prefixTokens: ASSUMED_PREFIX_TOKENS, instructionTokens: estimateTokens(instructions) })` on every render — pure, no round trip. Use `ASSUMED_PREFIX_TOKENS` imported from `@/lib/agents/document-budget` (Task 2 defines it) rather than a local `9_000` — the run-loop call site in Task 6 Step 7 imports the same constant, and the meter's guarantee depends on the two never drifting.
 - Render `used / budget` with `toLocaleString()` grouping.
 - A checkbox per document. `disabled` when **not currently selected** and adding it would exceed the budget. Never disable a selected one — the owner must always be able to get back under.
 - When `!usable`, replace the list with "This model's context is too small for reference documents."
@@ -2396,7 +2410,7 @@ git commit -m "feat(agents): attach reference documents to an agent with a live 
 
 **Scheduling notes.**
 
-- Batch 1 tasks mutate different files and can share the worktree. Batch 3's three tasks touch disjoint files **except** `document-budget.ts`, which Task 8 Step 3 edits to add `ASSUMED_PREFIX_TOKENS`. Either give Task 8 an isolated worktree, or land that one constant in Task 2 up front — **the simpler fix, and preferred**: add `export const ASSUMED_PREFIX_TOKENS = 9_000;` to `document-budget.ts` during Task 2 and have Tasks 6 and 8 import it.
+- Batch 1 tasks mutate different files and can share the worktree. Batch 3's three tasks touch disjoint files: `ASSUMED_PREFIX_TOKENS` lands in Task 2 precisely so Tasks 6 and 8 only ever _import_ `document-budget.ts` and never edit it.
 - Task 1 owns type regeneration; Tasks 5 and 6 consume the result. Do not regenerate types in more than one task — parallel worktrees editing `database.types.ts` is a guaranteed rebase conflict.
 - Task 1 must budget a migration-version reconcile: `gotcha-55` has fired on every migration in recent sessions.
 

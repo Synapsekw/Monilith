@@ -108,7 +108,7 @@ export async function listAgentRuns(
   const { data, error } = await client
     .from("user_agent_runs")
     .select(
-      "id, status, error, fire_date, fire_hour, input_tokens, output_tokens, model_substituted, created_at",
+      "id, status, error, fire_date, fire_hour, input_tokens, output_tokens, model_substituted, documents_omitted, created_at",
     )
     .eq("user_agent_id", agentId)
     .order("created_at", { ascending: false })
@@ -124,6 +124,7 @@ export async function listAgentRuns(
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
     modelSubstituted: r.model_substituted,
+    documentsOmitted: r.documents_omitted,
   }));
 }
 

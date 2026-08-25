@@ -24,6 +24,7 @@ const OPTIONS: ModelOption[] = [
     label: "Claude Sonnet 5",
     tier: "standard",
     supportsTools: true,
+    contextLength: 200_000,
   },
   {
     provider: "moonshotai",
@@ -32,6 +33,7 @@ const OPTIONS: ModelOption[] = [
     label: "Kimi K2 Instruct",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 128_000,
   },
   {
     provider: "mistral",
@@ -40,6 +42,7 @@ const OPTIONS: ModelOption[] = [
     label: "Mistral Small",
     tier: "cheap",
     supportsTools: false,
+    contextLength: 32_000,
   },
 ];
 

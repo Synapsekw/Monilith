@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
+    PostgrestVersion: "14.17";
   };
   public: {
     Tables: {
@@ -51,6 +51,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "admin_audit_log_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      agent_documents: {
+        Row: {
+          body: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          owner_id: string;
+          source_file_name: string | null;
+          source_format: string;
+          title: string;
+          token_estimate: number;
+          updated_at: string;
+        };
+        Insert: {
+          body: string;
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          owner_id: string;
+          source_file_name?: string | null;
+          source_format: string;
+          title: string;
+          token_estimate: number;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          owner_id?: string;
+          source_file_name?: string | null;
+          source_format?: string;
+          title?: string;
+          token_estimate?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agent_documents_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -3008,6 +3055,39 @@ export type Database = {
           },
         ];
       };
+      user_agent_documents: {
+        Row: {
+          document_id: string;
+          position: number;
+          user_agent_id: string;
+        };
+        Insert: {
+          document_id: string;
+          position?: number;
+          user_agent_id: string;
+        };
+        Update: {
+          document_id?: string;
+          position?: number;
+          user_agent_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agent_documents_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "agent_documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_documents_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_agent_fires: {
         Row: {
           fire_date: string;
@@ -3129,6 +3209,7 @@ export type Database = {
       user_agent_runs: {
         Row: {
           created_at: string;
+          documents_omitted: boolean;
           error: string | null;
           fire_date: string;
           fire_hour: number;
@@ -3147,6 +3228,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          documents_omitted?: boolean;
           error?: string | null;
           fire_date: string;
           fire_hour: number;
@@ -3165,6 +3247,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          documents_omitted?: boolean;
           error?: string | null;
           fire_date?: string;
           fire_hour?: number;
@@ -4143,6 +4226,10 @@ export type Database = {
       redeem_invitations: { Args: never; Returns: number };
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      replace_agent_documents: {
+        Args: { p_document_ids: string[]; p_user_agent_id: string };
         Returns: undefined;
       };
       report_in_org: {

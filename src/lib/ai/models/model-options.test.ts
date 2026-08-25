@@ -101,9 +101,20 @@ describe("buildModelOptions", () => {
         label: "Claude Haiku 4.5",
         tier: "cheap",
         supportsTools: true,
+        contextLength: 200000,
       },
     ]);
     expect(JSON.stringify(options)).not.toContain("claude-haiku-4-5-20251001");
+  });
+
+  // The reference-document budget meter (`DocumentPicker`) reads this straight
+  // off the selected `ModelOption` to compute the same budget the run loop
+  // will — a null here is what makes it disclose the assumed-context copy
+  // instead of asserting a window the catalog never confirmed.
+  it("carries context_length through, including when the catalog has not backfilled it", async () => {
+    const { client } = fakeCatalog([modelRow({ context_length: null })]);
+    const options = await buildModelOptions(client, [PROVIDERS[0]]);
+    expect(options[0]?.contextLength).toBeNull();
   });
 
   it("leaves out retired models", async () => {

@@ -168,6 +168,15 @@ export function AgentRunHistory({
                       </span>
                     </div>
                   ) : null}
+                  {/* Its own line, same rationale as modelSubstituted above: the
+                      briefing WAS sent, just without documents that did not
+                      fit — not a failure, so no destructive-looking pill. */}
+                  {run.documentsOmitted && (
+                    <span className="text-muted-foreground text-xs">
+                      Reference documents omitted — the model&rsquo;s context
+                      was too small.
+                    </span>
+                  )}
                   {/* What this run asked permission for. Rendered under the run
                       that produced it: the proposal only makes sense next to
                       the report that explains why the agent wanted it. */}

@@ -10,6 +10,8 @@ import {
   type PersonalAgentSettings,
 } from "@/lib/agents/agent-config";
 import type { AgentCapability } from "@/lib/agents/capabilities";
+import { setAgentDocuments } from "@/lib/agents/document-actions";
+import type { AgentDocumentRow } from "@/lib/agents/documents-db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +24,7 @@ import {
   type ModelValue,
 } from "@/components/settings/ModelPicker";
 import { CapabilityToggles } from "@/components/agents/CapabilityToggles";
+import { DocumentPicker } from "@/components/agents/DocumentPicker";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -108,6 +111,9 @@ export function AgentEditor({
   modelOptions,
   providers,
   capabilityCeiling,
+  documents,
+  initialDocumentIds = [],
+  orgDefaultContextLength,
   onSaved,
   onCancel,
   onDeleted,
@@ -121,6 +127,17 @@ export function AgentEditor({
   providers: { id: string; label: string }[];
   /** `OrgAiSettings.agentCapabilityCeiling`, read once by the server page. */
   capabilityCeiling: AgentCapability[];
+  /** The owner's reference-document library, METADATA ONLY (no `body`) — read
+   *  once by the server page and threaded straight to `DocumentPicker`. */
+  documents: AgentDocumentRow[];
+  /** This agent's currently-attached document ids, in saved order. Empty for
+   *  a brand-new agent (`mode: "create"` never has anything attached yet). */
+  initialDocumentIds?: string[];
+  /** The org default model's `context_length`, resolved once by the server
+   *  page (`page.tsx`) from data it already reads. The budget meter falls
+   *  back to this whenever the pin can't name a usable model directly — see
+   *  the doc comment beside its use below. */
+  orgDefaultContextLength: number | null;
   onSaved: (record: AgentRecord) => void;
   onCancel: () => void;
   onDeleted?: (id: string) => void;
@@ -144,6 +161,12 @@ export function AgentEditor({
   const [capabilities, setCapabilities] = useState<AgentCapability[]>(
     initial.capabilities,
   );
+  // Client state over the library already loaded by the server page — every
+  // toggle in `DocumentPicker` is 0 new server round-trips (working agreement
+  // #5). Persisted only on save, via `saveDocuments` below, exactly like
+  // every other field in this form.
+  const [selectedDocumentIds, setSelectedDocumentIds] =
+    useState<string[]>(initialDocumentIds);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -209,6 +232,36 @@ export function AgentEditor({
     }
     setFieldErrors({});
 
+    // The attachment set only changed if it differs from what was loaded —
+    // order matters (it becomes `position`, which is what keeps the prompt
+    // byte-stable across runs), so this is a straight array comparison, not a
+    // set comparison. A create is always empty on entry, so any pick at all
+    // counts as changed. Skipping the call when nothing changed keeps the
+    // common "no attachments touched" save at its usual single round trip.
+    const documentIdsChanged =
+      JSON.stringify(selectedDocumentIds) !==
+      JSON.stringify(initialDocumentIds);
+
+    // Runs after the agent itself is created/updated, since `setAgentDocuments`
+    // needs a real `user_agent_id` — a brand-new agent doesn't have one until
+    // `createAgent` returns it. Returns false (and leaves `serverError` set,
+    // the form still open) on failure, so a save that renamed the agent but
+    // failed to attach a document is never reported to the owner as a clean
+    // success — `DocumentPicker` itself never talks to the server; this is
+    // the one call site that does, exactly once, on save.
+    async function saveDocuments(id: string): Promise<boolean> {
+      if (!documentIdsChanged) return true;
+      const res = await setAgentDocuments({
+        userAgentId: id,
+        documentIds: selectedDocumentIds,
+      });
+      if (!res.ok) {
+        setServerError(res.error);
+        return false;
+      }
+      return true;
+    }
+
     startTransition(async () => {
       if (mode === "edit" && agentId) {
         const res = await updateAgent(agentId, parsed.data);
@@ -216,6 +269,7 @@ export function AgentEditor({
           setServerError(res.error);
           return;
         }
+        if (!(await saveDocuments(agentId))) return;
         onSaved({ ...parsed.data, id: agentId });
         return;
       }
@@ -225,6 +279,7 @@ export function AgentEditor({
         setServerError(res.error);
         return;
       }
+      if (!(await saveDocuments(res.data.id))) return;
       onSaved({ ...parsed.data, id: res.data.id });
     });
   }
@@ -297,6 +352,36 @@ export function AgentEditor({
               {fieldErrors.instructions}
             </p>
           ) : null}
+        </div>
+
+        <div
+          className="space-y-1.5"
+          role="group"
+          aria-labelledby="agent-documents-label"
+        >
+          <Label id="agent-documents-label">Reference documents</Label>
+          {/* `contextLength` comes from the PIN's own catalog row when one
+              resolves to a live model. `selectedModelOption` is `undefined`
+              in BOTH cases where it doesn't: no pin at all, and a pin naming
+              a model the catalog no longer carries (retired since it was
+              set). Those are not two different situations to the RUN
+              LOOP — `pickModel` (resolve.ts) sends a missing pin through the
+              exact same org-default fallback as no pin at all — so the meter
+              must not treat them differently either. `orgDefaultContextLength`
+              is that same fallback, resolved once by the server page from
+              catalog data it already has; it stays `null` only when the org
+              has no resolvable default, which is the one case nobody here
+              can predict — the meter then honestly discloses the assumed
+              context instead of guessing a window nothing confirmed. */}
+          <DocumentPicker
+            documents={documents}
+            selectedIds={selectedDocumentIds}
+            onChange={setSelectedDocumentIds}
+            contextLength={
+              selectedModelOption?.contextLength ?? orgDefaultContextLength
+            }
+            instructions={instructions}
+          />
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row">
