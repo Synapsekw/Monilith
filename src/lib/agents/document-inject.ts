@@ -24,11 +24,17 @@
  * from an untrusted source" the design names as its threat model.
  *
  * `documentInputSchema` (src/lib/validations/agent-documents.ts) REJECTS a
- * title or body containing either of these at save time. That is the enforcing
- * half; this is the single definition both halves share, so the check can never
- * drift from the delimiters it is checking for.
+ * title or body containing `INSTRUCTIONS_SENTINEL` at save time — that's the
+ * enforcing half, and this is the single definition it shares with the
+ * composer below, so the check can never drift from the delimiter it is
+ * checking for. `DOCUMENT_BLOCK_SENTINEL` is NOT rejected: it opens the
+ * reference block rather than closing it, so a forged occurrence has nothing
+ * after it to unlock, and it doubles as the standard "REFERENCE DOCUMENTS"
+ * SOP/ISO-style heading this feature exists to ingest. It stays exported
+ * (and in `PROMPT_SENTINELS`) because it's still the literal the prompt is
+ * composed from, just not a save-time rejection target.
  *
- * Rejection at save time, rather than a per-run nonce in the delimiters, is
+ * Rejection at save time, rather than a per-run nonce in the delimiter, is
  * deliberate — see the decision recorded in that schema.
  */
 export const INSTRUCTIONS_SENTINEL = "YOUR OWNER'S INSTRUCTIONS:";
