@@ -5,6 +5,7 @@ import { getServerEnv } from "@/lib/env.server";
 import { currentDigestPeriod, digestWindowStart } from "@/lib/digest/period";
 import { unsubscribeSignature } from "@/lib/digest/token";
 import { renderDigestHtml, renderDigestText } from "@/lib/digest/render";
+import { generateDigestNarrative } from "@/lib/digest/narrative";
 import {
   digestBoardRowSchema,
   type DigestBoardRow,
@@ -217,6 +218,8 @@ async function processOrg(
     optOut: profileById.get(id)?.optOut ?? false,
   }));
 
+  const narrative = await generateDigestNarrative(org.id, boards, totals);
+
   // 1) Email first (skipped entirely when the provider isn't configured).
   const emailSentCount = await sendEmails(
     org,
@@ -224,10 +227,15 @@ async function processOrg(
     totals,
     period,
     recipients,
+    narrative,
   );
 
   // 2) Notifications after email success — a retry can't duplicate them.
-  const payload = { ...totals, periodStart: period.periodStart };
+  const payload = {
+    ...totals,
+    periodStart: period.periodStart,
+    ...(narrative ? { narrative } : {}),
+  };
   const rows = recipients.map((r) => ({
     org_id: org.id,
     recipient_id: r.userId,
@@ -246,6 +254,7 @@ async function processOrg(
       status: "sent",
       stats: { ...totals, boards: boards.length },
       email_sent_count: emailSentCount,
+      narrative,
       completed_at: new Date().toISOString(),
     })
     .eq("id", runId);
@@ -259,6 +268,7 @@ async function sendEmails(
   totals: Totals,
   period: { periodStart: string },
   recipients: Recipient[],
+  narrative: string | null,
 ): Promise<number> {
   const { RESEND_API_KEY, DIGEST_SECRET, APP_BASE_URL, DIGEST_FROM_EMAIL } =
     getServerEnv();
@@ -275,6 +285,7 @@ async function sendEmails(
       boards,
       appBaseUrl: APP_BASE_URL,
       unsubscribeUrl,
+      ...(narrative ? { narrative } : {}),
     };
     return {
       from,
