@@ -69,6 +69,33 @@ describe("NotificationsList", () => {
     ).toBeInTheDocument();
   });
 
+  it("prefers the narrative sentence over the counts line when present", () => {
+    render(
+      <NotificationsList
+        notifications={[
+          notif({
+            id: "hd-2",
+            kind: "health_digest",
+            actor_id: null,
+            board_id: null,
+            item_id: null,
+            payload: {
+              newCount: 4,
+              incompleteCount: 3,
+              overdueCount: 2,
+              periodStart: "2026-06-29",
+              narrative: "A calm, productive week overall.",
+            },
+          }),
+        ]}
+        onOpen={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText("Weekly digest: A calm, productive week overall."),
+    ).toBeInTheDocument();
+  });
+
   it("falls back to generic copy when payload is malformed", () => {
     render(
       <NotificationsList
