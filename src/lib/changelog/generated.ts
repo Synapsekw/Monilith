@@ -4,6 +4,27 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-08-25",
+    kind: "new",
+    title: "Give your agents reference documents",
+    description:
+      "Keep a personal library of documents your agents can draw on -- paste text, or upload a Markdown, text, PDF, Word or Excel file and we will pull the text out for you to review before saving. Attach any of them to any of your agents.",
+  },
+  {
+    date: "2026-08-25",
+    kind: "new",
+    title: "Agents write the way you do",
+    description:
+      "An attached document is given to your agent in full, so it can copy the structure of a report you like, follow a policy list exactly, or use your team's internal shorthand without you re-explaining it every time.",
+  },
+  {
+    date: "2026-08-25",
+    kind: "improved",
+    title: "See what fits before you attach it",
+    description:
+      "Each agent shows a live budget as you attach documents, so you know what its model has room for. If a set no longer fits -- after switching to a smaller model, say -- the agent still runs and its history tells you the documents were left out, rather than quietly using part of one.",
+  },
+  {
     date: "2026-08-13",
     kind: "new",
     title: "Agents can act on your boards",
