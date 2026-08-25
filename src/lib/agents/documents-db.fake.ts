@@ -24,6 +24,8 @@ import type { Database } from "@/types/database.types";
 
 export type Calls = {
   select: string[];
+  selectOptions: (unknown | undefined)[];
+  rpc: [string, unknown][];
   eq: [string, unknown][];
   order: [string, unknown | undefined][];
   limit: number[];
@@ -32,12 +34,18 @@ export type Calls = {
   delete: true[];
 };
 
-export function makeFakeClient(result: { data: unknown; error?: unknown }): {
+export function makeFakeClient(result: {
+  data: unknown;
+  error?: unknown;
+  count?: number;
+}): {
   client: SupabaseClient<Database>;
   calls: Calls;
 } {
   const calls: Calls = {
     select: [],
+    selectOptions: [],
+    rpc: [],
     eq: [],
     order: [],
     limit: [],
@@ -45,12 +53,20 @@ export function makeFakeClient(result: { data: unknown; error?: unknown }): {
     update: [],
     delete: [],
   };
-  const resolved = { data: result.data, error: result.error ?? null };
+  const resolved = {
+    data: result.data,
+    error: result.error ?? null,
+    // PostgREST only returns a count when the query asked for one; `undefined`
+    // is the honest default so `?? rows.length` is exercised by every test
+    // that does not opt in.
+    count: result.count,
+  };
 
   function makeChain(): Record<string, unknown> {
     const chain: Record<string, unknown> = {
-      select: vi.fn((cols?: string) => {
+      select: vi.fn((cols?: string, opts?: unknown) => {
         calls.select.push(cols ?? "");
+        calls.selectOptions.push(opts);
         return chain;
       }),
       eq: vi.fn((col: string, val: unknown) => {
@@ -89,5 +105,13 @@ export function makeFakeClient(result: { data: unknown; error?: unknown }): {
   }
 
   const from = vi.fn(() => makeChain());
-  return { client: { from } as unknown as SupabaseClient<Database>, calls };
+  // `typedRpc` goes through `supabase.rpc(fn, args)` and awaits it directly.
+  const rpc = vi.fn((fn: string, args: unknown) => {
+    calls.rpc.push([fn, args]);
+    return Promise.resolve(resolved);
+  });
+  return {
+    client: { from, rpc } as unknown as SupabaseClient<Database>,
+    calls,
+  };
 }

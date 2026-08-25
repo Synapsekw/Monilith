@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildDocumentBlock, composeSystemPrompt } from "./document-inject";
+import {
+  buildDocumentBlock,
+  composeSystemPrompt,
+  INSTRUCTIONS_SENTINEL,
+  DOCUMENT_BLOCK_SENTINEL,
+  PROMPT_SENTINELS,
+} from "./document-inject";
 
 describe("buildDocumentBlock", () => {
   it("is empty for no documents", () => {
@@ -50,5 +56,31 @@ describe("composeSystemPrompt", () => {
       instructions: "INSTR",
     });
     expect(out).toBe("PRE\n\nYOUR OWNER'S INSTRUCTIONS:\nINSTR");
+  });
+});
+
+// The sentinels are exported so `documentInputSchema` can reject a document
+// that contains them (a body carrying the instructions sentinel would close
+// the reference block and read as owner-authored instruction). That check is
+// only sound if these constants really are the strings the prompt is built
+// from — a drift here would leave the schema guarding a delimiter nothing uses.
+describe("prompt sentinels", () => {
+  it("are the literal delimiters the prompt is composed from", () => {
+    const block = buildDocumentBlock([{ title: "T", body: "B" }]);
+    expect(block.startsWith(DOCUMENT_BLOCK_SENTINEL)).toBe(true);
+
+    const out = composeSystemPrompt({
+      preamble: "PRE",
+      documentBlock: block,
+      instructions: "INSTR",
+    });
+    expect(out).toContain(`\n\n${INSTRUCTIONS_SENTINEL}\nINSTR`);
+  });
+
+  it("covers both delimiters, so the schema can check one list", () => {
+    expect([...PROMPT_SENTINELS]).toEqual([
+      INSTRUCTIONS_SENTINEL,
+      DOCUMENT_BLOCK_SENTINEL,
+    ]);
   });
 });

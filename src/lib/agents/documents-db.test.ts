@@ -4,6 +4,7 @@ import {
   listDocumentsForAgent,
   insertDocument,
   updateDocumentRow,
+  replaceAgentDocuments,
 } from "./documents-db";
 // Local to this file — there is no shared fake-client helper in this repo.
 // Records: calls.select[], calls.order[], calls.limit[], calls.insert[], calls.update[]
@@ -21,6 +22,75 @@ describe("listDocumentsForOwner", () => {
     await listDocumentsForOwner(client, "owner-1");
     expect(calls.order).toContainEqual(["updated_at", { ascending: false }]);
     expect(calls.limit[0]).toBeGreaterThan(0);
+  });
+
+  it("asks for an exact count on the SAME request, not a second one", async () => {
+    const { client, calls } = makeFakeClient({ data: [], count: 0 });
+    await listDocumentsForOwner(client, "owner-1");
+    expect(calls.selectOptions[0]).toEqual({ count: "exact" });
+    // One `.from()` chain — the total must never cost an extra round trip.
+    expect(calls.select).toHaveLength(1);
+  });
+
+  it("reports the TOTAL, not the page length, so the cap is visible", async () => {
+    // The bug this closes: a 137-document library rendered "100 documents"
+    // forever and the 101st was unreachable with no hint it existed.
+    const page = Array.from({ length: 3 }, (_, i) => ({
+      id: `d${i}`,
+      title: `T${i}`,
+      token_estimate: 1,
+      source_format: "pasted",
+      source_file_name: null,
+      updated_at: "2026-08-24T10:00:00Z",
+    }));
+    const { client } = makeFakeClient({ data: page, count: 137 });
+    const res = await listDocumentsForOwner(client, "owner-1");
+    expect(res.rows).toHaveLength(3);
+    expect(res.total).toBe(137);
+  });
+
+  it("falls back to the page length when the count header is absent", async () => {
+    const { client } = makeFakeClient({ data: [] });
+    expect((await listDocumentsForOwner(client, "owner-1")).total).toBe(0);
+  });
+});
+
+describe("replaceAgentDocuments", () => {
+  it("goes through the ATOMIC rpc, never a delete-then-insert pair", async () => {
+    // Two PostgREST calls are two transactions: a failed insert would leave
+    // the agent with zero attachments instead of its prior set. The whole
+    // point of `replace_agent_documents` is that the pair cannot be split.
+    const { client, calls } = makeFakeClient({ data: null });
+    await replaceAgentDocuments(client, "agent-1", ["doc-a", "doc-b"]);
+    expect(calls.rpc).toEqual([
+      [
+        "replace_agent_documents",
+        { p_user_agent_id: "agent-1", p_document_ids: ["doc-a", "doc-b"] },
+      ],
+    ]);
+    expect(calls.delete).toEqual([]);
+    expect(calls.insert).toEqual([]);
+  });
+
+  it("sends an empty array for a full detach — still one atomic call", async () => {
+    const { client, calls } = makeFakeClient({ data: null });
+    await replaceAgentDocuments(client, "agent-1", []);
+    expect(calls.rpc).toEqual([
+      [
+        "replace_agent_documents",
+        { p_user_agent_id: "agent-1", p_document_ids: [] },
+      ],
+    ]);
+  });
+
+  it("throws with the postgres message when the rpc fails", async () => {
+    const { client } = makeFakeClient({
+      data: null,
+      error: { message: "violates foreign key constraint" },
+    });
+    await expect(
+      replaceAgentDocuments(client, "agent-1", ["doc-a"]),
+    ).rejects.toThrow(/violates foreign key constraint/);
   });
 });
 

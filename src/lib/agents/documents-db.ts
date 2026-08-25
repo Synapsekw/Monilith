@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import { estimateTokens } from "@/lib/agents/document-budget";
+import { typedRpc } from "@/lib/supabase/typed-rpc";
 import type { SourceFormat } from "@/lib/documents/extract-text";
 
 type Client = SupabaseClient<Database>;
@@ -45,19 +46,30 @@ function toRow(r: {
   };
 }
 
+/**
+ * One page of the library, plus the TOTAL the owner actually has.
+ *
+ * The total rides on the same request (`count: "exact"`, which PostgREST
+ * answers from the same query's `Content-Range`) — not a second round trip.
+ * Without it the UI could only ever say "100 documents", silently and
+ * permanently hiding the 101st; with it the list can say "showing 100 of 137".
+ */
 export async function listDocumentsForOwner(
   client: Client,
   ownerId: string,
   limit: number = LIBRARY_PAGE_SIZE,
-): Promise<AgentDocumentRow[]> {
-  const { data, error } = await client
+): Promise<{ rows: AgentDocumentRow[]; total: number }> {
+  const { data, count, error } = await client
     .from("agent_documents")
-    .select(META_COLUMNS)
+    .select(META_COLUMNS, { count: "exact" })
     .eq("owner_id", ownerId)
     .order("updated_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`listDocumentsForOwner: ${error.message}`);
-  return (data ?? []).map(toRow);
+  const rows = (data ?? []).map(toRow);
+  // `count` is null only if the header is missing; the page length is then the
+  // best honest answer, and it can never over-report.
+  return { rows, total: count ?? rows.length };
 }
 
 export async function getDocument(
@@ -197,27 +209,31 @@ export async function deleteDocumentRow(
   if (error) throw new Error(`deleteDocumentRow: ${error.message}`);
 }
 
-/** Replace an agent's attachment set. Delete-then-insert, because the join
- *  table has no UPDATE grant and `position` is derived from array order. */
+/**
+ * Replace an agent's attachment set, ATOMICALLY.
+ *
+ * Delete-then-insert, because the join table has no UPDATE grant and
+ * `position` is derived from array order — but both statements run inside ONE
+ * Postgres transaction, via `public.replace_agent_documents`
+ * (20260825113635). Two PostgREST calls would each get their own transaction,
+ * so an insert that failed — another tab deleted a selected document and
+ * tripped the FK, or a duplicate id tripped the composite PK — would leave the
+ * agent with ZERO attachments instead of its prior set. Inside the function the
+ * failed insert rolls the delete back with it.
+ *
+ * The function is SECURITY INVOKER, so `user_agent_documents_owner_*` still
+ * decides what the caller may touch; this buys atomicity, never reach. Called
+ * through `typedRpc` — the canonical wrapper — never a hand-rolled
+ * `client.rpc()`.
+ */
 export async function replaceAgentDocuments(
   client: Client,
   userAgentId: string,
   documentIds: readonly string[],
 ): Promise<void> {
-  const del = await client
-    .from("user_agent_documents")
-    .delete()
-    .eq("user_agent_id", userAgentId);
-  if (del.error)
-    throw new Error(`replaceAgentDocuments (delete): ${del.error.message}`);
-  if (documentIds.length === 0) return;
-  const ins = await client.from("user_agent_documents").insert(
-    documentIds.map((document_id, position) => ({
-      user_agent_id: userAgentId,
-      document_id,
-      position,
-    })),
-  );
-  if (ins.error)
-    throw new Error(`replaceAgentDocuments (insert): ${ins.error.message}`);
+  const { error } = await typedRpc(client, "replace_agent_documents", {
+    p_user_agent_id: userAgentId,
+    p_document_ids: [...documentIds],
+  });
+  if (error) throw new Error(`replaceAgentDocuments: ${error.message}`);
 }
