@@ -106,6 +106,11 @@ function renderEditor(over: Partial<Parameters<typeof AgentEditor>[0]> = {}) {
       providers={PROVIDERS}
       capabilityCeiling={FULL_CEILING}
       documents={[]}
+      // Most tests don't care about the org-default fallback specifically —
+      // `null` here is the "genuinely unresolvable" case, which keeps every
+      // OTHER test's meter on the conservative/assumed path rather than
+      // silently depending on a org-default fixture they never mention.
+      orgDefaultContextLength={null}
       onSaved={onSaved}
       onCancel={vi.fn()}
       {...over}
@@ -477,4 +482,32 @@ describe("AgentEditor · reference documents", () => {
     );
     expect(onSaved).not.toHaveBeenCalled();
   }, 30_000);
+
+  // `initial` is unpinned (`provider`/`modelId` both null) — the default
+  // state of every new agent, and the case the meter got wrong: it used to
+  // pass `null` straight through whenever there was no PIN-derived option,
+  // which made the meter assume `NULL_CONTEXT_FALLBACK` (32,000) even though
+  // the org default the run loop actually resolves to might be much smaller.
+  it("computes an unpinned agent's budget from the org default, not the 32,000 fallback", () => {
+    // 16,385 is document-budget.ts's own documented minimum among active
+    // tool-capable models — a real org default can legitimately be this
+    // small. Its true budget (2,461) is BELOW MIN_USEFUL_BUDGET, so the
+    // picker must say so. Under the bug, this same setup fell back to
+    // 32,000's budget (9,098) instead, which IS usable — so this assertion
+    // is exactly the one the regression would have failed.
+    renderEditor({ documents: DOCS, orgDefaultContextLength: 16_385 });
+    expect(
+      screen.getByText(/context is too small for reference documents/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/assuming a 32,000-token context/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to the assumed context and discloses it when the org default can't be resolved", () => {
+    renderEditor({ documents: DOCS, orgDefaultContextLength: null });
+    expect(
+      screen.getByText(/assuming a 32,000-token context/i),
+    ).toBeInTheDocument();
+  });
 });

@@ -113,6 +113,7 @@ export function AgentEditor({
   capabilityCeiling,
   documents,
   initialDocumentIds = [],
+  orgDefaultContextLength,
   onSaved,
   onCancel,
   onDeleted,
@@ -132,6 +133,11 @@ export function AgentEditor({
   /** This agent's currently-attached document ids, in saved order. Empty for
    *  a brand-new agent (`mode: "create"` never has anything attached yet). */
   initialDocumentIds?: string[];
+  /** The org default model's `context_length`, resolved once by the server
+   *  page (`page.tsx`) from data it already reads. The budget meter falls
+   *  back to this whenever the pin can't name a usable model directly — see
+   *  the doc comment beside its use below. */
+  orgDefaultContextLength: number | null;
   onSaved: (record: AgentRecord) => void;
   onCancel: () => void;
   onDeleted?: (id: string) => void;
@@ -354,17 +360,26 @@ export function AgentEditor({
           aria-labelledby="agent-documents-label"
         >
           <Label id="agent-documents-label">Reference documents</Label>
-          {/* `contextLength` comes from the PIN's own catalog row when one is
-              set. An unpinned agent runs on the org default, whose model this
-              form never resolves (that lookup belongs to the run endpoint,
-              not the editor) — so the meter falls back to `null` and
-              honestly discloses the assumed context rather than guessing a
-              window nobody here has confirmed. */}
+          {/* `contextLength` comes from the PIN's own catalog row when one
+              resolves to a live model. `selectedModelOption` is `undefined`
+              in BOTH cases where it doesn't: no pin at all, and a pin naming
+              a model the catalog no longer carries (retired since it was
+              set). Those are not two different situations to the RUN
+              LOOP — `pickModel` (resolve.ts) sends a missing pin through the
+              exact same org-default fallback as no pin at all — so the meter
+              must not treat them differently either. `orgDefaultContextLength`
+              is that same fallback, resolved once by the server page from
+              catalog data it already has; it stays `null` only when the org
+              has no resolvable default, which is the one case nobody here
+              can predict — the meter then honestly discloses the assumed
+              context instead of guessing a window nothing confirmed. */}
           <DocumentPicker
             documents={documents}
             selectedIds={selectedDocumentIds}
             onChange={setSelectedDocumentIds}
-            contextLength={selectedModelOption?.contextLength ?? null}
+            contextLength={
+              selectedModelOption?.contextLength ?? orgDefaultContextLength
+            }
             instructions={instructions}
           />
         </div>

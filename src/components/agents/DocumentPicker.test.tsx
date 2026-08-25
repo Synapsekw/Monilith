@@ -42,10 +42,13 @@ describe("DocumentPicker", () => {
         selectedIds={["a"]}
       />,
     );
-    expect(screen.getByText(/1,000/)).toBeInTheDocument();
-    expect(
-      screen.getByText(new RegExp(expectedBudget.toLocaleString())),
-    ).toBeInTheDocument();
+    // One `textContent` assertion, in order, rather than two independent
+    // `getByText` substring searches — those could not have caught "used"
+    // and "available" being swapped in the rendering, since both are just
+    // numbers and either one alone would still satisfy an isolated regex.
+    expect(screen.getByTestId("document-budget-meter")).toHaveTextContent(
+      `${(1_000).toLocaleString()} used · ${expectedBudget.toLocaleString()} tokens available`,
+    );
   });
 
   it("disables a document that would overrun the budget", () => {

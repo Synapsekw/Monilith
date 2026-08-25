@@ -51,6 +51,7 @@ export function AgentsSection({
   capabilityCeiling,
   documents,
   attachmentsByAgent,
+  orgDefaultContextLength,
 }: {
   agents: AgentRecord[];
   /** Most recent run per agent id, read once by the server component. Absent
@@ -86,6 +87,14 @@ export function AgentsSection({
    *  agent NAMES using the roster already in props, so the library's delete
    *  confirmation can name affected agents with no extra query. */
   attachmentsByAgent: Record<string, string[]>;
+  /** The org default model's `context_length`, resolved once by the server
+   *  page from data it already reads for other reasons (`readOrgAiSettings` +
+   *  `buildModelOptions`) — see the doc comment at its call site in
+   *  `page.tsx`. Threaded to `AgentEditor` as the fallback the reference-
+   *  document budget meter uses for an UNPINNED agent, so it budgets against
+   *  the same model the run loop actually resolves to, not an optimistic
+   *  guess. Null when the org has no resolvable default. */
+  orgDefaultContextLength: number | null;
 }) {
   const [agents, setAgents] = useState<AgentRecord[]>(initial);
   const [view, setView] = useState<View>("roster");
@@ -258,6 +267,7 @@ export function AgentsSection({
             ? editorContext.initialDocumentIds
             : undefined
         }
+        orgDefaultContextLength={orgDefaultContextLength}
         onSaved={handleSaved}
         onCancel={handleEditorCancel}
         onDeleted={handleDeleted}

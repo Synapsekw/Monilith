@@ -71,7 +71,12 @@ export function DocumentPicker({
     <div className="flex flex-col gap-2">
       <div className="bg-surface-muted flex items-center justify-between gap-3 rounded-lg border p-3 text-xs">
         <span className="text-muted-foreground">Reference budget</span>
-        <span className="font-mono">
+        {/* `data-testid` rather than two independent substring queries: used
+            and available are both plain numbers, so a test that checks them
+            in isolation can't catch the two being swapped in this markup.
+            Scoping to this one element and asserting its full `textContent`
+            can. */}
+        <span className="font-mono" data-testid="document-budget-meter">
           <span>{used.toLocaleString()}</span> used ·{" "}
           <span>{budget.toLocaleString()}</span> tokens available
         </span>

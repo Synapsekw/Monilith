@@ -146,6 +146,23 @@ export default async function AgentsSettingsPage() {
   ]);
   const maxAgents = orgAiSettings.maxAgentsPerUser;
   const capabilityCeiling = orgAiSettings.agentCapabilityCeiling;
+  // The context length an UNPINNED agent's meter must budget against — the
+  // run loop's own `pickModel` resolves both "never pinned" and "pinned at a
+  // since-retired model" (excluded from `active`, hence absent from
+  // `catalog.modelOptions` too) to this SAME org default before falling
+  // further to a tier default. Both catalog reads that back it
+  // (`readOrgAiSettings`, `buildModelOptions`) are already in this
+  // `Promise.all` for other reasons — this is a lookup over data already in
+  // hand, not a new read. Null when the org has no default set (or the
+  // default itself named a model the catalog no longer has): the run's
+  // eventual fallback then depends on the feature's tier, which this page has
+  // no way to predict, so the meter stays conservative rather than guessing.
+  const orgDefaultContextLength =
+    catalog.modelOptions.find(
+      (m) =>
+        m.provider === orgAiSettings.defaultProvider &&
+        m.modelId === orgAiSettings.defaultModelId,
+    )?.contextLength ?? null;
 
   const agents: AgentRecord[] = (rosterResult.data ?? []).map((a) => ({
     id: a.id,
@@ -186,6 +203,7 @@ export default async function AgentsSettingsPage() {
           capabilityCeiling={capabilityCeiling}
           documents={documents}
           attachmentsByAgent={attachmentsByAgent}
+          orgDefaultContextLength={orgDefaultContextLength}
         />
       </div>
     </SettingsSection>
