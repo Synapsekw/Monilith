@@ -122,9 +122,10 @@ function renderEditor(over: Partial<Parameters<typeof AgentEditor>[0]> = {}) {
 /**
  * The model combobox. The editor renders a second combobox — the "Runs daily
  * at" `<select>` — so a bare `getByRole("combobox")` is ambiguous. Going
- * through the labelled group is also the assertion that the field IS named:
- * the trigger's own accessible name is its current VALUE, so the group's
- * label is the only thing that says "Model".
+ * through the labelled group also works as a second, independent path to the
+ * same name: the trigger's OWN accessible name is "Model" too (its `label`
+ * prop), with the current pin as its accessible DESCRIPTION rather than its
+ * name — see `toHaveAccessibleDescription` assertions below.
  */
 function modelField(): HTMLElement {
   return within(screen.getByRole("group", { name: "Model" })).getByRole(
@@ -156,7 +157,8 @@ beforeEach(() => {
 describe("AgentEditor · model pin", () => {
   it("starts on the org default when the agent has no pin", () => {
     renderEditor();
-    expect(modelField()).toHaveAccessibleName(/organization's default/i);
+    expect(modelField()).toHaveAccessibleName("Model");
+    expect(modelField()).toHaveAccessibleDescription(/organization's default/i);
   });
 
   it("saves an unpinned agent as null on both halves", async () => {
@@ -194,8 +196,10 @@ describe("AgentEditor · model pin", () => {
       initial: { ...initial, provider: "moonshotai", modelId: "kimi-k2" },
     });
     // The stored pin reads back as its human LABEL, from the catalog option it
-    // matched — not as the raw id, and never as a wire id.
-    expect(modelField()).toHaveAccessibleName(/kimi k2 instruct/i);
+    // matched — not as the raw id, and never as a wire id. It's the trigger's
+    // accessible DESCRIPTION; the NAME stays "Model" regardless of the pin.
+    expect(modelField()).toHaveAccessibleName("Model");
+    expect(modelField()).toHaveAccessibleDescription(/kimi k2 instruct/i);
 
     await userEvent.click(
       screen.getByRole("button", { name: /save changes/i }),
@@ -525,3 +529,113 @@ describe("AgentEditor · reference documents", () => {
     expect(screen.queryByText(/showing \d+ of/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Client-side validation errors (`personalAgentSettingsSchema.safeParse`
+ * failing in `save()`) render as plain destructive text next to each field,
+ * with nothing telling a screen reader the error belongs to that field. This
+ * is defect #2 of the repo-wide a11y ticket (2026-08-11 vault session note,
+ * "matching ui/timezone-picker.tsx"): the error text now carries a stable
+ * `id`, gets `role="alert"` so it's announced the moment validation fails,
+ * and the field points at it via `aria-describedby`.
+ */
+describe("AgentEditor · validation errors are tied to their field", () => {
+  it("ties the name error to the Name input", async () => {
+    renderEditor();
+    await userEvent.clear(screen.getByLabelText("Name"));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+
+    const nameInput = screen.getByLabelText("Name");
+    const alert = await screen.findByRole("alert");
+    expect(nameInput).toHaveAttribute("aria-describedby", alert.id);
+    expect(nameInput).toHaveAttribute("aria-invalid", "true");
+    expect(createAgent).not.toHaveBeenCalled();
+  });
+
+  it("ties the instructions error to the Instructions textarea", async () => {
+    renderEditor();
+    await userEvent.clear(screen.getByLabelText("Instructions"));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+
+    const instructions = screen.getByLabelText("Instructions");
+    const alert = await screen.findByRole("alert");
+    expect(instructions).toHaveAttribute("aria-describedby", alert.id);
+  });
+
+  it("clears the error association once the field is corrected", async () => {
+    renderEditor();
+    const nameInput = screen.getByLabelText("Name");
+    await userEvent.clear(nameInput);
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await screen.findByRole("alert");
+    expect(nameInput).toHaveAttribute("aria-describedby");
+
+    await userEvent.type(nameInput, "Evening Digest");
+    expect(nameInput).not.toHaveAttribute("aria-describedby");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Defect #1 of the same ticket: Save disables itself the instant `pending`
+ * flips true — synchronously inside its own click handler, the same click
+ * that gave it focus — which in a real browser drops focus to `<body>`
+ * (see use-restore-focus-after-pending.ts for the mechanism and why jsdom
+ * can't reproduce the drop itself). What's verifiable here is the one
+ * direction jsdom CAN honestly assert: the restore must never steal focus
+ * from somewhere the user deliberately moved to while the save was in
+ * flight.
+ */
+describe("AgentEditor · focus management around save", () => {
+  it("does not steal focus from elsewhere once a save resolves", async () => {
+    let release: (v: { ok: true; data: { id: string } }) => void = () => {};
+    createAgent.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    render(
+      <>
+        <AgentEditorHarness />
+        <input aria-label="Elsewhere on the page" />
+      </>,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+
+    const elsewhere = screen.getByLabelText("Elsewhere on the page");
+    await userEvent.click(elsewhere);
+    expect(elsewhere).toHaveFocus();
+
+    release({ ok: true, data: { id: "agent-1" } });
+    await waitFor(() => expect(createAgent).toHaveBeenCalled());
+    expect(elsewhere).toHaveFocus();
+  }, 30_000);
+});
+
+/** Thin wrapper so the harness above can sit alongside a sibling element,
+ *  exactly like renderEditor() but without its return value. */
+function AgentEditorHarness() {
+  return (
+    <AgentEditor
+      mode="create"
+      initial={initial}
+      modelOptions={OPTIONS}
+      providers={PROVIDERS}
+      capabilityCeiling={FULL_CEILING}
+      documents={[]}
+      orgDefaultContextLength={null}
+      onSaved={vi.fn()}
+      onCancel={vi.fn()}
+    />
+  );
+}

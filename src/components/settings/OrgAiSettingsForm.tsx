@@ -357,11 +357,14 @@ export function OrgAiSettingsForm({
         )}
       </div>
 
-      {/* `role="group"` + `aria-labelledby`, not a `<label htmlFor>`: the
-          picker's trigger is a combobox whose accessible name is its current
-          VALUE, so a label pointing at it would REPLACE the value a screen
-          reader announces instead of naming the field. Same treatment as the
-          per-agent pin in AgentEditor, which renders the same picker. */}
+      {/* `role="group"` + `aria-labelledby` complements — not substitutes for
+          — the picker's own accessible name below: `ModelPicker`'s trigger
+          takes a static `label` prop now (its name no longer comes from the
+          live value, which is instead its accessible DESCRIPTION), so a
+          screen reader landing directly on the combobox via Tab also hears
+          "Default model", not just navigators that go through this group.
+          Same treatment as the per-agent pin in AgentEditor, which renders
+          the same picker. */}
       <div
         className="border-border space-y-3 border-t pt-4"
         role="group"
@@ -406,6 +409,7 @@ export function OrgAiSettingsForm({
           onChange={chooseDefaultModel}
           allowInherit
           inheritLabel="No default — each feature picks its own tier"
+          label="Default model"
         />
 
         {inertBecause && (

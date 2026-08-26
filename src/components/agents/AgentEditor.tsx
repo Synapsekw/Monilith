@@ -25,7 +25,13 @@ import {
 } from "@/components/settings/ModelPicker";
 import { CapabilityToggles } from "@/components/agents/CapabilityToggles";
 import { DocumentPicker } from "@/components/agents/DocumentPicker";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
+
+const NAME_ERROR_ID = "agent-name-error";
+const INSTRUCTIONS_ERROR_ID = "agent-instructions-error";
+const CADENCE_ERROR_ID = "agent-cadence-error";
+const HOUR_ERROR_ID = "agent-hour-error";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -180,6 +186,13 @@ export function AgentEditor({
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
+  // Save disables itself the instant `pending` flips true, synchronously in
+  // its own click handler — the click that gave it focus. A browser has
+  // nowhere else to send focus when the active element is disabled out from
+  // under it, so it drops to `<body>` and a keyboard or screen-reader user
+  // loses their place on the page. This reclaims it once the save settles,
+  // without stealing focus the user moved on purpose.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   // The catalog entry behind the current pin, if any — the source of truth
   // for whether this agent's run can use tools at all. `undefined` when the
@@ -329,13 +342,20 @@ export function AgentEditor({
             value={name}
             disabled={pending}
             aria-invalid={Boolean(fieldErrors.name)}
+            aria-describedby={fieldErrors.name ? NAME_ERROR_ID : undefined}
             onChange={(e) => {
               setName(e.target.value);
               setFieldErrors((f) => ({ ...f, name: undefined }));
             }}
           />
           {fieldErrors.name ? (
-            <p className="text-destructive text-xs">{fieldErrors.name}</p>
+            <p
+              id={NAME_ERROR_ID}
+              role="alert"
+              className="text-destructive text-xs"
+            >
+              {fieldErrors.name}
+            </p>
           ) : null}
         </div>
 
@@ -347,6 +367,9 @@ export function AgentEditor({
             value={instructions}
             disabled={pending}
             aria-invalid={Boolean(fieldErrors.instructions)}
+            aria-describedby={
+              fieldErrors.instructions ? INSTRUCTIONS_ERROR_ID : undefined
+            }
             onChange={(e) => {
               setInstructions(e.target.value);
               setFieldErrors((f) => ({ ...f, instructions: undefined }));
@@ -357,7 +380,11 @@ export function AgentEditor({
             straight to the model.
           </p>
           {fieldErrors.instructions ? (
-            <p className="text-destructive text-xs">
+            <p
+              id={INSTRUCTIONS_ERROR_ID}
+              role="alert"
+              className="text-destructive text-xs"
+            >
               {fieldErrors.instructions}
             </p>
           ) : null}
@@ -403,6 +430,9 @@ export function AgentEditor({
               value={cadence}
               disabled={pending}
               aria-invalid={Boolean(fieldErrors.cadence)}
+              aria-describedby={
+                fieldErrors.cadence ? CADENCE_ERROR_ID : undefined
+              }
               onChange={(e) => cadenceChanged(e.target.value as AgentCadence)}
             >
               {AGENT_CADENCES.map((c) => (
@@ -412,7 +442,13 @@ export function AgentEditor({
               ))}
             </select>
             {fieldErrors.cadence ? (
-              <p className="text-destructive text-xs">{fieldErrors.cadence}</p>
+              <p
+                id={CADENCE_ERROR_ID}
+                role="alert"
+                className="text-destructive text-xs"
+              >
+                {fieldErrors.cadence}
+              </p>
             ) : null}
           </div>
 
@@ -424,6 +460,9 @@ export function AgentEditor({
               value={runAtLocalHour}
               disabled={pending}
               aria-invalid={Boolean(fieldErrors.runAtLocalHour)}
+              aria-describedby={
+                fieldErrors.runAtLocalHour ? HOUR_ERROR_ID : undefined
+              }
               onChange={(e) => {
                 setRunAtLocalHour(Number(e.target.value));
                 setFieldErrors((f) => ({ ...f, runAtLocalHour: undefined }));
@@ -436,7 +475,11 @@ export function AgentEditor({
               ))}
             </select>
             {fieldErrors.runAtLocalHour ? (
-              <p className="text-destructive text-xs">
+              <p
+                id={HOUR_ERROR_ID}
+                role="alert"
+                className="text-destructive text-xs"
+              >
                 {fieldErrors.runAtLocalHour}
               </p>
             ) : null}
@@ -497,10 +540,12 @@ export function AgentEditor({
           </p>
         </div>
 
-        {/* `role="group"` + `aria-labelledby`, not `htmlFor`: the picker's
-            trigger is a combobox whose accessible name is its current VALUE,
-            so a label pointing at it would replace the value a screen reader
-            announces instead of naming the field. */}
+        {/* `role="group"` + `aria-labelledby` complements — not substitutes
+            for — the picker's own accessible name: `ModelPicker` takes a
+            static `label` prop below (its name no longer comes from the live
+            value, which is instead its accessible DESCRIPTION), so a screen
+            reader landing directly on the combobox via Tab also hears
+            "Model", not just navigators that go through this group. */}
         <div
           className="space-y-1.5"
           role="group"
@@ -523,6 +568,7 @@ export function AgentEditor({
             // configuration state with a next step — never "no models
             // available", which reads as a broken feature.
             emptyHint="Add an API key in Settings → AI to see models."
+            label="Model"
           />
           <p className="text-muted-foreground text-xs">
             {model
@@ -544,7 +590,9 @@ export function AgentEditor({
             </p>
           ) : null}
           {fieldErrors.provider ? (
-            <p className="text-destructive text-xs">{fieldErrors.provider}</p>
+            <p role="alert" className="text-destructive text-xs">
+              {fieldErrors.provider}
+            </p>
           ) : null}
         </div>
 
@@ -587,7 +635,13 @@ export function AgentEditor({
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button type="button" onClick={save} disabled={pending} size="sm">
+          <Button
+            ref={saveRef}
+            type="button"
+            onClick={save}
+            disabled={pending}
+            size="sm"
+          >
             {pending
               ? "Saving…"
               : mode === "edit"

@@ -9,12 +9,67 @@ vi.mock("@/lib/org/actions", () => ({
 import { updateOrgTimezone } from "@/lib/org/actions";
 
 describe("TimezoneForm", () => {
-  it("shows the current timezone on the trigger", () => {
+  it("names the combobox 'Time zone', not the current value", () => {
     render(<TimezoneForm orgId="o1" currentTimezone="Europe/Belgrade" />);
     expect(
-      screen.getByRole("combobox", { name: /belgrade/i }),
-    ).toBeInTheDocument();
+      screen.getByRole("combobox", { name: "Time zone" }),
+    ).toHaveAccessibleDescription(/belgrade/i);
   });
+
+  it("ties a save error to the Save button via aria-describedby, announced as an alert", async () => {
+    vi.mocked(updateOrgTimezone).mockResolvedValueOnce({
+      ok: false,
+      error: "Could not save the organization timezone.",
+    });
+    render(<TimezoneForm orgId="o1" currentTimezone="UTC" />);
+    await userEvent.click(screen.getByRole("combobox", { name: "Time zone" }));
+    await userEvent.type(
+      screen.getByPlaceholderText(/search timezone/i),
+      "New York",
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: /new york/i }),
+    );
+    const save = screen.getByRole("button", { name: /save/i });
+    await userEvent.click(save);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/could not save the organization/i);
+    expect(save).toHaveAttribute("aria-describedby", alert.id);
+  }, 30_000);
+
+  it("does not steal focus from elsewhere once a save resolves", async () => {
+    let release: (v: { ok: true; data: undefined }) => void = () => {};
+    vi.mocked(updateOrgTimezone).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    render(
+      <>
+        <TimezoneForm orgId="o1" currentTimezone="UTC" />
+        <input aria-label="Elsewhere on the page" />
+      </>,
+    );
+    await userEvent.click(screen.getByRole("combobox", { name: "Time zone" }));
+    await userEvent.type(
+      screen.getByPlaceholderText(/search timezone/i),
+      "New York",
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: /new york/i }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    const elsewhere = screen.getByLabelText("Elsewhere on the page");
+    await userEvent.click(elsewhere);
+    expect(elsewhere).toHaveFocus();
+
+    release({ ok: true, data: undefined });
+    await screen.findByRole("status");
+    expect(elsewhere).toHaveFocus();
+  }, 30_000);
 
   // Explicit budget: opening the combobox and typing re-filters the full IANA
   // timezone list on every keystroke, so this test costs seconds of real work
