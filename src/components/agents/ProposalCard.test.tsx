@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PendingProposal } from "@/lib/agents/proposal-display";
 import { WRITE_FAILED } from "@/lib/agents/proposal-display";
@@ -96,7 +96,9 @@ describe("ProposalCard", () => {
         screen.queryByRole("button", { name: /approve/i }),
       ).not.toBeInTheDocument();
     });
-    expect(screen.getByText(/approved/i)).toBeInTheDocument();
+    // Exact, not /approved/i: the card also carries an sr-only live region
+    // that says "Agent action approved." — this assertion is about the PILL.
+    expect(screen.getByText("Approved")).toBeInTheDocument();
     expect(onDecided).toHaveBeenCalledWith("p-1", "approved");
   });
 
@@ -187,5 +189,132 @@ describe("ProposalCard", () => {
     // write with a fresh call id produces two rows for one intent.
     render(<ProposalCard proposal={proposal()} />);
     expect(screen.getByText(/create_item/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The success path used to be silent. `setStatus(res.data.status)` swaps the
+ * eyebrow, renders the terminal pill and UNMOUNTS the button row — a purely
+ * visual transition. A screen-reader user who pressed Approve heard "Working…"
+ * and then nothing at all: the control they were on vanished, focus fell to
+ * `<body>`, and no live region said what happened. (The failure path already
+ * had `role="alert"`.)
+ */
+describe("ProposalCard outcome announcement", () => {
+  it("stays silent on mount so an already-decided card announces nothing", () => {
+    render(<ProposalCard proposal={proposal({ status: "approved" })} />);
+    expect(screen.getByRole("status")).toHaveTextContent("");
+  });
+
+  it("announces an approval politely once the decision lands", async () => {
+    decideProposal.mockResolvedValue({
+      ok: true,
+      data: { status: "approved" },
+    });
+    render(<ProposalCard proposal={proposal()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Agent action approved.",
+      ),
+    );
+    // Polite, not assertive: the outcome is confirmation, not an interruption.
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("announces a decline politely once the decision lands", async () => {
+    decideProposal.mockResolvedValue({
+      ok: true,
+      data: { status: "rejected" },
+    });
+    render(<ProposalCard proposal={proposal()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /decline/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Agent action declined.",
+      ),
+    );
+  });
+
+  it("leaves the failure path to its existing alert and announces nothing new", async () => {
+    decideProposal.mockResolvedValue({ ok: false, error: WRITE_FAILED });
+    render(<ProposalCard proposal={proposal()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByRole("status")).toHaveTextContent("");
+  });
+});
+
+/**
+ * `disabled={pending}` on the button the user just pressed removes the focused
+ * element from the tab order, and the browser has nowhere to send focus — it
+ * lands on `<body>`. On the two RETRYABLE failures the buttons come back, so
+ * the user is looking at a control they can no longer reach without tabbing
+ * from the top of the page. jsdom does not reproduce the auto-blur (see
+ * `use-restore-focus-after-pending.test.ts`), so these put focus on `<body>`
+ * explicitly and hold the decision promise open to keep the card pending.
+ */
+describe("ProposalCard focus after a retryable failure", () => {
+  /**
+   * jsdom neither auto-blurs a newly-disabled element nor honours `.blur()`
+   * ON one (blur is a no-op for an unfocusable node), so the browser's end
+   * state — focus sitting on `<body>` — has to be set directly.
+   */
+  function dropFocusToBody() {
+    document.body.setAttribute("tabindex", "-1");
+    document.body.focus();
+    document.body.removeAttribute("tabindex");
+  }
+
+  function deferredDecision() {
+    let settle!: (v: unknown) => void;
+    decideProposal.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    );
+    return {
+      fail: async () => {
+        await act(async () => {
+          settle({ ok: false, error: WRITE_FAILED });
+        });
+      },
+    };
+  }
+
+  it("returns focus to Approve after a failed approval", async () => {
+    const decision = deferredDecision();
+    render(<ProposalCard proposal={proposal()} />);
+    const approve = screen.getByRole("button", { name: /approve/i });
+
+    await userEvent.click(approve);
+    dropFocusToBody();
+    expect(document.body).toHaveFocus();
+
+    await decision.fail();
+    await waitFor(() => expect(approve).toHaveFocus());
+  });
+
+  // Focus must NOT jump to Approve after a failed DECLINE — a blind Enter on
+  // the restored control would then approve the very call the user refused.
+  it("returns focus to Decline after a failed decline", async () => {
+    const decision = deferredDecision();
+    render(<ProposalCard proposal={proposal()} />);
+    const decline = screen.getByRole("button", { name: /decline/i });
+
+    await userEvent.click(decline);
+    dropFocusToBody();
+    expect(document.body).toHaveFocus();
+
+    await decision.fail();
+    await waitFor(() => expect(decline).toHaveFocus());
+    expect(screen.getByRole("button", { name: /approve/i })).not.toHaveFocus();
   });
 });
