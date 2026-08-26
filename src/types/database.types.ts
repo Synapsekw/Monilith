@@ -3291,6 +3291,7 @@ export type Database = {
           cadence: string;
           capabilities: string[];
           created_at: string;
+          doc_nonce: string;
           enabled: boolean;
           id: string;
           instructions: string;
@@ -3311,6 +3312,7 @@ export type Database = {
           cadence?: string;
           capabilities?: string[];
           created_at?: string;
+          doc_nonce?: string;
           enabled?: boolean;
           id?: string;
           instructions: string;
@@ -3331,6 +3333,7 @@ export type Database = {
           cadence?: string;
           capabilities?: string[];
           created_at?: string;
+          doc_nonce?: string;
           enabled?: boolean;
           id?: string;
           instructions?: string;

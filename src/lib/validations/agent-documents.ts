@@ -47,16 +47,44 @@ type _SourceFormatsAreExhaustive = AssertTrue<
  * rejecting it was a false positive against the feature's own target content.
  *
  * WHY REJECT AT SAVE TIME rather than nonce the delimiter per run: a random
- * nonce in the delimiter would work, but it changes the system-prompt prefix
- * on every run for every agent that has documents, which destroys Anthropic
+ * nonce PER RUN would work, but it changes the system-prompt prefix on every
+ * run for every agent that has documents, which destroys Anthropic
  * prompt-cache reuse for exactly the agents whose prompts are longest and most
  * expensive to re-read. Rejecting the sentinel at the one boundary through
  * which text can enter the library costs nothing at run time, keeps the
  * no-documents prompt byte-identical (the cache guarantee for every existing
  * agent), and gives the owner an immediate, fixable error instead of a silent
- * downgrade. The trade-off is that it is a boundary check, not a rendering
- * escape: it binds only text saved through this schema — which is the only way
- * `agent_documents` rows are ever written by an authenticated caller.
+ * downgrade.
+ *
+ * KEPT, NOT MADE REDUNDANT, BY THE PER-AGENT NONCE: `document-inject.ts` now
+ * also keys the real instructions marker with a STABLE per-agent secret
+ * (`user_agents.doc_nonce`, threaded in from run-loop.ts) whenever a document
+ * block is present — a stable nonce doesn't cost the cache the way a per-run
+ * one would, which is why it was possible to add after this guard was
+ * already shipped. That nonce makes exact byte-for-byte reconstruction of the
+ * real marker require guessing a secret the document author cannot see, which
+ * is a strictly stronger property than "doesn't contain a known constant".
+ * But it does not replace this guard, for two reasons this schema is the one
+ * place both can be weighed against each other:
+ *   1. This check is a WRITE-BOUNDARY guarantee — it holds regardless of
+ *      which code path reads `agent_documents` back out. The nonce is a
+ *      RENDER-TIME guarantee — it only helps in prompts actually assembled by
+ *      `composeSystemPrompt`. If a future write path ever inserts into
+ *      `agent_documents` without going through this schema (there is
+ *      currently only one, but nothing enforces that staying true — see the
+ *      trade-off note below), the nonce is the only defense left standing,
+ *      and having BOTH means neither addition is a single point of failure.
+ *   2. The nonce defeats EXACT reconstruction of the real marker; it does not
+ *      by itself stop a model from being semantically confused by a bare
+ *      "YOUR OWNER'S INSTRUCTIONS:" line sitting in reference material — an
+ *      LLM interprets meaning, not just literal string equality. Rejecting
+ *      the literal outright removes that ambiguity at the one point it is
+ *      cheap to remove it (an immediate save-time error), rather than relying
+ *      on the model to notice the marker it is looking at lacks the nonce.
+ * The trade-off is that this remains a boundary check, not a rendering
+ * escape: it binds only text saved through this schema — which is, today,
+ * the only way `agent_documents` rows are ever written by an authenticated
+ * caller.
  */
 const SENTINEL_MESSAGE =
   "A document can't contain the prompt's own section marker " +

@@ -17,25 +17,16 @@
 /**
  * The two literal strings that give this prompt its structure.
  *
- * They are exported, and the framing/compose functions below are built FROM
- * them, because they are also a security boundary: a document body containing
- * `YOUR OWNER'S INSTRUCTIONS:` would otherwise close the reference block and
- * read to the model as owner-authored instruction — the exact "document pasted
- * from an untrusted source" the design names as its threat model.
- *
  * `documentInputSchema` (src/lib/validations/agent-documents.ts) REJECTS a
- * title or body containing `INSTRUCTIONS_SENTINEL` at save time — that's the
- * enforcing half, and this is the single definition it shares with the
- * composer below, so the check can never drift from the delimiter it is
- * checking for. `DOCUMENT_BLOCK_SENTINEL` is NOT rejected: it opens the
- * reference block rather than closing it, so a forged occurrence has nothing
- * after it to unlock, and it doubles as the standard "REFERENCE DOCUMENTS"
- * SOP/ISO-style heading this feature exists to ingest. It stays exported
- * (and in `PROMPT_SENTINELS`) because it's still the literal the prompt is
- * composed from, just not a save-time rejection target.
- *
- * Rejection at save time, rather than a per-run nonce in the delimiter, is
- * deliberate — see the decision recorded in that schema.
+ * title or body containing `INSTRUCTIONS_SENTINEL` at save time — a
+ * save-time boundary check kept as defense-in-depth alongside the per-agent
+ * nonce below (see that schema's doc comment for why both layers earn their
+ * keep). `DOCUMENT_BLOCK_SENTINEL` is NOT rejected: it opens the reference
+ * block rather than closing it, so a forged occurrence has nothing after it
+ * to unlock, and it doubles as the standard "REFERENCE DOCUMENTS" SOP/ISO-style
+ * heading this feature exists to ingest. It stays exported (and in
+ * `PROMPT_SENTINELS`) because it's still the literal the prompt is composed
+ * from, just not a save-time rejection target.
  */
 export const INSTRUCTIONS_SENTINEL = "YOUR OWNER'S INSTRUCTIONS:";
 export const DOCUMENT_BLOCK_SENTINEL = "REFERENCE DOCUMENTS";
@@ -43,6 +34,15 @@ export const PROMPT_SENTINELS = [
   INSTRUCTIONS_SENTINEL,
   DOCUMENT_BLOCK_SENTINEL,
 ] as const;
+
+/**
+ * The label `INSTRUCTIONS_SENTINEL` is built from, without its trailing colon
+ * — kept separate only so the KEYED marker below can splice the agent's nonce
+ * in before the colon (`…INSTRUCTIONS [nonce]:`) rather than after it
+ * (`…INSTRUCTIONS: [nonce]`, which reads as if the bracket were part of the
+ * instructions that follow on the next line).
+ */
+const INSTRUCTIONS_LABEL = "YOUR OWNER'S INSTRUCTIONS";
 
 const FRAMING = [
   DOCUMENT_BLOCK_SENTINEL,
@@ -59,11 +59,45 @@ export function buildDocumentBlock(
   return `${FRAMING}\n\n${parts.join("\n\n")}`;
 }
 
+/**
+ * The marker that actually closes the reference block and opens the real
+ * instructions — KEYED by the agent's own `doc_nonce` (`user_agents.doc_nonce`,
+ * threaded in from run-loop.ts) whenever there IS a document block for a
+ * forged sentinel to hide inside.
+ *
+ * Only keyed when `hasDocumentBlock` is true: a forged occurrence of
+ * `INSTRUCTIONS_SENTINEL` can only do anything when it has document text
+ * upstream of it to pose as the close of — an agent with no documents
+ * attached gets the plain, un-keyed literal, which keeps the system prompt
+ * BYTE-IDENTICAL to the pre-nonce prompt for every agent that has never
+ * attached a document (still the overwhelming majority). That is the same
+ * "byte-identical when there's nothing to protect" shape the sibling
+ * save-time guard already uses (see agent-documents.ts).
+ *
+ * The nonce must be STABLE per agent, not per run: `run-loop.ts` sets an
+ * Anthropic cache breakpoint on this exact system message, re-sent on every
+ * one of up to twelve steps, and re-hit on every subsequent run — a fresh
+ * nonce each run would defeat forgery too, but it would change this prefix
+ * on EVERY run for EVERY agent with documents, destroying that cache for
+ * exactly the agents whose prompts are longest and most expensive to
+ * re-read. `user_agents.doc_nonce` (20260826070115_agent_doc_nonce.sql) is
+ * generated ONCE at row creation and never touched again, so the marker is
+ * identical across runs for the SAME agent and different across agents.
+ */
+function instructionsMarker(nonce: string, hasDocumentBlock: boolean): string {
+  if (!hasDocumentBlock) return INSTRUCTIONS_SENTINEL;
+  return `${INSTRUCTIONS_LABEL} [${nonce}]:`;
+}
+
 export function composeSystemPrompt(args: {
   preamble: string;
   documentBlock: string;
   instructions: string;
+  /** The calling agent's stable `doc_nonce`. Only load-bearing when
+   *  `documentBlock` is non-empty — see `instructionsMarker` above. */
+  nonce: string;
 }): string {
   const middle = args.documentBlock ? `\n\n${args.documentBlock}` : "";
-  return `${args.preamble}${middle}\n\n${INSTRUCTIONS_SENTINEL}\n${args.instructions}`;
+  const marker = instructionsMarker(args.nonce, args.documentBlock !== "");
+  return `${args.preamble}${middle}\n\n${marker}\n${args.instructions}`;
 }

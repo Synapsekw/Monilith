@@ -429,6 +429,10 @@ const enabledAgent = () => ({
   // every backfilled agent — the pinned case is exercised explicitly below.
   provider: null,
   model_id: null,
+  // Stable per-agent secret (20260826070115_agent_doc_nonce.sql), threaded
+  // into the instructions delimiter whenever documents are attached — see
+  // the "reference documents" describe block below.
+  doc_nonce: "fixture-agent-nonce",
 });
 
 beforeEach(() => {
@@ -1217,6 +1221,41 @@ describe("POST /api/ai/personal-agent", () => {
       );
       // Owner instructions still come last, even with a document attached.
       expect(sink.system!.trimEnd().endsWith("Be concise.")).toBe(true);
+      // The agent's own doc_nonce (agents-db.ts) is what actually keys the
+      // instructions marker end-to-end through the route — this is the wire
+      // that would silently rot back to the plain literal if route.ts ever
+      // stopped reading `agent.doc_nonce` and passing it through.
+      expect(sink.system).toContain(
+        `YOUR OWNER'S INSTRUCTIONS [${enabledAgent().doc_nonce}]:`,
+      );
+    });
+
+    it("keys a different agent's marker with THAT agent's own doc_nonce", async () => {
+      getUserAgentById.mockResolvedValue({
+        ...enabledAgent(),
+        doc_nonce: "a-completely-different-agent-nonce",
+      });
+      docRows = [
+        {
+          agent_documents: {
+            id: "doc-1",
+            title: "Standup format",
+            body: "Yesterday / Today / Blockers, one line each.",
+            token_estimate: 20,
+          },
+        },
+      ];
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      await POST(post(slot));
+
+      expect(sink.system).toContain(
+        "YOUR OWNER'S INSTRUCTIONS [a-completely-different-agent-nonce]:",
+      );
+      expect(sink.system).not.toContain(
+        `YOUR OWNER'S INSTRUCTIONS [${enabledAgent().doc_nonce}]:`,
+      );
     });
 
     it("drops an attached document set that does not fit the budget, and records documents_omitted: true — the run still succeeds", async () => {

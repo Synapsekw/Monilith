@@ -87,6 +87,7 @@ const agent: UserAgentRow = {
   bridge_secret_id: null,
   provider: null,
   model_id: null,
+  doc_nonce: "fixture-agent-nonce",
 };
 
 const FIRE_DATE = "2026-08-01";
