@@ -346,3 +346,62 @@ describe("readSweepCredential", () => {
     );
   });
 });
+
+/**
+ * THE ORG-KEY EXCLUSION, PINNED.
+ *
+ * `readSweepCredential` borrows a PERSONAL key and nothing else. Org BYO keys
+ * live in `org_ai_settings.byo_secret_id` and are read only by
+ * `resolveAiAdapter`, on a request that belongs to that org — never here. The
+ * decision and its reasoning are on the function's own contract comment; this
+ * suite is what makes it break loudly if someone quietly "fixes" the gap by
+ * adding a fallback.
+ *
+ * Two things are asserted, because either alone is weak: that no table other
+ * than `user_ai_credentials` is touched, and that `org_ai_secret_get` is never
+ * called. An org fallback cannot be written without tripping one of them.
+ */
+function exclusionClient() {
+  const tables: string[] = [];
+  const rpcs: string[] = [];
+  const client = {
+    from(table: string) {
+      tables.push(table);
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        order: () => builder,
+        limit: async () => ({ data: [], error: null }),
+        maybeSingle: async () => ({ data: null, error: null }),
+      };
+      return builder;
+    },
+    rpc: async (fn: string) => {
+      rpcs.push(fn);
+      return { data: [], error: null };
+    },
+  };
+  return { client: client as never, tables, rpcs };
+}
+
+describe("readSweepCredential · org BYO keys are out of scope", () => {
+  it("returns null for a provider only an ORG holds a key for — it never falls back to the org secret", async () => {
+    const { client, tables, rpcs } = exclusionClient();
+    await expect(readSweepCredential(client, "mistral")).resolves.toBeNull();
+    // No org_ai_settings read, no org_ai_secret_get decrypt: the org's key is
+    // not merely unpreferred here, it is unreachable from this function.
+    expect(tables).toEqual(["user_ai_credentials"]);
+    expect(rpcs).toEqual([]);
+  });
+
+  it("never reaches for an org secret even when a personal key IS found", async () => {
+    const { client, rpcCalls } = sweepClient([
+      { user_id: "u1", updated_at: "2026-08-01T00:00:00Z" },
+    ]);
+    await expect(readSweepCredential(client, "mistral")).resolves.toBe(
+      "key-u1",
+    );
+    // Exactly one decrypt, and it is the per-USER one.
+    expect(rpcCalls).toEqual([{ p_user: "u1", p_provider: "mistral" }]);
+  });
+});
