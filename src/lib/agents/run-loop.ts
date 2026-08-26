@@ -200,6 +200,18 @@ function addUsage(a: AiUsageTokens, b: AiUsageTokens): AiUsageTokens {
 export async function runAgentLoop(args: {
   model: LanguageModel;
   instructions: string;
+  /**
+   * The calling agent's stable `doc_nonce` (`user_agents.doc_nonce`,
+   * read via `agents-db.ts`). Required — not defaulted here — because a
+   * silent fallback is exactly the failure mode this exists to avoid: this
+   * is the value `document-inject.ts` keys the instructions delimiter with
+   * whenever `documents` is non-empty, and it MUST be the real per-agent
+   * secret, not a shared placeholder, or every agent's delimiter forges
+   * identically again. It is a no-op string when `documents` is empty (see
+   * `instructionsMarker` in document-inject.ts), so tests that never attach
+   * documents may pass any fixed value.
+   */
+  nonce: string;
   tools: ToolSet;
   gate: GrantGate;
   maxOutputTokens: number | null;
@@ -266,6 +278,14 @@ export async function runAgentLoop(args: {
     // all; other providers cache automatically and ignore a namespace they do
     // not own. Mirrors `providers/anthropic.ts`, deliberately — the two are the
     // only places in the app that set a breakpoint, and they must not drift.
+    //
+    // `args.nonce` (the agent's stable `doc_nonce`) is passed straight through
+    // rather than generated here PER RUN on purpose: a fresh nonce every run
+    // would defeat document-delimiter forgery just as well, but it would also
+    // change THIS message's content on every single run — which is exactly
+    // the cache breakpoint above existing to avoid re-paying for. Same agent
+    // in, same nonce in, same bytes out, every run — see `instructionsMarker`
+    // in document-inject.ts for the full reasoning.
     allowSystemInMessages: true,
     messages: [
       {
@@ -274,6 +294,7 @@ export async function runAgentLoop(args: {
           preamble: PREAMBLE,
           documentBlock: buildDocumentBlock(args.documents ?? []),
           instructions: args.instructions,
+          nonce: args.nonce,
         }),
         providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
       },

@@ -442,6 +442,11 @@ export async function POST(req: Request): Promise<Response> {
               model: model.requestModel,
             }),
             instructions: agent.instructions,
+            // This agent's own stable secret — keys the instructions
+            // delimiter (document-inject.ts) whenever `documents` is
+            // non-empty, so a document body forging the literal
+            // `INSTRUCTIONS_SENTINEL` can't reproduce the real marker.
+            nonce: agent.doc_nonce,
             documents: included,
             documentsOmitted: omitted,
             tools,

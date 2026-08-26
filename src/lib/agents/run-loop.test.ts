@@ -103,6 +103,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: twoStepModel(),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({
         granted: [],
@@ -127,6 +128,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: twoStepModel(),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({
         granted: ["board.write"],
@@ -162,6 +164,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: endless,
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -191,6 +194,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: silent,
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -213,6 +217,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: blank,
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -225,6 +230,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: textModel("  Done.  "),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -263,6 +269,7 @@ describe("runAgentLoop", () => {
       runAgentLoop({
         model: throwsAtStepThree,
         instructions: "go",
+        nonce: "n-test-agent",
         tools,
         gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
         maxOutputTokens: null,
@@ -295,6 +302,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: twoStepModel(),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({
         granted: ["board.write"],
@@ -328,6 +336,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: twoStepModel(),
       instructions: "go",
+      nonce: "n-test-agent",
       tools: failing,
       gate: makeGrantGate({
         granted: ["board.write"],
@@ -346,6 +355,7 @@ describe("runAgentLoop", () => {
     const r = await runAgentLoop({
       model: twoStepModel(),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({
         granted: [],
@@ -491,6 +501,7 @@ describe("buildAgentRuntime", () => {
     const r = await runAgentLoop({
       model: twoStepModel(),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate,
       maxOutputTokens: null,
@@ -524,6 +535,7 @@ describe("buildAgentRuntime", () => {
     const r = await runAgentLoop({
       model,
       instructions: "go",
+      nonce: "n-test-agent",
       tools: assembled,
       gate,
       maxOutputTokens: null,
@@ -573,6 +585,7 @@ describe("prompt caching", () => {
     const r = await runAgentLoop({
       model: anthropicOverFakeFetch(bodies),
       instructions: "Be concise.",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -614,6 +627,7 @@ describe("prompt caching", () => {
     const r = await runAgentLoop({
       model,
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -658,6 +672,7 @@ describe("reference documents in the system prompt", () => {
     await runAgentLoop({
       model: capturingModel(sink),
       instructions: "Do the thing.",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -674,6 +689,7 @@ describe("reference documents in the system prompt", () => {
     await runAgentLoop({
       model: capturingModel(sink),
       instructions: "Do the thing.",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -690,6 +706,7 @@ describe("reference documents in the system prompt", () => {
     await runAgentLoop({
       model: capturingModel(sink),
       instructions: "Do the thing.",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -727,6 +744,7 @@ describe("reference documents in the system prompt", () => {
     const r1 = await runAgentLoop({
       model: textModel("Done."),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,
@@ -737,6 +755,7 @@ describe("reference documents in the system prompt", () => {
     const r2 = await runAgentLoop({
       model: capturingModel(sink),
       instructions: "go",
+      nonce: "n-test-agent",
       tools,
       gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
       maxOutputTokens: null,

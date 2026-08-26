@@ -46,12 +46,22 @@ export type UserAgentRow = {
    */
   provider: string | null;
   model_id: string | null;
+  /**
+   * Stable per-agent secret (20260826070115_agent_doc_nonce.sql), generated
+   * once by the column default and never client-writable — `authenticated`'s
+   * column-scoped INSERT/UPDATE grants on this table never name it, mirroring
+   * `bridge_secret_id`. Threaded into `document-inject.ts`'s instructions
+   * delimiter (via `run-loop.ts`) whenever this agent has documents attached,
+   * so a document body forging the literal `INSTRUCTIONS_SENTINEL` cannot
+   * reproduce the real, nonce-keyed marker without also knowing this value.
+   */
+  doc_nonce: string;
 };
 
 type Client = SupabaseClient<Database>;
 
 const AGENT_COLS =
-  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month";
+  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month, doc_nonce";
 
 export async function getUserAgentById(
   client: Client,
