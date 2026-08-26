@@ -24,6 +24,8 @@ import {
   DoneMappingFields,
   defaultDoneOptionIds,
 } from "@/components/goals/DoneMappingFields";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 const SELECT_CLASS =
   "border-input bg-transparent focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border px-2.5 text-sm transition-colors outline-none focus-visible:ring-3 disabled:opacity-50 dark:bg-input/30";
@@ -44,6 +46,12 @@ export function AddBoardDialog({
   const [doneOptionIds, setDoneOptionIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Both error paths — loading a board's columns and adding the board — are
+  // about the board the user picked, so the select owns the message.
+  const boardStatus = useFieldStatus(error);
+  // The dialog only stays mounted when the add fails; that is the case where
+  // the submit button has to take back the focus its `disabled` dropped.
+  const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function reset() {
     setBoardId("");
@@ -138,6 +146,7 @@ export function AddBoardDialog({
               className={SELECT_CLASS}
               value={boardId}
               onChange={(e) => void onBoardChange(e.target.value)}
+              {...boardStatus.controlProps}
             >
               <option value="" disabled>
                 Select a board…
@@ -172,14 +181,14 @@ export function AddBoardDialog({
             />
           ) : null}
 
-          {error ? (
-            <p role="alert" className="text-destructive text-xs">
-              {error}
-            </p>
-          ) : null}
+          <FieldStatus field={boardStatus} />
 
           <DialogFooter>
-            <Button type="submit" disabled={isPending || !boardId}>
+            <Button
+              ref={submitRef}
+              type="submit"
+              disabled={isPending || !boardId}
+            >
               {isPending ? "Adding…" : "Add board"}
             </Button>
           </DialogFooter>

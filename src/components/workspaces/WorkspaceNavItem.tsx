@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { renameWorkspace, deleteWorkspace } from "@/lib/workspaces/actions";
 
 export function WorkspaceNavItem({
@@ -35,6 +37,13 @@ export function WorkspaceNavItem({
   const [confirmName, setConfirmName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // The message renders inside the delete dialog, where the confirm-name input
+  // is the field the user is being asked to act on — so it owns the error.
+  const confirmStatus = useFieldStatus(error);
+  // A failed delete leaves the dialog open with the button re-enabled; that is
+  // the case this reclaims focus for. (Success unmounts it, and the hook then
+  // never runs.)
+  const deleteRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   function commitRename() {
     const trimmed = name.trim();
@@ -142,12 +151,9 @@ export function WorkspaceNavItem({
             onChange={(e) => setConfirmName(e.target.value)}
             placeholder={workspace.name}
             aria-label="Type the workspace name to confirm deletion"
+            {...confirmStatus.controlProps}
           />
-          {error ? (
-            <p role="alert" className="text-destructive text-xs">
-              {error}
-            </p>
-          ) : null}
+          <FieldStatus field={confirmStatus} />
           <DialogFooter>
             <Button
               variant="ghost"
@@ -157,6 +163,7 @@ export function WorkspaceNavItem({
               Cancel
             </Button>
             <Button
+              ref={deleteRef}
               variant="destructive"
               disabled={pending || confirmName !== workspace.name}
               onClick={confirmDelete}
