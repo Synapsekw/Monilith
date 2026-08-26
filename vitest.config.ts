@@ -27,6 +27,15 @@ export default defineConfig({
   plugins: [stripShebang, react()],
   test: {
     environment: "jsdom",
+    // vitest's default fork-pool size (cpus - 1) oversubscribes a normal dev
+    // machine: each jsdom worker is memory-hungry, and competing against the
+    // rest of a real desktop's running apps pushes the box into swap, which
+    // then makes worker *spawn* itself time out -- "[vitest-pool]: Timeout
+    // starting forks runner" / "Timeout waiting for worker to respond" --
+    // not a real test failure. A modest cap is faster in practice (no
+    // thrashing) and reliable on both a laptop and a memory-constrained CI
+    // runner, which is exactly the profile the default heuristic gets wrong.
+    maxWorkers: 4,
     setupFiles: ["./vitest.setup.ts"],
     // Runs once after the whole run: purges leaked @example.com cloud test
     // data provisioned by *.integration.test.ts suites. See
