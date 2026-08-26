@@ -14,6 +14,8 @@ import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +55,12 @@ export function BoardItemMenu({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [name, setName] = useState(board.name);
   const [error, setError] = useState<string | null>(null);
+  // A rename failure is the name field's problem — it must be that Input's
+  // accessible description, not loose red text under it.
+  const renameStatus = useFieldStatus(error);
+  // Save disables itself for the transition and the dialog only closes on
+  // SUCCESS, so a failed rename leaves the keyboard user on <body>.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function submitRename() {
     const trimmed = name.trim();
@@ -178,15 +186,16 @@ export function BoardItemMenu({
                 value={name}
                 disabled={isPending}
                 onChange={(e) => setName(e.target.value)}
+                {...renameStatus.controlProps}
               />
             </div>
-            {error ? (
-              <p role="alert" className="text-destructive text-xs">
-                {error}
-              </p>
-            ) : null}
+            <FieldStatus field={renameStatus} />
             <DialogFooter>
-              <Button type="submit" disabled={isPending || !name.trim()}>
+              <Button
+                ref={saveRef}
+                type="submit"
+                disabled={isPending || !name.trim()}
+              >
                 {isPending ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>

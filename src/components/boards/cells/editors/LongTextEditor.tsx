@@ -23,6 +23,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { useFieldStatus } from "@/components/ui/field-status";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -141,6 +142,14 @@ export function LongTextEditor({
 
   const overBy = text.length - CHAR_CAP;
   const isOverCap = overBy > 0;
+  // The over-cap line is the reason Save is refusing, so it has to be the
+  // textarea's accessible description — `aria-invalid` on its own says
+  // "wrong" without saying by how much.
+  const capStatus = useFieldStatus(
+    isOverCap
+      ? `${overBy.toLocaleString()} characters over the ${CHAR_CAP.toLocaleString()} limit — shorten to save.`
+      : null,
+  );
 
   // A no-op save is still a save per the contract, but writing back an
   // identical value is pointless — fall back to onCancel when nothing
@@ -340,7 +349,7 @@ export function LongTextEditor({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                aria-invalid={isOverCap}
+                {...capStatus.controlProps}
                 className="max-h-[min(24rem,var(--radix-popover-content-available-height))] min-h-[12rem] resize-none overflow-y-auto"
               />
             </div>
@@ -385,13 +394,12 @@ export function LongTextEditor({
               </Tooltip>
             ))}
           </div>
-          {isOverCap ? (
+          {capStatus.message ? (
             <p
-              role="alert"
+              {...capStatus.messageProps}
               className="text-destructive min-w-0 flex-1 text-right text-xs leading-snug"
             >
-              {overBy.toLocaleString()} characters over the{" "}
-              {CHAR_CAP.toLocaleString()} limit — shorten to save.
+              {capStatus.message}
             </p>
           ) : (
             showCounter && (

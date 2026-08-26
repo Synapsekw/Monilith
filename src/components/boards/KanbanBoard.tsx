@@ -15,6 +15,8 @@ import { Plus, Calendar, Users, Hash, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ColorChip } from "@/components/ui/color-chip";
 import { Kicker } from "@/components/ui/kicker";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   selectCardColumns,
   isCardCellEmpty,
@@ -619,6 +621,10 @@ function AddCardInput({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const status = useFieldStatus(error);
+  // Same trap as the table's AddItemRow: the quick-add input disables itself
+  // while the add is in flight, dropping focus to <body> mid-burst.
+  const inputRef = useRestoreFocusAfterPending<HTMLInputElement>(isPending);
 
   function commit() {
     const trimmed = name.trim();
@@ -654,6 +660,7 @@ function AddCardInput({
       <div className="flex items-center gap-2 px-1">
         <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
         <input
+          ref={inputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
@@ -666,13 +673,10 @@ function AddCardInput({
           placeholder="Add item"
           aria-label={`Add item to ${columnLabel}`}
           className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50 pointer-coarse:min-h-11"
+          {...status.controlProps}
         />
       </div>
-      {error ? (
-        <p role="alert" className="text-destructive px-1 text-xs">
-          {error}
-        </p>
-      ) : null}
+      <FieldStatus field={status} className="px-1" />
     </div>
   );
 }
