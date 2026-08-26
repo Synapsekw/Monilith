@@ -48,6 +48,11 @@ export function BoardFolderRow({
     <div className="flex flex-col gap-0.5">
       <div
         ref={dropRef}
+        // Focus anchor for the plain→drag subtree swap. Folder rows render
+        // FIRST in the section, so the chevron is the first focusable thing a
+        // Tab reaches — without this the very first Tab into Boards lands on
+        // <body>. See `boards-nav-focus.ts`.
+        data-folder-row={folder.id}
         data-testid={dropRef ? `folder-drop-${folder.id}` : undefined}
         className={cn(
           "group/folder text-muted-foreground hover:bg-state-hover hover:text-foreground flex items-center rounded-md pr-1 transition-colors",

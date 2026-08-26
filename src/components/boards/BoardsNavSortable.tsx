@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GripVertical, Users2 } from "lucide-react";
-import { DndContext, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  MeasuringStrategy,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
@@ -15,7 +21,7 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 // Aliased: the global `CSS.escape` is needed below, and an unqualified `CSS`
 // import would shadow it.
 import { CSS as DndCSS } from "@dnd-kit/utilities";
-import type { BoardListEntry } from "@/lib/boards/queries";
+import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import type { BoardFolder } from "@/lib/boards/folders/types";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { reorderBoard } from "@/lib/boards/actions";
@@ -25,6 +31,12 @@ import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { cn } from "@/lib/utils";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
+import {
+  focusAnchorTarget,
+  type BoardsNavFocusAnchor,
+} from "@/components/boards/boards-nav-focus";
+import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
+import { SharedBoardsSection } from "@/components/boards/SharedBoardsSection";
 
 /**
  * One rendered folder in the nav, handed down from `BoardsNav`. The rows inside
@@ -38,11 +50,12 @@ export type FolderSection = {
 };
 
 /**
- * Which board row held focus when `BoardsNav` armed the drag layer, and whether
- * the user was on the board link or on the row's `⋯` button (Shift+Tab enters
- * the list from the end, landing on the button).
+ * The grip column, shared by the owned and shared row variants so the two
+ * unfiled lists present one continuous handle column. Hidden until the row is
+ * hovered or the handle is focused.
  */
-export type BoardRowFocusAnchor = { boardId: string; edge: "link" | "menu" };
+const GRIP_CLASS =
+  "text-muted-foreground focus-visible:ring-ring flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing";
 
 /** Droppable ids are namespaced so a folder can never collide with a board id. */
 const FOLDER_DROP_PREFIX = "folder:";
@@ -93,7 +106,7 @@ function SortableBoardRow({
       <button
         type="button"
         aria-label={`Reorder ${board.name}`}
-        className="text-muted-foreground focus-visible:ring-ring flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+        className={GRIP_CLASS}
         {...attributes}
         {...listeners}
       >
@@ -128,6 +141,50 @@ function SortableBoardRow({
 }
 
 /**
+ * A shared board that can be dragged into a folder. It uses `useDraggable`, not
+ * `useSortable`: a board someone else owns has no position in MY owned list, so
+ * it is a drag SOURCE only. Dropping one on another board is a no-op —
+ * `reorderPosition` returns null for an id that isn't in the ordered list.
+ *
+ * The handle says "Move …", not "Reorder …", because that is all it can do.
+ */
+function DraggableSharedRow({
+  board,
+  isActive,
+  folders,
+}: {
+  board: SharedBoardEntry;
+  isActive: boolean;
+  folders: BoardFolder[];
+}) {
+  const { setNodeRef, attributes, listeners, transform, isDragging } =
+    useDraggable({ id: board.id });
+
+  return (
+    <SharedBoardRow
+      board={board}
+      isActive={isActive}
+      folders={folders}
+      currentFolderId={null}
+      dragRef={setNodeRef}
+      isDragging={isDragging}
+      style={{ transform: DndCSS.Translate.toString(transform) }}
+      leading={
+        <button
+          type="button"
+          aria-label={`Move ${board.name} into a folder`}
+          className={GRIP_CLASS}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5" />
+        </button>
+      }
+    />
+  );
+}
+
+/**
  * A folder header wired up as a drop target. `useDroppable` lives here rather
  * than in `BoardFolderRow` so that component stays @dnd-kit-free and can render
  * in the plain (pre-drag) tree too.
@@ -150,24 +207,28 @@ function DroppableFolderRow({ section }: { section: FolderSection }) {
 }
 
 /**
- * The drag-enabled variant of the Boards nav body: folder rows (drop targets)
- * plus the unfiled owned list (vertically sortable). Holds the entire @dnd-kit
+ * The drag-enabled variant of the Boards nav body: folder rows (drop targets),
+ * the unfiled owned list (vertically sortable) and the unfiled shared list
+ * (drag sources). Holds the entire @dnd-kit
  * stack (~30-40KB gz), so it is a lazy `next/dynamic({ ssr: false })` chunk
  * mounted by `BoardsNav` on first interaction — keeping @dnd-kit out of the
  * shell bundle that loads on every authenticated route.
  *
- * One `DndContext` spans both regions, because a drag starts in the unfiled
- * list and can end on a folder header. `SortableContext` stays scoped to the
- * unfiled list: folders are drop targets, not reorderable items.
+ * One `DndContext` spans all three regions, because a drag starts in either
+ * unfiled list and can end on a folder header. `SortableContext` stays scoped
+ * to the unfiled OWNED list: folders are drop targets, not reorderable items,
+ * and shared boards have no position of mine to reorder.
  */
 export function BoardsNavSortable({
   boards,
+  sharedBoards = [],
   folderSections = [],
   activeBoardId,
   folders = [],
   restoreFocus = null,
 }: {
   boards: BoardListEntry[];
+  sharedBoards?: SharedBoardEntry[];
   folderSections?: FolderSection[];
   activeBoardId?: string;
   folders?: BoardFolder[];
@@ -177,7 +238,7 @@ export function BoardsNavSortable({
    * focus back on mount — otherwise a keyboard user's first Tab into the boards
    * list silently drops them on <body>.
    */
-  restoreFocus?: BoardRowFocusAnchor | null;
+  restoreFocus?: BoardsNavFocusAnchor | null;
 }) {
   const router = useRouter();
 
@@ -259,15 +320,9 @@ export function BoardsNavSortable({
     // Only step in when the swap actually DROPPED focus. If the user tabbed
     // onward while the lazy chunk loaded, focus is somewhere legitimate and
     // yanking it backwards would be worse than the bug this fixes.
-    if (document.activeElement !== document.body) return;
-    const row = containerRef.current?.querySelector<HTMLElement>(
-      `[data-board-row="${CSS.escape(restoreFocus.boardId)}"]`,
-    );
-    const target =
-      restoreFocus.edge === "menu"
-        ? row?.querySelector<HTMLElement>('button[aria-haspopup="menu"]')
-        : row?.querySelector<HTMLElement>("a[href]");
-    target?.focus();
+    if (document.activeElement && document.activeElement !== document.body)
+      return;
+    focusAnchorTarget(containerRef.current, restoreFocus)?.focus();
     // Runs on mount (the prop is already set by the time this list first
     // renders) and never again — a later identical value means the server
     // re-rendered, not that the list was swapped in under the user.
@@ -286,6 +341,13 @@ export function BoardsNavSortable({
         // narrow column, so a vertical-only drag still reaches every drop
         // target — and reorder keeps its tight, rail-aligned feel.
         modifiers={[restrictToVerticalAxis]}
+        // dnd-kit's default (MeasuringStrategy.WhileDragging) measures each
+        // droppable once at drag start and re-measures only when that droppable
+        // itself resizes. Hovering a collapsed folder expands its BODY — a
+        // SIBLING of the droppable header — which pushes every row below it
+        // down without invalidating a single cached rect, so collision
+        // detection would keep hit-testing stale positions. Measure always.
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragEnd={handleDragEnd}
       >
         {folderSections.map((section) => (
@@ -304,6 +366,18 @@ export function BoardsNavSortable({
             />
           ))}
         </SortableContext>
+        <SharedBoardsSection
+          boards={sharedBoards}
+          folders={folders}
+          activeBoardId={activeBoardId}
+          renderRow={(board) => (
+            <DraggableSharedRow
+              board={board}
+              isActive={board.id === activeBoardId}
+              folders={folders}
+            />
+          )}
+        />
       </DndContext>
     </div>
   );

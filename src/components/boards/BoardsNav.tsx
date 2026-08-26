@@ -24,12 +24,14 @@ import { groupBoardsByFolder } from "@/lib/boards/folders/group";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
 import { NewFolderDialog } from "@/components/boards/NewFolderDialog";
 import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
+import { SharedBoardsSection } from "@/components/boards/SharedBoardsSection";
 // Type-only: erased at compile time, so naming the lazy module here does NOT
 // pull @dnd-kit into the shell bundle.
-import type {
-  BoardRowFocusAnchor,
-  FolderSection,
-} from "@/components/boards/BoardsNavSortable";
+import type { FolderSection } from "@/components/boards/BoardsNavSortable";
+import {
+  focusAnchorFrom,
+  type BoardsNavFocusAnchor,
+} from "@/components/boards/boards-nav-focus";
 
 // Keep the @dnd-kit stack (~30-40KB gz) out of the shell bundle that mounts on
 // every authenticated route: the drag-to-reorder variant is a lazy client chunk
@@ -136,26 +138,14 @@ export function BoardsNav({
   // first Tab into the list appears to do nothing. Remember which row held
   // focus at arm time, and which end of it, so the drag-enabled tree can hand
   // focus back to the same place.
-  const [restoreFocus, setRestoreFocus] = useState<BoardRowFocusAnchor | null>(
+  const [restoreFocus, setRestoreFocus] = useState<BoardsNavFocusAnchor | null>(
     null,
   );
 
   function armDnd(focusTarget?: Element | null) {
-    if (focusTarget) {
-      // Read the row from the DOM rather than assuming an anchor: Shift+Tab
-      // enters the list from below and lands on a row's `⋯` button, which used
-      // to record nothing and so dropped focus anyway.
-      const row = focusTarget.closest<HTMLElement>("[data-board-row]");
-      const boardId = row?.dataset.boardRow;
-      setRestoreFocus(
-        boardId
-          ? {
-              boardId,
-              edge: focusTarget instanceof HTMLAnchorElement ? "link" : "menu",
-            }
-          : null,
-      );
-    }
+    // Board rows AND folder headers both carry an anchor — every focusable
+    // thing in this region belongs to one of them.
+    if (focusTarget) setRestoreFocus(focusAnchorFrom(focusTarget));
     // A transition lets React hold the current rows while the lazy chunk
     // resolves rather than flashing the dynamic import's empty fallback. It
     // does NOT save focus on its own — the swap still unmounts the focused
@@ -281,19 +271,24 @@ export function BoardsNav({
         </>
       }
     >
-      {grouped.unfiledOwned.length === 0 && folderSections.length === 0 ? (
+      {grouped.unfiledOwned.length === 0 &&
+      folderSections.length === 0 &&
+      grouped.unfiledShared.length === 0 ? (
         <p className="text-muted-foreground px-3 py-1 text-xs">No boards yet</p>
       ) : dndReady ? (
         <BoardsNavSortable
           boards={grouped.unfiledOwned}
+          sharedBoards={grouped.unfiledShared}
           folderSections={folderSections}
           activeBoardId={activeBoardId}
           folders={folders}
           restoreFocus={restoreFocus}
         />
       ) : (
+        // Everything that can be dragged, or dragged onto, lives in here — so
+        // this is also the region that arms the lazy drag layer.
         <div
-          data-testid="boards-nav-owned"
+          data-testid="boards-nav-body"
           className="flex flex-col gap-0.5"
           onPointerEnter={() => armDnd()}
           // React routes portal events up the COMPONENT tree, so focus landing
@@ -324,25 +319,13 @@ export function BoardsNav({
               currentFolderId={null}
             />
           ))}
+          <SharedBoardsSection
+            boards={grouped.unfiledShared}
+            folders={folders}
+            activeBoardId={activeBoardId}
+          />
         </div>
       )}
-
-      {grouped.unfiledShared.length > 0 ? (
-        <>
-          <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">
-            Shared with me
-          </p>
-          {grouped.unfiledShared.map((b) => (
-            <SharedBoardRow
-              key={b.id}
-              board={b}
-              isActive={b.id === activeBoardId}
-              folders={folders}
-              currentFolderId={null}
-            />
-          ))}
-        </>
-      ) : null}
     </NavSection>
   );
 }
