@@ -510,4 +510,18 @@ describe("AgentEditor · reference documents", () => {
       screen.getByText(/assuming a 32,000-token context/i),
     ).toBeInTheDocument();
   });
+
+  // `documentTotal` is the same value `AgentsSection` threads to
+  // `DocumentLibrary`'s `total` prop, from the SAME `listDocumentsForOwner`
+  // read — this proves the editor forwards it into `DocumentPicker` too,
+  // rather than discarding it at this layer the way it used to.
+  it("forwards documentTotal into the picker so a capped library says so", () => {
+    renderEditor({ documents: DOCS, documentTotal: 137 });
+    expect(screen.getByText(/showing 1 of 137 documents/i)).toBeInTheDocument();
+  });
+
+  it("shows no capped-library notice when documentTotal is not over the page", () => {
+    renderEditor({ documents: DOCS, documentTotal: DOCS.length });
+    expect(screen.queryByText(/showing \d+ of/i)).not.toBeInTheDocument();
+  });
 });

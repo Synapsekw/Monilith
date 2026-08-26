@@ -35,12 +35,21 @@ import type { AgentDocumentRow } from "@/lib/agents/documents-db";
  */
 export function DocumentPicker({
   documents,
+  total = documents.length,
   selectedIds,
   onChange,
   contextLength,
   instructions,
 }: {
   documents: AgentDocumentRow[];
+  /** How many documents the owner ACTUALLY has — mirrors `DocumentLibrary`'s
+   *  `total` prop. `documents` is the SAME capped page (`LIBRARY_PAGE_SIZE`)
+   *  the library reads, so once the library outgrows a page these two
+   *  diverge: without this, a document past the cap is invisible here with
+   *  no indication it exists, and there is no way to attach it. Defaults to
+   *  `documents.length` (i.e. "no cap in effect") so callers that genuinely
+   *  have no total to report — tests, mainly — don't have to invent one. */
+  total?: number;
   selectedIds: string[];
   onChange: (next: string[]) => void;
   /** From the currently-selected `ModelOption.contextLength` (null while
@@ -86,6 +95,20 @@ export function DocumentPicker({
         <p className="text-muted-foreground text-xs">
           Assuming a {NULL_CONTEXT_FALLBACK.toLocaleString()}-token context —
           this model doesn&apos;t report one.
+        </p>
+      ) : null}
+
+      {/* Same "Showing N of TOTAL" wording as `DocumentLibrary` — only shown
+          once the library actually exceeds a page, so the common case (a
+          library that fits on one page) stays silent instead of always
+          restating a count nobody asked for. Without this, a document past
+          the 100th sits in the library with zero way to attach it here, and
+          nothing on screen says why. */}
+      {usable && total > documents.length ? (
+        <p className="text-muted-foreground text-xs">
+          Showing {documents.length.toLocaleString()} of{" "}
+          {total.toLocaleString()} documents — the rest can&apos;t be attached
+          from here yet.
         </p>
       ) : null}
 

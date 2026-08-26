@@ -271,6 +271,7 @@ export function AgentsSection({
         providers={providers}
         capabilityCeiling={capabilityCeiling}
         documents={documents}
+        documentTotal={documentTotal}
         initialDocumentIds={
           editorContext.mode === "edit"
             ? editorContext.initialDocumentIds
