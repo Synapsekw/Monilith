@@ -31,6 +31,7 @@ const FEATURE_TIERS = Object.freeze(
     automation_gen: "standard",
     import_mapping: "standard",
     report_narrative: "standard",
+    digest_narrative: "standard",
     thread_summary: "standard",
     personal_agent_run: "standard",
     // Short classification / rewrite — high volume, low difficulty.

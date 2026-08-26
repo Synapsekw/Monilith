@@ -30,9 +30,10 @@ function label(n: AppNotification): string {
       // System notification (actor_id null): the digest numbers ride in
       // payload so no join is needed at render time.
       const parsed = digestNotificationPayloadSchema.safeParse(n.payload);
-      return parsed.success
-        ? `Weekly digest: ${parsed.data.newCount} new · ${parsed.data.incompleteCount} incomplete · ${parsed.data.overdueCount} overdue`
-        : "Weekly plan health digest";
+      if (!parsed.success) return "Weekly plan health digest";
+      return parsed.data.narrative
+        ? `Weekly digest: ${parsed.data.narrative}`
+        : `Weekly digest: ${parsed.data.newCount} new · ${parsed.data.incompleteCount} incomplete · ${parsed.data.overdueCount} overdue`;
     }
     default:
       return "updated an item you follow";
