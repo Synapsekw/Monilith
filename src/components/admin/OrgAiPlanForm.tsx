@@ -5,6 +5,8 @@ import { setOrgAiPlan } from "@/lib/platform/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
 
 const SELECT_CLASS =
@@ -34,6 +36,17 @@ export function OrgAiPlanForm({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // One outcome, one message. "Plan updated." used to be a `role="alert"`,
+  // which interrupts a screen reader to report success; the tone now decides
+  // that, and the message describes the Save button that produced it (the
+  // failure can come from either field, so it belongs to neither).
+  const status = useFieldStatus(
+    error ?? (saved ? "Plan updated." : null),
+    error ? "error" : "success",
+  );
+  // Save disables itself for the duration of the transition and stays mounted,
+  // so focus would otherwise be dropped on `<body>`.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   function save() {
     setError(null);
@@ -105,16 +118,25 @@ export function OrgAiPlanForm({
       </div>
 
       <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={pending} size="sm">
+        <Button
+          ref={saveRef}
+          onClick={save}
+          disabled={pending}
+          size="sm"
+          aria-describedby={status.controlProps["aria-describedby"]}
+        >
           {pending ? "Saving…" : "Save"}
         </Button>
         {saved && !error && (
-          <span className="text-muted-foreground text-xs" role="alert">
+          <span
+            {...status.messageProps}
+            className="text-muted-foreground text-xs"
+          >
             Plan updated.
           </span>
         )}
         {error && (
-          <span className="text-destructive text-xs" role="alert">
+          <span {...status.messageProps} className="text-destructive text-xs">
             {error}
           </span>
         )}

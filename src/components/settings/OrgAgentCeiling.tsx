@@ -9,6 +9,8 @@ import { CAPABILITY_COPY } from "@/lib/agents/capability-copy";
 import { setAgentCapabilityCeiling } from "@/lib/ai/settings-actions";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 /**
  * Admin Settings → AI: the org-wide CEILING on what any personal agent may be
@@ -33,6 +35,15 @@ export function OrgAgentCeiling({ initial }: { initial: AgentCapability[] }) {
   const [confirmed, setConfirmed] = useState<AgentCapability[]>(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // The failure belongs to the whole row of switches (a rejected save reverts
+  // one of them), so it describes the group. `aria-invalid` has no meaning on
+  // a group, hence only the description is wired.
+  const errorStatus = useFieldStatus(error);
+  // Every switch disables itself while the save is in flight, so the one the
+  // user just flipped leaves the tab order and focus falls to `<body>`. Track
+  // which one it was and hand it back its focus when the save resolves.
+  const [lastToggled, setLastToggled] = useState<AgentCapability | null>(null);
+  const restoreRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   function toggle(capability: AgentCapability, checked: boolean) {
     if (pending) return;
@@ -40,6 +51,7 @@ export function OrgAgentCeiling({ initial }: { initial: AgentCapability[] }) {
       ? [...ceiling, capability]
       : ceiling.filter((c) => c !== capability);
     setError(null);
+    setLastToggled(capability);
     setCeiling(next); // optimistic
     startTransition(async () => {
       const res = await setAgentCapabilityCeiling({ capabilities: next });
@@ -58,6 +70,7 @@ export function OrgAgentCeiling({ initial }: { initial: AgentCapability[] }) {
       role="group"
       aria-label="Agent capability ceiling"
       aria-busy={pending}
+      aria-describedby={errorStatus.controlProps["aria-describedby"]}
     >
       {AGENT_CAPABILITIES.map((capability) => {
         const copy = CAPABILITY_COPY[capability];
@@ -74,6 +87,7 @@ export function OrgAgentCeiling({ initial }: { initial: AgentCapability[] }) {
               </p>
             </div>
             <Switch
+              ref={capability === lastToggled ? restoreRef : undefined}
               id={fieldId}
               checked={ceiling.includes(capability)}
               disabled={pending}
@@ -88,7 +102,7 @@ export function OrgAgentCeiling({ initial }: { initial: AgentCapability[] }) {
         narrows it further.
       </p>
       {error && (
-        <p role="alert" className="text-destructive text-xs">
+        <p {...errorStatus.messageProps} className="text-destructive text-xs">
           {error}
         </p>
       )}

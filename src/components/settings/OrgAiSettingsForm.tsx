@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFieldStatus } from "@/components/ui/field-status";
 
 type Initial = {
   mode: AiMode;
@@ -53,6 +54,10 @@ const MODES: { id: AiMode; title: string; hint: string }[] = [
 /** The provider that serves `managed` mode — see gateway.ts, whose platform key
  *  is Anthropic's, so a default on any other provider cannot apply there. */
 const MANAGED_PROVIDER = "anthropic";
+
+/** The static "stored encrypted" line under the key field — kept in the field's
+ *  accessible description alongside any error, rather than replaced by it. */
+const KEY_HINT_ID = "org-ai-key-hint";
 
 /**
  * Admin Settings → "Organization AI". Picks how AI is powered for the whole org
@@ -107,6 +112,13 @@ export function OrgAiSettingsForm({
   );
   const [defaultError, setDefaultError] = useState<string | null>(null);
   const [defaultPending, startDefault] = useTransition();
+
+  // Each message is tied to the control that produced it. The mode error and
+  // the default-model error belong to a GROUP of controls (the radio fieldset,
+  // and the picker + its explanations), so only the description is wired
+  // there — `aria-invalid` is meaningless on a group.
+  const modeStatus = useFieldStatus(modeError);
+  const keyStatus = useFieldStatus(keyError, "error", KEY_HINT_ID);
 
   // Never an index into a fixed map: a provider row can disappear (disabled)
   // while a stored id still names it, and the id is a better label than a crash.
@@ -199,6 +211,15 @@ export function OrgAiSettingsForm({
           ? `The organization key is a ${labelOf(byoProvider)} key, so this applies only to ${labelOf(defaultModel.provider)} runs.`
           : null;
 
+  // `inertBecause` is a caveat about the CURRENT selection, so it stays in the
+  // picker group's description even when an error is also showing.
+  const inertStatus = useFieldStatus(inertBecause, "info");
+  const defaultStatus = useFieldStatus(
+    defaultError,
+    "error",
+    inertStatus.controlProps["aria-describedby"],
+  );
+
   const usedPct =
     initial.creditsLimit > 0
       ? Math.min(
@@ -213,6 +234,7 @@ export function OrgAiSettingsForm({
         className="space-y-1"
         disabled={modePending}
         aria-label="AI mode"
+        aria-describedby={modeStatus.controlProps["aria-describedby"]}
       >
         {MODES.map((m) => (
           <label
@@ -238,7 +260,7 @@ export function OrgAiSettingsForm({
       </fieldset>
 
       {modeError && (
-        <p role="alert" className="text-destructive text-xs">
+        <p {...modeStatus.messageProps} className="text-destructive text-xs">
           {modeError}
         </p>
       )}
@@ -327,14 +349,14 @@ export function OrgAiSettingsForm({
                 autoComplete="off"
                 spellCheck={false}
                 placeholder={selectedProvider?.keyPlaceholder ?? ""}
-                aria-invalid={keyError ? true : undefined}
+                {...keyStatus.controlProps}
                 disabled={keyPending}
                 onChange={(e) => {
                   setKey(e.target.value);
                   setKeyError(null);
                 }}
               />
-              <p className="text-muted-foreground text-xs">
+              <p id={KEY_HINT_ID} className="text-muted-foreground text-xs">
                 Stored encrypted. Used to run AI features for the whole
                 organization.
               </p>
@@ -351,7 +373,7 @@ export function OrgAiSettingsForm({
         )}
 
         {keyError && (
-          <p role="alert" className="text-destructive text-xs">
+          <p {...keyStatus.messageProps} className="text-destructive text-xs">
             {keyError}
           </p>
         )}
@@ -372,6 +394,10 @@ export function OrgAiSettingsForm({
         // Announces the in-flight save without taking the control away. See
         // the picker below for why `disabled` is not used here.
         aria-busy={defaultPending}
+        // The picker owns its own name/description (see ModelPicker), so the
+        // group carries what is ABOUT the choice: why it may be inert, and any
+        // save error.
+        aria-describedby={defaultStatus.controlProps["aria-describedby"]}
       >
         <div className="space-y-0.5">
           <p id="org-default-model-label" className="text-sm font-medium">
@@ -413,11 +439,19 @@ export function OrgAiSettingsForm({
         />
 
         {inertBecause && (
-          <p className="text-muted-foreground text-xs">{inertBecause}</p>
+          <p
+            {...inertStatus.messageProps}
+            className="text-muted-foreground text-xs"
+          >
+            {inertBecause}
+          </p>
         )}
 
         {defaultError && (
-          <p role="alert" className="text-destructive text-xs">
+          <p
+            {...defaultStatus.messageProps}
+            className="text-destructive text-xs"
+          >
             {defaultError}
           </p>
         )}

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFieldStatus } from "@/components/ui/field-status";
 
 /**
  * Deleting your account is irreversible and it moves your colleagues' view of
@@ -37,7 +38,10 @@ export function DeleteAccount({ email }: { email: string }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const inputId = useId();
-  const errorId = useId();
+  // Replaces a hand-rolled id + aria-invalid + aria-describedby + role trio
+  // with the shared helper, so this field states the same contract as every
+  // other one.
+  const errorStatus = useFieldStatus(error);
 
   const typed = confirm.trim();
   const matches = typed.toLowerCase() === email.toLowerCase();
@@ -101,13 +105,11 @@ export function DeleteAccount({ email }: { email: string }) {
               autoComplete="off"
               spellCheck={false}
               disabled={pending}
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? errorId : undefined}
+              {...errorStatus.controlProps}
             />
             {error ? (
               <p
-                id={errorId}
-                role="alert"
+                {...errorStatus.messageProps}
                 className="text-destructive text-xs leading-relaxed"
               >
                 {error}

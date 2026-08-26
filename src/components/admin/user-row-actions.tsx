@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useFieldStatus } from "@/components/ui/field-status";
 
 type Result = { ok: boolean; error?: string };
 
@@ -47,6 +48,10 @@ export function UserRowActions({
   const [delOpen, setDelOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
+  // One `error` state, but two dialogs — and only one is ever mounted, so each
+  // gets its own id/description pair rather than sharing one element id.
+  const pwStatus = useFieldStatus(error);
+  const delStatus = useFieldStatus(error);
 
   const run = (fn: () => Promise<Result>, onOk?: () => void) =>
     start(async () => {
@@ -132,10 +137,11 @@ export function UserRowActions({
             onChange={(e) => setPassword(e.target.value)}
             placeholder="New password (min 8 characters)"
             aria-label="New temporary password"
+            {...pwStatus.controlProps}
             className="bg-surface focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
           />
           {error && (
-            <p role="alert" className="text-destructive text-xs">
+            <p {...pwStatus.messageProps} className="text-destructive text-xs">
               {error}
             </p>
           )}
@@ -178,10 +184,11 @@ export function UserRowActions({
             onChange={(e) => setConfirmEmail(e.target.value)}
             placeholder={email}
             aria-label="Type the user's email to confirm deletion"
+            {...delStatus.controlProps}
             className="bg-surface focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
           />
           {error && (
-            <p role="alert" className="text-destructive text-xs">
+            <p {...delStatus.messageProps} className="text-destructive text-xs">
               {error}
             </p>
           )}

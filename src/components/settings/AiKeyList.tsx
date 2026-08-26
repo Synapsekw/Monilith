@@ -154,6 +154,12 @@ export function AiKeyList({
         const isBusy = pending && busy === p.id;
         const labelId = `${idPrefix}-${p.id}-label`;
         const fieldId = `${idPrefix}-${p.id}-key`;
+        // Deliberately NOT `useFieldStatus`: this is inside a `.map`, so a hook
+        // per row would break the rules of hooks. Same contract, hand-derived
+        // from the id prefix this file already owns — the error becomes the
+        // accessible description of the control it belongs to (the key field
+        // for a failed save, the Remove button for a failed removal).
+        const errorId = `${idPrefix}-${p.id}-error`;
         const error = errors[p.id];
 
         return (
@@ -209,7 +215,9 @@ export function AiKeyList({
                       size="sm"
                       variant="ghost"
                       className="text-destructive hover:bg-destructive/10"
-                      aria-describedby={labelId}
+                      aria-describedby={
+                        error ? `${labelId} ${errorId}` : labelId
+                      }
                       disabled={isBusy}
                       onClick={() => remove(p.id)}
                     >
@@ -243,6 +251,7 @@ export function AiKeyList({
                   spellCheck={false}
                   placeholder={p.keyPlaceholder}
                   aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? errorId : undefined}
                   disabled={isBusy}
                   onChange={(e) => {
                     setDraftKey(e.target.value);
@@ -290,7 +299,11 @@ export function AiKeyList({
             )}
 
             {error && (
-              <p role="alert" className="text-destructive px-3 pb-2.5 text-xs">
+              <p
+                id={errorId}
+                role="alert"
+                className="text-destructive px-3 pb-2.5 text-xs"
+              >
                 {error}
               </p>
             )}
