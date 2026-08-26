@@ -160,6 +160,54 @@ type CatalogIdRow = {
 };
 
 /**
+ * What one provider's verification pass produced.
+ *
+ * `verified`/`unverified` describe the CATALOG. `reachable` describes the
+ * PROVIDER, and it is a separate bit because the two are not derivable from
+ * each other: this function fails closed, so a revoked key and a provider with
+ * no catalog rows yet both return `{ verified: 0, unverified: 0 }`. That is
+ * correct for the catalog and useless for health reporting —
+ * `verifyAllProviders` records per-provider sweep health, and without
+ * `reachable` it would file a week of 401s as "ok".
+ *
+ * `error` is a short, already-sanitized sentence, non-null exactly when
+ * `reachable` is false. It is safe to persist and to render: every message
+ * originates here or in `listNativeModelIds`, which reports the HTTP STATUS
+ * only — never the URL (Google's carries the key in the query string) and
+ * never the headers.
+ */
+export type VerifyOutcome = {
+  verified: number;
+  unverified: number;
+  /** Did the provider's own `/v1/models` answer this run? */
+  reachable: boolean;
+  /** Why not, when it did not. Null whenever `reachable` is true. */
+  error: string | null;
+};
+
+/** Cap on a persisted/rendered reason. Long enough for a real message, short
+ *  enough that a pathological provider body cannot become the badge. */
+const MAX_ERROR_CHARS = 300;
+
+/**
+ * Duck-typed on `.message` rather than `instanceof Error` on purpose. The
+ * timeout path rejects with a `DOMException`, which is NOT an `instanceof
+ * Error` when it crosses a realm boundary (jsdom's global vs node's) — so an
+ * `instanceof` check silently degraded the single most useful message the
+ * sweep can record, "the provider stalled", into a generic fallback.
+ */
+function reason(e: unknown, fallback: string): string {
+  const msg =
+    typeof e === "object" &&
+    e !== null &&
+    "message" in e &&
+    typeof (e as { message: unknown }).message === "string"
+      ? (e as { message: string }).message
+      : fallback;
+  return msg.slice(0, MAX_ERROR_CHARS);
+}
+
+/**
  * Resolve every catalog row for one provider to a provider-NATIVE model id.
  *
  * Fails closed and fails quietly. If the provider's model list is unreachable
@@ -178,26 +226,34 @@ export async function verifyProviderModels(args: {
   client: SupabaseClient<Database>;
   provider: string;
   apiKey: string;
-}): Promise<{ verified: number; unverified: number }> {
+}): Promise<VerifyOutcome> {
   const { client, provider, apiKey } = args;
 
   const row = await getProviderRow(client, provider);
-  if (!row || !row.enabled) return { verified: 0, unverified: 0 };
+  if (!row || !row.enabled)
+    return {
+      verified: 0,
+      unverified: 0,
+      reachable: false,
+      error: `provider "${provider}" is not enabled`,
+    };
 
   let nativeIds: string[];
   try {
     nativeIds = await listNativeModelIds(row, apiKey);
   } catch (e) {
-    console.error(
-      `[ai] id verification skipped for "${provider}": ${e instanceof Error ? e.message : "model list unavailable"}`,
-    );
-    return { verified: 0, unverified: 0 };
+    const error = reason(e, "model list unavailable");
+    console.error(`[ai] id verification skipped for "${provider}": ${error}`);
+    return { verified: 0, unverified: 0, reachable: false, error };
   }
   if (nativeIds.length === 0) {
-    console.error(
-      `[ai] id verification skipped for "${provider}": provider returned an empty model list`,
-    );
-    return { verified: 0, unverified: 0 };
+    // An empty list is a probe FAILURE, not a healthy answer: it is how a
+    // provider behind an outage or an org-scoped key presents itself, and the
+    // catalog already refuses to act on it. Reporting it as reachable would
+    // hide exactly the case the health badge exists for.
+    const error = `${provider} returned an empty model list`;
+    console.error(`[ai] id verification skipped for "${provider}": ${error}`);
+    return { verified: 0, unverified: 0, reachable: false, error };
   }
 
   const { data, error } = await client
@@ -248,5 +304,5 @@ export async function verifyProviderModels(args: {
       throw new Error(`verifyProviderModels write: ${failed.error.message}`);
   }
 
-  return { verified, unverified };
+  return { verified, unverified, reachable: true, error: null };
 }

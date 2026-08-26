@@ -516,7 +516,7 @@ describe("verifyAllProviders", () => {
       platformKey: noPlatformKey,
       verify: async ({ provider }) => {
         verified.push(provider);
-        return { verified: 1, unverified: 0 };
+        return { verified: 1, unverified: 0, reachable: true, error: null };
       },
     });
     expect(verified.sort()).toEqual(["anthropic", "mistral"]);
@@ -529,7 +529,7 @@ describe("verifyAllProviders", () => {
       platformKey: noPlatformKey,
       verify: async ({ provider }) => {
         verified.push(provider);
-        return { verified: 0, unverified: 0 };
+        return { verified: 0, unverified: 0, reachable: true, error: null };
       },
     });
     expect(verified).toEqual(["mistral"]);
@@ -545,7 +545,7 @@ describe("verifyAllProviders", () => {
       platformKey: noPlatformKey,
       verify: async ({ provider, apiKey }) => {
         calls.push({ provider, apiKey });
-        return { verified: 0, unverified: 0 };
+        return { verified: 0, unverified: 0, reachable: true, error: null };
       },
     });
     expect(calls).toEqual([{ provider: "mistral", apiKey: "key-u2" }]);
@@ -565,7 +565,7 @@ describe("verifyAllProviders", () => {
         p === "anthropic" ? "platform-anthropic" : undefined,
       verify: async ({ provider, apiKey }) => {
         calls.push({ provider, apiKey });
-        return { verified: 0, unverified: 0 };
+        return { verified: 0, unverified: 0, reachable: true, error: null };
       },
     });
     expect(calls.find((c) => c.provider === "anthropic")?.apiKey).toBe(
@@ -585,7 +585,7 @@ describe("verifyAllProviders", () => {
         // survive, since the credentials are users' own.
         if (provider === "anthropic") throw new Error("401");
         verified.push(provider);
-        return { verified: 0, unverified: 0 };
+        return { verified: 0, unverified: 0, reachable: true, error: null };
       },
     });
     expect(verified).toEqual(["mistral"]);
@@ -602,7 +602,7 @@ describe("verifyAllProviders", () => {
       },
       verify: async ({ provider }) => {
         verified.push(provider);
-        return { verified: 0, unverified: 0 };
+        return { verified: 0, unverified: 0, reachable: true, error: null };
       },
     });
     expect(verified).toEqual(["mistral"]);
@@ -626,5 +626,190 @@ describe("verifyAllProviders", () => {
       }),
     ).resolves.toBeUndefined();
     expect(verify).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sweep health — the record that makes a week of silent failures visible.
+// ---------------------------------------------------------------------------
+
+/**
+ * A recorder in place of the real `ai_providers` write, so these tests assert
+ * the SEMANTICS of the health record (which status, for which provider, with
+ * which reason) rather than the shape of a Postgres patch — that half is
+ * pinned in `providers/provider-rows.test.ts`.
+ */
+function healthRecorder() {
+  const calls: {
+    provider: string;
+    status: string;
+    error: string | null | undefined;
+  }[] = [];
+  const recordHealth = async (
+    _client: unknown,
+    provider: string,
+    outcome: { status: string; error?: string | null },
+  ) => {
+    calls.push({ provider, status: outcome.status, error: outcome.error });
+  };
+  return { calls, recordHealth: recordHealth as never };
+}
+
+const statusFor = (
+  calls: { provider: string; status: string }[],
+  provider: string,
+) => calls.find((c) => c.provider === provider)?.status;
+
+describe("verifyAllProviders · health record", () => {
+  it("records ok for a provider whose probe answered", async () => {
+    const { client } = fakeSvcWithCredentials(["mistral"]);
+    const { calls, recordHealth } = healthRecorder();
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      recordHealth,
+      verify: async () => ({
+        verified: 3,
+        unverified: 0,
+        reachable: true,
+        error: null,
+      }),
+    });
+    expect(statusFor(calls, "mistral")).toBe("ok");
+    expect(calls.find((c) => c.provider === "mistral")?.error).toBeNull();
+  });
+
+  /**
+   * The case this whole feature exists for. `verifyProviderModels` fails
+   * CLOSED — a revoked key returns zero/zero rather than throwing — so before
+   * `reachable` the sweep could only see a number that looked exactly like a
+   * healthy provider with nothing to verify. A week of 401s would have been
+   * filed as "ok" and the badge would have vouched for a dead provider.
+   */
+  it("records FAILED — not ok — when the probe reports the provider unreachable", async () => {
+    const { client } = fakeSvcWithCredentials(["mistral"]);
+    const { calls, recordHealth } = healthRecorder();
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      recordHealth,
+      verify: async () => ({
+        verified: 0,
+        unverified: 0,
+        reachable: false,
+        error: "mistral model list returned HTTP 401",
+      }),
+    });
+    expect(statusFor(calls, "mistral")).toBe("failed");
+    expect(calls.find((c) => c.provider === "mistral")?.error).toBe(
+      "mistral model list returned HTTP 401",
+    );
+  });
+
+  it("records FAILED with the thrown reason when the probe throws outright", async () => {
+    const { client } = fakeSvcWithCredentials(["mistral"]);
+    const { calls, recordHealth } = healthRecorder();
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      recordHealth,
+      verify: async () => {
+        throw new Error("connect ECONNREFUSED");
+      },
+    });
+    expect(statusFor(calls, "mistral")).toBe("failed");
+    expect(calls.find((c) => c.provider === "mistral")?.error).toContain(
+      "ECONNREFUSED",
+    );
+  });
+
+  /**
+   * THE ORG-BYO GAP, MADE VISIBLE.
+   *
+   * The sweep borrows a PERSONAL key and nothing else (see the contract on
+   * `readSweepCredential`). A provider that exists only as an ORG BYO key is
+   * therefore never probed here — deliberately — and before this record that
+   * decision was indistinguishable from a provider nobody uses. It now says
+   * "skipped", with the reason, on the settings page.
+   */
+  it("records SKIPPED, with a reason, for a provider it has no borrowable key for", async () => {
+    // Nobody holds a personal google key; google is enabled all the same.
+    const { client } = fakeSvcWithCredentials(["mistral"]);
+    const { calls, recordHealth } = healthRecorder();
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      recordHealth,
+      verify: async () => ({
+        verified: 0,
+        unverified: 0,
+        reachable: true,
+        error: null,
+      }),
+    });
+    expect(statusFor(calls, "google")).toBe("skipped");
+    expect(statusFor(calls, "anthropic")).toBe("skipped");
+    expect(calls.find((c) => c.provider === "google")?.error).toMatch(/key/i);
+    // Every enabled provider is accounted for, none twice.
+    expect(calls.map((c) => c.provider).sort()).toEqual([
+      "anthropic",
+      "google",
+      "mistral",
+    ]);
+  });
+
+  it("records FAILED when the credential read itself throws", async () => {
+    const { client } = fakeSvcWithCredentials(["anthropic", "mistral"]);
+    const { calls, recordHealth } = healthRecorder();
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      recordHealth,
+      readKey: async (_c, provider) => {
+        if (provider === "anthropic") throw new Error("vault unavailable");
+        return provider === "mistral" ? "key-u2" : null;
+      },
+      verify: async () => ({
+        verified: 0,
+        unverified: 0,
+        reachable: true,
+        error: null,
+      }),
+    });
+    expect(statusFor(calls, "anthropic")).toBe("failed");
+    expect(statusFor(calls, "mistral")).toBe("ok");
+  });
+
+  it("still finishes the sweep when recording health throws", async () => {
+    // Telemetry may never become a new way for the sweep to die.
+    const { client } = fakeSvcWithCredentials(["mistral"]);
+    const verified: string[] = [];
+    await expect(
+      verifyAllProviders(client as never, {
+        platformKey: noPlatformKey,
+        recordHealth: (async () => {
+          throw new Error("permission denied");
+        }) as never,
+        verify: async ({ provider }) => {
+          verified.push(provider);
+          return { verified: 0, unverified: 0, reachable: true, error: null };
+        },
+      }),
+    ).resolves.toBeUndefined();
+    expect(verified).toEqual(["mistral"]);
+  });
+
+  it("writes nothing at all when the provider registry is unreadable", async () => {
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: async () => ({ data: null, error: { message: "boom" } }),
+          }),
+        }),
+      }),
+    };
+    const { calls, recordHealth } = healthRecorder();
+    await verifyAllProviders(client as never, {
+      platformKey: noPlatformKey,
+      recordHealth,
+      verify: vi.fn(),
+    });
+    expect(calls).toEqual([]);
   });
 });

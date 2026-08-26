@@ -365,4 +365,57 @@ describe("AiKeyList", () => {
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.getByText(/no ai providers/i)).toBeInTheDocument();
   });
+
+  /**
+   * Sweep health, per row. The point of putting it HERE rather than on some
+   * ops dashboard: the thing that fixes a failing provider — its key — is on
+   * this exact row, and an unverified provider's models are silently missing
+   * from every picker until someone knows to look.
+   */
+  describe("sweep-health badge", () => {
+    const NOW = Date.parse("2026-08-26T12:00:00.000Z");
+    const daysAgo = (n: number) => new Date(NOW - n * 86_400_000).toISOString();
+
+    it("puts each provider's verification state on its own row", () => {
+      render(
+        <AiKeyList
+          providers={PROVIDERS}
+          initial={[]}
+          health={{
+            nowMs: NOW,
+            verification: {
+              anthropic: {
+                lastVerifiedAt: daysAgo(1),
+                lastAttemptAt: daysAgo(1),
+                status: "ok",
+                error: null,
+              },
+              mistral: {
+                lastVerifiedAt: daysAgo(7),
+                lastAttemptAt: daysAgo(0),
+                status: "failed",
+                error: "mistral model list returned HTTP 401",
+              },
+            },
+          }}
+        />,
+      );
+      expect(
+        within(rowFor("Anthropic (Claude)")).getByRole("status"),
+      ).toHaveTextContent("Verified");
+      const mistral = within(rowFor("Mistral")).getByRole("status");
+      expect(mistral).toHaveTextContent("Check failed");
+      expect(mistral).toHaveTextContent("last verified 7 days ago");
+      // Each badge belongs to ITS row — a shared/global badge would be worse
+      // than none, since the whole question is WHICH provider is broken.
+      expect(
+        within(rowFor("Kimi (Moonshot AI)")).queryByRole("status"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("renders no badge at all when the page passes no health data", () => {
+      render(<AiKeyList providers={PROVIDERS} initial={[]} />);
+      expect(screen.queryAllByRole("status")).toHaveLength(0);
+    });
+  });
 });
