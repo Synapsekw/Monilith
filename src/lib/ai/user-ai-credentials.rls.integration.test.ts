@@ -105,6 +105,7 @@ describe.skipIf(!integrationTargetReady())(
     it("the authenticated client cannot call ai_credential_get (execute revoked)", async () => {
       const { error } = await userA.anon.rpc("ai_credential_get", {
         p_user: userA.id,
+        p_provider: "anthropic",
       });
       expect(error).not.toBeNull();
     });

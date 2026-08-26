@@ -269,6 +269,7 @@ describe.skipIf(!integrationTargetReady())(
     it("org_ai_secret_get is not callable as authenticated (execute revoked)", async () => {
       const { error } = await userA.anon.rpc("org_ai_secret_get", {
         p_org: orgA,
+        p_provider: "anthropic",
       });
       expect(error).not.toBeNull();
     });
