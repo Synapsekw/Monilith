@@ -120,6 +120,47 @@ function resolvedFrom(row: ModelRow, substituted: boolean) {
  * PURE selection step, split out from the DB read so the whole decision matrix
  * is testable without a database. `active` is already filtered to status
  * 'active' for one provider and ordered cheapest input rate first.
+ *
+ * ## Precedence — four rungs, and the middle two are in this order ON PURPOSE
+ *
+ * ```
+ * 1. requested            the agent's own pin
+ * 2. orgDefaultModelId    Settings → AI → "Default model"
+ * 3. tier                 the per-feature hint (model-map.ts)
+ * 4. active[0]            the provider's cheapest active model
+ * ```
+ *
+ * Rung 2 above rung 3 reads like a bug — the feature knows what it needs, the
+ * admin does not — and it is not. The org default is a SPEND CONTROL, and it is
+ * the only one an admin has: "run this org on Haiku" is exactly the setting a
+ * tier-first ladder would silently reverse, routing every standard-tier feature
+ * (eleven of the thirteen in `FEATURE_TIERS`) straight back onto the expensive
+ * model the admin opted out of. The admin would learn about it from the invoice.
+ *
+ * It is also what the product promises in words: clearing the picker in
+ * `OrgAiSettingsForm` is labelled *"No default — each feature picks its own
+ * tier"*, i.e. the tier is what you get when there is NO default, and the
+ * approved design (`docs/superpowers/specs/2026-08-10-provider-model-layer-design.md`
+ * §3, rung 3) says the same — "org default, nudged by the feature's tier hint".
+ * Flipping the ladder without also rewriting that copy would make the setting
+ * mean something the UI denies.
+ *
+ * Two consequences worth naming, both tested:
+ *
+ *   - A default that is not in `active` (retired, or belonging to a provider
+ *     this call is not serving) is simply an ABSENT rung — the tier decides,
+ *     and `substituted` stays false. `substituted` reports a vanished PIN only;
+ *     flagging a stale org default would banner every agent in the org at once.
+ *   - This function is capability-BLIND. It never consults `supportsTools` or
+ *     `contextLength`, so an org default that cannot call tools is honoured here
+ *     and refused LOUDLY downstream — `ModelNotToolCapableError` in
+ *     `app/api/ai/personal-agent/route.ts`, with `AgentEditor` warning at pick
+ *     time. Loud beats silently substituting a model the admin did not choose.
+ *     Turning rung 3 into a real capability constraint — a feature declares what
+ *     it needs, the resolver takes the cheapest satisfying model and prefers the
+ *     org default AMONG the satisfiers — is the open redesign. `ai_models` today
+ *     carries `supports_tools`, `context_length` and `max_output_tokens` and
+ *     nothing else, so anything beyond tools-and-window needs a migration.
  */
 export function pickModel(args: {
   active: ModelRow[];
@@ -138,8 +179,10 @@ export function pickModel(args: {
   // model that was never pinned is just the ordinary default path.
   const substituted = requested !== null && requested !== "";
 
-  // `active` is ordered cheapest-first, so `.find` over a tier yields that
-  // tier's cheapest member and `active[0]` the cheapest overall.
+  // Rungs 2-4. `active` is ordered cheapest-first, so `.find` over a tier
+  // yields that tier's cheapest member and `active[0]` the cheapest overall.
+  // The org default sits ABOVE the tier deliberately — see the precedence
+  // block on this function before reordering these three lines.
   const chosen =
     byId(orgDefaultModelId) ??
     active.find((m) => m.tier === tier) ??
@@ -169,6 +212,10 @@ export async function resolveModel(args: {
   /**
    * Overrides {@link tierForFeature} for a caller whose tier is decided by the
    * SIZE of the request rather than by the feature.
+   *
+   * It overrides the feature→tier MAP, not the ladder: this is still rung 3, so
+   * an org default outranks whatever is passed here. A caller that escalates by
+   * size still runs on the model the admin chose. See {@link pickModel}.
    *
    * CURRENTLY UNCONSUMED: `column_fill` was that caller, until its batch was
    * shown to be bounded by `COLUMN_FILL_MAX` well below any context limit and

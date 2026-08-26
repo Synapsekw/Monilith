@@ -170,6 +170,81 @@ describe("pickModel", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Precedence. The ladder is `pin > org default > feature tier > cheapest`, and
+// the middle two rungs are in that order ON PURPOSE — see the block comment on
+// `pickModel` in resolve.ts. These tests exist so a future reader who thinks the
+// order is a bug has to argue with a red test rather than with a comment.
+// ---------------------------------------------------------------------------
+
+describe("pickModel — the org default outranks the feature tier, deliberately", () => {
+  // THE SPEND CONTROL. An admin who sets the org default to a cheap model is
+  // saying "run this org on this model", and the existing suite only proved the
+  // UPGRADE direction (cheap tier, standard default). This is the direction a
+  // tier-first ladder would silently reverse: it would route every
+  // standard/strong feature back onto the expensive model the admin opted out
+  // of, and the admin would find out from the invoice.
+  it("keeps a CHEAP org default for a strong-tier feature", () => {
+    const r = pickModel({
+      active: CATALOG,
+      requested: null,
+      orgDefaultModelId: "claude-mini-1",
+      tier: "strong",
+    });
+    expect(r.model).toBe("claude-mini-1");
+    expect(r.model).not.toBe("claude-opus-4-8");
+    // Nothing was pinned, so nothing was substituted: `substituted` is about a
+    // vanished PIN, never about the tier being overridden.
+    expect(r.substituted).toBe(false);
+  });
+
+  // The other half of the same rule: honouring the default must not mean
+  // depending on it. An org default naming a model that has since retired (or
+  // that belongs to another provider's catalog) is not in `active`, so the rung
+  // is simply absent and the tier below it decides.
+  it("falls through to the tier when the org default is not an active model", () => {
+    const r = pickModel({
+      active: CATALOG,
+      requested: null,
+      orgDefaultModelId: "claude-retired-9",
+      tier: "strong",
+    });
+    expect(r.model).toBe("claude-opus-4-8");
+    // A stale ORG DEFAULT is not a substitution either — only a stale pin is.
+    // Flagging it would put a "your model was substituted" banner on every
+    // agent in the org at once.
+    expect(r.substituted).toBe(false);
+  });
+
+  // `pickModel` is capability-BLIND, and that is the boundary the "should this
+  // be a capability constraint rather than a tier?" question sits on. Today the
+  // only capability gate is downstream and per-caller: the personal-agent route
+  // throws `ModelNotToolCapableError` after resolution
+  // (`app/api/ai/personal-agent/route.ts`), and `AgentEditor` warns at pick
+  // time. So an org default that cannot call tools is honoured here and fails
+  // LOUDLY there, rather than being silently swapped for a model the admin did
+  // not choose. Whoever implements the capability resolver flips this test.
+  it("honours an org default that cannot call tools, leaving the gate downstream", () => {
+    const r = pickModel({
+      active: [
+        row({ modelId: "no-tools-1", tier: "cheap", supportsTools: false }),
+        row({
+          modelId: "claude-sonnet-5",
+          tier: "standard",
+          supportsTools: true,
+        }),
+      ],
+      requested: null,
+      orgDefaultModelId: "no-tools-1",
+      tier: "standard",
+    });
+    expect(r.model).toBe("no-tools-1");
+    // Carried honestly, so the caller CAN refuse — which is what makes the
+    // loud failure possible.
+    expect(r.supportsTools).toBe(false);
+  });
+});
+
 describe("pickModel — the callable id", () => {
   // The Gateway's id namespace is NOT each provider's native namespace: the
   // feed publishes `claude-haiku-4.5` where Anthropic's own API wants a dated
@@ -516,6 +591,24 @@ describe("resolveModel", () => {
       orgDefaultModelId: "claude-sonnet-5",
     });
     expect(r.model).toBe("claude-sonnet-5");
+  });
+
+  // The `tier` seam overrides `tierForFeature` — the MAP — and nothing else.
+  // It is the rung BELOW the org default, so a caller that escalates by size
+  // still runs on the model the admin chose. Reading "overrides the tier" as
+  // "forces this model" is the misreading this test forecloses.
+  it("lets the org default outrank an explicit tier override too", async () => {
+    const { client } = fakeAiModelsClient(FIXTURES);
+    const r = await resolveModel({
+      client,
+      provider: "anthropic",
+      // A standard-tier feature asking, explicitly, for the cheap tier.
+      feature: "ask_pulse",
+      tier: "cheap",
+      orgDefaultModelId: "claude-sonnet-5",
+    });
+    expect(r.model).toBe("claude-sonnet-5");
+    expect(r.model).not.toBe("claude-haiku-4.5");
   });
 
   it("flags a substitution when a pinned model is no longer in the catalog", async () => {
