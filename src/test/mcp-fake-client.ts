@@ -12,6 +12,16 @@
  *   - `.storage.from(bucket).{createSignedUploadUrl,upload,info,remove}`
  *     (create_attachment_upload + attach_file)
  *
+ * It is ARGUMENT-AWARE: every `.eq(column, value)` is recorded on the read or
+ * update that issued it, and every `.update()` patch is recorded too. It did
+ * not used to be — `eq` was `() => chain`, so a query that had lost a predicate
+ * was indistinguishable from one that still had it, and a rename that dropped
+ * `.eq("id", itemId)` (renaming every visible item) would have passed every
+ * test in `update-item.test.ts`. Predicates are RECORDED rather than APPLIED
+ * because the results here are spec-driven, not table-driven; the same
+ * discipline, applied to a fake that does own rows, is in
+ * `src/test/ai-models-fake-client.ts`.
+ *
  * A structural fake of just those is safe and keeps the `as never` cast in one
  * place. Lives in `src/test/` beside `integration-auth.ts` / `integration-env.ts`
  * — outside vitest's `src/**` + `*.{test,spec}.{ts,tsx}` include glob, so it is
@@ -81,9 +91,30 @@ export type FakeClientSpec = {
   remove?: { error: FakeError };
 };
 
+/** One recorded `.from(t).select(cols)…` read, with the rows it addressed. */
+export type FakeRead = {
+  table: string;
+  cols: string;
+  /** Every `.eq(column, value)` on this read, in call order. */
+  eq: [string, unknown][];
+};
+
+/** One recorded `.from(t).update(patch).eq(…).select(cols)` write. */
+export type FakeUpdate = {
+  table: string;
+  patch: unknown;
+  /** Every `.eq(column, value)` on this update, in call order. */
+  eq: [string, unknown][];
+  cols: string;
+};
+
 export type FakeCalls = {
   /** Every cell_values upsert, in order, with its options argument. */
   upserts: { row: unknown; options: unknown }[];
+  /** Every select, in order, with the predicates it carried. */
+  reads: FakeRead[];
+  /** Every update, in order, with its patch and predicates. */
+  updates: FakeUpdate[];
   /** Every rpc() call, in order. */
   rpc: { fn: string; args: unknown }[];
   /** How many times the handler resolved the request client. Must be 1. */
@@ -143,6 +174,8 @@ export function makeFakeClient(spec: FakeClientSpec = {}): {
 } {
   const calls: FakeCalls = {
     upserts: [],
+    reads: [],
+    updates: [],
     rpc: [],
     getClient: 0,
     notifications: [],
@@ -186,24 +219,42 @@ export function makeFakeClient(spec: FakeClientSpec = {}): {
               )
             : Promise.resolve(dequeue(spec.item, OK_ITEM, itemReads++));
         };
+        const recorded: FakeRead = { table, cols: cols ?? "", eq: [] };
+        calls.reads.push(recorded);
         type Chain = {
-          eq: () => Chain;
+          eq: (column: string, value: unknown) => Chain;
           maybeSingle: () => Promise<
             FakeResult<
               ColumnRow | ItemRow | CellValueRow | ItemScopeRow | FileColumnRow
             >
           >;
         };
-        const chain: Chain = { eq: () => chain, maybeSingle: () => read() };
+        const chain: Chain = {
+          eq: (column: string, value: unknown) => {
+            recorded.eq.push([column, value]);
+            return chain;
+          },
+          maybeSingle: () => read(),
+        };
         return chain;
       },
-      update: () => ({
-        eq: () => ({
-          select: () => ({
-            maybeSingle: () => Promise.resolve(spec.rename ?? OK_ITEM),
-          }),
-        }),
-      }),
+      update: (patch: unknown) => {
+        const recorded: FakeUpdate = { table, patch, eq: [], cols: "" };
+        calls.updates.push(recorded);
+        const chain = {
+          eq: (column: string, value: unknown) => {
+            recorded.eq.push([column, value]);
+            return chain;
+          },
+          select: (cols?: string) => {
+            recorded.cols = cols ?? "";
+            return {
+              maybeSingle: () => Promise.resolve(spec.rename ?? OK_ITEM),
+            };
+          },
+        };
+        return chain;
+      },
       upsert: (row: unknown, options: unknown) => {
         calls.upserts.push({ row, options });
         const result = dequeue(spec.upsert, { error: null }, upsertWrites++);

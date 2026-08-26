@@ -342,6 +342,70 @@ describe("updateItemHandler", () => {
     expect(calls.notifications).toEqual([]);
   });
 
+  // ── WHICH ROWS the handler addresses ─────────────────────────────────
+  //
+  // `makeFakeClient` used to discard the arguments to `.eq()` entirely, so no
+  // test in this file could tell a correctly-scoped query from one missing a
+  // predicate: a rename that dropped `.eq("id", itemId)` would have renamed
+  // every item the client can see, and still passed. The fake now records
+  // them.
+  it("renames exactly the addressed item, and changes only its name", async () => {
+    const { getClient, calls } = makeFakeClient();
+    await updateItemHandler(
+      getClient,
+      { itemId: "i9", name: "Renamed" },
+      ACTOR,
+    );
+    expect(calls.updates).toEqual([
+      {
+        table: "items",
+        patch: { name: "Renamed" },
+        eq: [["id", "i9"]],
+        cols: "board_id",
+      },
+    ]);
+  });
+
+  it("keys the column and item reads on the ids the call named", async () => {
+    const { getClient, calls } = makeFakeClient();
+    await updateItemHandler(
+      getClient,
+      { itemId: "i9", fields: [{ columnId: "c1", value: { text: "hello" } }] },
+      ACTOR,
+    );
+    expect(calls.reads.find((r) => r.table === "columns")?.eq).toEqual([
+      ["id", "c1"],
+    ]);
+    expect(calls.reads.find((r) => r.table === "items")?.eq).toEqual([
+      ["id", "i9"],
+    ]);
+  });
+
+  it("reads the PRIOR people cell scoped to both the item and the column", async () => {
+    // Both predicates decide who gets notified. Drop `column_id` and the
+    // "prior assignees" are some other column's, so an already-assigned person
+    // is notified again — or a genuinely new one silently is not.
+    const { getClient, calls } = makeFakeClient({
+      column: {
+        data: { org_id: "o1", board_id: "b1", kind: "people" },
+        error: null,
+      },
+      priorCell: { data: { value: { userIds: ["u-old"] } }, error: null },
+    });
+    await updateItemHandler(
+      getClient,
+      {
+        itemId: "i9",
+        fields: [{ columnId: "c1", value: { userIds: ["u-old", "u-new"] } }],
+      },
+      ACTOR,
+    );
+    expect(calls.reads.find((r) => r.table === "cell_values")?.eq).toEqual([
+      ["item_id", "i9"],
+      ["column_id", "c1"],
+    ]);
+  });
+
   it("still reports success when the notification insert is rejected", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { getClient } = makeFakeClient({
