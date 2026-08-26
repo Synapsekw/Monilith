@@ -60,10 +60,14 @@ describe("composeSystemPrompt", () => {
 });
 
 // The sentinels are exported so `documentInputSchema` can reject a document
-// that contains them (a body carrying the instructions sentinel would close
-// the reference block and read as owner-authored instruction). That check is
-// only sound if these constants really are the strings the prompt is built
-// from — a drift here would leave the schema guarding a delimiter nothing uses.
+// that forges them. Only `INSTRUCTIONS_SENTINEL` is actually rejected at save
+// time (a body carrying it would close the reference block and read as
+// owner-authored instruction); `DOCUMENT_BLOCK_SENTINEL` opens the block
+// rather than closing it, so it's kept here as a structurally meaningful
+// constant but is NOT part of the save-time rejection (see
+// src/lib/validations/agent-documents.ts). That check is only sound if these
+// constants really are the strings the prompt is built from — a drift here
+// would leave the schema guarding a delimiter nothing uses.
 describe("prompt sentinels", () => {
   it("are the literal delimiters the prompt is composed from", () => {
     const block = buildDocumentBlock([{ title: "T", body: "B" }]);

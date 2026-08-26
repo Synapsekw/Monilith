@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { SourceFormat } from "@/lib/documents/extract-text";
-import { PROMPT_SENTINELS } from "@/lib/agents/document-inject";
+import { INSTRUCTIONS_SENTINEL } from "@/lib/agents/document-inject";
 
 /**
  * Kept in lockstep with `SourceFormat` (src/lib/documents/extract-text.ts).
@@ -29,7 +29,7 @@ type _SourceFormatsAreExhaustive = AssertTrue<
 >;
 
 /**
- * A document body may not forge the prompt's own structural delimiters.
+ * A document body may not forge the prompt's own instructions delimiter.
  *
  * `document-inject.ts` composes the system prompt as
  * `PREAMBLE / REFERENCE DOCUMENTS … / YOUR OWNER'S INSTRUCTIONS: …`, and
@@ -38,11 +38,19 @@ type _SourceFormatsAreExhaustive = AssertTrue<
  * reads to the model as owner-authored instruction — the design's stated threat
  * model, "a document pasted from an untrusted source".
  *
- * WHY REJECT AT SAVE TIME rather than nonce the delimiters per run: a random
- * nonce in the delimiters would work, but it changes the system-prompt prefix
+ * Only `INSTRUCTIONS_SENTINEL` is checked here — `DOCUMENT_BLOCK_SENTINEL`
+ * (the literal "REFERENCE DOCUMENTS") is deliberately NOT rejected. It opens
+ * the reference block rather than closing it, so a forged occurrence in a
+ * document body has nothing after it to unlock — it buys no real security.
+ * It's also a completely standard all-caps section heading in SOP/ISO/RFP-style
+ * documents, which is exactly the corpus this feature exists to ingest;
+ * rejecting it was a false positive against the feature's own target content.
+ *
+ * WHY REJECT AT SAVE TIME rather than nonce the delimiter per run: a random
+ * nonce in the delimiter would work, but it changes the system-prompt prefix
  * on every run for every agent that has documents, which destroys Anthropic
  * prompt-cache reuse for exactly the agents whose prompts are longest and most
- * expensive to re-read. Rejecting the two sentinels at the one boundary through
+ * expensive to re-read. Rejecting the sentinel at the one boundary through
  * which text can enter the library costs nothing at run time, keeps the
  * no-documents prompt byte-identical (the cache guarantee for every existing
  * agent), and gives the owner an immediate, fixable error instead of a silent
@@ -51,11 +59,11 @@ type _SourceFormatsAreExhaustive = AssertTrue<
  * `agent_documents` rows are ever written by an authenticated caller.
  */
 const SENTINEL_MESSAGE =
-  "A document can't contain the prompt's own section markers " +
-  `(${PROMPT_SENTINELS.join(" / ")}). Rename or remove that line.`;
+  "A document can't contain the prompt's own section marker " +
+  `(${INSTRUCTIONS_SENTINEL}). Rename or remove that line.`;
 
 function hasNoSentinel(value: string): boolean {
-  return !PROMPT_SENTINELS.some((s) => value.includes(s));
+  return !value.includes(INSTRUCTIONS_SENTINEL);
 }
 
 /** Matches the column check constraints exactly — the DB is the backstop, not
