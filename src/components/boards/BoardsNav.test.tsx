@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { MeasuringStrategy } from "@dnd-kit/core";
 import type { DndContextProps, DragEndEvent } from "@dnd-kit/core";
+import type { SharedBoardEntry } from "@/lib/boards/queries";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { reorderBoard } from "@/lib/boards/actions";
 import { BoardsNav } from "./BoardsNav";
@@ -49,6 +50,7 @@ vi.mock("@/lib/boards/folders/actions", () => ({
 // the failure surface — assert on it rather than on sonner's DOM.
 vi.mock("@/lib/ui/mutation-toast", () => ({
   showMutationError: vi.fn(),
+  showMutationSuccess: vi.fn(),
   showUndoToast: vi.fn(),
 }));
 
@@ -1350,5 +1352,191 @@ describe("BoardsNav droppable measuring", () => {
     expect(dnd.props?.measuring?.droppable?.strategy).toBe(
       MeasuringStrategy.Always,
     );
+  });
+});
+
+describe("BoardsNav optimistic reorder survives a client re-render", () => {
+  // Reorder deliberately does NOT revalidate (gotcha-44), so the optimistic
+  // client order in BoardsNavSortable IS the display. That state is re-synced
+  // during render whenever the `boards` prop's IDENTITY changes — which means
+  // anything that hands it a freshly-allocated array on a client-only
+  // re-render silently undoes the user's drag. `groupBoardsByFolder` allocates,
+  // so the fold must be memoised AND its optional-prop defaults must be
+  // module-level constants (an inline `= []` re-allocates and misses the memo).
+  const alpha = {
+    id: "b1",
+    name: "Alpha",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+  const beta = {
+    id: "b2",
+    name: "Beta",
+    workspace_id: "w1",
+    position: 1,
+    shared_out: false,
+  };
+  const filedBoard = {
+    id: "b3",
+    name: "Moodboard",
+    workspace_id: "w1",
+    position: 2,
+    shared_out: false,
+  };
+  // Hoisted, not an inline `[]`: re-rendering must hand BoardsNav the SAME
+  // prop objects the server payload does, which is exactly the scenario a
+  // route change produces.
+  const noShared: SharedBoardEntry[] = [];
+
+  /** Board ids in the order the mounted drag tree actually renders them. */
+  function renderedRowIds(): string[] {
+    return Array.from(
+      screen
+        .getByTestId("boards-nav-sortable")
+        .querySelectorAll<HTMLElement>("[data-board-row]"),
+    ).map((row) => row.dataset.boardRow ?? "");
+  }
+
+  it("keeps the dragged order when the route param changes and no folder props are passed", async () => {
+    const boards = [alpha, beta];
+    const { rerender } = render(
+      <TooltipProvider>
+        <BoardsNav boards={boards} sharedBoards={noShared} />
+      </TooltipProvider>,
+    );
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-body"));
+    await screen.findByTestId("boards-nav-sortable");
+    expect(renderedRowIds()).toEqual(["b1", "b2"]);
+
+    drop("b2", "b1");
+    await waitFor(() => expect(reorderBoard).toHaveBeenCalled());
+    expect(renderedRowIds()).toEqual(["b2", "b1"]);
+
+    // Clicking any other board changes useParams(), re-rendering BoardsNav with
+    // byte-identical server props. Nothing about the server data changed, so
+    // the optimistic order must stand.
+    mockUseParams.mockReturnValue({ boardId: "b1" });
+    rerender(
+      <TooltipProvider>
+        <BoardsNav boards={boards} sharedBoards={noShared} />
+      </TooltipProvider>,
+    );
+
+    expect(renderedRowIds()).toEqual(["b2", "b1"]);
+    // And it was never re-persisted or revalidated behind the user's back.
+    expect(reorderBoard).toHaveBeenCalledTimes(1);
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps the dragged order across a re-render when a folder is present", async () => {
+    // Same invariant with the folder props actually supplied: the fold still
+    // has to be memoised, or `unfiledOwned` is a new array every render.
+    const boards = [alpha, beta, filedBoard];
+    const folders = [{ id: "f1", name: "Acme Rebrand", position: 0 }];
+    const placements = [{ boardId: "b3", folderId: "f1", position: 0 }];
+    const { rerender } = render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={boards}
+          sharedBoards={noShared}
+          folders={folders}
+          placements={placements}
+        />
+      </TooltipProvider>,
+    );
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-body"));
+    await screen.findByTestId("folder-drop-f1");
+    // Folder body first (b3), then the unfiled list.
+    expect(renderedRowIds()).toEqual(["b3", "b1", "b2"]);
+
+    drop("b2", "b1");
+    await waitFor(() => expect(reorderBoard).toHaveBeenCalled());
+    expect(renderedRowIds()).toEqual(["b3", "b2", "b1"]);
+
+    mockUseParams.mockReturnValue({ boardId: "b1" });
+    rerender(
+      <TooltipProvider>
+        <BoardsNav
+          boards={boards}
+          sharedBoards={noShared}
+          folders={folders}
+          placements={placements}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(renderedRowIds()).toEqual(["b3", "b2", "b1"]);
+  });
+});
+
+describe("BoardsNav folder row alignment", () => {
+  // jsdom has no layout, so this is class arithmetic — which is exactly where
+  // the bug lived. The folder body indents with `pl-3` (12px). An owned row
+  // reserves a 24px grip slot as its first child, putting its link at 36px. A
+  // shared row that fell back to its own `pl-3` and skipped that slot put its
+  // link at 24px — 12px out, in the one view this whole feature exists for (a
+  // folder holding one of your boards and one shared with you).
+  function filedRow(boardId: string): HTMLElement {
+    const row = screen
+      .getByTestId("boards-nav-body")
+      .querySelector<HTMLElement>(`[data-board-row="${boardId}"]`);
+    if (!row) throw new Error(`No filed row for ${boardId}`);
+    return row;
+  }
+
+  beforeEach(() => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[
+            {
+              id: "own",
+              name: "My board",
+              workspace_id: "w1",
+              position: 0,
+              shared_out: false,
+            },
+          ]}
+          sharedBoards={[
+            {
+              id: "shared",
+              name: "Their board",
+              position: 0,
+              access_level: "viewer",
+              owner_name: "Dana",
+            },
+          ]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[
+            { boardId: "own", folderId: "f1", position: 0 },
+            { boardId: "shared", folderId: "f1", position: 1 },
+          ]}
+        />
+      </TooltipProvider>,
+    );
+  });
+
+  it("gives a filed shared row the same 24px leading slot as a filed owned row", () => {
+    for (const id of ["own", "shared"]) {
+      expect(filedRow(id).firstElementChild?.className).toContain("size-6");
+    }
+  });
+
+  it("never double-indents a filed row with its own padding", () => {
+    // The folder body already supplies the indent; a `pl-3` on the row itself
+    // is the shared row's old fallback and would stack on top of it.
+    for (const id of ["own", "shared"]) {
+      expect(filedRow(id).className).not.toMatch(/(^|\s)pl-\d/);
+    }
+  });
+
+  it("keeps both filed rows' links on the same column (no row-level gap)", () => {
+    // A row-level `gap` sits BETWEEN the 24px slot and the link, pushing the
+    // link off the owned row's column by the gap width — the same
+    // misalignment, just smaller.
+    for (const id of ["own", "shared"]) {
+      expect(filedRow(id).className).not.toMatch(/(^|\s)gap-/);
+    }
   });
 });

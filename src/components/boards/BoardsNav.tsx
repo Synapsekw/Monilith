@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -41,6 +41,15 @@ const BoardsNavSortable = dynamic(
   () => import("./BoardsNavSortable").then((m) => m.BoardsNavSortable),
   { ssr: false },
 );
+
+// Module-level empty defaults, NOT inline `= []`. An inline default allocates a
+// fresh array on every render, which would make the `useMemo` below miss on
+// every render for any caller that omits these props — and a fresh
+// `grouped.unfiledOwned` identity each render silently resets
+// `BoardsNavSortable`'s optimistic reorder (its render-phase prop sync treats a
+// new identity as "the server sent a new list").
+const NO_FOLDERS: BoardFolder[] = [];
+const NO_PLACEMENTS: BoardFolderPlacement[] = [];
 
 /**
  * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
@@ -110,8 +119,8 @@ export function PlainBoardRow({
 export function BoardsNav({
   boards,
   sharedBoards,
-  folders = [],
-  placements = [],
+  folders = NO_FOLDERS,
+  placements = NO_PLACEMENTS,
   activeWorkspaceId,
   collapsed = false,
 }: {
@@ -156,12 +165,23 @@ export function BoardsNav({
 
   // Fold folders + placements into the tree once. `groupBoardsByFolder` owns the
   // "a folder with no visible board is dropped, not rendered empty" rule.
-  const grouped = groupBoardsByFolder({
-    folders,
-    placements,
-    boards,
-    sharedBoards,
-  });
+  //
+  // The memo is load-bearing, not a micro-optimisation: the fold allocates fresh
+  // arrays, and `grouped.unfiledOwned` is the `boards` prop of
+  // `BoardsNavSortable`, whose render-phase sync resets the optimistic reorder
+  // whenever that prop's IDENTITY changes. Without the memo, any client-only
+  // re-render (e.g. `useParams()` changing as you click another board) would
+  // snap a just-dragged board back to the stale server order.
+  const grouped = useMemo(
+    () =>
+      groupBoardsByFolder({
+        folders,
+        placements,
+        boards,
+        sharedBoards,
+      }),
+    [folders, placements, boards, sharedBoards],
+  );
 
   // Folder rows are defined ONCE here and handed to whichever tree is mounted:
   // the plain one, or the lazy drag layer that wraps each header in a drop

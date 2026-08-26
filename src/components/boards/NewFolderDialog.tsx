@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FolderPlus } from "lucide-react";
 
 import { createFolder } from "@/lib/boards/folders/actions";
+import { showMutationSuccess } from "@/lib/ui/mutation-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +39,16 @@ export function NewFolderDialog() {
       }
       setName("");
       setOpen(false);
+      // A brand-new folder is EMPTY, and an empty folder is deliberately not
+      // rendered in the nav (design decision 3), so a refresh alone leaves the
+      // sidebar byte-identical — the user has no way to tell the create
+      // worked. The toast is the only confirmation, so it also has to carry
+      // the discovery path: the folder is reachable from a board's ⋯ menu
+      // until something is filed into it.
+      showMutationSuccess(
+        `Folder “${trimmed}” created`,
+        "Move a board into it from the board’s ⋯ menu.",
+      );
       router.refresh();
     });
   }

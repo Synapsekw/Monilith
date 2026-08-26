@@ -24,3 +24,22 @@ export function showUndoToast(message: string, onUndo: () => void): void {
     duration: 8000,
   });
 }
+
+/**
+ * Confirm a mutation whose result the user cannot see. Most mutations here need
+ * no toast — the board/row/sidebar visibly changes and that IS the feedback.
+ * This is for the ones where nothing on screen moves: creating a board folder,
+ * for instance, renders nothing at all (an empty folder is deliberately hidden
+ * from the nav), so without this the user types a name, clicks Create, and the
+ * sidebar is byte-identical.
+ *
+ * `message` is the headline ("Folder “Acme Rebrand” created"); the optional
+ * `description` is where to say what to do next. Sits alongside
+ * `showMutationError` so the success/failure copy stays uniform.
+ */
+export function showMutationSuccess(
+  message: string,
+  description?: string,
+): void {
+  toast.success(message, description ? { description } : undefined);
+}

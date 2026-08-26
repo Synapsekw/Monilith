@@ -41,9 +41,9 @@ export function SharedBoardsSection({
               isActive={board.id === activeBoardId}
               folders={folders}
               currentFolderId={null}
-              // Inert placeholder for the drag grip, so swapping in the drag
-              // tree doesn't shift the row horizontally.
-              leading={<span className="size-6 shrink-0" aria-hidden />}
+              // `leading` is omitted on purpose: SharedBoardRow's default IS
+              // the inert 24px grip placeholder, so swapping in the drag tree
+              // (which passes a real grip) doesn't shift the row horizontally.
             />
           )}
         </Fragment>

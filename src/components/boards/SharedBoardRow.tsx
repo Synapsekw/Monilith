@@ -24,20 +24,29 @@ import { SharedBoardMenu } from "@/components/boards/SharedBoardMenu";
  * hover/active chrome, the `<Link>` is the truncating flex child, and the
  * markers plus the menu are siblings of it.
  *
- * `leading` is the 24px slot `PlainBoardRow` reserves for its grip: an inert
- * spacer in the plain tree, a real drag handle in the lazy drag tree, and
- * absent when the row is nested in a folder (where the folder body supplies the
- * indent instead). Supplying it replaces the flat row's `pl-3`, so the two
- * unfiled lists line up on one grip column. The drag props are deliberately
- * structural — a ref callback, a style and a boolean — so this component stays
- * free of @dnd-kit, exactly like `BoardFolderRow`.
+ * `leading` is the 24px slot `PlainBoardRow` reserves for its grip: the inert
+ * spacer by default, a real drag handle when the lazy drag tree passes one. It
+ * is NOT optional — every list this row appears in also contains owned rows,
+ * which always reserve that 24px, so a shared row without it sits 24px to the
+ * left of its neighbours. Inside a folder that was the visible symptom: the
+ * folder body's `pl-3` put a filed owned row's link at 36px and a filed shared
+ * row's at 24px, 12px apart in the feature's flagship view.
+ *
+ * For the same reason this row spaces its trailing markers with explicit
+ * margins rather than a row-level `gap`: a gap would also push the <Link> off
+ * the grip column by the gap width, which is a second, smaller version of the
+ * same misalignment. `PlainBoardRow` is the reference — match it exactly.
+ *
+ * The drag props are deliberately structural — a ref callback, a style and a
+ * boolean — so this component stays free of @dnd-kit, exactly like
+ * `BoardFolderRow`.
  */
 export function SharedBoardRow({
   board,
   isActive,
   folders = [],
   currentFolderId = null,
-  leading,
+  leading = <span className="size-6 shrink-0" aria-hidden />,
   dragRef,
   isDragging = false,
   style,
@@ -59,8 +68,7 @@ export function SharedBoardRow({
       ref={dragRef}
       style={style}
       className={cn(
-        "group/row flex items-center gap-1 rounded-md pr-1 transition-colors",
-        leading ? null : "pl-3",
+        "group/row flex items-center rounded-md pr-1 transition-colors",
         isDragging && "relative z-20 shadow-lg",
         isActive
           ? "bg-primary/80 text-foreground"
@@ -71,20 +79,20 @@ export function SharedBoardRow({
       <Link
         href={`/boards/${board.id}`}
         aria-current={isActive ? "page" : undefined}
-        className="min-w-0 flex-1 truncate py-1 text-xs"
+        className="min-w-0 flex-1 truncate py-1 pr-1 text-xs"
       >
         {board.name}
       </Link>
       {board.access_level === "viewer" ? (
         <Eye
           aria-label="View only"
-          className="text-muted-foreground size-3 shrink-0"
+          className="text-muted-foreground mr-0.5 size-3 shrink-0"
         />
       ) : null}
       {board.owner_name ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex shrink-0 items-center">
+            <span className="mr-0.5 flex shrink-0 items-center">
               <Users2
                 aria-label={`Shared by ${board.owner_name}`}
                 className="text-muted-foreground size-3.5"

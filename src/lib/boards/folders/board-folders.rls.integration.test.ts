@@ -28,7 +28,9 @@ describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
   let aBoardId: string;
   let aBoard2Id: string;
   let aFolderId: string;
+  let bUserId: string;
   let bBoardId: string;
+  let bFolderId: string;
 
   async function provisionUser(label: string): Promise<{
     id: string;
@@ -114,7 +116,19 @@ describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
     //    for A.
     const b = await provisionUser("b");
     bAnon = b.anon;
+    bUserId = b.id;
     bBoardId = await provisionBoard(bAnon, b.orgId, b.id, "B");
+
+    // B gets a folder of their own, so the folder-ownership tests below can
+    // contrast "my folder" (allowed) against "A's folder id" (rejected) with
+    // every OTHER term of the WITH CHECK held constant.
+    const { data: bFolder, error: bFolderErr } = await bAnon
+      .from("board_folders")
+      .insert({ user_id: bUserId, name: "B's folder" })
+      .select("id")
+      .single();
+    expect(bFolderErr, "insert board_folders(B)").toBeNull();
+    bFolderId = (bFolder as { id: string }).id;
   }, 90_000);
 
   afterAll(async () => {
@@ -151,6 +165,57 @@ describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
       folder_id: aFolderId,
     });
     expect(error).toBeNull();
+  });
+
+  it("rejects filing your OWN board into another user's folder", async () => {
+    // Every other term of the WITH CHECK passes: the row is keyed to B's own
+    // user_id and bBoardId is a board B created, so can_read_board() is true.
+    // Only folder_id is someone else's — which the original policy never
+    // checked, making this succeed and turning the table into a
+    // folder-existence oracle.
+    const { error } = await bAnon.from("board_folder_boards").insert({
+      user_id: bUserId,
+      board_id: bBoardId,
+      folder_id: aFolderId,
+    });
+    expect(error).not.toBeNull();
+    expect(error?.code).toBe("42501"); // RLS violation, not a FK violation
+  });
+
+  it("makes a real folder owned by someone else indistinguishable from one that does not exist", async () => {
+    // This is the oracle itself. Before the fix these two probes answered
+    // differently — a real folder id inserted cleanly, a made-up one tripped
+    // the folder_id FK (23503) — and that difference IS the leak. Now both
+    // must be the same RLS refusal, before the FK is ever consulted.
+    const { error } = await bAnon.from("board_folder_boards").insert({
+      user_id: bUserId,
+      board_id: bBoardId,
+      folder_id: randomUUID(),
+    });
+    expect(error?.code).toBe("42501");
+  });
+
+  it("allows filing your own board into your OWN folder", async () => {
+    // The control: the tightened policy must not have broken the happy path.
+    const { error } = await bAnon.from("board_folder_boards").insert({
+      user_id: bUserId,
+      board_id: bBoardId,
+      folder_id: bFolderId,
+    });
+    expect(error).toBeNull();
+  });
+
+  it("rejects MOVING an existing placement into another user's folder", async () => {
+    // The update policy carries its own WITH CHECK, and moveBoardToFolder
+    // upserts — so the insert gate alone would leave the same hole open on the
+    // re-file path. Depends on the placement inserted by the test above.
+    const { error } = await bAnon
+      .from("board_folder_boards")
+      .update({ folder_id: aFolderId })
+      .eq("user_id", bUserId)
+      .eq("board_id", bBoardId);
+    expect(error).not.toBeNull();
+    expect(error?.code).toBe("42501");
   });
 
   it("cascades: deleting the folder removes its placements but leaves the boards intact", async () => {
