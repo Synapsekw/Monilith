@@ -17,26 +17,13 @@ const listBuilder: {
 const listEq = listBuilder.eq;
 const listSelect = vi.fn(() => ({ eq: listEq }));
 
-// `getWidgetAggregationCached` path: rpc("dashboard_aggregate", …) and
-// from("columns").select().eq().maybeSingle()
-const rpc = vi.fn();
-const colMaybeSingle = vi.fn();
-const colEq = vi.fn(() => ({ maybeSingle: colMaybeSingle }));
-const colSelect = vi.fn(() => ({ eq: colEq }));
-
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
-    from: (table: string) =>
-      table === "columns" ? { select: colSelect } : { select: listSelect },
-    rpc,
+    from: () => ({ select: listSelect }),
   }),
 }));
 
-import {
-  DASHBOARDS_LIMIT,
-  getWidgetAggregationCached,
-  listDashboardsCached,
-} from "./queries-cached";
+import { DASHBOARDS_LIMIT, listDashboardsCached } from "./queries-cached";
 
 beforeEach(() => {
   listSelect.mockClear();
@@ -44,11 +31,17 @@ beforeEach(() => {
   orderForList.mockClear();
   orderForList.mockReturnValue({ limit: limitForList });
   limitForList.mockReset();
-  rpc.mockReset();
-  colSelect.mockClear();
-  colEq.mockClear();
-  colMaybeSingle.mockReset();
 });
+
+// getWidgetAggregationCached / getWidgetCompletionCached / getWidgetHealthCached
+// were removed from this module (see the NOTE in queries-cached.ts): they ran
+// dashboard_aggregate/dashboard_completion/dashboard_health_summary on the
+// service client, and those RPCs are SECURITY DEFINER + auth.uid()-gated, so
+// the service client (no session) always got 42501. resolveWidgetAggregate
+// (widget-slot-core.ts) now calls resolveAggregate/resolveCompletion/
+// resolveHealth (widget-resolve.ts) over the request's own RLS client
+// instead — covered by widget-resolve.test.ts and the RLS integration test
+// (widget-aggregate-rls-client.rls.integration.test.ts).
 
 describe("listDashboardsCached", () => {
   it("filters by orgId (tenant boundary)", async () => {
@@ -84,69 +77,5 @@ describe("listDashboardsCached", () => {
     await listDashboardsCached("org-A");
     expect(listEq).toHaveBeenCalledWith("org_id", "org-A");
     expect(listEq).not.toHaveBeenCalledWith("workspace_id", expect.anything());
-  });
-});
-
-describe("getWidgetAggregationCached", () => {
-  it("runs dashboard_aggregate for the widget's board and maps buckets", async () => {
-    rpc.mockResolvedValue({
-      data: [{ group_key: "opt1", metric: "3" }],
-      error: null,
-    });
-    const res = await getWidgetAggregationCached({
-      widgetId: "w1",
-      orgId: "org-A",
-      boardId: "board-1",
-      config: { agg: "count" },
-      groupColumnId: null,
-    });
-    expect(rpc).toHaveBeenCalledWith(
-      "dashboard_aggregate",
-      expect.objectContaining({ p_board_id: "board-1", p_agg: "count" }),
-    );
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.buckets).toEqual([{ group_key: "opt1", metric: 3 }]);
-      expect(res.columnMeta).toBeNull();
-    }
-  });
-
-  it("resolves group-column options when grouped", async () => {
-    rpc.mockResolvedValue({ data: [], error: null });
-    colMaybeSingle.mockResolvedValue({
-      data: {
-        kind: "status",
-        settings: { options: [{ id: "o1", label: "Open", color: "#fff" }] },
-      },
-      error: null,
-    });
-    const res = await getWidgetAggregationCached({
-      widgetId: "w1",
-      orgId: "org-A",
-      boardId: "board-1",
-      config: { agg: "count", groupColumnId: "col-1" },
-      groupColumnId: "col-1",
-    });
-    expect(colSelect).toHaveBeenCalled();
-    expect(colEq).toHaveBeenCalledWith("id", "col-1");
-    expect(res.ok).toBe(true);
-    if (res.ok)
-      expect(res.columnMeta).toEqual({
-        kind: "status",
-        options: [{ id: "o1", label: "Open", color: "#fff" }],
-      });
-  });
-
-  it("returns an error string when the RPC fails", async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
-    const res = await getWidgetAggregationCached({
-      widgetId: "w1",
-      orgId: "org-A",
-      boardId: "board-1",
-      config: { agg: "count" },
-      groupColumnId: null,
-    });
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toBe("boom");
   });
 });
