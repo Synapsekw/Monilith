@@ -57,9 +57,13 @@ function CoarseCaption({ label }: { label: string }) {
 export function PlainBoardRow({
   board,
   isActive,
+  folders = [],
+  currentFolderId = null,
 }: {
   board: BoardListEntry;
   isActive: boolean;
+  folders?: BoardFolder[];
+  currentFolderId?: string | null;
 }) {
   return (
     <div
@@ -87,6 +91,8 @@ export function PlainBoardRow({
       <BoardItemMenu
         board={{ id: board.id, name: board.name }}
         isActive={isActive}
+        folders={folders}
+        currentFolderId={currentFolderId}
       />
     </div>
   );
@@ -218,12 +224,16 @@ export function BoardsNav({
                 key={entry.board.id}
                 board={entry.board}
                 isActive={entry.board.id === activeBoardId}
+                folders={folders}
+                currentFolderId={folder.id}
               />
             ) : (
               <SharedBoardRow
                 key={entry.board.id}
                 board={entry.board}
                 isActive={entry.board.id === activeBoardId}
+                folders={folders}
+                currentFolderId={folder.id}
               />
             ),
           )}
@@ -236,18 +246,29 @@ export function BoardsNav({
         <BoardsNavSortable
           boards={grouped.unfiledOwned}
           activeBoardId={activeBoardId}
+          folders={folders}
         />
       ) : (
         <div
           data-testid="boards-nav-owned"
           onPointerEnter={() => setDndReady(true)}
-          onFocus={() => setDndReady(true)}
+          // React routes portal events up the COMPONENT tree, so focus landing
+          // inside a row's portaled dropdown would otherwise read as "focus
+          // entered the board list" and swap this subtree for the lazy sortable
+          // one — tearing down the row and closing the menu the user just
+          // opened. Only a focus on a real DOM descendant is a genuine
+          // interaction with the list.
+          onFocus={(e) => {
+            if (e.currentTarget.contains(e.target)) setDndReady(true);
+          }}
         >
           {grouped.unfiledOwned.map((b) => (
             <PlainBoardRow
               key={b.id}
               board={b}
               isActive={b.id === activeBoardId}
+              folders={folders}
+              currentFolderId={null}
             />
           ))}
         </div>
@@ -263,6 +284,8 @@ export function BoardsNav({
               key={b.id}
               board={b}
               isActive={b.id === activeBoardId}
+              folders={folders}
+              currentFolderId={null}
             />
           ))}
         </>

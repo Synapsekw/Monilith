@@ -57,7 +57,13 @@ export function BoardFolderRow({
         >
           {folder.name}
         </button>
-        <span className="text-3xs text-muted-foreground mr-0.5 shrink-0 tabular-nums">
+        {/* Decorative: a screen reader would otherwise announce a bare number
+            with no unit after the folder name, and the expanded list of boards
+            is right there. */}
+        <span
+          aria-hidden
+          className="text-3xs text-muted-foreground mr-0.5 shrink-0 tabular-nums"
+        >
           {count}
         </span>
         <BoardFolderMenu folder={folder} />

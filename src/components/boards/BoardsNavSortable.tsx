@@ -13,6 +13,7 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import type { BoardListEntry } from "@/lib/boards/queries";
+import type { BoardFolder } from "@/lib/boards/folders/types";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { reorderBoard } from "@/lib/boards/actions";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
@@ -28,9 +29,11 @@ import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 function SortableBoardRow({
   board,
   isActive,
+  folders,
 }: {
   board: BoardListEntry;
   isActive: boolean;
+  folders: BoardFolder[];
 }) {
   const {
     setNodeRef,
@@ -81,6 +84,10 @@ function SortableBoardRow({
       <BoardItemMenu
         board={{ id: board.id, name: board.name }}
         isActive={isActive}
+        folders={folders}
+        // Only unfiled boards reach the sortable list — filed ones render
+        // inside their folder, which is not drag-reorderable.
+        currentFolderId={null}
       />
     </div>
   );
@@ -95,9 +102,11 @@ function SortableBoardRow({
 export function BoardsNavSortable({
   boards,
   activeBoardId,
+  folders = [],
 }: {
   boards: BoardListEntry[];
   activeBoardId?: string;
+  folders?: BoardFolder[];
 }) {
   // Optimistic order for the owned list: seeded from server props, re-synced
   // (during render, per React's "adjust state when a prop changes" pattern)
@@ -162,6 +171,7 @@ export function BoardsNavSortable({
               key={b.id}
               board={b}
               isActive={b.id === activeBoardId}
+              folders={folders}
             />
           ))}
         </SortableContext>

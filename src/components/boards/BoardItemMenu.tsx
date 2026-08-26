@@ -41,13 +41,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { BoardFolder } from "@/lib/boards/folders/types";
+import { MoveToFolderMenu } from "@/components/boards/MoveToFolderMenu";
 
 export function BoardItemMenu({
   board,
   isActive,
+  folders = [],
+  currentFolderId = null,
 }: {
   board: { id: string; name: string };
   isActive: boolean;
+  folders?: BoardFolder[];
+  currentFolderId?: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -151,6 +157,12 @@ export function BoardItemMenu({
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={doDuplicate}>Duplicate</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <MoveToFolderMenu
+            boardId={board.id}
+            folders={folders}
+            currentFolderId={currentFolderId}
+          />
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"

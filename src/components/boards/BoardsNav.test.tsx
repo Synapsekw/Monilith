@@ -9,8 +9,17 @@ import { useUIStore } from "@/stores/ui";
 
 const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
 
+// Hoisted so the SAME spies are handed to every `useRouter()` call. A factory
+// that minted a fresh `{ push, refresh }` per call could never observe a stray
+// `router.refresh()` — which is exactly the gotcha-09 regression shape (a nav
+// toggle that quietly re-runs every query in the page).
+const { routerPush, routerRefresh } = vi.hoisted(() => ({
+  routerPush: vi.fn(),
+  routerRefresh: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, refresh: routerRefresh }),
   usePathname: () => "/",
   useParams: () => mockUseParams(),
   useSearchParams: () => new URLSearchParams(),
@@ -25,13 +34,21 @@ vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
   return { useTouchAwareSensors: vi.fn(actual.useTouchAwareSensors) };
 });
 
-describe("BoardsNav", () => {
-  beforeEach(() => {
-    mockUseParams.mockReturnValue({});
-    vi.mocked(useCoarsePointer).mockReturnValue(false);
-    vi.mocked(useTouchAwareSensors).mockClear();
-  });
+// File-level so every describe gets a clean slate regardless of block order —
+// scoping these to one describe only worked while that block happened to run
+// last.
+beforeEach(() => {
+  mockUseParams.mockReturnValue({});
+  vi.mocked(useCoarsePointer).mockReturnValue(false);
+  vi.mocked(useTouchAwareSensors).mockClear();
+  routerPush.mockClear();
+  routerRefresh.mockClear();
+  // Folder open/closed state is the persisted `collapsedSections` map shared
+  // with NavSection — reset it so one test's toggle can't leak into the next.
+  useUIStore.setState({ collapsedSections: {} });
+});
 
+describe("BoardsNav", () => {
   it("shows 'No boards yet' when no boards are provided", () => {
     render(<BoardsNav boards={[]} sharedBoards={[]} />);
 
@@ -430,12 +447,6 @@ describe("BoardsNav folders", () => {
     access_level: "editor" as const,
   };
 
-  beforeEach(() => {
-    // Folder open/closed state is the persisted `collapsedSections` map shared
-    // with NavSection — reset it so one test's toggle can't leak into the next.
-    useUIStore.setState({ collapsedSections: {} });
-  });
-
   it("renders a folder containing both an owned and a shared board", () => {
     render(
       <TooltipProvider>
@@ -509,6 +520,9 @@ describe("BoardsNav folders", () => {
     expect(
       screen.getByRole("button", { name: /Expand Acme Rebrand/i }),
     ).toBeInTheDocument();
+    // Collapsing changes no server data, so it must not re-run the page's
+    // queries (gotcha-09): client state only, zero round-trips.
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 
   it("leaves the collapsed rail flat — no folder chrome", () => {
@@ -527,6 +541,79 @@ describe("BoardsNav folders", () => {
     expect(screen.queryByText("Acme Rebrand")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Website revamp" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers a 'Move to folder' entry on an owned board row", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Board actions" }));
+    expect(await screen.findByText("Move to folder")).toBeInTheDocument();
+  });
+
+  it("offers a 'Move to folder' entry on a shared board row", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[]}
+          sharedBoards={[sharedBoard]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Board actions for Design tasks" }),
+    );
+    expect(await screen.findByText("Move to folder")).toBeInTheDocument();
+  });
+
+  it("keeps an unfiled owned row's menu open — a portaled focus is not a list interaction", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav boards={[ownedBoard]} sharedBoards={[]} folders={[]} />
+      </TooltipProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Board actions" }));
+    expect(await screen.findByText("Rename")).toBeInTheDocument();
+    // React sends portal events up the COMPONENT tree, so the menu's own focus
+    // must not be mistaken for focus entering the board list and swap in the
+    // lazy sortable variant — that would unmount the row mid-interaction.
+    expect(screen.queryByTestId("boards-nav-sortable")).not.toBeInTheDocument();
+  });
+
+  it("keeps the shared-board row's owner and view-only markers alongside its menu", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[]}
+          sharedBoards={[{ ...sharedBoard, access_level: "viewer" as const }]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[{ boardId: "s1", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    // Filing a shared board must never hide WHOSE board it is.
+    expect(screen.getByLabelText("Shared by Ada")).toBeInTheDocument();
+    expect(screen.getByLabelText("View only")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Design tasks" })).toHaveAttribute(
+      "href",
+      "/boards/s1",
+    );
+    expect(
+      screen.getByRole("button", { name: "Board actions for Design tasks" }),
     ).toBeInTheDocument();
   });
 });
