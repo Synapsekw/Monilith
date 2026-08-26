@@ -112,6 +112,7 @@ export function AgentEditor({
   providers,
   capabilityCeiling,
   documents,
+  documentTotal = documents.length,
   initialDocumentIds = [],
   orgDefaultContextLength,
   onSaved,
@@ -130,6 +131,14 @@ export function AgentEditor({
   /** The owner's reference-document library, METADATA ONLY (no `body`) — read
    *  once by the server page and threaded straight to `DocumentPicker`. */
   documents: AgentDocumentRow[];
+  /** How many documents the owner ACTUALLY has — same value threaded to
+   *  `DocumentLibrary`'s `total` prop, from the same `listDocumentsForOwner`
+   *  read. `documents` is capped at `LIBRARY_PAGE_SIZE`, so once a library
+   *  outgrows a page this diverges from `documents.length`; forwarded to
+   *  `DocumentPicker` so it can say so instead of silently hiding anything
+   *  past the cap. Defaults to `documents.length` (no cap in effect) so
+   *  callers with nothing to report don't have to invent a number. */
+  documentTotal?: number;
   /** This agent's currently-attached document ids, in saved order. Empty for
    *  a brand-new agent (`mode: "create"` never has anything attached yet). */
   initialDocumentIds?: string[];
@@ -375,6 +384,7 @@ export function AgentEditor({
               context instead of guessing a window nothing confirmed. */}
           <DocumentPicker
             documents={documents}
+            total={documentTotal}
             selectedIds={selectedDocumentIds}
             onChange={setSelectedDocumentIds}
             contextLength={

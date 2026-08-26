@@ -112,6 +112,37 @@ describe("DocumentPicker", () => {
     ).toBeInTheDocument();
   });
 
+  it("says how many are hidden when the library is capped at a page", () => {
+    // `documents` here is ONE page (as `AgentEditor`/`AgentsSection` thread
+    // it), while `total` is what the owner actually has — the same split
+    // `DocumentLibrary` already surfaces as "Showing 1 of 137 documents".
+    // Without this, a document past the cap is invisible in the picker with
+    // no indication it exists or why it can't be attached.
+    render(
+      <DocumentPicker
+        {...base}
+        documents={[doc("a", 1_000)]}
+        total={137}
+        selectedIds={[]}
+      />,
+    );
+    expect(screen.getByText(/showing 1 of 137 documents/i)).toBeInTheDocument();
+  });
+
+  it("shows no capped-library notice when the page holds everything", () => {
+    // Default `total` (== documents.length) is the "no cap in effect" case —
+    // every existing caller that never mentions `total` must keep seeing
+    // nothing extra, not a spurious "showing 1 of 1".
+    render(
+      <DocumentPicker
+        {...base}
+        documents={[doc("a", 1_000)]}
+        selectedIds={[]}
+      />,
+    );
+    expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
+  });
+
   it("selecting is CONTROLLED client state — it reports up and fetches nothing", () => {
     // The old version of this test asserted that a locally-declared `vi.fn()`
     // — a mock of nothing, imported by nobody — had not been called, which no
