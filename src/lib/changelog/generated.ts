@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-08-26",
+    kind: "new",
+    title: "Group your boards into folders",
+    description:
+      "Organize the sidebar by dropping boards into folders you create. Folders are private to you, and they can hold both your own boards and ones shared with you. File a board from its ... menu, or drag it onto a folder.",
+  },
+  {
+    date: "2026-08-26",
     kind: "fixed",
     title: "See every document you can attach",
     description:
