@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { startTransition, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -123,6 +123,30 @@ export function BoardsNav({
   // so the very first reorder still works — while first paint stays plain and
   // @dnd-kit stays off the shell's initial JS.
   const [dndReady, setDndReady] = useState(false);
+
+  // Mounting the sortable variant REPLACES the plain rows in the DOM, so the
+  // element the user just tabbed to is destroyed and focus falls to
+  // <body> — their first Tab into the list appears to do nothing. Remember
+  // which board link held focus at arm time and hand focus back to its twin
+  // once the drag-enabled list is up.
+  const [restoreFocusHref, setRestoreFocusHref] = useState<string | null>(null);
+
+  function armDnd(fromFocus: boolean) {
+    if (fromFocus) {
+      const active = document.activeElement;
+      setRestoreFocusHref(
+        active instanceof HTMLAnchorElement
+          ? active.getAttribute("href")
+          : null,
+      );
+    }
+    // A transition lets React hold the current rows while the lazy chunk
+    // resolves rather than flashing the dynamic import's empty fallback. It
+    // does NOT save focus on its own — the swap still unmounts the focused
+    // node, which is what `restoreFocusHref` above is for. (jsdom resolves the
+    // import inside the same flush, so the flash itself has no unit test.)
+    startTransition(() => setDndReady(true));
+  }
 
   // Fold folders + placements into the tree once. `groupBoardsByFolder` owns the
   // "a folder with no visible board is dropped, not rendered empty" rule.
@@ -247,11 +271,12 @@ export function BoardsNav({
           boards={grouped.unfiledOwned}
           activeBoardId={activeBoardId}
           folders={folders}
+          restoreFocusHref={restoreFocusHref}
         />
       ) : (
         <div
           data-testid="boards-nav-owned"
-          onPointerEnter={() => setDndReady(true)}
+          onPointerEnter={() => armDnd(false)}
           // React routes portal events up the COMPONENT tree, so focus landing
           // inside a row's portaled dropdown would otherwise read as "focus
           // entered the board list" and swap this subtree for the lazy sortable
@@ -259,7 +284,7 @@ export function BoardsNav({
           // opened. Only a focus on a real DOM descendant is a genuine
           // interaction with the list.
           onFocus={(e) => {
-            if (e.currentTarget.contains(e.target)) setDndReady(true);
+            if (e.currentTarget.contains(e.target)) armDnd(true);
           }}
         >
           {grouped.unfiledOwned.map((b) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { GripVertical, Users2 } from "lucide-react";
@@ -103,10 +103,18 @@ export function BoardsNavSortable({
   boards,
   activeBoardId,
   folders = [],
+  restoreFocusHref = null,
 }: {
   boards: BoardListEntry[];
   activeBoardId?: string;
   folders?: BoardFolder[];
+  /**
+   * The `href` of the board link that held focus when `BoardsNav` swapped the
+   * plain list for this one. That swap destroys the focused element, so this
+   * variant hands focus back to the same board on mount — otherwise a keyboard
+   * user's first Tab into the boards list silently drops them on <body>.
+   */
+  restoreFocusHref?: string | null;
 }) {
   // Optimistic order for the owned list: seeded from server props, re-synced
   // (during render, per React's "adjust state when a prop changes" pattern)
@@ -154,8 +162,19 @@ export function BoardsNavSortable({
     });
   }
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!restoreFocusHref) return;
+    containerRef.current
+      ?.querySelector<HTMLElement>(`a[href="${restoreFocusHref}"]`)
+      ?.focus();
+    // Runs on mount (the prop is already set by the time this list first
+    // renders) and never again — a later identical value means the server
+    // re-rendered, not that the list was swapped in under the user.
+  }, [restoreFocusHref]);
+
   return (
-    <div data-testid="boards-nav-sortable">
+    <div data-testid="boards-nav-sortable" ref={containerRef}>
       <DndContext
         id="sidebar-boards"
         sensors={sensors}

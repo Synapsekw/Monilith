@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { reorderPosition } from "@/lib/boards/group-reorder";
 import { BoardsNav } from "./BoardsNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
 import { useUIStore } from "@/stores/ui";
+import { moveBoardToFolder } from "@/lib/boards/folders/actions";
+import { showMutationError } from "@/lib/ui/mutation-toast";
 
 const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
 
@@ -23,6 +25,21 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useParams: () => mockUseParams(),
   useSearchParams: () => new URLSearchParams(),
+}));
+
+// The folder mutations are the only server calls this nav makes. Mocking the
+// whole module (not just `moveBoardToFolder`) keeps NewFolderDialog's
+// `createFolder` import resolvable.
+vi.mock("@/lib/boards/folders/actions", () => ({
+  moveBoardToFolder: vi.fn(async () => ({ ok: true, data: undefined })),
+  createFolder: vi.fn(async () => ({ ok: true, data: undefined })),
+}));
+
+// The dropdown has already closed by the time a move fails, so the toast IS
+// the failure surface — assert on it rather than on sonner's DOM.
+vi.mock("@/lib/ui/mutation-toast", () => ({
+  showMutationError: vi.fn(),
+  showUndoToast: vi.fn(),
 }));
 
 vi.mock("@/lib/hooks/use-coarse-pointer", () => ({
@@ -43,6 +60,9 @@ beforeEach(() => {
   vi.mocked(useTouchAwareSensors).mockClear();
   routerPush.mockClear();
   routerRefresh.mockClear();
+  vi.mocked(moveBoardToFolder).mockClear();
+  vi.mocked(moveBoardToFolder).mockResolvedValue({ ok: true, data: undefined });
+  vi.mocked(showMutationError).mockClear();
   // Folder open/closed state is the persisted `collapsedSections` map shared
   // with NavSection — reset it so one test's toggle can't leak into the next.
   useUIStore.setState({ collapsedSections: {} });
@@ -369,6 +389,26 @@ describe("BoardsNav drag-reorder", () => {
     expect(useTouchAwareSensors).toHaveBeenCalled();
   });
 
+  it("keeps keyboard focus on the board you tabbed to when the drag variant mounts", async () => {
+    render(<BoardsNav boards={owned} sharedBoards={[]} />);
+
+    // First Tab into the boards list lands on a board link…
+    const link = screen.getByRole("link", { name: "Alpha" });
+    link.focus();
+    expect(document.activeElement).toBe(link);
+
+    // …which arms the lazy drag-enabled list. Mounting it REPLACES the plain
+    // rows, destroying the focused element — so it must hand focus back, or
+    // the user's first Tab appears to do nothing and drops them on <body>.
+    await screen.findByTestId("boards-nav-sortable");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("link", { name: "Alpha" }),
+      ),
+    );
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
   it("renders no reorder handles when collapsed", () => {
     render(
       <TooltipProvider>
@@ -615,5 +655,185 @@ describe("BoardsNav folders", () => {
     expect(
       screen.getByRole("button", { name: "Board actions for Design tasks" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("BoardsNav folder moves", () => {
+  const ownedBoard = {
+    id: "b1",
+    name: "Website revamp",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+  const sharedBoard = {
+    id: "s1",
+    name: "Design tasks",
+    position: 0,
+    owner_name: "Ada",
+    access_level: "editor" as const,
+  };
+  const folders = [
+    { id: "f1", name: "Acme Rebrand", position: 0 },
+    { id: "f2", name: "Q3 Launch", position: 1 },
+  ];
+
+  /** Open a row menu, then its "Move to folder" submenu, and hand back the items. */
+  async function openMoveSubmenu(triggerName: string) {
+    fireEvent.click(screen.getByRole("button", { name: triggerName }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /Move to folder/ }),
+    );
+    // The submenu content is portaled; wait for its first entry to land.
+    await screen.findByRole("menuitem", { name: "Q3 Launch" });
+  }
+
+  it("files an owned board into the folder you pick, then refreshes the sidebar", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={folders}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    await openMoveSubmenu("Board actions");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Q3 Launch" }));
+
+    // The board the user was pointing at, into the folder they clicked — not
+    // some other folder, and not `null` (which would silently UNFILE it).
+    await waitFor(() =>
+      expect(moveBoardToFolder).toHaveBeenCalledWith({
+        boardId: "b1",
+        folderId: "f2",
+      }),
+    );
+    // Placement is server data, so the sidebar must be re-read — without this
+    // the move persists but the nav shows the stale position until a reload.
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+  });
+
+  it("files a shared board from its own row menu", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[]}
+          sharedBoards={[sharedBoard]}
+          folders={folders}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    await openMoveSubmenu("Board actions for Design tasks");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Acme Rebrand" }));
+
+    await waitFor(() =>
+      expect(moveBoardToFolder).toHaveBeenCalledWith({
+        boardId: "s1",
+        folderId: "f1",
+      }),
+    );
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+  });
+
+  it("greys out the folder the board is already in, and only that one", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={folders}
+          placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    await openMoveSubmenu("Board actions");
+
+    expect(
+      screen.getByRole("menuitem", { name: "Acme Rebrand" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("menuitem", { name: "Q3 Launch" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("unfiles a filed board via 'Remove from folder'", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={folders}
+          placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    await openMoveSubmenu("Board actions");
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Remove from folder" }),
+    );
+
+    await waitFor(() =>
+      expect(moveBoardToFolder).toHaveBeenCalledWith({
+        boardId: "b1",
+        folderId: null,
+      }),
+    );
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+  });
+
+  it("offers no 'Remove from folder' on a board that isn't in one", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={folders}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    await openMoveSubmenu("Board actions");
+
+    expect(
+      screen.queryByRole("menuitem", { name: "Remove from folder" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("toasts and does not refresh when the move fails", async () => {
+    vi.mocked(moveBoardToFolder).mockResolvedValue({
+      ok: false,
+      error: "Nope.",
+    });
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={folders}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    await openMoveSubmenu("Board actions");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Acme Rebrand" }));
+
+    await waitFor(() =>
+      expect(showMutationError).toHaveBeenCalledWith(
+        "Couldn't move the board.",
+        expect.objectContaining({ message: "Nope." }),
+      ),
+    );
+    // A failed move changed nothing on the server — re-reading would just
+    // repaint the same nav and hide the failure.
+    expect(routerRefresh).not.toHaveBeenCalled();
   });
 });
