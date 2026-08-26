@@ -43,3 +43,34 @@ describe("renderDigestText", () => {
     expect(text).toContain(input.unsubscribeUrl);
   });
 });
+
+describe("renderDigestHtml with a narrative", () => {
+  it("includes the narrative as a lead paragraph when present", () => {
+    const html = renderDigestHtml({
+      ...input,
+      narrative: "Great <week> overall.",
+    });
+    expect(html).toContain("Great &lt;week&gt; overall.");
+  });
+
+  it("omits the narrative block entirely when absent (byte-identical to no-narrative path)", () => {
+    const withNarrative = renderDigestHtml({ ...input, narrative: undefined });
+    expect(withNarrative).toBe(renderDigestHtml(input));
+  });
+});
+
+describe("renderDigestText with a narrative", () => {
+  it("includes the narrative as the first line when present", () => {
+    const text = renderDigestText({
+      ...input,
+      narrative: "Great week overall.",
+    });
+    expect(text.split("\n")[0]).toBe("Great week overall.");
+  });
+
+  it("is unchanged when narrative is absent", () => {
+    expect(renderDigestText({ ...input, narrative: undefined })).toBe(
+      renderDigestText(input),
+    );
+  });
+});

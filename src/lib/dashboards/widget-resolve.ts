@@ -6,11 +6,13 @@ import { optionSchema } from "@/lib/validations/boards";
 import { normalizeChartConfig } from "@/lib/dashboards/chart-config";
 import type { SeriesData, SeriesPoint } from "@/lib/dashboards/series";
 import type { DisplayColumn } from "@/lib/dashboards/list-rows";
-import type { AggregateBucket, ColumnMeta } from "@/lib/dashboards/widget-data";
 import type {
-  WidgetCompletion,
-  WidgetHealth,
-} from "@/lib/dashboards/queries-cached";
+  AggregateBucket,
+  ColumnMeta,
+  CompletionGroupRow,
+  GroupMeta,
+  HealthCounts,
+} from "@/lib/dashboards/widget-data";
 import type { Database, Json } from "@/types/database.types";
 
 export type WidgetRowsData = {
@@ -18,11 +20,22 @@ export type WidgetRowsData = {
   rows: { itemId: string; name: string; cells: Record<string, unknown> }[];
 };
 
+export type WidgetCompletion =
+  | { ok: true; rows: CompletionGroupRow[]; groups: GroupMeta[] }
+  | { ok: false; error: string };
+
+export type WidgetHealth =
+  | { ok: true; counts: HealthCounts }
+  | { ok: false; error: string };
+
 type DB = SupabaseClient<Database>;
 
-/** Uncached aggregate resolve (Number/Battery). Bounded RPC over indexed board_id.
- *  Mirrors getWidgetAggregationCached without the cache wrapper — the preview
- *  needs the current draft, never a TTL'd entry. */
+/** Aggregate resolve (Number/Battery). Bounded RPC over indexed board_id — the
+ *  request's own RLS-respecting client, so `dashboard_aggregate`'s
+ *  `auth.uid()`-based guards evaluate against the real caller (see
+ *  `resolveWidgetAggregate` in widget-slot-core.ts for the full story). Also
+ *  used uncached by the config-sheet live preview, which needs the current
+ *  draft, never a stale entry. */
 export async function resolveAggregate(
   supabase: DB,
   { boardId, config }: { boardId: string; config: Record<string, unknown> },
@@ -62,7 +75,7 @@ export async function resolveAggregate(
   return { ok: true, buckets, columnMeta };
 }
 
-/** Uncached completion resolve — mirrors getWidgetCompletionCached body. */
+/** Completion resolve — RLS client, same reasoning as resolveAggregate above. */
 export async function resolveCompletion(
   supabase: DB,
   { boardId, config }: { boardId: string; config: Record<string, unknown> },
@@ -106,7 +119,7 @@ export async function resolveCompletion(
   };
 }
 
-/** Uncached health resolve — mirrors getWidgetHealthCached body. */
+/** Health resolve — RLS client, same reasoning as resolveAggregate above. */
 export async function resolveHealth(
   supabase: DB,
   { boardId }: { boardId: string },

@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
+    PostgrestVersion: "14.17";
   };
   public: {
     Tables: {
@@ -51,6 +51,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "admin_audit_log_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      agent_documents: {
+        Row: {
+          body: string;
+          created_at: string;
+          id: string;
+          org_id: string;
+          owner_id: string;
+          source_file_name: string | null;
+          source_format: string;
+          title: string;
+          token_estimate: number;
+          updated_at: string;
+        };
+        Insert: {
+          body: string;
+          created_at?: string;
+          id?: string;
+          org_id: string;
+          owner_id: string;
+          source_file_name?: string | null;
+          source_format: string;
+          title: string;
+          token_estimate: number;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          org_id?: string;
+          owner_id?: string;
+          source_file_name?: string | null;
+          source_format?: string;
+          title?: string;
+          token_estimate?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agent_documents_org_id_fkey";
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
@@ -1330,6 +1377,7 @@ export type Database = {
           email_sent_count: number | null;
           error: string | null;
           id: string;
+          narrative: string | null;
           org_id: string | null;
           period_end: string;
           period_start: string;
@@ -1342,6 +1390,7 @@ export type Database = {
           email_sent_count?: number | null;
           error?: string | null;
           id?: string;
+          narrative?: string | null;
           org_id?: string | null;
           period_end: string;
           period_start: string;
@@ -1354,6 +1403,7 @@ export type Database = {
           email_sent_count?: number | null;
           error?: string | null;
           id?: string;
+          narrative?: string | null;
           org_id?: string | null;
           period_end?: string;
           period_start?: string;
@@ -3008,6 +3058,39 @@ export type Database = {
           },
         ];
       };
+      user_agent_documents: {
+        Row: {
+          document_id: string;
+          position: number;
+          user_agent_id: string;
+        };
+        Insert: {
+          document_id: string;
+          position?: number;
+          user_agent_id: string;
+        };
+        Update: {
+          document_id?: string;
+          position?: number;
+          user_agent_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_agent_documents_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "agent_documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_documents_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       user_agent_fires: {
         Row: {
           fire_date: string;
@@ -3129,6 +3212,7 @@ export type Database = {
       user_agent_runs: {
         Row: {
           created_at: string;
+          documents_omitted: boolean;
           error: string | null;
           fire_date: string;
           fire_hour: number;
@@ -3147,6 +3231,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          documents_omitted?: boolean;
           error?: string | null;
           fire_date: string;
           fire_hour: number;
@@ -3165,6 +3250,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          documents_omitted?: boolean;
           error?: string | null;
           fire_date?: string;
           fire_hour?: number;
@@ -3205,6 +3291,7 @@ export type Database = {
           cadence: string;
           capabilities: string[];
           created_at: string;
+          doc_nonce: string;
           enabled: boolean;
           id: string;
           instructions: string;
@@ -3225,6 +3312,7 @@ export type Database = {
           cadence?: string;
           capabilities?: string[];
           created_at?: string;
+          doc_nonce?: string;
           enabled?: boolean;
           id?: string;
           instructions: string;
@@ -3245,6 +3333,7 @@ export type Database = {
           cadence?: string;
           capabilities?: string[];
           created_at?: string;
+          doc_nonce?: string;
           enabled?: boolean;
           id?: string;
           instructions?: string;
@@ -3492,21 +3581,13 @@ export type Database = {
         Args: { p_provider: string; p_user: string };
         Returns: undefined;
       };
-      ai_credential_get:
-        | {
-            Args: { p_user: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          }
-        | {
-            Args: { p_provider: string; p_user: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          };
+      ai_credential_get: {
+        Args: { p_provider: string; p_user: string };
+        Returns: {
+          provider: string;
+          secret: string;
+        }[];
+      };
       ai_credential_set: {
         Args: {
           p_hint: string;
@@ -3517,6 +3598,23 @@ export type Database = {
         Returns: undefined;
       };
       ai_credits_used_this_month: { Args: { p_org: string }; Returns: number };
+      ai_usage_by_feature_this_month: {
+        Args: { p_org: string };
+        Returns: {
+          calls: number;
+          credits: number;
+          feature: string;
+        }[];
+      };
+      ai_usage_summary: {
+        Args: { p_from: string; p_org: string; p_to: string };
+        Returns: {
+          calls: number;
+          cost_usd: number;
+          credits: number;
+          month: string;
+        }[];
+      };
       archive_group: { Args: { p_group_id: string }; Returns: number };
       archive_item: { Args: { p_item_id: string }; Returns: number };
       auth_user_orgs: { Args: never; Returns: string[] };
@@ -4026,21 +4124,13 @@ export type Database = {
         Returns: string;
       };
       org_ai_secret_clear: { Args: { p_org: string }; Returns: undefined };
-      org_ai_secret_get:
-        | {
-            Args: { p_org: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          }
-        | {
-            Args: { p_org: string; p_provider: string };
-            Returns: {
-              provider: string;
-              secret: string;
-            }[];
-          };
+      org_ai_secret_get: {
+        Args: { p_org: string; p_provider: string };
+        Returns: {
+          provider: string;
+          secret: string;
+        }[];
+      };
       org_ai_secret_set: {
         Args: {
           p_hint: string;
@@ -4143,6 +4233,10 @@ export type Database = {
       redeem_invitations: { Args: never; Returns: number };
       remove_member: {
         Args: { p_org_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      replace_agent_documents: {
+        Args: { p_document_ids: string[]; p_user_agent_id: string };
         Returns: undefined;
       };
       report_in_org: {

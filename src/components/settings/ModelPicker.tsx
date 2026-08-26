@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import type { ModelTier } from "@/lib/ai/models/feed-parse";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,16 @@ export type ModelOption = {
   label: string;
   tier: ModelTier;
   supportsTools: boolean;
+  /**
+   * `ai_models.context_length`, straight from the catalog row — null only for
+   * the handful of rows the daily feed refresh has not backfilled yet. Same
+   * field, same nullability as `ResolvedModel.contextLength`
+   * (`src/lib/ai/models/resolve.ts`); threaded through here so the per-agent
+   * reference-document budget meter (`DocumentPicker`) can compute the same
+   * number the run loop will, from the model the owner has actually selected,
+   * with zero extra server round-trips.
+   */
+  contextLength: number | null;
 };
 
 export type ModelValue = { provider: string; modelId: string };
@@ -81,6 +91,7 @@ export function ModelPicker({
   inheritLabel = "Use org default",
   disabled = false,
   emptyHint,
+  label = "Model",
 }: {
   options: ModelOption[];
   value: ModelValue | null;
@@ -98,8 +109,17 @@ export function ModelPicker({
   disabled?: boolean;
   /** Replaces the default "no models yet" line. */
   emptyHint?: string;
+  /**
+   * The field's static name, e.g. "Model" or "Default model" — the trigger's
+   * accessible NAME. Stays static regardless of selection: the chosen model
+   * is exposed separately as the accessible DESCRIPTION (`aria-describedby`,
+   * wired to the same text sighted users see in the trigger), not folded
+   * into the name. See {@link TimezonePicker} — same shared shape, same fix.
+   */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const valueId = useId();
 
   // Grouped by provider, insertion-ordered: the server hands options over
   // already sorted (providers by label, models cheapest-first within one).
@@ -124,17 +144,6 @@ export function ModelPicker({
   );
   const retired = value !== null && selected === null;
 
-  // `role="combobox"` is not name-from-content, so the trigger needs an explicit
-  // label — without it the control is anonymous to a screen reader (and to
-  // `getByRole("combobox", { name })`). Mirrors TimezonePicker.
-  const triggerText = selected
-    ? `${selected.label} · ${selected.providerLabel}`
-    : retired
-      ? value.modelId
-      : allowInherit
-        ? inheritLabel
-        : "Pick a model";
-
   // Nothing to offer AND nothing to undo — the only useful thing left is the
   // sentence. With a value still set the picker stays, however empty, because
   // it is the only way back out of a stored choice.
@@ -154,12 +163,13 @@ export function ModelPicker({
             type="button"
             variant="outline"
             role="combobox"
-            aria-label={triggerText}
+            aria-label={label}
+            aria-describedby={valueId}
             aria-expanded={open}
             disabled={disabled}
             className="border-border hover:border-border-hover w-full justify-between font-normal transition-colors"
           >
-            <span className="truncate">
+            <span id={valueId} className="truncate">
               {selected ? (
                 <>
                   {selected.label}

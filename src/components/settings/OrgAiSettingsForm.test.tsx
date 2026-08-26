@@ -71,6 +71,7 @@ const MODELS: ModelOption[] = [
     label: "Claude Sonnet 5",
     tier: "standard",
     supportsTools: true,
+    contextLength: 200_000,
   },
   {
     provider: "mistral",
@@ -79,6 +80,7 @@ const MODELS: ModelOption[] = [
     label: "Mistral Small",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 32_000,
   },
 ];
 
@@ -266,7 +268,7 @@ describe("OrgAiSettingsForm — default model", () => {
       defaultModelId: "claude-sonnet-5",
     });
     await userEvent.click(
-      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+      screen.getByRole("combobox", { name: "Default model" }),
     );
     await userEvent.click(
       await screen.findByRole("option", { name: /mistral small/i }),
@@ -278,8 +280,8 @@ describe("OrgAiSettingsForm — default model", () => {
     );
     // reverted to the last confirmed model
     expect(
-      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
-    ).toBeInTheDocument();
+      screen.getByRole("combobox", { name: "Default model" }),
+    ).toHaveAccessibleDescription(/claude sonnet 5/i);
   }, 30_000);
 
   it("tells the admin when the default cannot apply in the current mode", () => {
@@ -318,7 +320,7 @@ describe("OrgAiSettingsForm — default model", () => {
       defaultModelId: "claude-sonnet-5",
     });
     await userEvent.click(
-      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+      screen.getByRole("combobox", { name: "Default model" }),
     );
     await userEvent.click(
       await screen.findByRole("option", { name: /no default/i }),
@@ -327,8 +329,8 @@ describe("OrgAiSettingsForm — default model", () => {
     expect(setOrgDefaultModel).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(
-        screen.getByRole("combobox", { name: /no default/i }),
-      ).toBeInTheDocument(),
+        screen.getByRole("combobox", { name: "Default model" }),
+      ).toHaveAccessibleDescription(/no default/i),
     );
   }, 30_000);
 
@@ -343,7 +345,7 @@ describe("OrgAiSettingsForm — default model", () => {
       defaultModelId: "claude-sonnet-5",
     });
     await userEvent.click(
-      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
+      screen.getByRole("combobox", { name: "Default model" }),
     );
     await userEvent.click(
       await screen.findByRole("option", { name: /no default/i }),
@@ -354,8 +356,8 @@ describe("OrgAiSettingsForm — default model", () => {
       ),
     );
     expect(
-      screen.getByRole("combobox", { name: /claude sonnet 5/i }),
-    ).toBeInTheDocument();
+      screen.getByRole("combobox", { name: "Default model" }),
+    ).toHaveAccessibleDescription(/claude sonnet 5/i);
   }, 30_000);
 
   it("points at the keys section when no provider has models yet", () => {
@@ -380,14 +382,20 @@ describe("OrgAiSettingsForm — default model", () => {
     expect(screen.getByText(/needs a key for that provider/i)).toBeVisible();
   });
 
-  // The picker's trigger is a combobox whose accessible name is its VALUE, so
-  // a `<label htmlFor>` would REPLACE that value in the announcement. The group
-  // label is the only thing that names the field — and AgentEditor already
-  // renders the identical picker this way.
-  it("names the field through a labelled group, not the trigger", () => {
+  // The picker's own trigger is independently named "Default model" (its
+  // `label` prop — see ModelPicker.tsx), with the live selection as its
+  // accessible DESCRIPTION, not its name. The enclosing `role="group"` +
+  // `aria-labelledby` is a second, redundant path to the same name, for a
+  // screen reader that navigates by landmark/group rather than landing
+  // directly on the combobox — AgentEditor renders the identical picker the
+  // same way.
+  it("names the field through both the trigger's own label and the group", () => {
     renderForm();
     const group = screen.getByRole("group", { name: /default model/i });
-    expect(within(group).getByRole("combobox")).toBeInTheDocument();
+    const trigger = within(group).getByRole("combobox", {
+      name: "Default model",
+    });
+    expect(trigger).toBeInTheDocument();
   });
 
   /**

@@ -140,6 +140,36 @@ const ownerConversationInsert = vi.fn();
 const ownerMessageInsert = vi.fn();
 let forceThreadInsertError: { code?: string; message: string } | null = null;
 
+// `listDocumentsForAgent` (documents-db.ts) is deliberately NOT mocked, same
+// reasoning as run-loop.ts above: the route drives the REAL query shape, with
+// only the underlying client swapped. `docRows` mirrors what
+// `user_agent_documents!inner(agent_documents(...))` returns — a plain array
+// by default (no documents attached), overridable per test.
+type DocRow = {
+  agent_documents: {
+    id: string;
+    title: string;
+    body: string;
+    token_estimate: number;
+  };
+};
+let docRows: DocRow[] = [];
+
+/** A thenable Supabase-query-builder stand-in: every chained method returns
+ *  itself, and awaiting it anywhere in the chain resolves to `result` — the
+ *  shape `listDocumentsForAgent`'s `.select().eq().order().order()` chain
+ *  needs, without re-implementing Supabase's real builder. */
+function chainable(result: { data: unknown; error: unknown }) {
+  const builder = {
+    select: () => builder,
+    eq: () => builder,
+    order: () => builder,
+    then: (onFulfilled: (v: typeof result) => unknown) =>
+      Promise.resolve(result).then(onFulfilled),
+  };
+  return builder;
+}
+
 function ownerClientDouble() {
   return {
     // `create_item` runs `rpc("create_item")`; the tool wrapper first resolves
@@ -148,6 +178,9 @@ function ownerClientDouble() {
     // the gate is a gate and not a blanket refusal.
     rpc: async () => ({ data: { id: "item-1" }, error: null }),
     from(table: string) {
+      if (table === "user_agent_documents") {
+        return chainable({ data: docRows, error: null });
+      }
       if (table === "groups") {
         return {
           select: () => ({
@@ -396,6 +429,10 @@ const enabledAgent = () => ({
   // every backfilled agent — the pinned case is exercised explicitly below.
   provider: null,
   model_id: null,
+  // Stable per-agent secret (20260826070115_agent_doc_nonce.sql), threaded
+  // into the instructions delimiter whenever documents are attached — see
+  // the "reference documents" describe block below.
+  doc_nonce: "fixture-agent-nonce",
 });
 
 beforeEach(() => {
@@ -414,6 +451,7 @@ beforeEach(() => {
   ownerConversationInsert.mockReset();
   ownerMessageInsert.mockReset();
   forceThreadInsertError = null;
+  docRows = [];
   ceiling = [...AGENT_CAPABILITIES];
   readOrgAiSettings.mockClear();
   // mockReset, not mockClear: several tests queue a one-shot rejection, and a
@@ -1119,6 +1157,162 @@ describe("POST /api/ai/personal-agent", () => {
       expect.objectContaining({ patchStatus: "ran" }),
     );
     errSpy.mockRestore();
+  });
+
+  // ── reference documents (Task 6) ────────────────────────────────────────
+  // Read inside the runAi callback (the resolved model's contextLength is
+  // only known there), budgeted with the SAME arithmetic the attach-time
+  // meter uses, and injected into the ONE system message — never a second
+  // one, since the Anthropic cache breakpoint lives on that message alone.
+  describe("reference documents", () => {
+    /** Captures the exact system-message text the model was sent. */
+    function capturingModel(sink: { system?: string }) {
+      return new MockLanguageModelV4({
+        doGenerate: async ({ prompt }) => {
+          const system = (prompt as { role: string; content: string }[]).find(
+            (m) => m.role === "system",
+          );
+          sink.system = system?.content;
+          return {
+            content: [{ type: "text", text: "You have 1 overdue item." }],
+            finishReason: { unified: "stop", raw: undefined },
+            usage: USAGE,
+            warnings: [],
+          };
+        },
+      });
+    }
+
+    it("records documents_omitted: false and an unchanged prompt when the agent has no documents", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      const res = await POST(post(slot));
+
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({ documents_omitted: false });
+      expect(sink.system).not.toContain("REFERENCE DOCUMENTS");
+    });
+
+    it("injects an attached document that fits the budget, and records documents_omitted: false", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      docRows = [
+        {
+          agent_documents: {
+            id: "doc-1",
+            title: "Standup format",
+            body: "Yesterday / Today / Blockers, one line each.",
+            token_estimate: 20,
+          },
+        },
+      ];
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      const res = await POST(post(slot));
+
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({ documents_omitted: false });
+      expect(sink.system).toContain("REFERENCE DOCUMENTS");
+      expect(sink.system).toContain("Standup format");
+      expect(sink.system).toContain(
+        "Yesterday / Today / Blockers, one line each.",
+      );
+      // Owner instructions still come last, even with a document attached.
+      expect(sink.system!.trimEnd().endsWith("Be concise.")).toBe(true);
+      // The agent's own doc_nonce (agents-db.ts) is what actually keys the
+      // instructions marker end-to-end through the route — this is the wire
+      // that would silently rot back to the plain literal if route.ts ever
+      // stopped reading `agent.doc_nonce` and passing it through.
+      expect(sink.system).toContain(
+        `YOUR OWNER'S INSTRUCTIONS [${enabledAgent().doc_nonce}]:`,
+      );
+    });
+
+    it("keys a different agent's marker with THAT agent's own doc_nonce", async () => {
+      getUserAgentById.mockResolvedValue({
+        ...enabledAgent(),
+        doc_nonce: "a-completely-different-agent-nonce",
+      });
+      docRows = [
+        {
+          agent_documents: {
+            id: "doc-1",
+            title: "Standup format",
+            body: "Yesterday / Today / Blockers, one line each.",
+            token_estimate: 20,
+          },
+        },
+      ];
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      await POST(post(slot));
+
+      expect(sink.system).toContain(
+        "YOUR OWNER'S INSTRUCTIONS [a-completely-different-agent-nonce]:",
+      );
+      expect(sink.system).not.toContain(
+        `YOUR OWNER'S INSTRUCTIONS [${enabledAgent().doc_nonce}]:`,
+      );
+    });
+
+    it("drops an attached document set that does not fit the budget, and records documents_omitted: true — the run still succeeds", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      // fakeResolvedModel's default contextLength (200_000) gives a budget in
+      // the tens of thousands of tokens; a single document this large cannot
+      // fit no matter how the arithmetic lands, without hand-tuning to the
+      // exact budget constant (which would silently drift with it).
+      docRows = [
+        {
+          agent_documents: {
+            id: "doc-1",
+            title: "Huge policy doc",
+            body: "x",
+            token_estimate: 10_000_000,
+          },
+        },
+      ];
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      const res = await POST(post(slot));
+
+      // A dropped document set is NOT a failure — the run still succeeds and
+      // still emails, same as a run with no documents at all.
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({ documents_omitted: true });
+      expect(sink.system).not.toContain("REFERENCE DOCUMENTS");
+      expect(sink.system).not.toContain("Huge policy doc");
+      expect(sendBriefingEmail).toHaveBeenCalledOnce();
+    });
+
+    // A null contextLength (defensive: no active model should ever lack one)
+    // must degrade to the NULL_CONTEXT_FALLBACK, never throw or silently
+    // include everything.
+    it("still runs, budgeting off the null-context fallback, when the resolved model carries no context length", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      resolveWith({ model: fakeResolvedModel({ contextLength: null }) });
+      docRows = [
+        {
+          agent_documents: {
+            id: "doc-1",
+            title: "Small note",
+            body: "Keep it short.",
+            token_estimate: 10,
+          },
+        },
+      ];
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      const res = await POST(post(slot));
+
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({ documents_omitted: false });
+      expect(sink.system).toContain("Small note");
+    });
   });
 
   it("still reports 'skipped' when both the gate AND its finalize write fail", async () => {

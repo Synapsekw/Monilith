@@ -10,6 +10,8 @@ import {
   type PersonalAgentSettings,
 } from "@/lib/agents/agent-config";
 import type { AgentCapability } from "@/lib/agents/capabilities";
+import { setAgentDocuments } from "@/lib/agents/document-actions";
+import type { AgentDocumentRow } from "@/lib/agents/documents-db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +24,14 @@ import {
   type ModelValue,
 } from "@/components/settings/ModelPicker";
 import { CapabilityToggles } from "@/components/agents/CapabilityToggles";
+import { DocumentPicker } from "@/components/agents/DocumentPicker";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
+
+const NAME_ERROR_ID = "agent-name-error";
+const INSTRUCTIONS_ERROR_ID = "agent-instructions-error";
+const CADENCE_ERROR_ID = "agent-cadence-error";
+const HOUR_ERROR_ID = "agent-hour-error";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -108,6 +117,10 @@ export function AgentEditor({
   modelOptions,
   providers,
   capabilityCeiling,
+  documents,
+  documentTotal = documents.length,
+  initialDocumentIds = [],
+  orgDefaultContextLength,
   onSaved,
   onCancel,
   onDeleted,
@@ -121,6 +134,25 @@ export function AgentEditor({
   providers: { id: string; label: string }[];
   /** `OrgAiSettings.agentCapabilityCeiling`, read once by the server page. */
   capabilityCeiling: AgentCapability[];
+  /** The owner's reference-document library, METADATA ONLY (no `body`) — read
+   *  once by the server page and threaded straight to `DocumentPicker`. */
+  documents: AgentDocumentRow[];
+  /** How many documents the owner ACTUALLY has — same value threaded to
+   *  `DocumentLibrary`'s `total` prop, from the same `listDocumentsForOwner`
+   *  read. `documents` is capped at `LIBRARY_PAGE_SIZE`, so once a library
+   *  outgrows a page this diverges from `documents.length`; forwarded to
+   *  `DocumentPicker` so it can say so instead of silently hiding anything
+   *  past the cap. Defaults to `documents.length` (no cap in effect) so
+   *  callers with nothing to report don't have to invent a number. */
+  documentTotal?: number;
+  /** This agent's currently-attached document ids, in saved order. Empty for
+   *  a brand-new agent (`mode: "create"` never has anything attached yet). */
+  initialDocumentIds?: string[];
+  /** The org default model's `context_length`, resolved once by the server
+   *  page (`page.tsx`) from data it already reads. The budget meter falls
+   *  back to this whenever the pin can't name a usable model directly — see
+   *  the doc comment beside its use below. */
+  orgDefaultContextLength: number | null;
   onSaved: (record: AgentRecord) => void;
   onCancel: () => void;
   onDeleted?: (id: string) => void;
@@ -144,10 +176,23 @@ export function AgentEditor({
   const [capabilities, setCapabilities] = useState<AgentCapability[]>(
     initial.capabilities,
   );
+  // Client state over the library already loaded by the server page — every
+  // toggle in `DocumentPicker` is 0 new server round-trips (working agreement
+  // #5). Persisted only on save, via `saveDocuments` below, exactly like
+  // every other field in this form.
+  const [selectedDocumentIds, setSelectedDocumentIds] =
+    useState<string[]>(initialDocumentIds);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
+  // Save disables itself the instant `pending` flips true, synchronously in
+  // its own click handler — the click that gave it focus. A browser has
+  // nowhere else to send focus when the active element is disabled out from
+  // under it, so it drops to `<body>` and a keyboard or screen-reader user
+  // loses their place on the page. This reclaims it once the save settles,
+  // without stealing focus the user moved on purpose.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   // The catalog entry behind the current pin, if any — the source of truth
   // for whether this agent's run can use tools at all. `undefined` when the
@@ -209,6 +254,36 @@ export function AgentEditor({
     }
     setFieldErrors({});
 
+    // The attachment set only changed if it differs from what was loaded —
+    // order matters (it becomes `position`, which is what keeps the prompt
+    // byte-stable across runs), so this is a straight array comparison, not a
+    // set comparison. A create is always empty on entry, so any pick at all
+    // counts as changed. Skipping the call when nothing changed keeps the
+    // common "no attachments touched" save at its usual single round trip.
+    const documentIdsChanged =
+      JSON.stringify(selectedDocumentIds) !==
+      JSON.stringify(initialDocumentIds);
+
+    // Runs after the agent itself is created/updated, since `setAgentDocuments`
+    // needs a real `user_agent_id` — a brand-new agent doesn't have one until
+    // `createAgent` returns it. Returns false (and leaves `serverError` set,
+    // the form still open) on failure, so a save that renamed the agent but
+    // failed to attach a document is never reported to the owner as a clean
+    // success — `DocumentPicker` itself never talks to the server; this is
+    // the one call site that does, exactly once, on save.
+    async function saveDocuments(id: string): Promise<boolean> {
+      if (!documentIdsChanged) return true;
+      const res = await setAgentDocuments({
+        userAgentId: id,
+        documentIds: selectedDocumentIds,
+      });
+      if (!res.ok) {
+        setServerError(res.error);
+        return false;
+      }
+      return true;
+    }
+
     startTransition(async () => {
       if (mode === "edit" && agentId) {
         const res = await updateAgent(agentId, parsed.data);
@@ -216,6 +291,7 @@ export function AgentEditor({
           setServerError(res.error);
           return;
         }
+        if (!(await saveDocuments(agentId))) return;
         onSaved({ ...parsed.data, id: agentId });
         return;
       }
@@ -225,6 +301,7 @@ export function AgentEditor({
         setServerError(res.error);
         return;
       }
+      if (!(await saveDocuments(res.data.id))) return;
       onSaved({ ...parsed.data, id: res.data.id });
     });
   }
@@ -265,13 +342,20 @@ export function AgentEditor({
             value={name}
             disabled={pending}
             aria-invalid={Boolean(fieldErrors.name)}
+            aria-describedby={fieldErrors.name ? NAME_ERROR_ID : undefined}
             onChange={(e) => {
               setName(e.target.value);
               setFieldErrors((f) => ({ ...f, name: undefined }));
             }}
           />
           {fieldErrors.name ? (
-            <p className="text-destructive text-xs">{fieldErrors.name}</p>
+            <p
+              id={NAME_ERROR_ID}
+              role="alert"
+              className="text-destructive text-xs"
+            >
+              {fieldErrors.name}
+            </p>
           ) : null}
         </div>
 
@@ -283,6 +367,9 @@ export function AgentEditor({
             value={instructions}
             disabled={pending}
             aria-invalid={Boolean(fieldErrors.instructions)}
+            aria-describedby={
+              fieldErrors.instructions ? INSTRUCTIONS_ERROR_ID : undefined
+            }
             onChange={(e) => {
               setInstructions(e.target.value);
               setFieldErrors((f) => ({ ...f, instructions: undefined }));
@@ -293,10 +380,45 @@ export function AgentEditor({
             straight to the model.
           </p>
           {fieldErrors.instructions ? (
-            <p className="text-destructive text-xs">
+            <p
+              id={INSTRUCTIONS_ERROR_ID}
+              role="alert"
+              className="text-destructive text-xs"
+            >
               {fieldErrors.instructions}
             </p>
           ) : null}
+        </div>
+
+        <div
+          className="space-y-1.5"
+          role="group"
+          aria-labelledby="agent-documents-label"
+        >
+          <Label id="agent-documents-label">Reference documents</Label>
+          {/* `contextLength` comes from the PIN's own catalog row when one
+              resolves to a live model. `selectedModelOption` is `undefined`
+              in BOTH cases where it doesn't: no pin at all, and a pin naming
+              a model the catalog no longer carries (retired since it was
+              set). Those are not two different situations to the RUN
+              LOOP — `pickModel` (resolve.ts) sends a missing pin through the
+              exact same org-default fallback as no pin at all — so the meter
+              must not treat them differently either. `orgDefaultContextLength`
+              is that same fallback, resolved once by the server page from
+              catalog data it already has; it stays `null` only when the org
+              has no resolvable default, which is the one case nobody here
+              can predict — the meter then honestly discloses the assumed
+              context instead of guessing a window nothing confirmed. */}
+          <DocumentPicker
+            documents={documents}
+            total={documentTotal}
+            selectedIds={selectedDocumentIds}
+            onChange={setSelectedDocumentIds}
+            contextLength={
+              selectedModelOption?.contextLength ?? orgDefaultContextLength
+            }
+            instructions={instructions}
+          />
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row">
@@ -308,6 +430,9 @@ export function AgentEditor({
               value={cadence}
               disabled={pending}
               aria-invalid={Boolean(fieldErrors.cadence)}
+              aria-describedby={
+                fieldErrors.cadence ? CADENCE_ERROR_ID : undefined
+              }
               onChange={(e) => cadenceChanged(e.target.value as AgentCadence)}
             >
               {AGENT_CADENCES.map((c) => (
@@ -317,7 +442,13 @@ export function AgentEditor({
               ))}
             </select>
             {fieldErrors.cadence ? (
-              <p className="text-destructive text-xs">{fieldErrors.cadence}</p>
+              <p
+                id={CADENCE_ERROR_ID}
+                role="alert"
+                className="text-destructive text-xs"
+              >
+                {fieldErrors.cadence}
+              </p>
             ) : null}
           </div>
 
@@ -329,6 +460,9 @@ export function AgentEditor({
               value={runAtLocalHour}
               disabled={pending}
               aria-invalid={Boolean(fieldErrors.runAtLocalHour)}
+              aria-describedby={
+                fieldErrors.runAtLocalHour ? HOUR_ERROR_ID : undefined
+              }
               onChange={(e) => {
                 setRunAtLocalHour(Number(e.target.value));
                 setFieldErrors((f) => ({ ...f, runAtLocalHour: undefined }));
@@ -341,7 +475,11 @@ export function AgentEditor({
               ))}
             </select>
             {fieldErrors.runAtLocalHour ? (
-              <p className="text-destructive text-xs">
+              <p
+                id={HOUR_ERROR_ID}
+                role="alert"
+                className="text-destructive text-xs"
+              >
                 {fieldErrors.runAtLocalHour}
               </p>
             ) : null}
@@ -402,10 +540,12 @@ export function AgentEditor({
           </p>
         </div>
 
-        {/* `role="group"` + `aria-labelledby`, not `htmlFor`: the picker's
-            trigger is a combobox whose accessible name is its current VALUE,
-            so a label pointing at it would replace the value a screen reader
-            announces instead of naming the field. */}
+        {/* `role="group"` + `aria-labelledby` complements — not substitutes
+            for — the picker's own accessible name: `ModelPicker` takes a
+            static `label` prop below (its name no longer comes from the live
+            value, which is instead its accessible DESCRIPTION), so a screen
+            reader landing directly on the combobox via Tab also hears
+            "Model", not just navigators that go through this group. */}
         <div
           className="space-y-1.5"
           role="group"
@@ -428,6 +568,7 @@ export function AgentEditor({
             // configuration state with a next step — never "no models
             // available", which reads as a broken feature.
             emptyHint="Add an API key in Settings → AI to see models."
+            label="Model"
           />
           <p className="text-muted-foreground text-xs">
             {model
@@ -449,7 +590,9 @@ export function AgentEditor({
             </p>
           ) : null}
           {fieldErrors.provider ? (
-            <p className="text-destructive text-xs">{fieldErrors.provider}</p>
+            <p role="alert" className="text-destructive text-xs">
+              {fieldErrors.provider}
+            </p>
           ) : null}
         </div>
 
@@ -492,7 +635,13 @@ export function AgentEditor({
 
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button type="button" onClick={save} disabled={pending} size="sm">
+          <Button
+            ref={saveRef}
+            type="button"
+            onClick={save}
+            disabled={pending}
+            size="sm"
+          >
             {pending
               ? "Saving…"
               : mode === "edit"

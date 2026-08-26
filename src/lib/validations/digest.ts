@@ -24,6 +24,7 @@ export const digestNotificationPayloadSchema = z.object({
   incompleteCount: count,
   overdueCount: count,
   periodStart: isoDate,
+  narrative: z.string().max(400).optional(),
 });
 export type DigestNotificationPayload = z.infer<
   typeof digestNotificationPayloadSchema

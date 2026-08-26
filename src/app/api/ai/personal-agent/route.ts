@@ -22,6 +22,13 @@ import {
   runAgentLoop,
   ModelNotToolCapableError,
 } from "@/lib/agents/run-loop";
+import { listDocumentsForAgent } from "@/lib/agents/documents-db";
+import {
+  documentBudget,
+  selectDocuments,
+  estimateTokens,
+  ASSUMED_PREFIX_TOKENS,
+} from "@/lib/agents/document-budget";
 import { AGENT_ONLY_DESCRIPTORS } from "@/lib/agents/agent-only-tools";
 import type { ProposedCall } from "@/lib/agents/grant-gate";
 import type { AgentCapability } from "@/lib/agents/capabilities";
@@ -111,6 +118,9 @@ async function finalizeRun(
     output_tokens?: number | null;
     /** True when the agent's pinned model was unavailable and runAi fell back. */
     model_substituted?: boolean;
+    /** True when a non-empty document set did not fit the model's context and
+     *  was dropped in its entirety — see `selectDocuments` (all-or-nothing). */
+    documents_omitted?: boolean;
     /** What the run was EFFECTIVELY permitted to do — the agent's own grants
      *  intersected with the org ceiling, as it stood at run time. */
     grants?: string[];
@@ -381,6 +391,25 @@ export async function POST(req: Request): Promise<Response> {
             throw new ModelNotToolCapableError(model.model);
           modelSubstituted = model.substituted;
 
+          // Read the agent's attached documents and apply the budget HERE,
+          // inside the callback — this is the only place the resolved
+          // model (and therefore its real context window) is known.
+          // `listDocumentsForAgent` is the one query shape for this read
+          // (Task 5); `documentBudget`/`selectDocuments`/`estimateTokens`
+          // are the one budget arithmetic (Task 2) — both imported, never
+          // re-derived here.
+          const attached = await listDocumentsForAgent(ownerClient, agent.id);
+          const { budget } = documentBudget({
+            contextLength: model.contextLength,
+            // ASSUMED_PREFIX_TOKENS, imported from document-budget — the
+            // attach-time meter uses the identical constant. A local 9_000
+            // here would let the two drift, and the meter's whole guarantee
+            // is that they cannot.
+            prefixTokens: ASSUMED_PREFIX_TOKENS,
+            instructionTokens: estimateTokens(agent.instructions),
+          });
+          const { included, omitted } = selectDocuments(attached, budget);
+
           // ONE call assembles BOTH halves. `buildAgentTools` and
           // `makeGrantGate` are each a pure function of the same descriptor
           // list, and building them separately is exactly how a tool once
@@ -413,6 +442,13 @@ export async function POST(req: Request): Promise<Response> {
               model: model.requestModel,
             }),
             instructions: agent.instructions,
+            // This agent's own stable secret — keys the instructions
+            // delimiter (document-inject.ts) whenever `documents` is
+            // non-empty, so a document body forging the literal
+            // `INSTRUCTIONS_SENTINEL` can't reproduce the real marker.
+            nonce: agent.doc_nonce,
+            documents: included,
+            documentsOmitted: omitted,
             tools,
             gate,
             // No per-run output ceiling: the loop is bounded by
@@ -499,6 +535,12 @@ export async function POST(req: Request): Promise<Response> {
       input_tokens: result.usage.inputTokens,
       output_tokens: result.usage.outputTokens,
       model_substituted: modelSubstituted,
+      // Straight off the loop's own result, not a local mirror of it. Same
+      // rationale as `modelSubstituted`: a run whose documents did not fit
+      // still SUCCEEDED — `documents_omitted` is its own signal, never folded
+      // into `error`. `runAgentLoop` echoes the flag back precisely so the
+      // caller persists what the loop actually ran with.
+      documents_omitted: result.documentsOmitted,
       grants: effectiveGrants,
       steps: result.steps,
       tools_used: result.toolsUsed,

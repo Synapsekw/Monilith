@@ -19,6 +19,19 @@ vi.mock("@/lib/env.server", () => ({
   }),
 }));
 
+// vi.hoisted: vi.mock's factory below is hoisted above this file's imports,
+// so a plain `const` it closes over would be a TDZ error — vi.hoisted runs
+// first and is the supported way to share a mutable mock between the two.
+const { mockGenerateDigestNarrative } = vi.hoisted(() => ({
+  mockGenerateDigestNarrative: vi.fn<(...args: unknown[]) => string | null>(
+    () => null,
+  ),
+}));
+vi.mock("@/lib/digest/narrative", () => ({
+  generateDigestNarrative: (...args: unknown[]) =>
+    Promise.resolve(mockGenerateDigestNarrative(...args)),
+}));
+
 import { runWeeklyDigest } from "@/lib/digest/run";
 
 // ── chainable supabase fake ──────────────────────────────────────────────────
@@ -142,6 +155,7 @@ beforeEach(() => {
   delete envState.RESEND_API_KEY;
   delete envState.APP_BASE_URL;
   delete envState.DIGEST_FROM_EMAIL;
+  mockGenerateDigestNarrative.mockReset().mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -382,5 +396,56 @@ describe("runWeeklyDigest", () => {
       p_org_id: "org-1",
       p_since: "2026-07-20T07:00:00.000Z",
     });
+  });
+
+  it("persists the narrative on the sent run and folds it into notifications", async () => {
+    mockGenerateDigestNarrative.mockReturnValue("A calm week overall.");
+    const { client, calls } = makeClient(
+      baseResponder({
+        digestRows: [NONZERO_ROW],
+        members: [{ user_id: "u1", role: "owner" }],
+        profiles: [{ id: "u1", email: "a@x.com", email_digest_opt_out: false }],
+      }),
+    );
+    currentClient = client;
+
+    await runWeeklyDigest(new Date("2026-07-01T12:00:00Z"));
+
+    const finalize = calls.find(
+      (c) => c.table === "digest_runs" && c.op === "update",
+    );
+    expect(finalize?.values).toMatchObject({
+      status: "sent",
+      narrative: "A calm week overall.",
+    });
+    const notif = calls.find(
+      (c) => c.table === "notifications" && c.op === "insert",
+    );
+    expect(notif?.values).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({ narrative: "A calm week overall." }),
+      }),
+    ]);
+  });
+
+  it("sends unchanged when the narrative generator returns null", async () => {
+    mockGenerateDigestNarrative.mockReturnValue(null);
+    const { client, calls } = makeClient(
+      baseResponder({
+        digestRows: [NONZERO_ROW],
+        members: [{ user_id: "u1", role: "owner" }],
+        profiles: [{ id: "u1", email: "a@x.com", email_digest_opt_out: false }],
+      }),
+    );
+    currentClient = client;
+
+    const summary = await runWeeklyDigest(new Date("2026-07-01T12:00:00Z"));
+    expect(summary).toMatchObject({ sent: 1 });
+    const notif = calls.find(
+      (c) => c.table === "notifications" && c.op === "insert",
+    );
+    expect((notif?.values as unknown[] | undefined)?.[0]).not.toHaveProperty(
+      "payload.narrative",
+    );
   });
 });

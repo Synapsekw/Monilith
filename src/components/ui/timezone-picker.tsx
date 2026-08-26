@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,13 +28,26 @@ export function TimezonePicker({
   onChange,
   allowAutomatic = false,
   disabled = false,
+  label = "Timezone",
 }: {
   value: string | null;
   onChange: (tz: string | null) => void;
   allowAutomatic?: boolean;
   disabled?: boolean;
+  /**
+   * The field's static name, e.g. "Time zone" — the trigger's accessible
+   * NAME. It must stay static: the currently selected zone is exposed
+   * separately as the accessible DESCRIPTION (`aria-describedby`, wired to
+   * the same text sighted users see), not folded into the name. A combobox
+   * named from its live value announces as "combobox, America/New_York" with
+   * no indication of what the field IS — this keeps "Timezone" (or whatever
+   * the caller passes) as the name every time, with the value as a second,
+   * distinct announcement.
+   */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const valueId = useId();
   // One reference instant per mount keeps offset labels stable across renders.
   const ref = useMemo(() => new Date(), []);
   const options = useMemo(
@@ -55,12 +68,15 @@ export function TimezonePicker({
         <Button
           variant="outline"
           role="combobox"
-          aria-label={triggerLabel}
+          aria-label={label}
+          aria-describedby={valueId}
           aria-expanded={open}
           disabled={disabled}
           className="w-full justify-between font-normal"
         >
-          <span className="truncate">{triggerLabel}</span>
+          <span id={valueId} className="truncate">
+            {triggerLabel}
+          </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>

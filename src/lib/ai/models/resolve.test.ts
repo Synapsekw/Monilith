@@ -144,6 +144,30 @@ describe("pickModel", () => {
     });
     expect(r.supportsTools).toBe(true);
   });
+
+  // The reference-document budget (document-budget.ts's `documentBudget`)
+  // needs the model's real context window, and this is its only source: a
+  // caller that had to re-read the catalog for it could disagree with the
+  // row `pickModel` actually chose.
+  it("carries the chosen row's context length", () => {
+    const r = pickModel({
+      active: CATALOG,
+      requested: "claude-sonnet-5",
+      orgDefaultModelId: null,
+      tier: "standard",
+    });
+    expect(r.contextLength).toBe(1_000_000);
+  });
+
+  it("reports a null context length when no model could be chosen", () => {
+    const r = pickModel({
+      active: [],
+      requested: "anything",
+      orgDefaultModelId: "also-anything",
+      tier: "cheap",
+    });
+    expect(r.contextLength).toBeNull();
+  });
 });
 
 describe("pickModel — the callable id", () => {

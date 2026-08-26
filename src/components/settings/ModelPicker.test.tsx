@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   ModelPicker,
@@ -24,6 +24,7 @@ const OPTIONS: ModelOption[] = [
     label: "Claude Sonnet 5",
     tier: "standard",
     supportsTools: true,
+    contextLength: 200_000,
   },
   {
     provider: "moonshotai",
@@ -32,6 +33,7 @@ const OPTIONS: ModelOption[] = [
     label: "Kimi K2 Instruct",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 128_000,
   },
   {
     provider: "mistral",
@@ -40,6 +42,7 @@ const OPTIONS: ModelOption[] = [
     label: "Mistral Small",
     tier: "cheap",
     supportsTools: false,
+    contextLength: 32_000,
   },
 ];
 
@@ -95,10 +98,11 @@ describe("ModelPicker", () => {
       />,
     );
     expect(screen.queryByText(/no longer available/i)).not.toBeInTheDocument();
-    // The trigger shows the catalog label, taken from the option it matched.
+    // The trigger's accessible NAME is the static field label; the catalog
+    // label taken from the matched option is the accessible DESCRIPTION.
     expect(
-      screen.getByRole("combobox", { name: /kimi k2 instruct/i }),
-    ).toBeInTheDocument();
+      screen.getByRole("combobox", { name: "Model" }),
+    ).toHaveAccessibleDescription(/kimi k2 instruct/i);
   });
 
   it("groups options by provider once opened", async () => {
@@ -166,6 +170,44 @@ describe("ModelPicker", () => {
       name: /add an api key to see models/i,
     });
     expect(row).toHaveAttribute("aria-disabled", "true");
+  }, 30_000);
+
+  it("names the combobox from a caller-supplied label, not the selection", () => {
+    render(
+      <ModelPicker
+        options={OPTIONS}
+        value={{ provider: "anthropic", modelId: "claude-sonnet-5" }}
+        onChange={vi.fn()}
+        label="Default model"
+      />,
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Default model" }),
+    ).toHaveAccessibleDescription(/claude sonnet 5/i);
+    expect(
+      screen.queryByRole("combobox", { name: /claude sonnet 5/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("defaults the accessible name to 'Model' when no label is given", () => {
+    render(<ModelPicker options={OPTIONS} value={null} onChange={vi.fn()} />);
+    expect(screen.getByRole("combobox", { name: "Model" })).toBeInTheDocument();
+  });
+
+  // Radix Popover's default `onCloseAutoFocus` returns focus to the trigger
+  // when the popover closes — nothing here overrides it — so picking a model
+  // (which calls `setOpen(false)`) must land focus back on the trigger, not
+  // `<body>`.
+  it("returns focus to the trigger after picking a model closes the popover", async () => {
+    const user = userEvent.setup();
+    render(<ModelPicker options={OPTIONS} value={null} onChange={vi.fn()} />);
+    const trigger = screen.getByRole("combobox", { name: "Model" });
+    await user.click(trigger);
+    await user.click(
+      await screen.findByRole("option", { name: /kimi k2 instruct/i }),
+    );
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(document.body).not.toHaveFocus();
   }, 30_000);
 
   it("says which models cannot run tools", async () => {

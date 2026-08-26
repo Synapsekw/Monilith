@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import {
   DEFAULT_ORG_AI_SETTINGS,
   readOrgAiSettings,
+  unpinnedDefaultModel,
+  type OrgAiSettings,
 } from "@/lib/ai/org-settings";
 
 function clientReturning(row: unknown, error: unknown = null) {
@@ -107,5 +109,133 @@ describe("readOrgAiSettings", () => {
     await expect(
       readOrgAiSettings(clientReturning(null, { message: "boom" }), "org-1"),
     ).rejects.toBeTruthy();
+  });
+});
+
+// ===========================================================================
+// unpinnedDefaultModel
+// ===========================================================================
+//
+// The property under test is agreement with `resolveAiAdapter` (gateway.ts):
+// it honours `defaultModelId` only when `defaultProvider` equals the provider
+// the MODE resolves. Anything that predicts an unpinned run's model — the
+// reference-document budget meter above all — has to agree with that, or it
+// sizes a budget against a context window the run never gets.
+describe("unpinnedDefaultModel", () => {
+  const settings = (over: Partial<OrgAiSettings>): OrgAiSettings => ({
+    ...DEFAULT_ORG_AI_SETTINGS,
+    ...over,
+  });
+
+  it("managed: honours an anthropic default", () => {
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "managed",
+          defaultProvider: "anthropic",
+          defaultModelId: "claude-sonnet-4.5",
+        }),
+      ),
+    ).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4.5" });
+  });
+
+  it("managed: IGNORES a non-anthropic default", () => {
+    // The permitted-but-inert configuration: the platform key is Anthropic's,
+    // so the run resolves an Anthropic model no matter what the org default
+    // says. A meter that trusted this would budget a 1M-token OpenAI window,
+    // accept 200k of documents, and watch the run silently drop all of them.
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "managed",
+          defaultProvider: "openai",
+          defaultModelId: "gpt-5-1m",
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("org_byo: honours a default that matches byoProvider", () => {
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "org_byo",
+          byoProvider: "openai",
+          defaultProvider: "openai",
+          defaultModelId: "gpt-5",
+        }),
+      ),
+    ).toEqual({ provider: "openai", modelId: "gpt-5" });
+  });
+
+  it("org_byo: IGNORES a default whose provider is not the org's one key", () => {
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "org_byo",
+          byoProvider: "openai",
+          defaultProvider: "anthropic",
+          defaultModelId: "claude-sonnet-4.5",
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("org_byo: IGNORES the default when no BYO provider is set at all", () => {
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "org_byo",
+          byoProvider: null,
+          defaultProvider: "openai",
+          defaultModelId: "gpt-5",
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("per_user: the default provider IS the resolved provider", () => {
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "per_user",
+          defaultProvider: "openai",
+          defaultModelId: "gpt-5",
+        }),
+      ),
+    ).toEqual({ provider: "openai", modelId: "gpt-5" });
+  });
+
+  it("off: nothing resolves, so nothing is predicted", () => {
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "off",
+          defaultProvider: "anthropic",
+          defaultModelId: "claude-sonnet-4.5",
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("is null when either half of the default is unset", () => {
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "managed",
+          defaultProvider: "anthropic",
+          defaultModelId: null,
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      unpinnedDefaultModel(
+        settings({
+          mode: "managed",
+          defaultProvider: null,
+          defaultModelId: "claude-sonnet-4.5",
+        }),
+      ),
+    ).toBeNull();
   });
 });

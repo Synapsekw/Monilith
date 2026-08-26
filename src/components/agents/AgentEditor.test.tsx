@@ -17,7 +17,16 @@ vi.mock("@/lib/agents/actions", () => ({
   deleteAgent: (...a: unknown[]) => deleteAgent(...a),
 }));
 
+// `DocumentPicker` itself never calls this (proven in its own test file) —
+// these mocks are for the ONE call site that does: `AgentEditor.save`, after
+// the agent itself is created/updated.
+const setAgentDocuments = vi.fn();
+vi.mock("@/lib/agents/document-actions", () => ({
+  setAgentDocuments: (...a: unknown[]) => setAgentDocuments(...a),
+}));
+
 import { AgentEditor } from "@/components/agents/AgentEditor";
+import type { AgentDocumentRow } from "@/lib/agents/documents-db";
 
 /**
  * The agent editor's model pin.
@@ -40,6 +49,7 @@ const OPTIONS: ModelOption[] = [
     label: "Claude Haiku 4.5",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 200_000,
   },
   {
     provider: "moonshotai",
@@ -48,6 +58,7 @@ const OPTIONS: ModelOption[] = [
     label: "Kimi K2 Instruct",
     tier: "cheap",
     supportsTools: true,
+    contextLength: 128_000,
   },
   // The one model in the fixture catalog that cannot run a tool loop — the
   // fixture the tool-capability warning tests pin to.
@@ -58,6 +69,7 @@ const OPTIONS: ModelOption[] = [
     label: "Kimi K1 (legacy)",
     tier: "cheap",
     supportsTools: false,
+    contextLength: 16_385,
   },
 ];
 
@@ -93,6 +105,12 @@ function renderEditor(over: Partial<Parameters<typeof AgentEditor>[0]> = {}) {
       modelOptions={OPTIONS}
       providers={PROVIDERS}
       capabilityCeiling={FULL_CEILING}
+      documents={[]}
+      // Most tests don't care about the org-default fallback specifically —
+      // `null` here is the "genuinely unresolvable" case, which keeps every
+      // OTHER test's meter on the conservative/assumed path rather than
+      // silently depending on a org-default fixture they never mention.
+      orgDefaultContextLength={null}
       onSaved={onSaved}
       onCancel={vi.fn()}
       {...over}
@@ -104,9 +122,10 @@ function renderEditor(over: Partial<Parameters<typeof AgentEditor>[0]> = {}) {
 /**
  * The model combobox. The editor renders a second combobox — the "Runs daily
  * at" `<select>` — so a bare `getByRole("combobox")` is ambiguous. Going
- * through the labelled group is also the assertion that the field IS named:
- * the trigger's own accessible name is its current VALUE, so the group's
- * label is the only thing that says "Model".
+ * through the labelled group also works as a second, independent path to the
+ * same name: the trigger's OWN accessible name is "Model" too (its `label`
+ * prop), with the current pin as its accessible DESCRIPTION rather than its
+ * name — see `toHaveAccessibleDescription` assertions below.
  */
 function modelField(): HTMLElement {
   return within(screen.getByRole("group", { name: "Model" })).getByRole(
@@ -114,18 +133,32 @@ function modelField(): HTMLElement {
   );
 }
 
+const DOCS: AgentDocumentRow[] = [
+  {
+    id: "doc-1",
+    title: "Runbook",
+    tokenEstimate: 500,
+    sourceFormat: "pasted",
+    sourceFileName: null,
+    updatedAt: "2026-08-24T10:00:00Z",
+  },
+];
+
 beforeEach(() => {
   createAgent.mockReset();
   updateAgent.mockReset();
   deleteAgent.mockReset();
+  setAgentDocuments.mockReset();
   createAgent.mockResolvedValue({ ok: true, data: { id: "agent-1" } });
   updateAgent.mockResolvedValue({ ok: true, data: undefined });
+  setAgentDocuments.mockResolvedValue({ ok: true, data: undefined });
 });
 
 describe("AgentEditor · model pin", () => {
   it("starts on the org default when the agent has no pin", () => {
     renderEditor();
-    expect(modelField()).toHaveAccessibleName(/organization's default/i);
+    expect(modelField()).toHaveAccessibleName("Model");
+    expect(modelField()).toHaveAccessibleDescription(/organization's default/i);
   });
 
   it("saves an unpinned agent as null on both halves", async () => {
@@ -163,8 +196,10 @@ describe("AgentEditor · model pin", () => {
       initial: { ...initial, provider: "moonshotai", modelId: "kimi-k2" },
     });
     // The stored pin reads back as its human LABEL, from the catalog option it
-    // matched — not as the raw id, and never as a wire id.
-    expect(modelField()).toHaveAccessibleName(/kimi k2 instruct/i);
+    // matched — not as the raw id, and never as a wire id. It's the trigger's
+    // accessible DESCRIPTION; the NAME stays "Model" regardless of the pin.
+    expect(modelField()).toHaveAccessibleName("Model");
+    expect(modelField()).toHaveAccessibleDescription(/kimi k2 instruct/i);
 
     await userEvent.click(
       screen.getByRole("button", { name: /save changes/i }),
@@ -390,3 +425,217 @@ describe("AgentEditor · cadence", () => {
     });
   }, 30_000);
 });
+
+describe("AgentEditor · reference documents", () => {
+  it("does not call setAgentDocuments when nothing is attached and nothing was picked", async () => {
+    renderEditor();
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await waitFor(() => expect(createAgent).toHaveBeenCalled());
+    expect(setAgentDocuments).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("attaches a picked document, after the agent itself is created", async () => {
+    renderEditor({ documents: DOCS });
+    await userEvent.click(screen.getByRole("checkbox", { name: /runbook/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await waitFor(() => expect(setAgentDocuments).toHaveBeenCalled());
+    expect(setAgentDocuments).toHaveBeenCalledWith({
+      userAgentId: "agent-1",
+      documentIds: ["doc-1"],
+    });
+    // The agent was created BEFORE its attachments were saved — a new agent
+    // has no `user_agent_id` for `setAgentDocuments` until `createAgent`
+    // returns one.
+    expect(createAgent.mock.invocationCallOrder[0]).toBeLessThan(
+      setAgentDocuments.mock.invocationCallOrder[0],
+    );
+  }, 30_000);
+
+  // The skip in `saveDocuments` (AgentEditor.tsx) is what keeps an unrelated
+  // rename from costing the owner an extra server round trip.
+  it("skips the call when the attachment set was not touched", async () => {
+    renderEditor({
+      mode: "edit",
+      agentId: "11111111-1111-4111-8111-111111111111",
+      documents: DOCS,
+      initialDocumentIds: ["doc-1"],
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: /save changes/i }),
+    );
+    await waitFor(() => expect(updateAgent).toHaveBeenCalled());
+    expect(setAgentDocuments).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("surfaces a setAgentDocuments failure inline instead of reporting a clean save", async () => {
+    setAgentDocuments.mockResolvedValue({
+      ok: false,
+      error: "Couldn't update the attached documents.",
+    });
+    const { onSaved } = renderEditor({ documents: DOCS });
+    await userEvent.click(screen.getByRole("checkbox", { name: /runbook/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't update the attached documents.",
+    );
+    expect(onSaved).not.toHaveBeenCalled();
+  }, 30_000);
+
+  // `initial` is unpinned (`provider`/`modelId` both null) — the default
+  // state of every new agent, and the case the meter got wrong: it used to
+  // pass `null` straight through whenever there was no PIN-derived option,
+  // which made the meter assume `NULL_CONTEXT_FALLBACK` (32,000) even though
+  // the org default the run loop actually resolves to might be much smaller.
+  it("computes an unpinned agent's budget from the org default, not the 32,000 fallback", () => {
+    // 16,385 is document-budget.ts's own documented minimum among active
+    // tool-capable models — a real org default can legitimately be this
+    // small. Its true budget (2,461) is BELOW MIN_USEFUL_BUDGET, so the
+    // picker must say so. Under the bug, this same setup fell back to
+    // 32,000's budget (9,098) instead, which IS usable — so this assertion
+    // is exactly the one the regression would have failed.
+    renderEditor({ documents: DOCS, orgDefaultContextLength: 16_385 });
+    expect(
+      screen.getByText(/context is too small for reference documents/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/assuming a 32,000-token context/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("falls back to the assumed context and discloses it when the org default can't be resolved", () => {
+    renderEditor({ documents: DOCS, orgDefaultContextLength: null });
+    expect(
+      screen.getByText(/assuming a 32,000-token context/i),
+    ).toBeInTheDocument();
+  });
+
+  // `documentTotal` is the same value `AgentsSection` threads to
+  // `DocumentLibrary`'s `total` prop, from the SAME `listDocumentsForOwner`
+  // read — this proves the editor forwards it into `DocumentPicker` too,
+  // rather than discarding it at this layer the way it used to.
+  it("forwards documentTotal into the picker so a capped library says so", () => {
+    renderEditor({ documents: DOCS, documentTotal: 137 });
+    expect(screen.getByText(/showing 1 of 137 documents/i)).toBeInTheDocument();
+  });
+
+  it("shows no capped-library notice when documentTotal is not over the page", () => {
+    renderEditor({ documents: DOCS, documentTotal: DOCS.length });
+    expect(screen.queryByText(/showing \d+ of/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Client-side validation errors (`personalAgentSettingsSchema.safeParse`
+ * failing in `save()`) render as plain destructive text next to each field,
+ * with nothing telling a screen reader the error belongs to that field. This
+ * is defect #2 of the repo-wide a11y ticket (2026-08-11 vault session note,
+ * "matching ui/timezone-picker.tsx"): the error text now carries a stable
+ * `id`, gets `role="alert"` so it's announced the moment validation fails,
+ * and the field points at it via `aria-describedby`.
+ */
+describe("AgentEditor · validation errors are tied to their field", () => {
+  it("ties the name error to the Name input", async () => {
+    renderEditor();
+    await userEvent.clear(screen.getByLabelText("Name"));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+
+    const nameInput = screen.getByLabelText("Name");
+    const alert = await screen.findByRole("alert");
+    expect(nameInput).toHaveAttribute("aria-describedby", alert.id);
+    expect(nameInput).toHaveAttribute("aria-invalid", "true");
+    expect(createAgent).not.toHaveBeenCalled();
+  });
+
+  it("ties the instructions error to the Instructions textarea", async () => {
+    renderEditor();
+    await userEvent.clear(screen.getByLabelText("Instructions"));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+
+    const instructions = screen.getByLabelText("Instructions");
+    const alert = await screen.findByRole("alert");
+    expect(instructions).toHaveAttribute("aria-describedby", alert.id);
+  });
+
+  it("clears the error association once the field is corrected", async () => {
+    renderEditor();
+    const nameInput = screen.getByLabelText("Name");
+    await userEvent.clear(nameInput);
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await screen.findByRole("alert");
+    expect(nameInput).toHaveAttribute("aria-describedby");
+
+    await userEvent.type(nameInput, "Evening Digest");
+    expect(nameInput).not.toHaveAttribute("aria-describedby");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Defect #1 of the same ticket: Save disables itself the instant `pending`
+ * flips true — synchronously inside its own click handler, the same click
+ * that gave it focus — which in a real browser drops focus to `<body>`
+ * (see use-restore-focus-after-pending.ts for the mechanism and why jsdom
+ * can't reproduce the drop itself). What's verifiable here is the one
+ * direction jsdom CAN honestly assert: the restore must never steal focus
+ * from somewhere the user deliberately moved to while the save was in
+ * flight.
+ */
+describe("AgentEditor · focus management around save", () => {
+  it("does not steal focus from elsewhere once a save resolves", async () => {
+    let release: (v: { ok: true; data: { id: string } }) => void = () => {};
+    createAgent.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    render(
+      <>
+        <AgentEditorHarness />
+        <input aria-label="Elsewhere on the page" />
+      </>,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+
+    const elsewhere = screen.getByLabelText("Elsewhere on the page");
+    await userEvent.click(elsewhere);
+    expect(elsewhere).toHaveFocus();
+
+    release({ ok: true, data: { id: "agent-1" } });
+    await waitFor(() => expect(createAgent).toHaveBeenCalled());
+    expect(elsewhere).toHaveFocus();
+  }, 30_000);
+});
+
+/** Thin wrapper so the harness above can sit alongside a sibling element,
+ *  exactly like renderEditor() but without its return value. */
+function AgentEditorHarness() {
+  return (
+    <AgentEditor
+      mode="create"
+      initial={initial}
+      modelOptions={OPTIONS}
+      providers={PROVIDERS}
+      capabilityCeiling={FULL_CEILING}
+      documents={[]}
+      orgDefaultContextLength={null}
+      onSaved={vi.fn()}
+      onCancel={vi.fn()}
+    />
+  );
+}

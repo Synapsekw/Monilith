@@ -40,6 +40,7 @@ export async function buildModelOptions(
           label: m.label,
           tier: m.tier,
           supportsTools: m.supportsTools,
+          contextLength: m.contextLength,
         }),
       ),
     ),

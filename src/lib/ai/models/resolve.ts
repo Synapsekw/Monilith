@@ -28,6 +28,15 @@ export type ResolvedModel = {
   supportsTools: boolean;
   /** True when a pinned model was unavailable and the default was used. */
   substituted: boolean;
+  /**
+   * `ai_models.context_length`, straight from the catalog row — null only for
+   * the handful of rows the daily feed refresh has not backfilled yet (see
+   * `document-budget.ts`'s `NULL_CONTEXT_FALLBACK` for how a caller degrades
+   * when it is). Threaded through so a caller that needs the model's actual
+   * window (the reference-document budget) does not have to re-read the
+   * catalog a second time for a row this function already fetched.
+   */
+  contextLength: number | null;
 };
 
 /**
@@ -103,6 +112,7 @@ function resolvedFrom(row: ModelRow, substituted: boolean) {
     rates: ratesOf(row),
     supportsTools: row.supportsTools,
     substituted,
+    contextLength: row.contextLength,
   };
 }
 
@@ -143,6 +153,7 @@ export function pickModel(args: {
       rates: null,
       supportsTools: false,
       substituted,
+      contextLength: null,
     };
 
   return resolvedFrom(chosen, substituted);
