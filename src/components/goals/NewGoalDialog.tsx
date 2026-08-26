@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 const MODE_LABEL: Record<GoalProgressMode, string> = {
   manual_number: "A number (current → target)",
@@ -48,6 +50,11 @@ export function NewGoalDialog({
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // The create error belongs to the name field: it is what the user retypes.
+  const nameStatus = useFieldStatus(error);
+  // The dialog stays mounted on failure, so the submit button that disabled
+  // itself is still there to take focus back.
+  const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function reset() {
     setName("");
@@ -135,7 +142,7 @@ export function NewGoalDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Grow ARR to $1M"
-              aria-invalid={error ? true : undefined}
+              {...nameStatus.controlProps}
               autoFocus
             />
           </div>
@@ -243,13 +250,13 @@ export function NewGoalDialog({
             </div>
           </div>
 
-          {error ? (
-            <p role="alert" className="text-destructive text-xs">
-              {error}
-            </p>
-          ) : null}
+          <FieldStatus field={nameStatus} />
           <DialogFooter>
-            <Button type="submit" disabled={isPending || !name.trim()}>
+            <Button
+              ref={submitRef}
+              type="submit"
+              disabled={isPending || !name.trim()}
+            >
               {isPending ? "Creating…" : "Create goal"}
             </Button>
           </DialogFooter>

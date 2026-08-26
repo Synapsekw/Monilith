@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 export function NewPortfolioDialog() {
   const router = useRouter();
@@ -23,6 +25,10 @@ export function NewPortfolioDialog() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const nameStatus = useFieldStatus(error);
+  // Only the failure path keeps this dialog mounted — which is exactly when
+  // the submit button needs to reclaim the focus its own `disabled` dropped.
+  const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function submit() {
     setError(null);
@@ -68,17 +74,17 @@ export function NewPortfolioDialog() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Q3 initiatives"
-              aria-invalid={error ? true : undefined}
+              {...nameStatus.controlProps}
               autoFocus
             />
           </div>
-          {error ? (
-            <p role="alert" className="text-destructive text-xs">
-              {error}
-            </p>
-          ) : null}
+          <FieldStatus field={nameStatus} />
           <DialogFooter>
-            <Button type="submit" disabled={isPending || !name.trim()}>
+            <Button
+              ref={submitRef}
+              type="submit"
+              disabled={isPending || !name.trim()}
+            >
               {isPending ? "Creating…" : "Create portfolio"}
             </Button>
           </DialogFooter>

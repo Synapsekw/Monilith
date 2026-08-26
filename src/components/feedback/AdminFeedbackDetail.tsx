@@ -15,6 +15,8 @@ import type { AdminUpdateFeedbackInput } from "@/lib/validations/feedback";
 import type { ActionResult } from "@/lib/actions/result";
 import type { Tables } from "@/types/database.types";
 import { cn } from "@/lib/utils";
+import { useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   STATUS_BG,
   statusToneClasses,
@@ -62,6 +64,16 @@ export function AdminFeedbackDetail({ row, save }: Props) {
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Save outcome is a whole-panel result (status picker + response together),
+  // so it gets the live-region half of the field helper — `messageProps` onto
+  // the existing icon+text rows — and no `controlProps`: there is no single
+  // control it describes.
+  const savedStatus = useFieldStatus(saved ? "Saved" : null, "success");
+  const errorStatus = useFieldStatus(saveError);
+  // Save disables itself while the request is in flight, dropping focus to
+  // <body>; this panel never unmounts, so focus comes back to the button.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   async function handleSave() {
     setPending(true);
@@ -172,17 +184,28 @@ export function AdminFeedbackDetail({ row, save }: Props) {
 
         {/* Save button + feedback */}
         <div className="flex items-center gap-3">
-          <Button onClick={handleSave} disabled={pending} size="sm">
+          <Button
+            ref={saveRef}
+            onClick={handleSave}
+            disabled={pending}
+            size="sm"
+          >
             {pending ? "Saving…" : "Save"}
           </Button>
           {saved && (
-            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+            <span
+              {...savedStatus.messageProps}
+              className="text-muted-foreground flex items-center gap-1 text-xs"
+            >
               <CheckCircle className="text-status-green size-3.5" />
               Saved
             </span>
           )}
           {saveError && (
-            <span className="text-destructive flex items-center gap-1 text-xs">
+            <span
+              {...errorStatus.messageProps}
+              className="text-destructive flex items-center gap-1 text-xs"
+            >
               <AlertCircle className="size-3.5" />
               {saveError}
             </span>

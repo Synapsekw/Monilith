@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Sparkles } from "lucide-react";
 import { summarizeThread } from "@/lib/ai/summarize/actions";
 import { Button } from "@/components/ui/button";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 /**
  * "Catch me up": a read-only, opt-in summary of an item's updates thread.
@@ -24,6 +25,10 @@ export function ThreadSummary({
   const [isPending, startTransition] = useTransition();
 
   const isDisabled = disabled || itemId.length === 0 || isPending;
+  // The button disables itself the instant the transition starts, which drops
+  // focus to `<body>`; it is still there when the summary (or the error)
+  // arrives, so focus goes back to the control the user actually pressed.
+  const buttonRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function catchMeUp() {
     if (isDisabled) return;
@@ -48,6 +53,7 @@ export function ThreadSummary({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Button
+          ref={buttonRef}
           type="button"
           variant="outline"
           size="sm"

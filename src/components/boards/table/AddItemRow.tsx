@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { Plus } from "lucide-react";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import type { CellControls } from "./shared";
 
 export function AddItemRow({
@@ -24,6 +26,11 @@ export function AddItemRow({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const status = useFieldStatus(error);
+  // The input disables ITSELF for the duration of the add, which drops focus to
+  // <body> — so the keyboard user who just pressed Enter can't type the next
+  // item. The row always stays mounted, so reclaiming focus here is safe.
+  const inputRef = useRestoreFocusAfterPending<HTMLInputElement>(isPending);
 
   function commit() {
     const trimmed = name.trim();
@@ -57,6 +64,7 @@ export function AddItemRow({
       <div className="flex items-center gap-2">
         <Plus className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
         <input
+          ref={inputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
@@ -69,13 +77,10 @@ export function AddItemRow({
           placeholder="Add Item"
           aria-label="Add item"
           className="text-foreground placeholder:text-muted-foreground focus-visible:ring-ring w-full bg-transparent text-sm outline-none focus-visible:rounded-sm focus-visible:ring-2 disabled:opacity-50"
+          {...status.controlProps}
         />
       </div>
-      {error ? (
-        <p role="alert" className="text-destructive text-xs">
-          {error}
-        </p>
-      ) : null}
+      <FieldStatus field={status} />
     </div>
   );
 }

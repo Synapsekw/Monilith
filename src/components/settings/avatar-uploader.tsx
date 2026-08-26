@@ -17,6 +17,8 @@ import {
   AVATAR_MAX_BYTES,
 } from "@/lib/validations/profile";
 import { Button } from "@/components/ui/button";
+import { useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
 
 const AVATARS_BUCKET = "avatars";
@@ -52,6 +54,14 @@ export function AvatarUploader({
   const [msg, setMsg] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The message belongs to the visible affordance, not the sr-only file input:
+  // it is the Upload/Change button a user activates and returns to. Errors
+  // interrupt; "Saved."/"Removed." announce politely.
+  const status = useFieldStatus(msg, isError ? "error" : "success");
+  // Upload/Change disables itself while the upload runs and is the one control
+  // here that always survives it (Remove unmounts when the avatar goes), so it
+  // is where focus is reclaimed from `<body>`.
+  const pickRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -142,9 +152,11 @@ export function AvatarUploader({
             onChange={onPick}
           />
           <Button
+            ref={pickRef}
             size="sm"
             variant="outline"
             disabled={pending}
+            aria-describedby={status.controlProps["aria-describedby"]}
             onClick={() => inputRef.current?.click()}
           >
             {pending ? "Uploading…" : url ? "Change" : "Upload"}
@@ -165,6 +177,7 @@ export function AvatarUploader({
             every other row in the section. */}
         {msg ? (
           <span
+            {...status.messageProps}
             className={cn(
               "text-xs",
               isError ? "text-destructive" : "text-muted-foreground",

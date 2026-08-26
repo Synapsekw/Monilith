@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useFieldStatus } from "@/components/ui/field-status";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import {
@@ -178,6 +179,14 @@ function TimeTrackingPopover({
   const [editDuration, setEditDuration] = useState("");
   const [editDate, setEditDate] = useState("");
   const [editError, setEditError] = useState(false);
+  // Each "Use e.g. 1h 30m" hint is the accessible description of the field it
+  // rejects — hand-written `aria-invalid` alone told a screen-reader user the
+  // value was wrong but never why.
+  const estimateStatus = useFieldStatus(
+    estimateError ? "Use e.g. 1h 30m" : null,
+  );
+  const editStatus = useFieldStatus(editError ? "Use e.g. 1h 30m" : null);
+  const addStatus = useFieldStatus(addError ? "Use e.g. 1h 30m or 90m" : null);
 
   // Chronological sort: running entry always first, then oldest→newest by started_at.
   const sorted = [...entries].sort((a, b) => {
@@ -263,11 +272,14 @@ function TimeTrackingPopover({
                 "h-6 w-24 px-1.5 text-xs tabular-nums",
                 estimateError && "border-destructive",
               )}
-              aria-invalid={estimateError}
+              {...estimateStatus.controlProps}
             />
-            {estimateError && (
-              <span className="text-destructive mt-0.5 text-xs">
-                Use e.g. 1h 30m
+            {estimateStatus.message && (
+              <span
+                {...estimateStatus.messageProps}
+                className="text-destructive mt-0.5 text-xs"
+              >
+                {estimateStatus.message}
               </span>
             )}
           </div>
@@ -315,7 +327,7 @@ function TimeTrackingPopover({
                         "h-6 w-20 px-1.5 text-xs tabular-nums",
                         editError && "border-destructive",
                       )}
-                      aria-invalid={editError}
+                      {...editStatus.controlProps}
                     />
                     <DatePickerButton
                       ariaLabel="Edit date"
@@ -338,9 +350,12 @@ function TimeTrackingPopover({
                       Cancel
                     </Button>
                   </div>
-                  {editError && (
-                    <span className="text-destructive text-xs">
-                      Use e.g. 1h 30m
+                  {editStatus.message && (
+                    <span
+                      {...editStatus.messageProps}
+                      className="text-destructive text-xs"
+                    >
+                      {editStatus.message}
                     </span>
                   )}
                 </li>
@@ -409,7 +424,7 @@ function TimeTrackingPopover({
               "h-6 flex-1 px-1.5 text-xs tabular-nums",
               addError && "border-destructive",
             )}
-            aria-invalid={addError}
+            {...addStatus.controlProps}
           />
           <DatePickerButton
             ariaLabel="Date for manual entry"
@@ -427,9 +442,12 @@ function TimeTrackingPopover({
             Add
           </Button>
         </div>
-        {addError && (
-          <span className="text-destructive mt-1 block text-xs">
-            Use e.g. 1h 30m or 90m
+        {addStatus.message && (
+          <span
+            {...addStatus.messageProps}
+            className="text-destructive mt-1 block text-xs"
+          >
+            {addStatus.message}
           </span>
         )}
       </div>

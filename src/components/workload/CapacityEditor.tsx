@@ -8,6 +8,7 @@ import { upsertMemberCapacity } from "@/lib/workload/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import {
   Popover,
   PopoverContent,
@@ -50,6 +51,10 @@ export function CapacityEditor({
   const [hours, setHours] = useState(String(hoursPerDay));
   const [days, setDays] = useState<Set<number>>(new Set(workingDays));
   const [error, setError] = useState<string | null>(null);
+  // Both failure modes this can show — the local range check and whatever
+  // `upsertMemberCapacity` rejects with — are about the hours the owner typed,
+  // so the message is that field's accessible description.
+  const hoursStatus = useFieldStatus(error);
 
   function toggleDay(d: number) {
     setDays((prev) => {
@@ -118,6 +123,7 @@ export function CapacityEditor({
               value={hours}
               disabled={isPending}
               onChange={(e) => setHours(e.target.value)}
+              {...hoursStatus.controlProps}
             />
           </div>
 
@@ -147,7 +153,7 @@ export function CapacityEditor({
             </div>
           </div>
 
-          {error ? <p className="text-destructive text-xs">{error}</p> : null}
+          <FieldStatus field={hoursStatus} />
 
           <Button
             type="button"

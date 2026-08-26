@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { createWorkspace } from "@/lib/workspaces/actions";
 
 export function NewWorkspaceDialog({
@@ -33,6 +35,10 @@ export function NewWorkspaceDialog({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const nameStatus = useFieldStatus(error);
+  // Failure is the only path that leaves this dialog open, and it re-enables
+  // the Create button that dropped focus when it disabled itself.
+  const createRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   function submit() {
     const trimmed = name.trim();
@@ -73,6 +79,7 @@ export function NewWorkspaceDialog({
           value={name}
           placeholder="Workspace name"
           aria-label="Workspace name"
+          {...nameStatus.controlProps}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -81,11 +88,7 @@ export function NewWorkspaceDialog({
             }
           }}
         />
-        {error ? (
-          <p role="alert" className="text-destructive text-xs">
-            {error}
-          </p>
-        ) : null}
+        <FieldStatus field={nameStatus} />
         <DialogFooter>
           <Button
             variant="ghost"
@@ -94,7 +97,11 @@ export function NewWorkspaceDialog({
           >
             Cancel
           </Button>
-          <Button onClick={submit} disabled={pending || !name.trim()}>
+          <Button
+            ref={createRef}
+            onClick={submit}
+            disabled={pending || !name.trim()}
+          >
             Create
           </Button>
         </DialogFooter>

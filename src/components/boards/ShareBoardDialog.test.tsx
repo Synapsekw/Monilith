@@ -78,6 +78,37 @@ describe("ShareBoardDialog", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Not allowed");
   });
 
+  it("ties a failed write to the select it came from, for screen readers", async () => {
+    shareBoard.mockResolvedValue({ ok: false, error: "Not allowed" });
+    render(
+      <ShareBoardDialog
+        boardId="b1"
+        members={members}
+        grants={[]}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    const select = screen.getByLabelText(
+      "Access for Dana Lee",
+    ) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "editor" } });
+
+    // The message must be the failing control's accessible DESCRIPTION, not
+    // orphaned text next to it — a screen-reader user landing back on the
+    // select has to hear why it snapped back to "No access".
+    await waitFor(() =>
+      expect(select).toHaveAccessibleDescription("Not allowed"),
+    );
+    expect(select).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent("Not allowed");
+
+    // …and only that control: the other member's select is still valid.
+    const other = screen.getByLabelText("Access for Sam Roe");
+    expect(other).not.toHaveAttribute("aria-invalid");
+    expect(other).toHaveAccessibleDescription("");
+  });
+
   it("calls unshareBoard when access is set back to none", async () => {
     unshareBoard.mockResolvedValue({ ok: true });
     render(

@@ -13,6 +13,8 @@ import { showMutationError } from "@/lib/ui/mutation-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { RevealOnHover } from "@/components/ui/reveal-on-hover";
 import {
   DropdownMenu,
@@ -53,6 +55,13 @@ export function DashboardItemMenu({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [name, setName] = useState(dashboard.name);
   const [error, setError] = useState<string | null>(null);
+  // `error` is shown in two places; only the rename dialog has a field that
+  // owns it, so only that one gets the control wiring. The delete alert's copy
+  // is an action banner with no owning control and stays a plain role="alert".
+  const nameStatus = useFieldStatus(renameOpen ? error : null);
+  // The rename dialog stays mounted when the rename fails, re-enabling the
+  // Save button that dropped focus when it disabled itself.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function submitRename() {
     const trimmed = name.trim();
@@ -171,16 +180,17 @@ export function DashboardItemMenu({
                 autoFocus
                 value={name}
                 disabled={isPending}
+                {...nameStatus.controlProps}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-            {error ? (
-              <p role="alert" className="text-destructive text-xs">
-                {error}
-              </p>
-            ) : null}
+            <FieldStatus field={nameStatus} />
             <DialogFooter>
-              <Button type="submit" disabled={isPending || !name.trim()}>
+              <Button
+                ref={saveRef}
+                type="submit"
+                disabled={isPending || !name.trim()}
+              >
                 {isPending ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>

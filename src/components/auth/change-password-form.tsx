@@ -7,6 +7,7 @@ import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { changeOwnPassword } from "@/app/auth/actions";
 import type { AuthState } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import {
   Card,
   CardContent,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/input-group";
 import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   type ChangePasswordInput,
   changePasswordSchema,
@@ -48,6 +50,10 @@ function PasswordField({
   error?: string;
 }) {
   const [visible, setVisible] = useState(false);
+  // Ties the validation message to this field's input as its accessible
+  // description — the reveal toggle beside it is a separate control and must
+  // not inherit the error.
+  const status = useFieldStatus(error);
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -57,7 +63,7 @@ function PasswordField({
           type={visible ? "text" : "password"}
           autoComplete="new-password"
           placeholder={placeholder}
-          aria-invalid={error ? true : undefined}
+          {...status.controlProps}
           {...registration}
         />
         <InputGroupAddon align="inline-end">
@@ -72,7 +78,7 @@ function PasswordField({
           </InputGroupButton>
         </InputGroupAddon>
       </InputGroup>
-      {error ? <p className="text-destructive text-xs">{error}</p> : null}
+      <FieldStatus field={status} />
     </div>
   );
 }
@@ -97,6 +103,12 @@ export function ChangePasswordForm({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
   });
+
+  // The submit button disables itself the instant the transition starts, which
+  // drops focus to <body>. On the failure path the form stays mounted, so
+  // hand focus back to the button once the action resolves (success redirects
+  // away, where the ref is null and this is a no-op).
+  const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   return (
     <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
@@ -153,6 +165,7 @@ export function ChangePasswordForm({
           />
 
           <Button
+            ref={submitRef}
             type="submit"
             className="shadow-glow-primary w-full"
             disabled={pending}

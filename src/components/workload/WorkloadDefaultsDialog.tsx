@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS: { value: number; label: string }[] = [
@@ -48,8 +49,25 @@ export function WorkloadDefaultsDialog({
   const [hours, setHours] = useState(String(defaultHoursPerDay));
   const [perItem, setPerItem] = useState(String(defaultPerItemHours));
   const [days, setDays] = useState<Set<number>>(new Set(defaultWorkingDays));
-  const [error, setError] = useState<string | null>(null);
+  // Which FIELD the message belongs to, carried with the message itself. Both
+  // numeric fields can fail one save, and a message that can't name its owner
+  // is a message no `aria-describedby` can point anywhere useful — the old
+  // code hand-marked the hours input invalid for a per-item error.
+  const [error, setError] = useState<{
+    field: "hours" | "perItem";
+    message: string;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const hoursStatus = useFieldStatus(
+    error?.field === "hours" ? error.message : null,
+  );
+  const perItemStatus = useFieldStatus(
+    error?.field === "perItem" ? error.message : null,
+  );
+  // Only ever one is set, so this renders the single message element that has
+  // always sat here — now carrying the id its own field points at.
+  const shownStatus = error?.field === "perItem" ? perItemStatus : hoursStatus;
 
   function toggleDay(d: number) {
     setDays((prev) => {
@@ -65,11 +83,17 @@ export function WorkloadDefaultsDialog({
     const hpd = Number(hours.trim());
     const pih = Number(perItem.trim());
     if (Number.isNaN(hpd) || hpd < 0 || hpd > 24) {
-      setError("Hours per day must be between 0 and 24.");
+      setError({
+        field: "hours",
+        message: "Hours per day must be between 0 and 24.",
+      });
       return;
     }
     if (Number.isNaN(pih) || pih < 0) {
-      setError("Per-item hours must be 0 or more.");
+      setError({
+        field: "perItem",
+        message: "Per-item hours must be 0 or more.",
+      });
       return;
     }
     startTransition(async () => {
@@ -79,7 +103,9 @@ export function WorkloadDefaultsDialog({
         defaultWorkingDays: [...days].sort((a, b) => a - b),
       });
       if (!res.ok) {
-        setError(res.error);
+        // A server rejection has no single owning field; it lands on the first
+        // one, which is where the hand-written `aria-invalid` used to put it.
+        setError({ field: "hours", message: res.error });
         return;
       }
       setOpen(false);
@@ -122,7 +148,7 @@ export function WorkloadDefaultsDialog({
               step={0.5}
               value={hours}
               onChange={(e) => setHours(e.target.value)}
-              aria-invalid={error ? true : undefined}
+              {...hoursStatus.controlProps}
             />
           </div>
 
@@ -138,6 +164,7 @@ export function WorkloadDefaultsDialog({
               step={0.5}
               value={perItem}
               onChange={(e) => setPerItem(e.target.value)}
+              {...perItemStatus.controlProps}
             />
           </div>
 
@@ -171,7 +198,7 @@ export function WorkloadDefaultsDialog({
             </div>
           </div>
 
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          <FieldStatus field={shownStatus} className="text-sm" />
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>

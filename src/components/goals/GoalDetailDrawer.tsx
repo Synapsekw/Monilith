@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import {
   Sheet,
   SheetContent,
@@ -71,6 +72,17 @@ function GoalEditor({
   const [loadingBoardId, setLoadingBoardId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Which control the failed patch came from, so the error can be that field's
+  // accessible description instead of orphaned text above the form. Every edit
+  // here goes through one shared `patch()`, so the owning field is derived from
+  // the patch payload rather than from nine separate error states.
+  const [errorField, setErrorField] = useState<string | null>(null);
+  const saveStatus = useFieldStatus(saveError);
+  /** Spread onto the control the current save error belongs to — nothing elsewhere. */
+  const fieldProps = (field: string) =>
+    errorField === field
+      ? saveStatus.controlProps
+      : { "aria-describedby": undefined, "aria-invalid": undefined };
   const boardName = (id: string) => boards.find((b) => b.id === id)?.name ?? id;
 
   const num = (s: string): number | null =>
@@ -91,6 +103,8 @@ function GoalEditor({
 
   function patch(input: Parameters<typeof updateGoal>[0]) {
     setSaveError(null);
+    setErrorField(null);
+    const field = Object.keys(input).find((k) => k !== "goalId") ?? null;
     startTransition(async () => {
       const res = await updateGoal(input);
       if (res.ok) {
@@ -99,6 +113,7 @@ function GoalEditor({
         // Undo the optimistic field edit and tell the user it didn't save.
         resetFields();
         setSaveError(res.error);
+        setErrorField(field);
       }
     });
   }
@@ -201,15 +216,12 @@ function GoalEditor({
 
   return (
     <div className="flex flex-col gap-4">
-      {saveError ? (
-        <p role="alert" className="text-destructive text-xs">
-          {saveError}
-        </p>
-      ) : null}
+      <FieldStatus field={saveStatus} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="edit-name">Name</Label>
         <Input
           id="edit-name"
+          {...fieldProps("name")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() =>
@@ -224,6 +236,7 @@ function GoalEditor({
         <Label htmlFor="edit-status">Status</Label>
         <select
           id="edit-status"
+          {...fieldProps("status")}
           value={goal.status}
           onChange={(e) =>
             patch({ goalId: goal.id, status: e.target.value as GoalStatus })
@@ -242,6 +255,7 @@ function GoalEditor({
         <Label htmlFor="edit-owner">Owner</Label>
         <select
           id="edit-owner"
+          {...fieldProps("ownerId")}
           value={goal.ownerId}
           onChange={(e) => patch({ goalId: goal.id, ownerId: e.target.value })}
           className="border-input h-9 rounded-md border bg-transparent px-2 text-sm"
@@ -259,6 +273,7 @@ function GoalEditor({
           <Label htmlFor="edit-percent">Percent complete</Label>
           <Input
             id="edit-percent"
+            {...fieldProps("percent")}
             type="number"
             min={0}
             max={100}
@@ -275,6 +290,7 @@ function GoalEditor({
             <Label htmlFor="edit-current">Current</Label>
             <Input
               id="edit-current"
+              {...fieldProps("currentValue")}
               type="number"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
@@ -287,6 +303,7 @@ function GoalEditor({
             <Label htmlFor="edit-target">Target</Label>
             <Input
               id="edit-target"
+              {...fieldProps("targetValue")}
               type="number"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
@@ -299,6 +316,7 @@ function GoalEditor({
             <Label htmlFor="edit-unit">Unit</Label>
             <Input
               id="edit-unit"
+              {...fieldProps("unit")}
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
               onBlur={() => patch({ goalId: goal.id, unit: unit || null })}
@@ -416,6 +434,7 @@ function GoalEditor({
           <Label htmlFor="edit-start">Start date</Label>
           <Input
             id="edit-start"
+            {...fieldProps("startDate")}
             type="date"
             defaultValue={goal.startDate ?? ""}
             onBlur={(e) =>
@@ -427,6 +446,7 @@ function GoalEditor({
           <Label htmlFor="edit-due">Due date</Label>
           <Input
             id="edit-due"
+            {...fieldProps("dueDate")}
             type="date"
             defaultValue={goal.dueDate ?? ""}
             onBlur={(e) =>
