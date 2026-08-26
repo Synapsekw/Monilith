@@ -36,6 +36,9 @@ export function SharedBoardRow({
 }) {
   return (
     <div
+      // A filed shared row lives inside the region that arms the drag layer, so
+      // it needs the same focus anchor an owned row has — see `armDnd`.
+      data-board-row={board.id}
       className={cn(
         "group/row flex items-center gap-1 rounded-md pr-1 pl-3 transition-colors",
         isActive

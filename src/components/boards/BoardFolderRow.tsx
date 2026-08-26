@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
+import { cn } from "@/lib/utils";
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
 
 /**
@@ -10,14 +11,24 @@ import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
  * `useUIStore.collapsedSections` (the same persisted map `NavSection` uses),
  * keyed `folder:<id>` — so toggling a folder is 0 server round-trips and
  * survives a reload. Default open (absent key).
+ *
+ * The row can also be a drag drop target, but it deliberately imports nothing
+ * from @dnd-kit: the `useDroppable` hook is called by the lazy drag layer
+ * (`BoardsNavSortable`), which passes its `setNodeRef` and `isOver` down as
+ * `dropRef` / `isOver`. That keeps the ~30-40KB dnd stack out of the shell
+ * bundle that every authenticated route pays for.
  */
 export function BoardFolderRow({
   folder,
   count,
+  dropRef,
+  isOver = false,
   children,
 }: {
   folder: { id: string; name: string };
   count: number;
+  dropRef?: (node: HTMLElement | null) => void;
+  isOver?: boolean;
   children: ReactNode;
 }) {
   const collapsedSections = useUIStore((s) => s.collapsedSections);
@@ -26,9 +37,23 @@ export function BoardFolderRow({
   const open = !collapsedSections[key];
   const bodyId = `board-folder-${folder.id}`;
 
+  // Hovering a dragged board over a CLOSED folder opens it, so the drop lands
+  // somewhere the user can actually see. Same client-only persisted toggle a
+  // click uses — no server round-trip, so this is not the gotcha-09 shape.
+  useEffect(() => {
+    if (isOver && !open) toggleSection(key);
+  }, [isOver, open, key, toggleSection]);
+
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="group/folder text-muted-foreground hover:bg-state-hover hover:text-foreground flex items-center rounded-md pr-1 transition-colors">
+      <div
+        ref={dropRef}
+        data-testid={dropRef ? `folder-drop-${folder.id}` : undefined}
+        className={cn(
+          "group/folder text-muted-foreground hover:bg-state-hover hover:text-foreground flex items-center rounded-md pr-1 transition-colors",
+          isOver && "bg-state-hover ring-primary/60 text-foreground ring-1",
+        )}
+      >
         <button
           type="button"
           onClick={() => toggleSection(key)}

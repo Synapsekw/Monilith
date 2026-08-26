@@ -24,6 +24,12 @@ import { groupBoardsByFolder } from "@/lib/boards/folders/group";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
 import { NewFolderDialog } from "@/components/boards/NewFolderDialog";
 import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
+// Type-only: erased at compile time, so naming the lazy module here does NOT
+// pull @dnd-kit into the shell bundle.
+import type {
+  BoardRowFocusAnchor,
+  FolderSection,
+} from "@/components/boards/BoardsNavSortable";
 
 // Keep the @dnd-kit stack (~30-40KB gz) out of the shell bundle that mounts on
 // every authenticated route: the drag-to-reorder variant is a lazy client chunk
@@ -67,6 +73,7 @@ export function PlainBoardRow({
 }) {
   return (
     <div
+      data-board-row={board.id}
       className={cn(
         "group/row flex items-center rounded-md pr-1 transition-colors",
         isActive
@@ -124,26 +131,35 @@ export function BoardsNav({
   // @dnd-kit stays off the shell's initial JS.
   const [dndReady, setDndReady] = useState(false);
 
-  // Mounting the sortable variant REPLACES the plain rows in the DOM, so the
-  // element the user just tabbed to is destroyed and focus falls to
-  // <body> — their first Tab into the list appears to do nothing. Remember
-  // which board link held focus at arm time and hand focus back to its twin
-  // once the drag-enabled list is up.
-  const [restoreFocusHref, setRestoreFocusHref] = useState<string | null>(null);
+  // Mounting the drag layer REPLACES this subtree in the DOM, so the element
+  // the user just tabbed to is destroyed and focus falls to <body> — their
+  // first Tab into the list appears to do nothing. Remember which row held
+  // focus at arm time, and which end of it, so the drag-enabled tree can hand
+  // focus back to the same place.
+  const [restoreFocus, setRestoreFocus] = useState<BoardRowFocusAnchor | null>(
+    null,
+  );
 
-  function armDnd(fromFocus: boolean) {
-    if (fromFocus) {
-      const active = document.activeElement;
-      setRestoreFocusHref(
-        active instanceof HTMLAnchorElement
-          ? active.getAttribute("href")
+  function armDnd(focusTarget?: Element | null) {
+    if (focusTarget) {
+      // Read the row from the DOM rather than assuming an anchor: Shift+Tab
+      // enters the list from below and lands on a row's `⋯` button, which used
+      // to record nothing and so dropped focus anyway.
+      const row = focusTarget.closest<HTMLElement>("[data-board-row]");
+      const boardId = row?.dataset.boardRow;
+      setRestoreFocus(
+        boardId
+          ? {
+              boardId,
+              edge: focusTarget instanceof HTMLAnchorElement ? "link" : "menu",
+            }
           : null,
       );
     }
     // A transition lets React hold the current rows while the lazy chunk
     // resolves rather than flashing the dynamic import's empty fallback. It
     // does NOT save focus on its own — the swap still unmounts the focused
-    // node, which is what `restoreFocusHref` above is for. (jsdom resolves the
+    // node, which is what `restoreFocus` above is for. (jsdom resolves the
     // import inside the same flush, so the flash itself has no unit test.)
     startTransition(() => setDndReady(true));
   }
@@ -156,6 +172,35 @@ export function BoardsNav({
     boards,
     sharedBoards,
   });
+
+  // Folder rows are defined ONCE here and handed to whichever tree is mounted:
+  // the plain one, or the lazy drag layer that wraps each header in a drop
+  // target. Both must show identical markup, so neither owns the rows.
+  const folderSections: FolderSection[] = grouped.folders.map(
+    ({ folder, boards: folderBoards }) => ({
+      folder,
+      count: folderBoards.length,
+      children: folderBoards.map((entry) =>
+        entry.kind === "owned" ? (
+          <PlainBoardRow
+            key={entry.board.id}
+            board={entry.board}
+            isActive={entry.board.id === activeBoardId}
+            folders={folders}
+            currentFolderId={folder.id}
+          />
+        ) : (
+          <SharedBoardRow
+            key={entry.board.id}
+            board={entry.board}
+            isActive={entry.board.id === activeBoardId}
+            folders={folders}
+            currentFolderId={folder.id}
+          />
+        ),
+      ),
+    }),
+  );
 
   return collapsed ? (
     <div className="flex flex-col items-center gap-0.5 px-2 py-2">
@@ -236,47 +281,21 @@ export function BoardsNav({
         </>
       }
     >
-      {grouped.folders.map(({ folder, boards: folderBoards }) => (
-        <BoardFolderRow
-          key={folder.id}
-          folder={folder}
-          count={folderBoards.length}
-        >
-          {folderBoards.map((entry) =>
-            entry.kind === "owned" ? (
-              <PlainBoardRow
-                key={entry.board.id}
-                board={entry.board}
-                isActive={entry.board.id === activeBoardId}
-                folders={folders}
-                currentFolderId={folder.id}
-              />
-            ) : (
-              <SharedBoardRow
-                key={entry.board.id}
-                board={entry.board}
-                isActive={entry.board.id === activeBoardId}
-                folders={folders}
-                currentFolderId={folder.id}
-              />
-            ),
-          )}
-        </BoardFolderRow>
-      ))}
-
-      {grouped.unfiledOwned.length === 0 && grouped.folders.length === 0 ? (
+      {grouped.unfiledOwned.length === 0 && folderSections.length === 0 ? (
         <p className="text-muted-foreground px-3 py-1 text-xs">No boards yet</p>
       ) : dndReady ? (
         <BoardsNavSortable
           boards={grouped.unfiledOwned}
+          folderSections={folderSections}
           activeBoardId={activeBoardId}
           folders={folders}
-          restoreFocusHref={restoreFocusHref}
+          restoreFocus={restoreFocus}
         />
       ) : (
         <div
           data-testid="boards-nav-owned"
-          onPointerEnter={() => armDnd(false)}
+          className="flex flex-col gap-0.5"
+          onPointerEnter={() => armDnd()}
           // React routes portal events up the COMPONENT tree, so focus landing
           // inside a row's portaled dropdown would otherwise read as "focus
           // entered the board list" and swap this subtree for the lazy sortable
@@ -284,9 +303,18 @@ export function BoardsNav({
           // opened. Only a focus on a real DOM descendant is a genuine
           // interaction with the list.
           onFocus={(e) => {
-            if (e.currentTarget.contains(e.target)) armDnd(true);
+            if (e.currentTarget.contains(e.target)) armDnd(e.target);
           }}
         >
+          {folderSections.map((section) => (
+            <BoardFolderRow
+              key={section.folder.id}
+              folder={section.folder}
+              count={section.count}
+            >
+              {section.children}
+            </BoardFolderRow>
+          ))}
           {grouped.unfiledOwned.map((b) => (
             <PlainBoardRow
               key={b.id}

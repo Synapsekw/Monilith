@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { DndContextProps, DragEndEvent } from "@dnd-kit/core";
 import { reorderPosition } from "@/lib/boards/group-reorder";
+import { reorderBoard } from "@/lib/boards/actions";
 import { BoardsNav } from "./BoardsNav";
+import { BoardFolderRow } from "./BoardFolderRow";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
@@ -46,6 +49,44 @@ vi.mock("@/lib/hooks/use-coarse-pointer", () => ({
   useCoarsePointer: vi.fn(() => false),
 }));
 
+// Reorder persists through the board actions module; only that one export is
+// swapped so BoardItemMenu's rename/duplicate/archive imports stay real.
+vi.mock("@/lib/boards/actions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/boards/actions")>();
+  return {
+    ...actual,
+    reorderBoard: vi.fn(async () => ({ ok: true, data: undefined })),
+  };
+});
+
+// jsdom gives every node a 0x0 rect, so @dnd-kit's collision detection can
+// never resolve a real pointer drag here. Wrap DndContext to capture the very
+// handler the component installs — the drop OUTCOMES (file vs. reorder) are
+// then exercised for real, against the real props.
+const dnd = vi.hoisted(() => ({
+  dragEnd: null as ((e: DragEndEvent) => void) | null,
+}));
+
+vi.mock("@dnd-kit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/core")>();
+  const { createElement } = await import("react");
+  return {
+    ...actual,
+    DndContext: (props: DndContextProps) => {
+      dnd.dragEnd = props.onDragEnd ?? null;
+      return createElement(actual.DndContext, props);
+    },
+  };
+});
+
+/** A drop of `activeId` onto `overId`, minus the fields the handler ignores. */
+function dropEvent(activeId: string, overId: string): DragEndEvent {
+  return {
+    active: { id: activeId },
+    over: { id: overId },
+  } as unknown as DragEndEvent;
+}
+
 vi.mock("@/lib/dnd/sensors", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/dnd/sensors")>();
   return { useTouchAwareSensors: vi.fn(actual.useTouchAwareSensors) };
@@ -63,6 +104,9 @@ beforeEach(() => {
   vi.mocked(moveBoardToFolder).mockClear();
   vi.mocked(moveBoardToFolder).mockResolvedValue({ ok: true, data: undefined });
   vi.mocked(showMutationError).mockClear();
+  vi.mocked(reorderBoard).mockClear();
+  vi.mocked(reorderBoard).mockResolvedValue({ ok: true, data: undefined });
+  dnd.dragEnd = null;
   // Folder open/closed state is the persisted `collapsedSections` map shared
   // with NavSection — reset it so one test's toggle can't leak into the next.
   useUIStore.setState({ collapsedSections: {} });
@@ -835,5 +879,256 @@ describe("BoardsNav folder moves", () => {
     // A failed move changed nothing on the server — re-reading would just
     // repaint the same nav and hide the failure.
     expect(routerRefresh).not.toHaveBeenCalled();
+  });
+});
+
+describe("BoardFolderRow as a drop target", () => {
+  const folder = { id: "f1", name: "Acme Rebrand" };
+
+  it("stays an inert row — no drop testid — when no drop ref is supplied", () => {
+    render(
+      <BoardFolderRow folder={folder} count={1}>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+    expect(screen.queryByTestId("folder-drop-f1")).not.toBeInTheDocument();
+  });
+
+  it("opens a collapsed folder while a board is dragged over it", () => {
+    useUIStore.setState({ collapsedSections: { "folder:f1": true } });
+    const noop = () => {};
+    const { rerender } = render(
+      <BoardFolderRow folder={folder} count={1} dropRef={noop} isOver={false}>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+    expect(
+      screen.getByRole("button", { name: /Expand Acme Rebrand/i }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <BoardFolderRow folder={folder} count={1} dropRef={noop} isOver>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+
+    // Dropping into a closed folder would hide the board the user just filed,
+    // so hovering opens it first.
+    expect(
+      screen.getByRole("button", { name: /Collapse Acme Rebrand/i }),
+    ).toBeInTheDocument();
+    // Opening is client state only — never a re-read of the page's queries.
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("marks the header while a board hovers over it", () => {
+    const noop = () => {};
+    const { rerender } = render(
+      <BoardFolderRow folder={folder} count={1} dropRef={noop} isOver={false}>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+    expect(screen.getByTestId("folder-drop-f1").className).not.toContain(
+      "ring-1",
+    );
+
+    rerender(
+      <BoardFolderRow folder={folder} count={1} dropRef={noop} isOver>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+    expect(screen.getByTestId("folder-drop-f1").className).toContain("ring-1");
+  });
+});
+
+describe("BoardsNav drag a board onto a folder", () => {
+  const unfiled = {
+    id: "b1",
+    name: "Website revamp",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+  const alsoUnfiled = {
+    id: "b2",
+    name: "Brand kit",
+    workspace_id: "w1",
+    position: 1,
+    shared_out: false,
+  };
+  const filed = {
+    id: "b3",
+    name: "Moodboard",
+    workspace_id: "w1",
+    position: 2,
+    shared_out: false,
+  };
+
+  function renderNav() {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[unfiled, alsoUnfiled, filed]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[{ boardId: "b3", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+  }
+
+  /** Arm the lazy drag layer and wait for the folder drop target to land. */
+  async function armDragLayer() {
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-owned"));
+    await screen.findByTestId("folder-drop-f1");
+  }
+
+  it("makes folder rows drop targets once the drag layer mounts", async () => {
+    renderNav();
+    // First paint is the plain tree: the folder renders, but @dnd-kit (and so
+    // the drop target) is still off the shell bundle.
+    expect(screen.getByText("Acme Rebrand")).toBeInTheDocument();
+    expect(screen.queryByTestId("folder-drop-f1")).not.toBeInTheDocument();
+
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-owned"));
+
+    expect(await screen.findByTestId("folder-drop-f1")).toBeInTheDocument();
+    // One context spans folders AND the unfiled list, or a board could never
+    // be dragged from the list onto a folder.
+    expect(screen.getByTestId("boards-nav-sortable")).toContainElement(
+      screen.getByTestId("folder-drop-f1"),
+    );
+  });
+
+  it("files a board dropped on a folder header, then refreshes the sidebar", async () => {
+    renderNav();
+    await armDragLayer();
+
+    dnd.dragEnd?.(dropEvent("b1", "folder:f1"));
+
+    await waitFor(() =>
+      expect(moveBoardToFolder).toHaveBeenCalledWith({
+        boardId: "b1",
+        folderId: "f1",
+      }),
+    );
+    // Placement is server data — which subtree the row lives in changes, so
+    // the nav must be re-read.
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    expect(reorderBoard).not.toHaveBeenCalled();
+  });
+
+  it("reorders — and does NOT refresh — when the drop lands on another board (gotcha-44)", async () => {
+    renderNav();
+    await armDragLayer();
+
+    dnd.dragEnd?.(dropEvent("b2", "b1"));
+
+    await waitFor(() => expect(reorderBoard).toHaveBeenCalled());
+    expect(vi.mocked(reorderBoard).mock.calls[0][0].boardId).toBe("b2");
+    expect(moveBoardToFolder).not.toHaveBeenCalled();
+    // Revalidating a reorder reloads the whole sidebar; the optimistic order
+    // is authoritative instead.
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("toasts and does not refresh when a dropped move fails", async () => {
+    vi.mocked(moveBoardToFolder).mockResolvedValue({
+      ok: false,
+      error: "Nope.",
+    });
+    renderNav();
+    await armDragLayer();
+
+    dnd.dragEnd?.(dropEvent("b1", "folder:f1"));
+
+    await waitFor(() =>
+      expect(showMutationError).toHaveBeenCalledWith(
+        "Couldn't move the board.",
+        expect.objectContaining({ message: "Nope." }),
+      ),
+    );
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("ignores a drop that lands nowhere", async () => {
+    renderNav();
+    await armDragLayer();
+
+    dnd.dragEnd?.({
+      active: { id: "b1" },
+      over: null,
+    } as unknown as DragEndEvent);
+
+    expect(moveBoardToFolder).not.toHaveBeenCalled();
+    expect(reorderBoard).not.toHaveBeenCalled();
+  });
+
+  it("keeps the ⋯ 'Move to folder' path working alongside drag", async () => {
+    renderNav();
+    await armDragLayer();
+
+    // Drag is an enhancement; the accessible path must survive the restructure.
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Board actions" })[0],
+    );
+    expect(await screen.findByText("Move to folder")).toBeInTheDocument();
+  });
+});
+
+describe("BoardsNav focus handoff into the drag layer", () => {
+  const owned = [
+    {
+      id: "b1",
+      name: "Alpha",
+      workspace_id: "w1",
+      position: 0,
+      shared_out: false,
+    },
+  ];
+
+  it("hands focus back to the row's ⋯ button when the list is entered by Shift+Tab", async () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav boards={owned} sharedBoards={[]} />
+      </TooltipProvider>,
+    );
+
+    // Shift+Tab enters the list from below and lands on the row's menu button,
+    // not on its link.
+    const menuButton = screen.getByRole("button", { name: "Board actions" });
+    menuButton.focus();
+    expect(document.activeElement).toBe(menuButton);
+
+    await screen.findByTestId("boards-nav-sortable");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Board actions" }),
+      ),
+    );
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("does not drag focus backwards if the user tabbed on while the chunk loaded", async () => {
+    render(
+      <TooltipProvider>
+        <>
+          <BoardsNav boards={owned} sharedBoards={[]} />
+          <button type="button">Somewhere else</button>
+        </>
+      </TooltipProvider>,
+    );
+
+    screen.getByRole("link", { name: "Alpha" }).focus();
+    // …and the user keeps tabbing before the lazy chunk resolves.
+    const onward = screen.getByRole("button", { name: "Somewhere else" });
+    onward.focus();
+
+    await screen.findByTestId("boards-nav-sortable");
+    // Restoring here would yank the user back to a row they already left.
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: "Alpha" })).toBeInTheDocument(),
+    );
+    expect(document.activeElement).toBe(onward);
   });
 });
