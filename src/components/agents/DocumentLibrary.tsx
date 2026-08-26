@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -136,6 +137,14 @@ export function DocumentLibrary({
   const [bodyLoaded, setBodyLoaded] = useState(true);
   const [loadingBody, setLoadingBody] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Two messages that each belong to exactly one control: the title rejection
+  // to the title input, and an extraction failure to the file input that just
+  // produced it. `saveError`/`loadError`/`deleteError` stay panel-level — they
+  // are about the document as a whole, with no single field to hang off.
+  const titleStatus = useFieldStatus(titleError);
+  const uploadHintId = "doc-upload-hint";
+  const extractStatus = useFieldStatus(extractError, "error", uploadHintId);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -353,15 +362,13 @@ export function DocumentLibrary({
             id="doc-title"
             value={title}
             disabled={saving}
-            aria-invalid={Boolean(titleError)}
+            {...titleStatus.controlProps}
             onChange={(e) => {
               setTitle(e.target.value);
               setTitleError(null);
             }}
           />
-          {titleError ? (
-            <p className="text-destructive text-xs">{titleError}</p>
-          ) : null}
+          <FieldStatus field={titleStatus} />
         </div>
 
         {loadingBody ? (
@@ -386,20 +393,17 @@ export function DocumentLibrary({
             accept=".md,.markdown,.txt,.pdf,.docx,.xlsx"
             disabled={extracting || saving || loadingBody || !bodyLoaded}
             onChange={handleFileChange}
+            {...extractStatus.controlProps}
             className="text-muted-foreground file:text-foreground file:bg-surface-muted hover:file:bg-accent w-full text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border file:px-2.5 file:py-1 file:text-sm file:font-medium"
           />
-          <p className="text-muted-foreground text-xs">
+          <p id={uploadHintId} className="text-muted-foreground text-xs">
             PDF extraction is lossy — column order, tables and headers
             frequently mangle. Check the text before saving.
           </p>
           {extracting ? (
             <p className="text-muted-foreground text-xs">Reading file…</p>
           ) : null}
-          {extractError ? (
-            <p role="alert" className="text-destructive text-xs">
-              {extractError}
-            </p>
-          ) : null}
+          <FieldStatus field={extractStatus} />
         </div>
 
         <div className="space-y-1.5">
