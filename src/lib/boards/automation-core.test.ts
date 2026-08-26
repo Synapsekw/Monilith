@@ -145,6 +145,53 @@ describe("createAutomationCore — insert", () => {
   });
 });
 
+// The fake used to discard the arguments to `.eq()`, so EVERY predicate in
+// this core was invisible to its own suite: the membership check could have
+// dropped `user_id` (asking "is anyone an admin of this org?"), the board read
+// could have dropped `id` (resolving some other org), and the position read
+// could have dropped `board_id` (numbering against another board's rules) —
+// all three still green. The fake now records each predicate, so the suite can
+// state which ROWS the core addresses, not merely which tables it touched.
+describe("createAutomationCore — which rows each lookup addresses", () => {
+  it("keys the board, membership and position reads on the right columns", async () => {
+    const { client, reads } = makeAutomationClient({ role: "admin" });
+    const r = await createAutomationCore(
+      client,
+      { boardId: FAKE_BOARD, trigger: someTrigger, actions: [webhookAction] },
+      FAKE_ACTOR,
+    );
+    expect(r.ok).toBe(true);
+
+    const board = reads.find((x) => x.table === "boards");
+    expect(board?.eq).toEqual([["id", FAKE_BOARD]]);
+
+    // Both halves: the org resolved FROM the board, and the actor passed in.
+    // Dropping either turns the admin gate into a different question.
+    const member = reads.find((x) => x.table === "org_members");
+    expect(member?.eq).toEqual([
+      ["org_id", FAKE_ORG],
+      ["user_id", FAKE_ACTOR],
+    ]);
+
+    const position = reads.find((x) => x.table === "automations");
+    expect(position?.eq).toEqual([["board_id", FAKE_BOARD]]);
+  });
+
+  it("asks for the HIGHEST existing position, one row only", async () => {
+    // `(nextPos?.position ?? -1) + 1` is only "append to the end" if the read
+    // is ordered descending and limited to one row.
+    const { client, reads } = makeAutomationClient({ position: 4 });
+    await createAutomationCore(
+      client,
+      { boardId: FAKE_BOARD, trigger: someTrigger, actions: [notifyAction] },
+      FAKE_ACTOR,
+    );
+    const position = reads.find((x) => x.table === "automations");
+    expect(position?.order).toEqual([["position", { ascending: false }]]);
+    expect(position?.limit).toEqual([1]);
+  });
+});
+
 describe("createAutomationCore — boundary validation", () => {
   it("rejects an invalid trigger before touching the database", async () => {
     const { client, reads } = makeAutomationClient({});

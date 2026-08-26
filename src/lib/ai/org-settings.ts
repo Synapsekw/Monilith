@@ -46,7 +46,7 @@ export type OrgAiSettings = {
  * orgs land here now, and they reach AI through a subscription (or, until
  * checkout ships, through `setOrgAiPlan` in the platform console).
  */
-export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = {
+export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = Object.freeze({
   mode: "off",
   tier: "none",
   monthlyCreditLimit: 0,
@@ -64,7 +64,23 @@ export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = {
   // and the column default must not disagree, or an org would silently lose
   // capabilities the moment its first settings row was written.
   agentCapabilityCeiling: [...AGENT_CAPABILITIES],
-};
+});
+
+/**
+ * The freeze above is SHALLOW, and the one field that matters is an array.
+ *
+ * `readOrgAiSettings` returns `DEFAULT_ORG_AI_SETTINGS` BY IDENTITY for every
+ * org with no `org_ai_settings` row, so a single in-place `push`/`sort`/
+ * `splice` on the ceiling anywhere in the process rewrites the ADMIN half of
+ * the agent permission gate for every such org, for the lifetime of the server
+ * — widening what personal agents may do, silently and globally. Callers
+ * already copy defensively (`route.ts`'s "never mutate it in place" note,
+ * `.filter` there, the spread in `agent-tools.rls.integration.test.ts`); those
+ * stay, and this is what makes them enforceable instead of conventional. Under
+ * ESM's strict mode a violation now throws at the mutation rather than
+ * corrupting the singleton.
+ */
+Object.freeze(DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling);
 
 /**
  * The org default model an UNPINNED call will REALLY run on — or null.

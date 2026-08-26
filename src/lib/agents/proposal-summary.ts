@@ -31,11 +31,48 @@
  *  A summary that overflows would fail the INSERT for the whole batch. */
 export const PROPOSAL_SUMMARY_MAX_LENGTH = 500;
 
+/**
+ * Invisible FORMAT characters (Unicode general category Cf).
+ *
+ * These carry no glyph of their own — they exist only to change how the
+ * characters around them are displayed — so `\s` does not match them and the
+ * collapse below cannot see them. Two families reach this module:
+ *
+ *   - zero-width and soft marks (U+200B ZWSP, U+200C/200D ZWNJ/ZWJ, U+FEFF,
+ *     U+00AD SOFT HYPHEN, U+2060 WORD JOINER, and the U+E0001/U+E0020-E007F
+ *     tag block
+ *     used to smuggle text past a human reader), and
+ *   - bidi controls (U+200E/200F, U+061C, the U+202A-202E embeddings and
+ *     OVERRIDES, the U+2066-2069 isolates), which can make the rendered card
+ *     read in an order that is not the order stored.
+ *
+ * The second family is the dangerous one and is why this is not cosmetic: a
+ * right-to-left override inside a quoted value re-orders the sentence a human
+ * approves, so the card could describe something other than the call that
+ * executes — precisely the property this module exists to hold.
+ *
+ * STRIPPED, NOT REPLACED BY A SPACE, and the choice matters. These code points
+ * have no width, so removing one cannot change what the sentence LOOKS like;
+ * what it changes is that the stored summary now equals the glyphs the owner
+ * read. Substituting a space would do the opposite: it would invent a visible
+ * separator that was never on screen and hand the model a way to space out its
+ * own words (`Ad<ZWSP>d` rendering as `Ad d`) — model-authored structure by
+ * another route. Note that JS `\s` DOES include U+FEFF, so that one would
+ * otherwise become a space rather than vanish; stripping first settles it.
+ *
+ * Two accepted losses, both preferred to leaving the hole open: a ZWJ emoji
+ * sequence in a name renders as its separate components, and an Arabic
+ * prepended concatenation mark (U+0600-U+0605, also Cf) is dropped. Neither
+ * changes which call the sentence describes.
+ */
+const INVISIBLE_FORMAT = /\p{Cf}/gu;
+
 /** Model-chosen text can carry newlines (Zod `.trim()` only strips the ends),
  *  and the card renders one line. Collapse rather than truncate: the words are
- *  what identifies the call. */
+ *  what identifies the call. Invisible format characters go FIRST, so what is
+ *  collapsed is the whitespace a reader can actually see. */
 function oneLine(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  return value.replace(INVISIBLE_FORMAT, "").replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -49,12 +86,24 @@ function oneLine(value: string): string {
  * security property is that it never renders model prose — a prompt-injected
  * run could make the card describe an action other than the one that executes.
  * The quotes are decoration and nothing downstream parses them, so the value
- * simply loses them. Curly quotes go too: they cannot close the frame, but they
- * read like it. Truncation is no defence here — every interpolated field is
- * schema-capped well under the 500-character clamp.
+ * simply loses them — along with every mark that merely READS like one.
+ * Truncation is no defence here — every interpolated field is schema-capped
+ * well under the 500-character clamp.
+ *
+ * The curly pair alone was too narrow. None of the others below can literally
+ * close a U+0022 frame, but the property defended is what the OWNER READS: a
+ * fullwidth ＂, a low-9 „, a guillemet », a CJK corner bracket 」 or a prime ″
+ * all render as the end of a quotation, after which the value's own prose reads
+ * as the server's voice. Listed explicitly rather than as
+ * `\p{Quotation_Mark}`, because that property also carries the SINGLE quotes,
+ * and stripping apostrophes would mangle ordinary names (`Bob's board`) while
+ * defending nothing: the frame is a double quote.
  */
+const QUOTE_LOOKALIKES =
+  /[\u0022\u201C\u201D\u201E\u201F\uFF02\u00AB\u00BB\u2039\u203A\u300C\u300D\u300E\u300F\uFF62\uFF63\u301D\u301E\u301F\u2033\u2036\u3003\u02BA\u02DD\u02EE]/g;
+
 function stripQuotes(value: string): string {
-  return value.replace(/["“”]/g, "");
+  return value.replace(QUOTE_LOOKALIKES, "");
 }
 
 /**

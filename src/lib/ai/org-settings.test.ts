@@ -105,6 +105,53 @@ describe("readOrgAiSettings", () => {
     expect(settings.agentCapabilityCeiling).toEqual([]);
   });
 
+  // ── The default is a SHARED SINGLETON, so it must be immutable ─────────
+  //
+  // `readOrgAiSettings` returns this exact object BY IDENTITY for every org
+  // with no `org_ai_settings` row (org-settings.ts: `if (!data) return
+  // DEFAULT_ORG_AI_SETTINGS`). One in-place `push`/`sort`/`splice` anywhere in
+  // the process therefore rewrites the default for every such org for the
+  // lifetime of the server — and `agentCapabilityCeiling` is the ADMIN half of
+  // the agent permission gate, so a stray push there widens what personal
+  // agents may do, silently and globally.
+  //
+  // Two call sites already hand-guard against this (route.ts's "never mutate
+  // it in place" comment, and the defensive spread in
+  // agent-tools.rls.integration.test.ts). Those guards stay; the freeze is what
+  // makes them ENFORCEABLE rather than a convention — under ESM's strict mode
+  // a violation throws at the mutation instead of corrupting the process.
+  //
+  // The freeze must be DEEP: freezing the object alone leaves the ceiling array
+  // fully mutable, which is the one field that matters most.
+  it("refuses a write to the shared default object", () => {
+    expect(() => {
+      DEFAULT_ORG_AI_SETTINGS.mode = "managed";
+    }).toThrow(TypeError);
+    expect(DEFAULT_ORG_AI_SETTINGS.mode).toBe("off");
+  });
+
+  it("refuses an in-place mutation of the capability ceiling", () => {
+    expect(() =>
+      DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling.push("board.write"),
+    ).toThrow(TypeError);
+    expect(() =>
+      DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling.splice(0, 1),
+    ).toThrow(TypeError);
+    expect(DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling).toEqual([
+      "board.write",
+      "files.write",
+      "automation.create",
+      "time.log",
+    ]);
+  });
+
+  it("hands a row-less org the frozen object, ceiling included", async () => {
+    const settings = await readOrgAiSettings(clientReturning(null), "org-1");
+    expect(settings).toBe(DEFAULT_ORG_AI_SETTINGS);
+    expect(Object.isFrozen(settings)).toBe(true);
+    expect(Object.isFrozen(settings.agentCapabilityCeiling)).toBe(true);
+  });
+
   it("throws on a DB error (fail closed, not fail open)", async () => {
     await expect(
       readOrgAiSettings(clientReturning(null, { message: "boom" }), "org-1"),
