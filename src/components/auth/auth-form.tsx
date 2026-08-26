@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import { Input } from "@/components/ui/input";
 import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
@@ -68,6 +69,17 @@ export function AuthForm({ mode, footer, initialError, next }: AuthFormProps) {
       ? { email: "", password: "", orgName: "" }
       : { email: "", password: "" },
   });
+
+  // Each field's validation message becomes that input's accessible
+  // DESCRIPTION, so a screen-reader user tabbing back after a failed submit
+  // hears why. The form-level `state.error` banner below is deliberately NOT
+  // wired this way: it belongs to the whole form, not to one control.
+  const errors = form.formState.errors;
+  const orgNameError = useFieldStatus(
+    "orgName" in errors ? errors.orgName?.message : undefined,
+  );
+  const emailError = useFieldStatus(errors.email?.message);
+  const passwordError = useFieldStatus(errors.password?.message);
 
   if (state.success === "check-email") {
     return (
@@ -128,20 +140,10 @@ export function AuthForm({ mode, footer, initialError, next }: AuthFormProps) {
                 id="orgName"
                 autoComplete="organization"
                 placeholder="Acme Inc."
-                aria-invalid={
-                  "orgName" in form.formState.errors &&
-                  form.formState.errors.orgName
-                    ? true
-                    : undefined
-                }
+                {...orgNameError.controlProps}
                 {...form.register("orgName")}
               />
-              {"orgName" in form.formState.errors &&
-              form.formState.errors.orgName ? (
-                <p className="text-destructive text-xs">
-                  {form.formState.errors.orgName.message}
-                </p>
-              ) : null}
+              <FieldStatus field={orgNameError} />
             </div>
           ) : null}
 
@@ -152,14 +154,10 @@ export function AuthForm({ mode, footer, initialError, next }: AuthFormProps) {
               type="email"
               autoComplete="email"
               placeholder="you@example.com"
-              aria-invalid={form.formState.errors.email ? true : undefined}
+              {...emailError.controlProps}
               {...form.register("email")}
             />
-            {form.formState.errors.email ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.email.message}
-              </p>
-            ) : null}
+            <FieldStatus field={emailError} />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -169,14 +167,10 @@ export function AuthForm({ mode, footer, initialError, next }: AuthFormProps) {
               type="password"
               autoComplete={isSignup ? "new-password" : "current-password"}
               placeholder="••••••••"
-              aria-invalid={form.formState.errors.password ? true : undefined}
+              {...passwordError.controlProps}
               {...form.register("password")}
             />
-            {form.formState.errors.password ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.password.message}
-              </p>
-            ) : null}
+            <FieldStatus field={passwordError} />
             {!isSignup ? (
               <Link
                 href="/forgot-password"

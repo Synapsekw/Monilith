@@ -16,9 +16,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import { Input } from "@/components/ui/input";
 import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   type OnboardingInput,
   onboardingSchema,
@@ -36,6 +38,17 @@ export function OnboardingForm() {
     resolver: zodResolver(onboardingSchema),
     defaultValues: { orgName: "", workspaceName: "" },
   });
+
+  // Field messages become their input's accessible description; the
+  // form-level `state.error` banner stays a whole-form alert.
+  const orgNameError = useFieldStatus(form.formState.errors.orgName?.message);
+  const workspaceNameError = useFieldStatus(
+    form.formState.errors.workspaceName?.message,
+  );
+
+  // Submit disables itself synchronously, dropping focus to <body>. The form
+  // stays mounted on failure, so return focus to the button when it resolves.
+  const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   return (
     <Card className="shadow-panel [background:radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--brand)_8%,transparent),transparent_55%),var(--card)]">
@@ -75,14 +88,10 @@ export function OnboardingForm() {
               id="orgName"
               autoComplete="organization"
               placeholder="Acme Inc"
-              aria-invalid={form.formState.errors.orgName ? true : undefined}
+              {...orgNameError.controlProps}
               {...form.register("orgName")}
             />
-            {form.formState.errors.orgName ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.orgName.message}
-              </p>
-            ) : null}
+            <FieldStatus field={orgNameError} />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -90,19 +99,14 @@ export function OnboardingForm() {
             <Input
               id="workspaceName"
               placeholder="Engineering"
-              aria-invalid={
-                form.formState.errors.workspaceName ? true : undefined
-              }
+              {...workspaceNameError.controlProps}
               {...form.register("workspaceName")}
             />
-            {form.formState.errors.workspaceName ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.workspaceName.message}
-              </p>
-            ) : null}
+            <FieldStatus field={workspaceNameError} />
           </div>
 
           <Button
+            ref={submitRef}
             type="submit"
             disabled={isPending}
             className="shadow-glow-primary w-full"
