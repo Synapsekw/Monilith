@@ -4,6 +4,7 @@ import type { Database } from "@/types/database.types";
 import { parseFeed } from "@/lib/ai/models/feed-parse";
 import {
   listEnabledProviders,
+  recordProviderVerification,
   type ProviderRow,
 } from "@/lib/ai/providers/provider-rows";
 import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
@@ -44,7 +45,25 @@ export type VerifyAllProvidersDeps = {
   readKey?: typeof readSweepCredential;
   /** Injected seam for the platform-key lookup. */
   platformKey?: (provider: string) => string | undefined;
+  /** Injected seam for the per-provider health write. */
+  recordHealth?: typeof recordProviderVerification;
 };
+
+/** The reason recorded when a provider has no key this sweep may borrow. Its
+ *  most common cause is deliberate: see the org-BYO paragraph below. */
+const NO_KEY_REASON =
+  "No personal API key stored for this provider, so its models could not be checked.";
+
+/** Duck-typed on `.message`, like `verify-ids.ts` — see the note there on
+ *  cross-realm DOMExceptions. */
+function failureReason(e: unknown): string {
+  return typeof e === "object" &&
+    e !== null &&
+    "message" in e &&
+    typeof (e as { message: unknown }).message === "string"
+    ? (e as { message: string }).message
+    : "verification failed";
+}
 
 /**
  * Re-verify EVERY enabled provider's model ids against that provider's own
@@ -58,11 +77,23 @@ export type VerifyAllProvidersDeps = {
  *
  * ## Borrowing a user's key
  *
- * For a provider with no platform key the sweep uses ONE stored BYO credential
- * — see `readSweepCredential` for the selection rule and the full contract.
+ * For a provider with no platform key the sweep uses ONE stored PERSONAL BYO
+ * credential — see `readSweepCredential` for the selection rule and the full
+ * contract, including why an ORG BYO key is deliberately never borrowed here.
  * What matters here: this is a single read-only GET per provider per run (the
  * job runs daily), it can never bill the key's owner, and the same use is
  * disclosed under the key field in Personal Settings → AI.
+ *
+ * ## Every run leaves a record
+ *
+ * Each provider's outcome is written to `ai_providers` (`ok` / `failed` /
+ * `skipped`, with the reason and both timestamps) so the sweep stops being a
+ * thing that only `console` knows about. Two consequences worth stating:
+ * success is read off `reachable`, never off the counters — `verifyProviderModels`
+ * fails closed, so a revoked key returns the same zero/zero as a healthy
+ * provider with nothing to verify — and `skipped` is a real, expected outcome
+ * rather than an error: it is where a provider nobody has a personal key for
+ * (including one held only as an org BYO key) lands on every run.
  *
  * ## Failure is always local
  *
@@ -81,6 +112,7 @@ export async function verifyAllProviders(
   const verify = deps.verify ?? verifyProviderModels;
   const readKey = deps.readKey ?? readSweepCredential;
   const platformKey = deps.platformKey ?? platformKeyFor;
+  const recordHealth = deps.recordHealth ?? recordProviderVerification;
 
   let providers: ProviderRow[];
   try {
@@ -96,14 +128,47 @@ export async function verifyAllProviders(
         // Exactly one key resolution and one verify call per provider, so the
         // sweep is one outbound GET per provider per run.
         const apiKey = platformKey(p.id) ?? (await readKey(client, p.id));
-        if (!apiKey) return;
+        if (!apiKey) {
+          // Not a fault — and not nothing either. This is where a provider
+          // that exists ONLY as an org BYO key lands, every single run, and
+          // recording it is what turns that deliberate exclusion from an
+          // invisible dead end into a legible "skipped, no personal key".
+          await recordHealth(client, p.id, {
+            status: "skipped",
+            error: NO_KEY_REASON,
+          });
+          return;
+        }
         const res = await verify({ client, provider: p.id, apiKey });
+        // `reachable`, not the counters. `verifyProviderModels` fails closed,
+        // so a revoked key returns the same zero/zero as a healthy provider
+        // with nothing left to verify — reading success off the counts would
+        // file a week of 401s as "ok".
+        await recordHealth(
+          client,
+          p.id,
+          res.reachable
+            ? { status: "ok", error: null }
+            : { status: "failed", error: res.error },
+        );
         console.info(
           `[ai] ${p.id} id verification: ${res.verified} verified, ${res.unverified} unverified`,
         );
       } catch (e) {
         // Local to this provider by design — never abort the sweep.
         console.error(`[ai] ${p.id} id verification failed`, e);
+        // Best-effort, and deliberately re-caught: `recordProviderVerification`
+        // already swallows its own write errors, but an INJECTED recorder (or
+        // a future one) must not be able to turn a handled provider failure
+        // into an unhandled rejection that takes the whole sweep with it.
+        try {
+          await recordHealth(client, p.id, {
+            status: "failed",
+            error: failureReason(e),
+          });
+        } catch (recordErr) {
+          console.error(`[ai] ${p.id} health record failed`, recordErr);
+        }
       }
     }),
   );

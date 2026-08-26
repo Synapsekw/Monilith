@@ -310,7 +310,12 @@ describe("verifyProviderModels", () => {
     });
     // Two anthropic rows — NOT the bedrock row that shares a model_id, and NOT
     // the retired row, even though both would match the native list.
-    expect(res).toEqual({ verified: 2, unverified: 0 });
+    expect(res).toEqual({
+      verified: 2,
+      unverified: 0,
+      reachable: true,
+      error: null,
+    });
     expect(rowOf(table, "anthropic", "claude-haiku-4.5")?.native_model_id).toBe(
       "claude-haiku-4-5",
     );
@@ -373,7 +378,12 @@ describe("verifyProviderModels", () => {
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
-    expect(res).toEqual({ verified: 1, unverified: 1 });
+    expect(res).toEqual({
+      verified: 1,
+      unverified: 1,
+      reachable: true,
+      error: null,
+    });
     expect(updates.map((u) => u.predicates)).toEqual([
       [
         { op: "eq", column: "provider", value: "anthropic" },
@@ -383,6 +393,45 @@ describe("verifyProviderModels", () => {
     const mystery = rowOf(table, "anthropic", "claude-mystery-9");
     expect(mystery?.id_verified).toBe(false);
     expect(mystery?.native_model_id).toBeNull();
+  });
+
+  /**
+   * WHY `reachable` exists at all, stated where it can fail.
+   *
+   * This function fails CLOSED and QUIETLY: a 401 from a revoked key returns
+   * the same `{ verified: 0, unverified: 0 }` as a healthy provider that
+   * simply has no catalog rows yet. That is right for the catalog — nothing
+   * should be demoted on one bad call — but it made the outcome unreportable.
+   * `verifyAllProviders` writes a per-provider health row now, and with only
+   * the two counters it would have recorded a week of 401s as "ok", which is
+   * a health badge that lies. `reachable` is the one bit that separates "we
+   * asked and the provider answered" from "we could not ask".
+   */
+  it("reports a 401 as UNREACHABLE, so the sweep records a failure rather than a healthy zero", async () => {
+    getProviderRow.mockResolvedValueOnce(providerRow());
+    stubFetch(() => ({ ok: false, status: 401 }));
+    const { client, table, updates } = fakeAiModelsClient([
+      {
+        provider: "anthropic",
+        model_id: "claude-sonnet-5",
+        native_model_id: "claude-sonnet-5",
+        id_verified: true,
+      },
+    ]);
+    const res = await verifyProviderModels({
+      client,
+      provider: "anthropic",
+      apiKey: "sk-ant-revoked",
+    });
+    expect(res.reachable).toBe(false);
+    expect(res.error).toBe("anthropic model list returned HTTP 401");
+    // Status only — never the URL (Google's carries the key) or the headers.
+    expect(res.error).not.toContain("sk-ant-revoked");
+    // Fail-closed is unchanged: nothing was demoted and nothing was written.
+    expect(updates).toEqual([]);
+    expect(rowOf(table, "anthropic", "claude-sonnet-5")?.id_verified).toBe(
+      true,
+    );
   });
 
   it("SKIPS the whole provider when its model list errors — no row is demoted", async () => {
@@ -401,7 +450,12 @@ describe("verifyProviderModels", () => {
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
-    expect(res).toEqual({ verified: 0, unverified: 0 });
+    expect(res).toEqual({
+      verified: 0,
+      unverified: 0,
+      reachable: false,
+      error: "anthropic model list returned HTTP 503",
+    });
     expect(selects).toEqual([]);
     expect(updates).toEqual([]);
     expect(rowOf(table, "anthropic", "claude-sonnet-5")?.id_verified).toBe(
@@ -434,7 +488,12 @@ describe("verifyProviderModels", () => {
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
-    expect(res).toEqual({ verified: 0, unverified: 0 });
+    expect(res).toEqual({
+      verified: 0,
+      unverified: 0,
+      reachable: false,
+      error: expect.stringContaining("aborted"),
+    });
     expect(selects).toEqual([]);
     expect(updates).toEqual([]);
     expect(rowOf(table, "anthropic", "claude-sonnet-5")?.id_verified).toBe(
@@ -458,7 +517,12 @@ describe("verifyProviderModels", () => {
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
-    expect(res).toEqual({ verified: 0, unverified: 0 });
+    expect(res).toEqual({
+      verified: 0,
+      unverified: 0,
+      reachable: false,
+      error: "anthropic returned an empty model list",
+    });
     expect(updates).toEqual([]);
   });
 
@@ -487,7 +551,12 @@ describe("verifyProviderModels", () => {
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
-    expect(res).toEqual({ verified: 2, unverified: 0 });
+    expect(res).toEqual({
+      verified: 2,
+      unverified: 0,
+      reachable: true,
+      error: null,
+    });
     expect(updates).toHaveLength(1);
     expect(updates[0].predicates).toEqual([
       { op: "eq", column: "provider", value: "anthropic" },
@@ -507,7 +576,12 @@ describe("verifyProviderModels", () => {
       provider: "nope",
       apiKey: "sk-x",
     });
-    expect(res).toEqual({ verified: 0, unverified: 0 });
+    expect(res).toEqual({
+      verified: 0,
+      unverified: 0,
+      reachable: false,
+      error: 'provider "nope" is not enabled',
+    });
     expect(calls).toEqual([]);
     expect(selects).toEqual([]);
     expect(updates).toEqual([]);
@@ -522,7 +596,12 @@ describe("verifyProviderModels", () => {
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
-    expect(res).toEqual({ verified: 0, unverified: 0 });
+    expect(res).toEqual({
+      verified: 0,
+      unverified: 0,
+      reachable: false,
+      error: 'provider "anthropic" is not enabled',
+    });
     expect(calls).toEqual([]);
     expect(selects).toEqual([]);
   });
@@ -543,7 +622,12 @@ describe("verifyProviderModels", () => {
       provider: "anthropic",
       apiKey: "sk-ant-x",
     });
-    expect(res).toEqual({ verified: 1, unverified: 0 });
+    expect(res).toEqual({
+      verified: 1,
+      unverified: 0,
+      reachable: true,
+      error: null,
+    });
     expect(rowOf(table, "anthropic", "claude-haiku-4.5")?.native_model_id).toBe(
       "claude-haiku-4-5-20251001",
     );

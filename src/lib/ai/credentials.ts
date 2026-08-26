@@ -72,8 +72,8 @@ export async function resolveUserAdapterById(
 }
 
 /**
- * The ONE stored BYO credential the daily catalog sweep may borrow for
- * `provider`, or null when nobody has connected that provider.
+ * The ONE stored PERSONAL BYO credential the daily catalog sweep may borrow
+ * for `provider`, or null when no INDIVIDUAL has connected that provider.
  *
  * This is the only place in the product that reads a user's key for work the
  * user did not personally trigger, so the contract is deliberately narrow and
@@ -92,6 +92,40 @@ export async function resolveUserAdapterById(
  *   - The key never leaves the server and is never logged; the disclosure
  *     shown under the key field in Personal Settings → AI is the user-facing
  *     half of this contract.
+ *
+ * ## ORG BYO KEYS ARE OUT OF SCOPE — deliberately, not by omission
+ *
+ * `user_ai_credentials` is the ONLY table this reads. An org's key
+ * (`org_ai_settings.byo_secret_id`, read by `resolveAiAdapter` in
+ * `gateway.ts`) is never borrowed here, and there is no fallback to one. Three
+ * reasons, in order of weight:
+ *
+ *   1. `ai_models` is a PLATFORM-WIDE catalog, not an org-scoped table. A
+ *      sweep that borrowed an org key would have to pick ONE org among all of
+ *      them and spend that tenant's secret on a probe whose result is served
+ *      to every other tenant. That is a cross-tenant use of an org-scoped
+ *      secret — precisely the shape this codebase's security boundary exists
+ *      to forbid — and service-role access, which bypasses RLS, is the reason
+ *      nothing else would stop it.
+ *   2. There is no consent surface for it. What legitimises borrowing a
+ *      personal key is that the person who typed it reads the disclosure under
+ *      the field and is the only party affected. An org key is entered by one
+ *      admin under the organisation's own contract with the provider, and the
+ *      rate limits, 401 audit noise and anomaly detection that a daily probe
+ *      can trigger land on a tenant that never asked for the traffic.
+ *   3. The cost of excluding it is bounded, and much smaller than it looks.
+ *      `setOrgByoKey` already runs `verifyProviderModels` when the org key is
+ *      saved, so an org_byo-only provider's ids ARE verified — at save time.
+ *      The gap is narrower than "never": models published AFTER that save are
+ *      not picked up until an admin re-saves the key. It is a staleness
+ *      window, not the permanent dead end it first reads as.
+ *
+ * That residual staleness is no longer silent, which is what makes this
+ * decision safe to keep: every run records `skipped`, with a reason, against
+ * `ai_providers` for a provider it holds no borrowable key for, and Settings →
+ * AI renders it. If the trade ever stops being worth it, the fix is a
+ * per-org opt-in with its own disclosure — not a quiet fallback here.
+ * `readSweepCredential`'s own suite pins the exclusion.
  *
  * Requires a service-role client: `ai_credential_get` is `security definer`
  * and granted to `service_role` only. Decryption goes through that RPC — the
