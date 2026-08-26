@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Eye, FolderKanban, Users2 } from "lucide-react";
+import { FolderKanban, Users2 } from "lucide-react";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,14 @@ import {
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 import { NavSection } from "@/components/shell/nav-section";
+import type {
+  BoardFolder,
+  BoardFolderPlacement,
+} from "@/lib/boards/folders/types";
+import { groupBoardsByFolder } from "@/lib/boards/folders/group";
+import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
+import { NewFolderDialog } from "@/components/boards/NewFolderDialog";
+import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
 
 // Keep the @dnd-kit stack (~30-40KB gz) out of the shell bundle that mounts on
 // every authenticated route: the drag-to-reorder variant is a lazy client chunk
@@ -46,7 +54,7 @@ function CoarseCaption({ label }: { label: string }) {
  * hooks — an inert `size-6` spacer holds the grip's slot so swapping in the
  * drag-enabled variant on hover doesn't shift the row horizontally.
  */
-function PlainBoardRow({
+export function PlainBoardRow({
   board,
   isActive,
 }: {
@@ -87,11 +95,15 @@ function PlainBoardRow({
 export function BoardsNav({
   boards,
   sharedBoards,
+  folders = [],
+  placements = [],
   activeWorkspaceId,
   collapsed = false,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
+  folders?: BoardFolder[];
+  placements?: BoardFolderPlacement[];
   activeWorkspaceId?: string;
   collapsed?: boolean;
 }) {
@@ -105,6 +117,15 @@ export function BoardsNav({
   // so the very first reorder still works — while first paint stays plain and
   // @dnd-kit stays off the shell's initial JS.
   const [dndReady, setDndReady] = useState(false);
+
+  // Fold folders + placements into the tree once. `groupBoardsByFolder` owns the
+  // "a folder with no visible board is dropped, not rendered empty" rule.
+  const grouped = groupBoardsByFolder({
+    folders,
+    placements,
+    boards,
+    sharedBoards,
+  });
 
   return collapsed ? (
     <div className="flex flex-col items-center gap-0.5 px-2 py-2">
@@ -178,19 +199,51 @@ export function BoardsNav({
       storageKey="boards"
       title="Boards"
       icon={FolderKanban}
-      action={<NewBoardDialog workspaceId={activeWorkspaceId} />}
+      action={
+        <>
+          <NewFolderDialog />
+          <NewBoardDialog workspaceId={activeWorkspaceId} />
+        </>
+      }
     >
-      {boards.length === 0 ? (
+      {grouped.folders.map(({ folder, boards: folderBoards }) => (
+        <BoardFolderRow
+          key={folder.id}
+          folder={folder}
+          count={folderBoards.length}
+        >
+          {folderBoards.map((entry) =>
+            entry.kind === "owned" ? (
+              <PlainBoardRow
+                key={entry.board.id}
+                board={entry.board}
+                isActive={entry.board.id === activeBoardId}
+              />
+            ) : (
+              <SharedBoardRow
+                key={entry.board.id}
+                board={entry.board}
+                isActive={entry.board.id === activeBoardId}
+              />
+            ),
+          )}
+        </BoardFolderRow>
+      ))}
+
+      {grouped.unfiledOwned.length === 0 && grouped.folders.length === 0 ? (
         <p className="text-muted-foreground px-3 py-1 text-xs">No boards yet</p>
       ) : dndReady ? (
-        <BoardsNavSortable boards={boards} activeBoardId={activeBoardId} />
+        <BoardsNavSortable
+          boards={grouped.unfiledOwned}
+          activeBoardId={activeBoardId}
+        />
       ) : (
         <div
           data-testid="boards-nav-owned"
           onPointerEnter={() => setDndReady(true)}
           onFocus={() => setDndReady(true)}
         >
-          {boards.map((b) => (
+          {grouped.unfiledOwned.map((b) => (
             <PlainBoardRow
               key={b.id}
               board={b}
@@ -199,48 +252,18 @@ export function BoardsNav({
           ))}
         </div>
       )}
-      {sharedBoards.length > 0 ? (
+
+      {grouped.unfiledShared.length > 0 ? (
         <>
           <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">
             Shared with me
           </p>
-          {sharedBoards.map((b) => (
-            <Link
+          {grouped.unfiledShared.map((b) => (
+            <SharedBoardRow
               key={b.id}
-              href={`/boards/${b.id}`}
-              aria-current={b.id === activeBoardId ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors",
-                b.id === activeBoardId
-                  ? "bg-primary/80 text-foreground"
-                  : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-              )}
-            >
-              <span className="min-w-0 flex-1 truncate">{b.name}</span>
-              {b.access_level === "viewer" ? (
-                <Eye
-                  aria-label="View only"
-                  className="text-muted-foreground size-3 shrink-0"
-                />
-              ) : null}
-              {/* Who shared it: an icon with a hover tooltip, replacing the
-                  redundant "· from {owner}" second line. */}
-              {b.owner_name ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="flex shrink-0 items-center">
-                      <Users2
-                        aria-label={`Shared by ${b.owner_name}`}
-                        className="text-muted-foreground size-3.5"
-                      />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    Shared by {b.owner_name}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
-            </Link>
+              board={b}
+              isActive={b.id === activeBoardId}
+            />
           ))}
         </>
       ) : null}

@@ -28,6 +28,10 @@ import { useUIStore } from "@/stores/ui";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { cn } from "@/lib/utils";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
+import type {
+  BoardFolder,
+  BoardFolderPlacement,
+} from "@/lib/boards/folders/types";
 
 type NavLink = {
   label: string;
@@ -130,6 +134,8 @@ export function SidebarNav({
   activeOrgId = "",
   boards,
   sharedBoards,
+  folders,
+  placements,
   workspaces,
   activeWorkspaceId = "",
   dashboards,
@@ -139,6 +145,10 @@ export function SidebarNav({
   activeOrgId?: string;
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
+  /** Private board folders for the signed-in user (optional so every existing
+   *  call site — and the folder-blind tests — stay valid). */
+  folders?: BoardFolder[];
+  placements?: BoardFolderPlacement[];
   workspaces: { id: string; name: string }[];
   activeWorkspaceId?: string;
   dashboards: { id: string; name: string }[];
@@ -204,6 +214,8 @@ export function SidebarNav({
       <BoardsNav
         boards={boards}
         sharedBoards={sharedBoards}
+        folders={folders}
+        placements={placements}
         activeWorkspaceId={activeWorkspaceId}
         collapsed={isCollapsed}
       />

@@ -5,6 +5,7 @@ import { BoardsNav } from "./BoardsNav";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+import { useUIStore } from "@/stores/ui";
 
 const mockUseParams = vi.fn(() => ({}) as Record<string, string>);
 
@@ -410,5 +411,122 @@ describe("BoardsNav drag-reorder", () => {
       { id: "b2", position: 1 },
     ];
     expect(reorderPosition(order, "b2", "b2")).toBeNull();
+  });
+});
+
+describe("BoardsNav folders", () => {
+  const ownedBoard = {
+    id: "b1",
+    name: "Website revamp",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+  const sharedBoard = {
+    id: "s1",
+    name: "Design tasks",
+    position: 0,
+    owner_name: "Ada",
+    access_level: "editor" as const,
+  };
+
+  beforeEach(() => {
+    // Folder open/closed state is the persisted `collapsedSections` map shared
+    // with NavSection — reset it so one test's toggle can't leak into the next.
+    useUIStore.setState({ collapsedSections: {} });
+  });
+
+  it("renders a folder containing both an owned and a shared board", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[sharedBoard]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[
+            { boardId: "b1", folderId: "f1", position: 0 },
+            { boardId: "s1", folderId: "f1", position: 1 },
+          ]}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText("Acme Rebrand")).toBeInTheDocument();
+    expect(screen.getByText("Website revamp")).toBeInTheDocument();
+    expect(screen.getByText("Design tasks")).toBeInTheDocument();
+    // Every shared board is filed, so the section heading is gone.
+    expect(screen.queryByText("Shared with me")).not.toBeInTheDocument();
+  });
+
+  it("hides a folder whose boards are not visible in this workspace", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Elsewhere", position: 0 }]}
+          placements={[{ boardId: "b-other", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByText("Elsewhere")).not.toBeInTheDocument();
+    expect(screen.getByText("Website revamp")).toBeInTheDocument();
+  });
+
+  it("keeps 'Shared with me' for shared boards that are not filed", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[]}
+          sharedBoards={[sharedBoard]}
+          folders={[]}
+          placements={[]}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText("Shared with me")).toBeInTheDocument();
+    expect(screen.getByText("Design tasks")).toBeInTheDocument();
+  });
+
+  it("collapses a folder without a server round-trip", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    const toggle = screen.getByRole("button", {
+      name: /Collapse Acme Rebrand/i,
+    });
+    fireEvent.click(toggle);
+    expect(
+      screen.getByRole("button", { name: /Expand Acme Rebrand/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the collapsed rail flat — no folder chrome", () => {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
+          collapsed
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByText("Acme Rebrand")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Website revamp" }),
+    ).toBeInTheDocument();
   });
 });
