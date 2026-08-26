@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 
@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { Kicker } from "@/components/ui/kicker";
 
 type Step = "describe" | "generating" | "review";
@@ -49,12 +51,21 @@ export function AiBoardWizard({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const hintId = useId();
 
   const [step, setStep] = useState<Step>("describe");
   const [prompt, setPrompt] = useState("");
   const [feedback, setFeedback] = useState("");
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A failed generate drops the user back on the describe step, so the failure
+  // is the prompt field's business: it becomes the textarea's accessible
+  // description alongside the standing "only your description is sent" hint.
+  const status = useFieldStatus(error, "error", hintId);
+  // "Create board" disables itself for the duration of the transition and stays
+  // mounted when the create FAILS (the dialog only closes on success), so
+  // without this the keyboard user is dumped on <body> next to the error.
+  const createRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function generate(withFeedback?: string) {
     if (prompt.trim().length < 3) return;
@@ -120,8 +131,9 @@ export function AiBoardWizard({
               maxLength={2000}
               rows={4}
               onChange={(e) => setPrompt(e.target.value)}
+              {...status.controlProps}
             />
-            <p className="text-muted-foreground text-xs">
+            <p id={hintId} className="text-muted-foreground text-xs">
               Only your description is sent — no workspace data leaves.
             </p>
           </div>
@@ -142,11 +154,7 @@ export function AiBoardWizard({
           />
         ) : null}
 
-        {error ? (
-          <p role="alert" className="text-destructive text-sm">
-            {error}
-          </p>
-        ) : null}
+        <FieldStatus field={status} className="text-sm" />
 
         <DialogFooter>
           {step === "describe" ? (
@@ -183,7 +191,12 @@ export function AiBoardWizard({
                 <RefreshCw className="size-3.5" aria-hidden />
                 Regenerate
               </Button>
-              <Button type="button" onClick={create} disabled={isPending}>
+              <Button
+                ref={createRef}
+                type="button"
+                onClick={create}
+                disabled={isPending}
+              >
                 {isPending ? "Creating…" : "Create board"}
               </Button>
             </>

@@ -7,6 +7,8 @@ import { AvatarUploader } from "@/components/settings/avatar-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SettingRow } from "@/components/settings/setting-row";
+import { useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,6 +34,13 @@ export function ProfileForm({
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
+
+  // The save message is the input's accessible description; the tone decides
+  // whether it interrupts (error) or announces politely ("Saved.").
+  const status = useFieldStatus(msg, isError ? "error" : "success");
+  // Save disables itself mid-click, which drops focus to `<body>`; reclaim it
+  // once the save resolves. See timezone-form.tsx.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   const trimmed = name.trim();
   const tooLong = trimmed.length > MAX_FULL_NAME_LENGTH;
@@ -80,7 +89,10 @@ export function ProfileForm({
             placeholder="Your name"
             autoComplete="name"
             disabled={pending}
-            aria-invalid={tooLong || undefined}
+            {...status.controlProps}
+            // Two independent reasons to be invalid: the local length guard
+            // (which never produces a message) and a server error (which does).
+            aria-invalid={tooLong || status.controlProps["aria-invalid"]}
             onChange={(e) => {
               setName(e.target.value);
               setMsg(null);
@@ -88,6 +100,7 @@ export function ProfileForm({
           />
           <div className="flex items-center gap-3">
             <Button
+              ref={saveRef}
               onClick={save}
               disabled={pending || isUnchanged || tooLong}
               size="sm"
@@ -96,6 +109,7 @@ export function ProfileForm({
             </Button>
             {msg && (
               <span
+                {...status.messageProps}
                 className={cn(
                   "text-xs",
                   isError ? "text-destructive" : "text-muted-foreground",

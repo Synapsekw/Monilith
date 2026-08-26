@@ -302,6 +302,10 @@ export type Database = {
           key_format: string;
           key_placeholder: string;
           label: string;
+          last_verified_at: string | null;
+          last_verify_attempt_at: string | null;
+          last_verify_error: string | null;
+          last_verify_status: string | null;
         };
         Insert: {
           adapter_kind: string;
@@ -312,6 +316,10 @@ export type Database = {
           key_format: string;
           key_placeholder: string;
           label: string;
+          last_verified_at?: string | null;
+          last_verify_attempt_at?: string | null;
+          last_verify_error?: string | null;
+          last_verify_status?: string | null;
         };
         Update: {
           adapter_kind?: string;
@@ -322,6 +330,10 @@ export type Database = {
           key_format?: string;
           key_placeholder?: string;
           label?: string;
+          last_verified_at?: string | null;
+          last_verify_attempt_at?: string | null;
+          last_verify_error?: string | null;
+          last_verify_status?: string | null;
         };
         Relationships: [];
       };
@@ -997,6 +1009,72 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      board_folder_boards: {
+        Row: {
+          board_id: string;
+          created_at: string;
+          folder_id: string;
+          position: number;
+          user_id: string;
+        };
+        Insert: {
+          board_id: string;
+          created_at?: string;
+          folder_id: string;
+          position?: number;
+          user_id: string;
+        };
+        Update: {
+          board_id?: string;
+          created_at?: string;
+          folder_id?: string;
+          position?: number;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "board_folder_boards_board_id_fkey";
+            columns: ["board_id"];
+            isOneToOne: false;
+            referencedRelation: "boards";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "board_folder_boards_folder_id_fkey";
+            columns: ["folder_id"];
+            isOneToOne: false;
+            referencedRelation: "board_folders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      board_folders: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          position: number;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          position?: number;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          position?: number;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
       };
       board_members: {
         Row: {

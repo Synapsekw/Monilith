@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useFieldStatus } from "@/components/ui/field-status";
 import { previewAiStep, type AiStepPreview } from "@/lib/ai/agentic/actions";
 import {
   columnOptions,
@@ -442,6 +443,9 @@ export function WebhookRow({
   onChange: (next: AutomationAction) => void;
 }) {
   const urlInvalid = action.url.length > 0 && !/^https:\/\/.+/.test(action.url);
+  const urlStatus = useFieldStatus(
+    urlInvalid ? "Must start with https://" : null,
+  );
   const header = action.authHeader;
   function patch(
     next: Partial<Extract<AutomationAction, { type: "call_webhook" }>>,
@@ -472,10 +476,14 @@ export function WebhookRow({
           className={selectClass}
           value={action.url}
           onChange={(e) => patch({ url: e.target.value })}
+          {...urlStatus.controlProps}
         />
-        {urlInvalid ? (
-          <span className="text-destructive mt-1 block text-xs">
-            Must start with https://
+        {urlStatus.message ? (
+          <span
+            {...urlStatus.messageProps}
+            className="text-destructive mt-1 block text-xs"
+          >
+            {urlStatus.message}
           </span>
         ) : null}
       </label>

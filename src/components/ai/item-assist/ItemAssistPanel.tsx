@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ColorChip } from "@/components/ui/color-chip";
 import { Kicker } from "@/components/ui/kicker";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
 
 /** Local phase for a single assist entry's propose→review→apply flow. */
@@ -129,6 +130,13 @@ function DescriptionEntry({
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // Each entry's propose button disables itself the moment its transition
+  // starts, dropping focus to `<body>`; unlike the Apply/Discard pair (which
+  // unmounts when the review block closes) it is mounted in every phase, so it
+  // is the right place to hand focus back once the model answers.
+  const draftRef = useRestoreFocusAfterPending<HTMLButtonElement>(
+    phase === "loading",
+  );
 
   function draft() {
     if (disabled || !columnId) return;
@@ -192,6 +200,7 @@ function DescriptionEntry({
           ))}
         </select>
         <Button
+          ref={draftRef}
           size="sm"
           onClick={draft}
           disabled={phase === "loading" || phase === "applying"}
@@ -251,6 +260,13 @@ function SubtasksEntry({
   const [items, setItems] = useState<SubtaskProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // Each entry's propose button disables itself the moment its transition
+  // starts, dropping focus to `<body>`; unlike the Apply/Discard pair (which
+  // unmounts when the review block closes) it is mounted in every phase, so it
+  // is the right place to hand focus back once the model answers.
+  const suggestRef = useRestoreFocusAfterPending<HTMLButtonElement>(
+    phase === "loading",
+  );
 
   function suggest() {
     if (isSubitem) return;
@@ -321,6 +337,7 @@ function SubtasksEntry({
     >
       <div className="flex justify-end">
         <Button
+          ref={suggestRef}
           size="sm"
           onClick={suggest}
           disabled={phase === "loading" || phase === "applying"}
@@ -401,6 +418,13 @@ function StatusEntry({
   const [optionId, setOptionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  // Each entry's propose button disables itself the moment its transition
+  // starts, dropping focus to `<body>`; unlike the Apply/Discard pair (which
+  // unmounts when the review block closes) it is mounted in every phase, so it
+  // is the right place to hand focus back once the model answers.
+  const proposeRef = useRestoreFocusAfterPending<HTMLButtonElement>(
+    phase === "loading",
+  );
 
   const column = statusColumns.find((c) => c.id === columnId);
   const proposedOption = optionsFor(column).find((o) => o.id === optionId);
@@ -473,6 +497,7 @@ function StatusEntry({
           ))}
         </select>
         <Button
+          ref={proposeRef}
           size="sm"
           onClick={propose}
           disabled={phase === "loading" || phase === "applying"}

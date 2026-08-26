@@ -2,7 +2,11 @@
 
 import { useId, useState, useTransition } from "react";
 import { saveAiKey, removeAiKey } from "@/lib/ai/credentials-actions";
-import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
+import type {
+  ProviderRow,
+  ProviderVerificationMap,
+} from "@/lib/ai/providers/provider-rows";
+import { ProviderVerificationBadge } from "@/components/settings/ProviderVerificationBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,9 +54,22 @@ function formatUpdated(iso: string): string {
 export function AiKeyList({
   providers,
   initial,
+  health,
 }: {
   providers: ProviderRow[];
   initial: ConfiguredKey[];
+  /**
+   * Per-provider sweep health. Optional as a WHOLE — the list is fully usable
+   * without it, and a provider absent from `verification` simply gets no badge
+   * rather than an empty one.
+   *
+   * The map and the instant travel together deliberately: rendering "N days
+   * ago" needs a `now`, and the only correct `now` is the server's, captured
+   * once so SSR and hydration cannot disagree (the relative-time counterpart
+   * of the timezone pin on `formatUpdated` above). Bundling them makes the
+   * pair unforgeable — you cannot pass health data without an instant.
+   */
+  health?: { verification: ProviderVerificationMap; nowMs: number };
 }) {
   const [configured, setConfigured] = useState<Record<string, ConfiguredKey>>(
     () => Object.fromEntries(initial.map((c) => [c.provider, c])),
@@ -137,6 +154,12 @@ export function AiKeyList({
         const isBusy = pending && busy === p.id;
         const labelId = `${idPrefix}-${p.id}-label`;
         const fieldId = `${idPrefix}-${p.id}-key`;
+        // Deliberately NOT `useFieldStatus`: this is inside a `.map`, so a hook
+        // per row would break the rules of hooks. Same contract, hand-derived
+        // from the id prefix this file already owns — the error becomes the
+        // accessible description of the control it belongs to (the key field
+        // for a failed save, the Remove button for a failed removal).
+        const errorId = `${idPrefix}-${p.id}-error`;
         const error = errors[p.id];
 
         return (
@@ -146,12 +169,20 @@ export function AiKeyList({
           >
             <div className="flex items-center justify-between gap-4 px-3 py-2.5">
               <div className="min-w-0">
-                <p
-                  id={labelId}
-                  className="text-foreground truncate text-sm font-medium"
-                >
-                  {p.label}
-                </p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p
+                    id={labelId}
+                    className="text-foreground truncate text-sm font-medium"
+                  >
+                    {p.label}
+                  </p>
+                  {health && (
+                    <ProviderVerificationBadge
+                      verification={health.verification[p.id]}
+                      nowMs={health.nowMs}
+                    />
+                  )}
+                </div>
                 {cfg ? (
                   <p className="text-muted-foreground mt-0.5 truncate text-xs">
                     <span className="font-mono">{cfg.hint}</span>
@@ -184,7 +215,9 @@ export function AiKeyList({
                       size="sm"
                       variant="ghost"
                       className="text-destructive hover:bg-destructive/10"
-                      aria-describedby={labelId}
+                      aria-describedby={
+                        error ? `${labelId} ${errorId}` : labelId
+                      }
                       disabled={isBusy}
                       onClick={() => remove(p.id)}
                     >
@@ -218,6 +251,7 @@ export function AiKeyList({
                   spellCheck={false}
                   placeholder={p.keyPlaceholder}
                   aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? errorId : undefined}
                   disabled={isBusy}
                   onChange={(e) => {
                     setDraftKey(e.target.value);
@@ -265,7 +299,11 @@ export function AiKeyList({
             )}
 
             {error && (
-              <p role="alert" className="text-destructive px-3 pb-2.5 text-xs">
+              <p
+                id={errorId}
+                role="alert"
+                className="text-destructive px-3 pb-2.5 text-xs"
+              >
                 {error}
               </p>
             )}

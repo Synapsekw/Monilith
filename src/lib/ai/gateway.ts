@@ -208,6 +208,10 @@ export async function runAi<T>(
      * Overrides {@link tierForFeature} for a call whose tier depends on the
      * SIZE of the request rather than on the feature.
      *
+     * It overrides the feature→tier MAP, not `pickModel`'s ladder: the org
+     * default still outranks it, so this cannot force a model. See
+     * `models/resolve.ts` · pickModel for the full precedence.
+     *
      * CURRENTLY UNCONSUMED: the one caller (`column_fill`) had its escalation
      * removed once `COLUMN_FILL_MAX` was shown to bound the batch below the
      * threshold. The seam is kept — it is unit-tested end to end, and it is

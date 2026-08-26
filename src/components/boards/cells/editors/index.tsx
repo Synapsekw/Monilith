@@ -5,6 +5,7 @@ import { Star } from "lucide-react";
 import type { ColumnOption } from "@/lib/validations/boards";
 import { isHttpUrl } from "@/lib/validations/boards";
 import { Input } from "@/components/ui/input";
+import { useFieldStatus } from "@/components/ui/field-status";
 import {
   Popover,
   PopoverAnchor,
@@ -497,6 +498,9 @@ export function LinkEditor({
   const [url, setUrl] = useState(value?.url ?? "");
   const [text, setText] = useState(value?.text ?? "");
   const [err, setErr] = useState<string | null>(null);
+  // The failure is the URL field's, so it has to be the URL field's accessible
+  // description — not a loose line of red text under two identical inputs.
+  const urlStatus = useFieldStatus(err);
   const commit = () => {
     if (!isHttpUrl(url)) {
       setErr("Enter a valid http or https URL");
@@ -517,6 +521,7 @@ export function LinkEditor({
             setErr(null);
           }}
           className="h-8"
+          {...urlStatus.controlProps}
         />
         <Input
           aria-label="Label"
@@ -525,7 +530,14 @@ export function LinkEditor({
           onChange={(e) => setText(e.target.value)}
           className="h-8"
         />
-        {err && <span className="text-destructive text-xs">{err}</span>}
+        {urlStatus.message && (
+          <span
+            {...urlStatus.messageProps}
+            className="text-destructive text-xs"
+          >
+            {urlStatus.message}
+          </span>
+        )}
         <button type="button" className="self-end text-xs" onClick={commit}>
           Save
         </button>
@@ -551,6 +563,7 @@ function TextLikeEditor({
 }) {
   const [s, setS] = useState(initial);
   const [err, setErr] = useState<string | null>(null);
+  const status = useFieldStatus(err);
   const commit = () => {
     const e = validate(s);
     if (e) {
@@ -572,8 +585,13 @@ function TextLikeEditor({
         }}
         onKeyDown={onKey}
         className="h-8"
+        {...status.controlProps}
       />
-      {err && <span className="text-destructive text-xs">{err}</span>}
+      {status.message && (
+        <span {...status.messageProps} className="text-destructive text-xs">
+          {status.message}
+        </span>
+      )}
       <button type="button" className="self-end text-xs" onClick={commit}>
         Save
       </button>

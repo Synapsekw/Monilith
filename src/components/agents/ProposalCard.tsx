@@ -15,6 +15,7 @@ import {
   type PendingProposal,
 } from "@/lib/agents/proposal-display";
 import { decideProposal } from "@/lib/agents/proposal-actions";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 /**
  * One action an agent asked permission for, and the owner's decision on it.
@@ -55,7 +56,33 @@ export function ProposalCard({
    * it deliberately does not do, so it says so instead of guessing.
    */
   const [unresolved, setUnresolved] = useState(false);
+  /**
+   * What to announce once a decision made ON THIS CARD lands. Deliberately
+   * null until then: the success path is otherwise a purely visual transition
+   * (eyebrow swap, terminal pill, button row unmounted), so a screen-reader
+   * user who pressed Approve heard "Working…" and then silence, with the
+   * control they were on gone from under them. The failure path already had
+   * `role="alert"`; this is its polite counterpart.
+   *
+   * A card that MOUNTS already-decided must stay silent — it is reporting
+   * history, not an outcome — which is why this is set in `decide()` rather
+   * than derived from `state`.
+   */
+  const [outcome, setOutcome] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  /**
+   * Which button is in flight, so focus can be handed back to THAT one after a
+   * retryable failure re-enables the row. Restoring to Approve after a failed
+   * Decline would be worse than not restoring at all: a blind Enter on the
+   * newly-focused control would approve the very call the user just refused.
+   */
+  const [inFlight, setInFlight] = useState<"approve" | "decline" | null>(null);
+  const approveRef = useRestoreFocusAfterPending<HTMLButtonElement>(
+    pending && inFlight === "approve",
+  );
+  const declineRef = useRestoreFocusAfterPending<HTMLButtonElement>(
+    pending && inFlight === "decline",
+  );
 
   // Stored status is not display state: with no sweep job, an undecided row
   // stays `pending` for ever, including long after it expired. The rule lives
@@ -68,6 +95,7 @@ export function ProposalCard({
   function decide(approve: boolean) {
     if (pending) return;
     setNote(null);
+    setInFlight(approve ? "approve" : "decline");
     startTransition(async () => {
       const res = await decideProposal({ id: proposal.id, approve });
       if (!res.ok) {
@@ -80,6 +108,15 @@ export function ProposalCard({
         return;
       }
       setStatus(res.data.status);
+      const decided = proposalDisplayState({
+        ...proposal,
+        status: res.data.status,
+      });
+      if (decided !== "pending") {
+        setOutcome(
+          `Agent action ${PROPOSAL_STATE_PILL[decided].label.toLowerCase()}.`,
+        );
+      }
       onDecided?.(proposal.id, res.data.status);
     });
   }
@@ -145,17 +182,30 @@ export function ProposalCard({
         </p>
       ) : null}
 
+      {/* Mounted from the start, empty until a decision lands: a live region
+          announces MUTATIONS, so one that only appears with its text already
+          in it is unreliable across screen readers. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {outcome}
+      </span>
+
       {decidable ? (
         <div className="mt-3 flex items-center justify-end gap-2">
           <Button
             size="sm"
             variant="ghost"
+            ref={declineRef}
             onClick={() => decide(false)}
             disabled={pending}
           >
             <X className="size-3.5" /> Decline
           </Button>
-          <Button size="sm" onClick={() => decide(true)} disabled={pending}>
+          <Button
+            ref={approveRef}
+            size="sm"
+            onClick={() => decide(true)}
+            disabled={pending}
+          >
             <Check className="size-3.5" />
             {pending ? "Working…" : "Approve"}
           </Button>

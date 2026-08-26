@@ -11,6 +11,12 @@
  * `auth` is a THROWING getter on purpose: the core must take its actor as a
  * parameter, never pay a GoTrue round-trip on a bridged client.
  *
+ * It is ARGUMENT-AWARE: every `.eq()` / `.order()` / `.limit()` is recorded on
+ * the read that issued it (see `AutomationRead`). It did not used to be, and
+ * that blindness meant no test in the repo could tell "is THIS actor an admin
+ * of THIS org?" from "is anyone an admin of anything?" — both pass against a
+ * fake that throws its predicates away.
+ *
  * Lives in `src/test/` beside `mcp-fake-client.ts` — outside vitest's
  * `src/**\/*.{test,spec}.{ts,tsx}` include glob, so it is never collected as a
  * suite.
@@ -54,19 +60,43 @@ export type AutomationClientSpec = {
   insertError?: string;
 };
 
+/**
+ * One recorded read: the table, the projection, and — the point of this fake —
+ * WHICH ROWS it addressed.
+ *
+ * The predicates are recorded rather than applied because this fake's results
+ * are spec-driven (`role` / `board` / `position` are handed in, not stored in
+ * any table it could filter). Recording is what a suite needs to state the
+ * property that matters: a lookup that drops `user_id` or `board_id` is asking
+ * a DIFFERENT question of the database, and an argument-blind fake answers both
+ * questions identically. Same discipline as `src/test/ai-models-fake-client.ts`
+ * and `src/lib/agents/documents-db.fake.ts`.
+ */
+export type AutomationRead = {
+  table: string;
+  cols: string;
+  /** Every `.eq(column, value)` on this read, in call order. */
+  eq: [string, unknown][];
+  /** Every `.order(column, options)` on this read, in call order. */
+  order: [string, unknown][];
+  /** Every `.limit(n)` on this read, in call order. */
+  limit: number[];
+};
+
 export type AutomationFake = {
   client: SupabaseClient<Database>;
   /** Every `automations` insert, in order. */
   inserts: Record<string, unknown>[];
-  /** Every select, in order — lets a test assert a lookup did NOT happen. */
-  reads: { table: string; cols: string }[];
+  /** Every select, in order — lets a test assert a lookup did NOT happen, and
+   *  assert the predicates of the ones that did. */
+  reads: AutomationRead[];
 };
 
 export function makeAutomationClient(
   spec: AutomationClientSpec = {},
 ): AutomationFake {
   const inserts: Record<string, unknown>[] = [];
-  const reads: { table: string; cols: string }[] = [];
+  const reads: AutomationRead[] = [];
   const board = spec.board === undefined ? { org_id: FAKE_ORG } : spec.board;
 
   const client = {
@@ -75,11 +105,27 @@ export function makeAutomationClient(
     },
     from: (table: string) => ({
       select: (cols: string) => {
-        reads.push({ table, cols });
+        const read: AutomationRead = {
+          table,
+          cols,
+          eq: [],
+          order: [],
+          limit: [],
+        };
+        reads.push(read);
         const chain = {
-          eq: () => chain,
-          order: () => chain,
-          limit: () => chain,
+          eq: (column: string, value: unknown) => {
+            read.eq.push([column, value]);
+            return chain;
+          },
+          order: (column: string, options?: unknown) => {
+            read.order.push([column, options]);
+            return chain;
+          },
+          limit: (n: number) => {
+            read.limit.push(n);
+            return chain;
+          },
           maybeSingle: async () => {
             if (table === "boards") return { data: board, error: null };
             if (table === "org_members")

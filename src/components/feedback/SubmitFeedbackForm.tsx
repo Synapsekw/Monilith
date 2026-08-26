@@ -91,8 +91,14 @@ export function SubmitFeedbackForm({ submit, onDone }: Props) {
         maxLength={2000}
       />
 
-      {/* Error */}
-      {error && <p className="text-destructive text-xs">{error}</p>}
+      {/* Error. Whole-form, not per-field: submitFeedback fails on auth, org
+          membership or the insert, so there is no single control to describe.
+          It only needs announcing when it appears. */}
+      {error && (
+        <p role="alert" className="text-destructive text-xs">
+          {error}
+        </p>
+      )}
 
       {/* Submit */}
       <Button

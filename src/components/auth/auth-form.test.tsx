@@ -119,3 +119,57 @@ describe("AuthForm — next carrying", () => {
     expect(fd.get("next")).toBe("/boards/b1");
   });
 });
+
+describe("AuthForm — field errors are wired to their controls", () => {
+  it("makes the zod message the email input's accessible description and marks it invalid", async () => {
+    render(<AuthForm mode="login" />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    const email = screen.getByLabelText(/email/i);
+    await waitFor(() =>
+      expect(email).toHaveAccessibleDescription("Enter a valid email address"),
+    );
+    expect(email).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("announces the email error as a live region", async () => {
+    render(<AuthForm mode="login" />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("alert").map((el) => el.textContent),
+      ).toContain("Enter a valid email address"),
+    );
+  });
+
+  it("wires the password error to the password input too", async () => {
+    render(<AuthForm mode="login" />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    const password = screen.getByLabelText(/password/i);
+    await waitFor(() =>
+      expect(password).toHaveAccessibleDescription("Password is required"),
+    );
+    expect(password).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("wires the organization-name error in signup mode", async () => {
+    render(<AuthForm mode="signup" />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /create account/i }),
+    );
+
+    const orgName = screen.getByLabelText(/organization name/i);
+    await waitFor(() =>
+      expect(orgName).toHaveAccessibleDescription(
+        "Organization name is required",
+      ),
+    );
+    expect(orgName).toHaveAttribute("aria-invalid", "true");
+  });
+});

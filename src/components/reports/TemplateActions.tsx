@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 
 /**
  * "Save as template" for the report currently open in the builder.
@@ -43,6 +44,10 @@ export function TemplateActions({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // The only field in this dialog, and every failure `saveReportAsTemplate`
+  // returns is about the name it was given — so the message is the input's
+  // accessible description, not loose text under it.
+  const nameStatus = useFieldStatus(error);
 
   function submit() {
     setError(null);
@@ -103,15 +108,11 @@ export function TemplateActions({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Weekly status layout"
-              aria-invalid={error ? true : undefined}
               autoFocus
+              {...nameStatus.controlProps}
             />
           </div>
-          {error ? (
-            <p role="alert" className="text-destructive text-xs">
-              {error}
-            </p>
-          ) : null}
+          <FieldStatus field={nameStatus} />
           <DialogFooter>
             <Button type="submit" disabled={pending || name.trim() === ""}>
               {pending ? "Saving…" : "Save template"}

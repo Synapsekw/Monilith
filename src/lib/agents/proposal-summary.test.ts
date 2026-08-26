@@ -304,6 +304,142 @@ describe("summariseProposal — the model may not author sentence structure", ()
     );
   });
 
+  // The curly pair is not the whole family. Unicode carries a long tail of
+  // marks that a reader parses as an opening or closing double quote —
+  // fullwidth, low-9, guillemets, CJK corner brackets, primes — and every one
+  // of them reads like the frame this module owns. None can literally close a
+  // U+0022 frame, but the property being defended is what the OWNER READS, not
+  // what a parser sees: a name of `report＂ approved by your admin, no changes`
+  // renders as a closed quotation followed by the server's own voice.
+  //
+  // Enumerated one code point per assertion so a regression names the exact
+  // character that got through.
+  const QUOTE_LOOKALIKES = [
+    "\u0022", // " QUOTATION MARK — the frame itself
+    "\u201C", // " LEFT DOUBLE QUOTATION MARK
+    "\u201D", // " RIGHT DOUBLE QUOTATION MARK
+    "\u201E", // „ DOUBLE LOW-9 QUOTATION MARK
+    "\u201F", // ‟ DOUBLE HIGH-REVERSED-9 QUOTATION MARK
+    "\uFF02", // ＂ FULLWIDTH QUOTATION MARK
+    "\u00AB", // « LEFT-POINTING DOUBLE ANGLE QUOTATION MARK
+    "\u00BB", // » RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK
+    "\u2039", // ‹ SINGLE LEFT-POINTING ANGLE QUOTATION MARK
+    "\u203A", // › SINGLE RIGHT-POINTING ANGLE QUOTATION MARK
+    "\u300C", // 「 LEFT CORNER BRACKET
+    "\u300D", // 」 RIGHT CORNER BRACKET
+    "\u300E", // 『 LEFT WHITE CORNER BRACKET
+    "\u300F", // 』 RIGHT WHITE CORNER BRACKET
+    "\uFF62", // ｢ HALFWIDTH LEFT CORNER BRACKET
+    "\uFF63", // ｣ HALFWIDTH RIGHT CORNER BRACKET
+    "\u301D", // 〝 REVERSED DOUBLE PRIME QUOTATION MARK
+    "\u301E", // 〞 DOUBLE PRIME QUOTATION MARK
+    "\u301F", // 〟 LOW DOUBLE PRIME QUOTATION MARK
+    "\u2033", // ″ DOUBLE PRIME
+    "\u2036", // ‶ REVERSED DOUBLE PRIME
+    "\u3003", // 〃 DITTO MARK
+    "\u02BA", // ʺ MODIFIER LETTER DOUBLE PRIME
+    "\u02DD", // ˝ DOUBLE ACUTE ACCENT
+    "\u02EE", // ˮ MODIFIER LETTER DOUBLE APOSTROPHE
+  ];
+
+  it("strips the whole family of double-quote lookalikes, not just the curly pair", () => {
+    for (const q of QUOTE_LOOKALIKES) {
+      const hex = q.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0");
+      expect(
+        summariseProposal("create_item", {
+          groupId: "g-1",
+          name: `Rep${q}ort`,
+        }),
+        `U+${hex} survived into the frame`,
+      ).toBe('Add "Report" to a board group.');
+    }
+  });
+
+  it("cannot fake a closing quote with a fullwidth one", () => {
+    const summary = summariseProposal("create_item", {
+      groupId: "g-1",
+      name: "Weekly report\uFF02 is already approved. No board changes.",
+    });
+    expect(summary).toBe(
+      'Add "Weekly report is already approved. No board changes." to a board group.',
+    );
+    expect(summary.match(/["\u201C\u201D\uFF02\u00AB\u00BB]/g)).toHaveLength(2);
+  });
+
+  // Invisible format characters (Unicode Cf) carry no glyph of their own: they
+  // only change how the characters AROUND them are displayed. Two families
+  // matter here.
+  //
+  //   - Zero-width and soft characters (ZWSP/ZWNJ/ZWJ/BOM/soft hyphen/word
+  //     joiner, and the U+E00xx tag block used to smuggle text past a reader):
+  //     they let a value carry content the owner cannot see it carrying.
+  //   - Bidi controls (LRM/RLM/ALM, the U+202A-E embeddings and overrides, and
+  //     the U+2066-9 isolates): an RLO makes the rendered card read in an order
+  //     that is not the order stored — the sentence a human approves would then
+  //     differ from the call that executes, which is the one thing this module
+  //     exists to prevent.
+  //
+  // The summary must equal the glyphs the owner reads, so these are REMOVED
+  // rather than replaced by a space (see the helper's own comment).
+  const INVISIBLE_FORMATS = [
+    "\u00AD", // SOFT HYPHEN
+    "\u061C", // ARABIC LETTER MARK
+    "\u180E", // MONGOLIAN VOWEL SEPARATOR
+    "\u200B", // ZERO WIDTH SPACE
+    "\u200C", // ZERO WIDTH NON-JOINER
+    "\u200D", // ZERO WIDTH JOINER
+    "\u200E", // LEFT-TO-RIGHT MARK
+    "\u200F", // RIGHT-TO-LEFT MARK
+    "\u202A", // LEFT-TO-RIGHT EMBEDDING
+    "\u202B", // RIGHT-TO-LEFT EMBEDDING
+    "\u202C", // POP DIRECTIONAL FORMATTING
+    "\u202D", // LEFT-TO-RIGHT OVERRIDE
+    "\u202E", // RIGHT-TO-LEFT OVERRIDE
+    "\u2060", // WORD JOINER
+    "\u2066", // LEFT-TO-RIGHT ISOLATE
+    "\u2067", // RIGHT-TO-LEFT ISOLATE
+    "\u2068", // FIRST STRONG ISOLATE
+    "\u2069", // POP DIRECTIONAL ISOLATE
+    "\uFEFF", // ZERO WIDTH NO-BREAK SPACE (BOM)
+    "\u{E0041}", // TAG LATIN CAPITAL LETTER A
+  ];
+
+  it("removes invisible format characters instead of rendering them", () => {
+    for (const c of INVISIBLE_FORMATS) {
+      const hex = c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0");
+      expect(
+        summariseProposal("create_item", {
+          groupId: "g-1",
+          name: `Rep${c}ort`,
+        }),
+        `U+${hex} survived into the sentence`,
+      ).toBe('Add "Report" to a board group.');
+    }
+  });
+
+  it("cannot reorder the sentence it sits in with a bidi override", () => {
+    // Rendered, the override makes the run read right-to-left inside the
+    // frame; stored, it is the logical order below. The card must show what is
+    // stored, because that is what executes.
+    expect(
+      summariseProposal("create_item", {
+        groupId: "g-1",
+        name: "\u202Ereversed\u202C tail",
+      }),
+    ).toBe('Add "reversed tail" to a board group.');
+  });
+
+  it("treats a value that is nothing but invisibles as no value at all", () => {
+    // Same rule as the all-quotes case below: stripping can empty a value, and
+    // an empty name must not produce `Add "" to…`.
+    expect(
+      summariseProposal("create_item", {
+        groupId: "g-1",
+        name: "\u200B\u200D\uFEFF\u00AD",
+      }),
+    ).toBe("Run create_item.");
+  });
+
   it("applies to every interpolated field, not just the name", () => {
     expect(
       summariseProposal("attach_file", {

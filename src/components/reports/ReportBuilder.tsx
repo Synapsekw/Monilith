@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Kicker } from "@/components/ui/kicker";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { selectClass } from "@/components/boards/automations/builder-utils";
 import { SectionRail } from "./SectionRail";
 import { PreviewPane } from "./PreviewPane";
@@ -202,6 +204,21 @@ export function ReportBuilder({
   const [saved, setSaved] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  /**
+   * Which button opened the current transition. Three of them share one
+   * `pending` and all three disable together, so this is what tells the focus
+   * restore WHICH one to hand focus back to — restoring to Save after an
+   * Export would drop the user somewhere they never were.
+   */
+  const [pendingAction, setPendingAction] = useState<
+    "draft" | "save" | "export" | null
+  >(null);
+  // Each of the three disables itself the instant its transition starts, which
+  // drops focus to `<body>`; all three stay mounted, so the button that was
+  // clicked is the right place to put focus back.
+  const restoreRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
+  // The draft failure belongs to the summary field it was going to fill in.
+  const aiStatus = useFieldStatus(aiError);
 
   const summaryBlock = config.blocks.find((b) => b.type === "summary");
   const summaryText =
@@ -242,6 +259,7 @@ export function ReportBuilder({
   }
 
   function draftWithAi() {
+    setPendingAction("draft");
     start(async () => {
       setAiError(null);
       const res = await draftReportNarrativeAction({ reportId });
@@ -422,6 +440,7 @@ export function ReportBuilder({
               <Label htmlFor="report-summary">Executive summary</Label>
               <Button
                 type="button"
+                ref={pendingAction === "draft" ? restoreRef : undefined}
                 variant="secondary"
                 size="sm"
                 disabled={pending}
@@ -438,45 +457,46 @@ export function ReportBuilder({
               rows={8}
               className="resize-y"
               placeholder="Write an executive summary, or draft one with AI…"
+              {...aiStatus.controlProps}
             />
-            {aiError ? (
-              <p role="alert" className="text-destructive text-xs">
-                {aiError}
-              </p>
-            ) : null}
+            <FieldStatus field={aiStatus} />
           </div>
         </fieldset>
 
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
             <Button
+              ref={pendingAction === "save" ? restoreRef : undefined}
               type="button"
               disabled={disabled || pending}
-              onClick={() =>
+              onClick={() => {
+                setPendingAction("save");
                 start(async () => {
                   setError(null);
                   const res = await saveReport({ reportId, name, config });
                   if (res.ok) setSaved(true);
                   else setError(res.error);
-                })
-              }
+                });
+              }}
             >
               <Save data-icon="inline-start" />
               {saved ? "Saved" : "Save"}
             </Button>
             <Button
+              ref={pendingAction === "export" ? restoreRef : undefined}
               type="button"
               variant="outline"
               disabled={pending}
-              onClick={() =>
+              onClick={() => {
+                setPendingAction("export");
                 start(async () => {
                   setError(null);
                   const res = await exportReportPdf({ reportId });
                   if (res.ok)
                     download(res.data.base64, res.data.mime, res.data.fileName);
                   else setError(res.error);
-                })
-              }
+                });
+              }}
             >
               <FileDown data-icon="inline-start" />
               Export PDF

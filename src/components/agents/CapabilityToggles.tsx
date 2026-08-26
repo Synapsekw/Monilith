@@ -7,12 +7,75 @@ import {
 import { CAPABILITY_COPY } from "@/lib/agents/capability-copy";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useFieldStatus } from "@/components/ui/field-status";
 
 /** Shown on a toggle the org's `agentCapabilityCeiling` does not include. The
  *  grant/ceiling intersection happens again at RUN time regardless of what
  *  this form saves — disabling here is purely so an owner cannot set a grant
  *  they'd only discover was silently dropped from the 07:00 run. */
 const CEILING_REASON = "Disabled for this organization by an admin.";
+
+/**
+ * One capability row. Its own component rather than an inline `.map` body so
+ * `useFieldStatus` can run per row (hooks can't be called in a loop callback):
+ * the consequence line and the ceiling reason are the switch's accessible
+ * DESCRIPTION, so a screen-reader user who lands on a disabled toggle hears
+ * WHY it is disabled instead of a dead control with no explanation.
+ *
+ * Tone is `info`, not `error`: a capability outside the org ceiling is a state
+ * of the world, not something the owner typed wrong — `aria-invalid` would be
+ * a lie and `role="alert"` would interrupt for a message that was there before
+ * they arrived.
+ */
+function CapabilityRow({
+  capability,
+  granted,
+  overCeiling,
+  disabled,
+  onToggle,
+}: {
+  capability: AgentCapability;
+  granted: boolean;
+  overCeiling: boolean;
+  disabled: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  const copy = CAPABILITY_COPY[capability];
+  const fieldId = `agent-capability-${capability}`;
+  const consequenceId = `${fieldId}-consequence`;
+  const ceilingStatus = useFieldStatus(
+    overCeiling ? CEILING_REASON : null,
+    "info",
+    consequenceId,
+  );
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+      <div>
+        <Label htmlFor={fieldId}>{copy.label}</Label>
+        <p id={consequenceId} className="text-muted-foreground text-xs">
+          {copy.consequence}
+        </p>
+        {overCeiling ? (
+          <p
+            {...ceilingStatus.messageProps}
+            className="text-destructive text-xs"
+          >
+            {CEILING_REASON}
+          </p>
+        ) : null}
+      </div>
+      <Switch
+        id={fieldId}
+        checked={granted}
+        disabled={disabled || overCeiling}
+        aria-label={copy.label}
+        {...ceilingStatus.controlProps}
+        onCheckedChange={onToggle}
+      />
+    </div>
+  );
+}
 
 /**
  * The four capability toggles a personal agent can be granted, beyond the
@@ -48,34 +111,16 @@ export function CapabilityToggles({
 
   return (
     <div className="flex flex-col gap-2">
-      {AGENT_CAPABILITIES.map((capability) => {
-        const copy = CAPABILITY_COPY[capability];
-        const overCeiling = !ceiling.includes(capability);
-        const fieldId = `agent-capability-${capability}`;
-        return (
-          <div
-            key={capability}
-            className="flex items-center justify-between gap-3 rounded-lg border p-3"
-          >
-            <div>
-              <Label htmlFor={fieldId}>{copy.label}</Label>
-              <p className="text-muted-foreground text-xs">
-                {copy.consequence}
-              </p>
-              {overCeiling ? (
-                <p className="text-destructive text-xs">{CEILING_REASON}</p>
-              ) : null}
-            </div>
-            <Switch
-              id={fieldId}
-              checked={value.includes(capability)}
-              disabled={disabled || overCeiling}
-              aria-label={copy.label}
-              onCheckedChange={(checked) => toggle(capability, checked)}
-            />
-          </div>
-        );
-      })}
+      {AGENT_CAPABILITIES.map((capability) => (
+        <CapabilityRow
+          key={capability}
+          capability={capability}
+          granted={value.includes(capability)}
+          overCeiling={!ceiling.includes(capability)}
+          disabled={disabled}
+          onToggle={(checked) => toggle(capability, checked)}
+        />
+      ))}
       <p className="text-muted-foreground text-xs">
         Anything not granted here is recorded as a proposal for you to approve,
         instead of being blocked.

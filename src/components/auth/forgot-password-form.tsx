@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import { Input } from "@/components/ui/input";
 import { Kicker } from "@/components/ui/kicker";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,10 @@ export function ForgotPasswordForm({ footer }: { footer?: ReactNode }) {
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: { email: "" },
   });
+
+  // The field message becomes the input's accessible description; the
+  // form-level `state.error` banner below stays a whole-form alert.
+  const emailError = useFieldStatus(form.formState.errors.email?.message);
 
   if (state.success === "reset-email-sent") {
     return (
@@ -88,14 +93,10 @@ export function ForgotPasswordForm({ footer }: { footer?: ReactNode }) {
               type="email"
               autoComplete="email"
               placeholder="you@example.com"
-              aria-invalid={form.formState.errors.email ? true : undefined}
+              {...emailError.controlProps}
               {...form.register("email")}
             />
-            {form.formState.errors.email ? (
-              <p className="text-destructive text-xs">
-                {form.formState.errors.email.message}
-              </p>
-            ) : null}
+            <FieldStatus field={emailError} />
           </div>
 
           <Button

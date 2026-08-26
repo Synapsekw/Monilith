@@ -4,13 +4,16 @@ import { resolveActiveOrg } from "@/lib/org/active";
 import { isOrgAdminCached } from "@/lib/org/guard";
 import { createClient } from "@/lib/supabase/server";
 import { listMyAiCredentials } from "@/lib/ai/credentials";
-import { listEnabledProviders } from "@/lib/ai/providers/provider-rows";
+import {
+  listEnabledProviders,
+  listProviderVerification,
+} from "@/lib/ai/providers/provider-rows";
 import { buildModelOptions } from "@/lib/ai/models/model-options";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
 import { getUsageSummary } from "@/lib/ai/usage-summary";
 import { SettingsSection } from "@/components/settings/settings-section";
-import { SettingRow } from "@/components/settings/setting-row";
 import { AiKeyList } from "@/components/settings/AiKeyList";
+import { ProviderVerificationList } from "@/components/settings/ProviderVerificationBadge";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
 import { OrgAgentCeiling } from "@/components/settings/OrgAgentCeiling";
 import { UsageBreakdown } from "@/components/settings/UsageBreakdown";
@@ -43,7 +46,10 @@ export const metadata = { title: "AI · Settings" };
  *
  * Data budget: bounded reads, all on first paint. `user_ai_credentials` is at
  * most one row per provider for one user (indexed on `user_id`); `ai_providers`
- * is the registry itself, filtered to `enabled`; the catalog read is one
+ * is the registry itself, filtered to `enabled`, plus a second read of the same
+ * five-row table for the sweep-health columns (kept separate so `ProviderRow`
+ * — which four other modules and two client components consume — does not grow
+ * four fields none of them use); the catalog read is one
  * `listActiveModels` per enabled provider, run in parallel and served by
  * `ai_models_selectable_idx` (status + provider + id_verified) — tens of rows
  * each, and only for an admin, who is the only one who sees the org form.
@@ -59,12 +65,25 @@ export default async function AiSettingsPage() {
   if (!org) redirect("/onboarding");
 
   const supabase = await createClient();
-  const [credentials, providers, orgAi, isAdmin] = await Promise.all([
-    listMyAiCredentials(),
-    listEnabledProviders(supabase),
-    getOrgAiSettings(),
-    isOrgAdminCached(user.id, org.id),
-  ]);
+  const [credentials, providers, verification, orgAi, isAdmin] =
+    await Promise.all([
+      listMyAiCredentials(),
+      listEnabledProviders(supabase),
+      listProviderVerification(supabase),
+      getOrgAiSettings(),
+      isOrgAdminCached(user.id, org.id),
+    ]);
+
+  // One server instant for every badge on the page, so the "N days ago"
+  // strings the server renders are byte-identical to the ones that hydrate.
+  //
+  // react-hooks/purity is disabled here rather than dodged: this is an async
+  // Server Component that runs once per request and then serializes, so there
+  // is no re-render for the value to drift across — and the badge deliberately
+  // has NO clock-reading default precisely so the instant is captured exactly
+  // here, on the server, instead of once per client render.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
 
   const orgAiMode = orgAi.ok ? orgAi.data.mode : null;
   const personalKeyManaged = orgAiMode !== null && orgAiMode !== "per_user";
@@ -131,17 +150,32 @@ export default async function AiSettingsPage() {
         }
       >
         {personalKeyManaged ? (
-          <SettingRow
-            label="Provider keys"
-            description="Managed by your organization — no personal key needed."
-          >
-            <p className="text-muted-foreground text-sm">Nothing to do here.</p>
-          </SettingRow>
+          // Full width, not a SettingRow, for the same reason AiKeyList is:
+          // a provider name plus its state does not fit a 280px control
+          // column. The freshness is shown HERE too because this branch is
+          // the org_byo/managed case — the one where a provider the sweep
+          // can never borrow a key for would otherwise be invisible.
+          <div className="space-y-3 py-4">
+            <p className="text-muted-foreground text-sm">
+              Your organization supplies the key, so there is no personal key to
+              add. Model lists are refreshed daily — this is when each provider
+              was last checked.
+            </p>
+            <ProviderVerificationList
+              providers={providers}
+              verification={verification}
+              nowMs={nowMs}
+            />
+          </div>
         ) : (
           // Full width, not a SettingRow: each row carries its own key field
           // and buttons, and a 280px control column wraps that into an
           // unreadable stack.
-          <AiKeyList providers={providers} initial={credentials} />
+          <AiKeyList
+            providers={providers}
+            initial={credentials}
+            health={{ verification, nowMs }}
+          />
         )}
       </SettingsSection>
     </>

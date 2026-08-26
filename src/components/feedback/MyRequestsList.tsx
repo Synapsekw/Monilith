@@ -57,7 +57,13 @@ export function MyRequestsList({ load }: Props) {
   }, [load]);
 
   if (error) {
-    return <p className="text-destructive py-6 text-center text-xs">{error}</p>;
+    return (
+      // Announced because it replaces the skeleton after an async load — a
+      // screen-reader user gets no other signal that the list never arrived.
+      <p role="alert" className="text-destructive py-6 text-center text-xs">
+        {error}
+      </p>
+    );
   }
 
   if (items === null) {

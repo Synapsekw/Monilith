@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { inviteMember, revokeInvite } from "@/lib/org/admin-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
 
 export type Invite = {
@@ -30,6 +32,18 @@ export function InvitePanel({
   const [error, setError] = useState<string | null>(null);
   // Distinct from `error`: the invite was recorded but its email didn't send.
   const [warning, setWarning] = useState<string | null>(null);
+  // Both messages describe the invite the email field just submitted, so both
+  // become that field's accessible description — the warning first (chained
+  // through `extraDescribedBy`), then the error, which also marks it invalid.
+  const warn = useFieldStatus(warning, "info");
+  const err = useFieldStatus(
+    error,
+    "error",
+    warn.controlProps["aria-describedby"],
+  );
+  // Invite disables itself the instant the transition starts and stays
+  // mounted, so focus would otherwise land on `<body>`.
+  const inviteRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   return (
     <div className="space-y-4">
@@ -63,6 +77,7 @@ export function InvitePanel({
             setWarning(null);
           }}
           aria-label="Invite email"
+          {...err.controlProps}
           className="min-w-0 flex-1"
         />
         <select
@@ -81,19 +96,19 @@ export function InvitePanel({
             </option>
           ))}
         </select>
-        <Button type="submit" disabled={pending}>
+        <Button ref={inviteRef} type="submit" disabled={pending}>
           {pending ? "Inviting…" : "Invite"}
         </Button>
       </form>
 
       {error && (
-        <p role="alert" className="text-destructive text-xs">
+        <p {...err.messageProps} className="text-destructive text-xs">
           {error}
         </p>
       )}
 
       {warning && (
-        <p role="status" className="text-status-orange text-xs">
+        <p {...warn.messageProps} className="text-status-orange text-xs">
           {warning}
         </p>
       )}

@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 
 // Lazy-load the wizard (and its action/SDK imports) only when needed.
 const AiDashboardWizard = dynamic(
@@ -87,6 +89,10 @@ export function DashboardsNav({
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const nameStatus = useFieldStatus(error);
+  // Only a failed create keeps the dialog mounted; that is when the submit
+  // button has to reclaim the focus its own `disabled` dropped to <body>.
+  const submitRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
   const coarse = useCoarsePointer();
   const workspaceId = activeWorkspaceId;
 
@@ -237,19 +243,20 @@ export function DashboardsNav({
               <Label htmlFor="dashboard-name">Dashboard name</Label>
               <Input
                 id="dashboard-name"
+                {...nameStatus.controlProps}
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Team overview"
               />
             </div>
-            {error ? (
-              <p role="alert" className="text-destructive text-xs">
-                {error}
-              </p>
-            ) : null}
+            <FieldStatus field={nameStatus} />
             <DialogFooter>
-              <Button type="submit" disabled={isPending || !name.trim()}>
+              <Button
+                ref={submitRef}
+                type="submit"
+                disabled={isPending || !name.trim()}
+              >
                 {isPending ? "Creating…" : "Create dashboard"}
               </Button>
             </DialogFooter>

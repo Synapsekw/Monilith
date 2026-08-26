@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   Sheet,
   SheetContent,
@@ -135,6 +136,9 @@ function WidgetConfigSheetForm({
   }
 
   const pending = addWidget.isPending || editWidget.isPending;
+  // Save unmounts this form on success; on failure it stays open with the
+  // button re-enabled, which is the case that needs its focus back.
+  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(pending);
 
   return (
     <>
@@ -169,12 +173,19 @@ function WidgetConfigSheetForm({
           </div>
         </div>
       </div>
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+      {/* Form-level save error (a failed mutation, or "no source board" when
+          the workspace has none) — it belongs to the whole sheet, not to one
+          control, so it is an alert rather than a field description. */}
+      {error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      ) : null}
       <div className="flex justify-end gap-2 border-t pt-4">
         <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button onClick={save} disabled={pending}>
+        <Button ref={saveRef} onClick={save} disabled={pending}>
           {target ? "Save" : "Add widget"}
         </Button>
       </div>

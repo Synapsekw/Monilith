@@ -10,6 +10,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
+import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
 
 type Member = { userId: string; fullName: string | null; email: string | null };
@@ -42,12 +44,20 @@ export function ShareBoardDialog({
   );
   const [access, setAccess] = useState<Map<string, Access>>(initial);
   const [error, setError] = useState<string | null>(null);
+  // Which member's control the write was for. Two jobs: the error belongs to
+  // THAT select (not to all of them), and that select is the one whose focus
+  // has to come back after `disabled={pending}` dropped it to <body>.
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const status = useFieldStatus(error);
+  const activeSelectRef =
+    useRestoreFocusAfterPending<HTMLSelectElement>(pending);
 
   function change(userId: string, next: Access) {
     // Capture the persisted value so a failed write can be rolled back —
     // otherwise the <select> keeps showing the access level that never saved.
     const previous = access.get(userId) ?? "none";
+    setActiveUserId(userId);
     setAccess((prev) => new Map(prev).set(userId, next));
     start(async () => {
       setError(null);
@@ -120,7 +130,13 @@ export function ShareBoardDialog({
                   </span>
                   <div className="relative shrink-0">
                     <select
+                      ref={
+                        m.userId === activeUserId ? activeSelectRef : undefined
+                      }
                       aria-label={`Access for ${name}`}
+                      {...(m.userId === activeUserId
+                        ? status.controlProps
+                        : {})}
                       value={current}
                       onChange={(e) =>
                         change(m.userId, e.target.value as Access)
@@ -149,9 +165,7 @@ export function ShareBoardDialog({
         )}
 
         {error ? (
-          <p role="alert" className="text-destructive text-xs">
-            {error}
-          </p>
+          <FieldStatus field={status} />
         ) : members.length > 0 ? (
           <p className="text-muted-foreground text-xs">
             {sharedCount === 0

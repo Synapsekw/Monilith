@@ -4,6 +4,41 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-08-26",
+    kind: "fixed",
+    title: "See every document you can attach",
+    description:
+      "When an agent's document library grew past 100 items, older documents were impossible to attach with no explanation; the attach picker now tells you how many more there are.",
+  },
+  {
+    date: "2026-08-26",
+    kind: "improved",
+    title: "Better keyboard and screen-reader support",
+    description:
+      "Saving or clearing a form no longer loses your place, error messages are read aloud alongside the field they belong to, and dropdown menus like Model and Timezone now announce what they are, not just what's currently selected.",
+  },
+  {
+    date: "2026-08-25",
+    kind: "new",
+    title: "See your AI usage at a glance",
+    description:
+      "Settings -> AI now shows a monthly breakdown of what your organization has spent on AI features.",
+  },
+  {
+    date: "2026-08-25",
+    kind: "new",
+    title: "A weekly note on your AI usage",
+    description:
+      "Your weekly digest email and notifications now include a short narrative summarizing how your AI usage looked that week.",
+  },
+  {
+    date: "2026-08-25",
+    kind: "fixed",
+    title: "Dashboard summary widgets are working again",
+    description:
+      "Number, battery, completion, and health widgets on dashboards were failing to load; they now show data as expected.",
+  },
+  {
     date: "2026-08-25",
     kind: "new",
     title: "Give your agents reference documents",
