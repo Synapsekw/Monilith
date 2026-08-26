@@ -26,6 +26,7 @@ describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
   let bAnon: SupabaseClient<Database>;
   let aUserId: string;
   let aBoardId: string;
+  let aBoard2Id: string;
   let aFolderId: string;
   let bBoardId: string;
 
@@ -83,11 +84,12 @@ describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // -- user A: own org + own board + a private folder --
+    // -- user A: own org + two own boards + a private folder --
     const a = await provisionUser("a");
     aAnon = a.anon;
     aUserId = a.id;
     aBoardId = await provisionBoard(aAnon, a.orgId, a.id, "A");
+    aBoard2Id = await provisionBoard(aAnon, a.orgId, a.id, "A2");
 
     const { data: folder, error: folderErr } = await aAnon
       .from("board_folders")
@@ -96,6 +98,16 @@ describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
       .single();
     expect(folderErr, "insert board_folders(A)").toBeNull();
     aFolderId = (folder as { id: string }).id;
+
+    // Seed an existing placement (aBoardId inside aFolderId) directly via the
+    // admin/service-role client: this test isn't probing the insert-time
+    // can_read_board gate (that's exercised by the accept/reject tests below),
+    // it needs a real row already in place before the cascade test deletes
+    // the folder and asserts the placement disappears with it.
+    const { error: placementErr } = await admin
+      .from("board_folder_boards")
+      .insert({ user_id: aUserId, board_id: aBoardId, folder_id: aFolderId });
+    expect(placementErr, "seed board_folder_boards(A, aBoardId)").toBeNull();
 
     // -- user B: a separate org with its own board; A is neither creator nor
     //    a board_members grantee, so can_read_board(bBoardId) must be false
@@ -128,9 +140,36 @@ describe.skipIf(!integrationTargetReady())("RLS: board folders", () => {
     expect(error?.code).toBe("42501"); // RLS violation
   });
 
-  it("leaves boards intact when their folder is deleted", async () => {
+  it("allows filing a board the user can read", async () => {
+    // aBoard2Id is A's own board — can_read_board(aBoard2Id) is true for A, so
+    // the insert-time gate must permit it. Uses a second board (not aBoardId)
+    // so it doesn't collide with the placement seeded in beforeAll or get
+    // deleted early by the cascade test below.
+    const { error } = await aAnon.from("board_folder_boards").insert({
+      user_id: aUserId,
+      board_id: aBoard2Id,
+      folder_id: aFolderId,
+    });
+    expect(error).toBeNull();
+  });
+
+  it("cascades: deleting the folder removes its placements but leaves the boards intact", async () => {
     await aAnon.from("board_folders").delete().eq("id", aFolderId);
-    const { data } = await admin.from("boards").select("id").eq("id", aBoardId);
-    expect(data ?? []).toHaveLength(1);
+
+    // Queried via the admin client so RLS can't mask a placement row that
+    // survived the cascade — this is what actually proves
+    // `folder_id ... on delete cascade` fired, not just that the (already-
+    // invisible-once-the-folder-is-gone) row can't be read back.
+    const { data: placements } = await admin
+      .from("board_folder_boards")
+      .select("board_id")
+      .eq("folder_id", aFolderId);
+    expect(placements ?? []).toHaveLength(0);
+
+    const { data: boards } = await admin
+      .from("boards")
+      .select("id")
+      .eq("id", aBoardId);
+    expect(boards ?? []).toHaveLength(1);
   });
 });
