@@ -12,6 +12,7 @@ import type { Database } from "@/types/database.types";
 import {
   PROPOSAL_STATUSES,
   countPendingProposalsByAgent,
+  insertProposals,
   listPendingProposalsForRun,
 } from "./proposals-db";
 
@@ -58,6 +59,11 @@ import {
 // The three proposals are separate rows on purpose rather than one row reused:
 // two of the properties MUTATE status, and a shared row would make the read and
 // expiry assertions depend on test ordering.
+//
+// Two properties at the end of the file seed further rows of their own (the
+// status-vocabulary probe and the redelivery probe). Both delete what they
+// insert before returning, so the fixture state the properties above assert on
+// is untouched regardless of ordering.
 
 loadFixtureEnv();
 
@@ -448,6 +454,117 @@ describe.skipIf(!resolution.ok)(
         .select("id");
       expect(refused?.code, "check-constraint violation").toBe("23514");
       expect(refused?.message).toContain("user_agent_proposals_status_check");
+    });
+
+    // ── Property: (run_id, tool_call_id) is the idempotency key, enforced
+    //    by the DATABASE ────────────────────────────────────────────────────
+    //
+    // `user_agent_proposals_call_uniq` (the same migration) is what makes a
+    // redelivered run unable to queue the same proposed call twice — the
+    // proposal-side sibling of `user_agent_runs_slot_uniq`, which
+    // `agent-run.integration.test.ts` pins for the run slot. Without it, a
+    // model that re-proposes a denied write, or a retried delivery of one
+    // run, would hand the owner two approval cards for one call, each of
+    // which EXECUTES on click.
+    //
+    // `run-loop.test.ts` ("queues ONE proposal when a denied call is
+    // retried") covers the in-memory collector that dedupes BEFORE the
+    // insert. That is the belt; this is the braces, and only this half runs
+    // against the real index. The second assertion is the reason the belt
+    // exists at all: the insert is ONE statement, so a duplicate anywhere in
+    // the batch loses every row in it — the whole run's proposals, not just
+    // the repeat.
+    //
+    // Everything seeded here is deleted in the `finally`, including on
+    // assertion failure.
+    it("refuses a second proposal for the same (run_id, tool_call_id)", async () => {
+      const prefix = `call-redeliver-${tag}`;
+      const proposal = {
+        userAgentId: agentId,
+        runId,
+        orgId: ORG_A.orgId,
+        ownerId: ownerAId,
+        capability: "board.write",
+        toolName: "create_item",
+        toolCallId: `${prefix}-1`,
+        input: { boardId: ORG_A.boardId, name: `redelivery probe ${tag}` },
+        summary: `Add "redelivery probe ${tag}" to a board group.`,
+      };
+
+      try {
+        await insertProposals(admin, [proposal]);
+
+        // The redelivery: byte-identical call, same run.
+        await expect(
+          insertProposals(admin, [proposal]),
+          "a redelivered proposal must be refused by the database",
+        ).rejects.toThrow(/user_agent_proposals_call_uniq/);
+
+        // The raw error, so the failure is pinned to THAT index by name and
+        // to the unique-violation SQLSTATE — not merely to "some error".
+        const { error: raw } = await admin
+          .from("user_agent_proposals")
+          .insert({
+            user_agent_id: agentId,
+            run_id: runId,
+            org_id: ORG_A.orgId,
+            owner_id: ownerAId,
+            capability: "board.write",
+            tool_name: "create_item",
+            tool_call_id: `${prefix}-1`,
+            input: {},
+            summary: "redelivery probe, raw",
+            expires_at: new Date(Date.now() + 7 * DAY_MS).toISOString(),
+          })
+          .select("id");
+        expect(raw?.code, "unique violation").toBe("23505");
+        expect(raw?.message).toContain("user_agent_proposals_call_uniq");
+
+        // A duplicate ANYWHERE in the batch loses the whole statement: the
+        // fresh call id below is refused along with the repeat. This is
+        // exactly what `buildAgentRuntime`'s dedupe exists to prevent.
+        await expect(
+          insertProposals(admin, [
+            { ...proposal, toolCallId: `${prefix}-2` },
+            proposal,
+          ]),
+        ).rejects.toThrow(/user_agent_proposals_call_uniq/);
+        const { count: batchCount } = await admin
+          .from("user_agent_proposals")
+          .select("id", { count: "exact", head: true })
+          .eq("run_id", runId)
+          .eq("tool_call_id", `${prefix}-2`);
+        expect(
+          batchCount,
+          "the whole batch was lost, not just the repeat",
+        ).toBe(0);
+
+        // Exactly one row for the repeated call id — no second approval card.
+        const { count } = await admin
+          .from("user_agent_proposals")
+          .select("id", { count: "exact", head: true })
+          .eq("run_id", runId)
+          .eq("tool_call_id", `${prefix}-1`);
+        expect(count).toBe(1);
+
+        // And the index is on the PAIR: a different call id in the same run
+        // is a different proposal and still lands.
+        await insertProposals(admin, [
+          { ...proposal, toolCallId: `${prefix}-3` },
+        ]);
+        const { count: distinct } = await admin
+          .from("user_agent_proposals")
+          .select("id", { count: "exact", head: true })
+          .eq("run_id", runId)
+          .eq("tool_call_id", `${prefix}-3`);
+        expect(distinct).toBe(1);
+      } finally {
+        await admin
+          .from("user_agent_proposals")
+          .delete()
+          .eq("run_id", runId)
+          .like("tool_call_id", `${prefix}%`);
+      }
     });
   },
 );
