@@ -147,3 +147,46 @@ export function ProviderVerificationBadge({
     </span>
   );
 }
+
+/**
+ * The same freshness, for the org-managed half of Settings → AI.
+ *
+ * `AiKeyList` — and every badge on it — is swapped out for a "managed by your
+ * organization" note whenever the org runs `managed` or `org_byo`. That is
+ * exactly the mode in which a provider held ONLY as an org BYO key sits being
+ * `skipped` by the daily sweep run after run (see the borrowing contract in
+ * `src/lib/ai/credentials.ts`), so hiding the state there would blind the page
+ * in the one case it was built to explain.
+ *
+ * A plain server component: no hooks, no state, so the RSC page renders it
+ * directly rather than shipping another client bundle to say four words.
+ */
+export function ProviderVerificationList({
+  providers,
+  verification,
+  nowMs,
+}: {
+  providers: { id: string; label: string }[];
+  verification: Record<string, ProviderVerification>;
+  nowMs: number;
+}) {
+  if (providers.length === 0) return null;
+  return (
+    <ul className="space-y-2">
+      {providers.map((p) => (
+        <li
+          key={p.id}
+          className="border-border hover:border-border-hover flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5 transition-colors"
+        >
+          <span className="text-foreground truncate text-sm font-medium">
+            {p.label}
+          </span>
+          <ProviderVerificationBadge
+            verification={verification[p.id]}
+            nowMs={nowMs}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}

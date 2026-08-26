@@ -12,8 +12,8 @@ import { buildModelOptions } from "@/lib/ai/models/model-options";
 import { getOrgAiSettings } from "@/lib/ai/settings-actions";
 import { getUsageSummary } from "@/lib/ai/usage-summary";
 import { SettingsSection } from "@/components/settings/settings-section";
-import { SettingRow } from "@/components/settings/setting-row";
 import { AiKeyList } from "@/components/settings/AiKeyList";
+import { ProviderVerificationList } from "@/components/settings/ProviderVerificationBadge";
 import { OrgAiSettingsForm } from "@/components/settings/OrgAiSettingsForm";
 import { OrgAgentCeiling } from "@/components/settings/OrgAgentCeiling";
 import { UsageBreakdown } from "@/components/settings/UsageBreakdown";
@@ -150,12 +150,23 @@ export default async function AiSettingsPage() {
         }
       >
         {personalKeyManaged ? (
-          <SettingRow
-            label="Provider keys"
-            description="Managed by your organization — no personal key needed."
-          >
-            <p className="text-muted-foreground text-sm">Nothing to do here.</p>
-          </SettingRow>
+          // Full width, not a SettingRow, for the same reason AiKeyList is:
+          // a provider name plus its state does not fit a 280px control
+          // column. The freshness is shown HERE too because this branch is
+          // the org_byo/managed case — the one where a provider the sweep
+          // can never borrow a key for would otherwise be invisible.
+          <div className="space-y-3 py-4">
+            <p className="text-muted-foreground text-sm">
+              Your organization supplies the key, so there is no personal key to
+              add. Model lists are refreshed daily — this is when each provider
+              was last checked.
+            </p>
+            <ProviderVerificationList
+              providers={providers}
+              verification={verification}
+              nowMs={nowMs}
+            />
+          </div>
         ) : (
           // Full width, not a SettingRow: each row carries its own key field
           // and buttons, and a 280px control column wraps that into an

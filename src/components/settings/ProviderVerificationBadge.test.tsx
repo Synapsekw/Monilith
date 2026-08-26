@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import type { ProviderVerification } from "@/lib/ai/providers/provider-rows";
 import {
   ProviderVerificationBadge,
+  ProviderVerificationList,
   describeVerification,
 } from "@/components/settings/ProviderVerificationBadge";
 
@@ -149,5 +150,51 @@ describe("ProviderVerificationBadge", () => {
       .map((el) => el.getAttribute("class") ?? "")
       .join(" ");
     expect(classes).not.toMatch(/\b(bg|text|border)-(red|green|slate|zinc)-\d/);
+  });
+});
+
+/**
+ * The org-managed half of the page. `AiKeyList` — and therefore every badge on
+ * it — is replaced by a "managed by your organization" note whenever the org
+ * runs `managed` or `org_byo`, which is precisely the mode in which a provider
+ * held ONLY as an org key sits there being skipped by the sweep forever. A
+ * badge that vanishes in the one mode its subject matters most in is not a
+ * badge; this list is what keeps the freshness visible in both modes.
+ */
+describe("ProviderVerificationList", () => {
+  it("names every provider and its state, in org-managed mode", () => {
+    render(
+      <ProviderVerificationList
+        providers={[
+          { id: "anthropic", label: "Anthropic (Claude)" },
+          { id: "mistral", label: "Mistral" },
+        ]}
+        verification={{
+          anthropic: verification({
+            status: "ok",
+            lastVerifiedAt: daysAgo(1),
+          }),
+          mistral: verification({
+            status: "skipped",
+            lastAttemptAt: daysAgo(0),
+            error: "No personal API key stored for this provider.",
+          }),
+        }}
+        nowMs={NOW}
+      />,
+    );
+    const rows = screen.getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Anthropic (Claude)");
+    expect(rows[0]).toHaveTextContent("Verified");
+    expect(rows[1]).toHaveTextContent("Mistral");
+    expect(rows[1]).toHaveTextContent("Not checked");
+  });
+
+  it("renders nothing when the registry has no enabled providers", () => {
+    const { container } = render(
+      <ProviderVerificationList providers={[]} verification={{}} nowMs={NOW} />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });
