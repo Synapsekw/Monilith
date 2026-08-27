@@ -29,8 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { useFieldStatus } from "@/components/ui/field-status";
 import { showMutationSuccess } from "@/lib/ui/mutation-toast";
-
-type Result = { ok: boolean; error?: string };
+import type { ActionResult } from "@/lib/actions/result";
 
 /** Per-user actions for the admin Users page: reset email, set temp password,
  * suspend/reactivate, hard delete. Refreshes the route on success. */
@@ -57,7 +56,7 @@ export function UserRowActions({
 
   /** For the two DIALOG actions: the dialog is on screen, so its message goes
    *  to the field it belongs to via `useFieldStatus`. */
-  const run = (fn: () => Promise<Result>, onOk?: () => void) =>
+  const run = (fn: () => Promise<ActionResult>, onOk?: () => void) =>
     start(async () => {
       setError(null);
       const r = await fn();
@@ -76,7 +75,7 @@ export function UserRowActions({
    *  only for the action whose success is invisible (the reset email);
    *  suspend/reactivate flip the row's own status cell on `router.refresh()`,
    *  and that IS the feedback. */
-  const runFromMenu = (fn: () => Promise<Result>, okMessage?: string) =>
+  const runFromMenu = (fn: () => Promise<ActionResult>, okMessage?: string) =>
     start(async () => {
       const r = await fn();
       if (!r.ok) {
