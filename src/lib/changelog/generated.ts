@@ -5,6 +5,27 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-08-26",
+    kind: "improved",
+    title: "Forms work properly with a screen reader",
+    description:
+      "Error messages are now read out with the field they belong to, saving or clearing a form keeps your place instead of jumping to the top of the page, and confirmations are announced without interrupting you.",
+  },
+  {
+    date: "2026-08-26",
+    kind: "improved",
+    title: "Approving an agent action tells you what happened",
+    description:
+      "Approving or cancelling a proposed agent action now announces the outcome, instead of the buttons quietly disappearing.",
+  },
+  {
+    date: "2026-08-26",
+    kind: "new",
+    title: "See when your AI providers were last checked",
+    description:
+      "Settings -> AI now shows, for each provider, when its available models were last verified and whether that check succeeded, so a provider whose key has stopped working is visible instead of silently going stale.",
+  },
+  {
+    date: "2026-08-26",
     kind: "new",
     title: "Group your boards into folders",
     description:
