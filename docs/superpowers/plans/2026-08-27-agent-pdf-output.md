@@ -10,6 +10,31 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-27-agent-pdf-output-design.md`
 
+## Owner rulings on the spec's §13 open questions
+
+Decided before execution; these override the corresponding open questions.
+
+| §13 question                        | Ruling                                                                                                                                                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Tables — widen the AST?          | **No. Prose-only v1.** `src/lib/boards/markdown.ts` renders on every board paint; a `table` block is a blast radius this slice does not justify. The tool description tells the model tables are unavailable. |
+| 2. `maxDuration = 300` on the route | **Deferred — Task 6 Step 7 is SKIPPED.** See below.                                                                                                                                                           |
+| 3. Refactor `attachFileHandler`     | **Do it**, gated on `attach-file.test.ts` passing byte-for-byte unmodified.                                                                                                                                   |
+
+### Deferral: `maxDuration = 300` on the agent run route
+
+`src/app/api/ai/personal-agent/route.ts` is **not modified by this slice**. The
+concurrent Spec 2c (agent memory) slice also edits that file, and keeping the two
+branches textually disjoint is worth more than the headroom right now.
+
+What is lost, stated plainly: the in-tool 45 s bound (`RENDER_TIMEOUT_MS`,
+`create-pdf.ts`) still degrades a slow render to one failed STEP rather than a
+failed run — but only if the platform lets the function live long enough to
+reach it. Without the route value the run inherits the platform default, so a
+render that outlives it kills the whole run and leaves a `CLAIM_PLACEHOLDER`
+audit row. **Re-open this the moment a real agent-run timeout is observed, or
+as soon as the 2c slice has merged** — it is one exported line, and nothing else
+in this slice depends on it.
+
 ## Global Constraints
 
 - **No new npm dependency.** No markdown library, no sanitizer. Reuse `src/lib/boards/markdown.ts`.
@@ -87,7 +112,7 @@ Task 5 (approval sentence) ─────────────────�
 | `src/lib/agents/proposal-summary.test.ts`       | Tests for that case.                                                                                                                                         |
 | `src/lib/agents/agent-only-tools.ts`            | Append `createPdfDescriptor` to `AGENT_ONLY_DESCRIPTORS`.                                                                                                    |
 | `src/lib/agents/agent-only-tools.test.ts`       | `NAMES` gains `"create_pdf"`; add its capability/scope assertion.                                                                                            |
-| `src/app/api/ai/personal-agent/route.ts`        | `export const maxDuration = 300;` (one line — see §13 Q2 of the spec).                                                                                       |
+| ~~`src/app/api/ai/personal-agent/route.ts`~~    | ~~`export const maxDuration = 300;`~~ — **NOT CHANGED.** Deferred by owner ruling (above); the file is left to the concurrent 2c slice.                      |
 
 ---
 
@@ -1485,7 +1510,7 @@ git commit -m "feat(agents): describe a create_pdf proposal on the approval card
 - Modify: `src/lib/agents/agent-only-tools.ts:20-23`
 - Modify: `src/lib/agents/agent-only-tools.test.ts:25` (the `NAMES` const) and its capability assertion
 - Create: `src/lib/agents/proposal-actions.create-pdf.test.ts`
-- Modify: `src/app/api/ai/personal-agent/route.ts` (one added line)
+- ~~Modify: `src/app/api/ai/personal-agent/route.ts`~~ — **skipped**, see the owner ruling above.
 
 **Interfaces:**
 
@@ -1678,7 +1703,12 @@ counts invocations, hold one resolved client in the mock closure instead of
 calling `fake.getClient()` per `createClient` call — read `src/test/mcp-fake-client.ts`
 before adjusting, and adjust the **test**, never the handler's one-call rule.
 
-- [ ] **Step 7: Give the render room to finish**
+- [~] **Step 7: Give the render room to finish — SKIPPED (owner ruling)**
+
+> **NOT DONE, deliberately.** The route file is untouched so this branch stays
+> disjoint from the concurrent 2c slice. Rationale and the trigger to revisit
+> are in "Owner rulings" at the top of this plan. The step is preserved verbatim
+> below so re-applying it later is a copy-paste.
 
 At the top of `src/app/api/ai/personal-agent/route.ts`, below the imports and
 above `const FEATURE = "personal_agent_run";`, add:
@@ -1695,16 +1725,15 @@ above `const FEATURE = "personal_agent_run";`, add:
 export const maxDuration = 300;
 ```
 
-**If the owner declined this change** (spec §13 Q2), skip this step entirely —
-nothing else in the slice depends on it.
+**The owner DID decline this change** (spec §13 Q2), so this step was skipped
+entirely — nothing else in the slice depends on it.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 git add src/lib/agents/agent-only-tools.ts \
         src/lib/agents/agent-only-tools.test.ts \
-        src/lib/agents/proposal-actions.create-pdf.test.ts \
-        src/app/api/ai/personal-agent/route.ts
+        src/lib/agents/proposal-actions.create-pdf.test.ts
 git commit -m "feat(agents): offer create_pdf to personal agents"
 ```
 
@@ -1813,7 +1842,7 @@ note, under "How to test".
 | §3.4 nothing caller-asserted               | Task 2 Step 3 + Task 4 test "renders portrait A4 and attaches the bytes as application/pdf" |
 | §4 descriptor, input, output, error table  | Task 4                                                                                      |
 | §5 markdown-only pipeline + escaping       | Tasks 1 and 3                                                                               |
-| §6.1 timeout, both measures                | Task 4 (`raceTimeout`), Task 6 Step 7 (`maxDuration`)                                       |
+| §6.1 timeout, in-tool measure only         | Task 4 (`raceTimeout`). Task 6 Step 7 (`maxDuration`) SKIPPED — owner ruling, see top.      |
 | §6.2 fixed A4 portrait, `pdf.ts` untouched | Task 4 + Task 7 Step 4                                                                      |
 | §7.1 `files.write` reused                  | Task 4 descriptor + Task 6 Step 1 assertion                                                 |
 | §7.2 approval sentence                     | Task 5                                                                                      |
