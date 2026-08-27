@@ -11,7 +11,7 @@
 
 <script type="application/json" id="board-data">{
   "schema": 2,
-  "updated": "2026-08-26 09:00",
+  "updated": "2026-08-26 17:05",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -133,21 +133,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "d6d925b7",
-        "tone": "ok",
-        "note": "== main == production. Promoted 2026-08-26 as PR #99 — Spec 2b (reference documents) plus a same-session carryover batch: nonce defense, dashboard RLS fix, F17 usage/digest, a11y pass, DocumentPicker fix, migration cleanup, test-infra hardening. 52 commits."
+        "value": "3cbd3e06",
+        "tone": "warn",
+        "note": "Ahead of main. Unpromoted: sidebar board folders (14 commits, 2 migrations) plus two changelog backfill commits and the folders announcement. Built subagent-driven: 7 tasks, 7 task reviews, 5 fix rounds, a whole-branch review and a final fix wave."
       },
       {
         "name": "main",
         "value": "821efc9a",
         "tone": "ok",
-        "note": "PR #99 merged 2026-08-26. Squash divergence healed (57b77edb) — origin/main verified an ancestor of origin/develop."
+        "note": "PR #99 merged 2026-08-26. Squash divergence healed (57b77edb). Does not yet carry sidebar folders."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 821efc9a. Verified live, not assumed: Vercel state=success, www.monolith.works 200, /settings/ai 307."
+        "note": "Serving 821efc9a — sidebar folders are NOT live yet. Verified at promotion: Vercel state=success, www.monolith.works 200, /settings/ai 307."
       }
     ],
     "gates": [
@@ -164,9 +164,9 @@
       },
       {
         "name": "test",
-        "value": "5979 pass",
+        "value": "6046 pass",
         "tone": "ok",
-        "note": "697 files, 1 pre-existing skip. Plus live-DEV integration suites for RLS, usage rollups and the atomic attach RPC."
+        "note": "701 files, 1 pre-existing skip. The board-folders RLS integration suite cannot execute here — isSafeTestTarget() deny-lists the DEV and PROD refs — so its policies were verified directly against DEV in rolled-back probes instead."
       },
       {
         "name": "build",
@@ -182,6 +182,14 @@
     ]
   },
   "next": [
+    {
+      "title": "Browser-test sidebar folders, then promote",
+      "why": "Nothing on this branch has been rendered. MeasuringStrategy.Always changed dnd measurement for the pre-existing board reorder too, and no test in the repo can distinguish the two strategies — so reorder feel is the largest untestable regression risk on develop.",
+      "tags": [
+        "verify",
+        "promote"
+      ]
+    },
     {
       "title": "Brainstorm Spec 2c — agent memory",
       "why": "Spec 2 was split during 2b: reference documents shipped, the memory layer became 2c. It consumes document-budget.ts and must not re-derive the arithmetic — that shared module is the only coupling between them.",
@@ -277,14 +285,14 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-26-0900-carryover-batch-and-promote-99",
-    "when": "2026-08-26 09:00",
-    "title": "Carryover batch, test-infra hardening, and promote #99",
+    "id": "2026-08-26-1705-sidebar-board-folders",
+    "when": "2026-08-26 17:05",
+    "title": "Sidebar board folders",
     "bullets": [
-      "7 carryover items scoped and built in parallel worktrees, merged sequentially: migration cleanup, a real production bug fix (dashboard widgets 42501'ing since 07-04), sentinel narrowing, DocumentPicker's silent cap, an a11y pass, F17 usage/digest, and a per-agent nonce closing a prompt-injection forgery gap.",
-      "Two unplanned test-infra fixes landed directly on develop: Node's experimental localStorage global was shadowing jsdom's in every test, and vitest's default worker count was oversubscribing the machine — six worktrees running full pnpm test/build concurrently drove swap to 6.9 of 8GB.",
-      "PR #99 promoted the whole 52-commit delta to main, verified live (Vercel state=success, 200, 307). Squash divergence healed.",
-      "A fresh scoping pass on the old 'Personal Agents Phase 2 remainder' note found nothing left to build there — two of its four items already shipped by other work this session, the other two confirmed as Spec 3 scope, correctly deferred."
+      "Private, per-user folders in the Boards nav, holding both your own boards and ones shared with you. Placement is keyed (user_id, board_id) — that PK alone enforces 'one folder max', and keying on the user is what lets a shared board be filed without touching its owner's sidebar.",
+      "Filed by an ... menu (the accessible path, built first) or by dragging onto a folder header. @dnd-kit stays out of the shell bundle — verified against the built chunk manifests, not assumed.",
+      "The whole-branch review found two things no scoped review could: the fold's fresh array met the sortable's prop-identity check, silently reverting a persisted board reorder on the next click; and RLS gated the board but never the folder, leaving a folder-existence oracle the spec had closed for boards. Both fixed.",
+      "Never run in a browser. Every visual and pointer claim is read from code — the manual pass is owed before promotion, starting with whether board reorder still survives a click."
     ]
   }
 }</script>
