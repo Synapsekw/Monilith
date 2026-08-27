@@ -52,6 +52,7 @@ export function AgentsSection({
   documents,
   documentTotal,
   attachmentsByAgent,
+  memoryTotals,
   orgDefaultContextLength,
 }: {
   agents: AgentRecord[];
@@ -92,6 +93,15 @@ export function AgentsSection({
    *  agent NAMES using the roster already in props, so the library's delete
    *  confirmation can name affected agents with no extra query. */
   attachmentsByAgent: Record<string, string[]>;
+  /** Per-agent memory COUNT and TOKEN SUM — read 8 on the page
+   *  (`listMemoryTotalsByAgent`), never the notes themselves. Keyed by agent
+   *  id; an absent key means "remembers nothing", which is why this is a plain
+   *  lookup rather than a field on `AgentRecord` (the editor's shape has no
+   *  business carrying memory data, same reasoning as `lastRuns`). The
+   *  selected agent's entry is threaded to `AgentEditor`, where it both sizes
+   *  the document budget and fills the memory panel's collapsed counter with
+   *  no fetch of its own. */
+  memoryTotals: Record<string, { noteCount: number; tokenTotal: number }>;
   /** The org default model's `context_length`, resolved once by the server
    *  page from data it already reads for other reasons (`readOrgAiSettings` +
    *  `buildModelOptions`) — see the doc comment at its call site in
@@ -276,6 +286,15 @@ export function AgentsSection({
           editorContext.mode === "edit"
             ? editorContext.initialDocumentIds
             : undefined
+        }
+        // A create has no agent id yet, so it has no memory either — and the
+        // fallback for an existing agent with no notes is the same empty
+        // total. Both come from data already in hand; opening the editor stays
+        // a view switch, never a fetch.
+        memoryTotals={
+          (editorContext.mode === "edit"
+            ? memoryTotals[editorContext.agentId]
+            : undefined) ?? { noteCount: 0, tokenTotal: 0 }
         }
         orgDefaultContextLength={orgDefaultContextLength}
         onSaved={handleSaved}
