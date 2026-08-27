@@ -1,12 +1,9 @@
 import { z } from "zod";
 import {
-  buildColumnFilePath,
-  buildStoragePath,
-} from "@/lib/collaboration/attachments-path";
-import {
   attachmentPathPrefix,
   createAttachmentCore,
   resolveItemScope,
+  uploadAndRegisterAttachment,
 } from "@/lib/collaboration/attachment-core";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
@@ -63,22 +60,6 @@ export async function attachFileHandler(
 
   const supabase = await getClient();
 
-  const scope = await resolveItemScope(supabase, input.itemId);
-  if (!scope) return err("Item not found.");
-
-  const prefix = attachmentPathPrefix({
-    orgId: scope.orgId,
-    boardId: scope.boardId,
-    itemId: input.itemId,
-    columnId: input.columnId,
-  });
-
-  let storagePath: string;
-  let sizeBytes: number;
-  let mimeType: string;
-  // Only the inline branch owns the bytes it wrote, so only it cleans up.
-  let cleanupOnFailure = false;
-
   if (hasInline) {
     const bytes = decodeBase64(input.contentBase64 ?? "");
     if (!bytes || bytes.byteLength === 0)
@@ -89,48 +70,69 @@ export async function attachFileHandler(
           "Use create_attachment_upload for larger files.",
       );
 
-    storagePath = input.columnId
-      ? buildColumnFilePath({
-          orgId: scope.orgId,
-          boardId: scope.boardId,
-          itemId: input.itemId,
-          columnId: input.columnId,
-          fileName: input.fileName,
-        })
-      : buildStoragePath({
-          orgId: scope.orgId,
-          boardId: scope.boardId,
-          itemId: input.itemId,
-          fileName: input.fileName,
-        });
-    mimeType = input.mimeType ?? DEFAULT_MIME;
-    sizeBytes = bytes.byteLength;
+    const mimeType = input.mimeType ?? DEFAULT_MIME;
+    // One implementation of upload → register → clean up on failure, shared
+    // with `create_pdf`. Only this branch owns the bytes it wrote, which is why
+    // only this branch gets the clean-up (see the storagePath branch below).
+    const registered = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: input.itemId,
+        columnId: input.columnId,
+        fileName: input.fileName,
+        mimeType,
+        bytes,
+      },
+      actorId,
+    );
+    if (!registered.ok) return err(registered.error);
 
-    const { error: upErr } = await supabase.storage
-      .from("attachments")
-      .upload(storagePath, bytes, { contentType: mimeType });
-    if (upErr) return err(upErr.message);
-    cleanupOnFailure = true;
-  } else {
-    storagePath = input.storagePath ?? "";
-    // Guard before touching Storage so a spoofed path costs nothing.
-    if (!storagePath.startsWith(prefix))
-      return err("Storage path does not match this item.");
-
-    const { data: info, error: infoErr } = await supabase.storage
-      .from("attachments")
-      .info(storagePath);
-    if (infoErr || !info)
-      return err(
-        "No uploaded object at that storagePath. Upload the bytes to the " +
-          "`uploadUrl` from create_attachment_upload first (tickets expire " +
-          "after 2 hours).",
-      );
-    if (typeof info.size !== "number" || info.size <= 0)
-      return err("Uploaded object reports no size.");
-    sizeBytes = info.size;
-    mimeType = info.contentType ?? input.mimeType ?? DEFAULT_MIME;
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            attachmentId: registered.data.attachmentId,
+            storagePath: registered.data.storagePath,
+            fileName: input.fileName,
+            sizeBytes: registered.data.sizeBytes,
+            mimeType,
+          }),
+        },
+      ],
+    };
   }
+
+  // --- storagePath branch: unchanged. The bytes are the CALLER's, so size and
+  // mime come from Storage and a failed register must NOT delete them.
+  const scope = await resolveItemScope(supabase, input.itemId);
+  if (!scope) return err("Item not found.");
+
+  const prefix = attachmentPathPrefix({
+    orgId: scope.orgId,
+    boardId: scope.boardId,
+    itemId: input.itemId,
+    columnId: input.columnId,
+  });
+
+  const storagePath = input.storagePath ?? "";
+  // Guard before touching Storage so a spoofed path costs nothing.
+  if (!storagePath.startsWith(prefix))
+    return err("Storage path does not match this item.");
+
+  const { data: info, error: infoErr } = await supabase.storage
+    .from("attachments")
+    .info(storagePath);
+  if (infoErr || !info)
+    return err(
+      "No uploaded object at that storagePath. Upload the bytes to the " +
+        "`uploadUrl` from create_attachment_upload first (tickets expire " +
+        "after 2 hours).",
+    );
+  if (typeof info.size !== "number" || info.size <= 0)
+    return err("Uploaded object reports no size.");
+  const sizeBytes = info.size;
+  const mimeType = info.contentType ?? input.mimeType ?? DEFAULT_MIME;
 
   const registered = await createAttachmentCore(
     supabase,
@@ -144,13 +146,7 @@ export async function attachFileHandler(
     },
     actorId,
   );
-
-  if (!registered.ok) {
-    if (cleanupOnFailure) {
-      await supabase.storage.from("attachments").remove([storagePath]);
-    }
-    return err(registered.error);
-  }
+  if (!registered.ok) return err(registered.error);
 
   return {
     content: [

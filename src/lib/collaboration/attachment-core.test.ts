@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { attachmentPathPrefix, createAttachmentCore } from "./attachment-core";
+import { makeFakeClient } from "@/test/mcp-fake-client";
+import {
+  attachmentPathPrefix,
+  createAttachmentCore,
+  MAX_ATTACHMENT_BYTES,
+  uploadAndRegisterAttachment,
+} from "./attachment-core";
 
 const ACTOR = "99999999-9999-4999-8999-999999999999";
 const ITEM = "11111111-1111-4111-8111-111111111111";
@@ -129,5 +135,161 @@ describe("createAttachmentCore", () => {
       ACTOR,
     );
     expect(res).toEqual({ ok: false, error: "Item not found." });
+  });
+});
+
+const COLUMN = "22222222-2222-4222-8222-222222222222";
+const bytes = (s: string) => new TextEncoder().encode(s);
+
+/** `makeFakeClient` hands back `getClient`; this helper resolves it once, the
+ *  way a tool handler does. */
+async function client(spec: Parameters<typeof makeFakeClient>[0] = {}) {
+  const fake = makeFakeClient(spec);
+  return { supabase: await fake.getClient(), calls: fake.calls };
+}
+
+describe("uploadAndRegisterAttachment", () => {
+  it("uploads then registers, and reports the server's own byte count", async () => {
+    const { supabase, calls } = await client();
+    const r = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: ITEM,
+        fileName: "report.pdf",
+        mimeType: "application/pdf",
+        bytes: bytes("hello world"),
+      },
+      ACTOR,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.sizeBytes).toBe(11);
+    expect(r.data.attachmentId).toBe("a1");
+    expect(calls.storage.map((s) => s.op)).toEqual(["upload"]);
+    expect(calls.attachments[0]).toMatchObject({
+      mime_type: "application/pdf",
+      size_bytes: 11,
+      uploaded_by: ACTOR,
+    });
+  });
+
+  it("removes the uploaded object when registering fails", async () => {
+    const { supabase, calls } = await client({
+      attachmentInsert: { data: null, error: { message: "denied" } },
+    });
+    const r = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: ITEM,
+        fileName: "a.pdf",
+        mimeType: "application/pdf",
+        bytes: bytes("hi"),
+      },
+      ACTOR,
+    );
+    expect(r.ok).toBe(false);
+    expect(calls.storage.map((s) => s.op)).toEqual(["upload", "remove"]);
+  });
+
+  it("nests a column-scoped object one level deeper", async () => {
+    const { supabase } = await client();
+    const r = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: ITEM,
+        columnId: COLUMN,
+        fileName: "a.pdf",
+        mimeType: "application/pdf",
+        bytes: bytes("hi"),
+      },
+      ACTOR,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.storagePath).toContain(`/${ITEM}/${COLUMN}/`);
+  });
+
+  it("refuses empty bytes before touching Storage", async () => {
+    const { supabase, calls } = await client();
+    const r = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: ITEM,
+        fileName: "a.pdf",
+        mimeType: "application/pdf",
+        bytes: new Uint8Array(0),
+      },
+      ACTOR,
+    );
+    expect(r.ok).toBe(false);
+    expect(calls.storage).toHaveLength(0);
+  });
+
+  it("refuses bytes over the bucket ceiling before touching Storage", async () => {
+    const { supabase, calls } = await client();
+    const r = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: ITEM,
+        fileName: "a.pdf",
+        mimeType: "application/pdf",
+        bytes: new Uint8Array(MAX_ATTACHMENT_BYTES + 1),
+      },
+      ACTOR,
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toContain("50 MB");
+    expect(calls.storage).toHaveLength(0);
+  });
+
+  it("reports Item not found when the item is not visible", async () => {
+    const { supabase, calls } = await client({
+      itemScope: { data: null, error: null },
+    });
+    const r = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: ITEM,
+        fileName: "a.pdf",
+        mimeType: "application/pdf",
+        bytes: bytes("hi"),
+      },
+      ACTOR,
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe("Item not found.");
+    expect(calls.storage).toHaveLength(0);
+  });
+
+  // The invariant `attach_file` states as "size and type are read from storage,
+  // not from you", reached from the writer's side: neither number nor mime on
+  // the stored row may originate in anything a caller asserted.
+  it("takes size from the buffer and mime from the argument, never a claim", async () => {
+    const { supabase, calls } = await client();
+    const r = await uploadAndRegisterAttachment(
+      supabase,
+      {
+        itemId: ITEM,
+        fileName: "../../etc/passwd",
+        mimeType: "application/pdf",
+        bytes: bytes("0123456789"),
+        // A caller-shaped claim that must be ignored entirely.
+        sizeBytes: 1,
+        mime_type: "text/html",
+      } as Parameters<typeof uploadAndRegisterAttachment>[1],
+      ACTOR,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.sizeBytes).toBe(10);
+    expect(calls.attachments[0]).toMatchObject({
+      size_bytes: 10,
+      mime_type: "application/pdf",
+    });
+    // The name is sanitised into the object key, so it can never traverse.
+    expect(r.data.storagePath).not.toContain("..");
+    expect(calls.storage[0].path).toBe(r.data.storagePath);
   });
 });

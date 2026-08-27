@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Database } from "@/types/database.types";
+import { buildColumnFilePath, buildStoragePath } from "./attachments-path";
 
 /** What registering an attachment needs, already parsed by the caller's Zod boundary. */
 export type CreateAttachmentCoreInput = {
@@ -109,4 +110,104 @@ export async function createAttachmentCore(
   if (error || !data)
     return fail(error?.message ?? "Could not register attachment.");
   return { ok: true, data: { attachmentId: data.id } };
+}
+
+/** The `attachments` bucket ceiling, mirrored from the bucket + check
+ *  constraint. Exported so the one number has one home: the MCP upload-ticket
+ *  tool reports it to callers, and this module enforces it. */
+export const MAX_ATTACHMENT_BYTES = 52_428_800;
+
+/**
+ * Upload bytes the SERVER produced and register them as an attachment.
+ *
+ * The counterpart to `createAttachmentCore` for callers that hold the bytes
+ * rather than a storage path: it owns the whole upload → register → clean-up-on
+ * -failure sequence, which is the part a second copy would most plausibly get
+ * wrong (an orphaned object in the bucket with no row pointing at it).
+ *
+ * NOTHING ABOUT THE STORED ROW IS CALLER-ASSERTED except the file name, and
+ * that is sanitised into the object key by `attachments-path.ts`. `sizeBytes`
+ * is this function's own count of the buffer it uploaded; `mimeType` is chosen
+ * by the calling tool from a closed set, never by a model. That is the same
+ * property `attach_file` states as "size and type are read from storage, not
+ * from you", reached from the other side: we are the writer, so our count IS
+ * the storage truth and re-reading it would be a network call to learn a number
+ * we just produced.
+ *
+ * Callers: `attachFileHandler`'s inline branch (`src/lib/mcp/tools/attach-file.ts`)
+ * and `create_pdf` (`src/lib/agents/create-pdf.ts`).
+ */
+export async function uploadAndRegisterAttachment(
+  supabase: SupabaseClient<Database>,
+  input: {
+    itemId: string;
+    columnId?: string;
+    fileName: string;
+    mimeType: string;
+    bytes: Uint8Array;
+  },
+  actorId: string,
+): Promise<
+  ActionResult<{ attachmentId: string; storagePath: string; sizeBytes: number }>
+> {
+  const sizeBytes = input.bytes.byteLength;
+  // Both guards run BEFORE any network call: a refusal that costs nothing is
+  // the difference between an actionable message and a Storage error the
+  // caller cannot interpret.
+  if (sizeBytes === 0) return fail("There are no bytes to attach.");
+  if (sizeBytes > MAX_ATTACHMENT_BYTES)
+    return fail(
+      `That file is ${sizeBytes} bytes; the attachments bucket accepts up to 50 MB.`,
+    );
+
+  const scope = await resolveItemScope(supabase, input.itemId);
+  if (!scope) return fail("Item not found.");
+
+  const storagePath = input.columnId
+    ? buildColumnFilePath({
+        orgId: scope.orgId,
+        boardId: scope.boardId,
+        itemId: input.itemId,
+        columnId: input.columnId,
+        fileName: input.fileName,
+      })
+    : buildStoragePath({
+        orgId: scope.orgId,
+        boardId: scope.boardId,
+        itemId: input.itemId,
+        fileName: input.fileName,
+      });
+
+  const { error: upErr } = await supabase.storage
+    .from("attachments")
+    .upload(storagePath, input.bytes, { contentType: input.mimeType });
+  if (upErr) return fail(upErr.message);
+
+  const registered = await createAttachmentCore(
+    supabase,
+    {
+      itemId: input.itemId,
+      columnId: input.columnId,
+      storagePath,
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+      sizeBytes,
+    },
+    actorId,
+  );
+  if (!registered.ok) {
+    // We wrote these bytes, so we own them: leaving them behind would orphan an
+    // object no row references and no UI can reach.
+    await supabase.storage.from("attachments").remove([storagePath]);
+    return fail(registered.error);
+  }
+
+  return {
+    ok: true,
+    data: {
+      attachmentId: registered.data.attachmentId,
+      storagePath,
+      sizeBytes,
+    },
+  };
 }
