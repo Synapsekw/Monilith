@@ -66,12 +66,21 @@ export async function renameFolder(input: {
   if (!user) return fail("You must be signed in.");
 
   const supabase = await createClient();
-  const { error } = await supabase
+  // RETURNING on the same statement — no extra round-trip, and `board_folders`
+  // has a SELECT policy so RLS permits reading back what we just wrote.
+  const { data, error } = await supabase
     .from("board_folders")
     .update({ name: parsed.data.name })
-    .eq("id", parsed.data.folderId);
+    .eq("id", parsed.data.folderId)
+    .select("id")
+    .maybeSingle();
   if (error) return fail(error.message);
+  // A folder that isn't yours (or was deleted in another tab) is filtered out by
+  // RLS, so the update succeeds having matched nothing. Without this the action
+  // reported "renamed" and the name was unchanged.
+  if (!data) return fail("That folder no longer exists.");
 
+  // After the not-found check: nothing changed, so nothing is invalidated.
   updateTag(boardFoldersTag(user.id));
   return { ok: true, data: undefined };
 }
@@ -92,11 +101,16 @@ export async function deleteFolder(input: {
   if (!user) return fail("You must be signed in.");
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("board_folders")
     .delete()
-    .eq("id", parsed.data.folderId);
+    .eq("id", parsed.data.folderId)
+    .select("id")
+    .maybeSingle();
   if (error) return fail(error.message);
+  // Same RLS-filtered miss as `renameFolder`: deleting a folder that is already
+  // gone must say so rather than report a success that changed nothing.
+  if (!data) return fail("That folder no longer exists.");
 
   updateTag(boardFoldersTag(user.id));
   return { ok: true, data: undefined };
@@ -122,6 +136,12 @@ export async function moveBoardToFolder(input: {
   const supabase = await createClient();
 
   if (parsed.data.folderId === null) {
+    // Deliberately NOT the RETURNING/not-found shape `renameFolder` and
+    // `deleteFolder` use. Unfiling a board that has no placement is a
+    // legitimate no-op — a double-click, or a ⋯ menu rendered before another
+    // tab unfiled it — and the user already has the state they asked for.
+    // Failing it would surface an error toast for nothing. The asymmetry is
+    // intentional and is locked by a test.
     const { error } = await supabase
       .from("board_folder_boards")
       .delete()
