@@ -1470,6 +1470,106 @@ describe("BoardsNav optimistic reorder survives a client re-render", () => {
   });
 });
 
+describe("BoardsNav optimistic reorder survives a re-allocated prop", () => {
+  // The block above proves the memo holds when the caller passes the SAME
+  // arrays. This one removes that assumption: the guard must survive a caller
+  // that hands down a freshly-allocated, content-identical list — which is what
+  // a single `boards.filter(...)` upstream produces, and what an
+  // identity-based sync silently reads as "the server sent a new list".
+  const alpha = {
+    id: "b1",
+    name: "Alpha",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+  const beta = {
+    id: "b2",
+    name: "Beta",
+    workspace_id: "w1",
+    position: 1,
+    shared_out: false,
+  };
+  const noShared: SharedBoardEntry[] = [];
+
+  function renderedRowIds(): string[] {
+    return Array.from(
+      screen
+        .getByTestId("boards-nav-sortable")
+        .querySelectorAll<HTMLElement>("[data-board-row]"),
+    ).map((row) => row.dataset.boardRow ?? "");
+  }
+
+  /** Render, arm the drag layer, and perform the b2-over-b1 drag. */
+  async function renderAndDrag() {
+    const boards = [alpha, beta];
+    const view = render(
+      <TooltipProvider>
+        <BoardsNav boards={boards} sharedBoards={noShared} />
+      </TooltipProvider>,
+    );
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-body"));
+    await screen.findByTestId("boards-nav-sortable");
+    expect(renderedRowIds()).toEqual(["b1", "b2"]);
+
+    drop("b2", "b1");
+    await waitFor(() => expect(reorderBoard).toHaveBeenCalled());
+    expect(renderedRowIds()).toEqual(["b2", "b1"]);
+    return view;
+  }
+
+  it("keeps the dragged order when the prop is re-allocated with identical content", async () => {
+    const { rerender } = await renderAndDrag();
+
+    // A FRESHLY ALLOCATED array with byte-identical contents. Note that only
+    // `boards` is re-allocated — `sharedBoards` keeps its reference, so there is
+    // no ambiguity about which prop caused a resync.
+    rerender(
+      <TooltipProvider>
+        <BoardsNav boards={[alpha, beta]} sharedBoards={noShared} />
+      </TooltipProvider>,
+    );
+
+    expect(renderedRowIds()).toEqual(["b2", "b1"]);
+    expect(reorderBoard).toHaveBeenCalledTimes(1);
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("still resyncs when the server list genuinely changed (a rename)", async () => {
+    const { rerender } = await renderAndDrag();
+
+    // Without this companion, `navSyncKey` could return a constant and the test
+    // above would still pass — the exact shape gotcha-89 catalogues. A rename
+    // also proves the key covers `name`, not just ids and positions.
+    rerender(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[{ ...alpha, name: "Alpha renamed" }, beta]}
+          sharedBoards={noShared}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(renderedRowIds()).toEqual(["b1", "b2"]);
+    expect(screen.getByRole("link", { name: "Alpha renamed" })).toBeVisible();
+  });
+
+  it("still resyncs when only a position changed", async () => {
+    const { rerender } = await renderAndDrag();
+
+    rerender(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[{ ...alpha, position: 7 }, beta]}
+          sharedBoards={noShared}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(renderedRowIds()).toEqual(["b1", "b2"]);
+  });
+});
+
 describe("BoardsNav folder row alignment", () => {
   // jsdom has no layout, so this is class arithmetic — which is exactly where
   // the bug lived. The folder body indents with `pl-3` (12px). An owned row

@@ -24,6 +24,7 @@ import { CSS as DndCSS } from "@dnd-kit/utilities";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import type { BoardFolder } from "@/lib/boards/folders/types";
 import { reorderPosition } from "@/lib/boards/group-reorder";
+import { navSyncKey } from "@/lib/boards/nav-sync-key";
 import { reorderBoard } from "@/lib/boards/actions";
 import { moveBoardToFolder } from "@/lib/boards/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
@@ -247,13 +248,20 @@ export function BoardsNavSortable({
   // whenever the server sends a new list — e.g. after a create/rename/delete
   // revalidates the shell. Reorder itself is NOT revalidated (that would reload
   // the whole sidebar, gotcha-44); the optimistic order here is authoritative
-  // and the new position is persisted, so a fresh load reads it back. The prop
-  // identity only changes on a server re-render, so a client-only re-render
-  // (e.g. our own optimistic setState) does not clobber the optimistic order.
+  // and the new position is persisted, so a fresh load reads it back.
+  //
+  // The comparison is on CONTENT, not identity. Identity was never a safe proxy
+  // for "the server sent a new list": the prop is a derived array, so it is
+  // re-allocated by any caller that filters or maps on the way down, and a
+  // single `boards.filter(...)` upstream would silently snap a just-dragged
+  // board back to the stale server order — with the whole suite green. The
+  // invariant now lives in `navSyncKey`, where it is testable, instead of in
+  // every caller's memoisation.
   const [ordered, setOrdered] = useState(boards);
-  const [syncedBoards, setSyncedBoards] = useState(boards);
-  if (syncedBoards !== boards) {
-    setSyncedBoards(boards);
+  const [syncedKey, setSyncedKey] = useState(() => navSyncKey(boards));
+  const incomingKey = navSyncKey(boards);
+  if (syncedKey !== incomingKey) {
+    setSyncedKey(incomingKey);
     setOrdered(boards);
   }
 

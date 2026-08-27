@@ -44,10 +44,16 @@ const BoardsNavSortable = dynamic(
 
 // Module-level empty defaults, NOT inline `= []`. An inline default allocates a
 // fresh array on every render, which would make the `useMemo` below miss on
-// every render for any caller that omits these props — and a fresh
-// `grouped.unfiledOwned` identity each render silently resets
-// `BoardsNavSortable`'s optimistic reorder (its render-phase prop sync treats a
-// new identity as "the server sent a new list").
+// every render for any caller that omits these props.
+//
+// This used to be load-bearing for CORRECTNESS: `BoardsNavSortable`'s optimistic
+// reorder re-synced on the `boards` prop's identity, so a missed memo silently
+// undid a drag. That sync is content-based now (`navSyncKey`), so these are a
+// render-cost saving and nothing more — worth keeping, not worth defending.
+//
+// `NO_FOLDERS` carries one further meaning that IS load-bearing: it is the
+// sentinel for "the caller supplied no folder data at all", which the prune
+// effect below must treat as UNKNOWN rather than as "this user has no folders".
 const NO_FOLDERS: BoardFolder[] = [];
 const NO_PLACEMENTS: BoardFolderPlacement[] = [];
 
@@ -166,12 +172,11 @@ export function BoardsNav({
   // Fold folders + placements into the tree once. `groupBoardsByFolder` owns the
   // "a folder with no visible board is dropped, not rendered empty" rule.
   //
-  // The memo is load-bearing, not a micro-optimisation: the fold allocates fresh
-  // arrays, and `grouped.unfiledOwned` is the `boards` prop of
-  // `BoardsNavSortable`, whose render-phase sync resets the optimistic reorder
-  // whenever that prop's IDENTITY changes. Without the memo, any client-only
-  // re-render (e.g. `useParams()` changing as you click another board) would
-  // snap a just-dragged board back to the stale server order.
+  // The memo is a render-cost saving: the fold allocates several arrays and maps
+  // and runs on every client re-render (e.g. `useParams()` changing as you click
+  // another board) without it. It is NOT what keeps a just-dragged board in
+  // place any more — `BoardsNavSortable` compares the list's CONTENT now, so a
+  // missed memo costs work, not correctness.
   const grouped = useMemo(
     () =>
       groupBoardsByFolder({
