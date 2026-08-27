@@ -189,12 +189,19 @@ describe("LongTextEditor — save semantics", () => {
     expect(onCommit).toHaveBeenCalledWith({ text: "older" });
   });
 
-  it("commits on an outside click (pointerdown outside the panel)", async () => {
+  // Radix Popover sets `deferPointerDownOutside` (react-popover >= 1.1.20,
+  // radix-ui >= 1.6.x — radix-ui/primitives#3346), so a left-button outside
+  // press no longer dismisses on `pointerdown`: the layer waits for the
+  // matching `click` before firing onPointerDownOutside. Fire the whole
+  // gesture, not just its first half — a real user's outside click always
+  // produces both.
+  it("commits on an outside click", async () => {
     const { onCommit } = setup();
     const ta = screen.getByRole("textbox");
     await userEvent.click(ta);
     await userEvent.type(ta, "er");
     fireEvent.pointerDown(document.body);
+    fireEvent.click(document.body);
     expect(onCommit).toHaveBeenCalledWith({ text: "older" });
   });
 

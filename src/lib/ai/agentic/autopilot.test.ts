@@ -111,7 +111,9 @@ describe("autopilotRun", () => {
       client,
     });
     // triage => only move_to_group is offered; never set_option/call_webhook.
-    expect(calls[0]!.tools?.map((t) => t.name)).toEqual(["move_to_group"]);
+    expect(
+      calls[0]!.tools?.map((t) => ("name" in t ? t.name : undefined)),
+    ).toEqual(["move_to_group"]);
   });
 
   it("drops a move to a foreign-board group with a warning (confinement)", async () => {
