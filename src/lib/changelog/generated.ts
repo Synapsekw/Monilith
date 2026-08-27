@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-08-27",
+    kind: "improved",
+    title: "Drag boards between folders",
+    description:
+      "Boards already in a folder can now be dragged straight into another one, and the sidebar's drag handles work from the keyboard.",
+  },
+  {
+    date: "2026-08-27",
     kind: "fixed",
     title: "Out-of-range workload defaults now explain themselves",
     description:
