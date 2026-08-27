@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 import {
   ModelPicker,
   providersWithoutModels,
@@ -204,6 +205,15 @@ export function AgentEditor({
         (o) => o.provider === model.provider && o.modelId === model.modelId,
       )
     : undefined;
+
+  // The model field's own error. Unlike the hand-wired ids above it, the
+  // control is a combobox inside `ModelPicker`, which already describes itself
+  // with the current selection — so the message goes in through the picker's
+  // `describedBy`, which MERGES ids rather than replacing them. Only the
+  // description half of `controlProps` is used: `aria-invalid` would restyle
+  // the trigger (`<Button>` variants paint a destructive border and ring for
+  // it), and this is an announcement fix, not a visual one.
+  const providerStatus = useFieldStatus(fieldErrors.provider);
 
   function cadenceChanged(next: AgentCadence) {
     setCadence(next);
@@ -569,6 +579,7 @@ export function AgentEditor({
             // available", which reads as a broken feature.
             emptyHint="Add an API key in Settings → AI to see models."
             label="Model"
+            describedBy={providerStatus.controlProps["aria-describedby"]}
           />
           <p className="text-muted-foreground text-xs">
             {model
@@ -589,11 +600,7 @@ export function AgentEditor({
               summary. Pick a tool-capable model to let it act.
             </p>
           ) : null}
-          {fieldErrors.provider ? (
-            <p role="alert" className="text-destructive text-xs">
-              {fieldErrors.provider}
-            </p>
-          ) : null}
+          <FieldStatus field={providerStatus} />
         </div>
 
         <div

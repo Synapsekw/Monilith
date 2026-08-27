@@ -299,6 +299,52 @@ describe("AgentEditor · model pin", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
+  /**
+   * The provider error is unreachable through the picker — it only ever yields
+   * a complete pair or null, which is why `AgentEditor` calls it out as
+   * defensive where it renders it. This fixture reaches it the one way left: a
+   * catalog row whose provider id is longer than the column
+   * (`personalAgentSettingsSchema` caps it at 64 and files the failure under
+   * `provider`). The fixture is the means; the assertion is the point — a
+   * message rendered NEXT TO the picker is not attached to it, so a screen
+   * reader user hears it only if they happen to navigate onto that paragraph.
+   * It has to be part of the combobox's own accessible description, alongside
+   * (not instead of) the model it names.
+   */
+  const OVERLONG_PROVIDER = "moonshotai".padEnd(65, "-");
+  const BAD_PROVIDER_OPTION: ModelOption = {
+    provider: OVERLONG_PROVIDER,
+    providerLabel: "Kimi (Moonshot AI)",
+    modelId: "kimi-k2",
+    label: "Kimi K2 Instruct",
+    tier: "cheap",
+    supportsTools: true,
+    contextLength: 128_000,
+  };
+
+  it("announces a provider error as part of the model field, keeping the pin", async () => {
+    renderEditor({ modelOptions: [BAD_PROVIDER_OPTION], providers: [] });
+    await userEvent.click(modelField());
+    await userEvent.click(
+      await screen.findByRole("option", { name: /kimi k2 instruct/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+
+    const group = screen.getByRole("group", { name: "Model" });
+    const alert = await within(group).findByRole("alert");
+    const trigger = modelField();
+    // The relationship a screen reader actually consumes: the trigger points
+    // at the message, so it is read WITH the control, not stumbled upon.
+    expect(trigger.getAttribute("aria-describedby")?.split(" ")).toContain(
+      alert.id,
+    );
+    // Merged, not replaced — the selected model is still described too.
+    expect(trigger).toHaveAccessibleDescription(/kimi k2 instruct/i);
+    expect(createAgent).not.toHaveBeenCalled();
+  }, 30_000);
+
   it("keeps saving the rest of the form working", async () => {
     const { onSaved } = renderEditor();
     await userEvent.clear(screen.getByLabelText(/name/i));

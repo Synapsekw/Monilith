@@ -92,6 +92,7 @@ export function ModelPicker({
   disabled = false,
   emptyHint,
   label = "Model",
+  describedBy,
 }: {
   options: ModelOption[];
   value: ModelValue | null;
@@ -117,6 +118,22 @@ export function ModelPicker({
    * into the name. See {@link TimezonePicker} — same shared shape, same fix.
    */
   label?: string;
+  /**
+   * Id(s) of text the CALLER owns that belongs to this control's accessible
+   * description — a validation error beside the field, typically from
+   * `useFieldStatus` (`controlProps["aria-describedby"]`,
+   * `src/components/ui/field-status.tsx`).
+   *
+   * MERGED with, never substituted for, the picker's own value description:
+   * `aria-describedby` is a space-separated id LIST, so replacing it would
+   * cost a screen-reader user the one thing the trigger says about its own
+   * state. Order is deliberate — what is selected, then what is wrong with it.
+   *
+   * Deliberately describedby ONLY, no `aria-invalid` counterpart: the trigger
+   * is a `<Button>`, whose variants style `aria-invalid` with a destructive
+   * border and ring, and this field's error is announced, not restyled.
+   */
+  describedBy?: string;
 }) {
   const [open, setOpen] = useState(false);
   const valueId = useId();
@@ -164,7 +181,9 @@ export function ModelPicker({
             variant="outline"
             role="combobox"
             aria-label={label}
-            aria-describedby={valueId}
+            aria-describedby={
+              describedBy ? `${valueId} ${describedBy}` : valueId
+            }
             aria-expanded={open}
             disabled={disabled}
             className="border-border hover:border-border-hover w-full justify-between font-normal transition-colors"
