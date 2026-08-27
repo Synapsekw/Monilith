@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 export const metadata = { title: "Platform admin" };
 
-export const unstable_instant = false;
+export const instant = false;
 
 export default async function AdminLayout({
   children,

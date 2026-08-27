@@ -98,7 +98,9 @@ describe("decideAction", () => {
     expect(res.warnings).toEqual([]);
     expect(res.usage.inputTokens).toBe(10);
     // Only the ONE allowed action tool is offered to the model.
-    expect(calls[0]!.tools?.map((t) => t.name)).toEqual(["set_option"]);
+    expect(
+      calls[0]!.tools?.map((t) => ("name" in t ? t.name : undefined)),
+    ).toEqual(["set_option"]);
   });
 
   it("offers only the allowed action tools", async () => {
@@ -116,10 +118,9 @@ describe("decideAction", () => {
       allow: ["move_to_group", "notify"],
       client,
     });
-    expect(calls[0]!.tools?.map((t) => t.name).sort()).toEqual([
-      "move_to_group",
-      "notify",
-    ]);
+    expect(
+      calls[0]!.tools?.map((t) => ("name" in t ? t.name : undefined)).sort(),
+    ).toEqual(["move_to_group", "notify"]);
   });
 
   it("drops a choice targeting a foreign column id (referential re-validation)", async () => {

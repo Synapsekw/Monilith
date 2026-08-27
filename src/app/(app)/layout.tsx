@@ -15,7 +15,10 @@ import { Toaster } from "@/components/ui/sonner";
  * Cookie-bound page-load entry is dynamic; the static AppShell frame still
  * prerenders and per-user data streams behind Suspense.
  *
- * Instant navigation is OFF (`unstable_instant = false`). An earlier version of
+ * Instant navigation is OFF (`instant = false` — the export was `unstable_instant`
+ * until Next 16.3 stabilized it; the old name is silently ignored now, which
+ * turns this opt-out into a build-breaking `blocking-route` error, so never
+ * rename it back). An earlier version of
  * this docblock claimed the page segments validated instant nav via
  * `{ prefetch: 'static' }` — no such export exists anywhere and it was never
  * validated. The real blocker is architectural: the shell reads
@@ -31,7 +34,7 @@ import { Toaster } from "@/components/ui/sonner";
  * platform-admin guard before any Suspense boundary, and home is a one-shot
  * redirect dispatcher.
  */
-export const unstable_instant = false;
+export const instant = false;
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
