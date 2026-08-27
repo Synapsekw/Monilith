@@ -32,10 +32,14 @@ vi.mock("./proposals-db", async (importOriginal) => ({
   claimProposalDecision: (...a: unknown[]) => claimProposalDecision(...a),
   settleProposalOutcome: (...a: unknown[]) => settleProposalOutcome(...a),
 }));
-// The one thing that must not really happen in a unit run.
-const renderHtmlToPdf = vi.fn(async () => Buffer.from("%PDF-1.4 pretend"));
+// The one thing that must not really happen in a unit run. Typed with the real
+// signature so the assertions below read the arguments, not `unknown`.
+const renderHtmlToPdf = vi.fn<
+  (html: string, opts: { landscape: boolean }) => Promise<Buffer>
+>(async () => Buffer.from("%PDF-1.4 pretend"));
 vi.mock("@/lib/reports/pdf", () => ({
-  renderHtmlToPdf: (...a: unknown[]) => renderHtmlToPdf(...(a as [])),
+  renderHtmlToPdf: (html: string, opts: { landscape: boolean }) =>
+    renderHtmlToPdf(html, opts),
 }));
 
 const { decideProposal } = await import("./proposal-actions");
@@ -109,7 +113,7 @@ describe("decideProposal — create_pdf", () => {
     const r = await decideProposal({ id: PROPOSAL_ID, approve: true });
     expect(r.ok).toBe(true);
 
-    const html = renderHtmlToPdf.mock.calls[0][0] as unknown as string;
+    const html = renderHtmlToPdf.mock.calls[0][0];
     const body = html.slice(
       html.indexOf('<main class="doc">'),
       html.indexOf("</main>"),
