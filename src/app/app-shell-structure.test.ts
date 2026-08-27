@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const APP_GROUP = join(process.cwd(), "src/app/(app)");
@@ -56,6 +56,80 @@ describe("(app) route group shell structure", () => {
         readFileSync(file, "utf8"),
         `${file} must not mount AuthenticatedShell — the shared (app) layout already does`,
       ).not.toContain("AuthenticatedShell");
+    }
+  });
+});
+
+/** All `page.tsx` files at or below `dir`, as absolute paths. */
+function pageFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      out.push(...pageFiles(full));
+    } else if (entry === "page.tsx") {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+/**
+ * The nearest `loading.tsx` at or above `pageFile`, stopping at `root`.
+ * A `loading.tsx` is the Suspense boundary for its whole subtree, so a
+ * settings subsection is covered by `settings/loading.tsx` — the invariant is
+ * "an ancestor has one", not "a sibling has one".
+ */
+function nearestLoading(pageFile: string, root: string): string | null {
+  let dir = dirname(pageFile);
+  for (;;) {
+    const candidate = join(dir, "loading.tsx");
+    if (existsSync(candidate)) return candidate;
+    if (dir === root) return null;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * Cache Components (`cacheComponents: true`) validates every Page segment in
+ * dev. These pages all await Supabase in the page body, which is only legal
+ * because `loading.tsx` wraps the segment in a Suspense boundary — that is
+ * Pulse's chosen instant-nav mechanism (gotcha-48: `instant` itself is off,
+ * because the shell reads `useSearchParams()` pervasively for gotcha-09).
+ *
+ * Note that `instant = false` on `admin/layout.tsx` opts out the LAYOUT
+ * segment only; it does not cover the pages beneath it. The whole `/admin`
+ * section shipped without a single `loading.tsx` and every route logged a
+ * blocking-prerender-dynamic error on navigation — this test is the guard.
+ */
+describe("route skeletons", () => {
+  for (const [name, root] of [
+    ["(app)", APP_GROUP],
+    ["admin", join(process.cwd(), "src/app/admin")],
+  ] as const) {
+    it(`covers every ${name} page with a loading.tsx at or above it`, () => {
+      const pages = pageFiles(root);
+      expect(pages.length).toBeGreaterThan(0);
+      const uncovered = pages.filter((p) => nearestLoading(p, root) === null);
+      expect(
+        uncovered,
+        `these pages block navigation with no skeleton: ${uncovered.join(", ")}`,
+      ).toEqual([]);
+    });
+  }
+
+  it("gives each admin route its own skeleton, not the overview's", () => {
+    // The overview fallback (stat cards + two panels) is wrong for a list or a
+    // detail page, so inheriting it would be worse than the geometry mismatch
+    // it fixes. Every admin segment that owns a page owns a fallback.
+    const adminRoot = join(process.cwd(), "src/app/admin");
+    for (const page of pageFiles(adminRoot)) {
+      const sibling = join(dirname(page), "loading.tsx");
+      expect(existsSync(sibling), `${page} has no sibling loading.tsx`).toBe(
+        true,
+      );
     }
   });
 });

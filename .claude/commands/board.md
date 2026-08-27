@@ -4,8 +4,16 @@ Refresh `vault/board.html` (the visual plan board) from the project's canonical 
 it as a claude.ai Artifact at the permanent URL below. The board is a **DERIVED view** — it is
 never a source of truth; never edit project state here first.
 
-**Permanent URL (never mint a new one):** https://claude.ai/code/artifact/eb984761-bee4-4d1a-b6ba-30c6bc05119c
+**Permanent URL (never mint a new one):** https://claude.ai/code/artifact/fc8327d9-8ff3-4461-a17d-7994ab32cd87
 **Favicon (always the same):** 🗿
+
+> **URL re-minted 2026-08-27.** The previous artifact (`eb984761-bee4-4d1a-b6ba-30c6bc05119c`) was
+> **deleted from the owner's account** — `WebFetch` returned "artifact not found" and it was absent
+> from `Artifact action:"list"`, so a redeploy was impossible and the rule above could not be
+> honoured. Re-minted once, with the owner's explicit approval, and recorded here. The rule stands:
+> do not mint another. If this URL ever 404s again, confirm deletion with `action:"list"` **before**
+> re-minting, and say so in your report — a redeploy failure is not on its own proof of deletion.
+
 **Design spec:** `vault/decisions/2026-07-17-decision-28-mission-control-board.md`
 
 ## Refresh procedure

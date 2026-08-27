@@ -3,7 +3,13 @@ type: adr
 date: 2026-08-26
 status: accepted
 tags: [decision, ai, providers, security]
-related: ["[[2026-08-27-0913-carryover-batch-promote-100-sync-prod]]", "[[2026-08-11-1501-provider-model-layer-spec-1]]"]
+related:
+  [
+    "[[2026-08-27-0913-carryover-batch-promote-100-sync-prod]]",
+    "[[2026-08-11-1501-provider-model-layer-spec-1]]",
+    "[[2026-08-27-1229-carryover-clear-batch-promote-101]]",
+  ]
+amended: 2026-08-27
 ---
 
 # Decision 39 — the catalog sweep never borrows an org BYO key
@@ -44,8 +50,21 @@ added without turning one of them red.
 
 ## Consequences
 
-- A provider keyed only at org level shows "Not checked" freshness rather than a verified timestamp.
-  That is accurate, not a fault.
+- ~~A provider keyed only at org level shows "Not checked" freshness rather than a verified
+  timestamp. That is accurate, not a fault.~~ **Amended 2026-08-27**
+  ([[2026-08-27-1229-carryover-clear-batch-promote-101]]): a provider keyed only at org level now
+  shows a verified timestamp from its **last save-time check**, and ages from there. `setOrgByoKey`
+  (and `saveAiKey`) already ran the probe and discarded the result; they now record it. **The
+  decision is unchanged** — the sweep still borrows no org key, and both pinning tests are
+  untouched. Only the *staleness window* this section describes is unchanged too; it is now visible
+  as an ageing timestamp instead of a flat "Not checked", which is strictly more informative. This
+  closes a gap rationale #3 already anticipated ("Save-time verification already covers the
+  provider's ids") rather than reversing anything.
+- **Save-time health is recorded on success only.** A failed verify writes **no** row. `ai_providers`
+  is a platform-wide registry with no `org_id`/`user_id` column, so one tenant pasting a revoked key
+  would otherwise render as a vendor outage for every other tenant — the same cross-tenant objection
+  as rationale #1, pointing the other way down the write path. The nightly sweep remains the sole
+  authority on failures.
 - If the staleness window ever becomes a real complaint, the fix is **not** to borrow the org key —
   it is to re-run save-time verification on a schedule under the org's own authority, or to ask the
   admin to opt in explicitly.
