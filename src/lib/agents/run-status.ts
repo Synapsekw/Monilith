@@ -41,11 +41,7 @@ export const CLAIM_PLACEHOLDER = "claimed; result not yet recorded";
 export const STALE_CLAIM_MS = 15 * 60 * 1000;
 
 export type AgentRunDisplayStatus =
-  | "ran"
-  | "skipped"
-  | "running"
-  | "incomplete"
-  | "error";
+  "ran" | "skipped" | "running" | "incomplete" | "error";
 
 /** The subset of a run row any display decision needs. */
 export type AgentRunLike = {
@@ -82,6 +78,17 @@ export type AgentRunSummary = AgentRunLike & {
    * history row only — `get_my_agent_last_runs()` has fixed SQL columns.
    */
   documentsOmitted: boolean;
+  /**
+   * How many memory notes did not fit this run's memory budget.
+   *
+   * Like `modelSubstituted` and `documentsOmitted`, neither a `status` nor an
+   * `error`: the run worked. A COUNT rather than a boolean because memory
+   * truncation is PARTIAL by design (`selectMemory` keeps the freshest that
+   * fit) — "12 of your 50 notes didn't fit" is actionable in a way "memory
+   * omitted" is not. Rides on the expanded history row only:
+   * `get_my_agent_last_runs()` has fixed SQL columns.
+   */
+  memoryNotesDropped: number;
 };
 
 const PRESENTATION: Record<
@@ -138,6 +145,17 @@ export function agentRunStatusColor(
  */
 export const MODEL_SUBSTITUTED_NOTE =
   "Pinned model unavailable — ran on the default instead";
+
+/**
+ * What a truncated-memory run tells its owner. Names the COUNT and the cause,
+ * because the fix (a larger model, or fewer notes) depends on both — and
+ * because the count is the whole reason this is not a boolean.
+ */
+export function memoryDroppedNote(n: number): string {
+  return n === 1
+    ? "1 memory note didn't fit this model's context"
+    : `${n} memory notes didn't fit this model's context`;
+}
 
 /** Longest failure/skip reason rendered inline before an ellipsis. */
 const REASON_MAX = 160;

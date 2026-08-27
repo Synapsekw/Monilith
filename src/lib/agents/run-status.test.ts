@@ -4,6 +4,7 @@ import {
   agentRunStatusColor,
   agentRunStatusLabel,
   describeAgentRun,
+  memoryDroppedNote,
   CLAIM_PLACEHOLDER,
   STALE_CLAIM_MS,
   type AgentRunLike,
@@ -169,5 +170,20 @@ describe("describeAgentRun", () => {
     expect(
       describeAgentRun(run({ status: "error", error: null }), NOW),
     ).toMatch(/no reason recorded/i);
+  });
+});
+
+// Spec 2c. The count is the point — "memory omitted" would tell the owner
+// nothing they could act on, and the fix (a bigger model, or fewer notes)
+// depends on how many did not fit.
+describe("memoryDroppedNote", () => {
+  it("names the count and the cause", () => {
+    expect(memoryDroppedNote(1)).toMatch(/^1 memory note didn't fit/);
+    expect(memoryDroppedNote(12)).toMatch(/^12 memory notes didn't fit/);
+  });
+
+  it("is singular for exactly one and plural otherwise", () => {
+    expect(memoryDroppedNote(1)).toContain("note didn't");
+    expect(memoryDroppedNote(2)).toContain("notes didn't");
   });
 });
