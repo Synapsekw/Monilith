@@ -13,7 +13,8 @@ never a source of truth; never edit project state here first.
 > honoured. Re-minted once, with the owner's explicit approval, and recorded here. The rule stands:
 > do not mint another. If this URL ever 404s again, confirm deletion with `action:"list"` **before**
 > re-minting, and say so in your report — a redeploy failure is not on its own proof of deletion.
-> **Design spec:** `vault/decisions/2026-07-17-decision-28-mission-control-board.md`
+
+**Design spec:** `vault/decisions/2026-07-17-decision-28-mission-control-board.md`
 
 ## Refresh procedure
 
