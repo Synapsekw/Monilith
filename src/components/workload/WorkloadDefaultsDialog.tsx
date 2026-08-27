@@ -130,7 +130,17 @@ export function WorkloadDefaultsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* `noValidate` is load-bearing, not a style choice. The two numeric
+            inputs carry `min`/`max`, and with native validation on, the browser
+            refuses the submit itself before React's `onSubmit` ever runs — so
+            the range guards below could never fire, and the user got an
+            unstylable native bubble that no `aria-describedby` can point at and
+            that screen readers announce inconsistently. The attributes stay
+            (they are the constraint assistive tech reads off the control); only
+            the browser's own blocking + bubble is turned off, so the guards run
+            and their messages announce through `useFieldStatus`. */}
         <form
+          noValidate
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();

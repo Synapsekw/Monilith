@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Eye, FolderKanban, Users2 } from "lucide-react";
+import { FolderKanban, Users2 } from "lucide-react";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,22 @@ import {
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 import { NavSection } from "@/components/shell/nav-section";
+import type {
+  BoardFolder,
+  BoardFolderPlacement,
+} from "@/lib/boards/folders/types";
+import { groupBoardsByFolder } from "@/lib/boards/folders/group";
+import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
+import { NewFolderDialog } from "@/components/boards/NewFolderDialog";
+import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
+import { SharedBoardsSection } from "@/components/boards/SharedBoardsSection";
+// Type-only: erased at compile time, so naming the lazy module here does NOT
+// pull @dnd-kit into the shell bundle.
+import type { FolderSection } from "@/components/boards/BoardsNavSortable";
+import {
+  focusAnchorFrom,
+  type BoardsNavFocusAnchor,
+} from "@/components/boards/boards-nav-focus";
 
 // Keep the @dnd-kit stack (~30-40KB gz) out of the shell bundle that mounts on
 // every authenticated route: the drag-to-reorder variant is a lazy client chunk
@@ -25,6 +41,15 @@ const BoardsNavSortable = dynamic(
   () => import("./BoardsNavSortable").then((m) => m.BoardsNavSortable),
   { ssr: false },
 );
+
+// Module-level empty defaults, NOT inline `= []`. An inline default allocates a
+// fresh array on every render, which would make the `useMemo` below miss on
+// every render for any caller that omits these props — and a fresh
+// `grouped.unfiledOwned` identity each render silently resets
+// `BoardsNavSortable`'s optimistic reorder (its render-phase prop sync treats a
+// new identity as "the server sent a new list").
+const NO_FOLDERS: BoardFolder[] = [];
+const NO_PLACEMENTS: BoardFolderPlacement[] = [];
 
 /**
  * Visible caption for a collapsed icon/initial rail item under a coarse pointer.
@@ -46,15 +71,20 @@ function CoarseCaption({ label }: { label: string }) {
  * hooks — an inert `size-6` spacer holds the grip's slot so swapping in the
  * drag-enabled variant on hover doesn't shift the row horizontally.
  */
-function PlainBoardRow({
+export function PlainBoardRow({
   board,
   isActive,
+  folders = [],
+  currentFolderId = null,
 }: {
   board: BoardListEntry;
   isActive: boolean;
+  folders?: BoardFolder[];
+  currentFolderId?: string | null;
 }) {
   return (
     <div
+      data-board-row={board.id}
       className={cn(
         "group/row flex items-center rounded-md pr-1 transition-colors",
         isActive
@@ -79,6 +109,8 @@ function PlainBoardRow({
       <BoardItemMenu
         board={{ id: board.id, name: board.name }}
         isActive={isActive}
+        folders={folders}
+        currentFolderId={currentFolderId}
       />
     </div>
   );
@@ -87,11 +119,15 @@ function PlainBoardRow({
 export function BoardsNav({
   boards,
   sharedBoards,
+  folders = NO_FOLDERS,
+  placements = NO_PLACEMENTS,
   activeWorkspaceId,
   collapsed = false,
 }: {
   boards: BoardListEntry[];
   sharedBoards: SharedBoardEntry[];
+  folders?: BoardFolder[];
+  placements?: BoardFolderPlacement[];
   activeWorkspaceId?: string;
   collapsed?: boolean;
 }) {
@@ -105,6 +141,76 @@ export function BoardsNav({
   // so the very first reorder still works — while first paint stays plain and
   // @dnd-kit stays off the shell's initial JS.
   const [dndReady, setDndReady] = useState(false);
+
+  // Mounting the drag layer REPLACES this subtree in the DOM, so the element
+  // the user just tabbed to is destroyed and focus falls to <body> — their
+  // first Tab into the list appears to do nothing. Remember which row held
+  // focus at arm time, and which end of it, so the drag-enabled tree can hand
+  // focus back to the same place.
+  const [restoreFocus, setRestoreFocus] = useState<BoardsNavFocusAnchor | null>(
+    null,
+  );
+
+  function armDnd(focusTarget?: Element | null) {
+    // Board rows AND folder headers both carry an anchor — every focusable
+    // thing in this region belongs to one of them.
+    if (focusTarget) setRestoreFocus(focusAnchorFrom(focusTarget));
+    // A transition lets React hold the current rows while the lazy chunk
+    // resolves rather than flashing the dynamic import's empty fallback. It
+    // does NOT save focus on its own — the swap still unmounts the focused
+    // node, which is what `restoreFocus` above is for. (jsdom resolves the
+    // import inside the same flush, so the flash itself has no unit test.)
+    startTransition(() => setDndReady(true));
+  }
+
+  // Fold folders + placements into the tree once. `groupBoardsByFolder` owns the
+  // "a folder with no visible board is dropped, not rendered empty" rule.
+  //
+  // The memo is load-bearing, not a micro-optimisation: the fold allocates fresh
+  // arrays, and `grouped.unfiledOwned` is the `boards` prop of
+  // `BoardsNavSortable`, whose render-phase sync resets the optimistic reorder
+  // whenever that prop's IDENTITY changes. Without the memo, any client-only
+  // re-render (e.g. `useParams()` changing as you click another board) would
+  // snap a just-dragged board back to the stale server order.
+  const grouped = useMemo(
+    () =>
+      groupBoardsByFolder({
+        folders,
+        placements,
+        boards,
+        sharedBoards,
+      }),
+    [folders, placements, boards, sharedBoards],
+  );
+
+  // Folder rows are defined ONCE here and handed to whichever tree is mounted:
+  // the plain one, or the lazy drag layer that wraps each header in a drop
+  // target. Both must show identical markup, so neither owns the rows.
+  const folderSections: FolderSection[] = grouped.folders.map(
+    ({ folder, boards: folderBoards }) => ({
+      folder,
+      count: folderBoards.length,
+      children: folderBoards.map((entry) =>
+        entry.kind === "owned" ? (
+          <PlainBoardRow
+            key={entry.board.id}
+            board={entry.board}
+            isActive={entry.board.id === activeBoardId}
+            folders={folders}
+            currentFolderId={folder.id}
+          />
+        ) : (
+          <SharedBoardRow
+            key={entry.board.id}
+            board={entry.board}
+            isActive={entry.board.id === activeBoardId}
+            folders={folders}
+            currentFolderId={folder.id}
+          />
+        ),
+      ),
+    }),
+  );
 
   return collapsed ? (
     <div className="flex flex-col items-center gap-0.5 px-2 py-2">
@@ -178,72 +284,68 @@ export function BoardsNav({
       storageKey="boards"
       title="Boards"
       icon={FolderKanban}
-      action={<NewBoardDialog workspaceId={activeWorkspaceId} />}
+      action={
+        <>
+          <NewFolderDialog />
+          <NewBoardDialog workspaceId={activeWorkspaceId} />
+        </>
+      }
     >
-      {boards.length === 0 ? (
+      {grouped.unfiledOwned.length === 0 &&
+      folderSections.length === 0 &&
+      grouped.unfiledShared.length === 0 ? (
         <p className="text-muted-foreground px-3 py-1 text-xs">No boards yet</p>
       ) : dndReady ? (
-        <BoardsNavSortable boards={boards} activeBoardId={activeBoardId} />
+        <BoardsNavSortable
+          boards={grouped.unfiledOwned}
+          sharedBoards={grouped.unfiledShared}
+          folderSections={folderSections}
+          activeBoardId={activeBoardId}
+          folders={folders}
+          restoreFocus={restoreFocus}
+        />
       ) : (
+        // Everything that can be dragged, or dragged onto, lives in here — so
+        // this is also the region that arms the lazy drag layer.
         <div
-          data-testid="boards-nav-owned"
-          onPointerEnter={() => setDndReady(true)}
-          onFocus={() => setDndReady(true)}
+          data-testid="boards-nav-body"
+          className="flex flex-col gap-0.5"
+          onPointerEnter={() => armDnd()}
+          // React routes portal events up the COMPONENT tree, so focus landing
+          // inside a row's portaled dropdown would otherwise read as "focus
+          // entered the board list" and swap this subtree for the lazy sortable
+          // one — tearing down the row and closing the menu the user just
+          // opened. Only a focus on a real DOM descendant is a genuine
+          // interaction with the list.
+          onFocus={(e) => {
+            if (e.currentTarget.contains(e.target)) armDnd(e.target);
+          }}
         >
-          {boards.map((b) => (
+          {folderSections.map((section) => (
+            <BoardFolderRow
+              key={section.folder.id}
+              folder={section.folder}
+              count={section.count}
+            >
+              {section.children}
+            </BoardFolderRow>
+          ))}
+          {grouped.unfiledOwned.map((b) => (
             <PlainBoardRow
               key={b.id}
               board={b}
               isActive={b.id === activeBoardId}
+              folders={folders}
+              currentFolderId={null}
             />
           ))}
+          <SharedBoardsSection
+            boards={grouped.unfiledShared}
+            folders={folders}
+            activeBoardId={activeBoardId}
+          />
         </div>
       )}
-      {sharedBoards.length > 0 ? (
-        <>
-          <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">
-            Shared with me
-          </p>
-          {sharedBoards.map((b) => (
-            <Link
-              key={b.id}
-              href={`/boards/${b.id}`}
-              aria-current={b.id === activeBoardId ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-1 rounded-md px-3 py-1 text-xs transition-colors",
-                b.id === activeBoardId
-                  ? "bg-primary/80 text-foreground"
-                  : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-              )}
-            >
-              <span className="min-w-0 flex-1 truncate">{b.name}</span>
-              {b.access_level === "viewer" ? (
-                <Eye
-                  aria-label="View only"
-                  className="text-muted-foreground size-3 shrink-0"
-                />
-              ) : null}
-              {/* Who shared it: an icon with a hover tooltip, replacing the
-                  redundant "· from {owner}" second line. */}
-              {b.owner_name ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="flex shrink-0 items-center">
-                      <Users2
-                        aria-label={`Shared by ${b.owner_name}`}
-                        className="text-muted-foreground size-3.5"
-                      />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    Shared by {b.owner_name}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
-            </Link>
-          ))}
-        </>
-      ) : null}
     </NavSection>
   );
 }

@@ -4,18 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 
-import {
-  archiveBoard,
-  duplicateBoard,
-  renameBoard,
-  restoreBoard,
-} from "@/lib/boards/actions";
-import { showMutationError, showUndoToast } from "@/lib/ui/mutation-toast";
+import { deleteFolder, renameFolder } from "@/lib/boards/folders/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
-import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,64 +33,33 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { BoardFolder } from "@/lib/boards/folders/types";
-import { MoveToFolderMenu } from "@/components/boards/MoveToFolderMenu";
 
-export function BoardItemMenu({
-  board,
-  isActive,
-  folders = [],
-  currentFolderId = null,
+export function BoardFolderMenu({
+  folder,
 }: {
-  board: { id: string; name: string };
-  isActive: boolean;
-  folders?: BoardFolder[];
-  currentFolderId?: string | null;
+  folder: { id: string; name: string };
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [name, setName] = useState(board.name);
+  const [name, setName] = useState(folder.name);
   const [error, setError] = useState<string | null>(null);
-  // A rename failure is the name field's problem — it must be that Input's
-  // accessible description, not loose red text under it.
-  const renameStatus = useFieldStatus(error);
-  // Save disables itself for the transition and the dialog only closes on
-  // SUCCESS, so a failed rename leaves the keyboard user on <body>.
-  const saveRef = useRestoreFocusAfterPending<HTMLButtonElement>(isPending);
 
   function submitRename() {
     const trimmed = name.trim();
-    if (!trimmed || trimmed === board.name) {
+    if (!trimmed || trimmed === folder.name) {
       setRenameOpen(false);
       return;
     }
     setError(null);
     startTransition(async () => {
-      const res = await renameBoard({ boardId: board.id, name: trimmed });
+      const res = await renameFolder({ folderId: folder.id, name: trimmed });
       if (!res.ok) {
         setError(res.error);
         return;
       }
       setRenameOpen(false);
-      router.refresh();
-    });
-  }
-
-  function doDuplicate() {
-    startTransition(async () => {
-      const res = await duplicateBoard({ boardId: board.id });
-      if (!res.ok) {
-        // The dropdown has already closed, so there's no inline surface to host
-        // the message — toast it (delete keeps its AlertDialog open and shows
-        // the error inline instead).
-        showMutationError(
-          "Couldn't duplicate the board.",
-          new Error(res.error),
-        );
-        return;
-      }
       router.refresh();
     });
   }
@@ -106,29 +67,13 @@ export function BoardItemMenu({
   function doDelete() {
     setError(null);
     startTransition(async () => {
-      const res = await archiveBoard({ boardId: board.id });
+      const res = await deleteFolder({ folderId: folder.id });
       if (!res.ok) {
         setError(res.error);
         return;
       }
       setDeleteOpen(false);
-      // Reversible: offer an immediate Undo that restores the board, then bring
-      // it back into view. Trash is the durable recovery path once this expires.
-      showUndoToast("Board moved to Trash", () => {
-        startTransition(async () => {
-          const undo = await restoreBoard({ boardId: board.id });
-          if (!undo.ok) {
-            showMutationError(
-              "Couldn't restore the board.",
-              new Error(undo.error),
-            );
-            return;
-          }
-          router.refresh();
-        });
-      });
-      if (isActive) router.push("/boards");
-      else router.refresh();
+      router.refresh();
     });
   }
 
@@ -140,8 +85,8 @@ export function BoardItemMenu({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="Board actions"
-            className="text-muted-foreground hover:text-foreground shrink-0 opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+            aria-label={`Folder actions for ${folder.name}`}
+            className="text-muted-foreground hover:text-foreground shrink-0 opacity-0 transition-opacity group-hover/folder:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
           >
             <MoreHorizontal className="size-4" />
           </Button>
@@ -149,20 +94,13 @@ export function BoardItemMenu({
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem
             onSelect={() => {
-              setName(board.name);
+              setName(folder.name);
               setError(null);
               setRenameOpen(true);
             }}
           >
             Rename
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={doDuplicate}>Duplicate</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <MoveToFolderMenu
-            boardId={board.id}
-            folders={folders}
-            currentFolderId={currentFolderId}
-          />
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
@@ -179,8 +117,8 @@ export function BoardItemMenu({
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename board</DialogTitle>
-            <DialogDescription>Give this board a new name.</DialogDescription>
+            <DialogTitle>Rename folder</DialogTitle>
+            <DialogDescription>Give this folder a new name.</DialogDescription>
           </DialogHeader>
           <form
             className="flex flex-col gap-3"
@@ -190,24 +128,23 @@ export function BoardItemMenu({
             }}
           >
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`rename-board-${board.id}`}>Board name</Label>
+              <Label htmlFor={`rename-folder-${folder.id}`}>Folder name</Label>
               <Input
-                id={`rename-board-${board.id}`}
-                aria-label="Board name"
+                id={`rename-folder-${folder.id}`}
+                aria-label="Folder name"
                 autoFocus
                 value={name}
                 disabled={isPending}
                 onChange={(e) => setName(e.target.value)}
-                {...renameStatus.controlProps}
               />
             </div>
-            <FieldStatus field={renameStatus} />
+            {error ? (
+              <p role="alert" className="text-destructive text-xs">
+                {error}
+              </p>
+            ) : null}
             <DialogFooter>
-              <Button
-                ref={saveRef}
-                type="submit"
-                disabled={isPending || !name.trim()}
-              >
+              <Button type="submit" disabled={isPending || !name.trim()}>
                 {isPending ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>
@@ -219,11 +156,11 @@ export function BoardItemMenu({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Move &ldquo;{board.name}&rdquo; to Trash?
+              Delete the folder &ldquo;{folder.name}&rdquo;?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The board and all its items move to Trash. You can restore it from
-              Trash.
+              The boards inside it aren&rsquo;t deleted — they move back to your
+              main list.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {error ? (
@@ -241,7 +178,7 @@ export function BoardItemMenu({
               }}
               disabled={isPending}
             >
-              Move to Trash
+              Delete folder
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

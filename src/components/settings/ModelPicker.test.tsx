@@ -194,6 +194,55 @@ describe("ModelPicker", () => {
     expect(screen.getByRole("combobox", { name: "Model" })).toBeInTheDocument();
   });
 
+  /**
+   * The trigger already describes ITSELF — the selected model is its accessible
+   * description. A caller with a message of its own (a validation error beside
+   * the field) therefore has to be ADDED to that description, never swapped in:
+   * `aria-describedby` is a space-separated id LIST, and replacing it would
+   * silently cost a screen-reader user the one thing the control says about
+   * its own state.
+   */
+  it("adds the caller's description to the value's, rather than replacing it", () => {
+    render(
+      <>
+        <ModelPicker
+          options={OPTIONS}
+          value={{ provider: "anthropic", modelId: "claude-sonnet-5" }}
+          onChange={vi.fn()}
+          describedBy="model-error"
+        />
+        <p id="model-error">Pick a provider and a model together.</p>
+      </>,
+    );
+    const trigger = screen.getByRole("combobox", { name: "Model" });
+    // Both halves reach the accessible description, in that order: what is
+    // selected, then what is wrong with it.
+    expect(trigger).toHaveAccessibleDescription(
+      /claude sonnet 5[\s\S]*pick a provider and a model together/i,
+    );
+    const ids = trigger.getAttribute("aria-describedby")?.split(" ") ?? [];
+    expect(ids).toHaveLength(2);
+    expect(ids).toContain("model-error");
+  });
+
+  it("still describes the trigger with the value when the caller has no message", () => {
+    render(
+      <ModelPicker
+        options={OPTIONS}
+        value={{ provider: "anthropic", modelId: "claude-sonnet-5" }}
+        onChange={vi.fn()}
+        describedBy={undefined}
+      />,
+    );
+    const trigger = screen.getByRole("combobox", { name: "Model" });
+    expect(trigger).toHaveAccessibleDescription(/claude sonnet 5/i);
+    // No dangling id: a describedby pointing at nothing is a description a
+    // screen reader silently drops.
+    expect(trigger.getAttribute("aria-describedby")?.split(" ")).toHaveLength(
+      1,
+    );
+  });
+
   // Radix Popover's default `onCloseAutoFocus` returns focus to the trigger
   // when the popover closes — nothing here overrides it — so picking a model
   // (which calls `setOpen(false)`) must land focus back on the trigger, not

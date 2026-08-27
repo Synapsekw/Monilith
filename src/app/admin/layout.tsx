@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { requirePlatformAdmin } from "@/lib/platform/guard";
 import { AuthenticatedShell } from "@/components/shell/authenticated-shell";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata = { title: "Platform admin" };
 
-export const unstable_instant = false;
+export const instant = false;
 
 export default async function AdminLayout({
   children,
@@ -17,8 +18,16 @@ export default async function AdminLayout({
   await requirePlatformAdmin();
 
   return (
-    <AuthenticatedShell>
-      <div className="w-full px-6 py-8 lg:px-10">{children}</div>
-    </AuthenticatedShell>
+    <>
+      <AuthenticatedShell>
+        <div className="w-full px-6 py-8 lg:px-10">{children}</div>
+      </AuthenticatedShell>
+      {/* Admin sits outside the `(app)` group, so it inherits nothing from that
+          group's layout — including the app-wide toaster. Without this mount,
+          the row actions' `toast.error` for a refused reset/suspend/reactivate
+          renders into a toaster that is not on the page, which is the same
+          silent failure the toasts exist to end. */}
+      <Toaster />
+    </>
   );
 }

@@ -9,9 +9,10 @@
   where we stand, what's next, and the percentages behind each.
 -->
 
-<script type="application/json" id="board-data">{
+<script type="application/json" id="board-data">
+{
   "schema": 2,
-  "updated": "2026-08-26 09:00",
+  "updated": "2026-08-27 09:13",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -133,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "d6d925b7",
-        "tone": "ok",
-        "note": "== main == production. Promoted 2026-08-26 as PR #99 — Spec 2b (reference documents) plus a same-session carryover batch: nonce defense, dashboard RLS fix, F17 usage/digest, a11y pass, DocumentPicker fix, migration cleanup, test-infra hardening. 52 commits."
+        "value": "6ee1e77e",
+        "tone": "warn",
+        "note": "Ahead of main. Unpromoted: sidebar board folders (14 commits, 2 migrations) — never rendered in a browser — plus this session's announcement commits."
       },
       {
         "name": "main",
-        "value": "821efc9a",
+        "value": "169c6b56",
         "tone": "ok",
-        "note": "PR #99 merged 2026-08-26. Squash divergence healed (57b77edb) — origin/main verified an ancestor of origin/develop."
+        "note": "PR #100 merged 2026-08-27 — 25 commits: the a11y propagation sweep, AI provider sweep health, agent-runtime hardening. Squash divergence healed; develop's tree byte-identical before and after."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 821efc9a. Verified live, not assumed: Vercel state=success, www.monolith.works 200, /settings/ai 307."
+        "note": "Serving 169c6b56. Verified live, not assumed: Vercel state=success, 200, /settings/ai 307, and all five of the promotion's /updates entries rendering. Sidebar folders are NOT live."
       }
     ],
     "gates": [
@@ -164,9 +165,9 @@
       },
       {
         "name": "test",
-        "value": "5979 pass",
+        "value": "pass",
         "tone": "ok",
-        "note": "697 files, 1 pre-existing skip. Plus live-DEV integration suites for RLS, usage rollups and the atomic attach RPC."
+        "note": "Four worktrees gated and merged one at a time — the 2026-08-26 lesson that this machine cannot run 4+ concurrent full gates."
       },
       {
         "name": "build",
@@ -175,16 +176,24 @@
       },
       {
         "name": "ledger",
-        "value": "146/146",
+        "value": "149/149",
         "tone": "ok",
-        "note": "Three migrations this session (doc nonce, usage summary, price checks); gotcha-55 reconcile needed on all three."
+        "note": "DEV and PROD both at 149 after the schema push. gotcha-55 fired again on the sweep-health migration (7 of 7)."
       }
     ]
   },
   "next": [
     {
+      "title": "Browser-test sidebar folders, then promote",
+      "why": "Nothing on this branch has been rendered. MeasuringStrategy.Always changed dnd measurement for the pre-existing board reorder too, and no test in the repo can distinguish the two strategies — so reorder feel is the largest untestable regression risk on develop.",
+      "tags": [
+        "verify",
+        "promote"
+      ]
+    },
+    {
       "title": "Brainstorm Spec 2c — agent memory",
-      "why": "Spec 2 was split during 2b: reference documents shipped, the memory layer became 2c. It consumes document-budget.ts and must not re-derive the arithmetic — that shared module is the only coupling between them.",
+      "why": "Owner-chosen, depth before breadth over Spec 3. Sized M+: no memory surface exists in the schema, so it mirrors 2b's shape; the new risk is the write-back path and sharing the same cached system message with documents. It must consume document-budget.ts, not re-derive it.",
       "tags": [
         "spec",
         "brainstorm"
@@ -200,9 +209,16 @@
     },
     {
       "title": "E6 Stripe — units B, C, E–H",
-      "why": "The only open AI epic. Not blocked on credentials (only end-to-end verification is) and needs no migration, which makes it the safest large task to run beside a migration-bearing one.",
+      "why": "The only open AI epic. A and D shipped 2026-08-02, so what remains is the Stripe client, webhook, paywall primitives, /settings/billing and the admin screens. No migration needed — org_billing already carries every column the webhook writes. Its lockfile install must not overlap the dependabot batch.",
       "tags": [
         "billing"
+      ]
+    },
+    {
+      "title": "Clear the dependabot backlog",
+      "why": "Now 11 branches, not the 8 the vault recorded. The lockfile is free right now — this is the clean window, before E6 installs the Stripe SDK.",
+      "tags": [
+        "chore"
       ]
     },
     {
@@ -226,8 +242,8 @@
     },
     {
       "sev": "open",
-      "title": "Six test fakes still cannot fail",
-      "text": "Arg-blind Supabase fakes remain outside the provider branch, two on RLS-bypassing service-client writes where the org filter is the only tenant boundary. Five such tests shipped in one plan and none was caught by the suite going red."
+      "title": "Test fakes that cannot fail are ~175 sites, not six",
+      "text": "The two SHARED arg-blind fakes (automation, MCP) are now argument-aware and five previously-unstated query predicates are asserted — no production bug was behind them. But the inline pattern was measured at ~175 sites across 56 files, so the vault's 'six' understated it by an order of magnitude. The shape is unchanged: an arg-blind fake cannot go red."
     },
     {
       "sev": "open",
@@ -255,9 +271,14 @@
       "text": "The MCP attachment cross-org RLS tests skip: integration-env.ts deny-lists the DEV and PROD refs even with the marker forced. The claim rests on live policy evidence instead."
     },
     {
+      "sev": "amber",
+      "title": "PROD storage is 26 of 42 objects",
+      "text": "The 2026-08-27 sync copied every attachment and avatar but failed on the desktop binaries (113–118 MB each). Bucket limits are identical on both projects; the blocker is PROD's project-level upload limit, which DEV has raised and PROD has not — PROD's largest object ever is 28 MB. Raise it above 128 MB and re-run pnpm sync:storage, which upserts."
+    },
+    {
       "sev": "open",
-      "title": "/sync-prod's data phase copies the fixtures",
-      "text": "A full replace would copy the three Tier 2 fixture accounts — whose shared password is committed to this repo — into production. Schema-only pushes are unaffected."
+      "title": "Two prod-write commands are blocked by the permission classifier",
+      "text": "supabase db push and restore-prod.sh were both denied during the 2026-08-27 sync and the owner ran them by hand. Unattended /sync-prod needs a Bash permission rule — verbal permission does not reach the classifier."
     },
     {
       "sev": "open",
@@ -272,22 +293,23 @@
     {
       "sev": "open",
       "title": "gotcha-55 fires on every migration",
-      "text": "Nine for nine now across Spec 2a, 2b and this session's batch: MCP apply_migration stamps its own version and the ledger drifts from the committed filename. Budget the reconcile; pnpm db:ledger-check is the only thing that catches it."
+      "text": "Ten for ten now. MCP apply_migration stamps its own version and the ledger drifts from the committed filename. Budget the reconcile; pnpm db:ledger-check is the only thing that catches it."
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-26-0900-carryover-batch-and-promote-99",
-    "when": "2026-08-26 09:00",
-    "title": "Carryover batch, test-infra hardening, and promote #99",
+    "id": "2026-08-27-0913-carryover-batch-promote-100-sync-prod",
+    "when": "2026-08-27 09:13",
+    "title": "Carryover batch, promote #100, and the first full prod sync since July",
     "bullets": [
-      "7 carryover items scoped and built in parallel worktrees, merged sequentially: migration cleanup, a real production bug fix (dashboard widgets 42501'ing since 07-04), sentinel narrowing, DocumentPicker's silent cap, an a11y pass, F17 usage/digest, and a per-agent nonce closing a prompt-injection forgery gap.",
-      "Two unplanned test-infra fixes landed directly on develop: Node's experimental localStorage global was shadowing jsdom's in every test, and vitest's default worker count was oversubscribing the machine — six worktrees running full pnpm test/build concurrently drove swap to 6.9 of 8GB.",
-      "PR #99 promoted the whole 52-commit delta to main, verified live (Vercel state=success, 200, 307). Squash divergence healed.",
-      "A fresh scoping pass on the old 'Personal Agents Phase 2 remainder' note found nothing left to build there — two of its four items already shipped by other work this session, the other two confirmed as Spec 3 scope, correctly deferred."
+      "Four carryover worktrees built in parallel and merged one at a time: the a11y propagation sweep (44 files, aria-describedby coverage 7 to 44), AI provider sweep health, Spec 2a hardening, and the pickModel precedence question.",
+      "Three of the vault's carryover 'open defects' turned out not to be defects. pickModel's ladder is deliberate and specified; the org-BYO-key gap was a staleness window, not permanent invisibility; per-provider re-verification had already shipped on 2026-08-12.",
+      "The one real defect was invisible from the brief: verifyProviderModels failed closed, returning identical counters for a 401 and a healthy provider — health derived from it would have been a placebo.",
+      "Promoted PR #100 (25 commits) and resynced the PROD database for the first time since 2026-07-17: 27 migrations, full data replace, storage 26 of 42."
     ]
   }
-}</script>
+}
+</script>
 
 <style>
   /* ── Keystone Console ─────────────────────────────────────────────────────

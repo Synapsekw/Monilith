@@ -4,6 +4,55 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-08-27",
+    kind: "fixed",
+    title: "Out-of-range workload defaults now explain themselves",
+    description:
+      "Entering hours outside the allowed range in Workload -> Defaults now shows a clear message next to the field it belongs to, instead of a browser tooltip that a screen reader never announced.",
+  },
+  {
+    date: "2026-08-27",
+    kind: "fixed",
+    title: "Admin user actions no longer fail silently",
+    description:
+      "Sending a password reset, suspending or reactivating a user from the admin user list now confirms success and, if something goes wrong, says what - previously the menu simply closed and nothing happened.",
+  },
+  {
+    date: "2026-08-27",
+    kind: "improved",
+    title: "A newly saved AI key shows as checked straight away",
+    description:
+      'Saving a provider key in Settings -> AI now records the verification it already performed, so the provider reads as checked immediately instead of "Never checked" until the next nightly sweep.',
+  },
+  {
+    date: "2026-08-26",
+    kind: "improved",
+    title: "Forms work properly with a screen reader",
+    description:
+      "Error messages are now read out with the field they belong to, saving or clearing a form keeps your place instead of jumping to the top of the page, and confirmations are announced without interrupting you.",
+  },
+  {
+    date: "2026-08-26",
+    kind: "improved",
+    title: "Approving an agent action tells you what happened",
+    description:
+      "Approving or cancelling a proposed agent action now announces the outcome, instead of the buttons quietly disappearing.",
+  },
+  {
+    date: "2026-08-26",
+    kind: "new",
+    title: "See when your AI providers were last checked",
+    description:
+      "Settings -> AI now shows, for each provider, when its available models were last verified and whether that check succeeded, so a provider whose key has stopped working is visible instead of silently going stale.",
+  },
+  {
+    date: "2026-08-26",
+    kind: "new",
+    title: "Group your boards into folders",
+    description:
+      "Organize the sidebar by dropping boards into folders you create. Folders are private to you, and they can hold both your own boards and ones shared with you. File a board from its ... menu, or drag it onto a folder.",
+  },
+  {
     date: "2026-08-26",
     kind: "fixed",
     title: "See every document you can attach",

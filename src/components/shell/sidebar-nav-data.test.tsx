@@ -38,6 +38,14 @@ vi.mock("@/lib/boards/queries-cached", () => ({
   ]),
   listSharedBoardsCached: vi.fn(async () => []),
 }));
+// Private board folders — the same cached-read shape as the boards/dashboards
+// reads above, so the folder layer is exercised through the real shell loader.
+vi.mock("@/lib/boards/folders/queries-cached", () => ({
+  listBoardFoldersCached: vi.fn(async () => ({
+    folders: [{ id: "f1", name: "Client work", position: 0 }],
+    placements: [{ boardId: "b1", folderId: "f1", position: 0 }],
+  })),
+}));
 vi.mock("@/lib/dashboards/queries-cached", () => ({
   listDashboardsCached: vi.fn(async () => [{ id: "d1", name: "Velocity" }]),
 }));
@@ -65,6 +73,8 @@ describe("SidebarNavData", () => {
       const { SidebarNavData } = await import("./sidebar-nav-data");
       render(await SidebarNavData());
       expect(screen.getByText("Sprint backlog")).toBeInTheDocument();
+      // Folders are threaded through the loader into the Boards nav.
+      expect(screen.getByText("Client work")).toBeInTheDocument();
       expect(screen.getByText("Velocity")).toBeInTheDocument();
       expect(screen.getByText("Eng")).toBeInTheDocument();
     },

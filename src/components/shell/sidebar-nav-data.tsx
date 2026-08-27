@@ -4,6 +4,7 @@ import {
   listSharedBoardsCached,
 } from "@/lib/boards/queries-cached";
 import { listDashboardsCached } from "@/lib/dashboards/queries-cached";
+import { listBoardFoldersCached } from "@/lib/boards/folders/queries-cached";
 import { listWorkspacesCached } from "@/lib/workspaces/queries-cached";
 import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import { resolveActiveOrg } from "@/lib/org/active";
@@ -25,10 +26,13 @@ export async function getSidebarNavData(): Promise<
   const workspaces = await listWorkspacesCached(orgId);
   const activeWorkspaceId = await getActiveWorkspaceId(workspaces);
 
-  const [boards, sharedBoards, dashboards] = await Promise.all([
+  // Folders join the EXISTING Promise.all — a sequential await here would add a
+  // round-trip to first paint of every authenticated route.
+  const [boards, sharedBoards, dashboards, folderData] = await Promise.all([
     listMyBoardsCached(userId, activeWorkspaceId),
     listSharedBoardsCached(userId),
     listDashboardsCached(orgId, activeWorkspaceId),
+    listBoardFoldersCached(userId),
   ]);
 
   return {
@@ -36,6 +40,8 @@ export async function getSidebarNavData(): Promise<
     activeOrgId: orgId,
     boards,
     sharedBoards,
+    folders: folderData.folders,
+    placements: folderData.placements,
     workspaces,
     activeWorkspaceId,
     dashboards: dashboards.map((d) => ({ id: d.id, name: d.name })),

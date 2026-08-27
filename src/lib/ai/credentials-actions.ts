@@ -5,7 +5,10 @@ import { after } from "next/server";
 import { requireUser } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getAdapter } from "@/lib/ai/providers/registry";
-import { getProviderRow } from "@/lib/ai/providers/provider-rows";
+import {
+  getProviderRow,
+  recordProviderVerification,
+} from "@/lib/ai/providers/provider-rows";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
 import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
@@ -36,6 +39,29 @@ export async function saveAiKey(input: {
   if (!new RegExp(row.keyFormat).test(key))
     return fail(`That doesn't look like a ${row.label} key.`);
 
+  // Saving a key is a LIVE probe of this provider, and its result used to be
+  // computed and thrown away — which is why a key verified ten seconds ago
+  // still read "Never checked" in Settings → AI until the nightly sweep ran.
+  //
+  // SUCCESS ONLY, and the asymmetry is deliberate — do not "fix" it by adding
+  // the failure branch back. `ai_providers` is a PLATFORM-WIDE vendor registry
+  // with no tenant column, so whatever is written here is visible to every
+  // authenticated user in every org. A success is a true positive at that
+  // scope: the provider really is reachable and this key really is accepted. A
+  // failure is not. One person pasting a revoked or mistyped key would flip a
+  // global badge to `failed` for every other tenant until the nightly sweep
+  // overwrote it — one tenant's bad credential rendered as a vendor outage.
+  // `verifyAllProviders` (models/refresh.ts), which probes under our own
+  // platform key or a consenting user's, stays the sole authority on failures.
+  // Nothing is lost for the person who typed the key: they still learn it was
+  // rejected, from the error returned right here.
+  //
+  // Success is read off THROW-vs-RESOLVE, never off a return value.
+  // `validateKey` returns `void` and signals failure by throwing, so the two
+  // cases are genuinely distinguishable — the check gotcha-95 requires before
+  // any health indicator is derived from an existing function. (Contrast
+  // `verifyProviderModels`, which fails closed and is deliberately NOT the
+  // source here.)
   const adapter = getAdapter(row.adapterKind);
   try {
     await adapter.validateKey({ apiKey: key, baseUrl: row.baseUrl });
@@ -43,6 +69,28 @@ export async function saveAiKey(input: {
     if (e instanceof ProviderAuthError)
       return fail(`That key was rejected by ${row.label}.`);
     return fail("Couldn't verify the key. Please try again.");
+  }
+
+  // Health telemetry must never become a new way for "Save key" to fail.
+  // `recordProviderVerification` already swallows its own write errors as a
+  // documented contract; this catch covers it (or a future replacement)
+  // throwing anyway — the same belt-and-braces the sweep applies around its
+  // injected recorder in models/refresh.ts.
+  //
+  // `error` is null by construction. Any reason string this layer ever writes
+  // must be AUTHORED here, never lifted off a thrown error: the column is read
+  // by every authenticated user, and a raw SDK/transport message can carry the
+  // request URL — which for Google carries the key in its query string.
+  try {
+    await recordProviderVerification(svc, provider, {
+      status: "ok",
+      error: null,
+    });
+  } catch (e) {
+    console.error(
+      `[ai] could not record save-time health for "${provider}"`,
+      e,
+    );
   }
 
   const hint = maskKey(key);

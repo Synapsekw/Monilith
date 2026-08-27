@@ -26,6 +26,37 @@ describe("SubmitFeedbackForm", () => {
     await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
 
+  /**
+   * The defect this guards: both fields were placeholder-only — no `<label>`,
+   * no `aria-label` — so neither had an accessible NAME at all. A placeholder
+   * is not a name (it is not exposed as one, and it vanishes the moment the
+   * user types), so a screen reader announced two anonymous "edit text" fields
+   * inside the feedback popover with nothing to tell them apart.
+   */
+  it("gives both fields a real accessible name", () => {
+    render(<SubmitFeedbackForm submit={vi.fn()} onDone={vi.fn()} />);
+
+    expect(screen.getByLabelText("Title")).toBe(
+      screen.getByRole("textbox", { name: "Title" }),
+    );
+    expect(screen.getByLabelText("Details")).toBe(
+      screen.getByRole("textbox", { name: "Details" }),
+    );
+  });
+
+  it("keeps the placeholder as the visible hint, not the name", () => {
+    render(<SubmitFeedbackForm submit={vi.fn()} onDone={vi.fn()} />);
+
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveAttribute(
+      "placeholder",
+      "Title — briefly describe the issue",
+    );
+    expect(screen.getByRole("textbox", { name: "Details" })).toHaveAttribute(
+      "placeholder",
+      "What happened, or what you'd like to see…",
+    );
+  });
+
   it("shows the error and does not call onDone when submit fails", async () => {
     const submit = vi.fn().mockResolvedValue({ ok: false, error: "Nope" });
     const onDone = vi.fn();
