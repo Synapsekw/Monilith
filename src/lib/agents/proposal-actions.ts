@@ -9,6 +9,7 @@ import { type ActionResult, fail } from "@/lib/actions/result";
 import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import { descriptorsFor } from "./tool-descriptors";
 import { AGENT_ONLY_DESCRIPTORS } from "./agent-only-tools";
+import { makeMemoryDescriptors } from "./memory-tools";
 import { RUN_HISTORY_LIMIT } from "./agents-db";
 // The two messages a card may RETRY — shared with the card rather than
 // duplicated as literals, so "is this worth another click?" has one answer.
@@ -106,7 +107,7 @@ const decideSchema = z.object({
 const runIdsSchema = z.array(z.string().uuid()).max(RUN_HISTORY_LIMIT);
 
 /**
- * The tools a proposal may name, keyed by name.
+ * The tools THIS proposal could have named, resolved PER ROW.
  *
  * `descriptorsFor({ extra: AGENT_ONLY_DESCRIPTORS })` is the ONE composition
  * both the agent's tool set and its grant gate derive from, so this lookup sees
@@ -118,12 +119,34 @@ const runIdsSchema = z.array(z.string().uuid()).max(RUN_HISTORY_LIMIT);
  * correct, because an agent is never offered it and can never legitimately
  * propose it.
  *
- * Module scope: the composition is static, and a duplicate name THROWS there
- * rather than resolving last-wins.
+ * IT CANNOT BE A MODULE CONSTANT ANY MORE (Spec 2c). `remember` and `forget`
+ * are built per run, closed over the agent id, because `ToolInvokeContext`
+ * carries neither an agent id nor a run id — so the lookup has to know WHICH
+ * agent's proposal it is approving. Left at module scope, every `remember`
+ * proposal would hit the "Unknown tool" branch below and be permanently
+ * un-approvable: exactly the bug this comment already warned about for
+ * `create_file`, in a new costume.
+ *
+ * `row.userAgentId` is SERVER-READ from the proposal row — never client input —
+ * so this cannot be steered. `runId: null` because the note is being written by
+ * the owner's APPROVAL, not by the run that proposed it; stamping the original
+ * run id would claim a run wrote something it was actually denied.
+ *
+ * A duplicate name still THROWS inside `descriptorsFor` rather than resolving
+ * last-wins; that is now a per-call check instead of a per-module one, which is
+ * strictly more coverage for the same cost.
  */
-const DESCRIPTORS_BY_NAME: Map<string, ToolDescriptor> = new Map(
-  descriptorsFor({ extra: AGENT_ONLY_DESCRIPTORS }).map((d) => [d.name, d]),
-);
+function descriptorFor(row: {
+  userAgentId: string;
+  toolName: string;
+}): ToolDescriptor | undefined {
+  return descriptorsFor({
+    extra: [
+      ...AGENT_ONLY_DESCRIPTORS,
+      ...makeMemoryDescriptors({ userAgentId: row.userAgentId, runId: null }),
+    ],
+  }).find((d) => d.name === row.toolName);
+}
 
 /** Human-readable, and never the raw tool result — a tool's own error text can
  *  be long and is written for the model. */
@@ -204,7 +227,7 @@ export async function decideProposal(input: {
   }
 
   // 4. The tool itself. A proposal outlives the tool that produced it.
-  const descriptor = DESCRIPTORS_BY_NAME.get(row.toolName);
+  const descriptor = descriptorFor(row);
   if (!descriptor) {
     return await claimAndFinish(supabase, {
       id,

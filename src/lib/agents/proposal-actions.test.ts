@@ -42,6 +42,10 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("next/cache", () => ({
   revalidatePath: (p: string) => revalidatePath(p),
 }));
+// The memory descriptors are REAL here (they are what the lookup must now
+// compose), so their data layer is mocked instead — the approval path must not
+// reach a database.
+vi.mock("./memory-db");
 vi.mock("./proposals-db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./proposals-db")>()),
   getProposalForDecision: (...a: unknown[]) => getProposalForDecision(...a),
@@ -59,6 +63,11 @@ vi.mock("./proposals-db", async (importOriginal) => ({
 vi.mock("./tool-descriptors", () => ({
   descriptorsFor: (args: unknown) => {
     descriptorsForArgs.push(args);
+    // The EXTRAS are passed through rather than dropped: since Spec 2c the
+    // action composes per-run `remember`/`forget` descriptors into `extra`,
+    // and a mock that swallowed them would make "a remember proposal is
+    // approvable" unfalsifiable here.
+    const extra = (args as { extra?: unknown[] } | undefined)?.extra ?? [];
     return [
       {
         name: "create_item",
@@ -69,6 +78,7 @@ vi.mock("./tool-descriptors", () => ({
         scope: "groupId",
         invoke: (...a: unknown[]) => invoke(...a),
       },
+      ...extra,
     ];
   },
 }));
@@ -132,8 +142,10 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ content: [{ type: "text", text: "Item created." }] });
   createClientCalls.length = 0;
-  // `descriptorsForArgs` is NOT cleared: the lookup map is built once, at
-  // module load, which is the property the last test in this file asserts.
+  // `descriptorsForArgs` IS cleared now: since Spec 2c the descriptor list is
+  // composed PER ROW (it closes over the row's agent id), so each test must
+  // assert against its own call rather than a module-load snapshot.
+  descriptorsForArgs.length = 0;
 });
 
 // ── The four cases the brief pins ────────────────────────────────────────────
@@ -398,9 +410,64 @@ describe("decideProposal — two deciders racing on one row", () => {
 // ── The descriptor lookup must span BOTH descriptor sets ─────────────────────
 
 describe("the tool lookup", () => {
-  it("is derived from descriptorsFor with the agent-only descriptors", async () => {
+  it("is derived from descriptorsFor with the agent-only descriptors AND this row's memory tools", async () => {
     const { AGENT_ONLY_DESCRIPTORS } = await import("./agent-only-tools");
-    expect(descriptorsForArgs[0]).toEqual({ extra: AGENT_ONLY_DESCRIPTORS });
+    await decideProposal({ id: PROPOSAL_ID, approve: true });
+    const extra = (descriptorsForArgs.at(-1) as { extra: { name: string }[] })
+      .extra;
+    expect(extra.slice(0, AGENT_ONLY_DESCRIPTORS.length)).toEqual(
+      AGENT_ONLY_DESCRIPTORS,
+    );
+    expect(extra.map((d) => d.name)).toContain("remember");
+    expect(extra.map((d) => d.name)).toContain("forget");
+  });
+
+  // Spec 2c: the memory descriptors close over an AGENT ID, so a module-scope
+  // map cannot hold them. If this were still built once, every `remember`
+  // proposal would resolve to the FIRST agent's descriptors — a cross-agent
+  // memory write on the approval path.
+  it("is rebuilt per row, closed over THAT row's agent id", async () => {
+    getProposalForDecision.mockResolvedValue(
+      proposal({ userAgentId: "agent-A" }),
+    );
+    await decideProposal({ id: PROPOSAL_ID, approve: true });
+    getProposalForDecision.mockResolvedValue(
+      proposal({ userAgentId: "agent-B" }),
+    );
+    await decideProposal({ id: PROPOSAL_ID, approve: true });
+    expect(descriptorsForArgs).toHaveLength(2);
+    expect(descriptorsForArgs[0]).not.toEqual(descriptorsForArgs[1]);
+  });
+
+  // The bug this whole change exists to prevent: with a module-scope map a
+  // `remember` row hits the "Unknown tool" branch and is PERMANENTLY
+  // un-approvable — the owner is told the agent queued something they can
+  // never say yes to.
+  it("a remember proposal is approvable and writes the note for THIS agent", async () => {
+    const { agentRemember } = await import("./memory-db");
+    vi.mocked(agentRemember).mockResolvedValue("written");
+    getProposalForDecision.mockResolvedValue(
+      proposal({
+        userAgentId: "agent-A",
+        capability: "memory.write",
+        toolName: "remember",
+        input: { key: "dana-group", value: "Dana's items live in Ops" },
+        summary: 'Remember this for every future run, as "dana-group": "…"',
+      }),
+    );
+
+    const r = await decideProposal({ id: PROPOSAL_ID, approve: true });
+
+    expect(r.ok).toBe(true);
+    expect(writtenStatus()).toBe("approved");
+    expect(vi.mocked(agentRemember).mock.calls[0]![1]).toMatchObject({
+      userAgentId: "agent-A",
+      key: "dana-group",
+      // NULL, not the proposing run: the note is being written by the OWNER'S
+      // approval. Stamping run-1 would claim a run wrote something it was
+      // actually denied.
+      runId: null,
+    });
   });
 
   it("covers create_file and create_automation, which the catalog does NOT hold", async () => {

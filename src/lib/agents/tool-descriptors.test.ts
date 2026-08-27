@@ -3,6 +3,8 @@ import { z } from "zod";
 import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import { DuplicateToolNameError, descriptorsFor } from "./tool-descriptors";
+import { AGENT_ONLY_DESCRIPTORS } from "./agent-only-tools";
+import { makeMemoryDescriptors } from "./memory-tools";
 
 function probe(
   name: string,
@@ -69,5 +71,43 @@ describe("descriptorsFor", () => {
       extra: [probe("never_offered", { agentExcluded: true })],
     }).map((d) => d.name);
     expect(names).not.toContain("never_offered");
+  });
+});
+
+// ===========================================================================
+// Spec 2c — the PER-RUN memory descriptors.
+// ===========================================================================
+//
+// They are not in `AGENT_ONLY_DESCRIPTORS` because they close over an agent id
+// and a run id, neither of which exists at module scope. That makes them the
+// first extras built at call time, so the two properties every other extra gets
+// for free — correct capability classification, and no collision with the
+// catalog — have to be asserted here explicitly.
+describe("the per-run memory descriptors", () => {
+  it("classifies both under memory.write", () => {
+    // If the gate saw `null` here, `remember` would be an ALWAYS-ON write.
+    const extra = makeMemoryDescriptors({ userAgentId: "a", runId: "r" });
+    const byName = new Map(descriptorsFor({ extra }).map((d) => [d.name, d]));
+    expect(byName.get("remember")?.capability).toBe("memory.write");
+    expect(byName.get("forget")?.capability).toBe("memory.write");
+  });
+
+  it("the memory names do not collide with the catalog or the agent-only tools", () => {
+    expect(() =>
+      descriptorsFor({
+        extra: [
+          ...AGENT_ONLY_DESCRIPTORS,
+          ...makeMemoryDescriptors({ userAgentId: "a", runId: "r" }),
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it("offers both to the agent — neither is agentExcluded", () => {
+    const names = descriptorsFor({
+      extra: makeMemoryDescriptors({ userAgentId: "a", runId: "r" }),
+    }).map((d) => d.name);
+    expect(names).toContain("remember");
+    expect(names).toContain("forget");
   });
 });

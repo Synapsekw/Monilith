@@ -363,6 +363,38 @@ function sentenceFor(
       return `${opening}: on ${trigger}, run ${actionsPhrase(actions)}.${sends}`;
     }
 
+    // Memory proposals are what an UNGRANTED agent's `remember` call becomes,
+    // and they are the first thing an owner ever sees of this feature. The card
+    // must show the note VERBATIM — this is text a model wrote that would enter
+    // the SYSTEM PROMPT on every future run, so a paraphrase would mean
+    // approving something other than what was read. `str()` has already
+    // stripped the quote lookalikes and collapsed the invisible format
+    // characters, which is what stops a verbatim value from authoring sentence
+    // structure of its own.
+    //
+    // THE VALUE GOES LAST, and that is not a style choice. `agent_memory.value`
+    // allows 500 characters and `user_agent_proposals.summary` allows 500 — so
+    // the longest legal note CANNOT fit alongside any frame at all, and
+    // `summariseProposal` will clamp. Putting the value last means the clamp
+    // eats the tail OF THE NOTE, visibly, behind an ellipsis, instead of eating
+    // the clause that tells the owner what approving it does. An owner reading
+    // "…" knows there is more note; an owner reading a truncated explanation
+    // knows nothing. Notes up to ~450 characters — every realistic one — render
+    // whole. `ProposalCard` renders only this sentence, so this is the ONLY
+    // place a not-yet-approved note can be read.
+    case "remember": {
+      const key = str(input, "key");
+      const value = str(input, "value");
+      if (!key || !value) return undefined;
+      return `Remember this for every future run, as "${key}": ${quoted(value)}`;
+    }
+
+    case "forget": {
+      const key = str(input, "key");
+      if (!key) return undefined;
+      return `Forget the note "${key}".`;
+    }
+
     default:
       return undefined;
   }
