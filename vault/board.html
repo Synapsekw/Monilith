@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-27 13:05",
+  "updated": "2026-08-27 13:27",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,9 +134,9 @@
     "stages": [
       {
         "name": "develop",
-        "value": "df6214ee",
-        "tone": "ok",
-        "note": "Level with main — unpromoted delta 0. Squash divergence healed; tree byte-identical, origin/main confirmed an ancestor."
+        "value": "881373bf",
+        "tone": "warn",
+        "note": "Ahead of main by 7 (df6214ee..HEAD), of which 2 are source: the /admin route skeletons. The other 5 are vault/docs. Nothing user-facing — /admin is platform-admin chrome — so this is not urgent to promote."
       },
       {
         "name": "main",
@@ -283,16 +283,15 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-27-1229-carryover-clear-batch-promote-101",
-    "when": "2026-08-27 12:29",
-    "title": "Carryover cleared in four parallel worktrees, then promoted (PR #101)",
+    "id": "2026-08-27-1327-admin-route-skeletons",
+    "when": "2026-08-27 13:27",
+    "title": "Route skeletons for every /admin page",
     "bullets": [
-      "All nine carryover items from the morning's /whats-next are closed or handed back to the owner — the carryover column is empty.",
-      "Four task worktrees built in parallel, merged serially: the a11y trio, ModelPicker describedby, save-time provider health, and a 46-package dependency sweep.",
-      "The dependency sweep caught a production break — Next 16.3 stabilised unstable_instant to instant and silently ignores the old name, so two = false opt-outs stopped applying (gotcha-96).",
-      "Dependabot backlog cleared to zero: 46 packages in one lockfile change, six superseded PRs closed.",
-      "Promoted as PR #101 (33 commits). Two items proved NOT agent-fixable: the /sync-prod permission rules (classifier forbids self-granting) and the PROD storage upload limit (platform setting, read-only MCP).",
-      "PROD storage closed at 42/42 after the owner raised the project-level upload limit; the data phase was deliberately skipped (a one-row delta against a full truncate-and-reload)."
+      "The whole /admin section had never had a single loading.tsx, so every admin route blocked navigation with no skeleton and logged blocking-prerender-dynamic on each load.",
+      "instant = false on admin/layout.tsx opts out the LAYOUT segment, not the pages beneath it (gotcha-97) — what actually clears the validation is loading.tsx, which is gotcha-48s chosen instant-nav mechanism.",
+      "Seven fallbacks shipped; the three list pages share a parameterized AdminListSkeleton, the overview and two detail pages are bespoke.",
+      "Two guards: every (app)/admin page must have a loading.tsx at or above it, and each list fallbacks grid template is pinned to the page it mirrors.",
+      "The build is blind to this class of defect — /admin route markers are byte-identical with and without the skeletons. Verified instead against an authenticated dev server: two routes, 200, zero errors."
     ]
   }
 }

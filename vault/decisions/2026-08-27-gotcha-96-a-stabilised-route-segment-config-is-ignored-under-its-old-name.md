@@ -3,7 +3,9 @@ type: adr
 date: 2026-08-27
 status: accepted
 tags: [decision, gotcha, nextjs, dependencies, build]
-related: ["[[2026-08-27-1229-carryover-clear-batch-promote-101]]"]
+related:
+  - "[[2026-08-27-1229-carryover-clear-batch-promote-101]]"
+  - "[[2026-08-27-gotcha-97-a-layouts-instant-false-does-not-cover-the-pages-beneath-it]]"
 ---
 
 # Gotcha 96 — a stabilised route segment config is ignored under its old name
