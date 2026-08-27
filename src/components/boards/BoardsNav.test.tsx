@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { MeasuringStrategy } from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { DndContextProps, DragEndEvent } from "@dnd-kit/core";
 import type { SharedBoardEntry } from "@/lib/boards/queries";
 import { reorderPosition } from "@/lib/boards/group-reorder";
@@ -74,6 +75,14 @@ vi.mock("@/lib/boards/actions", async (importOriginal) => {
 // then exercised for real, against the real props.
 const dnd = vi.hoisted(() => ({
   props: null as DndContextProps | null,
+  // What every useDraggable / useDroppable in the tree was REGISTERED with.
+  // jsdom gives every node a 0x0 rect, so a keyboard drag cannot be simulated
+  // end to end here — arrow-key collision resolution needs real geometry. These
+  // let the tests assert the WIRING that makes the real thing work (notably the
+  // draggable/droppable pairing `sortableKeyboardCoordinates` requires), rather
+  // than a test that pretends to exercise the behaviour.
+  draggables: [] as { id: string; data?: unknown }[],
+  droppables: [] as { id: string }[],
 }));
 
 vi.mock("@dnd-kit/core", async (importOriginal) => {
@@ -84,6 +93,14 @@ vi.mock("@dnd-kit/core", async (importOriginal) => {
     DndContext: (props: DndContextProps) => {
       dnd.props = props;
       return createElement(actual.DndContext, props);
+    },
+    useDraggable: (args: Parameters<typeof actual.useDraggable>[0]) => {
+      dnd.draggables.push({ id: String(args.id), data: args.data });
+      return actual.useDraggable(args);
+    },
+    useDroppable: (args: Parameters<typeof actual.useDroppable>[0]) => {
+      dnd.droppables.push({ id: String(args.id) });
+      return actual.useDroppable(args);
     },
   };
 });
@@ -101,10 +118,22 @@ function sortableRow(boardId: string): HTMLElement {
   return row;
 }
 
-/** Fire the real handler the mounted DndContext installed. */
-function drop(activeId: string, overId: string | null) {
+/**
+ * Fire the real handler the mounted DndContext installed.
+ *
+ * `activeData` is what the dragged row registered with `useDraggable({ data })`
+ * — for a filed board that is `{ folderId }`, which is how a drop back onto its
+ * OWN folder header is recognised as a no-op. The tests that rely on it also
+ * assert (via `dnd.draggables`) that the row really does register that data, so
+ * this argument cannot drift away from production.
+ */
+function drop(
+  activeId: string,
+  overId: string | null,
+  activeData: Record<string, unknown> = {},
+) {
   dnd.props?.onDragEnd?.({
-    active: { id: activeId },
+    active: { id: activeId, data: { current: activeData } },
     over: overId === null ? null : { id: overId },
   } as unknown as DragEndEvent);
 }
@@ -129,6 +158,8 @@ beforeEach(() => {
   vi.mocked(reorderBoard).mockClear();
   vi.mocked(reorderBoard).mockResolvedValue({ ok: true, data: undefined });
   dnd.props = null;
+  dnd.draggables = [];
+  dnd.droppables = [];
   // Folder open/closed state is the persisted `collapsedSections` map shared
   // with NavSection — reset it so one test's toggle can't leak into the next.
   useUIStore.setState({ collapsedSections: {} });
@@ -620,11 +651,12 @@ describe("BoardsNav folders", () => {
     );
 
     const toggle = screen.getByRole("button", {
-      name: /Collapse Acme Rebrand/i,
+      name: "Acme Rebrand",
+      expanded: true,
     });
     fireEvent.click(toggle);
     expect(
-      screen.getByRole("button", { name: /Expand Acme Rebrand/i }),
+      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
     ).toBeInTheDocument();
     // Collapsing changes no server data, so it must not re-run the page's
     // queries (gotcha-09): client state only, zero round-trips.
@@ -721,6 +753,82 @@ describe("BoardsNav folders", () => {
     expect(
       screen.getByRole("button", { name: "Board actions for Design tasks" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("BoardsNav folder header disclosure", () => {
+  const ownedBoard = {
+    id: "b1",
+    name: "Website revamp",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+
+  function renderWithFolder() {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+  }
+
+  /** Everything inside the folder HEADER that a Tab will land on. */
+  function headerTabStops(): HTMLElement[] {
+    const header = document.querySelector<HTMLElement>("[data-folder-row]");
+    if (!header) throw new Error("No folder header row");
+    return Array.from(
+      header.querySelectorAll<HTMLElement>(
+        'button, a[href], input, [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+  }
+
+  it("has exactly two tab stops — the disclosure and its ⋯ menu", () => {
+    renderWithFolder();
+    // Three today: a chevron button and a name button that do the identical
+    // thing, plus the menu. One control, one stop — the menu is a genuinely
+    // different control and correctly keeps its own.
+    expect(headerTabStops()).toHaveLength(2);
+  });
+
+  it("names the disclosure after the folder and carries its state in aria-expanded", () => {
+    renderWithFolder();
+
+    // The standard disclosure pattern: the accessible name is the thing, the
+    // state is ARIA's job. A screen reader already says "Acme Rebrand, button,
+    // expanded" — a "Collapse Acme Rebrand" label would say it twice.
+    const disclosure = screen.getByRole("button", {
+      name: "Acme Rebrand",
+      expanded: true,
+    });
+    expect(disclosure).toHaveAttribute("aria-controls", "board-folder-f1");
+    expect(disclosure).not.toHaveAttribute("aria-label");
+  });
+
+  it("still toggles when the folder NAME is clicked, not just the chevron", () => {
+    renderWithFolder();
+
+    fireEvent.click(screen.getByText("Acme Rebrand"));
+
+    expect(
+      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
+    ).toBeInTheDocument();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("gives the disclosure a visible focus ring", () => {
+    renderWithFolder();
+    // It is the section's FIRST tab stop for anyone with a folder; neither of
+    // the two buttons it replaces had a focus-visible ring at all.
+    expect(
+      screen.getByRole("button", { name: "Acme Rebrand" }).className,
+    ).toContain("focus-visible:ring-2");
   });
 });
 
@@ -925,7 +1033,7 @@ describe("BoardFolderRow as a drop target", () => {
       </BoardFolderRow>,
     );
     expect(
-      screen.getByRole("button", { name: /Expand Acme Rebrand/i }),
+      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
     ).toBeInTheDocument();
 
     rerender(
@@ -937,10 +1045,55 @@ describe("BoardFolderRow as a drop target", () => {
     // Dropping into a closed folder would hide the board the user just filed,
     // so hovering opens it first.
     expect(
-      screen.getByRole("button", { name: /Collapse Acme Rebrand/i }),
+      screen.getByRole("button", { name: "Acme Rebrand", expanded: true }),
     ).toBeInTheDocument();
     // Opening is client state only — never a re-read of the page's queries.
     expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("expands a collapsed folder on hover WITHOUT writing collapse state", () => {
+    useUIStore.setState({ collapsedSections: { "folder:f1": true } });
+    const noop = () => {};
+    render(
+      <BoardFolderRow folder={folder} count={1} dropRef={noop} isOver>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+
+    // Visually open…
+    expect(
+      screen.getByRole("button", { name: "Acme Rebrand", expanded: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Website revamp")).toBeVisible();
+    // …but the PERSISTED map is untouched. Hover is not a decision the user
+    // made; writing it meant a drag that merely passed over a folder left it
+    // permanently expanded, and fought a concurrent click.
+    expect(useUIStore.getState().collapsedSections["folder:f1"]).toBe(true);
+  });
+
+  it("leaves the folder collapsed when the drag is cancelled", () => {
+    useUIStore.setState({ collapsedSections: { "folder:f1": true } });
+    const noop = () => {};
+    const { rerender } = render(
+      <BoardFolderRow folder={folder} count={1} dropRef={noop} isOver>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+
+    // Escape / drop-outside: isOver goes false with no drop having happened.
+    rerender(
+      <BoardFolderRow folder={folder} count={1} dropRef={noop} isOver={false}>
+        <span>Website revamp</span>
+      </BoardFolderRow>,
+    );
+
+    // Nothing to undo, so no onDragCancel handler is needed — which is the
+    // whole point of making hover purely visual.
+    expect(
+      screen.getByRole("button", { name: "Acme Rebrand", expanded: false }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Website revamp")).not.toBeVisible();
+    expect(useUIStore.getState().collapsedSections["folder:f1"]).toBe(true);
   });
 
   it("marks the header while a board hovers over it", () => {
@@ -1038,6 +1191,48 @@ describe("BoardsNav drag a board onto a folder", () => {
     // the nav must be re-read.
     await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
     expect(reorderBoard).not.toHaveBeenCalled();
+  });
+
+  it("persists a collapsed folder open after a successful drop into it", async () => {
+    useUIStore.setState({ collapsedSections: { "folder:f1": true } });
+    renderNav();
+    await armDragLayer();
+
+    drop("b1", "folder:f1");
+
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    // Hover is visual only, so without this the board the user just filed would
+    // vanish behind a chevron the moment the pointer left. One write, on the
+    // success path — strictly fewer than the old one-per-hover.
+    expect("folder:f1" in useUIStore.getState().collapsedSections).toBe(false);
+  });
+
+  it("leaves an already-open folder open after a drop into it", async () => {
+    // setSection, not toggleSection: toggling here would CLOSE the folder the
+    // user just dropped into, which is the same bug wearing a different hat.
+    renderNav();
+    await armDragLayer();
+
+    drop("b1", "folder:f1");
+
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    expect("folder:f1" in useUIStore.getState().collapsedSections).toBe(false);
+  });
+
+  it("does not persist the folder open when the drop FAILS", async () => {
+    vi.mocked(moveBoardToFolder).mockResolvedValue({
+      ok: false,
+      error: "Nope.",
+    });
+    useUIStore.setState({ collapsedSections: { "folder:f1": true } });
+    renderNav();
+    await armDragLayer();
+
+    drop("b1", "folder:f1");
+
+    await waitFor(() => expect(showMutationError).toHaveBeenCalled());
+    // Nothing was filed, so nothing needs revealing.
+    expect(useUIStore.getState().collapsedSections["folder:f1"]).toBe(true);
   });
 
   it("reorders — and does NOT refresh — when the drop lands on another board (gotcha-44)", async () => {
@@ -1187,12 +1382,14 @@ describe("BoardsNav folder-row focus handoff", () => {
     // Folder rows render FIRST, so for anyone with a folder this chevron is
     // the first focusable thing in Boards. Arming on it must not drop focus,
     // or the very first Tab into the section lands on <body>.
-    screen.getByRole("button", { name: /Collapse Acme Rebrand/i }).focus();
+    screen
+      .getByRole("button", { name: "Acme Rebrand", expanded: true })
+      .focus();
 
     await screen.findByTestId("boards-nav-sortable");
     await waitFor(() =>
       expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: /Collapse Acme Rebrand/i }),
+        screen.getByRole("button", { name: "Acme Rebrand", expanded: true }),
       ),
     );
     expect(document.activeElement).not.toBe(document.body);
@@ -1301,7 +1498,7 @@ describe("BoardsNav dragging a shared board", () => {
     ).toBeInTheDocument();
   });
 
-  it("leaves a shared board that is already filed undraggable", async () => {
+  it("gives a filed shared board the 'to another folder' handle, not the unfiled one", async () => {
     render(
       <TooltipProvider>
         <BoardsNav
@@ -1318,8 +1515,203 @@ describe("BoardsNav dragging a shared board", () => {
     fireEvent.pointerEnter(screen.getByTestId("boards-nav-body"));
     await screen.findByTestId("folder-drop-f1");
 
-    // Rows inside a folder are not drag sources — same rule owned boards follow.
+    // A filed row IS a drag source now, but it cannot be filed "into a folder"
+    // — it is already in one. The two labels are distinct on purpose: the
+    // unfiled handle files, the filed handle moves.
     expect(screen.queryByRole("button", { name: handleName })).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "Move Design tasks to another folder",
+      }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("BoardsNav dragging a board that is already in a folder", () => {
+  // The one user-visible change in this slice. Filed rows were drag TARGETS'
+  // neighbours but never drag SOURCES, so the only way to move a board between
+  // folders was the ⋯ menu.
+  const filedOwned = {
+    id: "b1",
+    name: "Website revamp",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+  const unfiledOwned = {
+    id: "b2",
+    name: "Brand kit",
+    workspace_id: "w1",
+    position: 1,
+    shared_out: false,
+  };
+  const filedShared = {
+    id: "s1",
+    name: "Design tasks",
+    position: 0,
+    owner_name: "Ada",
+    access_level: "editor" as const,
+  };
+  const folders = [
+    { id: "f1", name: "Acme Rebrand", position: 0 },
+    { id: "f2", name: "Archive", position: 1 },
+  ];
+  const placements = [
+    { boardId: "b1", folderId: "f1", position: 0 },
+    { boardId: "s1", folderId: "f1", position: 1 },
+    // f2 needs a visible board or `groupBoardsByFolder` drops it entirely.
+    { boardId: "b3", folderId: "f2", position: 0 },
+  ];
+  const alsoFiled = {
+    id: "b3",
+    name: "Moodboard",
+    workspace_id: "w1",
+    position: 2,
+    shared_out: false,
+  };
+
+  const ownedHandle = "Move Website revamp to another folder";
+  const sharedHandle = "Move Design tasks to another folder";
+
+  function renderNav() {
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[filedOwned, unfiledOwned, alsoFiled]}
+          sharedBoards={[filedShared]}
+          folders={folders}
+          placements={placements}
+        />
+      </TooltipProvider>,
+    );
+  }
+
+  async function armDragLayer() {
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-body"));
+    await screen.findByTestId("folder-drop-f1");
+  }
+
+  it("gives a filed OWNED board a drag handle once the drag layer mounts", async () => {
+    renderNav();
+    expect(screen.queryByRole("button", { name: ownedHandle })).toBeNull();
+
+    await armDragLayer();
+
+    const handle = await screen.findByRole("button", { name: ownedHandle });
+    // Applied by useDraggable's own attributes — fails if the row merely LOOKS
+    // draggable without being registered.
+    expect(handle).toHaveAttribute("aria-roledescription", "draggable");
+    // "Move …", not "Reorder …": a filed row has no within-folder reorder to
+    // persist, so reusing the unfiled row's label would be a fresh lie.
+    expect(
+      screen.queryByRole("button", { name: /^Reorder Website/ }),
+    ).toBeNull();
+  });
+
+  it("gives a filed SHARED board a drag handle too", async () => {
+    renderNav();
+    await armDragLayer();
+
+    expect(
+      await screen.findByRole("button", { name: sharedHandle }),
+    ).toHaveAttribute("aria-roledescription", "draggable");
+  });
+
+  it("registers each filed row as a droppable on the SAME node and id", async () => {
+    renderNav();
+    await armDragLayer();
+
+    // `sortableKeyboardCoordinates` returns undefined when
+    // `droppableContainers.get(active.id)` misses (verified in
+    // @dnd-kit/sortable@10.0.0, sortable.cjs.development.js:738-745). Without
+    // the pairing a keyboard lift on one of these rows picks up and then
+    // refuses to move on every arrow press — a worse lie than the current one.
+    for (const id of ["b1", "s1", "b3"]) {
+      expect(dnd.draggables.map((d) => d.id)).toContain(id);
+      expect(dnd.droppables.map((d) => d.id)).toContain(id);
+    }
+  });
+
+  it("registers the unfiled SHARED row as a droppable too", async () => {
+    renderNav();
+    await armDragLayer();
+
+    // Same pairing requirement, same reason — DraggableSharedRow used to call
+    // useDraggable alone.
+    render(<span />);
+    expect(dnd.droppables.map((d) => d.id)).toContain("s1");
+  });
+
+  it("carries the current folder in the drag data", async () => {
+    renderNav();
+    await armDragLayer();
+
+    // This is what makes the same-folder no-op guard below real, rather than an
+    // artefact of what the test helper happens to pass in.
+    expect(dnd.draggables).toContainEqual({
+      id: "b1",
+      data: { folderId: "f1" },
+    });
+    expect(dnd.draggables).toContainEqual({
+      id: "s1",
+      data: { folderId: "f1" },
+    });
+  });
+
+  it("drags a filed board into another folder and refreshes", async () => {
+    renderNav();
+    await armDragLayer();
+
+    drop("b1", "folder:f2", { folderId: "f1" });
+
+    await waitFor(() =>
+      expect(moveBoardToFolder).toHaveBeenCalledWith({
+        boardId: "b1",
+        folderId: "f2",
+      }),
+    );
+    await waitFor(() => expect(routerRefresh).toHaveBeenCalled());
+    expect(reorderBoard).not.toHaveBeenCalled();
+  });
+
+  it("ignores a drop onto the folder the board is already in", async () => {
+    renderNav();
+    await armDragLayer();
+
+    drop("b1", "folder:f1", { folderId: "f1" });
+
+    // `active.id === over.id` never catches this — the ids are namespaced
+    // differently — and without the guard it is a pointless server write plus a
+    // full router.refresh().
+    expect(moveBoardToFolder).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when a filed board is dropped on an unfiled board", async () => {
+    renderNav();
+    await armDragLayer();
+
+    // Filed → unfiled by DRAG is deliberately not in scope (the ⋯ menu's
+    // "Remove from folder" is the path). The drop simply snaps back: no write,
+    // no toast.
+    drop("b1", "b2", { folderId: "f1" });
+
+    expect(moveBoardToFolder).not.toHaveBeenCalled();
+    expect(reorderBoard).not.toHaveBeenCalled();
+    expect(showMutationError).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it("opts the sidebar into keyboard drag with the sortable coordinate getter", async () => {
+    renderNav();
+    await armDragLayer();
+
+    // jsdom gives every node a 0x0 rect, so arrow-key collision resolution
+    // cannot be simulated here — this asserts the WIRING. The behaviour is
+    // verified in the manual walkthrough.
+    expect(useTouchAwareSensors).toHaveBeenCalledWith({
+      keyboardCoordinateGetter: sortableKeyboardCoordinates,
+    });
   });
 });
 
@@ -1567,6 +1959,95 @@ describe("BoardsNav optimistic reorder survives a re-allocated prop", () => {
     );
 
     expect(renderedRowIds()).toEqual(["b1", "b2"]);
+  });
+});
+
+describe("BoardsNav prunes stale folder collapse state", () => {
+  const ownedBoard = {
+    id: "b1",
+    name: "Website revamp",
+    workspace_id: "w1",
+    position: 0,
+    shared_out: false,
+  };
+
+  it("drops the key of a folder that no longer exists", () => {
+    useUIStore.setState({
+      collapsedSections: { "folder:gone": true, "folder:f1": true },
+    });
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    const map = useUIStore.getState().collapsedSections;
+    expect("folder:gone" in map).toBe(false);
+    expect(map["folder:f1"]).toBe(true);
+  });
+
+  it("keeps the key of a folder that is merely hidden in this workspace", () => {
+    // THE subtle one. `groupBoardsByFolder` DROPS a folder whose boards are all
+    // in another workspace, so it never renders — but it still exists. Pruning
+    // against `grouped.folders` would erase its collapsed state every time the
+    // user switched workspace.
+    useUIStore.setState({ collapsedSections: { "folder:hidden": true } });
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "hidden", name: "Elsewhere", position: 0 }]}
+          // The folder's only board lives in another workspace, so it is not in
+          // `boards` and the fold drops the folder from the rendered tree.
+          placements={[{ boardId: "b-other", folderId: "hidden", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.queryByText("Elsewhere")).not.toBeInTheDocument();
+    expect(useUIStore.getState().collapsedSections["folder:hidden"]).toBe(true);
+  });
+
+  it("does not prune at all when no folder data was supplied", () => {
+    // No `folders` prop means UNKNOWN, not "none". A caller that renders the
+    // nav without folder data (the collapsed rail, a test, a future surface)
+    // must not wipe every folder key in localStorage.
+    useUIStore.setState({ collapsedSections: { "folder:f1": true } });
+    render(
+      <TooltipProvider>
+        <BoardsNav boards={[ownedBoard]} sharedBoards={[]} />
+      </TooltipProvider>,
+    );
+
+    expect(useUIStore.getState().collapsedSections["folder:f1"]).toBe(true);
+  });
+
+  it("leaves non-folder section keys alone", () => {
+    useUIStore.setState({
+      collapsedSections: { boards: true, "folder:gone": true },
+    });
+    render(
+      <TooltipProvider>
+        <BoardsNav
+          boards={[ownedBoard]}
+          sharedBoards={[]}
+          folders={[{ id: "f1", name: "Acme Rebrand", position: 0 }]}
+          placements={[{ boardId: "b1", folderId: "f1", position: 0 }]}
+        />
+      </TooltipProvider>,
+    );
+
+    // `boards` belongs to NavSection, not to any folder.
+    expect(useUIStore.getState().collapsedSections["boards"]).toBe(true);
+    expect("folder:gone" in useUIStore.getState().collapsedSections).toBe(
+      false,
+    );
   });
 });
 
