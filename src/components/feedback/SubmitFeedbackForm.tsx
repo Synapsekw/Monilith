@@ -72,8 +72,15 @@ export function SubmitFeedbackForm({ submit, onDone }: Props) {
         </button>
       </div>
 
-      {/* Title */}
+      {/* Title. `aria-label`, not a visible `<Label>`: this is a 320px popover
+          whose header already reads "Feedback", and the placeholders are full
+          sentences that double as the visible hint. A placeholder is NOT an
+          accessible name though — it is never exposed as one and it disappears
+          the moment you type — so the name is stated explicitly, matching how
+          `admin/user-row-actions.tsx` and the admin user search name their own
+          compact placeholder-carrying inputs. */}
       <Input
+        aria-label="Title"
         placeholder="Title — briefly describe the issue"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
@@ -83,6 +90,7 @@ export function SubmitFeedbackForm({ submit, onDone }: Props) {
 
       {/* Body */}
       <Textarea
+        aria-label="Details"
         placeholder="What happened, or what you'd like to see…"
         value={body}
         onChange={(e) => setBody(e.target.value)}

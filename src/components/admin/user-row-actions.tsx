@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { MoreHorizontal } from "lucide-react";
 import {
   deactivateUserAction,
@@ -27,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useFieldStatus } from "@/components/ui/field-status";
+import { showMutationSuccess } from "@/lib/ui/mutation-toast";
 
 type Result = { ok: boolean; error?: string };
 
@@ -53,6 +55,8 @@ export function UserRowActions({
   const pwStatus = useFieldStatus(error);
   const delStatus = useFieldStatus(error);
 
+  /** For the two DIALOG actions: the dialog is on screen, so its message goes
+   *  to the field it belongs to via `useFieldStatus`. */
   const run = (fn: () => Promise<Result>, onOk?: () => void) =>
     start(async () => {
       setError(null);
@@ -62,6 +66,25 @@ export function UserRowActions({
         onOk?.();
         router.refresh();
       }
+    });
+
+  /** For the three DROPDOWN-ONLY actions. These fire with no dialog mounted, so
+   *  routing their failure through `setError` put it in state that renders
+   *  nowhere — a refused reset/suspend/reactivate looked identical to a
+   *  successful one. There is no field to describe either, so the outcome
+   *  announces as a toast, matching settings/danger-zone.tsx. `okMessage` is
+   *  only for the action whose success is invisible (the reset email);
+   *  suspend/reactivate flip the row's own status cell on `router.refresh()`,
+   *  and that IS the feedback. */
+  const runFromMenu = (fn: () => Promise<Result>, okMessage?: string) =>
+    start(async () => {
+      const r = await fn();
+      if (!r.ok) {
+        toast.error(r.error ?? "Something went wrong.");
+        return;
+      }
+      if (okMessage) showMutationSuccess(okMessage);
+      router.refresh();
     });
 
   return (
@@ -79,7 +102,12 @@ export function UserRowActions({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
-            onSelect={() => run(() => resetUserPasswordAction(userId))}
+            onSelect={() =>
+              runFromMenu(
+                () => resetUserPasswordAction(userId),
+                `Password reset email sent to ${email}.`,
+              )
+            }
           >
             Send password reset email
           </DropdownMenuItem>
@@ -96,13 +124,13 @@ export function UserRowActions({
           <DropdownMenuSeparator />
           {banned ? (
             <DropdownMenuItem
-              onSelect={() => run(() => reactivateUserAction(userId))}
+              onSelect={() => runFromMenu(() => reactivateUserAction(userId))}
             >
               Reactivate
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem
-              onSelect={() => run(() => deactivateUserAction(userId))}
+              onSelect={() => runFromMenu(() => deactivateUserAction(userId))}
             >
               Suspend
             </DropdownMenuItem>

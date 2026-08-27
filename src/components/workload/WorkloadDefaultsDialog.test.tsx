@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkloadDefaultsDialog } from "@/components/workload/WorkloadDefaultsDialog";
 
@@ -65,16 +65,35 @@ describe("WorkloadDefaultsDialog field errors", () => {
     expect(hoursField()).toHaveAttribute("aria-invalid", "true");
   });
 
-  it("puts a per-item message on the per-item field, leaving hours valid", async () => {
+  it("reaches the hours range guard from a real click on Save", async () => {
     renderDialog();
     await open();
 
-    // Submitted directly: `min={0}` means the browser's own constraint
-    // validation refuses a negative value before React's `onSubmit` ever runs,
-    // so a native click can't reach this guard. The guard still has to name
-    // the right field for the day the attribute or the value source changes.
-    fireEvent.change(perItemField(), { target: { value: "-1" } });
-    fireEvent.submit(hoursField().closest("form")!);
+    // The whole point: a plain click. `max={24}` used to make the browser's own
+    // constraint validation refuse the submit before React's `onSubmit` ran, so
+    // this guard could never fire and the user got an unstylable native bubble
+    // with no `aria-describedby` — a guard that cannot fail is a lie.
+    await userEvent.clear(hoursField());
+    await userEvent.type(hoursField(), "30");
+    await save();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Hours per day must be between 0 and 24.");
+    expect(hoursField()).toHaveAccessibleDescription(
+      "Hours per day must be between 0 and 24.",
+    );
+    expect(hoursField()).toHaveAttribute("aria-invalid", "true");
+    expect(perItemField()).not.toHaveAttribute("aria-invalid");
+    expect(setWorkloadDefaults).not.toHaveBeenCalled();
+  });
+
+  it("reaches the per-item range guard from a real click on Save", async () => {
+    renderDialog();
+    await open();
+
+    await userEvent.clear(perItemField());
+    await userEvent.type(perItemField(), "-1");
+    await save();
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Per-item hours must be 0 or more.");
