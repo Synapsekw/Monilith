@@ -7,7 +7,10 @@ import { resolveActiveOrg } from "@/lib/org/active";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { getAdapter } from "@/lib/ai/providers/registry";
-import { getProviderRow } from "@/lib/ai/providers/provider-rows";
+import {
+  getProviderRow,
+  recordProviderVerification,
+} from "@/lib/ai/providers/provider-rows";
 import { getModel } from "@/lib/ai/models/catalog-db";
 import { verifyProviderModels } from "@/lib/ai/models/verify-ids";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
@@ -173,6 +176,27 @@ export async function setOrgByoKey(input: {
   if (!new RegExp(row.keyFormat).test(key))
     return fail(`That doesn't look like a ${row.label} key.`);
 
+  // Same contract as `saveAiKey` (see the long note there): this validate IS a
+  // live probe, success is read off THROW-vs-RESOLVE rather than a fail-closed
+  // return value (gotcha-95), and only SUCCESS is recorded.
+  //
+  // The success-only rule matters even more here. `ai_providers` is a
+  // platform-wide vendor registry with no tenant column, so a `failed` written
+  // from this action would take ONE organisation's credential problem — a
+  // revoked key, a typo, a key pasted into the wrong provider — and render it
+  // as a vendor outage on every other tenant's Settings → AI until the nightly
+  // sweep overwrote it. One tenant must not be able to defame a provider for
+  // everybody else. Do not add the failure branch back; the sweep
+  // (`verifyAllProviders`) is the authority on failures, and the admin who
+  // saved the key still learns it was rejected from the error returned below.
+  //
+  // Recording the SUCCESS does not reopen decision-39. That decision forbids
+  // the nightly sweep from BORROWING an org BYO key — spending one tenant's
+  // secret on a probe nobody in that tenant asked for. Nothing is borrowed
+  // here: the admin has just submitted this key and the validate call already
+  // happens under the organisation's own authority, which is precisely the
+  // direction decision-39 names as the legitimate way to keep an org-keyed
+  // provider fresh. Only the RESULT, previously discarded, is now kept.
   const adapter = getAdapter(row.adapterKind);
   try {
     await adapter.validateKey({ apiKey: key, baseUrl: row.baseUrl });
@@ -180,6 +204,22 @@ export async function setOrgByoKey(input: {
     if (e instanceof ProviderAuthError)
       return fail(`That key was rejected by ${row.label}.`);
     return fail("Couldn't verify the key. Please try again.");
+  }
+
+  // Never allowed to fail the save — same rule, same reason, as `saveAiKey`,
+  // and `error` is null by construction for the same reason too: any string
+  // this layer persists must be authored here, never lifted off a thrown
+  // error, because the column is read by every authenticated user.
+  try {
+    await recordProviderVerification(svc, provider, {
+      status: "ok",
+      error: null,
+    });
+  } catch (e) {
+    console.error(
+      `[ai] could not record org save-time health for "${provider}"`,
+      e,
+    );
   }
 
   const hint = maskKey(key);
