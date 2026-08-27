@@ -293,6 +293,7 @@ export async function runAgentLoop(args: {
         content: composeSystemPrompt({
           preamble: PREAMBLE,
           documentBlock: buildDocumentBlock(args.documents ?? []),
+          memoryBlock: "",
           instructions: args.instructions,
           nonce: args.nonce,
         }),
