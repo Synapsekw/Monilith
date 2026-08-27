@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-27 09:13",
+  "updated": "2026-08-27 12:29",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "6ee1e77e",
-        "tone": "warn",
-        "note": "Ahead of main. Unpromoted: sidebar board folders (14 commits, 2 migrations) — never rendered in a browser — plus this session's announcement commits."
+        "value": "df6214ee",
+        "tone": "ok",
+        "note": "Level with main — unpromoted delta 0. Squash divergence healed; tree byte-identical, origin/main confirmed an ancestor."
       },
       {
         "name": "main",
-        "value": "169c6b56",
+        "value": "55275c40",
         "tone": "ok",
-        "note": "PR #100 merged 2026-08-27 — 25 commits: the a11y propagation sweep, AI provider sweep health, agent-runtime hardening. Squash divergence healed; develop's tree byte-identical before and after."
+        "note": "PR #101 merged 2026-08-27 — 33 commits: sidebar board folders (finally live), the a11y/silent-failure carryover batch, save-time provider health, and a 46-package dependency sweep."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 169c6b56. Verified live, not assumed: Vercel state=success, 200, /settings/ai 307, and all five of the promotion's /updates entries rendering. Sidebar folders are NOT live."
+        "note": "Serving 55275c40. Verified live, not assumed: Vercel state=success, / 200, /login 200. Sidebar folders ARE now live."
       }
     ],
     "gates": [
@@ -167,7 +167,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Four worktrees gated and merged one at a time — the 2026-08-26 lesson that this machine cannot run 4+ concurrent full gates."
+        "note": "Four worktrees gated and merged one at a time. A 3-way concurrent run produced two phantom failures (TimeTrackingCell 5s timeout) that passed 12/12 in isolation — machine load, not a regression."
       },
       {
         "name": "build",
@@ -178,22 +178,14 @@
         "name": "ledger",
         "value": "149/149",
         "tone": "ok",
-        "note": "DEV and PROD both at 149 after the schema push. gotcha-55 fired again on the sweep-health migration (7 of 7)."
+        "note": "149/149, verified by db:ledger-check at the promotion preflight. No migration in this batch."
       }
     ]
   },
   "next": [
     {
-      "title": "Browser-test sidebar folders, then promote",
-      "why": "Nothing on this branch has been rendered. MeasuringStrategy.Always changed dnd measurement for the pre-existing board reorder too, and no test in the repo can distinguish the two strategies — so reorder feel is the largest untestable regression risk on develop.",
-      "tags": [
-        "verify",
-        "promote"
-      ]
-    },
-    {
       "title": "Brainstorm Spec 2c — agent memory",
-      "why": "Owner-chosen, depth before breadth over Spec 3. Sized M+: no memory surface exists in the schema, so it mirrors 2b's shape; the new risk is the write-back path and sharing the same cached system message with documents. It must consume document-budget.ts, not re-derive it.",
+      "why": "Owner-chosen, depth before breadth over Spec 3. Sized M+: no memory surface exists in the schema, so it mirrors 2b's shape; the new risk is the write-back path and sharing the same cached system message with documents. It must consume document-budget.ts, not re-derive it. It must not run in parallel with any other agent-surface slice: it owns the single cached system message and AgentEditor.tsx, and two branches each adding a prompt block merge cleanly into a wrong prompt.",
       "tags": [
         "spec",
         "brainstorm"
@@ -209,7 +201,7 @@
     },
     {
       "title": "E6 Stripe — units B, C, E–H",
-      "why": "The only open AI epic. A and D shipped 2026-08-02, so what remains is the Stripe client, webhook, paywall primitives, /settings/billing and the admin screens. No migration needed — org_billing already carries every column the webhook writes. Its lockfile install must not overlap the dependabot batch.",
+      "why": "The only open AI epic. A and D shipped 2026-08-02, so what remains is the Stripe client, webhook, paywall primitives, /settings/billing and the admin screens. CORRECTION: the long-repeated \"no migration needed\" claim is false — unit F needs a standalone notification_kind enum migration, G/H need is_platform_admin()-gated RPCs that do not exist, and there is no webhook idempotency store. The lockfile is now clean for the stripe install.",
       "tags": [
         "billing"
       ]
@@ -298,14 +290,15 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-27-0913-carryover-batch-promote-100-sync-prod",
-    "when": "2026-08-27 09:13",
-    "title": "Carryover batch, promote #100, and the first full prod sync since July",
+    "id": "2026-08-27-1229-carryover-clear-batch-promote-101",
+    "when": "2026-08-27 12:29",
+    "title": "Carryover cleared in four parallel worktrees, then promoted (PR #101)",
     "bullets": [
-      "Four carryover worktrees built in parallel and merged one at a time: the a11y propagation sweep (44 files, aria-describedby coverage 7 to 44), AI provider sweep health, Spec 2a hardening, and the pickModel precedence question.",
-      "Three of the vault's carryover 'open defects' turned out not to be defects. pickModel's ladder is deliberate and specified; the org-BYO-key gap was a staleness window, not permanent invisibility; per-provider re-verification had already shipped on 2026-08-12.",
-      "The one real defect was invisible from the brief: verifyProviderModels failed closed, returning identical counters for a 401 and a healthy provider — health derived from it would have been a placebo.",
-      "Promoted PR #100 (25 commits) and resynced the PROD database for the first time since 2026-07-17: 27 migrations, full data replace, storage 26 of 42."
+      "All nine carryover items from the morning's /whats-next are closed or handed back to the owner — the carryover column is empty.",
+      "Four task worktrees built in parallel, merged serially: the a11y trio, ModelPicker describedby, save-time provider health, and a 46-package dependency sweep.",
+      "The dependency sweep caught a production break — Next 16.3 stabilised unstable_instant to instant and silently ignores the old name, so two = false opt-outs stopped applying (gotcha-96).",
+      "Dependabot backlog cleared to zero: 46 packages in one lockfile change, six superseded PRs closed.",
+      "Promoted as PR #101 (33 commits). Two items proved NOT agent-fixable: the /sync-prod permission rules (classifier forbids self-granting) and the PROD storage upload limit (platform setting, read-only MCP)."
     ]
   }
 }
