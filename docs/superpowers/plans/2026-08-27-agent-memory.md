@@ -327,11 +327,54 @@ alter table public.org_ai_settings
                                            'automation.create','time.log',
                                            'memory.write']::text[]);
 
--- The one data-modifying statement. See the header.
-update public.org_ai_settings
-   set agent_capability_ceiling = agent_capability_ceiling || 'memory.write'
- where not ('memory.write' = any (agent_capability_ceiling));
+-- THE ONE DATA-MODIFYING STATEMENT — NOT SHIPPED. See the owner ruling below.
+-- It is recorded here, and as a comment in the migration file, so it stays
+-- reviewable in the diff and runnable verbatim later. IT HAS NOT BEEN EXECUTED.
+--
+-- update public.org_ai_settings
+--    set agent_capability_ceiling = agent_capability_ceiling || 'memory.write'
+--  where not ('memory.write' = any (agent_capability_ceiling));
 ```
+
+> **OWNER RULING (2026-08-27): the ceiling backfill is NOT part of this slice.**
+>
+> Open question 1 was decided against shipping the backfill inside the feature
+> branch. The DEV database holds real, live, user-facing data (decision-32), and
+> a data-modifying statement against it is production surgery that is reviewed
+> and run on its own — never as a side effect of merging a feature.
+>
+> The migration therefore contains **DDL only**. It carries the statement as a
+> SQL comment, and the shipped state was verified after applying:
+>
+> ```sql
+> select count(*) filter (where 'memory.write' = any (agent_capability_ceiling)) as with_memory,
+>        count(*) as total
+>   from public.org_ai_settings;
+> -- 2026-08-27, DEV: with_memory = 0, total = 9
+> ```
+>
+> **What that means:** every org that already has an `org_ai_settings` row still
+> carries the literal four-element array, so `makeGrantGate` denies every memory
+> write at the **ceiling** check — which runs _before_ the grant check and
+> records **no proposal**. The feature ships **installable but inert**: the
+> table, the RPC, both tools, the prompt block, the run disclosure and the owner
+> panel are all live and tested, and nothing is reachable until an admin opens
+> the capability.
+>
+> **Two ways to turn it on, whenever the owner chooses:**
+>
+> 1. Per org, through the product: Settings → AI → the agent capability ceiling,
+>    tick **"Remember what it learns"**. This writes the same array through
+>    `settings-actions.ts` under the admin's own RLS, and is the recommended
+>    route — it is auditable and needs no database access.
+> 2. All orgs at once, the statement above, run against DEV through the
+>    `supabase-dev` MCP `execute_sql`. It is additive, idempotent and guarded by
+>    its own `where`. Verify with the `select` above and expect
+>    `with_memory = total`.
+>
+> New orgs are unaffected either way: the migration's
+> `alter column agent_capability_ceiling set default …` (DDL, no existing row
+> touched) and `DEFAULT_ORG_AI_SETTINGS` both already include `memory.write`.
 
 - [ ] **Step 3: Apply to DEV and verify the ledger**
 
@@ -343,9 +386,9 @@ pnpm db:ledger-check
 
 Expected: no drift in either direction. If the ledger row's version drifted from the committed filename, repair with `scripts/reconcile-migration-version.sh` — do not rename the file by hand (gotcha-55).
 
-- [ ] **Step 4: Confirm the backfill actually landed**
+- [ ] **Step 4: Record the ceiling posture (the backfill is NOT run)**
 
-Through the `supabase-dev` MCP `execute_sql`:
+Through the `supabase-dev` MCP `execute_sql` — a READ, to record the state the feature ships in:
 
 ```sql
 select count(*) filter (where 'memory.write' = any (agent_capability_ceiling)) as with_memory,
@@ -353,7 +396,9 @@ select count(*) filter (where 'memory.write' = any (agent_capability_ceiling)) a
   from public.org_ai_settings;
 ```
 
-Expected: `with_memory = total`. A mismatch means the backfill did not run and the feature will ship invisible — stop and fix before continuing.
+Expected under the owner ruling: `with_memory = 0`. That is the intended
+**installable-but-inert** state, not a defect — see the ruling above for the two
+supported ways to turn the feature on later. Do **not** run the `update`.
 
 - [ ] **Step 5: Regenerate types**
 
@@ -2728,7 +2773,7 @@ git commit -m "feat(agents): memory panel, first-paint totals and a memory-aware
 - **Task 3 is the smallest and the most dangerous.** The nonce predicate widening is a one-line change that typechecks perfectly when wrong, and getting it wrong hands an agent's own note an unkeyed instructions delimiter to forge. Give it a careful reviewer, not a fast one.
 - **Task 1 owns type regeneration.** Tasks 4, 5, 6 consume the result. Regenerating in two worktrees is a guaranteed rebase conflict.
 - **Task 1 must budget a migration-version reconcile.** `gotcha-55` has fired on 7 of 7 recent migrations. Types come from the `supabase-dev` MCP + prettier, never `pnpm db:types` (`LegacyProjectNotLinkedError` in a worktree).
-- **Task 1 contains the only data-modifying statement in this plan** (the ceiling backfill) and it runs against the DEV database, which holds real live user data. Step 4 verifies it landed; do not skip it — a missed backfill ships the whole feature invisible.
+- **Task 1's ceiling backfill is NOT SHIPPED** (owner ruling, 2026-08-27). The migration is DDL only, so the plan contains no data-modifying statement at all. Step 4 is now a READ that records the inert posture. The feature ships installable-but-inert by design; see the ruling under Task 1 Step 2.
 - Tasks 3 and 6 both touch `run-loop.test.ts`. Task 3 only adds `memoryBlock: ""` to existing `composeSystemPrompt` call sites there; Task 6 appends new cases. Run them in different waves (they already are) and rebase Task 6 on Task 3's commit.
 
 ## Performance & data-fetching budget (working agreement #5)
@@ -2750,4 +2795,4 @@ git commit -m "feat(agents): memory panel, first-paint totals and a memory-aware
 
 **Cache safety.** Task 3's byte-identity test pins that an agent with neither documents nor memory produces a system message identical to the pre-2c build. Without it, this feature would silently invalidate the Anthropic prompt cache for the entire existing fleet — a cost regression no other test in the suite would catch. Task 2's `selectMemory` key-order test pins the second half of the same guarantee.
 
-**The two failure modes that typecheck.** Stated here because a reviewer skimming will not find them otherwise: (a) Task 3's nonce predicate left as `hasDocumentBlock` — an agent with memory and no documents then gets an unkeyed, forgeable instructions delimiter above model-written text; (b) Task 1's ceiling backfill skipped — every memory write is denied by the org clamp, no proposal is recorded, and the feature ships completely invisible. Both have a dedicated verification step (Task 3 Step 1's third test; Task 1 Step 4).
+**The two failure modes that typecheck.** Stated here because a reviewer skimming will not find them otherwise: (a) Task 3's nonce predicate left as `hasDocumentBlock` — an agent with memory and no documents then gets an unkeyed, forgeable instructions delimiter above model-written text; (b) Task 1's ceiling backfill skipped — every memory write is denied by the org clamp, no proposal is recorded, and the feature is completely invisible. (a) is guarded by a mutation-tested unit test (Task 3 Step 1's third test). (b) is now the DELIBERATE shipped state under the owner's ruling, recorded at Task 1 Step 4 rather than treated as a defect — the feature is installable but inert until an admin opens the ceiling.
