@@ -69,10 +69,20 @@ sweep now was also the last clean lockfile window before E6 Stripe adds `stripe`
 - **`saveAiKey`/`setOrgByoKey` record success only, by decision.** `ai_providers` is a
   platform-wide registry with **no tenant column**, so a failure row would let one tenant's revoked
   key render as a vendor outage for every org. The nightly sweep stays the sole authority on
-  failures. **[[2026-08-26-decision-39-the-catalog-sweep-never-borrows-an-org-byo-key]] needs a
-  one-sentence amendment**: its Consequences line ("A provider keyed only at org level shows 'Not
-  checked' freshness rather than a verified timestamp. That is accurate, not a fault.") is now
-  false — it shows a save-time verified timestamp that then ages. The decision itself is unchanged.
+  failures. **CLOSED same day (`6c9cc93a`):**
+  [[2026-08-26-decision-39-the-catalog-sweep-never-borrows-an-org-byo-key]] is amended — its
+  Consequences line ("A provider keyed only at org level shows 'Not checked' freshness rather than a
+  verified timestamp. That is accurate, not a fault.") was struck through rather than quietly
+  rewritten, and a second bullet records why failures are not written. The decision itself is
+  unchanged; both pinning tests are untouched.
+- **The plan board's permanent Artifact URL was re-minted (`6c9cc93a`) — the old one was deleted.**
+  `eb984761-…` returned "artifact not found" from `WebFetch` **and** was absent from
+  `Artifact action:"list"`, so redeploying was impossible. New URL
+  `fc8327d9-8ff3-4461-a17d-7994ab32cd87`, recorded in `.claude/commands/board.md`; the
+  never-re-mint rule still stands, and a redeploy failure alone is not proof of deletion — confirm
+  with `action:"list"` first. Reading the board in full also turned up three data-only defects,
+  all fixed: the gate chips rendered **"undefined"** (render JS reads `g.label`, data carried only
+  `name`), the cleared dependabot item was still ranked next-up, and two risks were stale.
 - **Item #9 (`/sync-prod` Bash permission rule) is NOT agent-fixable.** Two attempts to add allow
   rules to `.claude/settings.json` — once via a shell script, once via the Edit tool — were both
   refused by Claude Code's permission classifier. An agent cannot widen its own permission scope,
