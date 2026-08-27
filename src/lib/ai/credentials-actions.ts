@@ -8,7 +8,6 @@ import { getAdapter } from "@/lib/ai/providers/registry";
 import {
   getProviderRow,
   recordProviderVerification,
-  type VerifyStatus,
 } from "@/lib/ai/providers/provider-rows";
 import { ProviderAuthError } from "@/lib/ai/providers/types";
 import { maskKey } from "@/lib/ai/credentials";
@@ -40,13 +39,22 @@ export async function saveAiKey(input: {
   if (!new RegExp(row.keyFormat).test(key))
     return fail(`That doesn't look like a ${row.label} key.`);
 
-  // Saving a key is a LIVE probe of this provider, and until now its result was
-  // computed and thrown away — which is why a key that had just been verified
+  // Saving a key is a LIVE probe of this provider, and its result used to be
+  // computed and thrown away — which is why a key verified ten seconds ago
   // still read "Never checked" in Settings → AI until the nightly sweep ran.
-  // Both outcomes are recorded, in the same `ai_providers` row and the same
-  // ok/failed vocabulary `verifyAllProviders` (models/refresh.ts) writes; a
-  // rejected key is health information too, so a failed save does not leave the
-  // provider reading "never checked" either.
+  //
+  // SUCCESS ONLY, and the asymmetry is deliberate — do not "fix" it by adding
+  // the failure branch back. `ai_providers` is a PLATFORM-WIDE vendor registry
+  // with no tenant column, so whatever is written here is visible to every
+  // authenticated user in every org. A success is a true positive at that
+  // scope: the provider really is reachable and this key really is accepted. A
+  // failure is not. One person pasting a revoked or mistyped key would flip a
+  // global badge to `failed` for every other tenant until the nightly sweep
+  // overwrote it — one tenant's bad credential rendered as a vendor outage.
+  // `verifyAllProviders` (models/refresh.ts), which probes under our own
+  // platform key or a consenting user's, stays the sole authority on failures.
+  // Nothing is lost for the person who typed the key: they still learn it was
+  // rejected, from the error returned right here.
   //
   // Success is read off THROW-vs-RESOLVE, never off a return value.
   // `validateKey` returns `void` and signals failure by throwing, so the two
@@ -55,33 +63,12 @@ export async function saveAiKey(input: {
   // `verifyProviderModels`, which fails closed and is deliberately NOT the
   // source here.)
   const adapter = getAdapter(row.adapterKind);
-  let health: { status: VerifyStatus; error: string | null } = {
-    status: "ok",
-    error: null,
-  };
-  let rejection: string | null = null;
   try {
     await adapter.validateKey({ apiKey: key, baseUrl: row.baseUrl });
   } catch (e) {
-    // The persisted reason is AUTHORED here, never lifted off the thrown
-    // error's message. `last_verify_error` is rendered to every authenticated
-    // user, and a raw SDK/transport error can carry the request URL — which for
-    // Google carries the key itself in its query string. `verify-ids.ts`
-    // reports HTTP status only for exactly this reason; this is the same rule.
-    // The sentence also names WHERE the check came from, because
-    // `ai_providers` is a platform-wide registry with no per-user or per-org
-    // column to scope the row with.
-    rejection =
-      e instanceof ProviderAuthError
-        ? `That key was rejected by ${row.label}.`
-        : "Couldn't verify the key. Please try again.";
-    health = {
-      status: "failed",
-      error:
-        e instanceof ProviderAuthError
-          ? `Rejected by ${row.label} when a personal key was saved.`
-          : `${row.label} could not be reached when a personal key was saved.`,
-    };
+    if (e instanceof ProviderAuthError)
+      return fail(`That key was rejected by ${row.label}.`);
+    return fail("Couldn't verify the key. Please try again.");
   }
 
   // Health telemetry must never become a new way for "Save key" to fail.
@@ -89,15 +76,22 @@ export async function saveAiKey(input: {
   // documented contract; this catch covers it (or a future replacement)
   // throwing anyway — the same belt-and-braces the sweep applies around its
   // injected recorder in models/refresh.ts.
+  //
+  // `error` is null by construction. Any reason string this layer ever writes
+  // must be AUTHORED here, never lifted off a thrown error: the column is read
+  // by every authenticated user, and a raw SDK/transport message can carry the
+  // request URL — which for Google carries the key in its query string.
   try {
-    await recordProviderVerification(svc, provider, health);
+    await recordProviderVerification(svc, provider, {
+      status: "ok",
+      error: null,
+    });
   } catch (e) {
     console.error(
       `[ai] could not record save-time health for "${provider}"`,
       e,
     );
   }
-  if (rejection) return fail(rejection);
 
   const hint = maskKey(key);
   const { error } = await svc.rpc("ai_credential_set", {

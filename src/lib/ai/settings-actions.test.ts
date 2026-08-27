@@ -295,6 +295,35 @@ vi.mock("@/lib/ai/models/verify-ids", () => ({
   verifyProviderModels: (...a: unknown[]) => verifyProviderModels(...a),
 }));
 
+/**
+ * PARTIAL mock of the provider-rows seam. Everything real is kept — including
+ * `getProviderRow` and `recordProviderVerification` itself, so the recording
+ * fake above still observes the genuine UPDATE payload and predicate set.
+ *
+ * The one thing it adds is a way to make the recorder BREAK its never-throws
+ * contract. That contract is why the helper cannot be made to throw from the
+ * client side (it catches around `client.from(...).update(...)` inclusive), and
+ * therefore why `setOrgByoKey`'s own belt-and-braces catch is unreachable
+ * through the fake alone: without this override, deleting that try/catch left
+ * the whole suite green. A guard no test can fail is not a guard.
+ */
+const { recordHealthOverride } = vi.hoisted(() => ({
+  recordHealthOverride: { fn: null as null | (() => Promise<void>) },
+}));
+vi.mock("@/lib/ai/providers/provider-rows", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@/lib/ai/providers/provider-rows")>();
+  return {
+    ...actual,
+    recordProviderVerification: (
+      ...args: Parameters<typeof actual.recordProviderVerification>
+    ) =>
+      recordHealthOverride.fn
+        ? recordHealthOverride.fn()
+        : actual.recordProviderVerification(...args),
+  };
+});
+
 // Mocked at the module boundary rather than through rlsRpc: readOrgBillingStatus
 // goes through the same RLS client as has_org_role, so sharing that mock would
 // make the admin check and the billing read indistinguishable.
@@ -346,6 +375,7 @@ beforeEach(() => {
   providerUpdates.length = 0;
   providerUpdateError = null;
   providerUpdateThrows = false;
+  recordHealthOverride.fn = null;
   models = {
     "anthropic/claude-sonnet-5": modelFixture("anthropic", "claude-sonnet-5"),
     "mistral/mistral-small-latest": modelFixture(
@@ -652,6 +682,11 @@ describe("setOrgByoKey — id verification", () => {
  * org-BYO-only provider is never (decision-39: the sweep reads personal
  * credentials only). Nothing is borrowed here; only the result of a check the
  * admin themselves triggered is kept.
+ *
+ * SUCCESS ONLY. `ai_providers` has no tenant column, so a `failed` written
+ * from this action would publish ONE organisation's credential problem as a
+ * vendor outage to every other tenant. The tests below pin both halves: the
+ * `ok` patch and its predicate, and silence on every failure path.
  */
 describe("setOrgByoKey — save-time provider health", () => {
   const saveMistral = async (key = "sk-mistral-valid-key") => {
@@ -681,44 +716,42 @@ describe("setOrgByoKey — save-time provider health", () => {
     expect(write.patch.last_verify_attempt_at).toEqual(expect.any(String));
     // The bystander provider must be untouched.
     expect(providers.anthropic.last_verify_status).toBeUndefined();
+    // No key material, ever, in a row every authenticated user can read.
+    expect(JSON.stringify(write.patch)).not.toContain("valid-key");
   });
 
-  it("stamps `failed` when the provider rejects the org key, without moving the success stamp", async () => {
+  it("writes NO health row when the provider rejects the org key", async () => {
+    // The admin still learns the key was rejected. Every other tenant's badge
+    // is left exactly as it was — one org's bad credential is not a vendor
+    // outage, and the nightly sweep remains the authority on failures.
     const { ProviderAuthError } = await import("@/lib/ai/providers/types");
     validateKey.mockRejectedValue(new ProviderAuthError("mistral"));
 
     const res = await saveMistral();
-    expect(res.ok).toBe(false);
 
-    const write = soleProviderUpdate();
-    expect(write.predicates).toEqual([{ column: "id", value: "mistral" }]);
-    expect(write.patch.last_verify_status).toBe("failed");
-    expect(write.patch.last_verify_error).toBe(
-      "Rejected by mistral when the organization key was saved.",
-    );
-    // `last_verified_at` is the LAST SUCCESS. A failure that advanced it would
-    // erase the "verified a week ago, failing since" interval the four columns
-    // exist to express.
-    expect(write.patch).not.toHaveProperty("last_verified_at");
-    expect(write.patch.last_verify_attempt_at).toEqual(expect.any(String));
-    // Nothing was stored, and the recorded reason names the ORG save — the
-    // only provenance this platform-wide row can carry.
+    expect(res).toEqual({
+      ok: false,
+      error: "That key was rejected by mistral.",
+    });
+    expect(providerUpdates).toHaveLength(0);
+    expect(providers.mistral.last_verify_status).toBeUndefined();
+    expect(providers.mistral.last_verify_attempt_at).toBeUndefined();
     expect(svcRpc).not.toHaveBeenCalled();
   });
 
-  it("persists an authored reason rather than the thrown error's message or the key", async () => {
+  it("writes NO health row when the provider could not be reached", async () => {
     validateKey.mockRejectedValue(
       new Error("connect ECONNREFUSED https://api.mistral.ai?key=sekrit"),
     );
-    const res = await saveMistral("sk-mistral-supersecret");
-    expect(res.ok).toBe(false);
 
-    const write = soleProviderUpdate();
-    expect(write.patch.last_verify_error).toBe(
-      "mistral could not be reached when the organization key was saved.",
-    );
-    expect(JSON.stringify(write.patch)).not.toContain("sekrit");
-    expect(JSON.stringify(write.patch)).not.toContain("supersecret");
+    const res = await saveMistral("sk-mistral-supersecret");
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Couldn't verify the key. Please try again.",
+    });
+    expect(providerUpdates).toHaveLength(0);
+    expect(providers.mistral.last_verify_status).toBeUndefined();
   });
 
   it("writes no health row when the key never reached the provider", async () => {
@@ -746,7 +779,9 @@ describe("setOrgByoKey — save-time provider health", () => {
     );
   });
 
-  it("still saves the key when the health write throws outright", async () => {
+  it("still saves the key when the registry query builder throws outright", async () => {
+    // Absorbed one layer down, by `recordProviderVerification`'s never-throws
+    // contract — this asserts the contract holds end-to-end through the action.
     validateKey.mockResolvedValue(undefined);
     providerUpdateThrows = true;
     const res = await saveMistral();
@@ -754,6 +789,22 @@ describe("setOrgByoKey — save-time provider health", () => {
     expect(svcRpc).toHaveBeenCalledWith(
       "org_ai_secret_set",
       expect.objectContaining({ p_provider: "mistral" }),
+    );
+  });
+
+  it("still saves the key when the recorder itself breaks its never-throws contract", async () => {
+    // The belt-and-braces case: telemetry must not be able to fail a save even
+    // if a future recorder stops swallowing. This is the ONLY test that reaches
+    // `setOrgByoKey`'s own try/catch — deleting that catch turns it red.
+    validateKey.mockResolvedValue(undefined);
+    recordHealthOverride.fn = async () => {
+      throw new Error("registry unavailable");
+    };
+    const res = await saveMistral();
+    expect(res.ok).toBe(true);
+    expect(svcRpc).toHaveBeenCalledWith(
+      "org_ai_secret_set",
+      expect.objectContaining({ p_org: "org-1", p_provider: "mistral" }),
     );
   });
 });

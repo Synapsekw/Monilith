@@ -262,10 +262,16 @@ describe("saveAiKey", () => {
  * this provider has. It used to be discarded, so a key added ten seconds ago
  * still read "Never checked" in Settings → AI until the nightly sweep ran.
  *
- * Every assertion below is on the ARGUMENTS, not on call counts: the provider
- * the row is written for, the status, and the persisted reason. A fake that
+ * SUCCESS ONLY. `ai_providers` is a platform-wide vendor registry with no
+ * tenant column, so a `failed` written from here would let one person's
+ * revoked or mistyped key render as a vendor outage for every other tenant.
+ * These tests pin the asymmetry from both sides: the success write happens,
+ * and no failure path writes anything at all.
+ *
+ * Every assertion is on the ARGUMENTS, not on call counts alone: which
+ * provider the row is written for, the status, and the reason. A fake that
  * asserted only `toHaveBeenCalled()` would stay green with the provider id
- * swapped or `ok` and `failed` transposed.
+ * swapped or `ok` and `failed` transposed (gotcha-89).
  */
 describe("saveAiKey — save-time provider health", () => {
   it("records an `ok` health row for the provider that was actually verified", async () => {
@@ -297,9 +303,9 @@ describe("saveAiKey — save-time provider health", () => {
     );
   });
 
-  it("records `failed` — not `ok`, and not nothing — when the provider rejects the key", async () => {
-    // Requirement in its own right: a key that failed verification must not go
-    // on reading "Never checked" either.
+  it("records NOTHING when the provider rejects the key, but still tells the caller", async () => {
+    // The person who typed the key learns it was rejected. Every OTHER tenant
+    // is left alone: one bad credential must not defame the provider globally.
     getProviderRow.mockResolvedValueOnce(anthropicRow());
     validateKey.mockRejectedValueOnce(new ProviderAuthError("anthropic"));
 
@@ -309,24 +315,15 @@ describe("saveAiKey — save-time provider health", () => {
     });
 
     expect(res.ok).toBe(false);
-    expect(recordProviderVerification).toHaveBeenCalledTimes(1);
-    const [, provider, outcome] = recordProviderVerification.mock.calls[0] as [
-      unknown,
-      string,
-      { status: string; error: string | null },
-    ];
-    expect(provider).toBe("anthropic");
-    expect(outcome.status).toBe("failed");
-    expect(outcome.error).toBe(
-      "Rejected by Anthropic (Claude) when a personal key was saved.",
-    );
+    if (!res.ok)
+      expect(res.error).toBe("That key was rejected by Anthropic (Claude).");
+    expect(recordProviderVerification).not.toHaveBeenCalled();
   });
 
-  it("persists an AUTHORED reason, never the thrown error's own message", async () => {
-    // `last_verify_error` is readable by every authenticated user, and a raw
-    // transport error can carry the request URL — which for Google carries the
-    // key in its query string. verify-ids.ts reports HTTP status only for the
-    // same reason.
+  it("records NOTHING when the provider could not be reached at all", async () => {
+    // A transport failure is even less of a global signal than a 401 — it can
+    // be this one user's network. The nightly sweep, which probes under our
+    // own platform key, stays the authority on provider failures.
     getProviderRow.mockResolvedValueOnce(anthropicRow());
     validateKey.mockRejectedValueOnce(
       new Error("connect ECONNREFUSED https://api.anthropic.com?key=sekrit"),
@@ -338,20 +335,15 @@ describe("saveAiKey — save-time provider health", () => {
     });
 
     expect(res.ok).toBe(false);
-    const [, , outcome] = recordProviderVerification.mock.calls[0] as [
-      unknown,
-      string,
-      { status: string; error: string | null },
-    ];
-    expect(outcome.status).toBe("failed");
-    expect(outcome.error).toBe(
-      "Anthropic (Claude) could not be reached when a personal key was saved.",
-    );
-    expect(outcome.error).not.toContain("sekrit");
-    expect(outcome.error).not.toContain("ECONNREFUSED");
+    if (!res.ok)
+      expect(res.error).toBe("Couldn't verify the key. Please try again.");
+    expect(recordProviderVerification).not.toHaveBeenCalled();
   });
 
-  it("never records the key itself in the health row", async () => {
+  it("never records the key, or any lifted error text, in the health row", async () => {
+    // `last_verify_error` is read by every authenticated user, and a raw
+    // SDK/transport message can carry the request URL — which for Google
+    // carries the key in its query string. Nothing but `null` is written here.
     getProviderRow.mockResolvedValueOnce(anthropicRow());
     validateKey.mockResolvedValueOnce(undefined);
     rpc.mockResolvedValueOnce({ error: null });
@@ -359,8 +351,9 @@ describe("saveAiKey — save-time provider health", () => {
     const [, , outcome] = recordProviderVerification.mock.calls[0] as [
       unknown,
       string,
-      unknown,
+      { status: string; error: string | null },
     ];
+    expect(outcome.error).toBeNull();
     expect(JSON.stringify(outcome)).not.toContain("abcdefAB12");
   });
 
@@ -400,12 +393,13 @@ describe("saveAiKey — save-time provider health", () => {
     );
   });
 
-  it("still reports the rejection when the health write throws on the failure path", async () => {
+  it("records the successful probe even when the key then fails to store", async () => {
+    // The health row is a statement about the PROVIDER, not about the save.
+    // The probe genuinely succeeded; a vault outage afterwards does not
+    // un-verify it.
     getProviderRow.mockResolvedValueOnce(anthropicRow());
-    validateKey.mockRejectedValueOnce(new ProviderAuthError("anthropic"));
-    recordProviderVerification.mockRejectedValueOnce(
-      new Error("registry down"),
-    );
+    validateKey.mockResolvedValueOnce(undefined);
+    rpc.mockResolvedValueOnce({ error: { message: "vault down" } });
 
     const res = await saveAiKey({
       provider: "anthropic",
@@ -413,7 +407,11 @@ describe("saveAiKey — save-time provider health", () => {
     });
 
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/rejected/i);
+    expect(recordProviderVerification).toHaveBeenCalledWith(
+      expect.anything(),
+      "anthropic",
+      { status: "ok", error: null },
+    );
   });
 });
 
