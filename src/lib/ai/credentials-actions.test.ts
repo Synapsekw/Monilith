@@ -30,8 +30,15 @@ vi.mock("next/server", async (importActual) => {
 // hardcoded enum — getProviderRow is the seam credentials-actions reads it
 // through.
 const getProviderRow = vi.fn();
+// The save-time health write goes through the SAME access seam. Mocked here so
+// the exact arguments — which provider row, which status, which persisted
+// reason — are assertable; a fake that only counted calls could not fail on the
+// wrong provider or a status inverted between ok and failed (gotcha-89).
+const recordProviderVerification = vi.fn();
 vi.mock("@/lib/ai/providers/provider-rows", () => ({
   getProviderRow: (...a: unknown[]) => getProviderRow(...a),
+  recordProviderVerification: (...a: unknown[]) =>
+    recordProviderVerification(...a),
 }));
 
 // The adapter no longer carries the key format — that is per-PROVIDER
@@ -74,6 +81,8 @@ beforeEach(() => {
   getProviderRow.mockReset();
   verifyProviderModels.mockReset();
   verifyProviderModels.mockResolvedValue({ verified: 0, unverified: 0 });
+  recordProviderVerification.mockReset();
+  recordProviderVerification.mockResolvedValue(undefined);
   afterTasks.length = 0;
 });
 
@@ -245,6 +254,166 @@ describe("saveAiKey", () => {
     });
     expect(res.ok).toBe(true);
     await expect(afterTasks[0]()).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * A key is VERIFIED on save — that live probe is the freshest health signal
+ * this provider has. It used to be discarded, so a key added ten seconds ago
+ * still read "Never checked" in Settings → AI until the nightly sweep ran.
+ *
+ * Every assertion below is on the ARGUMENTS, not on call counts: the provider
+ * the row is written for, the status, and the persisted reason. A fake that
+ * asserted only `toHaveBeenCalled()` would stay green with the provider id
+ * swapped or `ok` and `failed` transposed.
+ */
+describe("saveAiKey — save-time provider health", () => {
+  it("records an `ok` health row for the provider that was actually verified", async () => {
+    getProviderRow.mockResolvedValueOnce(
+      anthropicRow({
+        id: "moonshotai",
+        label: "Moonshot AI (Kimi)",
+        adapterKind: "openai-compatible",
+        baseUrl: "https://api.moonshot.ai/v1",
+        keyFormat: "^sk-",
+      }),
+    );
+    validateKey.mockResolvedValueOnce(undefined);
+    rpc.mockResolvedValueOnce({ error: null });
+
+    const res = await saveAiKey({
+      provider: "moonshotai",
+      key: "sk-kimi-abcdefgh12",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(recordProviderVerification).toHaveBeenCalledTimes(1);
+    // The provider id is the whole scope `ai_providers` has — writing the row
+    // for anything else would stamp a provider this save never touched.
+    expect(recordProviderVerification).toHaveBeenCalledWith(
+      expect.anything(),
+      "moonshotai",
+      { status: "ok", error: null },
+    );
+  });
+
+  it("records `failed` — not `ok`, and not nothing — when the provider rejects the key", async () => {
+    // Requirement in its own right: a key that failed verification must not go
+    // on reading "Never checked" either.
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockRejectedValueOnce(new ProviderAuthError("anthropic"));
+
+    const res = await saveAiKey({
+      provider: "anthropic",
+      key: "sk-ant-abcdefAB12",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(recordProviderVerification).toHaveBeenCalledTimes(1);
+    const [, provider, outcome] = recordProviderVerification.mock.calls[0] as [
+      unknown,
+      string,
+      { status: string; error: string | null },
+    ];
+    expect(provider).toBe("anthropic");
+    expect(outcome.status).toBe("failed");
+    expect(outcome.error).toBe(
+      "Rejected by Anthropic (Claude) when a personal key was saved.",
+    );
+  });
+
+  it("persists an AUTHORED reason, never the thrown error's own message", async () => {
+    // `last_verify_error` is readable by every authenticated user, and a raw
+    // transport error can carry the request URL — which for Google carries the
+    // key in its query string. verify-ids.ts reports HTTP status only for the
+    // same reason.
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockRejectedValueOnce(
+      new Error("connect ECONNREFUSED https://api.anthropic.com?key=sekrit"),
+    );
+
+    const res = await saveAiKey({
+      provider: "anthropic",
+      key: "sk-ant-abcdefAB12",
+    });
+
+    expect(res.ok).toBe(false);
+    const [, , outcome] = recordProviderVerification.mock.calls[0] as [
+      unknown,
+      string,
+      { status: string; error: string | null },
+    ];
+    expect(outcome.status).toBe("failed");
+    expect(outcome.error).toBe(
+      "Anthropic (Claude) could not be reached when a personal key was saved.",
+    );
+    expect(outcome.error).not.toContain("sekrit");
+    expect(outcome.error).not.toContain("ECONNREFUSED");
+  });
+
+  it("never records the key itself in the health row", async () => {
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockResolvedValueOnce(undefined);
+    rpc.mockResolvedValueOnce({ error: null });
+    await saveAiKey({ provider: "anthropic", key: "sk-ant-abcdefAB12" });
+    const [, , outcome] = recordProviderVerification.mock.calls[0] as [
+      unknown,
+      string,
+      unknown,
+    ];
+    expect(JSON.stringify(outcome)).not.toContain("abcdefAB12");
+  });
+
+  it("writes no health row at all when nothing was probed", async () => {
+    // A shape rejection never reaches the provider, so there is no outcome to
+    // report — recording one would invent a probe that did not happen.
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    const res = await saveAiKey({
+      provider: "anthropic",
+      key: "wrong-prefix-key",
+    });
+    expect(res.ok).toBe(false);
+    expect(validateKey).not.toHaveBeenCalled();
+    expect(recordProviderVerification).not.toHaveBeenCalled();
+  });
+
+  it("still saves the key when the health write throws", async () => {
+    // Telemetry must never turn a working save into a failed one. The real
+    // recorder swallows its own write errors by contract; this covers it (or a
+    // replacement) breaking that contract.
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockResolvedValueOnce(undefined);
+    rpc.mockResolvedValueOnce({ error: null });
+    recordProviderVerification.mockRejectedValueOnce(
+      new Error("registry down"),
+    );
+
+    const res = await saveAiKey({
+      provider: "anthropic",
+      key: "sk-ant-abcdefAB12",
+    });
+
+    expect(res.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith(
+      "ai_credential_set",
+      expect.objectContaining({ p_provider: "anthropic" }),
+    );
+  });
+
+  it("still reports the rejection when the health write throws on the failure path", async () => {
+    getProviderRow.mockResolvedValueOnce(anthropicRow());
+    validateKey.mockRejectedValueOnce(new ProviderAuthError("anthropic"));
+    recordProviderVerification.mockRejectedValueOnce(
+      new Error("registry down"),
+    );
+
+    const res = await saveAiKey({
+      provider: "anthropic",
+      key: "sk-ant-abcdefAB12",
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/rejected/i);
   });
 });
 

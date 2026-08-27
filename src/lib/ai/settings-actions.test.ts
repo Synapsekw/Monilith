@@ -137,6 +137,78 @@ const providerFixture = (
   enabled,
 });
 
+/**
+ * `ai_providers` health writes, as a recording-and-APPLYING fake — the same
+ * shape, and the same reasoning, as the `org_ai_settings` fake above.
+ *
+ * `recordProviderVerification` is NOT module-mocked here: the real one runs
+ * against this fake, so what a test asserts is the actual UPDATE payload and
+ * the actual predicate set. That matters twice over. `.eq("id", provider)` is
+ * the only thing narrowing a save-time health write to ONE provider — the
+ * table is a platform-wide registry with no per-user or per-org column — so a
+ * lost predicate must show up as a write that stamped every seeded provider,
+ * not as a silently green call count. And `last_verified_at` must appear on an
+ * `ok` and be absent on a `failed`, which is a claim about the patch itself.
+ */
+type RecordedProviderUpdate = {
+  patch: Record<string, unknown>;
+  predicates: Predicate[];
+  /** Which seeded provider ids the recorded predicates actually matched. */
+  matched: string[];
+};
+const providerUpdates: RecordedProviderUpdate[] = [];
+let providerUpdateError: { message: string } | null = null;
+let providerUpdateThrows = false;
+
+function makeProviderUpdate(patch: Record<string, unknown>) {
+  // A synchronous throw from the query builder, so the "telemetry can never
+  // fail the save" claim is exercised at its harshest.
+  if (providerUpdateThrows) throw new Error("registry unavailable");
+  const predicates: Predicate[] = [];
+  let recorded = false;
+
+  const settle = (): { error: { message: string } | null } => {
+    const matched = Object.values(providers).filter((r) =>
+      predicates.every((p) => r[p.column] === p.value),
+    );
+    if (!recorded) {
+      recorded = true;
+      providerUpdates.push({
+        patch: { ...patch },
+        predicates: [...predicates],
+        matched: matched.map((r) => String(r.id)),
+      });
+    }
+    if (providerUpdateError) return { error: providerUpdateError };
+    for (const row of matched) Object.assign(row, patch);
+    return { error: null };
+  };
+
+  const builder = {
+    eq(column: string, value: unknown) {
+      predicates.push({ column, value });
+      return builder;
+    },
+    then<TResult1 = { error: { message: string } | null }, TResult2 = never>(
+      onFulfilled?:
+        | ((v: {
+            error: { message: string } | null;
+          }) => TResult1 | PromiseLike<TResult1>)
+        | null,
+      onRejected?: ((r: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ): Promise<TResult1 | TResult2> {
+      return Promise.resolve(settle()).then(onFulfilled, onRejected);
+    },
+  };
+  return builder;
+}
+
+/** The single health write a save should have produced. */
+const soleProviderUpdate = (): RecordedProviderUpdate => {
+  expect(providerUpdates).toHaveLength(1);
+  return providerUpdates[0];
+};
+
 vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => ({
     rpc: svcRpc,
@@ -149,6 +221,7 @@ vi.mock("@/lib/supabase/service", () => ({
                 Promise.resolve({ data: providers[id] ?? null, error: null }),
             }),
           }),
+          update: (patch: Record<string, unknown>) => makeProviderUpdate(patch),
         };
       if (table === "ai_models")
         return {
@@ -270,6 +343,9 @@ beforeEach(() => {
   ];
   settingsUpdates.length = 0;
   settingsUpdateError = null;
+  providerUpdates.length = 0;
+  providerUpdateError = null;
+  providerUpdateThrows = false;
   models = {
     "anthropic/claude-sonnet-5": modelFixture("anthropic", "claude-sonnet-5"),
     "mistral/mistral-small-latest": modelFixture(
@@ -566,6 +642,119 @@ describe("setOrgByoKey — id verification", () => {
     const res = await saveMistral();
     expect(res.ok).toBe(true);
     await expect(afterTasks[0]()).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * The org key is VERIFIED on save, and that live probe used to be discarded —
+ * so a provider an admin had just keyed and validated still read "Never
+ * checked" on Settings → AI until the nightly sweep ran, which for an
+ * org-BYO-only provider is never (decision-39: the sweep reads personal
+ * credentials only). Nothing is borrowed here; only the result of a check the
+ * admin themselves triggered is kept.
+ */
+describe("setOrgByoKey — save-time provider health", () => {
+  const saveMistral = async (key = "sk-mistral-valid-key") => {
+    admin(true);
+    svcRpc.mockResolvedValue({ data: null, error: null });
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    return setOrgByoKey({ provider: "mistral", key });
+  };
+
+  it("stamps `ok` on the verified provider's row and nothing else", async () => {
+    validateKey.mockResolvedValue(undefined);
+    const res = await saveMistral();
+    expect(res.ok).toBe(true);
+
+    const write = soleProviderUpdate();
+    // The predicate IS the scope. `ai_providers` is platform-wide, so losing
+    // `.eq("id", …)` would stamp every provider in the registry.
+    expect(write.predicates).toEqual([{ column: "id", value: "mistral" }]);
+    expect(write.matched).toEqual(["mistral"]);
+    expect(write.patch).toMatchObject({
+      last_verify_status: "ok",
+      last_verify_error: null,
+    });
+    // An `ok` moves BOTH stamps; that is what makes the row read "verified
+    // just now" instead of "never checked".
+    expect(write.patch.last_verified_at).toEqual(expect.any(String));
+    expect(write.patch.last_verify_attempt_at).toEqual(expect.any(String));
+    // The bystander provider must be untouched.
+    expect(providers.anthropic.last_verify_status).toBeUndefined();
+  });
+
+  it("stamps `failed` when the provider rejects the org key, without moving the success stamp", async () => {
+    const { ProviderAuthError } = await import("@/lib/ai/providers/types");
+    validateKey.mockRejectedValue(new ProviderAuthError("mistral"));
+
+    const res = await saveMistral();
+    expect(res.ok).toBe(false);
+
+    const write = soleProviderUpdate();
+    expect(write.predicates).toEqual([{ column: "id", value: "mistral" }]);
+    expect(write.patch.last_verify_status).toBe("failed");
+    expect(write.patch.last_verify_error).toBe(
+      "Rejected by mistral when the organization key was saved.",
+    );
+    // `last_verified_at` is the LAST SUCCESS. A failure that advanced it would
+    // erase the "verified a week ago, failing since" interval the four columns
+    // exist to express.
+    expect(write.patch).not.toHaveProperty("last_verified_at");
+    expect(write.patch.last_verify_attempt_at).toEqual(expect.any(String));
+    // Nothing was stored, and the recorded reason names the ORG save — the
+    // only provenance this platform-wide row can carry.
+    expect(svcRpc).not.toHaveBeenCalled();
+  });
+
+  it("persists an authored reason rather than the thrown error's message or the key", async () => {
+    validateKey.mockRejectedValue(
+      new Error("connect ECONNREFUSED https://api.mistral.ai?key=sekrit"),
+    );
+    const res = await saveMistral("sk-mistral-supersecret");
+    expect(res.ok).toBe(false);
+
+    const write = soleProviderUpdate();
+    expect(write.patch.last_verify_error).toBe(
+      "mistral could not be reached when the organization key was saved.",
+    );
+    expect(JSON.stringify(write.patch)).not.toContain("sekrit");
+    expect(JSON.stringify(write.patch)).not.toContain("supersecret");
+  });
+
+  it("writes no health row when the key never reached the provider", async () => {
+    // A shape rejection is not a probe outcome; inventing one would report a
+    // check that never ran.
+    admin(true);
+    const { setOrgByoKey } = await import("@/lib/ai/settings-actions");
+    const res = await setOrgByoKey({
+      provider: "anthropic",
+      key: "sk-not-an-anthropic-key",
+    });
+    expect(res.ok).toBe(false);
+    expect(validateKey).not.toHaveBeenCalled();
+    expect(providerUpdates).toHaveLength(0);
+  });
+
+  it("still saves the key when the health write errors", async () => {
+    validateKey.mockResolvedValue(undefined);
+    providerUpdateError = { message: "registry write denied" };
+    const res = await saveMistral();
+    expect(res.ok).toBe(true);
+    expect(svcRpc).toHaveBeenCalledWith(
+      "org_ai_secret_set",
+      expect.objectContaining({ p_org: "org-1", p_provider: "mistral" }),
+    );
+  });
+
+  it("still saves the key when the health write throws outright", async () => {
+    validateKey.mockResolvedValue(undefined);
+    providerUpdateThrows = true;
+    const res = await saveMistral();
+    expect(res.ok).toBe(true);
+    expect(svcRpc).toHaveBeenCalledWith(
+      "org_ai_secret_set",
+      expect.objectContaining({ p_provider: "mistral" }),
+    );
   });
 });
 
