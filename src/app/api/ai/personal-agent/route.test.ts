@@ -155,6 +155,22 @@ type DocRow = {
 };
 let docRows: DocRow[] = [];
 
+// `listMemoryForAgent` (memory-db.ts) is deliberately NOT mocked either, for
+// the same reason: the route drives the REAL query shape — including the
+// `.limit(MEMORY_MAX_NOTES)` bound — with only the underlying client swapped.
+// Empty by default, so every pre-2c test in this file describes an agent that
+// has learned nothing, which is exactly the byte-identical-prompt case.
+type MemoryRow = {
+  id: string;
+  key: string;
+  value: string;
+  origin: string;
+  token_estimate: number;
+  last_run_id: string | null;
+  updated_at: string;
+};
+let memoryRows: MemoryRow[] = [];
+
 /** A thenable Supabase-query-builder stand-in: every chained method returns
  *  itself, and awaiting it anywhere in the chain resolves to `result` — the
  *  shape `listDocumentsForAgent`'s `.select().eq().order().order()` chain
@@ -164,6 +180,7 @@ function chainable(result: { data: unknown; error: unknown }) {
     select: () => builder,
     eq: () => builder,
     order: () => builder,
+    limit: () => builder,
     then: (onFulfilled: (v: typeof result) => unknown) =>
       Promise.resolve(result).then(onFulfilled),
   };
@@ -180,6 +197,9 @@ function ownerClientDouble() {
     from(table: string) {
       if (table === "user_agent_documents") {
         return chainable({ data: docRows, error: null });
+      }
+      if (table === "agent_memory") {
+        return chainable({ data: memoryRows, error: null });
       }
       if (table === "groups") {
         return {
@@ -452,6 +472,7 @@ beforeEach(() => {
   ownerMessageInsert.mockReset();
   forceThreadInsertError = null;
   docRows = [];
+  memoryRows = [];
   ceiling = [...AGENT_CAPABILITIES];
   readOrgAiSettings.mockClear();
   // mockReset, not mockClear: several tests queue a one-shot rejection, and a
@@ -1312,6 +1333,143 @@ describe("POST /api/ai/personal-agent", () => {
       await expect(res.json()).resolves.toMatchObject({ status: "ran" });
       expect(runUpdates[0]!.patch).toMatchObject({ documents_omitted: false });
       expect(sink.system).toContain("Small note");
+    });
+  });
+
+  // ── memory (Spec 2c) ──────────────────────────────────────────────────
+  // The whole wire, end to end: the route reads the agent's notes, divides ONE
+  // envelope between them and the documents, injects the survivors into the
+  // SAME cached system message, and persists the count that did not fit.
+  describe("memory", () => {
+    /** Local copies of the document block's capturing models — that block
+     *  scopes its own, and reaching into it would couple two describes. */
+    function capturingModel(sink: { system?: string }) {
+      return new MockLanguageModelV4({
+        doGenerate: async ({ prompt }) => {
+          const system = (prompt as { role: string; content: string }[]).find(
+            (m) => m.role === "system",
+          );
+          sink.system = system?.content;
+          return {
+            content: [{ type: "text", text: "You have 1 overdue item." }],
+            finishReason: { unified: "stop", raw: undefined },
+            usage: USAGE,
+            warnings: [],
+          };
+        },
+      });
+    }
+
+    /** Captures the tool DEFINITIONS the run offered, which is where the
+     *  "offered but ungated" / "gated but never offered" split would show. */
+    function capturingToolsModel(sink: { toolNames?: string[] }) {
+      return new MockLanguageModelV4({
+        doGenerate: async ({ tools }) => {
+          sink.toolNames = ((tools ?? []) as { name: string }[]).map(
+            (t) => t.name,
+          );
+          return {
+            content: [{ type: "text", text: "You have 1 overdue item." }],
+            finishReason: { unified: "stop", raw: undefined },
+            usage: USAGE,
+            warnings: [],
+          };
+        },
+      });
+    }
+
+    function memoryRow(over: Partial<MemoryRow> = {}): MemoryRow {
+      return {
+        id: "m-1",
+        key: "dana-group",
+        value: "Dana's items live in Ops, not Assigned",
+        origin: "agent",
+        token_estimate: 10,
+        last_run_id: null,
+        updated_at: "2026-08-01T00:00:00Z",
+        ...over,
+      };
+    }
+
+    it("records memory_notes_dropped: 0 and an unchanged prompt when the agent has learned nothing", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      const res = await POST(post(slot));
+
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({ memory_notes_dropped: 0 });
+      expect(sink.system).not.toContain("WHAT YOU HAVE LEARNED");
+      // The byte-identity guarantee, through the route: an agent with neither
+      // documents nor memory still gets the plain, un-keyed literal.
+      expect(sink.system).toContain("YOUR OWNER'S INSTRUCTIONS:");
+    });
+
+    it("injects the agent's notes and keys the marker even with NO documents", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      memoryRows = [memoryRow()];
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      const res = await POST(post(slot));
+
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({ memory_notes_dropped: 0 });
+      expect(sink.system).toContain("WHAT YOU HAVE LEARNED");
+      expect(sink.system).toContain(
+        "- dana-group: Dana's items live in Ops, not Assigned",
+      );
+      // THE wire that would rot silently: memory is untrusted, model-written
+      // text sitting directly above the marker, so the marker must be keyed by
+      // this agent's own nonce even though no document is attached.
+      expect(sink.system).toContain(
+        `YOUR OWNER'S INSTRUCTIONS [${enabledAgent().doc_nonce}]:`,
+      );
+      // The owner's instructions still come last and still win.
+      expect(sink.system!.trimEnd().endsWith("Be concise.")).toBe(true);
+    });
+
+    it("drops the tail that does not fit and RECORDS the count — the run still succeeds", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      // PARTIAL, unlike documents: the freshest note survives and the
+      // oversized one is dropped and counted, rather than the agent losing
+      // everything it knows to one bad note.
+      memoryRows = [
+        memoryRow({
+          id: "m-huge",
+          key: "huge",
+          value: "x",
+          token_estimate: 10_000_000,
+          updated_at: "2026-08-03T00:00:00Z",
+        }),
+        memoryRow({ id: "m-small", key: "small", value: "still useful" }),
+      ];
+      const sink: { system?: string } = {};
+      nextModel = () => capturingModel(sink);
+
+      const res = await POST(post(slot));
+
+      await expect(res.json()).resolves.toMatchObject({ status: "ran" });
+      expect(runUpdates[0]!.patch).toMatchObject({ memory_notes_dropped: 1 });
+      expect(sink.system).toContain("- small: still useful");
+      expect(sink.system).not.toContain("- huge:");
+      expect(sendBriefingEmail).toHaveBeenCalledOnce();
+    });
+
+    it("offers `remember` and `forget` to the model, bound to THIS agent", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { toolNames?: string[] } = {};
+      nextModel = () => capturingToolsModel(sink);
+
+      await POST(post(slot));
+
+      // The grant gate DENIES an ungranted call; it does not hide the tool.
+      // Both must therefore be in every run's prefix, which is what the
+      // ASSUMED_PREFIX_TOKENS 9_000 -> 9_500 bump pays for.
+      expect(sink.toolNames).toEqual(
+        expect.arrayContaining(["remember", "forget"]),
+      );
     });
   });
 

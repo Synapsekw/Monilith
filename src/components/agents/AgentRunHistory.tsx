@@ -16,6 +16,7 @@ import {
   agentRunStatusLabel,
   describeAgentRun,
   MODEL_SUBSTITUTED_NOTE,
+  memoryDroppedNote,
 } from "@/lib/agents/run-status";
 
 /**
@@ -175,6 +176,15 @@ export function AgentRunHistory({
                     <span className="text-muted-foreground text-xs">
                       Reference documents omitted — the model&rsquo;s context
                       was too small.
+                    </span>
+                  )}
+                  {/* Same shape again, and deliberately NOT a failure pill:
+                      memory truncation is partial by design, so the run
+                      succeeded on the freshest notes that fit. The count is
+                      what makes it actionable. */}
+                  {run.memoryNotesDropped > 0 && (
+                    <span className="text-muted-foreground text-xs">
+                      {memoryDroppedNote(run.memoryNotesDropped)}.
                     </span>
                   )}
                   {/* What this run asked permission for. Rendered under the run

@@ -780,3 +780,122 @@ describe("ModelNotToolCapableError", () => {
     expect(e.modelId).toBe("gpt-legacy-1");
   });
 });
+
+// ── Memory (Spec 2c) ─────────────────────────────────────────────────────
+// Memory rides in the SAME system message as the documents, for the same
+// reason: the Anthropic cache breakpoint lives on that one message's
+// `providerOptions`, and a second system message would not carry it.
+describe("memory in the system prompt", () => {
+  function capturingModel(sink: { prompt?: unknown }): LanguageModel {
+    return new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        sink.prompt = prompt;
+        return {
+          content: [{ type: "text", text: "Done." }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      },
+    });
+  }
+
+  const base = {
+    instructions: "Do the thing.",
+    nonce: "n-test-agent",
+    tools,
+    maxOutputTokens: null,
+  };
+
+  it("composes memory into the SAME system message as the documents", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      ...base,
+      model: capturingModel(sink),
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      documents: [{ title: "Policy", body: "escalate after 2 days" }],
+      memory: [{ key: "dana-group", value: "Dana's items live in Ops" }],
+    });
+    const messages = sink.prompt as { role: string; content: string }[];
+    const system = messages.filter((m) => m.role === "system");
+    // ONE system message, still. A second would not carry the cache breakpoint.
+    expect(system).toHaveLength(1);
+    expect(system[0]!.content).toContain("REFERENCE DOCUMENTS");
+    expect(system[0]!.content).toContain("WHAT YOU HAVE LEARNED");
+    expect(system[0]!.content).toContain(
+      "- dana-group: Dana's items live in Ops",
+    );
+    // Documents outrank memory; the owner's instructions outrank both.
+    expect(system[0]!.content.indexOf("REFERENCE DOCUMENTS")).toBeLessThan(
+      system[0]!.content.indexOf("WHAT YOU HAVE LEARNED"),
+    );
+    expect(system[0]!.content.indexOf("WHAT YOU HAVE LEARNED")).toBeLessThan(
+      system[0]!.content.indexOf("YOUR OWNER'S INSTRUCTIONS"),
+    );
+  });
+
+  // The delimiter property, end to end. An agent with memory and NO documents
+  // is the case the widened predicate exists for: model-written text sits
+  // directly above the marker, so the marker must be nonce-keyed.
+  it("keys the instructions marker for an agent with memory and no documents", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      ...base,
+      model: capturingModel(sink),
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      memory: [{ key: "k", value: "v" }],
+    });
+    const system = (sink.prompt as { role: string; content: string }[])[0];
+    expect(system.content).toContain(
+      "YOUR OWNER'S INSTRUCTIONS [n-test-agent]:",
+    );
+  });
+
+  it("stays byte-identical when `memory` is explicitly an empty array", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      ...base,
+      model: capturingModel(sink),
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      documents: [],
+      memory: [],
+    });
+    const system = (sink.prompt as { role: string; content: string }[])[0];
+    expect(system.content).toBe(
+      `${PREAMBLE}\n\nYOUR OWNER'S INSTRUCTIONS:\nDo the thing.`,
+    );
+  });
+
+  it("keeps the cacheControl breakpoint on that one message", async () => {
+    const sink: { prompt?: unknown } = {};
+    await runAgentLoop({
+      ...base,
+      model: capturingModel(sink),
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      memory: [{ key: "k", value: "v" }],
+    });
+    const messages = sink.prompt as Record<string, unknown>[];
+    expect(messages[0]!.providerOptions).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+  });
+
+  it("echoes memoryNotesDropped straight back for the caller to persist", async () => {
+    const r = await runAgentLoop({
+      ...base,
+      model: capturingModel({}),
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+      memoryNotesDropped: 12,
+    });
+    expect(r.memoryNotesDropped).toBe(12);
+  });
+
+  it("defaults memoryNotesDropped to 0", async () => {
+    const r = await runAgentLoop({
+      ...base,
+      model: capturingModel({}),
+      gate: makeGrantGate({ granted: [], ceiling: [], onPropose: () => {} }),
+    });
+    expect(r.memoryNotesDropped).toBe(0);
+  });
+});

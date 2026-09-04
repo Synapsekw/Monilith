@@ -363,6 +363,45 @@ function sentenceFor(
       return `${opening}: on ${trigger}, run ${actionsPhrase(actions)}.${sends}`;
     }
 
+    // Memory proposals are what an UNGRANTED agent's `remember` call becomes,
+    // and they are the first thing an owner ever sees of this feature. The card
+    // must show the note VERBATIM — this is text a model wrote that would enter
+    // the SYSTEM PROMPT on every future run, so a paraphrase would mean
+    // approving something other than what was read. `str()` has already
+    // stripped the quote lookalikes and collapsed the invisible format
+    // characters, which is what stops a verbatim value from authoring sentence
+    // structure of its own.
+    //
+    // THE CLAMP MUST NEVER FIRE HERE, and the arithmetic — not this comment —
+    // is what guarantees it. `ProposalCard` renders this sentence and nothing
+    // else (`proposals-db.ts` deliberately excludes `input`), so it is the ONLY
+    // place a not-yet-approved note can be read. A clamped summary would
+    // therefore hide the TAIL of a note that nonetheless enters every future
+    // system prompt in full: benign prose up front, payload behind the
+    // ellipsis, owner approves. So `MEMORY_MAX_VALUE_CHARS` is 380 rather than
+    // 500, sized against THIS frame (45 chars) and the 64-char key ceiling:
+    // 45 + 64 + 380 = 489 <= 500. `proposal-summary.test.ts` derives that bound
+    // from the real sentence, so rewording this frame past the headroom fails a
+    // test instead of quietly re-opening the hole.
+    //
+    // THE VALUE STILL GOES LAST. The clamp is unreachable through the current
+    // ceilings, not deleted — a proposal row outlives the schema that produced
+    // it — and if a stored row ever does overflow, the elision must eat the
+    // tail OF THE NOTE, visibly, rather than the clause that tells the owner
+    // what approving it does.
+    case "remember": {
+      const key = str(input, "key");
+      const value = str(input, "value");
+      if (!key || !value) return undefined;
+      return `Remember this for every future run, as "${key}": ${quoted(value)}`;
+    }
+
+    case "forget": {
+      const key = str(input, "key");
+      if (!key) return undefined;
+      return `Forget the note "${key}".`;
+    }
+
     default:
       return undefined;
   }

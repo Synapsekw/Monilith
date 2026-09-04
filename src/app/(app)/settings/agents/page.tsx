@@ -22,13 +22,14 @@ import {
   listDocumentsForOwner,
   listAttachmentsByAgent,
 } from "@/lib/agents/documents-db";
+import { listMemoryTotalsByAgent } from "@/lib/agents/memory-db";
 
 export const metadata = { title: "Agents · Settings" };
 
 /**
  * Settings → Agents. Server Component.
  *
- * First paint is SEVEN bounded reads, all indexed, issued concurrently:
+ * First paint is EIGHT bounded reads, all indexed, issued concurrently:
  *   1. the roster — `.eq("owner_id", …)` hits the (owner_id, enabled) index
  *      prefix; the select includes `instructions`/`board_scope` and the model
  *      pin alongside the roster fields so opening the editor for an existing
@@ -63,8 +64,18 @@ export const metadata = { title: "Agents · Settings" };
  *      into document id -> agent NAMES using the roster it already has, so the
  *      library's delete confirmation can name the agents a document would
  *      stop feeding — no per-document query.
+ *   8. `listMemoryTotalsByAgent` — per-agent memory totals, COUNT and TOKEN SUM
+ *      only, never `value`. The document budget meter has to subtract the
+ *      agent's memory (the run loop divides ONE knowledge envelope between
+ *      them), and the memory panel's collapsed `N of 50` counter needs the
+ *      count — both are numbers, and shipping every note for every agent to
+ *      render a number would be gotcha-09 in a new costume. One query for the
+ *      whole roster through `user_agents!inner(owner_id)`, served by
+ *      `agent_memory_agent_idx` and bounded by `MEMORY_TOTALS_SCAN_LIMIT`. The
+ *      note LIST is NOT here: it loads on demand when the owner opens ONE
+ *      agent's panel, the same posture `AgentRunHistory` already uses.
  *
- * Reads 5-7 are on first paint deliberately. Opening the editor, opening the model
+ * Reads 5-8 are on first paint deliberately. Opening the editor, opening the model
  * picker, searching it and switching provider inside it — and now, switching to
  * the "Reference documents" view, opening its add-document form, and its live
  * token count as the owner types — are all in-page state changes over data
@@ -98,6 +109,7 @@ export default async function AgentsSettingsPage() {
     catalog,
     documentPage,
     attachmentsByAgent,
+    memoryTotals,
   ] = await Promise.all([
     supabase
       .from("user_agents")
@@ -146,6 +158,15 @@ export default async function AgentsSettingsPage() {
     // costs the delete confirmation its agent names — never a 500.
     listAttachmentsByAgent(supabase, user.id).catch(
       (): Record<string, string[]> => ({}),
+    ),
+    // Read 8: per-agent memory totals — COUNT and TOKEN SUM only, never
+    // `value`. The budget meter needs the sum and nothing else; shipping every
+    // note for every agent to render a number would be gotcha-09 in a new
+    // costume. The note LIST loads on demand when the owner opens one agent's
+    // panel, the same posture AgentRunHistory already uses. Degrades to no
+    // memory rather than 500-ing the page, like every other supporting read.
+    listMemoryTotalsByAgent(supabase, user.id).catch(
+      (): Record<string, { noteCount: number; tokenTotal: number }> => ({}),
     ),
   ]);
   const maxAgents = orgAiSettings.maxAgentsPerUser;
@@ -222,6 +243,7 @@ export default async function AgentsSettingsPage() {
           documents={documentPage.rows}
           documentTotal={documentPage.total}
           attachmentsByAgent={attachmentsByAgent}
+          memoryTotals={memoryTotals}
           orgDefaultContextLength={orgDefaultContextLength}
         />
       </div>

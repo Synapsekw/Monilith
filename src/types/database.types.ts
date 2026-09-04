@@ -105,6 +105,70 @@ export type Database = {
           },
         ];
       };
+      agent_memory: {
+        Row: {
+          created_at: string;
+          id: string;
+          key: string;
+          last_run_id: string | null;
+          org_id: string;
+          origin: string;
+          owner_id: string;
+          token_estimate: number;
+          updated_at: string;
+          user_agent_id: string;
+          value: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          key: string;
+          last_run_id?: string | null;
+          org_id: string;
+          origin: string;
+          owner_id: string;
+          token_estimate: number;
+          updated_at?: string;
+          user_agent_id: string;
+          value: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          key?: string;
+          last_run_id?: string | null;
+          org_id?: string;
+          origin?: string;
+          owner_id?: string;
+          token_estimate?: number;
+          updated_at?: string;
+          user_agent_id?: string;
+          value?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agent_memory_last_run_id_fkey";
+            columns: ["last_run_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agent_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "agent_memory_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "agent_memory_user_agent_id_fkey";
+            columns: ["user_agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_conversations: {
         Row: {
           agent_id: string | null;
@@ -2670,8 +2734,7 @@ export type Database = {
           done_column_id: string | null;
           done_option_ids: Json;
           health_override:
-            | Database["public"]["Enums"]["portfolio_health"]
-            | null;
+            Database["public"]["Enums"]["portfolio_health"] | null;
           id: string;
           org_id: string;
           owner_user_id: string | null;
@@ -2688,8 +2751,7 @@ export type Database = {
           done_column_id?: string | null;
           done_option_ids?: Json;
           health_override?:
-            | Database["public"]["Enums"]["portfolio_health"]
-            | null;
+            Database["public"]["Enums"]["portfolio_health"] | null;
           id?: string;
           org_id: string;
           owner_user_id?: string | null;
@@ -2706,8 +2768,7 @@ export type Database = {
           done_column_id?: string | null;
           done_option_ids?: Json;
           health_override?:
-            | Database["public"]["Enums"]["portfolio_health"]
-            | null;
+            Database["public"]["Enums"]["portfolio_health"] | null;
           id?: string;
           org_id?: string;
           owner_user_id?: string | null;
@@ -3297,6 +3358,7 @@ export type Database = {
           grants: Json | null;
           id: string;
           input_tokens: number | null;
+          memory_notes_dropped: number;
           model_substituted: boolean;
           org_id: string;
           output: string | null;
@@ -3316,6 +3378,7 @@ export type Database = {
           grants?: Json | null;
           id?: string;
           input_tokens?: number | null;
+          memory_notes_dropped?: number;
           model_substituted?: boolean;
           org_id: string;
           output?: string | null;
@@ -3335,6 +3398,7 @@ export type Database = {
           grants?: Json | null;
           id?: string;
           input_tokens?: number | null;
+          memory_notes_dropped?: number;
           model_substituted?: boolean;
           org_id?: string;
           output?: string | null;
@@ -3636,8 +3700,7 @@ export type Database = {
           done_column_id: string | null;
           done_option_ids: Json;
           health_override:
-            | Database["public"]["Enums"]["portfolio_health"]
-            | null;
+            Database["public"]["Enums"]["portfolio_health"] | null;
           id: string;
           org_id: string;
           owner_user_id: string | null;
@@ -3653,6 +3716,20 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      agent_forget: {
+        Args: { p_key: string; p_user_agent_id: string };
+        Returns: string;
+      };
+      agent_remember: {
+        Args: {
+          p_key: string;
+          p_run_id: string;
+          p_token_estimate: number;
+          p_user_agent_id: string;
+          p_value: string;
+        };
+        Returns: string;
       };
       ai_credential_clear: { Args: { p_user: string }; Returns: undefined };
       ai_credential_delete: {
@@ -4488,10 +4565,7 @@ export type Database = {
         | "currency"
         | "priority";
       goal_progress_mode:
-        | "manual_number"
-        | "manual_percent"
-        | "auto_subgoals"
-        | "auto_boards";
+        "manual_number" | "manual_percent" | "auto_subgoals" | "auto_boards";
       goal_status: "on_track" | "at_risk" | "off_track" | "done";
       notification_channel: "in_app" | "email";
       notification_kind:
@@ -4508,12 +4582,7 @@ export type Database = {
       portfolio_priority: "low" | "medium" | "high" | "critical";
       view_kind: "table" | "kanban" | "calendar" | "timeline";
       widget_kind:
-        | "number"
-        | "chart"
-        | "battery"
-        | "list"
-        | "completion"
-        | "health";
+        "number" | "chart" | "battery" | "list" | "completion" | "health";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -4532,12 +4601,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4559,13 +4628,12 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4584,13 +4652,12 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4609,13 +4676,12 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -4628,11 +4694,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }

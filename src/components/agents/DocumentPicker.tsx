@@ -40,6 +40,7 @@ export function DocumentPicker({
   onChange,
   contextLength,
   instructions,
+  memoryTokens,
 }: {
   documents: AgentDocumentRow[];
   /** How many documents the owner ACTUALLY has — mirrors `DocumentLibrary`'s
@@ -58,11 +59,22 @@ export function DocumentPicker({
   /** The form's live instructions text — the budget reserves room for it, so
    *  it must react to every keystroke, not just what was last saved. */
   instructions: string;
+  /** This agent's ACTUAL memory cost, summed from `token_estimate` — read on
+   *  first paint by the settings page (`listMemoryTotalsByAgent`) and threaded
+   *  through `AgentEditor`. REQUIRED, never optional: see the call below. */
+  memoryTokens: number;
 }) {
   const { budget, usable, assumedContext } = documentBudget({
     contextLength,
     prefixTokens: ASSUMED_PREFIX_TOKENS,
     instructionTokens: estimateTokens(instructions),
+    // REQUIRED, not optional. The run loop subtracts the agent's memory from
+    // the same envelope; a meter that does not would promise document room the
+    // run will not have — the precise drift ASSUMED_PREFIX_TOKENS exists to
+    // prevent, reappearing through a new input. A default here would let a
+    // future call site forget it silently, which is exactly how the first
+    // version of this drift shipped.
+    memoryTokens,
   });
 
   const selected = new Set(selectedIds);

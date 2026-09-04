@@ -62,6 +62,7 @@ function row(over: Record<string, unknown> = {}) {
     outputTokens: 300,
     modelSubstituted: false,
     documentsOmitted: false,
+    memoryNotesDropped: 0,
     ...over,
   };
 }
@@ -270,6 +271,32 @@ describe("AgentRunHistory", () => {
     expect(
       screen.queryByText(/reference documents omitted/i),
     ).not.toBeInTheDocument();
+  });
+
+  // `user_agent_runs.memory_notes_dropped` (Spec 2c). A COUNT, not a boolean:
+  // memory truncation is partial by design, so the run succeeded on the
+  // freshest notes that fit and this must never read as a failure.
+  it("discloses truncated memory on a SUCCESSFUL run", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ memoryNotesDropped: 3 })],
+    });
+    wrap(<AgentRunHistory agentId="a13" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(screen.getByText(/3 memory notes didn't fit/)).toBeInTheDocument();
+    expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+  });
+
+  it("says nothing about memory when no notes were dropped", async () => {
+    getAgentRuns.mockResolvedValue({
+      ok: true,
+      data: [row({ memoryNotesDropped: 0 })],
+    });
+    wrap(<AgentRunHistory agentId="a14" agentName="Morning Brief" />);
+    await expand();
+    expect(await screen.findByText("Ran")).toBeInTheDocument();
+    expect(screen.queryByText(/didn't fit/)).not.toBeInTheDocument();
   });
 });
 
