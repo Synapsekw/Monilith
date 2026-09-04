@@ -136,21 +136,34 @@ describe("remember", () => {
 
 describe("forget", () => {
   it("confirms a deletion", async () => {
-    vi.mocked(db.agentForget).mockResolvedValue(true);
+    vi.mocked(db.agentForget).mockResolvedValue("forgotten");
     const r = await forget!.invoke(CTX, { key: "stale" });
     expect(r.isError).toBeFalsy();
     expect(r.content[0]!.text).toMatch(/stale/);
   });
 
   it("says so when there was no such note", async () => {
-    vi.mocked(db.agentForget).mockResolvedValue(false);
+    vi.mocked(db.agentForget).mockResolvedValue("not_found");
     const r = await forget!.invoke(CTX, { key: "never-existed" });
     expect(r.isError).toBe(true);
     expect(r.content[0]!.text).toMatch(/no note/i);
   });
 
+  // The owner-note refusal is what makes the tool's own description true. Left
+  // out, `forget` + `remember` is a two-step bypass of `agent_remember`'s
+  // refusal, under one grant.
+  it("names the owner rule when the note is the owner's", async () => {
+    vi.mocked(db.agentForget).mockResolvedValue("refused_owner_note");
+    const r = await forget!.invoke(CTX, { key: "escalation-policy" });
+    expect(r.isError).toBe(true);
+    expect(r.content[0]!.text).toMatch(/your owner/i);
+    // NOT "there is no such note": that would invite the model to create one
+    // on the key, which is the rewrite the refusal exists to prevent.
+    expect(r.content[0]!.text).not.toMatch(/no note/i);
+  });
+
   it("deletes against the SERVER-known agent id", async () => {
-    vi.mocked(db.agentForget).mockResolvedValue(true);
+    vi.mocked(db.agentForget).mockResolvedValue("forgotten");
     await forget!.invoke(CTX, {
       key: "stale",
       userAgentId: "someone-elses-agent",
@@ -162,6 +175,12 @@ describe("forget", () => {
     const r = await forget!.invoke(CTX, { key: "Not A Slug" });
     expect(r.isError).toBe(true);
     expect(db.agentForget).not.toHaveBeenCalled();
+  });
+
+  // The description makes a SECURITY CLAIM to the model. It was false when it
+  // was written: `forget` deleted owner notes. Keep claim and code together.
+  it("the description's promise about owner notes is one the code keeps", () => {
+    expect(forget!.description).toMatch(/note your owner wrote/i);
   });
 });
 

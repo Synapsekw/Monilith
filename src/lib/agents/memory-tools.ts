@@ -5,7 +5,10 @@ import {
   memoryKeySchema,
   memoryValueSchema,
 } from "@/lib/validations/agent-memory";
-import { MEMORY_MAX_NOTES } from "@/lib/agents/document-budget";
+import {
+  MEMORY_MAX_NOTES,
+  MEMORY_MAX_VALUE_CHARS,
+} from "@/lib/agents/document-budget";
 import { agentRemember, agentForget, listMemoryKeys } from "./memory-db";
 
 function ok(text: string): ToolResult {
@@ -54,7 +57,7 @@ export function makeMemoryDescriptors(args: {
     description:
       "Keep one short fact you have worked out, so you still know it on your " +
       "next run. `key` is a short lowercase slug that identifies the fact " +
-      "(letters, numbers and hyphens). `value` is ONE line of at most 500 " +
+      `(letters, numbers and hyphens). \`value\` is ONE line of at most ${MEMORY_MAX_VALUE_CHARS} ` +
       "characters. Writing to a key you already have REPLACES it — if a note " +
       "about this already exists, reuse its exact key rather than inventing a " +
       `similar one. You may keep at most ${MEMORY_MAX_NOTES} notes. Your notes ` +
@@ -118,6 +121,11 @@ export function makeMemoryDescriptors(args: {
   const forget: ToolDescriptor = {
     name: "forget",
     title: "Forget",
+    // THE SECOND SENTENCE IS A SECURITY CLAIM, and it was false when it was
+    // first written — `forget` deleted owner notes, which made
+    // delete-then-rewrite a complete bypass of `remember`'s owner-note
+    // refusal. `agent_forget()` is what makes it true; do not restore a raw
+    // delete beneath it.
     description:
       "Delete one of your own notes by its key, to make room or because it is " +
       "no longer true. This only removes YOUR note; it never touches a board, " +
@@ -130,10 +138,26 @@ export function makeMemoryDescriptors(args: {
       if (!parsed.success)
         return err(parsed.error.issues[0]?.message ?? "Invalid key.");
       const client = await ctx.getClient();
-      const gone = await agentForget(client, args.userAgentId, parsed.data.key);
-      return gone
-        ? ok(`Forgot "${parsed.data.key}".`)
-        : err(`There is no note with the key "${parsed.data.key}".`);
+      const status = await agentForget(
+        client,
+        args.userAgentId,
+        parsed.data.key,
+      );
+      switch (status) {
+        case "forgotten":
+          return ok(`Forgot "${parsed.data.key}".`);
+        // The MIRROR of `remember`'s refusal, and the reason this tool's
+        // description is now true. Distinct from `not_found` on purpose:
+        // "there is no such note" would invite the model to create one on the
+        // key, which is the rewrite the refusal exists to prevent.
+        case "refused_owner_note":
+          return err(
+            `"${parsed.data.key}" was written by your owner, so you cannot ` +
+              "delete it. Leave it alone.",
+          );
+        case "not_found":
+          return err(`There is no note with the key "${parsed.data.key}".`);
+      }
     },
   };
 

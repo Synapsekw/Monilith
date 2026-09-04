@@ -9,7 +9,10 @@ import {
   MEMORY_MAX_TOKENS,
   MEMORY_SHARE,
   ASSUMED_PREFIX_TOKENS,
+  MEMORY_FRAMING_TOKENS,
+  memoryNoteTokens,
 } from "./document-budget";
+import { buildMemoryBlock } from "./document-inject";
 
 describe("estimateTokens", () => {
   it("is length/4 rounded up", () => {
@@ -141,24 +144,62 @@ const BIG = {
 };
 
 describe("documentBudget with memory", () => {
-  // THE REGRESSION PIN. Any change here silently shrinks every existing
-  // agent's document budget and can flip a working, already-attached set to
-  // documents_omitted at 07:00 with the owner having changed nothing.
-  it("an agent with no memory gets the whole knowledge envelope", () => {
+  // What this pins is narrower than it once claimed, and the difference is the
+  // point: passing `memoryTokens: 0` must be BYTE-IDENTICAL to omitting the
+  // argument. It does NOT pin the end-to-end budget — see "the prefix raise IS
+  // a real cut" below, which does.
+  it("passing zero memory is identical to passing none", () => {
     const withNothing = documentBudget(BIG);
     const withZero = documentBudget({ ...BIG, memoryTokens: 0 });
     const outputReserve = Math.min(16_000, Math.ceil(200_000 * 0.15));
-    const free = 200_000 - outputReserve - 9_500 - 200;
+    const free = 200_000 - outputReserve - BIG.prefixTokens - 200;
     expect(withNothing.budget).toBe(Math.floor(free * 0.5));
     expect(withNothing.memoryBudget).toBe(0);
-    expect(withZero.budget).toBe(withNothing.budget);
+    expect(withNothing.memoryNoteBudget).toBe(0);
+    expect(withZero).toEqual(withNothing);
   });
 
-  it("memory pays for exactly what it has, below its share", () => {
+  // =========================================================================
+  // THE HONEST END-TO-END PIN.
+  // =========================================================================
+  //
+  // The branch's compatibility claim was "an agent with no memory gets exactly
+  // the number this function returned before Spec 2c, to the token". That is
+  // true of the FUNCTION and false of the SYSTEM: `route.ts` passes
+  // `ASSUMED_PREFIX_TOKENS`, which this branch raised 9_000 -> 9_500 to cover
+  // the two new tool descriptors. So `free` falls 500 and `knowledge` falls 250
+  // for EVERY agent — and `selectDocuments` is all-or-nothing, so an agent whose
+  // attached set totals inside that 250-token window loses its ENTIRE document
+  // set with the owner having changed nothing.
+  //
+  // The raise is correct — the descriptors really are in every run's prefix.
+  // What was missing is that the cost be stated and measured, so it cannot grow
+  // again unnoticed. This test measures it.
+  it("the prefix raise IS a real cut to every agent's document budget", () => {
+    const PRE_2C_PREFIX_TOKENS = 9_000;
+    const before = documentBudget({
+      ...BIG,
+      prefixTokens: PRE_2C_PREFIX_TOKENS,
+    });
+    const after = documentBudget({
+      ...BIG,
+      prefixTokens: ASSUMED_PREFIX_TOKENS,
+    });
+    expect(after.budget).toBeLessThan(before.budget);
+    expect(before.budget - after.budget).toBe(
+      Math.floor((ASSUMED_PREFIX_TOKENS - PRE_2C_PREFIX_TOKENS) * 0.5),
+    );
+    // 250 tokens, ~1 KB of document text. Stated as a number so a future raise
+    // has to come here and change it.
+    expect(before.budget - after.budget).toBe(250);
+  });
+
+  it("memory pays for exactly what it has PLUS its framing, below its share", () => {
     const r = documentBudget({ ...BIG, memoryTokens: 1_200 });
     const base = documentBudget(BIG).budget;
-    expect(r.memoryBudget).toBe(1_200);
-    expect(r.budget).toBe(base - 1_200);
+    expect(r.memoryBudget).toBe(1_200 + MEMORY_FRAMING_TOKENS);
+    expect(r.memoryNoteBudget).toBe(1_200);
+    expect(r.budget).toBe(base - 1_200 - MEMORY_FRAMING_TOKENS);
   });
 
   it("memory is capped at MEMORY_MAX_TOKENS on a large model", () => {
@@ -196,8 +237,74 @@ describe("documentBudget with memory", () => {
     expect(r.usable).toBe(r.budget >= MIN_USEFUL_BUDGET);
   });
 
-  it("ASSUMED_PREFIX_TOKENS covers the two new tool descriptors", () => {
+  // Retitled to what it actually checks. It is a CHANGE DETECTOR on the
+  // constant, nothing more — the claim that the raise is big enough to cover
+  // `remember` and `forget` is verified where the descriptors live, in
+  // `memory-tools.test.ts`, because only there can their real text be measured.
+  it("ASSUMED_PREFIX_TOKENS is pinned (the raise is sized in memory-tools.test.ts)", () => {
     expect(ASSUMED_PREFIX_TOKENS).toBe(9_500);
+  });
+});
+
+// ===========================================================================
+// WHAT A NOTE ACTUALLY COSTS THE PROMPT
+// ===========================================================================
+//
+// `token_estimate` is what the memory budget is measured against, so it has to
+// price the RENDERED form. Pricing the bare value under-counted every note by
+// its key plus four characters of punctuation, and ignored the block's own
+// ~90-token framing entirely.
+describe("memoryNoteTokens", () => {
+  it("prices the line the prompt really carries, not the bare value", () => {
+    const key = "dana-group";
+    const value = "Dana's items are filed in Ops";
+    expect(memoryNoteTokens(key, value)).toBe(
+      estimateTokens(`- ${key}: ${value}`),
+    );
+    expect(memoryNoteTokens(key, value)).toBeGreaterThan(estimateTokens(value));
+  });
+});
+
+describe("MEMORY_FRAMING_TOKENS", () => {
+  it("prices the framing `buildMemoryBlock` really emits", () => {
+    // Derived from the block itself: one note's line subtracted from the whole
+    // rendered block leaves the framing, and that is what this constant must be
+    // within a token of.
+    const key = "k";
+    const value = "v";
+    const block = buildMemoryBlock([{ key, value }]);
+    const framingOnly = estimateTokens(block) - memoryNoteTokens(key, value);
+    expect(Math.abs(MEMORY_FRAMING_TOKENS - framingOnly)).toBeLessThanOrEqual(
+      1,
+    );
+    // It is not a rounding error — it is roughly a hundred tokens of prompt
+    // charged on every run of every agent that has any memory at all.
+    expect(MEMORY_FRAMING_TOKENS).toBeGreaterThan(50);
+  });
+
+  it("is charged to memory once, and only when there IS memory", () => {
+    const none = documentBudget(BIG);
+    const some = documentBudget({ ...BIG, memoryTokens: 1_200 });
+    // Nothing to frame, nothing charged — this is what keeps a memory-less
+    // agent's prompt and budget exactly where they were.
+    expect(none.memoryBudget).toBe(0);
+    // With memory, the block's framing is charged ON TOP of the notes…
+    expect(some.memoryBudget).toBe(1_200 + MEMORY_FRAMING_TOKENS);
+    // …and `selectMemory` may only spend what is left for the LINES, or the
+    // block it builds would overrun the budget it was sized against.
+    expect(some.memoryNoteBudget).toBe(1_200);
+    expect(some.budget).toBe(none.budget - 1_200 - MEMORY_FRAMING_TOKENS);
+  });
+
+  it("never lets the note budget go negative when the share is tiny", () => {
+    const tiny = {
+      contextLength: 16_385,
+      prefixTokens: ASSUMED_PREFIX_TOKENS,
+      instructionTokens: 200,
+    };
+    const r = documentBudget({ ...tiny, memoryTokens: 5_000 });
+    expect(r.memoryNoteBudget).toBeGreaterThanOrEqual(0);
+    expect(r.memoryBudget).toBeGreaterThanOrEqual(r.memoryNoteBudget);
   });
 });
 

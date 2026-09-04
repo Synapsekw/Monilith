@@ -269,6 +269,24 @@ export function makeFakeMemoryClient(opts: {
     },
     rpc(fn: string, args: unknown) {
       rpcCalls.push([fn, args]);
+      if (error) return Promise.resolve({ data: null, error });
+      // `agent_forget` is EMULATED rather than stubbed, for the same reason
+      // every predicate above is applied rather than merely recorded: the
+      // property under test is which rows survive, and a stub that answers
+      // "forgotten" however the table looks cannot fail when the origin
+      // predicate is dropped. Mirrors the SQL in
+      // 20260827105257_agent_forget_and_memory_containment.sql.
+      if (fn === "agent_forget") {
+        const a = args as { p_user_agent_id?: unknown; p_key?: unknown };
+        const row = table.find(
+          (r) => r.user_agent_id === a.p_user_agent_id && r.key === a.p_key,
+        );
+        if (!row) return Promise.resolve({ data: "not_found", error: null });
+        if (row.origin === "owner")
+          return Promise.resolve({ data: "refused_owner_note", error: null });
+        table.splice(table.indexOf(row), 1);
+        return Promise.resolve({ data: "forgotten", error: null });
+      }
       return Promise.resolve({ data: opts.rpcResult ?? null, error });
     },
   };

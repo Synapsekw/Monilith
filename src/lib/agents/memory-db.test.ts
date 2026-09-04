@@ -174,7 +174,13 @@ describe("agentRemember", () => {
       p_value: "12345678",
       // NEVER model-supplied: a model whose note is over budget has every
       // incentive to under-report its size.
-      p_token_estimate: 2,
+      //
+      // And it counts the RENDERED LINE, not the bare value. The prompt
+      // carries `- dana-group: 12345678` (22 chars, 6 tokens); charging the
+      // budget for the 8-character value alone under-counts every note by its
+      // key plus four characters of punctuation, which is what the memory
+      // budget is then measured against.
+      p_token_estimate: 6, // `- dana-group: 12345678` = 22 chars
       p_run_id: "run-1",
     });
   });
@@ -209,22 +215,62 @@ describe("agentRemember", () => {
   });
 });
 
+// ===========================================================================
+// THE DELETE-THEN-REWRITE BYPASS
+// ===========================================================================
+//
+// `agent_remember` refuses a key an `origin='owner'` note holds. That guard is
+// worth nothing if the agent can simply DELETE the owner's note first and then
+// write the key freshly: `agent_remember` would see no existing row, pass the
+// cap, and insert `origin='agent'` — the owner's pinned note gone and its key
+// now carrying model-written text into every future system prompt. Both calls
+// sit under the single `memory.write` grant, so one injected tool result buys
+// both.
+//
+// So the origin condition must live on the DELETE path too, and in the DATABASE
+// rather than at one TypeScript call site — the RLS delete policy is
+// `owner_id = auth.uid()` with no origin predicate, and the agent RUNS AS ITS
+// OWNER. `public.agent_forget()` is that path.
+// ===========================================================================
 describe("agentForget", () => {
-  it("deletes by (agent, key) and reports whether a row went", async () => {
-    const { client, deletes } = makeFakeMemoryClient({
+  it("goes through the agent_forget RPC with the SERVER-known agent id", async () => {
+    const { client, rpcCalls, deletes } = makeFakeMemoryClient({
       rows: [{ user_agent_id: AGENT, key: "stale", value: "x" }],
     });
-    expect(await agentForget(client, AGENT, "stale")).toBe(true);
-    expect(deletes[0]!.predicates).toEqual([
-      { column: "user_agent_id", value: AGENT },
-      { column: "key", value: "stale" },
+    expect(await agentForget(client, AGENT, "stale")).toBe("forgotten");
+    expect(rpcCalls[0]).toEqual([
+      "agent_forget",
+      { p_user_agent_id: AGENT, p_key: "stale" },
     ]);
+    // NOT a raw `.delete()`: that path carries no origin predicate, and RLS
+    // does not add one.
+    expect(deletes).toHaveLength(0);
+  });
+
+  it("REFUSES an owner-written note and leaves the row in place", async () => {
+    const { client, table } = makeFakeMemoryClient({
+      rows: [
+        {
+          user_agent_id: AGENT,
+          key: "escalation-policy",
+          value: "never escalate to the vendor",
+          origin: "owner",
+        },
+      ],
+    });
+    expect(await agentForget(client, AGENT, "escalation-policy")).toBe(
+      "refused_owner_note",
+    );
+    expect(table).toHaveLength(1);
+    expect(table[0]).toMatchObject({
+      origin: "owner",
+      value: "never escalate to the vendor",
+    });
   });
 
   it("does NOT delete another agent's identically-keyed note", async () => {
-    // The failure this fake exists to catch: `agent_memory` is keyed on
-    // (user_agent_id, key), so a forget that dropped the agent predicate would
-    // take a sibling agent's note with it.
+    // `agent_memory` is keyed on (user_agent_id, key), so a forget that
+    // dropped the agent predicate would take a sibling agent's note with it.
     const { client, table } = makeFakeMemoryClient({
       rows: [
         { user_agent_id: AGENT, key: "stale", value: "mine" },
@@ -236,9 +282,19 @@ describe("agentForget", () => {
     expect(table[0]!.user_agent_id).toBe(OTHER);
   });
 
-  it("reports false when there was no such note", async () => {
+  it("reports not_found when there was no such note", async () => {
     const { client } = makeFakeMemoryClient({ rows: [] });
-    expect(await agentForget(client, AGENT, "never-existed")).toBe(false);
+    expect(await agentForget(client, AGENT, "never-existed")).toBe("not_found");
+  });
+
+  it("throws when the RPC errors, so tools.ts can funnel it to { error }", async () => {
+    const { client } = makeFakeMemoryClient({
+      rows: [],
+      error: { message: "no such user_agent" },
+    });
+    await expect(agentForget(client, AGENT, "k")).rejects.toThrow(
+      /agentForget: no such user_agent/,
+    );
   });
 });
 
@@ -258,7 +314,9 @@ describe("upsertOwnerNote", () => {
       owner_id: "owner-1",
       key: "frozen-board",
       origin: "owner",
-      token_estimate: 2,
+      // The RENDERED line, exactly as `agentRemember` charges it — one
+      // estimator, or the panel's meter and the run's budget disagree.
+      token_estimate: 6, // `- frozen-board: 12345678` = 24 chars
       // An owner note has no run that authored it; stamping one would make the
       // provenance column lie.
       last_run_id: null,

@@ -3,6 +3,14 @@ import {
   summariseProposal,
   PROPOSAL_SUMMARY_MAX_LENGTH,
 } from "./proposal-summary";
+import {
+  MEMORY_MAX_KEY_CHARS,
+  MEMORY_MAX_VALUE_CHARS,
+} from "./document-budget";
+import {
+  memoryKeySchema,
+  memoryValueSchema,
+} from "@/lib/validations/agent-memory";
 
 /**
  * The summary is the ONLY sentence a human reads before approving a stored
@@ -637,18 +645,73 @@ describe("remember / forget summaries", () => {
     expect(summary.endsWith("…")).toBe(false);
   });
 
-  it("elides the NOTE's tail — never the clause that says what approving does", () => {
-    // `agent_memory.value` allows 500 and `user_agent_proposals.summary`
-    // allows 500, so the longest legal note cannot fit alongside any frame.
-    // What must survive the clamp is the part that tells the owner what they
-    // are approving, and the elision must be VISIBLE rather than a silent
-    // paraphrase.
-    const value = "x".repeat(500);
+  // =========================================================================
+  // NO VALID NOTE CAN PRODUCE A CLAMPED SUMMARY.
+  // =========================================================================
+  //
+  // `ProposalCard` renders `summary` and NOTHING ELSE — `proposals-db.ts`
+  // deliberately excludes `input`, so model prose never reaches the client
+  // payload. That makes this sentence the ONLY place a not-yet-approved note
+  // can be read, and a clamp therefore hides attacker-controlled text behind an
+  // ellipsis: 440 benign characters up front, the payload in the tail, the
+  // owner approves what looks like plausible prose, and the FULL value enters
+  // every future system prompt.
+  //
+  // The fix is arithmetic, not vigilance: `agent_memory.value` is capped low
+  // enough that the longest legal note plus the longest legal key plus the
+  // frame still fits under the 500-character summary limit. The bound is
+  // DERIVED here from the real frame rather than eyeballed, so a reworded
+  // sentence that eats the headroom fails this test instead of shipping.
+  it("no valid note can produce a clamped summary", () => {
+    // The frame is everything the sentence adds around the key and the value.
+    const frame =
+      summariseProposal("remember", { key: "k", value: "v" }).length - 2;
+    expect(
+      frame + MEMORY_MAX_KEY_CHARS + MEMORY_MAX_VALUE_CHARS,
+    ).toBeLessThanOrEqual(PROPOSAL_SUMMARY_MAX_LENGTH);
+  });
+
+  it("renders the longest legal note WHOLE, key and all", () => {
+    // The derived bound above proves the arithmetic; this proves the code
+    // agrees with it.
+    const key = "k".repeat(MEMORY_MAX_KEY_CHARS);
+    const value = "x".repeat(MEMORY_MAX_VALUE_CHARS);
+    const summary = summariseProposal("remember", { key, value });
+    expect(summary).toContain(key);
+    expect(summary).toContain(value);
+    expect(summary.endsWith("…")).toBe(false);
+    expect(summary.length).toBeLessThanOrEqual(PROPOSAL_SUMMARY_MAX_LENGTH);
+  });
+
+  it("the key and value ceilings the schema enforces are the ones assumed here", () => {
+    // If Zod and the CHECK constraint ever admit a longer note than this
+    // module was measured against, the two tests above become vacuous.
+    expect(
+      memoryValueSchema.safeParse("x".repeat(MEMORY_MAX_VALUE_CHARS)).success,
+    ).toBe(true);
+    expect(
+      memoryValueSchema.safeParse("x".repeat(MEMORY_MAX_VALUE_CHARS + 1))
+        .success,
+    ).toBe(false);
+    expect(
+      memoryKeySchema.safeParse("k".repeat(MEMORY_MAX_KEY_CHARS)).success,
+    ).toBe(true);
+    expect(
+      memoryKeySchema.safeParse("k".repeat(MEMORY_MAX_KEY_CHARS + 1)).success,
+    ).toBe(false);
+  });
+
+  it("still elides the NOTE's tail if a stored row somehow overflows", () => {
+    // A proposal row outlives the schema that produced it, so the clamp has
+    // not gone away — it is merely unreachable through the current ceilings.
+    // What must survive it is the clause that tells the owner what approving
+    // does, and the elision must be VISIBLE rather than a silent paraphrase.
+    const value = "x".repeat(600);
     const summary = summariseProposal("remember", { key: "k", value });
     expect(summary.length).toBe(PROPOSAL_SUMMARY_MAX_LENGTH);
     expect(
       summary.startsWith('Remember this for every future run, as "k": "x'),
-    );
+    ).toBe(true);
     expect(summary.endsWith("…")).toBe(true);
   });
 

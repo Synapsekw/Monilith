@@ -372,16 +372,23 @@ function sentenceFor(
     // characters, which is what stops a verbatim value from authoring sentence
     // structure of its own.
     //
-    // THE VALUE GOES LAST, and that is not a style choice. `agent_memory.value`
-    // allows 500 characters and `user_agent_proposals.summary` allows 500 — so
-    // the longest legal note CANNOT fit alongside any frame at all, and
-    // `summariseProposal` will clamp. Putting the value last means the clamp
-    // eats the tail OF THE NOTE, visibly, behind an ellipsis, instead of eating
-    // the clause that tells the owner what approving it does. An owner reading
-    // "…" knows there is more note; an owner reading a truncated explanation
-    // knows nothing. Notes up to ~450 characters — every realistic one — render
-    // whole. `ProposalCard` renders only this sentence, so this is the ONLY
-    // place a not-yet-approved note can be read.
+    // THE CLAMP MUST NEVER FIRE HERE, and the arithmetic — not this comment —
+    // is what guarantees it. `ProposalCard` renders this sentence and nothing
+    // else (`proposals-db.ts` deliberately excludes `input`), so it is the ONLY
+    // place a not-yet-approved note can be read. A clamped summary would
+    // therefore hide the TAIL of a note that nonetheless enters every future
+    // system prompt in full: benign prose up front, payload behind the
+    // ellipsis, owner approves. So `MEMORY_MAX_VALUE_CHARS` is 380 rather than
+    // 500, sized against THIS frame (45 chars) and the 64-char key ceiling:
+    // 45 + 64 + 380 = 489 <= 500. `proposal-summary.test.ts` derives that bound
+    // from the real sentence, so rewording this frame past the headroom fails a
+    // test instead of quietly re-opening the hole.
+    //
+    // THE VALUE STILL GOES LAST. The clamp is unreachable through the current
+    // ceilings, not deleted — a proposal row outlives the schema that produced
+    // it — and if a stored row ever does overflow, the elision must eat the
+    // tail OF THE NOTE, visibly, rather than the clause that tells the owner
+    // what approving it does.
     case "remember": {
       const key = str(input, "key");
       const value = str(input, "value");

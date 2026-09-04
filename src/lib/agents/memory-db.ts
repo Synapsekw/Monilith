@@ -2,7 +2,10 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
-import { estimateTokens, MEMORY_MAX_NOTES } from "@/lib/agents/document-budget";
+import {
+  memoryNoteTokens,
+  MEMORY_MAX_NOTES,
+} from "@/lib/agents/document-budget";
 import { typedRpc } from "@/lib/supabase/typed-rpc";
 
 type Client = SupabaseClient<Database>;
@@ -20,6 +23,15 @@ export type AgentMemoryNote = {
 /** The four outcomes `public.agent_remember` can report. */
 export type RememberStatus =
   "written" | "replaced" | "refused_owner_note" | "refused_cap";
+
+/**
+ * The three outcomes `public.agent_forget` can report.
+ *
+ * `refused_owner_note` is deliberately NOT collapsed into `not_found`: telling
+ * a model that its owner's note does not exist invites it to create one on that
+ * key, which is the very rewrite the refusal exists to prevent.
+ */
+export type ForgetStatus = "forgotten" | "refused_owner_note" | "not_found";
 
 const NOTE_COLUMNS =
   "id, key, value, origin, token_estimate, last_run_id, updated_at";
@@ -55,8 +67,9 @@ function toNote(r: {
  * THE read helper — used by BOTH the run loop and the owner's panel.
  *
  * One shape rather than two (documents needed a metadata-only variant because
- * a body runs to 2,000,000 characters; a whole memory is at most 50 x 500
- * chars ~= 25 KB). One shape means the prompt and the panel can never disagree
+ * a body runs to 2,000,000 characters; a whole memory is at most
+ * MEMORY_MAX_NOTES x MEMORY_MAX_VALUE_CHARS ~= 19 KB). One shape means the
+ * prompt and the panel can never disagree
  * about what an agent knows.
  *
  * Bounded by MEMORY_MAX_NOTES over `agent_memory_agent_idx
@@ -130,9 +143,14 @@ export async function listMemoryTotalsByAgent(
  * How many notes an agent already has — the panel's `47 of 50` counter and the
  * action-side cap check. `head: true` so no rows cross the wire.
  *
- * NOT the enforcement point: the real cap lives inside `agent_remember`, where
- * the count and the insert are atomic. A check-then-insert from TypeScript is
- * a TOCTOU race whose losing side is a silently-51st note.
+ * NOT the enforcement point: the real cap lives inside `agent_remember`, which
+ * takes a `for update` lock on the parent `user_agents` row before counting, so
+ * the count and the insert really are indivisible for that agent. (They are not
+ * indivisible on their own — count-then-insert at READ COMMITTED lets two
+ * concurrent runs both read 49 and both insert. The lock is what makes the
+ * claim true; 20260827105257 added it.) A check-then-insert from TypeScript
+ * has no such lock and is a TOCTOU race whose losing side is a silently-51st
+ * note.
  */
 export async function countMemoryForAgent(
   client: Client,
@@ -149,9 +167,12 @@ export async function countMemoryForAgent(
 /**
  * The AGENT's write, through `public.agent_remember`.
  *
- * `token_estimate` is computed HERE, server-side, from the value actually
- * being stored — never accepted from the model, whose whole incentive under
- * injection would be to under-report so a long note escapes the budget.
+ * `token_estimate` is computed HERE, server-side, from the LINE the prompt
+ * will actually carry (`- key: value`) — never accepted from the model, whose
+ * whole incentive under injection would be to under-report so a long note
+ * escapes the budget. Pricing the bare value under-counted every note by its
+ * key plus four characters of punctuation, and this number IS what the memory
+ * budget is measured against.
  *
  * Called through `typedRpc`, the canonical wrapper, never a hand-rolled
  * `client.rpc()` — and `typedRpc` is also what lets `p_run_id` be a real
@@ -171,7 +192,7 @@ export async function agentRemember(
     p_user_agent_id: args.userAgentId,
     p_key: args.key,
     p_value: args.value,
-    p_token_estimate: estimateTokens(args.value),
+    p_token_estimate: memoryNoteTokens(args.key, args.value),
     p_run_id: args.runId,
   });
   if (error) throw new Error(`agentRemember: ${error.message}`);
@@ -179,25 +200,35 @@ export async function agentRemember(
 }
 
 /**
- * Delete one note by (agent, key). Returns whether a row actually went, so the
- * tool can tell the model "there was no such note" instead of a false
- * confirmation. RLS scopes it to the caller; the `user_agent_id` predicate is
- * what scopes it to THIS agent — `agent_memory` is keyed on (user_agent_id,
- * key), so dropping it would delete a sibling agent's identically-keyed note.
+ * The AGENT's delete, through `public.agent_forget`.
+ *
+ * A RAW `.delete()` HERE WAS A CRITICAL HOLE, and it is worth stating plainly
+ * because it typechecked, read correctly, and had passing tests.
+ * `agent_remember` refuses to overwrite an `origin='owner'` note — but nothing
+ * refused to DELETE one, so the agent could simply drop the owner's note and
+ * write the key freshly: the second call sees no existing row, passes the cap,
+ * and inserts `origin='agent'`. The owner's pinned note gone, its key now
+ * carrying model-written text into every future system prompt, and BOTH calls
+ * under the single `memory.write` grant. RLS cannot close it —
+ * `agent_memory_owner_delete` is `owner_id = auth.uid()` with no origin
+ * predicate, and THE AGENT RUNS AS ITS OWNER.
+ *
+ * So the origin condition lives in the DATABASE, on the delete statement
+ * itself, and this function is a thin call to it. Putting it in a `.eq()` here
+ * instead would hold only for THIS call site; the next one would reopen it.
+ * (Same reasoning as `agentRemember` above.)
  */
 export async function agentForget(
   client: Client,
   userAgentId: string,
   key: string,
-): Promise<boolean> {
-  const { data, error } = await client
-    .from("agent_memory")
-    .delete()
-    .eq("user_agent_id", userAgentId)
-    .eq("key", key)
-    .select("id");
+): Promise<ForgetStatus> {
+  const { data, error } = await typedRpc(client, "agent_forget", {
+    p_user_agent_id: userAgentId,
+    p_key: key,
+  });
   if (error) throw new Error(`agentForget: ${error.message}`);
-  return (data ?? []).length > 0;
+  return data as ForgetStatus;
 }
 
 /**
@@ -228,8 +259,10 @@ export async function upsertOwnerNote(
       key: args.key,
       value: args.value,
       origin: "owner",
-      // RECOMPUTED on every write, from the value actually being saved.
-      token_estimate: estimateTokens(args.value),
+      // RECOMPUTED on every write, from the LINE actually being rendered —
+      // `- key: value`, not the bare value. One estimator for both write
+      // paths, or the panel's meter and the run's budget disagree.
+      token_estimate: memoryNoteTokens(args.key, args.value),
       last_run_id: null,
       updated_at: new Date().toISOString(),
     },

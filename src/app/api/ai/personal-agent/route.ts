@@ -408,7 +408,7 @@ export async function POST(req: Request): Promise<Response> {
           const notes = await listMemoryForAgent(ownerClient, agent.id);
           const memoryTokens = notes.reduce((n, m) => n + m.tokenEstimate, 0);
 
-          const { budget, memoryBudget } = documentBudget({
+          const { budget, memoryNoteBudget } = documentBudget({
             contextLength: model.contextLength,
             // ASSUMED_PREFIX_TOKENS, imported from document-budget — the
             // attach-time meter uses the identical constant. A local 9_500
@@ -421,8 +421,12 @@ export async function POST(req: Request): Promise<Response> {
           const { included, omitted } = selectDocuments(attached, budget);
           // PARTIAL, unlike documents: notes are independent atoms, so the
           // freshest that fit are kept and the tail is dropped and COUNTED.
+          // `memoryNoteBudget`, NOT `memoryBudget`: the latter includes the
+          // block's own ~100-token framing, which `buildMemoryBlock` emits on
+          // top of the lines. Spending it on lines would overrun the envelope
+          // the budget was sized against by exactly the framing's length.
           const { included: memory, dropped: memoryNotesDropped } =
-            selectMemory(notes, memoryBudget);
+            selectMemory(notes, memoryNoteBudget);
 
           // ONE call assembles BOTH halves. `buildAgentTools` and
           // `makeGrantGate` are each a pure function of the same descriptor

@@ -3717,6 +3717,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      agent_forget: {
+        Args: { p_key: string; p_user_agent_id: string };
+        Returns: string;
+      };
       agent_remember: {
         Args: {
           p_key: string;
