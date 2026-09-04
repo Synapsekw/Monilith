@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -398,7 +398,15 @@ export function BoardsNavSortable({
   // every caller's memoisation.
   const [ordered, setOrdered] = useState(boards);
   const [syncedKey, setSyncedKey] = useState(() => navSyncKey(boards));
-  const incomingKey = navSyncKey(boards);
+  //
+  // Memoised on the prop's identity: this component re-renders on every
+  // pointermove while a drag is in flight, and `MY_BOARDS_LIMIT` is 500, so an
+  // unmemoised scan of the whole list ran on each of those frames. Keying the
+  // MEMO on identity does not re-introduce the identity bug the key exists to
+  // fix — a miss only costs a recompute that yields the same string, and a
+  // genuine content change always arrives as a fresh array (props from the
+  // server are never mutated in place), so a real change can never be missed.
+  const incomingKey = useMemo(() => navSyncKey(boards), [boards]);
   if (syncedKey !== incomingKey) {
     setSyncedKey(incomingKey);
     setOrdered(boards);
