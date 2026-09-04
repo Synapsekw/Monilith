@@ -36,10 +36,19 @@ function escapeHtml(s: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** Recurses: bold/italic/strikethrough/link nodes nest arbitrarily. */
+/**
+ * Recurses: bold/italic/strikethrough/link nodes nest arbitrarily.
+ *
+ * The `: string` on the callback is the same exhaustiveness device `renderBlock`
+ * uses, and it is load-bearing for the module contract above: a switch-only body
+ * whose declared return type excludes `undefined` makes an unhandled `Inline`
+ * variant a compile error (TS2366). Without it the callback's return type would
+ * be inferred as `string | undefined`, `join("")` would coerce the `undefined`
+ * to `""`, and a new variant would silently vanish from every rendered document.
+ */
 function renderInline(nodes: Inline[]): string {
   return nodes
-    .map((node) => {
+    .map((node): string => {
       switch (node.type) {
         case "text":
           return escapeHtml(node.value);
