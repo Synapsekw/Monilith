@@ -112,6 +112,38 @@ describe("buildAgentPdfHtml", () => {
     expect(html).toContain("<h1>Report</h1>");
   });
 
+  /**
+   * The BACKSTOP behind `escapeHtml`, and the reason it is worth a test of its
+   * own: `renderHtmlToPdf` launches Chromium with `@sparticuz/chromium`'s args
+   * (`--disable-web-security`, `--allow-running-insecure-content`,
+   * `--no-sandbox`, `--single-process`), and this document is the first to feed
+   * prompt-injection-reachable text into that browser. Every test above proves
+   * the escaper holds; this one proves that if it ever stopped holding, the
+   * browser would still refuse to fetch. `default-src 'none'` blocks every
+   * subresource and every connection; `style-src 'unsafe-inline'` is the single
+   * exception the inline `<style>` needs (it is inline CSS, not a fetch).
+   */
+  it("carries a restrictive CSP as the browser-level backstop", () => {
+    const html = buildAgentPdfHtml("# T");
+    expect(html).toContain(
+      `<meta http-equiv="Content-Security-Policy" ` +
+        `content="default-src 'none'; style-src 'unsafe-inline'">`,
+    );
+  });
+
+  /**
+   * The CSP belongs to the server-owned shell, in the head, before any
+   * model-authored markup — a policy that arrived after the body would be too
+   * late for anything the body already referenced.
+   */
+  it("declares the CSP in the head, ahead of the model-authored body", () => {
+    const html = buildAgentPdfHtml("# T");
+    const csp = html.indexOf("Content-Security-Policy");
+    expect(csp).toBeGreaterThan(-1);
+    expect(csp).toBeLessThan(html.indexOf("</head>"));
+    expect(csp).toBeLessThan(html.indexOf('<main class="doc">'));
+  });
+
   it("keeps the stylesheet free of anything fetchable", () => {
     expect(AGENT_PDF_CSS).not.toMatch(/url\(|@import|@font-face/i);
   });

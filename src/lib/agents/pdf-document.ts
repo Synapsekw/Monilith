@@ -12,6 +12,21 @@ import { renderBlocksToHtml } from "@/lib/boards/markdown-html";
  * below carries no `url(`, `@import` or `@font-face` — so there is nothing to
  * fetch and `networkidle` settles immediately.
  *
+ * The `<meta http-equiv="Content-Security-Policy">` below is the BACKSTOP, not
+ * the defence — the defence is the AST plus `escapeHtml`. It exists because
+ * `renderHtmlToPdf` launches Chromium with `@sparticuz/chromium`'s args, which
+ * include `--disable-web-security`, `--allow-running-insecure-content`,
+ * `--no-sandbox` and `--single-process`; that browser is deliberately hostile to
+ * being fed untrusted content, and this document is the first to feed it any.
+ * `default-src 'none'` denies every subresource and every connection the page
+ * could make, so an escaping bug becomes an inert string rather than an outbound
+ * request from inside our function to (say) the instance metadata endpoint.
+ * `style-src 'unsafe-inline'` is the one exception the inline `<style>` needs —
+ * "unsafe-inline" here means inline CSS is allowed to APPLY, not that anything
+ * may be fetched; `default-src 'none'` still forbids `url()`, `@import` and
+ * `@font-face`. This shell only: `src/lib/reports/pdf.ts` and the report export
+ * are untouched by it.
+ *
  * Visual register deliberately matches `src/lib/reports/report-css.ts` (same
  * system sans, same ink/muted/rule palette, hierarchy from size and weight
  * rather than a typeface) without importing it: that stylesheet is written
@@ -50,6 +65,8 @@ export function buildAgentPdfHtml(markdown: string): string {
   const body = renderBlocksToHtml(parseMarkdown(markdown));
   return (
     `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
+    `<meta http-equiv="Content-Security-Policy" ` +
+    `content="default-src 'none'; style-src 'unsafe-inline'">` +
     `<style>${AGENT_PDF_CSS}</style></head>` +
     `<body><main class="doc">${body}</main></body></html>`
   );
