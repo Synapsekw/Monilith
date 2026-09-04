@@ -1443,6 +1443,25 @@ describe("BoardsNav dragging a shared board", () => {
     );
   }
 
+  it("registers the unfiled SHARED row as a droppable too", async () => {
+    // This lived in the "already in a folder" block, whose fixture files s1 into
+    // f1 — so `groupBoardsByFolder` routed s1 to DraggableFiledRow and
+    // DraggableSharedRow, the component the title names, never mounted. The
+    // `toContain("s1")` was satisfied by the filed row, leaving the unfiled
+    // row's pairing with zero coverage (gotcha-89). Here s1 really is unfiled.
+    //
+    // Same pairing requirement as the filed rows: `sortableKeyboardCoordinates`
+    // returns undefined when `droppableContainers.get(active.id)` misses, so a
+    // draggable without a droppable on the SAME id lifts on Space and then
+    // refuses to move on every arrow press.
+    renderNav();
+    fireEvent.pointerEnter(screen.getByTestId("boards-nav-body"));
+    await screen.findByRole("button", { name: handleName });
+
+    expect(dnd.draggables.map((d) => d.id)).toContain("s1");
+    expect(dnd.droppables.map((d) => d.id)).toContain("s1");
+  });
+
   it("gives an unfiled shared board a drag handle once the drag layer mounts", async () => {
     renderNav();
     expect(screen.getByText("Shared with me")).toBeInTheDocument();
@@ -1630,16 +1649,6 @@ describe("BoardsNav dragging a board that is already in a folder", () => {
       expect(dnd.draggables.map((d) => d.id)).toContain(id);
       expect(dnd.droppables.map((d) => d.id)).toContain(id);
     }
-  });
-
-  it("registers the unfiled SHARED row as a droppable too", async () => {
-    renderNav();
-    await armDragLayer();
-
-    // Same pairing requirement, same reason — DraggableSharedRow used to call
-    // useDraggable alone.
-    render(<span />);
-    expect(dnd.droppables.map((d) => d.id)).toContain("s1");
   });
 
   it("carries the current folder in the drag data", async () => {
