@@ -59,8 +59,9 @@ export function focusAnchorFrom(target: Element): BoardsNavFocusAnchor | null {
 
 /**
  * Find the element in the freshly mounted tree that should take focus back.
- * A folder header has two toggles (chevron and name); both restore to the
- * chevron, which is first in DOM order — one step back, but never <body>.
+ * A folder header has exactly one disclosure — chevron, icon and name merged
+ * into a single `button[aria-expanded]` — so this selector resolves to one
+ * node, not two, and focus returns precisely where it was.
  */
 export function focusAnchorTarget(
   container: HTMLElement | null,

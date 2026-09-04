@@ -40,8 +40,14 @@ export async function getSidebarNavData(): Promise<
     activeOrgId: orgId,
     boards,
     sharedBoards,
-    folders: folderData.folders,
-    placements: folderData.placements,
+    // `folderData` is null when the folders read FAILED. Spreading `?.` here
+    // hands `undefined` down, which makes `SidebarNav`/`BoardsNav` fall back to
+    // their `NO_FOLDERS` sentinel — the one place that already means "no folder
+    // data was supplied", as opposed to "this user has no folders". That
+    // sentinel is what stops the prune effect wiping every persisted folder
+    // collapse key on a one-off Supabase blip.
+    folders: folderData?.folders,
+    placements: folderData?.placements,
     workspaces,
     activeWorkspaceId,
     dashboards: dashboards.map((d) => ({ id: d.id, name: d.name })),

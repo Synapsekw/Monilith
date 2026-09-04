@@ -15,6 +15,7 @@ vi.mock("@/lib/boards/folders/actions", () => ({
 }));
 
 import { BoardFolderMenu } from "@/components/boards/BoardFolderMenu";
+import { FOLDER_GONE_ERROR } from "@/lib/boards/folders/types";
 
 const folder = { id: "f1", name: "Acme Rebrand" };
 
@@ -122,5 +123,23 @@ describe("BoardFolderMenu", () => {
       "Folder is gone.",
     );
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("closes and refreshes when the folder was ALREADY deleted", async () => {
+    // A dead end otherwise: the dialog stayed open reporting "That folder no
+    // longer exists." with Cancel as the only way forward, and the sidebar kept
+    // rendering the ghost folder until a full reload. But that outcome IS the
+    // user's goal — the folder is gone. Close, and refresh so the stale row
+    // goes with it.
+    deleteFolder.mockResolvedValue({ ok: false, error: FOLDER_GONE_ERROR });
+    openMenuAndSelect("Delete");
+
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: "Delete folder" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
+    expect(refresh).toHaveBeenCalled();
   });
 });

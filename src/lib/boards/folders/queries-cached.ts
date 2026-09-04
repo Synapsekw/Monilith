@@ -17,12 +17,16 @@ const PLACEMENTS_LIMIT = 2000;
  * `user_id = userId` filter — that filter is the tenant boundary, because the
  * service client bypasses RLS.
  *
- * Returns empty lists on error: the sidebar degrades to today's flat board list
- * rather than blanking the shell. The uncached sibling throws instead.
+ * Returns `null` on error — the caller MUST be able to tell "we could not load
+ * folders" from "this user has none". Both degrade the sidebar to today's flat
+ * board list rather than blanking the shell, but only the second one licenses
+ * `BoardsNav` to prune persisted `folder:*` collapse keys; a transient blip
+ * reported as `{ folders: [] }` silently deleted every one of them. The
+ * uncached sibling throws instead.
  */
 export async function listBoardFoldersCached(
   userId: string,
-): Promise<BoardFolderData> {
+): Promise<BoardFolderData | null> {
   "use cache";
   cacheLife("nav");
   cacheTag(boardFoldersTag(userId));
@@ -44,7 +48,7 @@ export async function listBoardFoldersCached(
   ]);
 
   if (foldersRes.error || placementsRes.error) {
-    return { folders: [], placements: [] };
+    return null;
   }
 
   return {

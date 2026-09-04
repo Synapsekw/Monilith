@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -23,14 +24,21 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS as DndCSS } from "@dnd-kit/utilities";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import type { BoardFolder } from "@/lib/boards/folders/types";
+import type { NavBoard } from "@/lib/boards/folders/group";
 import { reorderPosition } from "@/lib/boards/group-reorder";
+import { navSyncKey } from "@/lib/boards/nav-sync-key";
 import { reorderBoard } from "@/lib/boards/actions";
 import { moveBoardToFolder } from "@/lib/boards/folders/actions";
 import { showMutationError } from "@/lib/ui/mutation-toast";
 import { useTouchAwareSensors } from "@/lib/dnd/sensors";
+import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
+// A filed OWNED row is the same component the plain tree renders, just handed a
+// real grip instead of the inert spacer — which is what keeps the two trees
+// pixel-identical (the "folder row alignment" tests).
+import { PlainBoardRow } from "@/components/boards/PlainBoardRow";
 import {
   focusAnchorTarget,
   type BoardsNavFocusAnchor,
@@ -39,14 +47,15 @@ import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
 import { SharedBoardsSection } from "@/components/boards/SharedBoardsSection";
 
 /**
- * One rendered folder in the nav, handed down from `BoardsNav`. The rows inside
- * `children` are built exactly once up there (plain and drag-enabled trees show
- * the same markup); this layer only adds the drop target around them.
+ * One folder in the nav, handed down from `BoardsNav` as DATA rather than as
+ * finished markup. The two trees render the same entries differently — the
+ * plain one with inert rows, this one with real grip handles — so the rows
+ * cannot be built once upstream. The count derives from `entries.length`; there
+ * is no separate field to fall out of step with the list.
  */
 export type FolderSection = {
   folder: BoardFolder;
-  count: number;
-  children: ReactNode;
+  entries: NavBoard[];
 };
 
 /**
@@ -141,12 +150,80 @@ function SortableBoardRow({
 }
 
 /**
- * A shared board that can be dragged into a folder. It uses `useDraggable`, not
- * `useSortable`: a board someone else owns has no position in MY owned list, so
- * it is a drag SOURCE only. Dropping one on another board is a no-op —
- * `reorderPosition` returns null for an id that isn't in the ordered list.
+ * A drag SOURCE that is not a `useSortable` item — a shared board, or any board
+ * already filed in a folder. Neither has a position in MY owned list to persist,
+ * so neither is sortable; both can still be picked up and dropped on a folder.
  *
- * The handle says "Move …", not "Reorder …", because that is all it can do.
+ * ## Why the droppable is not optional
+ *
+ * `useSortable` registers a draggable AND a droppable under the same id.
+ * `sortableKeyboardCoordinates` depends on that: it ends with
+ *
+ *     const activeDroppable = droppableContainers.get(active.id);
+ *     if (newNode && newRect && activeDroppable && newDroppable) { … }
+ *     return undefined;
+ *
+ * (verified in @dnd-kit/sortable@10.0.0, sortable.cjs.development.js:738-745).
+ * A row that registers only a draggable therefore picks up on Space and then
+ * returns `undefined` for every arrow press — it lifts and refuses to move,
+ * which is a worse lie than having no keyboard drag at all. So every non-
+ * sortable drag source pairs a `useDroppable` on the SAME node and id.
+ *
+ * Landing a drop on such an id is already an explicit no-op:
+ * `folderIdFromDropTarget` returns null, and `reorderPosition` returns null
+ * because the id is not in `ordered`.
+ */
+function useDragSource(id: string, data?: { folderId: string }) {
+  const {
+    setNodeRef: setDragRef,
+    attributes,
+    listeners,
+    transform,
+    isDragging,
+  } = useDraggable({ id, data });
+  const { setNodeRef: setDropRef } = useDroppable({ id });
+
+  // Both refs, one node. `useCallback` so the identity is stable — dnd-kit
+  // treats a new ref callback as a node change and re-measures.
+  const setNodeRef = useCallback(
+    (node: HTMLElement | null) => {
+      setDragRef(node);
+      setDropRef(node);
+    },
+    [setDragRef, setDropRef],
+  );
+
+  return { setNodeRef, attributes, listeners, transform, isDragging };
+}
+
+/** The grip button itself — identical for every non-sortable drag source. */
+function DragSourceGrip({
+  label,
+  attributes,
+  listeners,
+}: {
+  label: string;
+  // dnd-kit's own types, not a hand-written `Record<string, unknown>` — same
+  // `ReturnType<typeof …>` idiom `table/GroupHeaderRow.tsx` already uses.
+  attributes: ReturnType<typeof useDraggable>["attributes"];
+  listeners: ReturnType<typeof useDraggable>["listeners"];
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      className={GRIP_CLASS}
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="size-3.5" />
+    </button>
+  );
+}
+
+/**
+ * An unfiled shared board. The handle says "Move …", not "Reorder …", because
+ * that is all it can do.
  */
 function DraggableSharedRow({
   board,
@@ -158,7 +235,7 @@ function DraggableSharedRow({
   folders: BoardFolder[];
 }) {
   const { setNodeRef, attributes, listeners, transform, isDragging } =
-    useDraggable({ id: board.id });
+    useDragSource(board.id);
 
   return (
     <SharedBoardRow
@@ -170,17 +247,61 @@ function DraggableSharedRow({
       isDragging={isDragging}
       style={{ transform: DndCSS.Translate.toString(transform) }}
       leading={
-        <button
-          type="button"
-          aria-label={`Move ${board.name} into a folder`}
-          className={GRIP_CLASS}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="size-3.5" />
-        </button>
+        <DragSourceGrip
+          label={`Move ${board.name} into a folder`}
+          attributes={attributes}
+          listeners={listeners}
+        />
       }
     />
+  );
+}
+
+/**
+ * A board that is already IN a folder, made draggable so it can be moved
+ * straight into another one.
+ *
+ * The label is "Move X to another folder", not "Reorder X": a folder's boards
+ * sort by placement position and no gesture persists that order, so a filed row
+ * genuinely cannot reorder. Reusing the unfiled row's label would be a fresh
+ * accessibility lie in a slice that exists to remove them.
+ */
+function DraggableFiledRow({
+  entry,
+  folderId,
+  isActive,
+  folders,
+}: {
+  entry: NavBoard;
+  folderId: string;
+  isActive: boolean;
+  folders: BoardFolder[];
+}) {
+  const { setNodeRef, attributes, listeners, transform, isDragging } =
+    // The folder travels with the drag so `handleDragEnd` can reject a drop
+    // back onto the folder the board is already in.
+    useDragSource(entry.board.id, { folderId });
+
+  const shared = {
+    isActive,
+    folders,
+    currentFolderId: folderId,
+    dragRef: setNodeRef,
+    isDragging,
+    style: { transform: DndCSS.Translate.toString(transform) },
+    leading: (
+      <DragSourceGrip
+        label={`Move ${entry.board.name} to another folder`}
+        attributes={attributes}
+        listeners={listeners}
+      />
+    ),
+  };
+
+  return entry.kind === "owned" ? (
+    <PlainBoardRow board={entry.board} {...shared} />
+  ) : (
+    <SharedBoardRow board={entry.board} {...shared} />
   );
 }
 
@@ -189,7 +310,15 @@ function DraggableSharedRow({
  * than in `BoardFolderRow` so that component stays @dnd-kit-free and can render
  * in the plain (pre-drag) tree too.
  */
-function DroppableFolderRow({ section }: { section: FolderSection }) {
+function DroppableFolderRow({
+  section,
+  activeBoardId,
+  folders,
+}: {
+  section: FolderSection;
+  activeBoardId?: string;
+  folders: BoardFolder[];
+}) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${FOLDER_DROP_PREFIX}${section.folder.id}`,
   });
@@ -197,11 +326,19 @@ function DroppableFolderRow({ section }: { section: FolderSection }) {
   return (
     <BoardFolderRow
       folder={section.folder}
-      count={section.count}
+      count={section.entries.length}
       dropRef={setNodeRef}
       isOver={isOver}
     >
-      {section.children}
+      {section.entries.map((entry) => (
+        <DraggableFiledRow
+          key={entry.board.id}
+          entry={entry}
+          folderId={section.folder.id}
+          isActive={entry.board.id === activeBoardId}
+          folders={folders}
+        />
+      ))}
     </BoardFolderRow>
   );
 }
@@ -241,25 +378,53 @@ export function BoardsNavSortable({
   restoreFocus?: BoardsNavFocusAnchor | null;
 }) {
   const router = useRouter();
+  // Selector, as the rest of the tree does — subscribing to the whole store
+  // would re-render this list on every unrelated UI-state change.
+  const setSection = useUIStore((s) => s.setSection);
 
   // Optimistic order for the owned list: seeded from server props, re-synced
   // (during render, per React's "adjust state when a prop changes" pattern)
   // whenever the server sends a new list — e.g. after a create/rename/delete
   // revalidates the shell. Reorder itself is NOT revalidated (that would reload
   // the whole sidebar, gotcha-44); the optimistic order here is authoritative
-  // and the new position is persisted, so a fresh load reads it back. The prop
-  // identity only changes on a server re-render, so a client-only re-render
-  // (e.g. our own optimistic setState) does not clobber the optimistic order.
+  // and the new position is persisted, so a fresh load reads it back.
+  //
+  // The comparison is on CONTENT, not identity. Identity was never a safe proxy
+  // for "the server sent a new list": the prop is a derived array, so it is
+  // re-allocated by any caller that filters or maps on the way down, and a
+  // single `boards.filter(...)` upstream would silently snap a just-dragged
+  // board back to the stale server order — with the whole suite green. The
+  // invariant now lives in `navSyncKey`, where it is testable, instead of in
+  // every caller's memoisation.
   const [ordered, setOrdered] = useState(boards);
-  const [syncedBoards, setSyncedBoards] = useState(boards);
-  if (syncedBoards !== boards) {
-    setSyncedBoards(boards);
+  const [syncedKey, setSyncedKey] = useState(() => navSyncKey(boards));
+  //
+  // Memoised on the prop's identity: this component re-renders on every
+  // pointermove while a drag is in flight, and `MY_BOARDS_LIMIT` is 500, so an
+  // unmemoised scan of the whole list ran on each of those frames. Keying the
+  // MEMO on identity does not re-introduce the identity bug the key exists to
+  // fix — a miss only costs a recompute that yields the same string, and a
+  // genuine content change always arrives as a fresh array (props from the
+  // server are never mutated in place), so a real change can never be missed.
+  const incomingKey = useMemo(() => navSyncKey(boards), [boards]);
+  if (syncedKey !== incomingKey) {
+    setSyncedKey(incomingKey);
     setOrdered(boards);
   }
 
   // Shared sensors: 6px move for mouse, 200ms long-press lift for touch (a quick
-  // swipe scrolls the list instead of grabbing a board).
-  const sensors = useTouchAwareSensors();
+  // swipe scrolls the list instead of grabbing a board) — plus, for this surface
+  // only, a KeyboardSensor. dnd-kit announces a space-bar lift on every handle;
+  // without this the announcement was false. `sortableKeyboardCoordinates` is
+  // the right strategy here because everything in this context is a vertical
+  // list of rows and folder headers, and it walks EVERY droppable in the
+  // context (not just the SortableContext's items), so folder headers are
+  // arrow-key reachable too. Both imports live only in this lazy chunk, which
+  // already carries the dnd stack. See decision-41 for the surfaces that stay
+  // opted out.
+  const sensors = useTouchAwareSensors({
+    keyboardCoordinateGetter: sortableKeyboardCoordinates,
+  });
 
   /**
    * Filing a board by dropping it on a folder header. Unlike reorder this
@@ -273,6 +438,11 @@ export function BoardsNavSortable({
         showMutationError("Couldn't move the board.", new Error(res.error));
         return;
       }
+      // The folder may have been collapsed — and hover-expansion is purely
+      // visual now, so it will snap shut the instant the pointer leaves, hiding
+      // the board the user just filed. `setSection`, never `toggleSection`: an
+      // already-open folder must stay open. Client state only, 0 round-trips.
+      setSection(`${FOLDER_DROP_PREFIX}${folderId}`, false);
       router.refresh();
     });
   }
@@ -308,9 +478,18 @@ export function BoardsNavSortable({
 
     const folderId = folderIdFromDropTarget(String(over.id));
     if (folderId) {
+      // Dropping a board back on its OWN folder header is a no-op, not a write.
+      // `active.id === over.id` never catches it — the ids are namespaced
+      // differently — and without this guard it fires a pointless server write
+      // plus a full router.refresh().
+      if (active.data.current?.folderId === folderId) return;
       fileIntoFolder(String(active.id), folderId);
       return;
     }
+    // Anything else — including a filed row dropped on an unfiled board — falls
+    // through to reorder, where `reorderPosition` returns null for an id that is
+    // not in `ordered`. That is the "snaps back, no write, no toast" path:
+    // dragging a board OUT of a folder is the ⋯ menu's job, not a gesture.
     reorderWithin(String(active.id), String(over.id));
   }
 
@@ -351,7 +530,12 @@ export function BoardsNavSortable({
         onDragEnd={handleDragEnd}
       >
         {folderSections.map((section) => (
-          <DroppableFolderRow key={section.folder.id} section={section} />
+          <DroppableFolderRow
+            key={section.folder.id}
+            section={section}
+            activeBoardId={activeBoardId}
+            folders={folders}
+          />
         ))}
         <SortableContext
           items={ordered.map((b) => b.id)}

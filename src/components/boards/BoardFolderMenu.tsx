@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 
 import { deleteFolder, renameFolder } from "@/lib/boards/folders/actions";
+import { FOLDER_GONE_ERROR } from "@/lib/boards/folders/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,7 +69,12 @@ export function BoardFolderMenu({
     setError(null);
     startTransition(async () => {
       const res = await deleteFolder({ folderId: folder.id });
-      if (!res.ok) {
+      // "Already gone" is not a failure to report on a DELETE — it is the
+      // outcome the user asked for, reached by another tab. Reporting it left
+      // the dialog open with Cancel as the only exit and the ghost folder still
+      // in the sidebar. Treat it as success: close, and refresh so the stale row
+      // goes too.
+      if (!res.ok && res.error !== FOLDER_GONE_ERROR) {
         setError(res.error);
         return;
       }

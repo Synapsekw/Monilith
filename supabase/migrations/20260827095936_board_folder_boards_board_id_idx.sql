@@ -1,0 +1,38 @@
+-- 20260827095936_board_folder_boards_board_id_idx.sql
+-- Version minted by scripts/new-migration.sh (real UTC stamp) — do not hand-edit
+-- the version; the filename must match the remote ledger row (gotcha-55).
+--
+-- What this migration does:
+--   Covers the last uncovered foreign key on board_folder_boards.
+--
+-- The `board_id` FK is uncovered: the primary key is (user_id, board_id), so a
+-- board_id-only predicate cannot seek it and Postgres scans the whole PK index.
+--
+-- The consumer is NOT the app's unfile path. That runs through the request-scoped
+-- RLS client, so Postgres also sees `user_id = (select auth.uid())` and the PK's
+-- leading column IS supplied — measured on DEV before this index existed:
+--
+--   Delete on board_folder_boards
+--     ->  Index Scan using board_folder_boards_pkey on board_folder_boards
+--           Index Cond: ((user_id = $1) AND (board_id = $2))   -- already a seek
+--
+-- The consumer is the `boards ON DELETE CASCADE` referential-integrity check,
+-- which filters on board_id alone. It fires every time ANY board is deleted and
+-- scans the entire placement index across all users — also measured on DEV:
+--
+--   Delete on board_folder_boards
+--     ->  Bitmap Heap Scan on board_folder_boards
+--           Recheck Cond: (board_id = $1)
+--           ->  Bitmap Index Scan on board_folder_boards_pkey
+--                 Index Cond: (board_id = $1)                  -- full index scan
+--
+-- It is also what the Supabase `unindexed_foreign_keys` advisor flags. Plain
+-- btree on the single column: not partial, not composite, because the predicate
+-- the planner has to serve is exactly `board_id = ?`.
+--
+-- `folder_id` is already covered by board_folder_boards_folder_position_idx, and
+-- both `user_id` columns are covered by the PK / board_folders_user_position_idx,
+-- so this is the last one.
+
+create index board_folder_boards_board_id_idx
+  on public.board_folder_boards (board_id);

@@ -1,5 +1,6 @@
 import { renderHook } from "@testing-library/react";
-import { PointerSensor, TouchSensor } from "@dnd-kit/core";
+import { KeyboardSensor, PointerSensor, TouchSensor } from "@dnd-kit/core";
+import type { KeyboardCoordinateGetter } from "@dnd-kit/core";
 import { expect, test } from "vitest";
 import { useTouchAwareSensors } from "./sensors";
 
@@ -27,4 +28,37 @@ test("exposes a mouse PointerSensor and a long-press TouchSensor", () => {
     delay: 200,
     tolerance: 8,
   });
+});
+
+test("stays pointer+touch only when no keyboard strategy is supplied", () => {
+  const { result } = renderHook(() => useTouchAwareSensors());
+
+  // THIS is the guard that the other eight drag surfaces are unchanged. They
+  // all call the hook with no argument, so if this ever returns three sensors
+  // the keyboard lift silently went live on Kanban, Gantt, Calendar, BoardTable
+  // and ColumnOptionsDialog — geometries `sortableKeyboardCoordinates` does not
+  // describe. It passes today and must keep passing; that is the point.
+  expect(result.current).toHaveLength(2);
+  expect(result.current.some((s) => s.sensor === KeyboardSensor)).toBe(false);
+});
+
+test("adds a KeyboardSensor carrying the supplied coordinate getter", () => {
+  // A sentinel, not the real getter: the assertion is that the caller's
+  // function reaches the sensor untouched, not what that function computes.
+  const coordinateGetter = (() => ({
+    x: 0,
+    y: 0,
+  })) as unknown as KeyboardCoordinateGetter;
+
+  const { result } = renderHook(() =>
+    useTouchAwareSensors({ keyboardCoordinateGetter: coordinateGetter }),
+  );
+
+  expect(result.current).toHaveLength(3);
+  const keyboard = result.current.find((s) => s.sensor === KeyboardSensor);
+  expect(keyboard).toBeDefined();
+  expect(
+    (keyboard?.options as { coordinateGetter?: KeyboardCoordinateGetter })
+      .coordinateGetter,
+  ).toBe(coordinateGetter);
 });
