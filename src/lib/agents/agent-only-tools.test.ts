@@ -22,10 +22,10 @@ const ctx: ToolInvokeContext = {
   actorId: "00000000-0000-4000-8000-000000000001",
 };
 
-const NAMES = ["create_file", "create_automation"];
+const NAMES = ["create_file", "create_automation", "create_pdf"];
 
 describe("AGENT_ONLY_DESCRIPTORS", () => {
-  it("offers create_file and create_automation to the model", () => {
+  it("offers create_file, create_automation and create_pdf to the model", () => {
     const tools = buildAgentTools({
       ctx,
       scope: { mode: "all" },
@@ -35,9 +35,9 @@ describe("AGENT_ONLY_DESCRIPTORS", () => {
     expect(Object.keys(tools)).toEqual(expect.arrayContaining(NAMES));
   });
 
-  // The MCP catalog is a contract with third-party clients; these two are not
+  // The MCP catalog is a contract with third-party clients; these are not
   // part of it, and a name that appeared in both would throw at construction.
-  it("keeps both out of the MCP registration", () => {
+  it("keeps all three out of the MCP registration", () => {
     const catalogNames = ALL_TOOL_DESCRIPTORS.map((d) => d.name);
     for (const name of NAMES) expect(catalogNames).not.toContain(name);
     expect(() =>
@@ -55,7 +55,14 @@ describe("AGENT_ONLY_DESCRIPTORS", () => {
       capability: "automation.create",
       scope: "boardId",
     });
-    // Neither may be agentExcluded — that flag would drop them from the very
+    // REUSES files.write. Minting a new capability would leave every agent
+    // already trusted to write files unable to render one until its owner
+    // re-approved something they have already approved.
+    expect(byName.get("create_pdf")).toMatchObject({
+      capability: "files.write",
+      scope: "itemId",
+    });
+    // None may be agentExcluded — that flag would drop them from the very
     // set they exist to join.
     for (const d of AGENT_ONLY_DESCRIPTORS)
       expect(d.agentExcluded).toBeUndefined();

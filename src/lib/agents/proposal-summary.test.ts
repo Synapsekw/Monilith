@@ -145,6 +145,54 @@ describe("summariseProposal — create_file", () => {
   });
 });
 
+describe("summariseProposal — create_pdf", () => {
+  it("names the file that will exist and the size of the SOURCE", () => {
+    expect(
+      summariseProposal("create_pdf", {
+        itemId: "11111111-1111-4111-8111-111111111111",
+        fileName: "q3-review",
+        content: "x".repeat(4300),
+      }),
+    ).toBe(
+      'Render "q3-review.pdf" from 4.2 KB of Markdown and attach it to an item.',
+    );
+  });
+
+  it("does not double-append an extension the model already supplied", () => {
+    expect(
+      summariseProposal("create_pdf", { fileName: "brief.PDF", content: "x" }),
+    ).toContain('"brief.PDF"');
+  });
+
+  // The PDF does not exist until approval renders it, so any output size on
+  // this card would be a guess presented as a fact — the same rule attach_file's
+  // storagePath branch already follows.
+  it("states no output size", () => {
+    const s = summariseProposal("create_pdf", {
+      fileName: "a",
+      content: "x".repeat(1000),
+    });
+    expect(s).toContain("of Markdown");
+    expect(s).not.toMatch(/PDF is|resulting|output/i);
+  });
+
+  it("measures BYTES of the source, not characters", () => {
+    // "é" is two UTF-8 bytes; a character count would say 3 B.
+    expect(
+      summariseProposal("create_pdf", { fileName: "n", content: "ééé" }),
+    ).toBe('Render "n.pdf" from 6 B of Markdown and attach it to an item.');
+  });
+
+  it("falls back to Run create_pdf. when the input is unreadable", () => {
+    expect(summariseProposal("create_pdf", { fileName: "a" })).toBe(
+      "Run create_pdf.",
+    );
+    expect(summariseProposal("create_pdf", { content: "x" })).toBe(
+      "Run create_pdf.",
+    );
+  });
+});
+
 describe("summariseProposal — log_time_allocation", () => {
   it("describes time against an item", () => {
     expect(

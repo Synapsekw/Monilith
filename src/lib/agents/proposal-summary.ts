@@ -311,6 +311,22 @@ function sentenceFor(
       return `Attach ${quoted(named)} (${formatBytes(utf8Bytes(content))}) to an item.`;
     }
 
+    case "create_pdf": {
+      const fileName = str(input, "fileName");
+      const content = typeof input.content === "string" ? input.content : null;
+      if (!fileName || content === null) return undefined;
+      // Mirrors create-pdf.ts: the tool appends `.pdf` unless the model already
+      // did. The card must name the file that will exist.
+      const named = fileName.toLowerCase().endsWith(".pdf")
+        ? fileName
+        : `${fileName}.pdf`;
+      // The SOURCE size, never the PDF's. The document does not exist until
+      // approving this proposal renders it, so an output size here would be a
+      // guess presented as a fact — the same reason `attach_file`'s
+      // storagePath branch states none.
+      return `Render ${quoted(named)} from ${formatBytes(utf8Bytes(content))} of Markdown and attach it to an item.`;
+    }
+
     case "log_time_allocation": {
       const date = str(input, "date");
       const target = timeTarget(input);
