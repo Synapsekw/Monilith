@@ -58,8 +58,13 @@ vi.mock("@/lib/workspaces/active", () => ({
   getActiveWorkspaceId: vi.fn(async () => "w1"),
 }));
 
+import { listBoardFoldersCached } from "@/lib/boards/folders/queries-cached";
+import { useUIStore } from "@/stores/ui";
+
 beforeEach(() => {
   Element.prototype.scrollIntoView ??= () => {};
+  vi.mocked(listBoardFoldersCached).mockClear();
+  useUIStore.setState({ collapsedSections: {} });
 });
 
 describe("SidebarNavData", () => {
@@ -89,4 +94,40 @@ describe("SidebarNavData", () => {
     ]);
     expect(data.activeOrgId).toBe("org2");
   });
+
+  it("omits the folder props entirely when the folders read fails", async () => {
+    // `undefined`, not `[]`. The prop is how the client learns whether folder
+    // data is KNOWN; an empty array would say "this user has none".
+    vi.mocked(listBoardFoldersCached).mockResolvedValueOnce(null);
+
+    const { getSidebarNavData } = await import("./sidebar-nav-data");
+    const data = await getSidebarNavData();
+
+    expect(data.folders).toBeUndefined();
+    expect(data.placements).toBeUndefined();
+  });
+
+  it(
+    "leaves persisted folder-collapse keys intact when the folders read fails",
+    { timeout: 20_000 },
+    async () => {
+      // The end-to-end shape of the bug: one Supabase blip on the nav read used
+      // to reach `BoardsNav`'s prune effect as an empty keep-set, which deleted
+      // every `folder:*` key and persisted the deletion. The sidebar degrading
+      // to a flat list for one render is by design; losing the user's collapse
+      // state permanently is not.
+      useUIStore.setState({
+        collapsedSections: { "folder:f1": true, planning: true },
+      });
+      vi.mocked(listBoardFoldersCached).mockResolvedValueOnce(null);
+
+      const { SidebarNavData } = await import("./sidebar-nav-data");
+      render(await SidebarNavData());
+
+      expect(useUIStore.getState().collapsedSections).toEqual({
+        "folder:f1": true,
+        planning: true,
+      });
+    },
+  );
 });
