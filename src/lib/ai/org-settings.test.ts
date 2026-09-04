@@ -82,6 +82,11 @@ describe("readOrgAiSettings", () => {
       "files.write",
       "automation.create",
       "time.log",
+      // Spec 2c. Deliberately a LITERAL list rather than `[...AGENT_CAPABILITIES]`
+      // — the point of this assertion is to catch drift between this default and
+      // `org_ai_settings.agent_capability_ceiling`'s own column default, and a
+      // list derived from the same constant could not.
+      "memory.write",
     ]);
   });
 
@@ -142,6 +147,11 @@ describe("readOrgAiSettings", () => {
       "files.write",
       "automation.create",
       "time.log",
+      // Spec 2c. Deliberately a LITERAL list rather than `[...AGENT_CAPABILITIES]`
+      // — the point of this assertion is to catch drift between this default and
+      // `org_ai_settings.agent_capability_ceiling`'s own column default, and a
+      // list derived from the same constant could not.
+      "memory.write",
     ]);
   });
 

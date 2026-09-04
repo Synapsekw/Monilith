@@ -17,7 +17,11 @@ import type { AgentCapability } from "./capabilities";
 import type { BoardScope } from "./agent-config";
 import { buildAgentTools } from "./tools";
 import { makeGrantGate, type GrantGate, type ProposedCall } from "./grant-gate";
-import { buildDocumentBlock, composeSystemPrompt } from "./document-inject";
+import {
+  buildDocumentBlock,
+  buildMemoryBlock,
+  composeSystemPrompt,
+} from "./document-inject";
 
 /**
  * The hard ceiling on model round-trips in ONE agent run.
@@ -205,11 +209,14 @@ export async function runAgentLoop(args: {
    * read via `agents-db.ts`). Required — not defaulted here — because a
    * silent fallback is exactly the failure mode this exists to avoid: this
    * is the value `document-inject.ts` keys the instructions delimiter with
-   * whenever `documents` is non-empty, and it MUST be the real per-agent
-   * secret, not a shared placeholder, or every agent's delimiter forges
-   * identically again. It is a no-op string when `documents` is empty (see
-   * `instructionsMarker` in document-inject.ts), so tests that never attach
-   * documents may pass any fixed value.
+   * whenever `documents` OR `memory` is non-empty, and it MUST be the real
+   * per-agent secret, not a shared placeholder, or every agent's delimiter
+   * forges identically again. Spec 2c WIDENED that predicate: memory is
+   * model-written text sitting directly above the marker, so an agent with
+   * memory and no documents is now exactly the case the nonce protects. It is
+   * a no-op string only when BOTH are empty (see `instructionsMarker` in
+   * document-inject.ts), so tests that attach neither may pass any fixed
+   * value.
    */
   nonce: string;
   tools: ToolSet;
@@ -226,6 +233,24 @@ export async function runAgentLoop(args: {
    *  dropped in its entirety (see `selectDocuments` — all-or-nothing).
    *  Echoed straight back on the result so the caller can persist it. */
   documentsOmitted?: boolean;
+  /**
+   * The agent's own notes, ALREADY budget-filtered and already in render order
+   * (`selectMemory` sorts the kept set by key). Injected inside the SAME system
+   * message as PREAMBLE/documents/instructions — never a second one, for the
+   * identical reason the documents are: the Anthropic cache breakpoint lives on
+   * that one message's `providerOptions`.
+   *
+   * Read ONCE, here, before the loop starts. A `remember` call at step 3 cannot
+   * change this message — which is exactly why the expensive INTRA-run cache
+   * (this prefix is re-sent on all twelve steps) is unaffected by memory
+   * writes. The note lands for the NEXT run, and the block's own framing tells
+   * the model so.
+   */
+  memory?: ReadonlyArray<{ key: string; value: string }>;
+  /** How many notes did not fit the memory budget. A COUNT, not a boolean:
+   *  memory truncation is partial by design (see `selectMemory`). Echoed
+   *  straight back on the result so the caller can persist it. */
+  memoryNotesDropped?: number;
   /**
    * Progress reported after EVERY completed step.
    *
@@ -251,6 +276,7 @@ export async function runAgentLoop(args: {
   steps: number;
   toolsUsed: string[];
   documentsOmitted: boolean;
+  memoryNotesDropped: number;
 }> {
   // toolRESULTS, not toolCalls: a denied call is a call the model MADE but
   // never executed, and `user_agent_runs.tools_used` is an audit of what the
@@ -293,6 +319,7 @@ export async function runAgentLoop(args: {
         content: composeSystemPrompt({
           preamble: PREAMBLE,
           documentBlock: buildDocumentBlock(args.documents ?? []),
+          memoryBlock: buildMemoryBlock(args.memory ?? []),
           instructions: args.instructions,
           nonce: args.nonce,
         }),
@@ -346,5 +373,6 @@ export async function runAgentLoop(args: {
     steps: result.steps.length,
     toolsUsed,
     documentsOmitted: args.documentsOmitted ?? false,
+    memoryNotesDropped: args.memoryNotesDropped ?? 0,
   };
 }

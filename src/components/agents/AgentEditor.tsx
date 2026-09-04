@@ -26,6 +26,7 @@ import {
 } from "@/components/settings/ModelPicker";
 import { CapabilityToggles } from "@/components/agents/CapabilityToggles";
 import { DocumentPicker } from "@/components/agents/DocumentPicker";
+import { MemoryPanel } from "@/components/agents/MemoryPanel";
 import { useRestoreFocusAfterPending } from "@/lib/hooks/use-restore-focus-after-pending";
 import { cn } from "@/lib/utils";
 
@@ -121,6 +122,7 @@ export function AgentEditor({
   documents,
   documentTotal = documents.length,
   initialDocumentIds = [],
+  memoryTotals = { noteCount: 0, tokenTotal: 0 },
   orgDefaultContextLength,
   onSaved,
   onCancel,
@@ -149,6 +151,15 @@ export function AgentEditor({
   /** This agent's currently-attached document ids, in saved order. Empty for
    *  a brand-new agent (`mode: "create"` never has anything attached yet). */
   initialDocumentIds?: string[];
+  /** This agent's memory COUNT and TOKEN SUM, from the page's first-paint
+   *  aggregate (`listMemoryTotalsByAgent`) — never the notes themselves. The
+   *  token sum is what the document budget must subtract (the run loop draws
+   *  both from ONE knowledge envelope, so a meter that ignored memory would
+   *  promise room the run has already spent); the count is what the panel's
+   *  `N of 50` renders without a fetch. Defaults to an empty memory, which is
+   *  the true value for a `mode: "create"` agent and lets callers with nothing
+   *  to report — tests, mainly — skip it, exactly like `documentTotal`. */
+  memoryTotals?: { noteCount: number; tokenTotal: number };
   /** The org default model's `context_length`, resolved once by the server
    *  page (`page.tsx`) from data it already reads. The budget meter falls
    *  back to this whenever the pin can't name a usable model directly — see
@@ -428,7 +439,24 @@ export function AgentEditor({
               selectedModelOption?.contextLength ?? orgDefaultContextLength
             }
             instructions={instructions}
+            // Documents and memory share ONE knowledge envelope in the run
+            // loop. Passing this is what keeps the meter honest about what is
+            // actually left for documents.
+            memoryTokens={memoryTotals.tokenTotal}
           />
+        </div>
+
+        <div
+          className="space-y-1.5"
+          role="group"
+          aria-labelledby="agent-memory-label"
+        >
+          <Label id="agent-memory-label">Memory</Label>
+          {/* Directly below the documents it shares a budget with. `agentId`
+              is undefined until a create is saved — the panel renders its own
+              "save this agent first" state for that, since a note needs a real
+              `user_agent_id` to hang off. */}
+          <MemoryPanel agentId={agentId ?? null} totals={memoryTotals} />
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row">

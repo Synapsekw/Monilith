@@ -3,12 +3,13 @@ import {
   buildColumnFilePath,
   buildStoragePath,
 } from "@/lib/collaboration/attachments-path";
-import { resolveItemScope } from "@/lib/collaboration/attachment-core";
+import {
+  MAX_ATTACHMENT_BYTES,
+  resolveItemScope,
+} from "@/lib/collaboration/attachment-core";
 import type { GetClient, ToolResult } from "./shared";
 import type { ToolDescriptor } from "./descriptor";
 
-/** The `attachments` bucket ceiling, mirrored from the bucket + check constraint. */
-const MAX_BYTES = 52_428_800;
 /** Fixed by @supabase/storage-js: createSignedUploadUrl takes only { upsert }. */
 const SIGNED_UPLOAD_TTL_SECONDS = 7200;
 
@@ -78,7 +79,7 @@ export async function createAttachmentUploadHandler(
           token: data.token,
           storagePath,
           expiresInSeconds: SIGNED_UPLOAD_TTL_SECONDS,
-          maxBytes: MAX_BYTES,
+          maxBytes: MAX_ATTACHMENT_BYTES,
         }),
       },
     ],

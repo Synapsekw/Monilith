@@ -9,6 +9,7 @@ export const AGENT_CAPABILITIES = [
   "files.write",
   "automation.create",
   "time.log",
+  "memory.write",
 ] as const;
 
 export type AgentCapability = (typeof AGENT_CAPABILITIES)[number];

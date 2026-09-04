@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useUIStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
@@ -34,15 +34,24 @@ export function BoardFolderRow({
   const collapsedSections = useUIStore((s) => s.collapsedSections);
   const toggleSection = useUIStore((s) => s.toggleSection);
   const key = `folder:${folder.id}`;
-  const open = !collapsedSections[key];
   const bodyId = `board-folder-${folder.id}`;
 
   // Hovering a dragged board over a CLOSED folder opens it, so the drop lands
-  // somewhere the user can actually see. Same client-only persisted toggle a
-  // click uses — no server round-trip, so this is not the gotcha-09 shape.
-  useEffect(() => {
-    if (isOver && !open) toggleSection(key);
-  }, [isOver, open, key, toggleSection]);
+  // somewhere the user can actually see — but PURELY VISUALLY. The persisted
+  // map is not touched.
+  //
+  // This used to be a `useEffect` that called `toggleSection`, i.e. a
+  // localStorage write on every hover. Merely dragging PAST a folder left it
+  // permanently expanded, a concurrent click fought the effect, and unmounting
+  // mid-drag left the write with nothing to undo it. An `onDragCancel` handler
+  // could only undo what was written; deriving `open` instead means there is
+  // nothing to undo and no cancel handler is needed.
+  //
+  // A SUCCESSFUL drop does persist the folder open — otherwise the board the
+  // user just filed disappears the moment the pointer leaves. That write lives
+  // in `BoardsNavSortable.fileIntoFolder`'s success path, once, via
+  // `setSection`.
+  const open = !collapsedSections[key] || isOver;
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -59,33 +68,39 @@ export function BoardFolderRow({
           isOver && "bg-state-hover ring-primary/60 text-foreground ring-1",
         )}
       >
+        {/* ONE disclosure, not two. The chevron and the name used to be
+            separate buttons doing the identical thing, which cost the folder a
+            third tab stop for no second control. The accessible name is the
+            folder name and `aria-expanded` carries the state — the standard
+            disclosure pattern, and a screen reader already announces
+            "Acme Rebrand, button, collapsed" without a redundant aria-label.
+            The count and the ⋯ menu stay OUTSIDE: inside they would join the
+            accessible name. */}
         <button
           type="button"
           onClick={() => toggleSection(key)}
           aria-expanded={open}
           aria-controls={bodyId}
-          aria-label={`${open ? "Collapse" : "Expand"} ${folder.name}`}
-          className="flex size-6 shrink-0 items-center justify-center rounded"
+          className="focus-visible:ring-ring flex min-w-0 flex-1 items-center rounded py-1 pr-1 text-left text-xs focus-visible:ring-2 focus-visible:outline-none"
         >
+          {/* Keeps the chevron in the same 24px column the board rows reserve
+              for their grip, so the header and its boards line up. */}
+          <span
+            aria-hidden
+            className="flex size-6 shrink-0 items-center justify-center"
+          >
+            {open ? (
+              <ChevronDown className="size-3.5" />
+            ) : (
+              <ChevronRight className="size-3.5" />
+            )}
+          </span>
           {open ? (
-            <ChevronDown className="size-3.5" />
+            <FolderOpen className="mr-1.5 size-3.5 shrink-0" aria-hidden />
           ) : (
-            <ChevronRight className="size-3.5" />
+            <Folder className="mr-1.5 size-3.5 shrink-0" aria-hidden />
           )}
-        </button>
-        {open ? (
-          <FolderOpen className="mr-1.5 size-3.5 shrink-0" aria-hidden />
-        ) : (
-          <Folder className="mr-1.5 size-3.5 shrink-0" aria-hidden />
-        )}
-        <button
-          type="button"
-          onClick={() => toggleSection(key)}
-          aria-expanded={open}
-          aria-controls={bodyId}
-          className="min-w-0 flex-1 truncate py-1 pr-1 text-left text-xs"
-        >
-          {folder.name}
+          <span className="min-w-0 flex-1 truncate">{folder.name}</span>
         </button>
         {/* Decorative: a screen reader would otherwise announce a bare number
             with no unit after the folder name, and the expanded list of boards

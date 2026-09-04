@@ -20,6 +20,11 @@ const base = {
   contextLength: 200_000,
   instructions: "Do the thing.",
   onChange: vi.fn(),
+  // REQUIRED, like the prop itself. Every existing case here budgets an agent
+  // with no memory, which is the pre-2c number to the token — `documentBudget`
+  // pins that compatibility guarantee, and this fixture is what keeps these
+  // assertions measuring the document half in isolation.
+  memoryTokens: 0,
 };
 
 // The exact budget number the meter must show is derived from the REAL
@@ -141,6 +146,32 @@ describe("DocumentPicker", () => {
       />,
     );
     expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
+  });
+
+  it("subtracts the agent's memory from the document budget it advertises", () => {
+    // The meter and the run loop must divide ONE envelope the same way. If
+    // `memoryTokens` never reaches `documentBudget`, this meter promises
+    // document room the run has already spent on memory — the precise drift
+    // `ASSUMED_PREFIX_TOKENS` exists to prevent, reappearing through a new
+    // input. Comparing two renders (rather than pinning a literal) keeps this
+    // honest across any future change to the split itself.
+    const props = { ...base, documents: [doc("a", 1_000)], selectedIds: ["a"] };
+    const { rerender } = render(<DocumentPicker {...props} memoryTokens={0} />);
+    const without = screen.getByTestId("document-budget-meter").textContent!;
+    rerender(<DocumentPicker {...props} memoryTokens={2_000} />);
+    const with2k = screen.getByTestId("document-budget-meter").textContent!;
+    expect(with2k).not.toBe(without);
+    // And specifically the budget `documentBudget` itself computes for that
+    // memory — a meter that merely CHANGED (or grew) would satisfy the
+    // inequality above while still being wrong in the direction that matters.
+    const budgetWith2k = documentBudget({
+      contextLength: base.contextLength,
+      prefixTokens: ASSUMED_PREFIX_TOKENS,
+      instructionTokens: estimateTokens(base.instructions),
+      memoryTokens: 2_000,
+    }).budget;
+    expect(budgetWith2k).toBeLessThan(expectedBudget);
+    expect(with2k).toContain(`${budgetWith2k.toLocaleString()} tokens`);
   });
 
   it("selecting is CONTROLLED client state — it reports up and fetches nothing", () => {

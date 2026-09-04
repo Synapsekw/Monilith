@@ -4,6 +4,16 @@
  * from here, which is what lets those three be built in parallel.
  */
 
+/**
+ * The message a folder mutation returns when RLS filtered the row out — the
+ * folder is not yours, or another tab already deleted it. Lives here rather than
+ * in `actions.ts` because a `"use server"` module may only export async
+ * functions, and the CLIENT needs to recognise this one outcome: for a DELETE it
+ * is not a failure to report but the goal already met, so the dialog closes and
+ * refreshes instead of dead-ending on Cancel.
+ */
+export const FOLDER_GONE_ERROR = "That folder no longer exists.";
+
 /** A folder as rendered in the nav. Private to one user; never org-visible. */
 export type BoardFolder = {
   id: string;

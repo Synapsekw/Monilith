@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-08-27 13:27",
+  "updated": "2026-09-04 12:53",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -88,7 +88,7 @@
       {
         "label": "10 AI",
         "state": "part",
-        "pct": 88
+        "pct": 92
       }
     ]
   },
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "881373bf",
+        "value": "b2d00dec",
         "tone": "warn",
-        "note": "Ahead of main by 7 (df6214ee..HEAD), of which 2 are source: the /admin route skeletons. The other 5 are vault/docs. Nothing user-facing — /admin is platform-admin chrome — so this is not urgent to promote."
+        "note": "Ahead of main by 35 (bdc946b7..HEAD), of which 31 are source: Spec 2c agent memory, the create_pdf agent tool, and the sidebar-folders hardening slice — three stalled worktrees closed out on 2026-09-04. Two of those commits are security repairs. Promote."
       },
       {
         "name": "main",
-        "value": "55275c40",
+        "value": "6b83e571",
         "tone": "ok",
-        "note": "PR #101 merged 2026-08-27 — 33 commits: sidebar board folders (finally live), the a11y/silent-failure carryover batch, save-time provider health, and a 46-package dependency sweep."
+        "note": "PR #102 merged 2026-08-27 — admin route skeletons, canonical ActionResult, dev-memory."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 55275c40. Verified live, not assumed: Vercel state=success, / 200, /login 200. Sidebar folders ARE now live."
+        "note": "Serving 6b83e571. Nothing from the 2026-09-04 batch is live yet."
       }
     ],
     "gates": [
@@ -162,14 +162,14 @@
         "name": "lint",
         "value": "pass",
         "tone": "ok",
-        "note": "1 pre-existing unrelated warning (apple-icon.tsx)",
+        "note": "4 pre-existing unrelated warnings (apple-icon.tsx, NotificationsBell.tsx)",
         "label": "lint"
       },
       {
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Four worktrees gated and merged one at a time. A 3-way concurrent run produced two phantom failures (TimeTrackingCell 5s timeout) that passed 12/12 in isolation — machine load, not a regression.",
+        "note": "Each worktree gated separately before merge: 6227, 6214 and 6313 tests green. finish-task re-ran all four gates against the rebased state.",
         "label": "test"
       },
       {
@@ -180,25 +180,33 @@
       },
       {
         "name": "ledger",
-        "value": "149/149",
+        "value": "152/152",
         "tone": "ok",
-        "note": "Verified by db:ledger-check at the promotion preflight. No migration in this batch.",
+        "note": "Verified by db:ledger-check after all three merges. Three migrations landed in this batch; no reconcile was needed.",
         "label": "ledger"
       }
     ]
   },
   "next": [
     {
-      "title": "Brainstorm Spec 2c — agent memory",
-      "why": "Owner-chosen, depth before breadth over Spec 3. Sized M+: no memory surface exists in the schema, so it mirrors 2b's shape; the new risk is the write-back path and sharing the same cached system message with documents. It must consume document-budget.ts, not re-derive it. It must not run in parallel with any other agent-surface slice: it owns the single cached system message and AgentEditor.tsx, and two branches each adding a prompt block merge cleanly into a wrong prompt.",
+      "title": "Promote develop → main",
+      "why": "31 source commits are unpromoted, including two security repairs that only help users once they ship: agent_forget() closing a delete-then-rewrite bypass of the owner-note invariant, and a restrictive CSP on the agent PDF shell. gotcha-92 is the standing lesson — a fix merged to develop is not a fix in production, and the last one sat for three days while production served the break.",
       "tags": [
-        "spec",
-        "brainstorm"
+        "promote",
+        "critical"
+      ]
+    },
+    {
+      "title": "Open the org ceiling so agent memory does something",
+      "why": "Spec 2c ships installable-but-inert by the 2026-08-27 owner ruling: the ceiling backfill was deliberately not run, so every memory write is denied by the org clamp and no proposal is recorded. Nothing is broken — but until an admin opens it, the whole feature is invisible. Owner’s move, and it is why memory was not announced on /updates.",
+      "tags": [
+        "owner",
+        "agents"
       ]
     },
     {
       "title": "Re-read every org-admin gate against an AI actor",
-      "why": "gotcha-91: an org-admin gate authorises the actor, and a model's actor is trusted by construction, so the gate was never a defence. Found once in create_automation; nothing has swept the rest.",
+      "why": "gotcha-91: an org-admin gate authorises the actor, and a model’s actor is trusted by construction, so the gate was never a defence. Spec 2c found the sibling shape again — agent_remember refused to overwrite an owner note while nothing refused to DELETE one. Found twice now; nothing has swept the rest.",
       "tags": [
         "security",
         "critical"
@@ -206,20 +214,25 @@
     },
     {
       "title": "E6 Stripe — units B, C, E–H",
-      "why": "The only open AI epic. A and D shipped 2026-08-02, so what remains is the Stripe client, webhook, paywall primitives, /settings/billing and the admin screens. CORRECTION: the long-repeated \"no migration needed\" claim is false — unit F needs a standalone notification_kind enum migration, G/H need is_platform_admin()-gated RPCs that do not exist, and there is no webhook idempotency store. The lockfile is now clean for the stripe install.",
+      "why": "The only open AI epic. A and D shipped 2026-08-02, so what remains is the Stripe client, webhook, paywall primitives, /settings/billing and the admin screens. The long-repeated \"no migration needed\" claim is false — unit F needs a standalone notification_kind enum migration, G/H need is_platform_admin()-gated RPCs that do not exist, and there is no webhook idempotency store. The lockfile is clean for the stripe install.",
       "tags": [
         "billing"
       ]
     },
     {
       "title": "Buy the $99 Apple Developer account",
-      "why": "The desktop signing path is code-complete and has never run signed. Owner's move, not schedulable work.",
+      "why": "The desktop signing path is code-complete and has never run signed. Owner’s move, not schedulable work.",
       "tags": [
         "desktop"
       ]
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "A stalled worktree is not neutral storage",
+      "text": "Three worktrees sat abandoned for eight days. One held escapeHtml switched off in a SHARED markdown renderer behind a comment promising it would be restored; the suite covered it, but a gate only fires when someone runs it, and the session that dismounts a guard is the one that never reaches the gate (gotcha-98). Another held a migration already applied to DEV whose file was untracked — one worktree prune from a ledger row with no DDL in any git object. db:ledger-check read in sync throughout, because it suppresses rows whose file lives in a live sibling worktree."
+    },
     {
       "sev": "amber",
       "title": "An agent can write to real boards unattended",
@@ -278,20 +291,25 @@
     {
       "sev": "open",
       "title": "gotcha-55 fires on every migration",
-      "text": "Ten for ten. No migration landed in the 2026-08-27 batch, so the count is unchanged. MCP apply_migration stamps its own version and the ledger drifts from the committed filename. Budget the reconcile; pnpm db:ledger-check is the only thing that catches it."
+      "text": "Ten for ten historically. Three migrations landed in the 2026-09-04 batch and the ledger came back 152/152 with no reconcile needed — the first clean batch, not evidence the trap is gone. MCP apply_migration stamps its own version and the ledger drifts from the committed filename. Budget the reconcile; pnpm db:ledger-check is the only thing that catches it."
+    },
+    {
+      "sev": "open",
+      "title": "Agent memory is shipped but inert",
+      "text": "Spec 2c is complete and merged, and does nothing: the org ceiling clamp denies every write and records no proposal, by owner ruling. Deliberate, not a defect — but it means the feature has never run end to end against a real model, and its RLS integration suite only executes with PULSE_TEST_DB set, so it did not run in any gate."
     }
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-08-27-1327-admin-route-skeletons",
-    "when": "2026-08-27 13:27",
-    "title": "Route skeletons for every /admin page",
+    "id": "2026-09-04-1253-close-three-stalled-worktrees",
+    "when": "2026-09-04 12:53",
+    "title": "Close the three stalled worktrees",
     "bullets": [
-      "The whole /admin section had never had a single loading.tsx, so every admin route blocked navigation with no skeleton and logged blocking-prerender-dynamic on each load.",
-      "instant = false on admin/layout.tsx opts out the LAYOUT segment, not the pages beneath it (gotcha-97) — what actually clears the validation is loading.tsx, which is gotcha-48s chosen instant-nav mechanism.",
-      "Seven fallbacks shipped; the three list pages share a parameterized AdminListSkeleton, the overview and two detail pages are bespoke.",
-      "Two guards: every (app)/admin page must have a loading.tsx at or above it, and each list fallbacks grid template is pinned to the page it mirrors.",
-      "The build is blind to this class of defect — /admin route markers are byte-identical with and without the skeletons. Verified instead against an authenticated dev server: two routes, 200, zero errors."
+      "Three task/* worktrees had been frozen since 2026-08-27, each with committed AND uncommitted work, none merged. All three gated and merged to develop one at a time.",
+      "agent-pdf-output had died with escapeHtml switched off in a shared markdown renderer, behind a comment promising it would be restored immediately after a CSP experiment (gotcha-98).",
+      "An applied-but-uncommitted migration was one worktree prune from a DEV ledger row whose DDL existed in no git object; committed before anything else.",
+      "Spec 2c (agent memory) is complete on develop, including the uncommitted review-repair pass: agent_forget() closing a delete-then-rewrite bypass, the marker guard rejecting the LABEL not the sentinel, all seven line-break characters.",
+      "Ledger 152/152, no worktrees, no task/* branches. Four /updates entries announced; memory deliberately not announced because it ships inert."
     ]
   }
 }

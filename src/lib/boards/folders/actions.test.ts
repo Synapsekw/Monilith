@@ -8,10 +8,21 @@ vi.mock("@/lib/auth/session", () => ({
 
 type EqCall = [string, unknown];
 
-// Shared mutable state the actions read from (position lookups, forced errors).
-const state: { insertError: unknown; maxPosition: number | null } = {
+// Shared mutable state the actions read from (position lookups, forced errors,
+// and how many rows a write matched).
+//
+// `affectedRows` is APPLIED, not merely recorded: `.maybeSingle()` below resolves
+// `data: null` when it is 0, so a 0-row match genuinely changes what the action
+// observes. A fake that only logged the number would let the not-found fix be
+// deleted with the suite still green — gotcha-89.
+const state: {
+  insertError: unknown;
+  maxPosition: number | null;
+  affectedRows: number;
+} = {
   insertError: null,
   maxPosition: null,
+  affectedRows: 1,
 };
 
 // Every write the mocked client actually received, keyed by operation — this is
@@ -26,9 +37,16 @@ const calls: {
 /**
  * Chainable Supabase stub. `.eq()` both records the filter and returns the
  * same node, so it works mid-chain (`.select().eq().order().limit()`) and as
- * the terminal call (`.update(...).eq(...)`, `.delete().eq(...)`). For the
- * terminal case the node is itself thenable, resolving to `{ error }` and
- * logging the operation only when it is actually awaited.
+ * the terminal call (`.delete().eq(...)`). For that case the node is itself
+ * thenable, resolving to `{ error }` and logging the operation only when it is
+ * actually awaited.
+ *
+ * `.maybeSingle()` is the OTHER terminal — the RETURNING form
+ * (`.update(...).eq(...).select("id").maybeSingle()`) that lets an action tell
+ * "changed one row" from "matched nothing". It resolves `data: null` whenever
+ * `state.affectedRows` is 0, so the fake APPLIES the row count rather than just
+ * recording it; that is what makes the not-found tests genuinely fail without
+ * the fix.
  */
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -36,6 +54,20 @@ vi.mock("@/lib/supabase/server", () => ({
       const eqLog: EqCall[] = [];
       let mode: "update" | "delete" | null = null;
       let updatePayload: unknown = null;
+      let logged = false;
+
+      // Exactly one of `.then` / `.maybeSingle` terminates a given chain, but
+      // guard anyway: a double-log would silently break the `toHaveLength(1)`
+      // assertions rather than the behaviour under test.
+      const logOperation = () => {
+        if (logged) return;
+        logged = true;
+        if (mode === "update") {
+          calls.updates.push({ payload: updatePayload, eq: [...eqLog] });
+        } else if (mode === "delete") {
+          calls.deletes.push({ eq: [...eqLog] });
+        }
+      };
 
       const qb: Record<string, unknown> = {};
       qb.select = () => qb;
@@ -55,6 +87,13 @@ vi.mock("@/lib/supabase/server", () => ({
           data: { id: "f-new", name: "Acme", position: 0 },
           error: state.insertError,
         });
+      qb.maybeSingle = () => {
+        logOperation();
+        return Promise.resolve({
+          data: state.affectedRows > 0 ? { id: "matched-row" } : null,
+          error: state.insertError,
+        });
+      };
       qb.insert = (payload: unknown) => {
         calls.inserts.push(payload);
         return qb;
@@ -73,14 +112,10 @@ vi.mock("@/lib/supabase/server", () => ({
         return Promise.resolve({ error: state.insertError });
       };
       // Makes `qb` itself awaitable when `.eq()` is the last call in the
-      // chain — the update/delete flows never call a distinct terminal
-      // method the way the position lookups terminate on `.limit()`.
+      // chain — `moveBoardToFolder`'s unfile delete has no RETURNING, so it
+      // never reaches a distinct terminal method.
       qb.then = (resolve: (value: { error: unknown }) => void) => {
-        if (mode === "update") {
-          calls.updates.push({ payload: updatePayload, eq: [...eqLog] });
-        } else if (mode === "delete") {
-          calls.deletes.push({ eq: [...eqLog] });
-        }
+        logOperation();
         resolve({ error: state.insertError });
       };
       return qb;
@@ -103,6 +138,7 @@ describe("board folder actions", () => {
     updateTag.mockClear();
     state.insertError = null;
     state.maxPosition = null;
+    state.affectedRows = 1;
     calls.inserts = [];
     calls.updates = [];
     calls.deletes = [];
@@ -188,5 +224,76 @@ describe("board folder actions", () => {
     state.maxPosition = 4;
     await moveBoardToFolder({ boardId: BOARD, folderId: FOLDER });
     expect(calls.upserts[0]?.payload).toMatchObject({ position: 5 });
+  });
+});
+
+/**
+ * RLS filters a folder you do not own out of the statement entirely, so the
+ * write succeeds having matched zero rows. Without a RETURNING check both
+ * actions reported success for a folder that was deleted in another tab — the
+ * user saw "renamed" and nothing had changed.
+ *
+ * The asymmetry with `moveBoardToFolder` is deliberate and is locked below, so a
+ * future "make these consistent" refactor has to argue with a red test.
+ */
+describe("board folder actions — a 0-row match", () => {
+  beforeEach(() => {
+    updateTag.mockClear();
+    state.insertError = null;
+    state.maxPosition = null;
+    state.affectedRows = 1;
+    calls.inserts = [];
+    calls.updates = [];
+    calls.deletes = [];
+    calls.upserts = [];
+  });
+
+  it("renameFolder reports a folder that isn't yours as missing", async () => {
+    state.affectedRows = 0;
+    const res = await renameFolder({ folderId: FOLDER, name: "New Name" });
+    expect(res.ok).toBe(false);
+    expect(res.ok === false && res.error).toBe("That folder no longer exists.");
+    // Nothing changed, so nothing may be invalidated.
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("deleteFolder reports a folder that isn't yours as missing", async () => {
+    state.affectedRows = 0;
+    const res = await deleteFolder({ folderId: FOLDER });
+    expect(res.ok).toBe(false);
+    expect(res.ok === false && res.error).toBe("That folder no longer exists.");
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("still renames and invalidates on a real match", async () => {
+    state.affectedRows = 1;
+    const res = await renameFolder({ folderId: FOLDER, name: "  New Name  " });
+    expect(res.ok).toBe(true);
+    expect(calls.updates).toHaveLength(1);
+    expect(calls.updates[0]).toMatchObject({
+      payload: { name: "New Name" },
+      eq: [["id", FOLDER]],
+    });
+    expect(updateTag).toHaveBeenCalledTimes(1);
+    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
+  });
+
+  it("still deletes and invalidates on a real match", async () => {
+    state.affectedRows = 1;
+    const res = await deleteFolder({ folderId: FOLDER });
+    expect(res.ok).toBe(true);
+    expect(calls.deletes).toHaveLength(1);
+    expect(calls.deletes[0]).toEqual({ eq: [["id", FOLDER]] });
+    expect(updateTag).toHaveBeenCalledTimes(1);
+  });
+
+  it("unfiling a board with no placement stays a success", async () => {
+    state.affectedRows = 0;
+    const res = await moveBoardToFolder({ boardId: BOARD, folderId: null });
+    // A double-click, or a stale ⋯ menu, is a state the user already has —
+    // failing it would surface an error toast for a no-op. Deliberately NOT
+    // symmetric with rename/delete.
+    expect(res.ok).toBe(true);
+    expect(updateTag).toHaveBeenCalledWith("board-folders:user:user-1");
   });
 });

@@ -214,10 +214,13 @@
   --glow-primary: 0 0 30px -8px rgba(91, 111, 214, 0.35);
 
   /* Periwinkle Dusk — light. Chrome only; content stays neutral. */
-  --app-wash: linear-gradient(168deg, #eef0f8 0%, #e6e9f3 46%, #d9dce8 100%);
+  --app-wash: linear-gradient(168deg, #e3e7f6 0%, #dbe0f1 46%, #d3d8e9 100%);
+  /* Periwinkle-tinted, not white: a pure-white bloom bleached the chrome the
+     sidebar sits in back to near-#fff (#f9fafd), losing the blue cast dark
+     mode gets from its brand bloom. Tinted, the sidebar reads ~#e2e8f8. */
   --app-bloom: radial-gradient(
     110% 85% at 8% -6%,
-    rgb(255 255 255 / 65%) 0%,
+    rgb(226 232 250 / 55%) 0%,
     transparent 58%
   );
   --content-surface: #ffffff;

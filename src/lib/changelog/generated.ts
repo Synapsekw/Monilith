@@ -4,6 +4,41 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-04",
+    kind: "new",
+    title: "Ask an agent for a PDF",
+    description:
+      "Your agents can now write a document and hand it back as a PDF, attached to the item you are working on -- a summary, a status report, a checklist. You approve it before it is created, and you can read exactly what it wrote on the approval card.",
+  },
+  {
+    date: "2026-09-04",
+    kind: "fixed",
+    title: "Deleting a folder that is already gone",
+    description:
+      "If a board folder was deleted in another tab, deleting it again no longer dead-ends with an error and a Cancel button. The dialog closes and the stale folder disappears from your sidebar.",
+  },
+  {
+    date: "2026-09-04",
+    kind: "fixed",
+    title: "Collapsed folders stay collapsed",
+    description:
+      "A brief hiccup loading your folders could permanently forget which ones you had collapsed. Your sidebar now keeps that state through it.",
+  },
+  {
+    date: "2026-09-04",
+    kind: "fixed",
+    title: "Sidebar board order no longer gets stuck",
+    description:
+      "Renaming, creating or reordering boards could leave the sidebar showing a stale order until a full page reload.",
+  },
+  {
+    date: "2026-08-27",
+    kind: "improved",
+    title: "Drag boards between folders",
+    description:
+      "Boards already in a folder can now be dragged straight into another one, and the sidebar's drag handles work from the keyboard.",
+  },
+  {
     date: "2026-08-27",
     kind: "fixed",
     title: "Out-of-range workload defaults now explain themselves",

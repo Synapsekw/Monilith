@@ -1,10 +1,16 @@
 "use client";
 
-import { startTransition, useMemo, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FolderKanban, Users2 } from "lucide-react";
+import { FolderKanban } from "lucide-react";
 import type { BoardListEntry, SharedBoardEntry } from "@/lib/boards/queries";
 import { useCoarsePointer } from "@/lib/hooks/use-coarse-pointer";
 import { cn } from "@/lib/utils";
@@ -14,13 +20,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { NewBoardDialog } from "@/components/boards/NewBoardDialog";
-import { BoardItemMenu } from "@/components/boards/BoardItemMenu";
+import { PlainBoardRow } from "@/components/boards/PlainBoardRow";
 import { NavSection } from "@/components/shell/nav-section";
 import type {
   BoardFolder,
   BoardFolderPlacement,
 } from "@/lib/boards/folders/types";
-import { groupBoardsByFolder } from "@/lib/boards/folders/group";
+import { groupBoardsByFolder, type NavBoard } from "@/lib/boards/folders/group";
+import { useUIStore } from "@/stores/ui";
 import { BoardFolderRow } from "@/components/boards/BoardFolderRow";
 import { NewFolderDialog } from "@/components/boards/NewFolderDialog";
 import { SharedBoardRow } from "@/components/boards/SharedBoardRow";
@@ -44,10 +51,16 @@ const BoardsNavSortable = dynamic(
 
 // Module-level empty defaults, NOT inline `= []`. An inline default allocates a
 // fresh array on every render, which would make the `useMemo` below miss on
-// every render for any caller that omits these props — and a fresh
-// `grouped.unfiledOwned` identity each render silently resets
-// `BoardsNavSortable`'s optimistic reorder (its render-phase prop sync treats a
-// new identity as "the server sent a new list").
+// every render for any caller that omits these props.
+//
+// This used to be load-bearing for CORRECTNESS: `BoardsNavSortable`'s optimistic
+// reorder re-synced on the `boards` prop's identity, so a missed memo silently
+// undid a drag. That sync is content-based now (`navSyncKey`), so these are a
+// render-cost saving and nothing more — worth keeping, not worth defending.
+//
+// `NO_FOLDERS` carries one further meaning that IS load-bearing: it is the
+// sentinel for "the caller supplied no folder data at all", which the prune
+// effect below must treat as UNKNOWN rather than as "this user has no folders".
 const NO_FOLDERS: BoardFolder[] = [];
 const NO_PLACEMENTS: BoardFolderPlacement[] = [];
 
@@ -62,57 +75,6 @@ function CoarseCaption({ label }: { label: string }) {
     <span className="text-muted-foreground text-3xs max-w-full truncate leading-tight normal-case">
       {label}
     </span>
-  );
-}
-
-/**
- * A non-draggable owned-board row: the default first-paint markup before the
- * lazy sortable variant mounts. Mirrors `SortableBoardRow` minus the grip
- * hooks — an inert `size-6` spacer holds the grip's slot so swapping in the
- * drag-enabled variant on hover doesn't shift the row horizontally.
- */
-export function PlainBoardRow({
-  board,
-  isActive,
-  folders = [],
-  currentFolderId = null,
-}: {
-  board: BoardListEntry;
-  isActive: boolean;
-  folders?: BoardFolder[];
-  currentFolderId?: string | null;
-}) {
-  return (
-    <div
-      data-board-row={board.id}
-      className={cn(
-        "group/row flex items-center rounded-md pr-1 transition-colors",
-        isActive
-          ? "bg-primary/80 text-foreground"
-          : "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-      )}
-    >
-      <span className="size-6 shrink-0" aria-hidden />
-      <Link
-        href={`/boards/${board.id}`}
-        aria-current={isActive ? "page" : undefined}
-        className="min-w-0 flex-1 truncate py-1 pr-1 text-xs"
-      >
-        {board.name}
-      </Link>
-      {board.shared_out ? (
-        <Users2
-          aria-label="Shared with others"
-          className="text-muted-foreground mr-0.5 size-3.5 shrink-0"
-        />
-      ) : null}
-      <BoardItemMenu
-        board={{ id: board.id, name: board.name }}
-        isActive={isActive}
-        folders={folders}
-        currentFolderId={currentFolderId}
-      />
-    </div>
   );
 }
 
@@ -166,12 +128,11 @@ export function BoardsNav({
   // Fold folders + placements into the tree once. `groupBoardsByFolder` owns the
   // "a folder with no visible board is dropped, not rendered empty" rule.
   //
-  // The memo is load-bearing, not a micro-optimisation: the fold allocates fresh
-  // arrays, and `grouped.unfiledOwned` is the `boards` prop of
-  // `BoardsNavSortable`, whose render-phase sync resets the optimistic reorder
-  // whenever that prop's IDENTITY changes. Without the memo, any client-only
-  // re-render (e.g. `useParams()` changing as you click another board) would
-  // snap a just-dragged board back to the stale server order.
+  // The memo is a render-cost saving: the fold allocates several arrays and maps
+  // and runs on every client re-render (e.g. `useParams()` changing as you click
+  // another board) without it. It is NOT what keeps a just-dragged board in
+  // place any more — `BoardsNavSortable` compares the list's CONTENT now, so a
+  // missed memo costs work, not correctness.
   const grouped = useMemo(
     () =>
       groupBoardsByFolder({
@@ -183,34 +144,65 @@ export function BoardsNav({
     [folders, placements, boards, sharedBoards],
   );
 
-  // Folder rows are defined ONCE here and handed to whichever tree is mounted:
-  // the plain one, or the lazy drag layer that wraps each header in a drop
-  // target. Both must show identical markup, so neither owns the rows.
+  // Folder sections are DATA, not pre-rendered markup: `{ folder, entries }`.
+  // The two trees render the same entries differently — the plain one with
+  // inert rows, the drag layer with grip handles — so handing down finished
+  // `children` would have forced the drag layer to re-wrap someone else's
+  // elements. This mirrors `SharedBoardsSection`'s existing `renderRow` shape;
+  // it is not a second pattern.
   const folderSections: FolderSection[] = grouped.folders.map(
-    ({ folder, boards: folderBoards }) => ({
-      folder,
-      count: folderBoards.length,
-      children: folderBoards.map((entry) =>
-        entry.kind === "owned" ? (
-          <PlainBoardRow
-            key={entry.board.id}
-            board={entry.board}
-            isActive={entry.board.id === activeBoardId}
-            folders={folders}
-            currentFolderId={folder.id}
-          />
-        ) : (
-          <SharedBoardRow
-            key={entry.board.id}
-            board={entry.board}
-            isActive={entry.board.id === activeBoardId}
-            folders={folders}
-            currentFolderId={folder.id}
-          />
-        ),
-      ),
-    }),
+    ({ folder, boards: entries }) => ({ folder, entries }),
   );
+
+  /** The non-draggable row for one entry inside a folder. */
+  function renderPlainRow(entry: NavBoard, folderId: string): ReactNode {
+    return entry.kind === "owned" ? (
+      <PlainBoardRow
+        key={entry.board.id}
+        board={entry.board}
+        isActive={entry.board.id === activeBoardId}
+        folders={folders}
+        currentFolderId={folderId}
+      />
+    ) : (
+      <SharedBoardRow
+        key={entry.board.id}
+        board={entry.board}
+        isActive={entry.board.id === activeBoardId}
+        folders={folders}
+        currentFolderId={folderId}
+      />
+    );
+  }
+
+  // Drop the collapse state of folders that no longer exist, so the persisted
+  // map cannot grow without bound.
+  //
+  // Prune against the RAW `folders` prop, never `grouped.folders`: the fold
+  // DROPS folders whose boards are all in another workspace, so pruning against
+  // the rendered tree would erase the collapse state of folders that still
+  // exist, merely because you switched workspace.
+  //
+  // And skip entirely when the prop was omitted — `NO_FOLDERS` means "the
+  // caller supplied no folder data", i.e. UNKNOWN, not "this user has none".
+  // Pruning against an empty keep-set would wipe every folder key in the
+  // sidebar.
+  const pruneSections = useUIStore((s) => s.pruneSections);
+  // Key the effect on a stable signature, not the array: `folders` is a fresh
+  // identity on any server re-render. (`pruneSections` also returns the
+  // identical map when nothing is stale, so this cannot loop either way.)
+  const folderIdSignature = folders
+    .map((f) => f.id)
+    .sort()
+    .join(",");
+  const foldersSupplied = folders !== NO_FOLDERS;
+  useEffect(() => {
+    if (!foldersSupplied) return;
+    pruneSections(
+      "folder:",
+      new Set(folderIdSignature === "" ? [] : folderIdSignature.split(",")),
+    );
+  }, [foldersSupplied, folderIdSignature, pruneSections]);
 
   return collapsed ? (
     <div className="flex flex-col items-center gap-0.5 px-2 py-2">
@@ -325,9 +317,11 @@ export function BoardsNav({
             <BoardFolderRow
               key={section.folder.id}
               folder={section.folder}
-              count={section.count}
+              count={section.entries.length}
             >
-              {section.children}
+              {section.entries.map((entry) =>
+                renderPlainRow(entry, section.folder.id),
+              )}
             </BoardFolderRow>
           ))}
           {grouped.unfiledOwned.map((b) => (
