@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth/session";
 import { boardFoldersTag } from "@/lib/cache/tags";
 import { fail, type ActionResult } from "@/lib/actions/result";
-import type { BoardFolder } from "@/lib/boards/folders/types";
+import {
+  FOLDER_GONE_ERROR,
+  type BoardFolder,
+} from "@/lib/boards/folders/types";
 import {
   createFolderSchema,
   deleteFolderSchema,
@@ -78,7 +81,7 @@ export async function renameFolder(input: {
   // A folder that isn't yours (or was deleted in another tab) is filtered out by
   // RLS, so the update succeeds having matched nothing. Without this the action
   // reported "renamed" and the name was unchanged.
-  if (!data) return fail("That folder no longer exists.");
+  if (!data) return fail(FOLDER_GONE_ERROR);
 
   // After the not-found check: nothing changed, so nothing is invalidated.
   updateTag(boardFoldersTag(user.id));
@@ -110,7 +113,7 @@ export async function deleteFolder(input: {
   if (error) return fail(error.message);
   // Same RLS-filtered miss as `renameFolder`: deleting a folder that is already
   // gone must say so rather than report a success that changed nothing.
-  if (!data) return fail("That folder no longer exists.");
+  if (!data) return fail(FOLDER_GONE_ERROR);
 
   updateTag(boardFoldersTag(user.id));
   return { ok: true, data: undefined };
