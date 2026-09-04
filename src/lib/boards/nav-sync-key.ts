@@ -10,12 +10,31 @@ type NavSyncBoard = Pick<
   "id" | "position" | "name" | "shared_out"
 >;
 
-// A record separator and a field separator that cannot appear in a uuid, a
-// number, or a boolean, and are vanishingly unlikely in a board name. Using two
-// DISTINCT control characters is what stops a name containing one separator from
-// forging a different list shape.
-const FIELD = "";
-const RECORD = "";
+// Field and record separators: control characters that cannot appear in a uuid,
+// a number or a boolean, and are vanishingly unlikely in a board name.
+//
+// They are punctuation, NOT the safety property. Distinct separators only make
+// an encoding unforgeable if the payload is escaped, and `name` is not escaped:
+// `boardNameSchema` is `z.string().trim().min(1).max(100)` with no
+// control-character filter, so a board could be named `Alpha\x010\x02b2\x011\x01Beta`
+// and the naive `join` produced byte-for-byte the key of a DIFFERENT two-board
+// list. That forged "content unchanged" strands the sidebar's optimistic order
+// across a real server rename/create/delete/reorder until a full reload.
+//
+// What actually makes the key unforgeable is the LENGTH PREFIX below.
+const FIELD = "\x01";
+const RECORD = "\x02";
+
+/**
+ * One field, encoded `<char count>\x01<value>`. This is what makes the whole key
+ * injective: a reader takes the digits up to the separator and then exactly that
+ * many characters, whatever they are — so no value, however crafted, can move a
+ * field or record boundary. It is unconditional (no escaping, no filtering, no
+ * lossiness: two different names still hash apart) and costs one `.length`.
+ */
+function field(value: string): string {
+  return `${value.length}${FIELD}${value}`;
+}
 
 /**
  * A content signature for the owned-boards list, used by `BoardsNavSortable` to
@@ -44,7 +63,9 @@ const RECORD = "";
 export function navSyncKey(boards: readonly NavSyncBoard[]): string {
   return boards
     .map((b) =>
-      [b.id, b.position, b.name, b.shared_out ? "1" : "0"].join(FIELD),
+      [b.id, String(b.position), b.name, b.shared_out ? "1" : "0"]
+        .map(field)
+        .join(""),
     )
     .join(RECORD);
 }

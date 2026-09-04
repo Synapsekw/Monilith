@@ -69,11 +69,34 @@ describe("navSyncKey", () => {
   });
 
   it("cannot be spoofed by a name that contains the separators", () => {
-    // Two boards whose names carry the field/record separators must not be able
-    // to produce the same key as a differently-shaped list.
-    const a = navSyncKey([{ ...alpha, name: "Ab2" }]);
-    const b = navSyncKey([alpha, beta]);
-    expect(a).not.toBe(b);
+    // The MODULE's real separators — \x01 (field) and \x02 (record). The
+    // previous version of this test used \x1f/\x1e, which appear nowhere in the
+    // encoding, so it compared two obviously-different strings and could not
+    // fail (gotcha-89).
+    //
+    // Board names permit these bytes: `boardNameSchema` is
+    // `z.string().trim().min(1).max(100)` with no control-character filter. This
+    // exact payload is the collision the un-prefixed key admitted — one board
+    // whose NAME carries the tail of a two-board record:
+    //
+    //   "b1" \x01 "0" \x01 <name> \x01 "0"
+    //          ==  "b1\x010\x01Alpha\x010" \x02 "b2\x011\x01Beta\x010"
+    //
+    // A forged "content unchanged" here strands the sidebar's optimistic order
+    // across a genuine server rename/create/delete/reorder until a full reload.
+    const spoofed = navSyncKey([
+      { ...alpha, name: "Alpha\x010\x02b2\x011\x01Beta" },
+    ]);
+    expect(spoofed).not.toBe(navSyncKey([alpha, beta]));
+  });
+
+  it("still tells two names apart when one contains a separator", () => {
+    // Stripping the separators out of `name` would also close the forgery
+    // above — but lossily: two genuinely different names would hash alike and
+    // a server-side rename would stop re-syncing the sidebar. Pin that out.
+    const plain = navSyncKey([{ ...alpha, name: "Alpha" }]);
+    expect(navSyncKey([{ ...alpha, name: "Al\x01pha" }])).not.toBe(plain);
+    expect(navSyncKey([{ ...alpha, name: "Al\x02pha" }])).not.toBe(plain);
   });
 
   it("is stable for an empty list", () => {
