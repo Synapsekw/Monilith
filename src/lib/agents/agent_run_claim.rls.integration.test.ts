@@ -43,10 +43,19 @@ import type { Database } from "@/types/database.types";
 // fresh `randomUUID()` ids, so nothing here can collide with another suite or
 // be picked up by the cron. The delegation cases hang off a PAST `fire_date`,
 // deliberately: a child inherits its parent's day, so they cannot consume the
-// owner's cap for today and cannot perturb the cooldown/cap cases below them.
-// `afterAll` deletes the four agents unconditionally, which cascades every run
-// row this file created (`user_agent_runs_user_agent_id_fkey ... on delete
-// cascade`).
+// owner's cap for today. `afterAll` deletes the four agents unconditionally,
+// which cascades every run row this file created
+// (`user_agent_runs_user_agent_id_fkey ... on delete cascade`).
+//
+// A PAST `fire_date` does NOT also hold the cooldown off, and assuming it did
+// is what broke this file on its first live run. The two limits read DIFFERENT
+// clocks: the daily cap counts `fire_date` (a logical day the seed chooses),
+// but the cooldown counts `created_at > now() - interval '5 minutes'` (real
+// arrival time, which the seed does not choose — it defaults to now()). So a
+// row seeded with `fire_date = '2026-01-20'` still lands INSIDE the cooldown
+// window, and the very first `claim(agentA, 'mention')` came back
+// `refused_cooldown`. `seedRun` therefore backdates `created_at`; see
+// SEED_BACKDATE_MS.
 //
 // ORDERED, not independent: the cooldown case spends one of today's runs and
 // the daily-cap case then fills the rest. Vitest runs a file's tests in source
@@ -58,6 +67,23 @@ const [ORG_A, ORG_B] = TIER2_FIXTURE_TENANTS;
 
 /** A past day, so the delegation subtree can never count against today's cap. */
 const PAST_DATE = "2026-01-20";
+
+/**
+ * How far back `seedRun` dates a row's `created_at`.
+ *
+ * Every row this file seeds directly is PRE-EXISTING HISTORY — the parent of a
+ * delegation subtree, the runs that have already spent today's budget. None of
+ * them is an event that just arrived, and only a just-arrived mention should
+ * arm the five-minute cooldown. Left at the column default (`now()`), a seeded
+ * `trigger: 'mention'` row silently rate-limits the agent it is meant to be
+ * background for, and the cooldown then answers ahead of the limit under test.
+ *
+ * One hour — 12x the window — so the margin cannot be eaten by a slow suite,
+ * and small enough that the row still reads as recent history to a human
+ * inspecting DEV. It is only ever the ARRIVAL time: `fire_date` (the day the
+ * cap counts) is passed explicitly by every caller and is unaffected.
+ */
+const SEED_BACKDATE_MS = 60 * 60 * 1000;
 
 type Target = { url: string; anonKey: string; serviceRoleKey: string };
 type Resolution = { ok: true; target: Target } | { ok: false; reason: string };
@@ -91,8 +117,17 @@ if (!resolution.ok) {
   console.info(`[agent_run_claim] skipped — ${resolution.reason}`);
 }
 
+// `retry: 0` overrides the integration project's `retry: 1` (vitest.config.ts)
+// for THIS file only. That retry exists to absorb a one-off cloud blip on a
+// stateless suite; these cases are ordered and stateful, and Vitest re-runs a
+// failed TEST without re-running `beforeAll`. So a retry replays a case against
+// state its own first attempt already wrote: attempt 1 of the cooldown case
+// genuinely claims a run, which genuinely arms the cooldown, so attempt 2's
+// "first" claim is refused for real. Retrying cannot rescue this file — it can
+// only turn one honest failure into a misleading one.
 describe.skipIf(!resolution.ok)(
   "agent_run_claim (live DEV, Tier-2 permanent fixture tenants)",
+  { retry: 0 },
   () => {
     const target = resolution.ok ? resolution.target : null;
     const tag = randomUUID().slice(0, 8);
@@ -148,7 +183,12 @@ describe.skipIf(!resolution.ok)(
 
     /** Insert a run row directly (service role) — the paths under test are the
      *  RPC's refusals, and seeding through it would make the fixture depend on
-     *  the very rules being asserted. */
+     *  the very rules being asserted.
+     *
+     *  Backdates `created_at` by SEED_BACKDATE_MS: a seeded row is history, and
+     *  history must not arm the five-minute mention cooldown. Read that comment
+     *  before removing this — it is the whole reason the cooldown and daily-cap
+     *  cases below can reach the limit they name. */
     async function seedRun(row: {
       agentId: string;
       orgId: string;
@@ -165,6 +205,8 @@ describe.skipIf(!resolution.ok)(
           org_id: row.orgId,
           owner_id: row.ownerId,
           fire_date: row.fireDate,
+          // Arrival time, NOT the logical day — see SEED_BACKDATE_MS.
+          created_at: new Date(Date.now() - SEED_BACKDATE_MS).toISOString(),
           // NULL is required for every non-schedule trigger —
           // `user_agent_runs_slot_shape` makes the pairing exact.
           fire_hour: null,
@@ -359,6 +401,12 @@ describe.skipIf(!resolution.ok)(
 
     // ── Cooldown ─────────────────────────────────────────────────────────
     // SPENDS ONE of today's runs — the cap case below accounts for it.
+    //
+    // The cooldown is armed by the FIRST CLAIM, not by the fixture: agentA's
+    // seeded mention row (`rootRun`) is backdated out of the window, so the
+    // window opening is the RPC's own insert. That is what makes the second
+    // claim's refusal evidence about `agent_run_claim` rather than about the
+    // seed.
     it("claims a first mention run, then refuses a second inside the cooldown", async () => {
       const first = await claim(userA, {
         agentId: agentA,
@@ -413,7 +461,10 @@ describe.skipIf(!resolution.ok)(
         .is("parent_run_id", null);
 
       // Fill today to exactly the cap. Hung off THIS suite's agent, so the
-      // afterAll cascade takes them with it.
+      // afterAll cascade takes them with it. `seedRun` backdates `created_at`,
+      // which is load-bearing here: these are `trigger: 'mention'` rows on the
+      // very agent about to be probed, so at the column default they would arm
+      // agentA2's cooldown and the cap would never be reached.
       for (let n = count ?? 0; n < cap; n++) {
         await seedRun({
           agentId: agentA2,
@@ -423,6 +474,18 @@ describe.skipIf(!resolution.ok)(
           trigger: "mention",
         });
       }
+
+      // The premise, checked rather than assumed: the assertion below only
+      // means "the cap refuses" if today is actually AT the cap. Counted the
+      // way the function counts it — root runs, this owner, this org, today.
+      const { count: filled } = await admin
+        .from("user_agent_runs")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", ownerA)
+        .eq("org_id", ORG_A.orgId)
+        .eq("fire_date", today)
+        .is("parent_run_id", null);
+      expect(filled ?? 0).toBeGreaterThanOrEqual(cap);
 
       // agentA2, not agentA: the cooldown is per AGENT and would otherwise be
       // the refusal that answered first, proving nothing about the cap.
