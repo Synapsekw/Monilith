@@ -88,6 +88,34 @@ describe("deleteUpdate", () => {
 
 describe("addUpdate mention fan-out", () => {
   const OTHER = "33333333-3333-4333-8333-333333333333";
+  const AGENT = "44444444-4444-4444-8444-444444444444";
+
+  /** The item/item_updates/notifications triple every fan-out case needs. */
+  function mockTables(notifInsert: ReturnType<typeof vi.fn>) {
+    from.mockImplementation((table: string) => {
+      if (table === "items")
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { org_id: "org", board_id: "board" },
+                error: null,
+              }),
+            }),
+          }),
+        } as never;
+      if (table === "item_updates")
+        return {
+          insert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: UPD }, error: null }),
+            }),
+          }),
+        } as never;
+      if (table === "notifications") return { insert: notifInsert } as never;
+      return {} as never;
+    });
+  }
   it("inserts one notification per mention, excluding the author", async () => {
     const notifInsert = vi.fn().mockResolvedValue({ error: null });
     const updInsert = vi.fn().mockReturnValue({
@@ -114,7 +142,10 @@ describe("addUpdate mention fan-out", () => {
     await addUpdate({
       itemId: ITEM,
       text: "hi @x @me",
-      mentions: [OTHER, USER],
+      mentions: [
+        { kind: "user", userId: OTHER },
+        { kind: "user", userId: USER },
+      ],
     });
     expect(notifInsert).toHaveBeenCalledTimes(1);
     expect(notifInsert).toHaveBeenCalledWith([
@@ -128,6 +159,35 @@ describe("addUpdate mention fan-out", () => {
         update_id: UPD,
       }),
     ]);
+  });
+
+  it("does not create a notification row for an agent target", async () => {
+    // Agents have no `profiles` row, so a mention notification for one would be
+    // undeliverable. The agent trigger path is separate (Spec 3 Task 11).
+    const notifInsert = vi.fn().mockResolvedValue({ error: null });
+    mockTables(notifInsert);
+    const res = await addUpdate({
+      itemId: ITEM,
+      text: "hi @ops",
+      mentions: [{ kind: "agent", agentId: AGENT }],
+    });
+    expect(res).toEqual({ ok: true, data: { updateId: UPD } });
+    expect(notifInsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 20 mentions before any insert", async () => {
+    const notifInsert = vi.fn();
+    mockTables(notifInsert);
+    const res = await addUpdate({
+      itemId: ITEM,
+      text: "spam",
+      mentions: Array.from({ length: 21 }, () => ({
+        kind: "user" as const,
+        userId: OTHER,
+      })),
+    });
+    expect(res.ok).toBe(false);
+    expect(notifInsert).not.toHaveBeenCalled();
   });
 
   it("does not touch notifications when there are no mentions", async () => {
@@ -189,7 +249,7 @@ describe("addUpdate mention fan-out", () => {
     const res = await addUpdate({
       itemId: ITEM,
       text: "hi",
-      mentions: [OTHER],
+      mentions: [{ kind: "user", userId: OTHER }],
     });
 
     expect(res).toEqual({ ok: true, data: { updateId: UPD } });
