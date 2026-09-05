@@ -5,6 +5,13 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-05",
+    kind: "new",
+    title: "Summon an agent from a comment",
+    description:
+      "Type @handle in an item update and your agent answers on the item.",
+  },
+  {
+    date: "2026-09-05",
     kind: "fixed",
     title: "Settings opens from the profile menu again",
     description:
