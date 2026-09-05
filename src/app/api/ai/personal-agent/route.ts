@@ -13,7 +13,11 @@ import {
   PersonalAiKeyMissingError,
   ByoKeyMissingError,
 } from "@/lib/ai/errors";
-import { getUserAgentById, findUserAgentRun } from "@/lib/agents/agents-db";
+import {
+  getUserAgentById,
+  findUserAgentRun,
+  type UserAgentRow,
+} from "@/lib/agents/agents-db";
 import { getAgentOwnerClient } from "@/lib/agents/owner-client";
 import { ModelNotToolCapableError } from "@/lib/agents/run-loop";
 // The per-run work — budget, tools, bounded loop, proposals — lives in
@@ -47,11 +51,62 @@ const SIGNATURE_HEADER = "x-pulse-signature";
 /** Postgres unique_violation — raised by `user_agent_runs_slot_uniq`. */
 const PG_UNIQUE_VIOLATION = "23505";
 
-const bodySchema = z.object({
-  agent_id: z.string().uuid(),
-  fire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  fire_hour: z.number().int().min(0).max(23),
-});
+/**
+ * Up to 1 + DELEGATE_FANOUT_MAX (= 4) bounded tool loops run inside ONE
+ * invocation of this function, serially, each capped at AGENT_MAX_STEPS (= 12)
+ * model round-trips — 48 in the worst case. The route declared no duration at
+ * all before delegation existed and relied on whatever the platform default
+ * happened to be; with a delegating run that is no longer a safe assumption, so
+ * the number is stated here rather than inherited. 300s is the ceiling a
+ * non-Enterprise Vercel function may ask for, so it is also the most this can
+ * be without a plan change: past it, the fix is a smaller fan-out, not a bigger
+ * timeout.
+ */
+export const maxDuration = 300;
+
+const bodySchema = z.union([
+  // Already claimed by `agent_run_claim` — the ONE creation path for a run with
+  // no fire slot. Nothing here re-claims it.
+  //
+  // `item_id` is present exactly for a mention run: it is the item the agent
+  // was summoned from and the item its reply is posted to. It rides the signed
+  // body rather than a `user_agent_runs` column, because no other trigger has
+  // such a value and a column that is null for every scheduled and delegated
+  // run invites a null-check at every read.
+  z.object({
+    run_id: z.string().uuid(),
+    item_id: z.string().uuid().optional(),
+  }),
+  // The hourly sweep's fire slot. This branch, and only this branch, claims.
+  z.object({
+    agent_id: z.string().uuid(),
+    fire_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    fire_hour: z.number().int().min(0).max(23),
+  }),
+]);
+
+/** The already-claimed row, read by id. Deliberately a local read rather than
+ *  an `agents-db.ts` helper: this is the route's own dispatch concern, and the
+ *  columns it needs (why the run exists, and whether it is a root) are exactly
+ *  the ones nothing else reads. */
+async function loadRun(
+  svc: SupabaseClient<Database>,
+  runId: string,
+): Promise<{
+  id: string;
+  user_agent_id: string;
+  fire_date: string;
+  trigger: string;
+  depth: number;
+} | null> {
+  const { data, error } = await svc
+    .from("user_agent_runs")
+    .select("id, user_agent_id, fire_date, trigger, depth")
+    .eq("id", runId)
+    .maybeSingle();
+  if (error) throw new Error(`loadRun: ${error.message}`);
+  return data ?? null;
+}
 
 type RunKey = {
   user_agent_id: string;
@@ -96,13 +151,18 @@ async function claimRun(
   throw new Error(`claimRun: ${error?.message ?? "no row returned"}`);
 }
 
-/** Update the already-claimed row to its final status. Keyed on the same
- *  (user_agent_id, fire_date, fire_hour) slot the claim insert used — an
- *  UPDATE can never itself hit the unique index, so there is nothing left to
- *  arbitrate here; a failure is an ordinary write failure, not a race. */
+/**
+ * Update the already-claimed row to its final status.
+ *
+ * Keyed on the run's OWN id. It used to filter on
+ * (user_agent_id, fire_date, fire_hour) — which was unique only while every run
+ * was scheduled. A mention and a delegated run both carry fire_hour = null, so
+ * that filter would now update EVERY non-scheduled run of the agent on that day
+ * with one run's outcome.
+ */
 async function finalizeRun(
   svc: SupabaseClient<Database>,
-  key: RunKey,
+  runId: string,
   patch: {
     status: "ran" | "skipped" | "error";
     error?: string | null;
@@ -130,31 +190,27 @@ async function finalizeRun(
   const { error } = await svc
     .from("user_agent_runs")
     .update(patch)
-    .eq("user_agent_id", key.user_agent_id)
-    .eq("fire_date", key.fire_date)
-    .eq("fire_hour", key.fire_hour);
+    .eq("id", runId);
   if (error) throw new Error(`finalizeRun: ${error.message}`);
 }
 
 /**
- * By the time this is called the slot is already claimed (the fire ledger
- * has consumed it) and the real outcome — email sent, correctly gated, or
- * genuinely errored — has already happened. A failure writing THAT outcome
- * down must never crash the response or mask the real result, so it is
- * logged rather than thrown.
+ * By the time this is called the run is already claimed — by `claimRun` for a
+ * fire slot, or by `agent_run_claim` before the request even arrived — and the
+ * real outcome (delivered, correctly gated, or genuinely errored) has already
+ * happened. A failure writing THAT outcome down must never crash the response
+ * or mask the real result, so it is logged rather than thrown.
  */
 async function safeFinalize(
   svc: SupabaseClient<Database>,
-  key: RunKey,
+  runId: string,
   patch: Parameters<typeof finalizeRun>[2],
 ): Promise<void> {
   try {
-    await finalizeRun(svc, key, patch);
+    await finalizeRun(svc, runId, patch);
   } catch (e) {
     console.error("[personal-agent] finalizeRun failed:", {
-      agentId: key.user_agent_id,
-      fireDate: key.fire_date,
-      fireHour: key.fire_hour,
+      runId,
       patchStatus: patch.status,
       cause: e instanceof Error ? e.message : String(e),
     });
@@ -168,10 +224,15 @@ async function safeFinalize(
  * `net.http_post { agent_id, fire_date, fire_hour }` here. This handler
  * (service-role, HMAC-verified) resolves an OWNER-SCOPED client, runs a
  * BOUNDED TOOL LOOP under that owner's RLS, queues anything the agent had no
- * grant for as a proposal, emails the agent's report, and writes ONE
+ * grant for as a proposal, delivers the agent's report, and writes ONE
  * `user_agent_runs` audit row. Idempotent: a redelivered fire slot is a
  * no-op — see `claimRun` for why that holds even under concurrent delivery,
  * not just sequential redelivery.
+ *
+ * It also accepts a second body, `{ run_id, item_id? }`, for a run that was
+ * already claimed by `agent_run_claim` — today a mention. That run has no fire
+ * slot, so nothing about the slot applies to it: no probe, no claim, no email,
+ * and the finalize keys on the run's own id.
  *
  * The loop replaced a fixed briefing pipeline (build a payload → one
  * tool-less summarise call → email). Everything OUTSIDE the model call is
@@ -192,71 +253,120 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let agentId: string;
-  let fireDate: string;
-  let fireHour: number;
+  let parsed: z.infer<typeof bodySchema>;
   try {
-    const parsed = bodySchema.parse(JSON.parse(raw));
-    agentId = parsed.agent_id;
-    fireDate = parsed.fire_date;
-    fireHour = parsed.fire_hour;
+    parsed = bodySchema.parse(JSON.parse(raw));
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
 
   const svc = createServiceClient();
 
-  // 2. Load the agent.
-  const agent = await getUserAgentById(svc, agentId);
-  if (!agent) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
-  // Kill switch: a disabled agent does nothing (no run row, no spend).
-  if (!agent.enabled) {
-    return NextResponse.json({ status: "skipped", reason: "disabled" });
-  }
+  // ── 2. Resolve THE RUN. Two ways in, and only two ──────────────────────
+  // The sweep sends a FIRE SLOT and this route claims it (that claim is the
+  // idempotency backstop for a redelivered slot). Everything else — a mention
+  // today, anything else that reaches HTTP later — was ALREADY claimed by
+  // `agent_run_claim`, the single creation path for a run with no slot, and
+  // arrives as its own id. The second branch therefore claims nothing and does
+  // not probe the fire ledger: the row exists, it has no slot to redeliver, and
+  // a second insert would mint a duplicate run for one summons.
+  let agent: UserAgentRow;
+  let runId: string;
+  let fireDate: string;
+  /** Why this run exists — 'schedule' | 'mention' | 'delegation'. Decides
+   *  DELIVERY below: a briefing is emailed, a summoned answer is replied. */
+  let trigger: string;
+  /** 0 for a root run, 1 for one that was delegated TO. Decides whether the
+   *  `delegate` tool is offered at all. */
+  let depth: number;
+  /** Present only on a mention: the item the agent was summoned from, carried
+   *  by the SIGNED body (see `bodySchema`). */
+  const itemId = "run_id" in parsed ? parsed.item_id : undefined;
 
-  // 3. Fast-path idempotency probe. This is an optimisation ONLY — it can
-  //    race under concurrent delivery of the same fire slot (two deliveries
-  //    can both observe `null` here). claimRun below is what actually
-  //    arbitrates; this just avoids the extra round trip on the
-  //    overwhelmingly common case of a plain sequential redelivery.
-  const existing = await findUserAgentRun(svc, agentId, fireDate, fireHour);
-  if (existing) {
-    return NextResponse.json({ status: "noop", reason: "already_ran" });
-  }
+  if ("run_id" in parsed) {
+    const run = await loadRun(svc, parsed.run_id);
+    if (!run) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    const claimed = await getUserAgentById(svc, run.user_agent_id);
+    if (!claimed) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    if (!claimed.enabled) {
+      // Unlike the slot branch below there IS a row to write: it was claimed
+      // before the agent was switched off, and leaving the placeholder on it
+      // would render as "Didn't finish" for a run that was correctly refused.
+      await safeFinalize(svc, run.id, {
+        status: "skipped",
+        error: "Agent is switched off.",
+      });
+      return NextResponse.json({ status: "skipped", reason: "disabled" });
+    }
+    agent = claimed;
+    runId = run.id;
+    fireDate = run.fire_date;
+    trigger = run.trigger;
+    depth = run.depth;
+  } else {
+    const scheduled = await getUserAgentById(svc, parsed.agent_id);
+    if (!scheduled) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    // Kill switch: a disabled agent does nothing (no run row, no spend).
+    if (!scheduled.enabled) {
+      return NextResponse.json({ status: "skipped", reason: "disabled" });
+    }
 
-  const key: RunKey = {
-    user_agent_id: agentId,
-    org_id: agent.org_id,
-    owner_id: agent.owner_id,
-    fire_date: fireDate,
-    fire_hour: fireHour,
-  };
+    // 3. Fast-path idempotency probe. This is an optimisation ONLY — it can
+    //    race under concurrent delivery of the same fire slot (two deliveries
+    //    can both observe `null` here). claimRun below is what actually
+    //    arbitrates; this just avoids the extra round trip on the
+    //    overwhelmingly common case of a plain sequential redelivery.
+    const existing = await findUserAgentRun(
+      svc,
+      parsed.agent_id,
+      parsed.fire_date,
+      parsed.fire_hour,
+    );
+    if (existing) {
+      return NextResponse.json({ status: "noop", reason: "already_ran" });
+    }
 
-  // 4. Claim the slot BEFORE any token spend or email (Finding 1).
-  let claim: Awaited<ReturnType<typeof claimRun>>;
-  try {
-    claim = await claimRun(svc, key);
-  } catch (e) {
-    // The claim attempt itself failed for a reason OTHER than a conflict
-    // (e.g. a transient DB error). Nothing was spent and nothing else was
-    // written, so it's safe to just fail closed — there is no row to
-    // finalize.
-    console.error("[personal-agent] claimRun failed:", {
-      agentId,
-      fireDate,
-      fireHour,
-      cause: e instanceof Error ? e.message : String(e),
-    });
-    return NextResponse.json({ error: "agent run failed" }, { status: 500 });
-  }
-  if (claim.outcome === "already_claimed") {
-    // Another delivery of this exact fire slot already won the claim — do
-    // nothing further. This is the case a redelivery landing concurrently
-    // with an in-flight run relies on: no second summarise call, no second
-    // email.
-    return NextResponse.json({ status: "noop", reason: "already_ran" });
+    // 4. Claim the slot BEFORE any token spend or email (Finding 1).
+    let claim: Awaited<ReturnType<typeof claimRun>>;
+    try {
+      claim = await claimRun(svc, {
+        user_agent_id: parsed.agent_id,
+        org_id: scheduled.org_id,
+        owner_id: scheduled.owner_id,
+        fire_date: parsed.fire_date,
+        fire_hour: parsed.fire_hour,
+      });
+    } catch (e) {
+      // The claim attempt itself failed for a reason OTHER than a conflict
+      // (e.g. a transient DB error). Nothing was spent and nothing else was
+      // written, so it's safe to just fail closed — there is no row to
+      // finalize.
+      console.error("[personal-agent] claimRun failed:", {
+        agentId: parsed.agent_id,
+        fireDate: parsed.fire_date,
+        fireHour: parsed.fire_hour,
+        cause: e instanceof Error ? e.message : String(e),
+      });
+      return NextResponse.json({ error: "agent run failed" }, { status: 500 });
+    }
+    if (claim.outcome === "already_claimed") {
+      // Another delivery of this exact fire slot already won the claim — do
+      // nothing further. This is the case a redelivery landing concurrently
+      // with an in-flight run relies on: no second summarise call, no second
+      // email.
+      return NextResponse.json({ status: "noop", reason: "already_ran" });
+    }
+    agent = scheduled;
+    runId = claim.runId;
+    fireDate = parsed.fire_date;
+    trigger = "schedule";
+    depth = 0;
   }
 
   // ── Hoisted above the try so the CATCH can see it ──────────────────────
@@ -280,7 +390,7 @@ export async function POST(req: Request): Promise<Response> {
         e instanceof AiQuotaExceededError ||
         e instanceof AgentCapExceededError
       ) {
-        await safeFinalize(svc, key, { status: "skipped", error: e.message });
+        await safeFinalize(svc, runId, { status: "skipped", error: e.message });
         return NextResponse.json({ status: "skipped", reason: "gated" });
       }
       throw e;
@@ -327,12 +437,17 @@ export async function POST(req: Request): Promise<Response> {
         svc,
         ownerClient,
         agent,
-        runId: claim.runId,
+        runId,
         ceiling: agentCapabilityCeiling,
-        // A scheduled fire is the ROOT of its (currently one-node) run tree.
-        // Task 5 flips this to true, once there is a `delegate` tool for it to
-        // offer; until then no call site can hand the model one.
-        allowDelegation: false,
+        // A ROOT run — scheduled or summoned — may delegate; a run that was
+        // itself delegated to may not, so it is never even offered the tool.
+        // This is the second layer only: `agent_run_claim` answers
+        // `refused_depth` from the DB CHECK regardless of what any caller
+        // passes here. Note this is still INERT on an org whose
+        // `agent_capability_ceiling` withholds `agent.delegate` — the tool is
+        // offered and then denied by the grant gate — and the backfill that
+        // would have added it was deliberately skipped.
+        allowDelegation: depth === 0,
         progress,
       });
     } catch (e) {
@@ -340,7 +455,7 @@ export async function POST(req: Request): Promise<Response> {
         e instanceof PersonalAiKeyMissingError ||
         e instanceof ByoKeyMissingError
       ) {
-        await safeFinalize(svc, key, {
+        await safeFinalize(svc, runId, {
           status: "skipped",
           error: `AI not configured for this run (${e.message})`,
         });
@@ -351,7 +466,7 @@ export async function POST(req: Request): Promise<Response> {
         // "skipped" with a message naming the model and both places a model
         // can come from. Nothing was spent — the throw happens before the
         // first model call.
-        await safeFinalize(svc, key, { status: "skipped", error: e.message });
+        await safeFinalize(svc, runId, { status: "skipped", error: e.message });
         return NextResponse.json({
           status: "skipped",
           reason: "model_not_tool_capable",
@@ -366,30 +481,44 @@ export async function POST(req: Request): Promise<Response> {
     //    already failed the run loudly rather than emailing a promise it did
     //    not keep.
     //
-    // Thread BEFORE email, so the email can link to it. Never gates the run: a
-    // failed write returns null and the email simply omits the link.
-    const threadId = await writeBriefingThread(ownerClient, {
-      orgId: agent.org_id,
-      ownerId: agent.owner_id,
-      agentId: agent.id,
-      agentName: agent.name,
-      runId: claim.runId,
-      fireDate,
-      summary: result.text,
-    });
+    // Delivery depends on WHY the run happened. A briefing is a scheduled
+    // report: it gets a thread and an email. A mention is a conversational
+    // reply to something someone just wrote on an item — emailing it would turn
+    // a comment into an inbox item, and threading it would file an answer to
+    // one item under the daily briefing of another.
+    if (trigger === "mention") {
+      // Task 11 replaces this with
+      // `postAgentReply(svc, { runId, itemId, ... })`.
+      console.info("[personal-agent] mention run finished", {
+        runId,
+        itemId,
+      });
+    } else {
+      // Thread BEFORE email, so the email can link to it. Never gates the run: a
+      // failed write returns null and the email simply omits the link.
+      const threadId = await writeBriefingThread(ownerClient, {
+        orgId: agent.org_id,
+        ownerId: agent.owner_id,
+        agentId: agent.id,
+        agentName: agent.name,
+        runId,
+        fireDate,
+        summary: result.text,
+      });
 
-    await sendBriefingEmail(svc, {
-      agent,
-      fireDate,
-      summary: result.text,
-      proposalCount: result.proposalCount,
-      threadId,
-    });
+      await sendBriefingEmail(svc, {
+        agent,
+        fireDate,
+        summary: result.text,
+        proposalCount: result.proposalCount,
+        threadId,
+      });
+    }
 
     // 9. Finalize the single audit row for this fire (Finding 2: never let
     //    a bookkeeping-write failure crash a response whose real outcome —
     //    the email — already succeeded).
-    await safeFinalize(svc, key, {
+    await safeFinalize(svc, runId, {
       status: "ran",
       error: null,
       input_tokens: result.usage.inputTokens,
@@ -425,7 +554,7 @@ export async function POST(req: Request): Promise<Response> {
     // `steps`/`tools_used` what it got through before it died. `output` is
     // deliberately absent: there is no report, and inventing one would be
     // worse than the empty column.
-    await safeFinalize(svc, key, {
+    await safeFinalize(svc, runId, {
       status: "error",
       error: message,
       grants: progress.grants,
