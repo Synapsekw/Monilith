@@ -71,15 +71,42 @@ function clientForUpdate(error: unknown) {
   return { client: { from } as never, calls, update };
 }
 
-/** select(cols, {count,head}).eq() x n — countAgentsForOwner / countRunsToday.
- *  The last `.eq()` is itself the thenable, matching the real client. */
+/** One [operator, column, value] triple. The counts filter with more than
+ *  `.eq()` — `.neq("kind", "builtin")` and `.is("parent_run_id", null)` are
+ *  what keep the built-in orchestrator out of the agent cap and delegated
+ *  children out of the daily cap — and an assertion that only saw columns
+ *  could not tell `.eq("kind", "builtin")` from `.neq(...)`, i.e. could not
+ *  tell "exclude the built-in" from "count ONLY the built-in". */
+type FilterCall = [op: string, column: string, value: unknown];
+
+/** Builds a filter chain of exactly `n` calls, each of which may be `.eq()`,
+ *  `.neq()` or `.is()`. The final call resolves the thenable instead of
+ *  returning another link, matching the real Supabase count builder. */
+function makeFilterChain(
+  n: number,
+  calls: FilterCall[],
+  terminal: () => unknown,
+): Record<string, unknown> {
+  const link = (op: string) =>
+    vi.fn((col: string, val: unknown) => {
+      calls.push([op, col, val]);
+      return n <= 1 ? terminal() : makeFilterChain(n - 1, calls, terminal);
+    });
+  return { eq: link("eq"), neq: link("neq"), is: link("is") };
+}
+
+/** select(cols, {count,head}) then n filters — countAgentsForOwner /
+ *  countRunsToday. The last filter is itself the thenable, matching the real
+ *  client. */
 function clientForCount(
   n: number,
   count: number | null,
   error: unknown = null,
 ) {
-  const calls: EqCall[] = [];
-  const chain = makeEqChain(n, calls, () => Promise.resolve({ count, error }));
+  const calls: FilterCall[] = [];
+  const chain = makeFilterChain(n, calls, () =>
+    Promise.resolve({ count, error }),
+  );
   const select = vi.fn(() => chain);
   const from = vi.fn(() => ({ select }));
   return { client: { from } as never, calls, select };
@@ -172,6 +199,18 @@ describe("getUserAgentById", () => {
   // arrives as `undefined` rather than as an error — for `capabilities` that
   // would be an agent whose grant set silently reads as "nothing", and for the
   // cadence day fields a run that cannot tell which day it was meant to fire.
+  // `handle` is the only identifier a mention can carry, and `kind` is what
+  // tells the built-in orchestrator apart from an agent its owner made. A
+  // column missing from this list arrives as `undefined`, which would read as
+  // "this agent has no address" and "every agent is user-made".
+  it("selects handle and kind", () => {
+    const { client, select } = clientForGetAgent(null);
+    void getUserAgentById(client as never, "a1");
+    const cols = String(select.mock.calls[0]?.[0]);
+    for (const col of ["handle", "kind"])
+      expect(cols, `${col} must be selected`).toContain(col);
+  });
+
   it("selects the grant set and the cadence day fields", () => {
     const { client, select } = clientForGetAgent(null);
     void getUserAgentById(client as never, "agent-1");
@@ -200,24 +239,33 @@ describe("setAgentBridgeSecret", () => {
 
 describe("countAgentsForOwner", () => {
   it("returns the count value (not a row-array length), filtering on org_id and owner_id — a person can belong to multiple orgs, and the cap is per-org", async () => {
-    const { client, calls, select } = clientForCount(2, 5);
+    const { client, calls, select } = clientForCount(3, 5);
     const n = await countAgentsForOwner(client as never, "org-1", "user-1");
     expect(n).toBe(5);
     expect(select).toHaveBeenCalledWith("id", { count: "exact", head: true });
-    expect(calls).toEqual([
-      ["org_id", "org-1"],
-      ["owner_id", "user-1"],
+    expect(calls.slice(0, 2)).toEqual([
+      ["eq", "org_id", "org-1"],
+      ["eq", "owner_id", "user-1"],
     ]);
   });
 
+  // The built-in orchestrator is seeded, not chosen. Counting it would take
+  // one of the owner's three slots away on the day it shipped — every user
+  // would open Settings → Agents to find they had silently lost a slot.
+  it("does not count the built-in agent against the per-user cap", async () => {
+    const { client, calls } = clientForCount(3, 5);
+    await countAgentsForOwner(client as never, "org-1", "user-1");
+    expect(calls).toContainEqual(["neq", "kind", "builtin"]);
+  });
+
   it("falls back to 0 when count comes back null", async () => {
-    const { client } = clientForCount(2, null);
+    const { client } = clientForCount(3, null);
     const n = await countAgentsForOwner(client as never, "org-1", "user-1");
     expect(n).toBe(0);
   });
 
   it("throws (never silently returns 0) on a DB error", async () => {
-    const { client } = clientForCount(2, null, { message: "boom" });
+    const { client } = clientForCount(3, null, { message: "boom" });
     await expect(
       countAgentsForOwner(client as never, "org-1", "user-1"),
     ).rejects.toThrow("countAgentsForOwner: boom");
@@ -226,7 +274,7 @@ describe("countAgentsForOwner", () => {
 
 describe("countRunsToday", () => {
   it("returns the count value, filtering on org_id, owner_id, date and status='ran'", async () => {
-    const { client, calls, select } = clientForCount(4, 2);
+    const { client, calls, select } = clientForCount(5, 2);
     const n = await countRunsToday(
       client as never,
       "org-1",
@@ -238,16 +286,25 @@ describe("countRunsToday", () => {
     // org_id first (a person can belong to multiple orgs and the cap is
     // per-org), then owner_id, then 'ran' only — skipped/errored runs must
     // not consume the daily budget.
-    expect(calls).toEqual([
-      ["org_id", "org-1"],
-      ["owner_id", "user-1"],
-      ["fire_date", "2026-08-01"],
-      ["status", "ran"],
+    expect(calls.slice(0, 4)).toEqual([
+      ["eq", "org_id", "org-1"],
+      ["eq", "owner_id", "user-1"],
+      ["eq", "fire_date", "2026-08-01"],
+      ["eq", "status", "ran"],
     ]);
   });
 
+  // The daily cap counts TRIGGERS, not runs. A delegated child is already
+  // bounded by the fan-out cap; counting it here as well would let a single
+  // orchestration exhaust a whole day's budget.
+  it("counts only root runs toward the daily cap", async () => {
+    const { client, calls } = clientForCount(5, 2);
+    await countRunsToday(client as never, "org-1", "user-1", "2026-08-01");
+    expect(calls).toContainEqual(["is", "parent_run_id", null]);
+  });
+
   it("falls back to 0 when count comes back null", async () => {
-    const { client } = clientForCount(4, null);
+    const { client } = clientForCount(5, null);
     const n = await countRunsToday(
       client as never,
       "org-1",
@@ -258,7 +315,7 @@ describe("countRunsToday", () => {
   });
 
   it("throws on a DB error — a swallow here would silently disable the per-user daily cap", async () => {
-    const { client } = clientForCount(4, null, { message: "boom" });
+    const { client } = clientForCount(5, null, { message: "boom" });
     await expect(
       countRunsToday(client as never, "org-1", "user-1", "2026-08-01"),
     ).rejects.toThrow("countRunsToday: boom");

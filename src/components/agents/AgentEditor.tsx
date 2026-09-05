@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { ArrowLeft } from "lucide-react";
 import { createAgent, deleteAgent, updateAgent } from "@/lib/agents/actions";
 import {
@@ -9,11 +9,17 @@ import {
   type AgentCadence,
   type PersonalAgentSettings,
 } from "@/lib/agents/agent-config";
+import { slugifyHandle } from "@/lib/agents/handle";
 import type { AgentCapability } from "@/lib/agents/capabilities";
 import { setAgentDocuments } from "@/lib/agents/document-actions";
 import type { AgentDocumentRow } from "@/lib/agents/documents-db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -45,7 +51,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export type AgentRecord = PersonalAgentSettings & { id: string };
+/** `builtin` is the seeded orchestrator (`seed_builtin_agent`): an ordinary
+ *  agent in every respect except that it cannot be deleted and does not count
+ *  against `max_agents_per_user`. Written only by the seed function — no
+ *  client role holds a grant on `user_agents.kind`, so this can never be
+ *  something the editor sets. */
+export type AgentKind = "user" | "builtin";
+
+/** Everything the editor edits, plus the one thing it only READS. `kind` is
+ *  not part of `personalAgentSettingsSchema` because it is not a setting: it
+ *  decides which affordances are offered, and the server decides again. */
+export type EditableAgent = PersonalAgentSettings & { kind: AgentKind };
+
+export type AgentRecord = EditableAgent & { id: string };
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
@@ -81,10 +99,23 @@ const SELECT_CLASS =
 
 type FieldErrors = Partial<
   Record<
-    "name" | "instructions" | "runAtLocalHour" | "provider" | "cadence",
+    | "name"
+    | "handle"
+    | "instructions"
+    | "runAtLocalHour"
+    | "provider"
+    | "cadence",
     string
   >
 >;
+
+/** Stands in for a real agent id when the create form derives a handle before
+ *  the row exists. `slugifyHandle` only reaches for the id when the name
+ *  cannot be slugged at all (empty, or entirely punctuation), so this is the
+ *  placeholder for a handle the owner is about to overwrite anyway. */
+const UNSAVED_AGENT_ID = "00000000";
+
+const HANDLE_HINT_ID = "agent-handle-hint";
 
 /**
  * Create/edit form for a single agent. Validates locally against
@@ -134,7 +165,7 @@ export function AgentEditor({
 }: {
   mode: "create" | "edit";
   agentId?: string;
-  initial: PersonalAgentSettings;
+  initial: EditableAgent;
   /** Every selectable model, built server-side by the page (buildModelOptions). */
   modelOptions: ModelOption[];
   /** The enabled provider registry, for the "no models yet" groups. */
@@ -174,6 +205,16 @@ export function AgentEditor({
   onDeleted?: (id: string) => void;
 }) {
   const [name, setName] = useState(initial.name);
+  const [handle, setHandle] = useState(initial.handle);
+  /**
+   * Whether the owner has taken the handle over. The prefill is a convenience
+   * for a brand-new agent that has no address yet — an EXISTING agent is
+   * already being summoned by its handle, so re-deriving it from a renamed
+   * display name would silently break every `@handle` already typed into an
+   * item update. Hence: never derived in edit mode, and never again after the
+   * first hand edit.
+   */
+  const handleTouched = useRef(mode === "edit");
   const [instructions, setInstructions] = useState(initial.instructions);
   const [runAtLocalHour, setRunAtLocalHour] = useState(initial.runAtLocalHour);
   const [enabled, setEnabled] = useState(initial.enabled);
@@ -230,6 +271,23 @@ export function AgentEditor({
   // it), and this is an announcement fix, not a visual one.
   const providerStatus = useFieldStatus(fieldErrors.provider);
 
+  // The handle's message rides the same hook, with the hint line kept in the
+  // accessible description alongside it — a screen-reader user who lands on an
+  // errored field should still hear what the field is FOR.
+  const handleStatus = useFieldStatus(
+    fieldErrors.handle,
+    "error",
+    HANDLE_HINT_ID,
+  );
+
+  /**
+   * Guarded affordances for the seeded orchestrator. This is the SOFT half:
+   * `deleteAgent` refuses a built-in row on the server, which is the boundary
+   * that actually holds. Hiding the control here is so the owner is never
+   * offered an action that will be refused.
+   */
+  const isBuiltin = initial.kind === "builtin";
+
   function cadenceChanged(next: AgentCadence) {
     setCadence(next);
     // Each cadence has exactly one day operand (`cadenceFieldsMatch`) — reset
@@ -245,11 +303,7 @@ export function AgentEditor({
     setServerError(null);
     const candidate: PersonalAgentSettings = {
       name: name.trim(),
-      // Straight through, unedited: this editor has no handle FIELD yet, and a
-      // save that dropped the handle would fail validation on a value the form
-      // never showed. Re-sending what was loaded keeps a rename of the display
-      // name from silently re-addressing the agent.
-      handle: initial.handle,
+      handle: handle.trim(),
       templateId: initial.templateId,
       instructions: instructions.trim(),
       boardScope: initial.boardScope,
@@ -270,6 +324,10 @@ export function AgentEditor({
       const flat = parsed.error.flatten().fieldErrors;
       setFieldErrors({
         name: flat.name?.[0],
+        // Reachable in the ordinary way: the shape rules (lowercase, no
+        // spaces, 2..32) and the reserved-word list are things an owner can
+        // type straight into the field.
+        handle: flat.handle?.[0],
         instructions: flat.instructions?.[0],
         runAtLocalHour: flat.runAtLocalHour?.[0],
         // Unreachable through the picker (it only ever yields a complete pair
@@ -322,7 +380,7 @@ export function AgentEditor({
           return;
         }
         if (!(await saveDocuments(agentId))) return;
-        onSaved({ ...parsed.data, id: agentId });
+        onSaved({ ...parsed.data, kind: initial.kind, id: agentId });
         return;
       }
 
@@ -332,7 +390,10 @@ export function AgentEditor({
         return;
       }
       if (!(await saveDocuments(res.data.id))) return;
-      onSaved({ ...parsed.data, id: res.data.id });
+      // `kind` is never editable, so it rides back out exactly as it came in.
+      // A create is always a user-made agent — only `seed_builtin_agent`
+      // writes the column, and no client role is granted it.
+      onSaved({ ...parsed.data, kind: initial.kind, id: res.data.id });
     });
   }
 
@@ -374,10 +435,23 @@ export function AgentEditor({
             aria-invalid={Boolean(fieldErrors.name)}
             aria-describedby={fieldErrors.name ? NAME_ERROR_ID : undefined}
             onChange={(e) => {
-              setName(e.target.value);
+              const next = e.target.value;
+              setName(next);
+              // Only until the owner takes the handle over — see
+              // `handleTouched`. `slugifyHandle` is total, so this can never
+              // seed a value the schema would refuse.
+              if (!handleTouched.current) {
+                setHandle(slugifyHandle(next, agentId ?? UNSAVED_AGENT_ID));
+              }
               setFieldErrors((f) => ({ ...f, name: undefined }));
             }}
           />
+          {isBuiltin ? (
+            <p className="text-muted-foreground text-xs">
+              Your built-in assistant. Rename it, give it a different handle, or
+              switch it off — it can&apos;t be deleted.
+            </p>
+          ) : null}
           {fieldErrors.name ? (
             <p
               id={NAME_ERROR_ID}
@@ -387,6 +461,49 @@ export function AgentEditor({
               {fieldErrors.name}
             </p>
           ) : null}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-handle">Handle</Label>
+          {/* The `@` is an ADORNMENT, never part of the value: the stored
+              handle is the bare word, and `activeMentionQuery` strips the
+              sigil before it looks anything up. Keeping it outside the input
+              is also what stops an owner from saving "@ops", which the shape
+              constraint would refuse. */}
+          <InputGroup>
+            <InputGroupAddon className="font-mono">
+              <span aria-hidden>@</span>
+            </InputGroupAddon>
+            <InputGroupInput
+              id="agent-handle"
+              // Mono, like every other typed identifier in the app (kickers,
+              // MetaChip values): this is a literal string the owner will
+              // retype in a mention, not prose.
+              className="font-mono"
+              value={handle}
+              disabled={pending}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              {...handleStatus.controlProps}
+              onChange={(e) => {
+                handleTouched.current = true;
+                // Lowercased as you type rather than at save: handles are
+                // lowercase-only (so `unique (owner_id, lower(handle))` and
+                // the typed token agree without a case-folding step), and
+                // showing the value that will actually be stored beats
+                // failing on a rule the field never demonstrated.
+                setHandle(e.target.value.toLowerCase());
+                setFieldErrors((f) => ({ ...f, handle: undefined }));
+              }}
+            />
+          </InputGroup>
+          <p id={HANDLE_HINT_ID} className="text-muted-foreground text-xs">
+            How you summon this agent: type{" "}
+            <span className="font-mono">@{handle || "handle"}</span> in an item
+            update or in Ask.
+          </p>
+          <FieldStatus field={handleStatus} />
         </div>
 
         <div className="space-y-1.5">
@@ -703,7 +820,10 @@ export function AgentEditor({
           </Button>
         </div>
 
-        {mode === "edit" && agentId ? (
+        {/* A built-in has no Delete at all — `deleteAgent` refuses it, the
+            seed trigger would recreate it on the next org join, and an owner
+            left without an orchestrator has no way to get one back. */}
+        {mode === "edit" && agentId && !isBuiltin ? (
           <Button
             type="button"
             variant="destructive"
@@ -716,29 +836,31 @@ export function AgentEditor({
         ) : null}
       </div>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this agent?</AlertDialogTitle>
-            <AlertDialogDescription>
-              &quot;{name}&quot; will stop running and its history is removed.
-              This can&apos;t be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                confirmDeleteAgent();
-              }}
-              disabled={pending}
-            >
-              {pending ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isBuiltin ? null : (
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this agent?</AlertDialogTitle>
+              <AlertDialogDescription>
+                &quot;{name}&quot; will stop running and its history is removed.
+                This can&apos;t be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  confirmDeleteAgent();
+                }}
+                disabled={pending}
+              >
+                {pending ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }

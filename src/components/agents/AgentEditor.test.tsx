@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { PersonalAgentSettings } from "@/lib/agents/agent-config";
+import type { EditableAgent } from "@/components/agents/AgentEditor";
 import type { ModelOption } from "@/components/settings/ModelPicker";
 import {
   AGENT_CAPABILITIES,
@@ -81,9 +81,12 @@ const PROVIDERS = [
   { id: "google", label: "Google Gemini" },
 ];
 
-const initial: PersonalAgentSettings = {
+const initial: EditableAgent = {
   name: "Morning Brief",
   handle: "morning-brief",
+  // An ordinary agent its owner made. `builtin` is the seeded orchestrator,
+  // whose affordances are guarded — the tests that care say so explicitly.
+  kind: "user",
   templateId: "morning-brief",
   instructions: "Summarise what is pending.",
   boardScope: { mode: "all" },
@@ -666,6 +669,113 @@ describe("AgentEditor · focus management around save", () => {
     release({ ok: true, data: { id: "agent-1" } });
     await waitFor(() => expect(createAgent).toHaveBeenCalled());
     expect(elsewhere).toHaveFocus();
+  }, 30_000);
+});
+
+describe("AgentEditor · handle, built-in and cadence", () => {
+  const EDIT = {
+    mode: "edit" as const,
+    agentId: "11111111-1111-4111-8111-111111111111",
+  };
+
+  it("prefills the handle from the name in create mode", async () => {
+    renderEditor();
+    const name = screen.getByLabelText(/^name$/i);
+    await userEvent.clear(name);
+    await userEvent.type(name, "Overdue Chaser");
+    expect(screen.getByLabelText(/handle/i)).toHaveValue("overdue-chaser");
+  }, 30_000);
+
+  // The prefill is a convenience, not a rule. Once someone has chosen an
+  // address, a later edit to the display name must not silently re-address
+  // the agent and break every `@handle` already typed into an item update.
+  it("stops prefilling once the handle is edited by hand", async () => {
+    renderEditor();
+    const handle = screen.getByLabelText(/handle/i);
+    await userEvent.clear(handle);
+    await userEvent.type(handle, "ops");
+    const name = screen.getByLabelText(/^name$/i);
+    await userEvent.clear(name);
+    await userEvent.type(name, "Overdue Chaser");
+    expect(handle).toHaveValue("ops");
+  }, 30_000);
+
+  // Editing an existing agent never re-derives its handle from the name —
+  // the address is already in use.
+  it("never prefills in edit mode", async () => {
+    renderEditor({ ...EDIT });
+    const name = screen.getByLabelText(/^name$/i);
+    await userEvent.clear(name);
+    await userEvent.type(name, "Overdue Chaser");
+    expect(screen.getByLabelText(/handle/i)).toHaveValue("morning-brief");
+  }, 30_000);
+
+  it("saves the handle it was given", async () => {
+    renderEditor({ ...EDIT });
+    const handle = screen.getByLabelText(/handle/i);
+    await userEvent.clear(handle);
+    await userEvent.type(handle, "chaser");
+    await userEvent.click(
+      screen.getByRole("button", { name: /save changes/i }),
+    );
+    await waitFor(() => expect(updateAgent).toHaveBeenCalled());
+    expect(updateAgent.mock.calls[0][1]).toMatchObject({ handle: "chaser" });
+  }, 30_000);
+
+  it("shows a field error for a reserved handle", async () => {
+    renderEditor({ ...EDIT });
+    const handle = screen.getByLabelText(/handle/i);
+    await userEvent.clear(handle);
+    await userEvent.type(handle, "everyone");
+    await userEvent.click(
+      screen.getByRole("button", { name: /save changes/i }),
+    );
+    expect(await screen.findByText(/reserved/i)).toBeInTheDocument();
+    expect(updateAgent).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("hides Delete for the built-in agent", () => {
+    renderEditor({ ...EDIT, initial: { ...initial, kind: "builtin" } });
+    expect(
+      screen.queryByRole("button", { name: /delete/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still offers Delete for an agent its owner made", () => {
+    renderEditor({ ...EDIT });
+    expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
+  });
+
+  // Undeletable, but not untouchable: the whole point of the guarded
+  // affordance is that everything else about a built-in still edits.
+  it("says a built-in can be renamed but not deleted", () => {
+    renderEditor({ ...EDIT, initial: { ...initial, kind: "builtin" } });
+    expect(screen.getByText(/be deleted/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^name$/i)).not.toBeDisabled();
+    expect(screen.getByLabelText(/handle/i)).not.toBeDisabled();
+  });
+
+  it("offers the manual cadence", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("option", { name: /only when i ask/i }),
+    ).toBeInTheDocument();
+  });
+
+  // A manual agent has no fire slot at all, so the hour it would run at is a
+  // control that decides nothing.
+  it("saves a manual cadence with no day fields", async () => {
+    renderEditor();
+    await userEvent.selectOptions(screen.getByLabelText(/^runs$/i), "manual");
+    await userEvent.click(
+      screen.getByRole("button", { name: /create agent/i }),
+    );
+    await waitFor(() => expect(createAgent).toHaveBeenCalled());
+    expect(createAgent.mock.calls[0][0]).toMatchObject({
+      cadence: "manual",
+      runOnWeekday: null,
+      runOnDayOfMonth: null,
+    });
   }, 30_000);
 });
 

@@ -121,6 +121,10 @@ const agentFixture: UserAgentRow = {
   org_id: "00000000-0000-4000-8000-0000000000f1",
   owner_id: "00000000-0000-4000-8000-0000000000f2",
   name: "Morning Brief",
+  // Added with `user_agents.handle`/`.kind` — every UserAgentRow now carries
+  // its typeable address and whether it is the seeded orchestrator.
+  handle: "morning-brief",
+  kind: "user",
   template_id: "morning-brief",
   instructions: "Be concise.",
   board_scope: { mode: "all" },

@@ -4,15 +4,16 @@ import { useMemo, useState, useTransition } from "react";
 import { ArrowLeft, FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setAgentEnabled } from "@/lib/agents/actions";
-import type {
-  AgentTemplate,
-  PersonalAgentSettings,
-} from "@/lib/agents/agent-config";
+import type { AgentTemplate } from "@/lib/agents/agent-config";
 import { slugifyHandle } from "@/lib/agents/handle";
 import type { AgentRunLike } from "@/lib/agents/run-status";
 import { AgentRoster, type RosterAgent } from "@/components/agents/AgentRoster";
 import { TemplateGallery } from "@/components/agents/TemplateGallery";
-import { AgentEditor, type AgentRecord } from "@/components/agents/AgentEditor";
+import {
+  AgentEditor,
+  type AgentRecord,
+  type EditableAgent,
+} from "@/components/agents/AgentEditor";
 import { DocumentLibrary } from "@/components/agents/DocumentLibrary";
 import type { ModelOption } from "@/components/settings/ModelPicker";
 import type { AgentCapability } from "@/lib/agents/capabilities";
@@ -21,11 +22,11 @@ import type { AgentDocumentRow } from "@/lib/agents/documents-db";
 type View = "roster" | "gallery" | "editor" | "library";
 
 type EditorContext =
-  | { mode: "create"; initial: PersonalAgentSettings }
+  | { mode: "create"; initial: EditableAgent }
   | {
       mode: "edit";
       agentId: string;
-      initial: PersonalAgentSettings;
+      initial: EditableAgent;
       initialDocumentIds: string[];
     };
 
@@ -133,12 +134,24 @@ export function AgentsSection({
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  // What the cap actually counts. `countAgentsForOwner` excludes
+  // `kind = 'builtin'` — the seeded orchestrator is given, not chosen — so a
+  // label that counted it would read "4 of 3" for someone the server would
+  // happily let create a fourth. The LIST below is unfiltered: a built-in is
+  // still an agent its owner edits, renames and switches off.
+  const ownedCount = agents.filter((a) => a.kind !== "builtin").length;
+
   const rosterAgents: RosterAgent[] = agents.map((a) => ({
     id: a.id,
     name: a.name,
+    handle: a.handle,
     templateId: a.templateId,
+    // The cadence AND its day operand, so the row can say "Mondays at 07:00"
+    // rather than the hardcoded "Daily at …" every row used to render.
     cadence: a.cadence,
     runAtLocalHour: a.runAtLocalHour,
+    runOnWeekday: a.runOnWeekday,
+    runOnDayOfMonth: a.runOnDayOfMonth,
     enabled: a.enabled,
     // Last-run status IS first paint — it's the signal that an agent is
     // failing, and hiding it behind an expand is what made every gotcha-70
@@ -181,6 +194,9 @@ export function AgentsSection({
         // backfill does. `slugifyHandle` is total, so this never seeds a
         // payload the schema would refuse.
         handle: slugifyHandle(template.name, template.id),
+        // Only `seed_builtin_agent` writes `kind` — no client role holds a
+        // grant on the column — so anything created here is user-made.
+        kind: "user",
         templateId: template.id,
         instructions: template.instructions,
         boardScope: template.boardScope,
@@ -319,7 +335,7 @@ export function AgentsSection({
             disabling here would trade a readable message from
             `assertCanCreateAgent` for a dead control with no explanation. */}
         <p className="text-muted-foreground text-sm">
-          {agents.length} of {maxAgents} {maxAgents === 1 ? "agent" : "agents"}
+          {ownedCount} of {maxAgents} {maxAgents === 1 ? "agent" : "agents"}
         </p>
         <div className="flex items-center gap-2">
           <Button
