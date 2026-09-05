@@ -643,3 +643,74 @@ describe("AskChat — an agent briefing thread", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// Spec 3 addressing: a LEADING `@handle` in the composer chooses which of the
+// owner's agents answers. The persona is a property of the CONVERSATION ROW —
+// `/api/ask` reads it from there — so it can only be set as the thread is
+// minted, never bolted onto one that already exists.
+describe("AskChat — @handle picks the persona", () => {
+  const OPS_ID = "33333333-3333-4333-8333-333333333333";
+  const OPS = {
+    kind: "agent" as const,
+    agentId: OPS_ID,
+    handle: "ops",
+    name: "Ops Chaser",
+  };
+
+  it("passes the addressed agent to createConversation for a new thread", async () => {
+    render(
+      <AskChat conversationId={null} initialMessages={[]} agents={[OPS]} />,
+    );
+    ask("@ops what is late?");
+
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "@ops what is late?",
+        agentId: OPS_ID,
+      }),
+    );
+  });
+
+  it("still starts an ordinary thread when no handle leads the message", async () => {
+    render(
+      <AskChat conversationId={null} initialMessages={[]} agents={[OPS]} />,
+    );
+    ask("what is late?");
+
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "what is late?",
+      }),
+    );
+  });
+
+  it("ignores the handle in an existing thread and says why", async () => {
+    render(<AskChat conversationId="c1" initialMessages={[]} agents={[OPS]} />);
+    ask("@ops what is late?");
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/start a new chat to ask a different agent/i),
+      ).toBeInTheDocument(),
+    );
+    expect(createConversation).not.toHaveBeenCalled();
+  });
+
+  it("clears the hint on the next message that addresses nobody", async () => {
+    render(<AskChat conversationId="c1" initialMessages={[]} agents={[OPS]} />);
+    ask("@ops what is late?");
+    await waitFor(() =>
+      expect(
+        screen.getByText(/start a new chat to ask a different agent/i),
+      ).toBeInTheDocument(),
+    );
+
+    ask("what is late?");
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/start a new chat to ask a different agent/i),
+      ).toBeNull(),
+    );
+  });
+});
