@@ -8,6 +8,7 @@ import type {
   AgentTemplate,
   PersonalAgentSettings,
 } from "@/lib/agents/agent-config";
+import { slugifyHandle } from "@/lib/agents/handle";
 import type { AgentRunLike } from "@/lib/agents/run-status";
 import { AgentRoster, type RosterAgent } from "@/components/agents/AgentRoster";
 import { TemplateGallery } from "@/components/agents/TemplateGallery";
@@ -175,6 +176,11 @@ export function AgentsSection({
       mode: "create",
       initial: {
         name: template.name,
+        // A template carries no handle of its own, and the schema requires one
+        // — derive it from the display name, exactly as the migration's
+        // backfill does. `slugifyHandle` is total, so this never seeds a
+        // payload the schema would refuse.
+        handle: slugifyHandle(template.name, template.id),
         templateId: template.id,
         instructions: template.instructions,
         boardScope: template.boardScope,

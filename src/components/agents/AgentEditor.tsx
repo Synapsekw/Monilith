@@ -70,6 +70,10 @@ const CADENCE_LABELS: Record<AgentCadence, string> = {
   weekdays: "Weekdays",
   weekly: "Weekly",
   monthly: "Monthly",
+  // Spec 3: never swept, only summoned — by `@handle` or by another agent
+  // delegating to it. The select is driven by this map, so a cadence missing
+  // from it renders as an empty option.
+  manual: "Only when I ask",
 };
 
 const SELECT_CLASS =
@@ -241,6 +245,11 @@ export function AgentEditor({
     setServerError(null);
     const candidate: PersonalAgentSettings = {
       name: name.trim(),
+      // Straight through, unedited: this editor has no handle FIELD yet, and a
+      // save that dropped the handle would fail validation on a value the form
+      // never showed. Re-sending what was loaded keeps a rename of the display
+      // name from silently re-addressing the agent.
+      handle: initial.handle,
       templateId: initial.templateId,
       instructions: instructions.trim(),
       boardScope: initial.boardScope,
