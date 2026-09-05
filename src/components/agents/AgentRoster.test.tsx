@@ -12,6 +12,9 @@ import { CLAIM_PLACEHOLDER } from "@/lib/agents/run-status";
 const getAgentRuns = vi.fn();
 vi.mock("@/lib/agents/actions", () => ({
   getAgentRuns: (...a: unknown[]) => getAgentRuns(...a),
+  // Imported by AgentRunHistory (Spec 3). Never called here — the disclosure is
+  // collapsed — but a mocked module must still carry the export.
+  getChildRuns: vi.fn(),
 }));
 
 function wrap(ui: ReactNode) {

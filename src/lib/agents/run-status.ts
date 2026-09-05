@@ -50,6 +50,16 @@ export type AgentRunLike = {
   createdAt: string;
 };
 
+/**
+ * WHY a run exists — `user_agent_runs.trigger`, mirrored in TS.
+ *
+ * `schedule` is the hourly sweep and the only kind that occupies a fire slot;
+ * `delegation` is a child started by another run's `delegate` tool call;
+ * `mention` is an @handle on an item update. The database says the same thing
+ * in `user_agent_runs_trigger_known`.
+ */
+export type AgentRunTrigger = "schedule" | "delegation" | "mention";
+
 /** One row of the expanded run history. Structurally an {@link AgentRunLike}. */
 export type AgentRunSummary = AgentRunLike & {
   id: string;
@@ -97,7 +107,59 @@ export type AgentRunSummary = AgentRunLike & {
    * `get_my_agent_last_runs()` has fixed SQL columns.
    */
   memoryNotesDropped: number;
+  /** The run whose `delegate` call created this one; NULL for a root run. */
+  parentRunId: string | null;
+  /** 0 for a root, 1 for a delegated child. Capped at 1 by CHECK constraint —
+   *  a child cannot delegate again, so the tree is exactly two levels deep. */
+  depth: number;
+  trigger: AgentRunTrigger;
+  /**
+   * The name of the agent that RAN this row — carried only on a child, where
+   * it is the whole point: a nested run belongs to a DIFFERENT agent from the
+   * one whose history is open, and without its name it reads as an anonymous
+   * second run of the same agent. Optional because the history read is already
+   * scoped to one known agent and re-selecting its name per row would be a
+   * join for a string the caller is holding.
+   */
+  agentName?: string;
 };
+
+/**
+ * What a delegating run actually cost, in tokens.
+ *
+ * A child run bills its OWN `ai_usage` row (Spec 3 §2.3) and carries its own
+ * `input_tokens`/`output_tokens`, so a parent's own columns describe the parent
+ * ALONE and understate the orchestration by however much it delegated. This is
+ * the sum, and it is deliberately tokens rather than money: `ai_usage` is
+ * admin-only by RLS, and copying credits onto the run row would put the same
+ * number in two places, one of which is best-effort.
+ *
+ * NULL on either column is zero, not NaN — a claimed-but-unfinalised child has
+ * NULL on both, and letting that poison the arithmetic would blank the total on
+ * exactly the run most worth reading.
+ */
+export function subtreeTokens(
+  root: AgentRunSummary,
+  children: readonly AgentRunSummary[],
+): number {
+  const own = (r: AgentRunSummary) =>
+    (r.inputTokens ?? 0) + (r.outputTokens ?? 0);
+  return children.reduce((sum, c) => sum + own(c), own(root));
+}
+
+/**
+ * The one word that explains why a run exists, or nothing.
+ *
+ * Only for the runs the hourly sweep did NOT start. Every other row in the
+ * table is scheduled, and labelling those would put a kicker on every line and
+ * make the two that matter invisible. Lives here with the rest of the run
+ * vocabulary rather than as a literal in the component.
+ */
+export function agentRunTriggerLabel(trigger: AgentRunTrigger): string | null {
+  if (trigger === "delegation") return "Delegated";
+  if (trigger === "mention") return "Summoned";
+  return null;
+}
 
 const PRESENTATION: Record<
   AgentRunDisplayStatus,

@@ -6,6 +6,7 @@ const assertCanCreateAgent = vi.fn();
 const insert = vi.fn();
 const revalidatePath = vi.fn();
 const listAgentRuns = vi.fn();
+const listChildRuns = vi.fn();
 
 /** Every `.eq()` any action applies, as [column, value]. The owner filters are
  *  defence-in-depth on top of RLS; asserting them stops a refactor from quietly
@@ -45,6 +46,7 @@ vi.mock("./agents-db", async (importOriginal) => ({
   // RUN_HISTORY_LIMIT is a real constant the action clamps against — keep it.
   ...(await importOriginal<typeof import("./agents-db")>()),
   listAgentRuns: (...a: unknown[]) => listAgentRuns(...a),
+  listChildRuns: (...a: unknown[]) => listChildRuns(...a),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => revalidatePath() }));
 
@@ -96,8 +98,14 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-const { createAgent, updateAgent, setAgentEnabled, deleteAgent, getAgentRuns } =
-  await import("./actions");
+const {
+  createAgent,
+  updateAgent,
+  setAgentEnabled,
+  deleteAgent,
+  getAgentRuns,
+  getChildRuns,
+} = await import("./actions");
 
 const AGENT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -129,6 +137,7 @@ beforeEach(() => {
   assertCanCreateAgent.mockReset();
   insert.mockReset();
   listAgentRuns.mockReset();
+  listChildRuns.mockReset();
   eqCalls = [];
   selectEqCalls = [];
   lastSelect = null;
@@ -143,6 +152,7 @@ beforeEach(() => {
   });
   insert.mockResolvedValue({ data: { id: "agent-1" }, error: null });
   listAgentRuns.mockResolvedValue([]);
+  listChildRuns.mockResolvedValue([]);
 });
 
 describe("createAgent", () => {
@@ -596,6 +606,57 @@ describe("getAgentRuns", () => {
     listAgentRuns.mockRejectedValue(cause);
     await getAgentRuns(AGENT_ID);
     expect(spy).toHaveBeenCalledWith(expect.stringContaining(AGENT_ID), cause);
+    spy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spec 3: the delegated children of a page of runs.
+// ---------------------------------------------------------------------------
+
+describe("getChildRuns", () => {
+  const OTHER_RUN = "22222222-2222-4222-8222-222222222222";
+
+  it("returns the children of the runs it was given", async () => {
+    const children = [{ id: "child-1", agentName: "Risk Spotter" }];
+    listChildRuns.mockResolvedValue(children);
+    await expect(getChildRuns([AGENT_ID, OTHER_RUN])).resolves.toEqual({
+      ok: true,
+      data: children,
+    });
+    expect(listChildRuns).toHaveBeenCalledWith(expect.anything(), [
+      AGENT_ID,
+      OTHER_RUN,
+    ]);
+  });
+
+  // The id list comes from a CLIENT. Unbounded in means unbounded `IN (…)`,
+  // which is the one way this indexed read stops being bounded.
+  it("refuses a list longer than the run-history page without querying", async () => {
+    const tooMany = Array.from({ length: 51 }, () => AGENT_ID);
+    const r = await getChildRuns(tooMany);
+    expect(r.ok).toBe(false);
+    expect(listChildRuns).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-uuid run id without querying", async () => {
+    const r = await getChildRuns(["not-a-uuid"]);
+    expect(r.ok).toBe(false);
+    expect(listChildRuns).not.toHaveBeenCalled();
+  });
+
+  it("requires a signed-in caller", async () => {
+    requireUser.mockRejectedValue(new Error("unauthenticated"));
+    await expect(getChildRuns([AGENT_ID])).rejects.toThrow();
+    expect(listChildRuns).not.toHaveBeenCalled();
+  });
+
+  it("reports a read failure rather than an empty subtree", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    listChildRuns.mockRejectedValue(new Error("listChildRuns: boom"));
+    const r = await getChildRuns([AGENT_ID]);
+    expect(r.ok).toBe(false);
+    expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
 });
