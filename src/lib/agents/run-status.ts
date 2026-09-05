@@ -54,7 +54,15 @@ export type AgentRunLike = {
 export type AgentRunSummary = AgentRunLike & {
   id: string;
   fireDate: string;
-  fireHour: number;
+  /**
+   * NULL for every run that is not scheduled. `user_agent_runs.fire_hour` is
+   * the SCHEDULE slot, and Spec 3 gave the table two other kinds of run —
+   * a delegated child and an @handle mention — that occupy no slot at all
+   * (`user_agent_runs_slot_shape`: `trigger = 'schedule'` ⇔ `fire_hour is not
+   * null`). Nothing renders this today; it is carried so the history row stays
+   * a faithful copy of the column rather than a lie with a fabricated hour.
+   */
+  fireHour: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
   /**
