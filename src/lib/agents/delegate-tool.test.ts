@@ -95,6 +95,8 @@ const childAgent: UserAgentRow = {
   org_id: "00000000-0000-4000-8000-0000000000f1",
   owner_id: "00000000-0000-4000-8000-0000000000f2",
   name: "Ops",
+  handle: "ops",
+  kind: "user",
   template_id: "custom",
   instructions: "Watch the ops board.",
   board_scope: { mode: "all" },

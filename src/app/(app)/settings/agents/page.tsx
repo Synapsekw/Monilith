@@ -5,7 +5,6 @@ import { SettingsSection } from "@/components/settings/settings-section";
 import { AgentsSection } from "@/components/agents/AgentsSection";
 import type { AgentRecord } from "@/components/agents/AgentEditor";
 import type { AgentCadence, BoardScope } from "@/lib/agents/agent-config";
-import { slugifyHandle } from "@/lib/agents/handle";
 import type { AgentCapability } from "@/lib/agents/capabilities";
 import { getMyAgentLastRuns } from "@/lib/agents/agents-db";
 import { countPendingProposalsByAgent } from "@/lib/agents/proposals-db";
@@ -115,7 +114,7 @@ export default async function AgentsSettingsPage() {
     supabase
       .from("user_agents")
       .select(
-        "id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month",
+        "id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month, handle, kind",
       )
       .eq("owner_id", user.id)
       .order("created_at", { ascending: true })
@@ -207,12 +206,13 @@ export default async function AgentsSettingsPage() {
   const agents: AgentRecord[] = (rosterResult.data ?? []).map((a) => ({
     id: a.id,
     name: a.name,
-    // DERIVED, not read: `user_agents.handle` is added by the schema task and
-    // the roster select does not carry it yet. Deriving the same value the
-    // backfill will store keeps the editor's required `handle` populated
-    // without inventing a second source of truth — the roster read starts
-    // selecting the real column in the settings-UI task, and this line goes.
-    handle: slugifyHandle(a.name, a.id),
+    // The real column, read on first paint alongside every other field the
+    // editor re-sends on save. `handle` is what the roster row renders and
+    // what a mention resolves; `kind` is what tells the seeded orchestrator
+    // apart from an agent its owner made, and it decides which affordances
+    // the editor offers (the server refuses a built-in delete regardless).
+    handle: a.handle,
+    kind: a.kind === "builtin" ? "builtin" : "user",
     templateId: a.template_id,
     instructions: a.instructions,
     boardScope: a.board_scope as BoardScope,

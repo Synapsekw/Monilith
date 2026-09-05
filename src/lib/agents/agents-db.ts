@@ -16,6 +16,14 @@ export type UserAgentRow = {
   org_id: string;
   owner_id: string;
   name: string;
+  /** The typeable name. Unique per owner, case-insensitively, and the only
+   *  identifier a mention can carry — `user_agents.name` may contain spaces
+   *  and `activeMentionQuery` terminates a token at the first one. */
+  handle: string;
+  /** 'builtin' is the seeded orchestrator: renameable, undeletable, and NOT
+   *  counted against `max_agents_per_user`. Written only by
+   *  `seed_builtin_agent`; it is absent from `authenticated`'s column grants. */
+  kind: "user" | "builtin";
   template_id: string;
   instructions: string;
   board_scope: BoardScope;
@@ -61,7 +69,7 @@ export type UserAgentRow = {
 type Client = SupabaseClient<Database>;
 
 const AGENT_COLS =
-  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month, doc_nonce";
+  "id, org_id, owner_id, name, template_id, instructions, board_scope, cadence, run_at_local_hour, enabled, bridge_secret_id, provider, model_id, capabilities, run_on_weekday, run_on_day_of_month, doc_nonce, handle, kind";
 
 export async function getUserAgentById(
   client: Client,
@@ -195,7 +203,10 @@ export async function countAgentsForOwner(
     .from("user_agents")
     .select("id", { count: "exact", head: true })
     .eq("org_id", orgId)
-    .eq("owner_id", ownerId);
+    .eq("owner_id", ownerId)
+    // The built-in orchestrator is given, not chosen — charging it against the
+    // owner's three slots would take one away on the day this shipped.
+    .neq("kind", "builtin");
   if (error) throw new Error(`countAgentsForOwner: ${error.message}`);
   return count ?? 0;
 }
@@ -216,7 +227,11 @@ export async function countRunsToday(
     .eq("org_id", orgId)
     .eq("owner_id", ownerId)
     .eq("fire_date", fireDate)
-    .eq("status", "ran");
+    .eq("status", "ran")
+    // The cap counts TRIGGERS, not runs. A delegated child is bounded by the
+    // fan-out cap instead; counting it too would let one orchestration exhaust
+    // the day.
+    .is("parent_run_id", null);
   if (error) throw new Error(`countRunsToday: ${error.message}`);
   return count ?? 0;
 }

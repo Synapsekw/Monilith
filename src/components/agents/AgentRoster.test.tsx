@@ -22,9 +22,12 @@ function wrap(ui: ReactNode) {
 const base: RosterAgent = {
   id: "a1",
   name: "Morning Brief",
+  handle: "morning-brief",
   templateId: "morning-brief",
   cadence: "daily",
   runAtLocalHour: 7,
+  runOnWeekday: null,
+  runOnDayOfMonth: null,
   enabled: true,
   lastRun: null,
 };
@@ -139,6 +142,59 @@ describe("AgentRoster", () => {
       />,
     );
     expect(screen.queryByText(/awaiting approval/i)).not.toBeInTheDocument();
+  });
+
+  // The handle is the ONLY thing a person can type to summon an agent, and
+  // it is not the display name. A roster that never showed it left the answer
+  // to "what do I type?" nowhere in the product.
+  it("shows the handle the agent answers to", () => {
+    wrap(<AgentRoster agents={agents} onToggle={vi.fn()} />);
+    expect(screen.getByText("@morning-brief")).toBeInTheDocument();
+  });
+
+  // The regression this replaces: the row rendered "Daily at HH:00" for every
+  // agent regardless of cadence, so a weekly agent claimed to run every day
+  // and a manual one claimed a schedule it does not have at all.
+  it("does not claim a manual agent runs daily", () => {
+    wrap(
+      <AgentRoster
+        agents={[{ ...base, cadence: "manual" }]}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/only when you ask/i)).toBeInTheDocument();
+    expect(screen.queryByText(/daily/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/07:00/)).not.toBeInTheDocument();
+  });
+
+  it("names the weekday a weekly agent runs on", () => {
+    wrap(
+      <AgentRoster
+        agents={[{ ...base, cadence: "weekly", runOnWeekday: 1 }]}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Mondays at 07:00")).toBeInTheDocument();
+  });
+
+  it("names the day of the month a monthly agent runs on", () => {
+    wrap(
+      <AgentRoster
+        agents={[{ ...base, cadence: "monthly", runOnDayOfMonth: 28 }]}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Day 28 at 07:00")).toBeInTheDocument();
+  });
+
+  it("says weekdays, not daily, for a weekdays agent", () => {
+    wrap(
+      <AgentRoster
+        agents={[{ ...base, cadence: "weekdays" }]}
+        onToggle={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Weekdays at 07:00")).toBeInTheDocument();
   });
 
   // Working agreement #5: the roster's first paint must not pull run history.

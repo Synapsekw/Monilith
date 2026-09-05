@@ -18,6 +18,38 @@ const SETTINGS_PATH = "/settings/agents";
 const NO_ORG = "No organization.";
 
 /**
+ * Turn a unique-violation into the field message it is actually about.
+ *
+ * Uniqueness of both the handle and the display name is enforced by INDEXES
+ * (`user_agents_owner_handle_uniq`, `user_agents_org_owner_name_uniq`), never
+ * by the editor: the only way for the client to pre-empt a collision would be
+ * to read every other agent's handle, which is a query the editor must not
+ * make on every keystroke. So the database is allowed to be the one that says
+ * no — but "Couldn't save that agent" for a taken handle sends the owner
+ * looking for a bug instead of typing a different word.
+ *
+ * Returns null for anything that is not a 23505, so a genuine failure still
+ * falls through to the generic message rather than being explained away as a
+ * duplicate. The raw driver text is read but never echoed (it names indexes
+ * and column values).
+ */
+function duplicateFieldMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const e = error as { code?: unknown; message?: unknown; details?: unknown };
+  if (e.code !== "23505") return null;
+  const text = `${String(e.message ?? "")} ${String(e.details ?? "")}`;
+  if (text.includes("handle")) {
+    return "You already have an agent with that handle.";
+  }
+  if (text.includes("name")) {
+    return "You already have an agent with that name.";
+  }
+  // A 23505 from an index this code does not know about. Naming the wrong
+  // field would be worse than naming neither.
+  return "You already have an agent with that name or handle.";
+}
+
+/**
  * Roster mutations. RLS is the real boundary — every statement here runs on the
  * request-scoped client, so a user can only ever touch their own agents; the
  * explicit owner filters keep the reads on the owner index and make intent
@@ -55,6 +87,10 @@ export async function createAgent(
       org_id: org.id,
       owner_id: user.id,
       name: s.name,
+      // The typeable address. In `authenticated`'s column-level INSERT grant
+      // since 20260905045108; without it the row falls back to the column
+      // default (`agent-<8 hex>`) and the handle the owner typed is lost.
+      handle: s.handle,
       template_id: s.templateId,
       instructions: s.instructions,
       board_scope: s.boardScope,
@@ -83,7 +119,9 @@ export async function createAgent(
     .select("id")
     .single();
 
-  if (error || !data) return fail("Couldn't create that agent.");
+  if (error || !data) {
+    return fail(duplicateFieldMessage(error) ?? "Couldn't create that agent.");
+  }
   revalidatePath(SETTINGS_PATH);
   return { ok: true, data: { id: (data as { id: string }).id } };
 }
@@ -103,6 +141,10 @@ export async function updateAgent(
     .from("user_agents")
     .update({
       name: s.name,
+      // Always written, like every other field here: a rename that could not
+      // re-address the agent would make the editor's handle field a control
+      // that silently does nothing.
+      handle: s.handle,
       template_id: s.templateId,
       instructions: s.instructions,
       board_scope: s.boardScope,
@@ -129,7 +171,9 @@ export async function updateAgent(
     .eq("id", id)
     .eq("owner_id", user.id);
 
-  if (error) return fail("Couldn't save that agent.");
+  if (error) {
+    return fail(duplicateFieldMessage(error) ?? "Couldn't save that agent.");
+  }
   revalidatePath(SETTINGS_PATH);
   return { ok: true, data: undefined };
 }
@@ -153,6 +197,25 @@ export async function setAgentEnabled(
 export async function deleteAgent(id: string): Promise<ActionResult> {
   const user = await requireUser();
   const supabase = await createClient();
+
+  // The editor hides Delete for a built-in agent; THIS is the boundary that
+  // holds. Owner-scoped like every other statement in this module, so another
+  // person's row can neither be probed nor deleted.
+  const { data: row } = await supabase
+    .from("user_agents")
+    .select("kind")
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if ((row as { kind?: string } | null)?.kind === "builtin") {
+    // Rename it, switch it off, strip its grants — but it cannot be removed:
+    // the seed trigger would recreate it on the next org join, and a user with
+    // no orchestrator has no way to get one back.
+    return fail(
+      "Your built-in assistant can't be deleted. Switch it off instead.",
+    );
+  }
+
   const { error } = await supabase
     .from("user_agents")
     .delete()
