@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17";
+    PostgrestVersion: "14.5";
   };
   public: {
     Tables: {
@@ -415,6 +415,7 @@ export type Database = {
           org_id: string;
           output_tokens: number;
           provider: string | null;
+          run_id: string | null;
           user_id: string | null;
         };
         Insert: {
@@ -430,6 +431,7 @@ export type Database = {
           org_id: string;
           output_tokens?: number;
           provider?: string | null;
+          run_id?: string | null;
           user_id?: string | null;
         };
         Update: {
@@ -445,6 +447,7 @@ export type Database = {
           org_id?: string;
           output_tokens?: number;
           provider?: string | null;
+          run_id?: string | null;
           user_id?: string | null;
         };
         Relationships: [
@@ -2448,6 +2451,7 @@ export type Database = {
         Row: {
           agent_capability_ceiling: string[];
           ai_mode: Database["public"]["Enums"]["ai_mode"];
+          assistant_name: string;
           byo_key_last4: string | null;
           byo_provider: string | null;
           byo_secret_id: string | null;
@@ -2464,6 +2468,7 @@ export type Database = {
         Insert: {
           agent_capability_ceiling?: string[];
           ai_mode?: Database["public"]["Enums"]["ai_mode"];
+          assistant_name?: string;
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
@@ -2480,6 +2485,7 @@ export type Database = {
         Update: {
           agent_capability_ceiling?: string[];
           ai_mode?: Database["public"]["Enums"]["ai_mode"];
+          assistant_name?: string;
           byo_key_last4?: string | null;
           byo_provider?: string | null;
           byo_secret_id?: string | null;
@@ -3351,10 +3357,11 @@ export type Database = {
       user_agent_runs: {
         Row: {
           created_at: string;
+          depth: number;
           documents_omitted: boolean;
           error: string | null;
           fire_date: string;
-          fire_hour: number;
+          fire_hour: number | null;
           grants: Json | null;
           id: string;
           input_tokens: number | null;
@@ -3364,17 +3371,20 @@ export type Database = {
           output: string | null;
           output_tokens: number | null;
           owner_id: string;
+          parent_run_id: string | null;
           status: string;
           steps: number | null;
           tools_used: string[] | null;
+          trigger: string;
           user_agent_id: string;
         };
         Insert: {
           created_at?: string;
+          depth?: number;
           documents_omitted?: boolean;
           error?: string | null;
           fire_date: string;
-          fire_hour: number;
+          fire_hour?: number | null;
           grants?: Json | null;
           id?: string;
           input_tokens?: number | null;
@@ -3384,17 +3394,20 @@ export type Database = {
           output?: string | null;
           output_tokens?: number | null;
           owner_id: string;
+          parent_run_id?: string | null;
           status: string;
           steps?: number | null;
           tools_used?: string[] | null;
+          trigger?: string;
           user_agent_id: string;
         };
         Update: {
           created_at?: string;
+          depth?: number;
           documents_omitted?: boolean;
           error?: string | null;
           fire_date?: string;
-          fire_hour?: number;
+          fire_hour?: number | null;
           grants?: Json | null;
           id?: string;
           input_tokens?: number | null;
@@ -3404,9 +3417,11 @@ export type Database = {
           output?: string | null;
           output_tokens?: number | null;
           owner_id?: string;
+          parent_run_id?: string | null;
           status?: string;
           steps?: number | null;
           tools_used?: string[] | null;
+          trigger?: string;
           user_agent_id?: string;
         };
         Relationships: [
@@ -3415,6 +3430,13 @@ export type Database = {
             columns: ["org_id"];
             isOneToOne: false;
             referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_agent_runs_parent_run_id_fkey";
+            columns: ["parent_run_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agent_runs";
             referencedColumns: ["id"];
           },
           {
@@ -3435,8 +3457,10 @@ export type Database = {
           created_at: string;
           doc_nonce: string;
           enabled: boolean;
+          handle: string;
           id: string;
           instructions: string;
+          kind: string;
           model_id: string | null;
           name: string;
           org_id: string;
@@ -3456,8 +3480,10 @@ export type Database = {
           created_at?: string;
           doc_nonce?: string;
           enabled?: boolean;
+          handle?: string;
           id?: string;
           instructions: string;
+          kind?: string;
           model_id?: string | null;
           name: string;
           org_id: string;
@@ -3477,8 +3503,10 @@ export type Database = {
           created_at?: string;
           doc_nonce?: string;
           enabled?: boolean;
+          handle?: string;
           id?: string;
           instructions?: string;
+          kind?: string;
           model_id?: string | null;
           name?: string;
           org_id?: string;
@@ -3730,6 +3758,17 @@ export type Database = {
           p_value: string;
         };
         Returns: string;
+      };
+      agent_run_claim: {
+        Args: {
+          p_agent_id: string;
+          p_parent_run_id?: string;
+          p_trigger: string;
+        };
+        Returns: {
+          outcome: string;
+          run_id: string;
+        }[];
       };
       ai_credential_clear: { Args: { p_user: string }; Returns: undefined };
       ai_credential_delete: {
@@ -4381,6 +4420,7 @@ export type Database = {
           p_org: string;
           p_output_tokens: number;
           p_provider: string;
+          p_run_id?: string;
           p_user: string;
         };
         Returns: undefined;
@@ -4409,6 +4449,10 @@ export type Database = {
           name: string;
           rank: number;
         }[];
+      };
+      seed_builtin_agent: {
+        Args: { p_org: string; p_user: string };
+        Returns: undefined;
       };
       set_goal_links: {
         Args: { p_goal_id: string; p_links: Json };
@@ -4576,7 +4620,8 @@ export type Database = {
         | "feedback_response"
         | "health_digest"
         | "account_deleted"
-        | "agent_briefing";
+        | "agent_briefing"
+        | "agent_reply";
       org_role: "owner" | "admin" | "member" | "guest";
       portfolio_health: "on_track" | "at_risk" | "off_track";
       portfolio_priority: "low" | "medium" | "high" | "critical";
@@ -4757,6 +4802,7 @@ export const Constants = {
         "health_digest",
         "account_deleted",
         "agent_briefing",
+        "agent_reply",
       ],
       org_role: ["owner", "admin", "member", "guest"],
       portfolio_health: ["on_track", "at_risk", "off_track"],
