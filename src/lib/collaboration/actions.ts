@@ -19,13 +19,40 @@ import {
 } from "@/lib/collaboration/attachments-format";
 import { fail, type ActionResult } from "@/lib/actions/result";
 import { createAttachmentCore } from "./attachment-core";
+import { createServiceClient } from "@/lib/supabase/service";
+import { checkAgentMentionRateLimit } from "@/lib/rate-limit/agent-mention-rate-limit";
+import {
+  claimAgentRun,
+  CLAIM_REFUSAL_COPY,
+  type ClaimOutcome,
+} from "@/lib/agents/run-claim";
+import { dispatchAgentRun } from "@/lib/agents/mention-dispatch";
 import type { Json } from "@/types/database.types";
+
+/**
+ * What happened to the agent an update summoned.
+ *
+ * `agentRun: null` with a `reason` is the ONLY way a refusal reaches the
+ * person: a summons that is rate-limited, on cooldown, over the org's daily
+ * cap, aimed at a disabled agent, or aimed at an agent they do not own must
+ * never fail the comment — the comment is the thing they actually asked for —
+ * but it must never fail SILENTLY either, or they are left waiting for an
+ * answer that is never coming.
+ */
+export type AddUpdateResult = {
+  updateId: string;
+  agentRun: "started" | null;
+  /** The summoned agent's handle, so the confirmation can name it. Present
+   *  only alongside `agentRun: "started"`. */
+  agentHandle?: string;
+  reason?: string;
+};
 
 export async function addUpdate(input: {
   itemId: string;
   text: string;
   mentions?: MentionTargetInput[];
-}): Promise<ActionResult<{ updateId: string }>> {
+}): Promise<ActionResult<AddUpdateResult>> {
   const parsed = addUpdateSchema.safeParse(input);
   if (!parsed.success)
     return fail(parsed.error.issues[0]?.message ?? "Invalid");
@@ -90,7 +117,64 @@ export async function addUpdate(input: {
       });
   }
 
-  return { ok: true, data: { updateId: data.id } };
+  // ── The agent trigger ──────────────────────────────────────────────────
+  // ONE agent per update, deliberately. Several handles in one comment would
+  // turn a single keystroke into several billable runs; the orchestrator (and
+  // its bounded `delegate` fan-out) is the supported way to reach more than
+  // one agent from one sentence.
+  //
+  // Everything below is AFTER the update is committed and can only ever change
+  // what the caller is TOLD, never whether the comment was saved.
+  const agentTarget = parsed.data.mentions.find((m) => m.kind === "agent");
+  let agentRun: "started" | null = null;
+  let agentHandle: string | undefined;
+  let reason: string | undefined;
+  if (agentTarget) {
+    const limit = await checkAgentMentionRateLimit(user.id);
+    if (!limit.allowed) {
+      reason = "You have summoned agents too many times this hour.";
+    } else {
+      // OWNERSHIP, checked here and not delegated to the RPC. `agent_run_claim`
+      // establishes ownership from `auth.uid()`, and the claim below runs on
+      // the SERVICE client (a Server Action has no way to call it as the user
+      // and still bypass nothing else), where `auth.uid()` is null — so its
+      // ownership arm cannot fire. This read is that arm, run through the
+      // USER's client so RLS is what answers it: a uuid the author cannot see
+      // returns no row, and "not yours" and "does not exist" are the same
+      // answer, as they must be.
+      const { data: owned } = await supabase
+        .from("user_agents")
+        .select("id, handle")
+        .eq("id", agentTarget.agentId)
+        .eq("owner_id", user.id)
+        .maybeSingle();
+      if (!owned) {
+        reason = "That agent isn't yours.";
+      } else {
+        const claim = await claimAgentRun(createServiceClient(), {
+          agentId: agentTarget.agentId,
+          trigger: "mention",
+        });
+        if (claim.outcome === "claimed" && claim.runId) {
+          // Fire-and-forget: the POST is queued behind the response, so the
+          // comment returns now and the run happens on its own invocation.
+          await dispatchAgentRun(claim.runId, parsed.data.itemId, data.id);
+          agentRun = "started";
+          agentHandle = owned.handle;
+        } else {
+          reason =
+            CLAIM_REFUSAL_COPY[
+              claim.outcome as Exclude<ClaimOutcome, "claimed">
+            ];
+        }
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    data: { updateId: data.id, agentRun, agentHandle, reason },
+  };
 }
 
 export async function editUpdate(input: {
