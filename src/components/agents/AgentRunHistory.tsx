@@ -5,10 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/ui/status-pill";
-import { getAgentRuns } from "@/lib/agents/actions";
+import { getAgentRuns, getChildRuns } from "@/lib/agents/actions";
 import { getPendingProposals } from "@/lib/agents/proposal-actions";
 import type { PendingProposal } from "@/lib/agents/proposal-display";
 import { ProposalCard } from "@/components/agents/ProposalCard";
+import { Kicker } from "@/components/ui/kicker";
 import { timeAgo } from "@/lib/boards/automation-runs";
 import {
   agentRunDisplayStatus,
@@ -17,6 +18,9 @@ import {
   describeAgentRun,
   MODEL_SUBSTITUTED_NOTE,
   memoryDroppedNote,
+  subtreeTokens,
+  agentRunTriggerLabel,
+  type AgentRunSummary,
 } from "@/lib/agents/run-status";
 
 /**
@@ -97,6 +101,38 @@ export function AgentRunHistory({
     proposalsByRun.set(p.runId, [...(proposalsByRun.get(p.runId) ?? []), p]);
   }
 
+  /**
+   * The runs these runs delegated — ONE batched read for the whole page, beside
+   * the proposals query and on the same terms.
+   *
+   * THE DATA-FETCHING BUDGET (working agreement #5), stated: children ship with
+   * the page of runs, once, when the disclosure opens. Reading what a run
+   * delegated therefore costs ZERO further round trips — there is no per-run
+   * expander to click and nothing to fetch when one is read, and the 30s
+   * staleTime means collapsing and re-expanding is free too. The read itself is
+   * bounded and indexed: `parent_run_id IN (…)` over
+   * `user_agent_runs_parent_idx`, capped at three children per parent by
+   * `DELEGATE_FANOUT_MAX`, over an id list the action caps at the page size.
+   *
+   * A failure is silent, exactly like the proposals read: run history is the
+   * signal this surface exists for, and a side read must never replace it with
+   * an error.
+   */
+  const { data: childResult } = useQuery({
+    queryKey: ["userAgentChildRuns", agentId, runIds],
+    enabled: open && runIds.length > 0,
+    staleTime: 30_000,
+    queryFn: () => getChildRuns(runIds),
+  });
+  const childrenByRun = new Map<string, AgentRunSummary[]>();
+  for (const c of childResult?.ok ? childResult.data : []) {
+    if (!c.parentRunId) continue;
+    childrenByRun.set(c.parentRunId, [
+      ...(childrenByRun.get(c.parentRunId) ?? []),
+      c,
+    ]);
+  }
+
   return (
     <div className="w-full">
       <button
@@ -134,6 +170,11 @@ export function AgentRunHistory({
             runs.map((run) => {
               const status = agentRunDisplayStatus(run);
               const proposals = proposalsByRun.get(run.id) ?? [];
+              const children = childrenByRun.get(run.id) ?? [];
+              // Null for the scheduled runs that are almost every row — see
+              // `agentRunTriggerLabel`. Answers "why does this run exist?",
+              // which the status pill does not.
+              const triggerLabel = agentRunTriggerLabel(run.trigger);
               return (
                 <div key={run.id} className="flex flex-col gap-1">
                   <div className="flex items-start gap-2 text-xs sm:items-center">
@@ -144,13 +185,64 @@ export function AgentRunHistory({
                     >
                       {agentRunStatusLabel(status)}
                     </StatusPill>
+                    {triggerLabel ? (
+                      <Kicker className="shrink-0">{triggerLabel}</Kicker>
+                    ) : null}
                     <span className="text-muted-foreground shrink-0">
                       {timeAgo(run.createdAt)}
                     </span>
                     <span className="text-muted-foreground min-w-0 flex-1 truncate">
                       {describeAgentRun(run)}
                     </span>
+                    {/* The real cost of a delegating run. A child bills its own
+                        ai_usage row, so this run's own token columns describe
+                        only itself — and it is deliberately tokens, not money:
+                        ai_usage is admin-only by RLS. Rendered ONLY when this
+                        run actually delegated, so an ordinary run's line is
+                        byte-for-byte what it was before this feature. */}
+                    {children.length > 0 ? (
+                      <span className="text-kicker text-2xs shrink-0 font-mono tabular-nums">
+                        {subtreeTokens(run, children).toLocaleString()} tokens
+                        across {children.length + 1} runs
+                      </span>
+                    ) : null}
                   </div>
+                  {/* The runs this one delegated, indented under it. A child is
+                      a run of a DIFFERENT agent, so its name leads — without it
+                      the row reads as an anonymous second run of this agent.
+                      Nothing renders when a run delegated to nobody: no empty
+                      expander, no "0 children". */}
+                  {children.length > 0 ? (
+                    <div
+                      role="group"
+                      aria-label={`Runs ${agentName} delegated`}
+                      className="ml-4 flex flex-col gap-1 border-l pl-3"
+                    >
+                      {children.map((c) => {
+                        const childStatus = agentRunDisplayStatus(c);
+                        return (
+                          <div
+                            key={c.id}
+                            className="flex items-start gap-2 text-xs sm:items-center"
+                          >
+                            <StatusPill
+                              color={agentRunStatusColor(childStatus)}
+                              variant="soft"
+                              className="shrink-0"
+                            >
+                              {agentRunStatusLabel(childStatus)}
+                            </StatusPill>
+                            <span className="text-foreground shrink-0 font-medium">
+                              {c.agentName ?? "Another agent"}
+                            </span>
+                            <span className="text-muted-foreground min-w-0 flex-1 truncate">
+                              {describeAgentRun(c)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   {/* Its own line, and a needs-attention pill rather than a
                       failure one: the briefing WAS sent, but on a model the
                       owner did not choose. Pairing the colour with words keeps

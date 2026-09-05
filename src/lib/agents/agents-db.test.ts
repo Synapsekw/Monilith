@@ -6,8 +6,10 @@ import {
   countAgentsForOwner,
   countRunsToday,
   listAgentRuns,
+  listChildRuns,
   getMyAgentLastRuns,
 } from "./agents-db";
+import { DELEGATE_FANOUT_MAX } from "./run-claim";
 
 // ---------------------------------------------------------------------------
 // Fakes. Each mirrors one Supabase query-builder shape used by agents-db.ts.
@@ -479,5 +481,130 @@ describe("getMyAgentLastRuns", () => {
     await expect(getMyAgentLastRuns(client as never)).rejects.toThrow(
       "getMyAgentLastRuns: boom",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Spec 3: the nested-run read. ONE batched query for a whole page of runs —
+// the N+1 that working agreement #5 exists to prevent is a per-row child read.
+// ---------------------------------------------------------------------------
+
+/** select().in().order().limit() — listChildRuns. `.limit()` is the thenable,
+ *  and `from` is exposed so a test can count ROUND TRIPS, not just filters. */
+function clientForChildRuns(data: unknown, error: unknown = null) {
+  const filters: FilterCall[] = [];
+  const order = vi.fn();
+  const limit = vi.fn();
+  const chain = {
+    in: vi.fn((col: string, val: unknown) => {
+      filters.push(["in", col, val]);
+      return {
+        order: order.mockImplementation((col2: string, opts: unknown) => {
+          void col2;
+          void opts;
+          return {
+            limit: limit.mockImplementation((n: number) => {
+              void n;
+              return Promise.resolve({ data, error });
+            }),
+          };
+        }),
+      };
+    }),
+  };
+  const select = vi.fn((_cols: string) => chain);
+  const from = vi.fn(() => ({ select }));
+  return { client: { from } as never, filters, select, order, limit, from };
+}
+
+describe("listChildRuns", () => {
+  const childRow = {
+    id: "child-1",
+    status: "ran",
+    error: null,
+    fire_date: "2026-09-04",
+    fire_hour: null,
+    input_tokens: 800,
+    output_tokens: 120,
+    model_substituted: false,
+    documents_omitted: false,
+    memory_notes_dropped: 0,
+    created_at: "2026-09-04T07:00:11.000Z",
+    parent_run_id: "r1",
+    depth: 1,
+    trigger: "delegation",
+    user_agents: { name: "Risk Spotter" },
+  };
+
+  it("reads all children in ONE batched query over the parent index", async () => {
+    const { client, filters, from } = clientForChildRuns([]);
+    await listChildRuns(client as never, ["r1", "r2"]);
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(filters).toContainEqual(["in", "parent_run_id", ["r1", "r2"]]);
+  });
+
+  // An `in ()` with no values is a full scan waiting to happen, and the
+  // overwhelmingly common case — delegation is inert until an admin grants it —
+  // is a page of runs with no children at all.
+  it("returns [] without querying for an empty parent list", async () => {
+    const { client, from } = clientForChildRuns([]);
+    await expect(listChildRuns(client as never, [])).resolves.toEqual([]);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  // Bounded by the SAME cap the database enforces: agent_run_claim refuses a
+  // fourth sibling, so three per parent is the true ceiling, not a guess.
+  it("bounds the read at the fan-out cap per parent, oldest first", async () => {
+    const { client, order, limit } = clientForChildRuns([]);
+    await listChildRuns(client as never, ["r1", "r2"]);
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: true });
+    expect(limit).toHaveBeenCalledWith(2 * DELEGATE_FANOUT_MAX);
+  });
+
+  it("maps a child row to the display shape, including its agent's name", async () => {
+    const { client } = clientForChildRuns([childRow]);
+    await expect(listChildRuns(client as never, ["r1"])).resolves.toEqual([
+      {
+        id: "child-1",
+        status: "ran",
+        error: null,
+        createdAt: "2026-09-04T07:00:11.000Z",
+        fireDate: "2026-09-04",
+        // A delegated run occupies no schedule slot; the column is genuinely
+        // NULL and must not be fabricated into an hour.
+        fireHour: null,
+        inputTokens: 800,
+        outputTokens: 120,
+        modelSubstituted: false,
+        documentsOmitted: false,
+        memoryNotesDropped: 0,
+        parentRunId: "r1",
+        depth: 1,
+        trigger: "delegation",
+        agentName: "Risk Spotter",
+      },
+    ]);
+  });
+
+  // Without parent_run_id the rows cannot be grouped under anything, and
+  // without the name a child reads as an anonymous second run.
+  it("selects the tree columns and the child agent's name", async () => {
+    const { client, select } = clientForChildRuns([]);
+    await listChildRuns(client as never, ["r1"]);
+    const cols = String(select.mock.calls[0]?.[0]);
+    for (const col of ["parent_run_id", "depth", "trigger", "user_agents"])
+      expect(cols, `${col} must be selected`).toContain(col);
+  });
+
+  it("throws on a DB error rather than reporting a childless run", async () => {
+    const { client } = clientForChildRuns(null, { message: "boom" });
+    await expect(listChildRuns(client as never, ["r1"])).rejects.toThrow(
+      "listChildRuns: boom",
+    );
+  });
+
+  it("returns an empty list when no run delegated", async () => {
+    const { client } = clientForChildRuns(null);
+    await expect(listChildRuns(client as never, ["r1"])).resolves.toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ import {
   type PersonalAgentSettings,
 } from "./agent-config";
 import { assertCanCreateAgent, AgentCapExceededError } from "./caps";
-import { listAgentRuns, RUN_HISTORY_LIMIT } from "./agents-db";
+import { listAgentRuns, listChildRuns, RUN_HISTORY_LIMIT } from "./agents-db";
 import type { AgentRunSummary } from "./run-status";
 
 const SETTINGS_PATH = "/settings/agents";
@@ -273,5 +273,44 @@ export async function getAgentRuns(
     // line in one user's browser that nobody is watching.
     console.error(`[agents] run history read failed for ${agentId}`, e);
     return fail("Couldn't load this agent's runs.");
+  }
+}
+
+/** The run ids a client may ask about at once — exactly the page
+ *  `getAgentRuns` just returned. Declared here rather than imported from
+ *  `proposal-actions.ts`, which enforces the identical bound for the identical
+ *  reason: a `"use server"` module may export only async functions, so a schema
+ *  cannot cross that boundary. */
+const childRunIdsSchema = z.array(z.string().uuid()).max(RUN_HISTORY_LIMIT);
+
+/**
+ * The delegated children of a page of runs — the nested half of the run-history
+ * tree.
+ *
+ * ONE batched read for the whole page, fired once when the disclosure opens and
+ * cached client-side, so seeing what a run delegated costs no further round
+ * trips (working agreement #5). The id list is bounded on the way in: an
+ * unbounded list from a client is an unbounded `IN (…)`, which is the one way
+ * this indexed read stops being bounded.
+ *
+ * RLS is the boundary, not the ids. `user_agent_runs_owner_read` scopes the
+ * table to the caller, so a run id that is not theirs contributes nothing
+ * rather than leaking someone else's orchestration.
+ */
+export async function getChildRuns(
+  parentRunIds: string[],
+): Promise<ActionResult<AgentRunSummary[]>> {
+  const parsed = childRunIdsSchema.safeParse(parentRunIds);
+  if (!parsed.success) return fail("Couldn't load this run's nested runs.");
+  await requireUser();
+  const supabase = await createClient();
+  try {
+    return { ok: true, data: await listChildRuns(supabase, parsed.data) };
+  } catch (e) {
+    // Logged for the same reason its sibling read is: the caller renders this
+    // failure silently (run history must not be replaced by a side read's
+    // error), so the server log is the ONLY evidence it happened.
+    console.error("[agents] child run read failed", e);
+    return fail("Couldn't load this run's nested runs.");
   }
 }

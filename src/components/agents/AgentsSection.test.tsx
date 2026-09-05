@@ -10,6 +10,9 @@ import type { AgentRecord } from "./AgentEditor";
 // so an accidental fetch fails loudly rather than hitting the network.
 vi.mock("@/lib/agents/actions", () => ({
   getAgentRuns: vi.fn(),
+  // Imported by AgentRunHistory (Spec 3). Never called here — the disclosure is
+  // collapsed — but a mocked module must still carry the export.
+  getChildRuns: vi.fn(),
   setAgentEnabled: vi.fn(),
 }));
 

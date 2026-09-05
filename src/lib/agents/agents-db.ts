@@ -3,7 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { AgentCadence, BoardScope } from "./agent-config";
 import type { AgentCapability } from "./capabilities";
-import type { AgentRunLike, AgentRunSummary } from "./run-status";
+import type {
+  AgentRunLike,
+  AgentRunSummary,
+  AgentRunTrigger,
+} from "./run-status";
+// The DATABASE's own fan-out cap (agent_run_claim refuses a fourth sibling),
+// reused as the child read's bound so the two cannot drift.
+import { DELEGATE_FANOUT_MAX } from "./run-claim";
 
 /**
  * Access seam for the personal-agent family (`user_agents`, `user_agent_runs`).
@@ -112,6 +119,56 @@ export async function findUserAgentRun(
 export const RUN_HISTORY_LIMIT = 50;
 
 /**
+ * Every column the expanded run history reads, for a root run and for a child
+ * alike — one list, so the two reads cannot drift into showing different facts
+ * about the same kind of row.
+ */
+const RUN_COLS =
+  "id, status, error, fire_date, fire_hour, input_tokens, output_tokens, model_substituted, documents_omitted, memory_notes_dropped, created_at, parent_run_id, depth, trigger";
+
+/** The `RUN_COLS` projection, as Postgres hands it back. */
+type RunRow = {
+  id: string;
+  status: string;
+  error: string | null;
+  fire_date: string;
+  fire_hour: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  model_substituted: boolean;
+  documents_omitted: boolean;
+  memory_notes_dropped: number;
+  created_at: string;
+  parent_run_id: string | null;
+  depth: number;
+  trigger: string;
+};
+
+/** snake_case row → the display shape. `trigger` is `text` in the generated
+ *  types and a three-value union in the app; `user_agent_runs_trigger_known`
+ *  is what makes the narrowing true, exactly as `user_agents_cadence_check`
+ *  backs the `AgentCadence` narrowing above. */
+function toRunSummary(r: RunRow, agentName?: string): AgentRunSummary {
+  return {
+    id: r.id,
+    status: r.status,
+    error: r.error,
+    createdAt: r.created_at,
+    fireDate: r.fire_date,
+    fireHour: r.fire_hour,
+    inputTokens: r.input_tokens,
+    outputTokens: r.output_tokens,
+    modelSubstituted: r.model_substituted,
+    documentsOmitted: r.documents_omitted,
+    memoryNotesDropped: r.memory_notes_dropped,
+    parentRunId: r.parent_run_id,
+    depth: r.depth,
+    trigger: r.trigger as AgentRunTrigger,
+    ...(agentName === undefined ? {} : { agentName }),
+  };
+}
+
+/**
  * Bounded run history for ONE agent, newest first. `.eq("user_agent_id", …)`
  * plus `created_at desc` is exactly `user_agent_runs_history_idx`, so this stays
  * an index scan as the table grows (working agreement #5). Called with the
@@ -125,26 +182,55 @@ export async function listAgentRuns(
 ): Promise<AgentRunSummary[]> {
   const { data, error } = await client
     .from("user_agent_runs")
-    .select(
-      "id, status, error, fire_date, fire_hour, input_tokens, output_tokens, model_substituted, documents_omitted, memory_notes_dropped, created_at",
-    )
+    .select(RUN_COLS)
     .eq("user_agent_id", agentId)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`listAgentRuns: ${error.message}`);
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    status: r.status,
-    error: r.error,
-    createdAt: r.created_at,
-    fireDate: r.fire_date,
-    fireHour: r.fire_hour,
-    inputTokens: r.input_tokens,
-    outputTokens: r.output_tokens,
-    modelSubstituted: r.model_substituted,
-    documentsOmitted: r.documents_omitted,
-    memoryNotesDropped: r.memory_notes_dropped,
-  }));
+  return (data ?? []).map((r) => toRunSummary(r));
+}
+
+/**
+ * The delegated children of a PAGE of runs — the nested half of the run-history
+ * tree.
+ *
+ * ONE batched read for the whole page (working agreement #5), never one per
+ * row: `parent_run_id IN (…)` is served by `user_agent_runs_parent_idx`, which
+ * is PARTIAL (`where parent_run_id is not null`) precisely because the vast
+ * majority of rows are scheduled roots that belong in no such index.
+ *
+ * Bounded by the database's own arithmetic rather than a guessed number:
+ * `agent_run_claim` refuses a fourth sibling, so `parents × DELEGATE_FANOUT_MAX`
+ * is the true ceiling on what this can return, and the caller's id list is
+ * itself capped at `RUN_HISTORY_LIMIT` before it gets here.
+ *
+ * The empty list is guarded BEFORE the client is touched — an `in ()` with no
+ * values is a full scan waiting to happen, and it is the overwhelmingly common
+ * case: delegation is inert on an org until an admin adds `agent.delegate` to
+ * the capability ceiling.
+ *
+ * `user_agents!inner(name)` is what makes a child legible: it is a run of a
+ * DIFFERENT agent, and without its name it reads as an anonymous second run of
+ * the one whose history is open. `!inner` rather than a left join, so a row
+ * whose agent the caller cannot see under RLS is dropped rather than rendered
+ * nameless. Called with the REQUEST-scoped client — `user_agent_runs_owner_read`
+ * is the access boundary, not the id list.
+ */
+export async function listChildRuns(
+  client: Client,
+  parentRunIds: string[],
+): Promise<AgentRunSummary[]> {
+  if (parentRunIds.length === 0) return [];
+  const { data, error } = await client
+    .from("user_agent_runs")
+    .select(`${RUN_COLS}, user_agents!inner(name)`)
+    .in("parent_run_id", parentRunIds)
+    // Oldest first: children are read as the order the parent delegated in,
+    // which is the order they actually ran (they run serially).
+    .order("created_at", { ascending: true })
+    .limit(parentRunIds.length * DELEGATE_FANOUT_MAX);
+  if (error) throw new Error(`listChildRuns: ${error.message}`);
+  return (data ?? []).map((r) => toRunSummary(r, r.user_agents.name));
 }
 
 /**
