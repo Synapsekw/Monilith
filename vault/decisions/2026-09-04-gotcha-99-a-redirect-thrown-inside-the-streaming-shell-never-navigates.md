@@ -6,6 +6,7 @@ tags: [decision, gotcha, nextjs, cache-components, routing, settings]
 related:
   - "[[2026-08-27-gotcha-97-a-layouts-instant-false-does-not-cover-the-pages-beneath-it]]"
   - "[[2026-06-16-gotcha-09-rsc-nav-refetch-on-view-switch]]"
+  - "[[2026-09-05-1314-settings-menu-blank-streaming-redirect]]"
 ---
 
 # Gotcha 99 — a `redirect()` thrown inside the streaming shell never navigates
