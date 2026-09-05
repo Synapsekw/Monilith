@@ -4,6 +4,13 @@ import type { ChangelogEntry } from "./types";
 // Do not edit by hand. CI (develop) fails if this file drifts from git history.
 export const GENERATED: ChangelogEntry[] = [
   {
+    date: "2026-09-05",
+    kind: "fixed",
+    title: "Settings opens from the profile menu again",
+    description:
+      "Choosing Settings from the profile menu did nothing — the menu closed and the page stayed put. It now opens your profile settings straight away, whether you click through from the menu or open the address directly.",
+  },
+  {
     date: "2026-09-04",
     kind: "new",
     title: "Ask an agent for a PDF",
