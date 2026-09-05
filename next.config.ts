@@ -72,6 +72,27 @@ const nextConfig: NextConfig = {
     // they gain nothing here (see optimizePackageImports.md).
     optimizePackageImports: ["radix-ui", "framer-motion"],
   },
+  // `/settings` has no content of its own — the first Account section is home.
+  // This MUST live at the routing layer, not as a `redirect()` inside
+  // `app/(app)/settings/page.tsx` (its previous form). That page renders inside
+  // the `(app)` streaming shell, so the redirect was thrown from a streaming
+  // context: Next.js then degrades it to a `<meta http-equiv="refresh">` in the
+  // flushed HTML and to a serialized redirect digest in the RSC payload. A hard
+  // load recovered after the 1s meta refresh, but a client-side navigation — what
+  // clicking "Settings" in the user menu does — rendered the settings layout with
+  // an empty content column and never navigated. `redirects()` runs BEFORE
+  // rendering, so both entry paths get a real 307 (see redirect.md, "If you'd
+  // like to redirect before the render process, use next.config.js", and
+  // vault/decisions/2026-09-04-gotcha-99-…).
+  async redirects() {
+    return [
+      {
+        source: "/settings",
+        destination: "/settings/profile",
+        permanent: false,
+      },
+    ];
+  },
   // Baseline security response headers applied to every route. These are the
   // low-risk, high-value defaults:
   //   - X-Frame-Options: DENY — clickjacking protection (no framing anywhere).
