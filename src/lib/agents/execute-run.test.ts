@@ -51,9 +51,13 @@ const LOOP_RESULT = {
   documentsOmitted: false,
   memoryNotesDropped: 0,
 };
-type RuntimeArgs = { onPropose: (c: ProposedCall) => void };
+type RuntimeArgs = {
+  onPropose: (c: ProposedCall) => void;
+  extra: { name: string }[];
+};
 let runtimeArgs: RuntimeArgs | null = null;
 type LoopArgs = {
+  task?: string;
   onStep?: (p: {
     steps: number;
     toolsUsed: string[];
@@ -80,6 +84,22 @@ vi.mock("./run-loop", async (importOriginal) => ({
   runAgentLoop: (a: unknown) => runAgentLoop(a as LoopArgs),
 }));
 
+// ── delegation ──────────────────────────────────────────────────────────
+// Mocked so this suite asserts the WIRING (is the tool offered, and with whose
+// run id as the parent) rather than re-testing delegate-tool.test.ts.
+type DelegateArgs = { parentRunId: string; ceiling: AgentCapability[] };
+const makeDelegateDescriptors = vi.fn((_a: DelegateArgs) => [
+  { name: "delegate" },
+]);
+const listDelegateRoster = vi.fn(async (_client: unknown, _agent: unknown) => [
+  { id: "b1", handle: "ops", name: "Ops", instructions: "watch" },
+]);
+vi.mock("./delegate-tool", () => ({
+  makeDelegateDescriptors: (a: unknown) =>
+    makeDelegateDescriptors(a as DelegateArgs),
+  listDelegateRoster: (c: unknown, a: unknown) => listDelegateRoster(c, a),
+}));
+
 vi.mock("./documents-db", () => ({ listDocumentsForAgent: async () => [] }));
 vi.mock("./memory-db", () => ({ listMemoryForAgent: async () => [] }));
 
@@ -92,6 +112,7 @@ vi.mock("./proposals-db", () => ({
   },
 }));
 
+const { DEFAULT_RUN_TASK } = await import("./run-loop");
 const { executeAgentRun, newRunProgress } = await import("./execute-run");
 
 const AGENT_ID = "00000000-0000-4000-8000-0000000000aa";
@@ -150,14 +171,22 @@ beforeEach(() => {
   insertProposals.mockReset();
   insertProposals.mockResolvedValue(undefined);
   proposalRows = [];
+  makeDelegateDescriptors.mockClear();
+  listDelegateRoster.mockClear();
 });
 
 describe("executeAgentRun", () => {
-  // Task 5 adds `task` to `runAgentLoop`; until it does there is no parameter
-  // to forward it to, so `executeAgentRun` accepts it and drops it. Un-todo
-  // these in Task 5's Step 4.
-  it.todo("uses the default task when none is given");
-  it.todo("passes an explicit task straight through");
+  // The USER turn, not the system message — a delegated child is handed its
+  // parent's task here, and the cached prefix is unchanged either way.
+  it("uses the default task when none is given", async () => {
+    await executeAgentRun(baseArgs());
+    expect(runAgentLoop.mock.calls[0]![0].task).toBe(DEFAULT_RUN_TASK);
+  });
+
+  it("passes an explicit task straight through", async () => {
+    await executeAgentRun({ ...baseArgs(), task: "Summarise board Ops." });
+    expect(runAgentLoop.mock.calls[0]![0].task).toBe("Summarise board Ops.");
+  });
 
   it("records the effective grants on progress before the loop runs", async () => {
     const progress = newRunProgress();
@@ -299,5 +328,51 @@ describe("executeAgentRun", () => {
       provider: "openai",
       requestedModel: "gpt-5",
     });
+  });
+});
+
+describe("executeAgentRun — delegation", () => {
+  it("offers no delegate tool when delegation is off", async () => {
+    await executeAgentRun({ ...baseArgs(), allowDelegation: false });
+    expect(makeDelegateDescriptors).not.toHaveBeenCalled();
+    expect(listDelegateRoster).not.toHaveBeenCalled();
+    const names = buildAgentRuntime.mock.calls[0]![0].extra.map((d) => d.name);
+    expect(names).not.toContain("delegate");
+  });
+
+  it("offers the delegate tool when delegation is on", async () => {
+    await executeAgentRun({ ...baseArgs(), allowDelegation: true });
+    const names = buildAgentRuntime.mock.calls[0]![0].extra.map((d) => d.name);
+    expect(names).toContain("delegate");
+  });
+
+  // The descriptor closes over THIS run as the parent — that is the edge the
+  // claim RPC counts fan-out and depth along.
+  it("names its own run as the parent and hands over the org ceiling", async () => {
+    await executeAgentRun({
+      ...baseArgs(),
+      allowDelegation: true,
+      ceiling: ["agent.delegate"],
+    });
+    expect(makeDelegateDescriptors.mock.calls[0]![0]).toMatchObject({
+      parentRunId: "run-1",
+      ceiling: ["agent.delegate"],
+    });
+  });
+
+  // The roster is read through the OWNER's client, so RLS decides what is on
+  // it — not a service-role read that could see another owner's agents.
+  it("reads the roster through the owner client", async () => {
+    await executeAgentRun({ ...baseArgs(), allowDelegation: true });
+    expect(listDelegateRoster.mock.calls[0]![0]).toBe(client);
+  });
+});
+
+describe("executeAgentRun — metering correlation", () => {
+  // Without this the parent and all three of its children collapse into one
+  // undifferentiated `personal_agent_run` bucket for the org.
+  it("meters under this run's own id", async () => {
+    await executeAgentRun(baseArgs());
+    expect(runAi.mock.calls[0]![0]).toMatchObject({ runId: "run-1" });
   });
 });

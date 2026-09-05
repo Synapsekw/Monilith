@@ -9,6 +9,7 @@ import {
   buildAgentRuntime,
   runAgentLoop,
   ModelNotToolCapableError,
+  DEFAULT_RUN_TASK,
 } from "./run-loop";
 import { listDocumentsForAgent } from "./documents-db";
 import {
@@ -21,6 +22,7 @@ import {
 import { listMemoryForAgent } from "./memory-db";
 import { makeMemoryDescriptors } from "./memory-tools";
 import { AGENT_ONLY_DESCRIPTORS } from "./agent-only-tools";
+import { makeDelegateDescriptors, listDelegateRoster } from "./delegate-tool";
 import type { ProposedCall } from "./grant-gate";
 import type { AgentCapability } from "./capabilities";
 import { insertProposals } from "./proposals-db";
@@ -105,17 +107,16 @@ export async function executeAgentRun(args: {
    *  be the module singleton `DEFAULT_ORG_AI_SETTINGS` returns by identity —
    *  never mutated in place here (no push/sort/splice); `.filter` copies. */
   ceiling: AgentCapability[];
-  /** Replaces the default "Do your work for today…" user message.
-   *  NOT YET FORWARDED: `runAgentLoop` has no `task` parameter until Task 5
-   *  adds one. Accepted now so the delegate tool's call site is the shape it
-   *  will keep, and so this seam is the only thing Task 5 has to change. */
+  /** Replaces the default "Do your work for today…" user message. A mention
+   *  run passes the update it was summoned by; a delegated child passes the
+   *  task its parent handed it. Forwarded to `runAgentLoop` as the USER turn —
+   *  never folded into the instructions, which are the cached prefix. */
   task?: string;
-  /** Adds the `delegate` descriptor. FALSE for a child run — depth is capped.
-   *  THREADED BUT UNUSED in this task: `extra` below is still exactly
-   *  `[...AGENT_ONLY_DESCRIPTORS, ...makeMemoryDescriptors(...)]`. Task 5 adds
-   *  the `makeDelegateDescriptors` branch that reads it. Not dead code — the
-   *  parameter is what lets the depth cap be expressed at every call site
-   *  before the tool it gates exists. */
+  /** Adds the `delegate` descriptor. FALSE for a child run — depth is capped
+   *  at 1, so an agent that was delegated TO is never even offered the tool.
+   *  This is the second layer only: the DB CHECK inside `agent_run_claim` is
+   *  the guarantee, and it answers `refused_depth` regardless of what any
+   *  caller passes here. */
   allowDelegation: boolean;
   /** Mutated after every completed step so a caller's catch can still write an
    *  honest audit row for a run that died mid-loop. */
@@ -205,9 +206,12 @@ export async function executeAgentRun(args: {
         // exactly what runAi does when they are omitted.
         provider: agent.provider ?? undefined,
         requestedModel: agent.model_id,
-        // `runId` (the run↔ledger correlation) belongs here too, but the field
-        // does not exist on runAi's args yet — it lands with the gateway
-        // change in Task 1 and is threaded through then.
+        // The run↔ledger correlation (`ai_usage.run_id`). A nested (delegated)
+        // run passes its OWN id, never its parent's — that is what makes a
+        // child's spend attributable at all, instead of the parent and all
+        // three of its children collapsing into one undifferentiated
+        // `personal_agent_run` bucket for the org.
+        runId,
       },
       async ({ adapter, apiKey, baseUrl, model }, reportUsage) => {
         if (!model.supportsTools)
@@ -276,6 +280,23 @@ export async function executeAgentRun(args: {
               userAgentId: agent.id,
               runId,
             }),
+            // The roster is read through the OWNER's client, so RLS decides
+            // what is on it. `makeDelegateDescriptors` returns [] for an empty
+            // roster, so an owner with one agent spends no context on a tool
+            // that could never be called. The tool is `agent.delegate`-gated
+            // like any other write: offered here, but denied by the grant gate
+            // unless the agent holds it AND the org ceiling allows it.
+            ...(args.allowDelegation
+              ? makeDelegateDescriptors({
+                  svc,
+                  ownerClient,
+                  // THIS run is the parent — the edge `agent_run_claim` counts
+                  // depth and fan-out along.
+                  parentRunId: runId,
+                  ceiling,
+                  roster: await listDelegateRoster(ownerClient, agent),
+                })
+              : []),
           ],
           granted: effectiveGrants,
           ceiling,
@@ -297,6 +318,11 @@ export async function executeAgentRun(args: {
             model: model.requestModel,
           }),
           instructions: agent.instructions,
+          // `?? DEFAULT_RUN_TASK` resolves HERE rather than being left to the
+          // loop's own default so there is exactly one place that decides what
+          // an unattended run is asked to do, and so the task the loop was
+          // actually given is visible in this call.
+          task: args.task ?? DEFAULT_RUN_TASK,
           // This agent's own stable secret — keys the instructions
           // delimiter (document-inject.ts) whenever `documents` is
           // non-empty, so a document body forging the literal

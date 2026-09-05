@@ -35,6 +35,18 @@ import {
 export const AGENT_MAX_STEPS = 12;
 
 /**
+ * What an UNATTENDED scheduled run is asked to do.
+ *
+ * Extracted so a summoned run can replace it without the two drifting into two
+ * different prompts. It is the USER turn, not the system message: the Anthropic
+ * cache breakpoint sits on the system message, so a per-run task costs no cache
+ * — which is precisely why a mention or delegation replaces THIS string and
+ * never the instructions above it.
+ */
+export const DEFAULT_RUN_TASK =
+  "Do your work for today. Report what you did in a short summary.";
+
+/**
  * The agent's model cannot call tools, so there is no loop to run.
  *
  * Its own class because the route records it as `skipped`, not `error`: a
@@ -252,6 +264,17 @@ export async function runAgentLoop(args: {
    *  straight back on the result so the caller can persist it. */
   memoryNotesDropped?: number;
   /**
+   * Replaces the default user message. A mention run passes the update it was
+   * summoned by; a delegated child passes the task its parent handed it. The
+   * system message is unchanged either way — this is the USER turn, which is
+   * outside the cached prefix, so a per-run task costs no cache.
+   *
+   * MODEL-REACHABLE TEXT on the delegation path (a parent agent writes it), so
+   * it lands here as an ordinary user turn and never inside the instructions
+   * block, where it could read as a rule rather than a request.
+   */
+  task?: string;
+  /**
    * Progress reported after EVERY completed step.
    *
    * The whole point is the failure path: if step 5 throws, `generateText`
@@ -327,8 +350,7 @@ export async function runAgentLoop(args: {
       },
       {
         role: "user",
-        content:
-          "Do your work for today. Report what you did in a short summary.",
+        content: args.task ?? DEFAULT_RUN_TASK,
       },
     ],
     tools: args.tools,
