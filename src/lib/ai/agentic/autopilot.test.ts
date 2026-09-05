@@ -195,7 +195,27 @@ describe("autopilotRun", () => {
     expect(AUTOPILOT_ACTIONS).not.toContain("set_option");
   });
 
-  it("introduces itself to the model as Monolith Autopilot", async () => {
+  it("introduces itself to the model by the org's assistant name", async () => {
+    const { client, calls } = fakeClient([
+      { stop_reason: "end_turn", content: [] },
+    ]);
+    await autopilotRun({
+      apiKey: "k",
+      model: "claude-sonnet-5",
+      agentContext: CTX,
+      tasks: ["triage"],
+      assistantName: "Ada",
+      client,
+    });
+    // The bot's name is user-visible (it authors board updates) and per-org
+    // now, so the prompt must agree with what Settings → AI shows — a model
+    // that calls itself something else in a comment is the visible defect.
+    const system = String(calls[0]!.system);
+    expect(system).toContain("You are Ada");
+    expect(system).not.toContain("Pulse Autopilot");
+  });
+
+  it("falls back to the product name when the caller passes none", async () => {
     const { client, calls } = fakeClient([
       { stop_reason: "end_turn", content: [] },
     ]);
@@ -206,11 +226,7 @@ describe("autopilotRun", () => {
       tasks: ["triage"],
       client,
     });
-    // The bot's name is user-visible (it authors board updates), so the prompt
-    // must agree with the product name and with the seeded profiles row.
-    const system = String(calls[0]!.system);
-    expect(system).toContain("You are Monolith Autopilot");
-    expect(system).not.toContain("Pulse Autopilot");
+    expect(String(calls[0]!.system)).toContain("You are Monolith Autopilot");
   });
 
   it("returns no actions when the model does nothing", async () => {

@@ -5,6 +5,7 @@ import type { AutomationContext } from "@/lib/ai/automation-context";
 import type { AiUsageTokens } from "@/lib/ai/pricing";
 import { validateChoice } from "./decide";
 import { AUTOPILOT_TASKS, type AutopilotTask } from "./autopilot-config";
+import { resolveAssistantName } from "@/lib/org/assistant-name";
 
 export { AUTOPILOT_TASKS, type AutopilotTask };
 
@@ -145,9 +146,10 @@ function allowedFor(tasks: readonly AutopilotTask[]): AutopilotAction[] {
 function systemPrompt(
   context: AutopilotContext,
   allow: readonly AutopilotAction[],
+  assistantName: string,
 ): string {
   return [
-    "You are Monolith Autopilot, a scheduled housekeeping agent for ONE board.",
+    `You are ${assistantName}, a scheduled housekeeping agent for ONE board.`,
     "Take a SMALL, reversible set of housekeeping actions by calling the provided tools — one tool call per item you want to change. Do nothing to items that are already fine.",
     "You may reference ONLY the item ids, column ids, option ids, group ids, and member ids present in the CONTEXT below — never invent an id, and never act on an item that is not in context.items.",
     `You may take at most ${MAX_ACTIONS} actions in total. When there is nothing worth doing, reply with a short plain-text note and call no tools.`,
@@ -170,13 +172,26 @@ export async function autopilotRun(args: {
   model: string;
   agentContext: AutopilotContext;
   tasks: readonly AutopilotTask[];
+  /**
+   * What the ORG calls the assistant (`org_ai_settings.assistant_name`). The
+   * bot authors comments and notifications under this name, so the prompt has
+   * to introduce it by the same one — a run that signs off as "Monolith
+   * Autopilot" under a profile the org renamed is the visible defect. Optional
+   * so a caller with no org context still gets the product default rather than
+   * an anonymous agent.
+   */
+  assistantName?: string;
   client?: Anthropic;
 }): Promise<AutopilotResult> {
   const client = args.client ?? new Anthropic({ apiKey: args.apiKey });
   const context = args.agentContext;
   const allow = allowedFor(args.tasks);
   const tools = allow.map((a) => TOOL_DEFS[a]);
-  const system = systemPrompt(context, allow);
+  const system = systemPrompt(
+    context,
+    allow,
+    resolveAssistantName(args.assistantName),
+  );
   const itemIds = new Set(context.items.map((i) => i.id));
 
   const messages: Anthropic.MessageParam[] = [

@@ -85,8 +85,7 @@ function makeSettingsUpdate(patch: Record<string, unknown>) {
     // behaviour change the suite can see rather than a type error.
     then<TResult1 = UpdateResult, TResult2 = never>(
       onFulfilled?:
-        | ((v: UpdateResult) => TResult1 | PromiseLike<TResult1>)
-        | null,
+        ((v: UpdateResult) => TResult1 | PromiseLike<TResult1>) | null,
       onRejected?: ((r: unknown) => TResult2 | PromiseLike<TResult2>) | null,
     ): Promise<TResult1 | TResult2> {
       return Promise.resolve(settle()).then(onFulfilled, onRejected);
@@ -1117,6 +1116,112 @@ describe("setAgentCapabilityCeiling", () => {
   });
 });
 
+describe("setAssistantName", () => {
+  // The name is org-admin-editable CONTENT, not an entitlement — but it is
+  // still written on the SERVICE client, and there is deliberately no
+  // authenticated write policy on `org_ai_settings` at all. This check is the
+  // whole authorization boundary for the rename.
+  it("rejects non-admins", async () => {
+    admin(false);
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    expect(await setAssistantName({ name: "Ada" })).toEqual({
+      ok: false,
+      error: "Only organization admins can change AI settings.",
+    });
+    expect(settingsUpdates).toHaveLength(0);
+  });
+
+  it("rejects a blank name before any write", async () => {
+    admin(true);
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    const res = await setAssistantName({ name: "   " });
+    expect(res.ok).toBe(false);
+    expect(settingsUpdates).toHaveLength(0);
+    expect(rlsRpc).not.toHaveBeenCalled();
+  });
+
+  // The column carries `check (length(trim(assistant_name)) between 1 and 40)`.
+  // Without this the write reaches Postgres and comes back as an opaque failure
+  // the form cannot attach to the field.
+  it("rejects a name over the column's 40-character limit before any write", async () => {
+    admin(true);
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    const res = await setAssistantName({ name: "x".repeat(41) });
+    expect(res.ok).toBe(false);
+    expect(settingsUpdates).toHaveLength(0);
+    expect(rlsRpc).not.toHaveBeenCalled();
+  });
+
+  it("stores the trimmed name for admins", async () => {
+    admin(true);
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    const res = await setAssistantName({ name: "  Ada  " });
+    expect(res).toEqual({ ok: true, data: { name: "Ada" } });
+    expect(rowFor("org-1")).toMatchObject({
+      assistant_name: "Ada",
+      updated_by: "user-1",
+    });
+  });
+
+  // Same tenant-boundary shape as every other write in this module: the
+  // service client bypasses RLS, so `.eq("org_id", …)` is the only thing
+  // stopping one org's rename from renaming the assistant for everybody.
+  it("touches ONLY the caller's org row", async () => {
+    admin(true);
+    const bystander = { ...rowFor("org-2") };
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    expect((await setAssistantName({ name: "Ada" })).ok).toBe(true);
+    expect(settingsUpdates).toHaveLength(1);
+    expect(settingsUpdates[0].matched).toBe(1);
+    expect(settingsUpdates[0].predicates).toEqual([
+      { column: "org_id", value: "org-1" },
+    ]);
+    expect(rowFor("org-2")).toEqual(bystander);
+  });
+
+  it("never creates a settings row, and says so when there is none", async () => {
+    admin(true);
+    settingsTable = [settingsRow("org-2")];
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    expect(await setAssistantName({ name: "Ada" })).toEqual({
+      ok: false,
+      error: "Choose how AI is powered for this organization first.",
+    });
+    expect(svcUpsert).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed write instead of claiming success", async () => {
+    admin(true);
+    settingsUpdateError = { message: "boom" };
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    expect(await setAssistantName({ name: "Ada" })).toEqual({
+      ok: false,
+      error: "Couldn't rename the assistant. Please try again.",
+    });
+  });
+});
+
+describe("getOrgAiSettings", () => {
+  // The form's initial value. Without it the field renders the default for
+  // every org and an admin's saved name only appears after a hard reload.
+  it("surfaces the org's assistant name", async () => {
+    rlsMaybeSingle.mockResolvedValue({
+      data: { ai_mode: "managed", assistant_name: "Ada" },
+      error: null,
+    } as never);
+    const { getOrgAiSettings } = await import("@/lib/ai/settings-actions");
+    const res = await getOrgAiSettings();
+    expect(res.ok && res.data.assistantName).toBe("Ada");
+  });
+
+  it("falls back to the product default when the org has no settings row", async () => {
+    rlsMaybeSingle.mockResolvedValue({ data: null, error: null } as never);
+    const { getOrgAiSettings } = await import("@/lib/ai/settings-actions");
+    const res = await getOrgAiSettings();
+    expect(res.ok && res.data.assistantName).toBe("Monolith Autopilot");
+  });
+});
+
 describe("removeOrgByoKey", () => {
   it("rejects non-admins", async () => {
     admin(false);
@@ -1180,6 +1285,13 @@ describe("revalidation names the page the form actually lives on", () => {
     svcRpc.mockResolvedValue({ data: null, error: null });
     const { removeOrgByoKey } = await import("@/lib/ai/settings-actions");
     expect((await removeOrgByoKey()).ok).toBe(true);
+    expect(paths()).toEqual([AI_SETTINGS_PATH]);
+  });
+
+  it("setAssistantName", async () => {
+    admin(true);
+    const { setAssistantName } = await import("@/lib/ai/settings-actions");
+    expect((await setAssistantName({ name: "Ada" })).ok).toBe(true);
     expect(paths()).toEqual([AI_SETTINGS_PATH]);
   });
 

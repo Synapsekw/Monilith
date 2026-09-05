@@ -22,6 +22,7 @@ import {
   type BoardAgentSettings,
 } from "@/lib/ai/agentic/autopilot-config";
 import { assertOnline } from "@/lib/offline/online-status";
+import { DEFAULT_ASSISTANT_NAME } from "@/lib/org/assistant-name";
 
 /** The three housekeeping tasks a board agent can run (spec §4.3). Each maps to
  *  exactly one reversible action the confined applier is allowed to take. */
@@ -65,6 +66,10 @@ export function AutopilotCard({ boardId }: { boardId: string }) {
 
   const isAdmin = data?.isAdmin ?? false;
   const serverSettings = data?.settings;
+  // The org's own name for the assistant, resolved server-side. The product
+  // default stands in only while the first read is still in flight — the card
+  // renders its header before `data` exists.
+  const assistantName = data?.assistantName ?? DEFAULT_ASSISTANT_NAME;
   const [form, setForm] = useState<BoardAgentSettings | null>(
     serverSettings ?? null,
   );
@@ -139,9 +144,7 @@ export function AutopilotCard({ boardId }: { boardId: string }) {
           </div>
           <p className="text-muted-foreground text-xs">
             Runs bounded, reversible housekeeping on a schedule, posting as{" "}
-            <span className="text-foreground font-medium">
-              Monolith Autopilot
-            </span>
+            <span className="text-foreground font-medium">{assistantName}</span>
             . Every action is logged and confined to this board.
           </p>
         </div>
