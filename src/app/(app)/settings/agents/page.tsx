@@ -5,6 +5,7 @@ import { SettingsSection } from "@/components/settings/settings-section";
 import { AgentsSection } from "@/components/agents/AgentsSection";
 import type { AgentRecord } from "@/components/agents/AgentEditor";
 import type { AgentCadence, BoardScope } from "@/lib/agents/agent-config";
+import { slugifyHandle } from "@/lib/agents/handle";
 import type { AgentCapability } from "@/lib/agents/capabilities";
 import { getMyAgentLastRuns } from "@/lib/agents/agents-db";
 import { countPendingProposalsByAgent } from "@/lib/agents/proposals-db";
@@ -206,6 +207,12 @@ export default async function AgentsSettingsPage() {
   const agents: AgentRecord[] = (rosterResult.data ?? []).map((a) => ({
     id: a.id,
     name: a.name,
+    // DERIVED, not read: `user_agents.handle` is added by the schema task and
+    // the roster select does not carry it yet. Deriving the same value the
+    // backfill will store keeps the editor's required `handle` populated
+    // without inventing a second source of truth — the roster read starts
+    // selecting the real column in the settings-UI task, and this line goes.
+    handle: slugifyHandle(a.name, a.id),
     templateId: a.template_id,
     instructions: a.instructions,
     boardScope: a.board_scope as BoardScope,

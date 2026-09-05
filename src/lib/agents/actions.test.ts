@@ -75,6 +75,9 @@ const AGENT_ID = "11111111-1111-4111-8111-111111111111";
 
 const valid = {
   name: "Morning Brief",
+  // The typeable name. Required by `personalAgentSettingsSchema` — an agent
+  // with no handle cannot be addressed, so there is no valid payload without.
+  handle: "morning-brief",
   templateId: "morning-brief",
   instructions: "Summarise what is pending.",
   boardScope: { mode: "all" as const },

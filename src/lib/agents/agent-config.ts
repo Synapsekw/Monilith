@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AGENT_CAPABILITIES } from "./capabilities";
+import { handleSchema } from "./handle";
 
 /**
  * Client-safe shared config for personal agents: the template gallery, cadences
@@ -19,6 +20,15 @@ export const AGENT_CADENCES = [
   "weekdays",
   "weekly",
   "monthly",
+  /**
+   * "Only when I ask". A manual agent is never picked up by the hourly sweep
+   * and occupies no fire slot — it runs only when something addresses it: a
+   * `@handle` on an item update, or another agent delegating to it. It is the
+   * cadence the built-in orchestrator ships with, and the one an agent you
+   * only ever want on demand should carry, rather than being switched off
+   * (disabled means "do not run at all", including when addressed).
+   */
+  "manual",
 ] as const;
 export type AgentCadence = (typeof AGENT_CADENCES)[number];
 
@@ -45,6 +55,16 @@ export type BoardScope = z.infer<typeof boardScopeSchema>;
 export const personalAgentSettingsSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
+    /**
+     * The TYPEABLE name — what `@handle` in an item update or in Ask resolves
+     * to. Separate from `name` because `name` is free text (spaces, emoji,
+     * punctuation) and a mention token terminates at the first whitespace.
+     * Required, with no default: every agent must be addressable, and a
+     * derived-on-save fallback would silently hand two agents the same handle
+     * and fail at the unique index instead of in the field the owner is
+     * looking at. `slugifyHandle` is what the editor prefills it with.
+     */
+    handle: handleSchema,
     templateId: z.string().min(1).max(64),
     instructions: z.string().trim().min(1).max(INSTRUCTIONS_MAX),
     boardScope: boardScopeSchema,
@@ -132,6 +152,10 @@ function cadenceFieldsMatch(v: {
       return weekday && !dayOfMonth;
     case "monthly":
       return !weekday && dayOfMonth;
+    // Never scheduled, so there is no day to operate on — the same shape as
+    // daily/weekdays, for the opposite reason.
+    case "manual":
+      return !weekday && !dayOfMonth;
   }
 }
 

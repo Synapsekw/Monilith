@@ -2,10 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
-import {
-  AGENT_CAPABILITIES,
-  type AgentCapability,
-} from "@/lib/agents/capabilities";
+import type { AgentCapability } from "@/lib/agents/capabilities";
 
 export type AiMode = Database["public"]["Enums"]["ai_mode"];
 
@@ -63,7 +60,22 @@ export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = Object.freeze({
   // `mode: "off"` anyway — no agent runs there regardless — but this constant
   // and the column default must not disagree, or an org would silently lose
   // capabilities the moment its first settings row was written.
-  agentCapabilityCeiling: [...AGENT_CAPABILITIES],
+  //
+  // Spec 3 note: the list is now stated LITERALLY rather than as
+  // `[...AGENT_CAPABILITIES]`, because the two stopped being the same thing.
+  // `agent.delegate` joined the vocabulary but deliberately did NOT join the
+  // column default, and existing rows are deliberately NOT backfilled with it:
+  // delegation ships installable-but-inert, switched on by an admin ticking it
+  // in the org ceiling. Deriving this constant from the vocabulary would have
+  // handed it to every row-less org silently, which is the drift this comment
+  // exists to prevent — in the other direction.
+  agentCapabilityCeiling: [
+    "board.write",
+    "files.write",
+    "automation.create",
+    "time.log",
+    "memory.write",
+  ] satisfies AgentCapability[],
 });
 
 /**

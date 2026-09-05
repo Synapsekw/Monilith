@@ -83,6 +83,7 @@ const PROVIDERS = [
 
 const initial: PersonalAgentSettings = {
   name: "Morning Brief",
+  handle: "morning-brief",
   templateId: "morning-brief",
   instructions: "Summarise what is pending.",
   boardScope: { mode: "all" },
