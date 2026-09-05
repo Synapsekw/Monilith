@@ -7,8 +7,10 @@ import {
   removeOrgByoKey,
   setOrgDefaultModel,
   clearOrgDefaultModel,
+  setAssistantName,
 } from "@/lib/ai/settings-actions";
 import { type AiMode } from "@/lib/ai/org-settings";
+import { ASSISTANT_NAME_MAX_LENGTH } from "@/lib/org/assistant-name";
 import type { ProviderRow } from "@/lib/ai/providers/provider-rows";
 import {
   ModelPicker,
@@ -19,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useFieldStatus } from "@/components/ui/field-status";
+import { FieldStatus, useFieldStatus } from "@/components/ui/field-status";
 
 type Initial = {
   mode: AiMode;
@@ -30,6 +32,7 @@ type Initial = {
   byoKeyLast4: string | null;
   defaultProvider: string | null;
   defaultModelId: string | null;
+  assistantName: string;
 };
 
 const MODES: { id: AiMode; title: string; hint: string }[] = [
@@ -55,6 +58,10 @@ const MODES: { id: AiMode; title: string; hint: string }[] = [
  *  is Anthropic's, so a default on any other provider cannot apply there. */
 const MANAGED_PROVIDER = "anthropic";
 
+/** The static line under the assistant-name field — kept in the field's
+ *  accessible description alongside any error, like KEY_HINT_ID below. */
+const ASSISTANT_NAME_HINT_ID = "org-assistant-name-hint";
+
 /** The static "stored encrypted" line under the key field — kept in the field's
  *  accessible description alongside any error, rather than replaced by it. */
 const KEY_HINT_ID = "org-ai-key-hint";
@@ -72,9 +79,10 @@ const KEY_HINT_ID = "org-ai-key-hint";
  *
  * Nothing here fetches. Mode, key state and the chosen model are client state
  * over data the page loaded once, so every in-page interaction is 0 server
- * round-trips (working agreement #5); only the four mutations talk to the
- * server. Mode changes are optimistic and revert on failure; inline messages,
- * so an error sits on the control that caused it.
+ * round-trips (working agreement #5); only the mutations talk to the server —
+ * including the rename, which is one round-trip on "Rename" rather than one
+ * per keystroke. Mode changes are optimistic and revert on failure; inline
+ * messages, so an error sits on the control that caused it.
  */
 export function OrgAiSettingsForm({
   initial,
@@ -91,6 +99,15 @@ export function OrgAiSettingsForm({
   const [confirmed, setConfirmed] = useState<AiMode>(initial.mode);
   const [modeError, setModeError] = useState<string | null>(null);
   const [modePending, startMode] = useTransition();
+
+  // The rename is client state until Rename is pressed: typing costs zero
+  // server round-trips (working agreement #5), and `confirmed` is the last
+  // name the server acknowledged, which is what "changed" is measured against.
+  const [name, setName] = useState(initial.assistantName);
+  const [confirmedName, setConfirmedName] = useState(initial.assistantName);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [renamed, setRenamed] = useState(false);
+  const [namePending, startName] = useTransition();
 
   const [byoProvider, setByoProvider] = useState<string | null>(
     initial.byoProvider,
@@ -119,6 +136,13 @@ export function OrgAiSettingsForm({
   // there — `aria-invalid` is meaningless on a group.
   const modeStatus = useFieldStatus(modeError);
   const keyStatus = useFieldStatus(keyError, "error", KEY_HINT_ID);
+  // One message slot, two tones: the refusal wins over the confirmation, and
+  // only the refusal marks the field invalid.
+  const nameStatus = useFieldStatus(
+    nameError ?? (renamed ? "Renamed." : null),
+    nameError ? "error" : "success",
+    ASSISTANT_NAME_HINT_ID,
+  );
 
   // Never an index into a fixed map: a provider row can disappear (disabled)
   // while a stored id still names it, and the id is a better label than a crash.
@@ -142,6 +166,31 @@ export function OrgAiSettingsForm({
       } else {
         setMode(confirmed); // revert
         setModeError(res.error);
+      }
+    });
+  }
+
+  // Trimmed here because the SERVER trims: sending "  Ada  " and storing "Ada"
+  // would leave the field dirty forever, since the confirmed value would never
+  // match what is on screen.
+  const trimmedName = name.trim();
+  const nameChanged = trimmedName.length > 0 && trimmedName !== confirmedName;
+
+  function rename() {
+    if (!nameChanged || namePending) return;
+    setNameError(null);
+    setRenamed(false);
+    startName(async () => {
+      const res = await setAssistantName({ name: trimmedName });
+      if (res.ok) {
+        setName(res.data.name);
+        setConfirmedName(res.data.name);
+        setRenamed(true);
+      } else {
+        // Deliberately NOT reverted to `confirmedName`, unlike the optimistic
+        // radios above: this is free text an admin typed, and throwing it away
+        // on a refusal would make them retype it to retry.
+        setNameError(res.error);
       }
     });
   }
@@ -284,6 +333,55 @@ export function OrgAiSettingsForm({
           </div>
         </div>
       )}
+
+      <div className="border-border space-y-3 border-t pt-4">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Assistant name</p>
+          <p className="text-muted-foreground text-xs">
+            What this organization calls the built-in assistant. It is used
+            wherever the assistant posts, introduces itself, or is described.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="org-assistant-name" className="sr-only">
+            Assistant name
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="org-assistant-name"
+              value={name}
+              autoComplete="off"
+              spellCheck={false}
+              // Capped at the schema's own bound, so the field cannot compose a
+              // name the column's `between 1 and 40` check would refuse.
+              maxLength={ASSISTANT_NAME_MAX_LENGTH}
+              {...nameStatus.controlProps}
+              disabled={namePending}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameError(null);
+                setRenamed(false);
+              }}
+            />
+            <Button
+              size="sm"
+              className="shrink-0"
+              onClick={rename}
+              disabled={!nameChanged || namePending}
+            >
+              {namePending ? "Renaming…" : "Rename"}
+            </Button>
+          </div>
+          <p
+            id={ASSISTANT_NAME_HINT_ID}
+            className="text-muted-foreground text-xs"
+          >
+            Display only — members still reach the assistant the same way.
+          </p>
+          <FieldStatus field={nameStatus} />
+        </div>
+      </div>
 
       <div className="border-border space-y-3 border-t pt-4">
         <div className="space-y-0.5">

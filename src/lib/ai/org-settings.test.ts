@@ -43,6 +43,7 @@ describe("readOrgAiSettings", () => {
         max_agents_per_user: 5,
         max_agent_runs_per_user_per_day: 10,
         agent_capability_ceiling: ["board.write", "time.log"],
+        assistant_name: "Ada",
       }),
       "org-1",
     );
@@ -55,6 +56,7 @@ describe("readOrgAiSettings", () => {
       maxAgentsPerUser: 5,
       maxAgentRunsPerUserPerDay: 10,
       agentCapabilityCeiling: ["board.write", "time.log"],
+      assistantName: "Ada",
     });
   });
 
@@ -70,6 +72,19 @@ describe("readOrgAiSettings", () => {
       client as unknown as { from: () => { select: Mock } }
     ).from().select as Mock;
     expect(select.mock.calls[0]?.[0]).toContain("agent_capability_ceiling");
+  });
+
+  // Same failure mode as the ceiling above, one step quieter: a column left
+  // out of the select list arrives as `undefined`, and `resolveAssistantName`
+  // would silently answer "Monolith Autopilot" for every org — a rename that
+  // saved successfully and then appeared nowhere.
+  it("selects the assistant name column", async () => {
+    const client = clientReturning(null);
+    await readOrgAiSettings(client, "org-1");
+    const select = (
+      client as unknown as { from: () => { select: Mock } }
+    ).from().select as Mock;
+    expect(select.mock.calls[0]?.[0]).toContain("assistant_name");
   });
 
   // The DEFAULT (no settings row) matches the column default: all four. Such an

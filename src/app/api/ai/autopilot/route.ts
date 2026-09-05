@@ -8,6 +8,7 @@ import { autopilotRun } from "@/lib/ai/agentic/autopilot";
 import { runAi } from "@/lib/ai/gateway";
 import { assertToolLoopCapable } from "@/lib/ai/tool-capability";
 import { requireAiEntitlement } from "@/lib/ai/entitlement";
+import { readOrgAiSettings } from "@/lib/ai/org-settings";
 import { AiDisabledError, AiQuotaExceededError } from "@/lib/ai/errors";
 import { boardAgentConfigSchema } from "@/lib/ai/agentic/autopilot-config";
 import {
@@ -119,9 +120,14 @@ export async function POST(req: Request): Promise<Response> {
       boardId: agent.board_id,
     });
     const tasks = boardAgentConfigSchema.parse(agent.config).tasks;
-    // Truthful attribution: usage + authorship belong to the platform bot.
+    // Truthful attribution: usage + authorship belong to the platform bot —
+    // and the bot goes by whatever THIS org calls it. One bounded read on the
+    // org's own settings row (primary key), on a cron path that already reads
+    // the entitlement, so the prompt cannot introduce the agent as something
+    // other than the name its comments are signed with.
     const botUserId =
       (await getPlatformAgentUserId(svc)) ?? agent.created_by ?? agent.org_id;
+    const { assistantName } = await readOrgAiSettings(svc, agent.org_id);
 
     const decision = await runAi(
       { orgId: agent.org_id, userId: botUserId, feature: FEATURE },
@@ -137,6 +143,7 @@ export async function POST(req: Request): Promise<Response> {
           model: model.requestModel,
           agentContext: context,
           tasks,
+          assistantName,
         });
         return { result: r, usage: r.usage };
       },

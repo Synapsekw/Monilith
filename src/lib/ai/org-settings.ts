@@ -3,6 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { AiProvider } from "@/lib/ai/providers/catalog";
 import type { AgentCapability } from "@/lib/agents/capabilities";
+import {
+  DEFAULT_ASSISTANT_NAME,
+  resolveAssistantName,
+} from "@/lib/org/assistant-name";
 
 export type AiMode = Database["public"]["Enums"]["ai_mode"];
 
@@ -30,6 +34,13 @@ export type OrgAiSettings = {
    * editing any of them. Mirrors `org_ai_settings.agent_capability_ceiling`.
    */
   agentCapabilityCeiling: AgentCapability[];
+  /**
+   * What THIS org calls the built-in platform assistant — the name every
+   * render site shows instead of a hardcoded product string. Display only: the
+   * bot's identity (`auth.users.email`) is global and unrenamed, because
+   * `platform_agent_user_id()` resolves it by that email.
+   */
+  assistantName: string;
 };
 
 /**
@@ -76,6 +87,7 @@ export const DEFAULT_ORG_AI_SETTINGS: OrgAiSettings = Object.freeze({
     "time.log",
     "memory.write",
   ] satisfies AgentCapability[],
+  assistantName: DEFAULT_ASSISTANT_NAME,
 });
 
 /**
@@ -145,7 +157,7 @@ export async function readOrgAiSettings(
   const { data, error } = await client
     .from("org_ai_settings")
     .select(
-      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, default_provider, default_model_id, max_agents_per_user, max_agent_runs_per_user_per_day, agent_capability_ceiling",
+      "ai_mode, tier, monthly_credit_limit, byo_provider, byo_key_last4, default_provider, default_model_id, max_agents_per_user, max_agent_runs_per_user_per_day, agent_capability_ceiling, assistant_name",
     )
     .eq("org_id", orgId)
     .maybeSingle();
@@ -168,5 +180,11 @@ export async function readOrgAiSettings(
     // `org_ai_settings_ceiling_known` is what actually enforces.
     agentCapabilityCeiling:
       (data.agent_capability_ceiling as AgentCapability[] | null) ?? [],
+    // Resolved, never raw. The column is NOT NULL with a default and a
+    // 1..40 check, so a blank is unreachable through any supported path — but
+    // a row read before the column existed, or through an older select list,
+    // arrives as `undefined`, and an empty assistant name renders as a hole in
+    // the sentence rather than as an error anyone would notice.
+    assistantName: resolveAssistantName(data.assistant_name),
   };
 }
