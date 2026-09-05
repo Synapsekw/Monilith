@@ -11,6 +11,7 @@ import {
   attachmentUrlSchema,
   attachmentUrlsSchema,
   attachmentPreviewUrlSchema,
+  type MentionTargetInput,
 } from "@/lib/validations/collaboration-actions";
 import {
   isPreviewable,
@@ -23,7 +24,7 @@ import type { Json } from "@/types/database.types";
 export async function addUpdate(input: {
   itemId: string;
   text: string;
-  mentions?: string[];
+  mentions?: MentionTargetInput[];
 }): Promise<ActionResult<{ updateId: string }>> {
   const parsed = addUpdateSchema.safeParse(input);
   if (!parsed.success)
@@ -58,9 +59,16 @@ export async function addUpdate(input: {
   if (error || !data) return fail(error?.message ?? "Could not post update.");
 
   // Fan out one notification per mentioned member (deduped, excluding self).
-  const recipients = [...new Set(parsed.data.mentions)].filter(
-    (id) => id !== user.id,
-  );
+  // Humans only here. Agent targets are handled by the agent trigger path; an
+  // agent has no `profiles` row, so a notification row for one would be
+  // undeliverable and `gate_notification_by_pref` has nothing to gate.
+  const recipients = [
+    ...new Set(
+      parsed.data.mentions
+        .filter((m) => m.kind === "user")
+        .map((m) => m.userId),
+    ),
+  ].filter((id) => id !== user.id);
   if (recipients.length > 0) {
     const { error: notifErr } = await supabase.from("notifications").insert(
       recipients.map((rid) => ({

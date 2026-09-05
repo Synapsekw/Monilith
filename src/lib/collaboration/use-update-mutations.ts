@@ -18,6 +18,7 @@ import {
   itemUpdatesKey,
 } from "@/lib/collaboration/use-item-collab";
 import { assertOnline } from "@/lib/offline/online-status";
+import type { MentionTargetInput } from "@/lib/validations/collaboration-actions";
 
 type Ctx = { previous?: UpdatesCache; optimisticId?: string };
 
@@ -32,7 +33,7 @@ export function useUpdateMutations(
   const add = useMutation<
     { updateId: string },
     Error,
-    { text: string; mentions: string[] },
+    { text: string; mentions: MentionTargetInput[] },
     Ctx
   >({
     mutationFn: async (vars) => {
@@ -143,7 +144,7 @@ export function useUpdateMutations(
   });
 
   return {
-    addUpdate: (text: string, mentions: string[]) =>
+    addUpdate: (text: string, mentions: MentionTargetInput[]) =>
       add.mutate({ text, mentions }),
     editUpdate: (update: ItemUpdate, text: string) =>
       edit.mutate({ update, text }),
