@@ -37,6 +37,12 @@ import {
   assertRunAllowedToday,
   AgentCapExceededError,
 } from "@/lib/agents/caps";
+import { postAgentReply } from "@/lib/agents/agent-reply";
+import {
+  buildMentionTask,
+  loadMentionSummons,
+  MENTION_SUMMONS_LOST_TASK,
+} from "@/lib/agents/mention-summons";
 /** Conservative placeholder on the claim row: if the process dies before
  *  `finalizeRun` runs, the audit trail correctly reads "did not complete"
  *  rather than falsely "ran". `status` has no fourth ("pending"/"claimed")
@@ -68,14 +74,17 @@ const bodySchema = z.union([
   // Already claimed by `agent_run_claim` — the ONE creation path for a run with
   // no fire slot. Nothing here re-claims it.
   //
-  // `item_id` is present exactly for a mention run: it is the item the agent
-  // was summoned from and the item its reply is posted to. It rides the signed
-  // body rather than a `user_agent_runs` column, because no other trigger has
-  // such a value and a column that is null for every scheduled and delegated
-  // run invites a null-check at every read.
+  // `item_id` and `update_id` are present exactly for a mention run: the item
+  // the agent was summoned from (and the item its reply is posted to), and the
+  // comment that summoned it — whose text IS the run's task. Both ride the
+  // signed body rather than `user_agent_runs` columns, because no other trigger
+  // has such values and a column that is null for every scheduled and delegated
+  // run invites a null-check at every read. Being inside the HMAC is what stops
+  // either from being swapped for an item or a comment the summoner never saw.
   z.object({
     run_id: z.string().uuid(),
     item_id: z.string().uuid().optional(),
+    update_id: z.string().uuid().optional(),
   }),
   // The hourly sweep's fire slot. This branch, and only this branch, claims.
   z.object({
@@ -282,6 +291,10 @@ export async function POST(req: Request): Promise<Response> {
   /** Present only on a mention: the item the agent was summoned from, carried
    *  by the SIGNED body (see `bodySchema`). */
   const itemId = "run_id" in parsed ? parsed.item_id : undefined;
+  /** Present only on a mention: the comment that summoned the agent. Its text
+   *  is the run's TASK — see `mention-summons.ts` for why the id travels and
+   *  the prose does not. */
+  const updateId = "run_id" in parsed ? parsed.update_id : undefined;
 
   if ("run_id" in parsed) {
     const run = await loadRun(svc, parsed.run_id);
@@ -431,6 +444,21 @@ export async function POST(req: Request): Promise<Response> {
     //    can fix it, and it silently kills every briefing in the org every
     //    day), so it falls through to the generic catch below and is recorded
     //    as "error", not "skipped".
+    // WHAT THIS RUN IS ASKED TO DO. A scheduled run gets `DEFAULT_RUN_TASK`
+    // (resolved inside `executeAgentRun` from `task: undefined`). A MENTION run
+    // is asked the question the person actually typed — an agent summoned by
+    // "@ops what's blocking us?" that reports its daily briefing instead is not
+    // the feature. The text is read back from the summoning comment by id and
+    // composed into a nonce-keyed quoted block; `mention-summons.ts` is the
+    // whole argument for why it travels that way and how it is contained.
+    let task: string | undefined;
+    if (trigger === "mention") {
+      const summons = updateId ? await loadMentionSummons(svc, updateId) : null;
+      task = summons
+        ? buildMentionTask({ text: summons, nonce: agent.doc_nonce })
+        : MENTION_SUMMONS_LOST_TASK;
+    }
+
     let result: ExecuteRunResult;
     try {
       result = await executeAgentRun({
@@ -439,6 +467,9 @@ export async function POST(req: Request): Promise<Response> {
         agent,
         runId,
         ceiling: agentCapabilityCeiling,
+        // Undefined for every non-mention run, which is what makes
+        // `executeAgentRun` fall back to DEFAULT_RUN_TASK for them.
+        task,
         // A ROOT run — scheduled or summoned — may delegate; a run that was
         // itself delegated to may not, so it is never even offered the tool.
         // This is the second layer only: `agent_run_claim` answers
@@ -487,12 +518,25 @@ export async function POST(req: Request): Promise<Response> {
     // a comment into an inbox item, and threading it would file an answer to
     // one item under the daily briefing of another.
     if (trigger === "mention") {
-      // Task 11 replaces this with
-      // `postAgentReply(svc, { runId, itemId, ... })`.
-      console.info("[personal-agent] mention run finished", {
-        runId,
-        itemId,
-      });
+      if (itemId) {
+        // The answer goes back where the question was asked, authored by the
+        // platform bot and prefixed with the agent's name and handle so it can
+        // never read as a teammate's comment. Best-effort inside: the run has
+        // already succeeded and its report is already going onto the run row.
+        await postAgentReply(svc, {
+          runId,
+          itemId,
+          agentName: agent.name,
+          agentHandle: agent.handle,
+          text: result.text,
+        });
+      } else {
+        // A mention run with no item is not reachable through `addUpdate`,
+        // which always signs one. Log rather than invent a destination.
+        console.error("[personal-agent] mention run had no item to reply to", {
+          runId,
+        });
+      }
     } else {
       // Thread BEFORE email, so the email can link to it. Never gates the run: a
       // failed write returns null and the email simply omits the link.

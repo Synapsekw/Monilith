@@ -69,6 +69,27 @@ function renderBody(text: string, names: string[]): ReactNode[] {
  *  every render. */
 const NO_AGENTS: readonly AgentMentionTarget[] = [];
 
+/**
+ * The agent marker `postAgentReply` writes into an agent-authored update's
+ * `body`.
+ *
+ * Read for ATTRIBUTION only. An agent's reply is authored by the platform bot,
+ * which is not an org member, so without this the author line falls through to
+ * the "Someone" default — and "Someone" is exactly the ambiguity an agent
+ * comment must not have. Absent (and the badge simply not rendered) on every
+ * human comment and on every comment written before this shipped.
+ */
+function agentAuthor(
+  body: unknown,
+): { name: string; handle: string } | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const marker = (body as { agent?: unknown }).agent;
+  if (typeof marker !== "object" || marker === null) return undefined;
+  const { name, handle } = marker as { name?: unknown; handle?: unknown };
+  if (typeof name !== "string" || typeof handle !== "string") return undefined;
+  return { name, handle };
+}
+
 export function UpdatesTab({
   itemId,
   cache,
@@ -168,43 +189,55 @@ export function UpdatesTab({
         <EmptyState variant="inline">No updates yet for this item.</EmptyState>
       ) : (
         <ul className="flex flex-col gap-3">
-          {cache.updates.map((u) => (
-            <li
-              key={u.id}
-              className="group bg-surface-muted card-lift border-border hover:border-border-bright rounded-lg border p-3.5 text-sm"
-            >
-              <div className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
-                <span className="flex items-center gap-2">
-                  <span className="text-foreground font-extrabold">
-                    {members.find((m) => m.userId === u.author_id)?.fullName ??
-                      "Someone"}
+          {cache.updates.map((u) => {
+            const bot = agentAuthor(u.body);
+            return (
+              <li
+                key={u.id}
+                className="group bg-surface-muted card-lift border-border hover:border-border-bright rounded-lg border p-3.5 text-sm"
+              >
+                <div className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-2">
+                    <span className="text-foreground font-extrabold">
+                      {bot?.name ??
+                        members.find((m) => m.userId === u.author_id)
+                          ?.fullName ??
+                        "Someone"}
+                    </span>
+                    {bot && (
+                      <span className="text-kicker text-3xs border-border rounded border px-1 font-mono tracking-wide uppercase">
+                        Agent
+                      </span>
+                    )}
+                    <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
+                      <DateTime value={u.created_at} />
+                    </span>
                   </span>
-                  <span className="text-kicker text-3xs font-mono tracking-wide uppercase">
-                    <DateTime value={u.created_at} />
+                  <RevealOnHover>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(u.id)}
+                      aria-label="Delete update"
+                    >
+                      Delete
+                    </Button>
+                  </RevealOnHover>
+                </div>
+                <p className="whitespace-pre-wrap">
+                  {renderBody(
+                    u.body_text,
+                    targets.map((t) => mentionLabel(t).slice(1)),
+                  )}
+                </p>
+                {u.edited_at && (
+                  <span className="text-muted-foreground text-xs">
+                    (edited)
                   </span>
-                </span>
-                <RevealOnHover>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onDelete(u.id)}
-                    aria-label="Delete update"
-                  >
-                    Delete
-                  </Button>
-                </RevealOnHover>
-              </div>
-              <p className="whitespace-pre-wrap">
-                {renderBody(
-                  u.body_text,
-                  targets.map((t) => mentionLabel(t).slice(1)),
                 )}
-              </p>
-              {u.edited_at && (
-                <span className="text-muted-foreground text-xs">(edited)</span>
-              )}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

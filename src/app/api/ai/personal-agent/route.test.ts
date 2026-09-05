@@ -11,6 +11,7 @@ import {
 } from "@/lib/ai/errors";
 import { AGENT_CAPABILITIES } from "@/lib/agents/capabilities";
 import { CLAIM_PLACEHOLDER } from "@/lib/agents/run-status";
+import { DEFAULT_RUN_TASK } from "@/lib/agents/run-loop";
 
 const SECRET = "test-secret";
 const ORG = "00000000-0000-4000-8000-0000000000f1";
@@ -313,6 +314,22 @@ vi.mock("@/lib/agents/proposals-db", () => ({
   },
 }));
 
+// ── Task 11: the mention reply and the summoning text ────────────────────
+// `postAgentReply` and `loadMentionSummons` have their own unit suites; what
+// the ROUTE owes is that it calls them with the right things, and that the
+// summoning text really reaches the model as the task.
+const postAgentReply = vi.fn(async () => {});
+vi.mock("@/lib/agents/agent-reply", () => ({
+  postAgentReply: (...a: unknown[]) => postAgentReply(...(a as [])),
+}));
+const loadMentionSummons = vi.fn(async () => null as string | null);
+vi.mock("@/lib/agents/mention-summons", async (importOriginal) => ({
+  // `buildMentionTask` stays REAL: the containment it applies is the point of
+  // the assertion below, and a stub would prove nothing about it.
+  ...(await importOriginal<typeof import("@/lib/agents/mention-summons")>()),
+  loadMentionSummons: (...a: unknown[]) => loadMentionSummons(...(a as [])),
+}));
+
 const sendBriefingEmail = vi.fn(async () => ({ emailed: true }));
 vi.mock("@/lib/agents/send", () => ({
   sendBriefingEmail: (...a: unknown[]) => sendBriefingEmail(...(a as [])),
@@ -492,6 +509,10 @@ const enabledAgent = () => ({
   org_id: ORG,
   owner_id: OWNER,
   name: "Morning Brief",
+  // The typeable identifier a mention carries, and half of the attribution
+  // line an agent's reply is posted under.
+  handle: "brief",
+  kind: "user" as const,
   template_id: "morning-brief",
   instructions: "Be concise.",
   board_scope: { mode: "all" as const },
@@ -541,6 +562,10 @@ beforeEach(() => {
   proposalRows = [];
   sendBriefingEmail.mockReset();
   sendBriefingEmail.mockResolvedValue({ emailed: true });
+  postAgentReply.mockReset();
+  postAgentReply.mockResolvedValue(undefined);
+  loadMentionSummons.mockReset();
+  loadMentionSummons.mockResolvedValue(null);
   languageModelFor.mockClear();
   nextModel = () => textOnlyModel("You have 1 overdue item.");
   runAi.mockReset();
@@ -1542,6 +1567,7 @@ describe("POST /api/ai/personal-agent", () => {
     const SIBLING = "00000000-0000-4000-8000-0000000000b2";
     const MISSING = "00000000-0000-4000-8000-0000000000b9";
     const ITEM = "00000000-0000-4000-8000-0000000000c1";
+    const UPDATE = "00000000-0000-4000-8000-0000000000d1";
 
     /** A row exactly as `agent_run_claim` inserts it: claimed, no fire slot,
      *  status 'error' carrying the placeholder until it finalises. */
@@ -1586,23 +1612,132 @@ describe("POST /api/ai/personal-agent", () => {
       expect((await POST(post({ run_id: MISSING }))).status).toBe(404);
     });
 
-    it("neither emails nor writes a briefing thread for a mention run", async () => {
+    it("replies on the item instead of emailing or threading a briefing", async () => {
       runRows = [claimedRow()];
       getUserAgentById.mockResolvedValue(enabledAgent());
-      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
-      await POST(post({ run_id: RUN, item_id: ITEM }));
+      await POST(post({ run_id: RUN, item_id: ITEM, update_id: UPDATE }));
 
       // A summoned answer is a conversational reply, not a daily briefing.
       expect(sendBriefingEmail).not.toHaveBeenCalled();
       expect(ownerConversationInsert).not.toHaveBeenCalled();
-      // Task 11 replaces this log with the actual item reply; until then the
-      // item id has to be visibly threaded through the signed body.
-      expect(infoSpy).toHaveBeenCalledWith(
-        "[personal-agent] mention run finished",
-        expect.objectContaining({ runId: RUN, itemId: ITEM }),
+      // It goes back to the item, attributed to the AGENT, carrying the run's
+      // own report.
+      expect(postAgentReply).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          runId: RUN,
+          itemId: ITEM,
+          agentName: "Morning Brief",
+          agentHandle: "brief",
+          text: "You have 1 overdue item.",
+        }),
       );
-      infoSpy.mockRestore();
+    });
+
+    it("logs rather than inventing a destination when a mention has no item", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await POST(post({ run_id: RUN }));
+
+      expect(postAgentReply).not.toHaveBeenCalled();
+      expect(spy).toHaveBeenCalledWith(
+        "[personal-agent] mention run had no item to reply to",
+        expect.objectContaining({ runId: RUN }),
+      );
+      spy.mockRestore();
+    });
+
+    // ── the summoning text reaches the model ────────────────────────────
+    // The gap Task 10 flagged: a mention run that falls back to
+    // DEFAULT_RUN_TASK ignores the question it was asked.
+    it("asks the model the question the person actually typed", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      loadMentionSummons.mockResolvedValue("@brief what's blocking us?");
+      const sink: { user?: string } = {};
+      nextModel = () =>
+        new MockLanguageModelV4({
+          doGenerate: async ({ prompt }) => {
+            const user = (prompt as { role: string; content: unknown }[]).find(
+              (m) => m.role === "user",
+            );
+            sink.user = JSON.stringify(user?.content);
+            return {
+              content: [{ type: "text", text: "You have 1 overdue item." }],
+              finishReason: { unified: "stop", raw: undefined },
+              usage: USAGE,
+              warnings: [],
+            };
+          },
+        });
+
+      await POST(post({ run_id: RUN, item_id: ITEM, update_id: UPDATE }));
+
+      expect(loadMentionSummons).toHaveBeenCalledWith(
+        expect.anything(),
+        UPDATE,
+      );
+      expect(sink.user).toContain("what's blocking us?");
+      // NOT the unattended briefing task.
+      expect(sink.user).not.toContain(DEFAULT_RUN_TASK);
+      // Quoted inside the marker keyed on THIS agent's own doc_nonce.
+      expect(sink.user).toContain("BEGIN MESSAGE [fixture-agent-nonce]");
+      expect(sink.user).toContain("END MESSAGE [fixture-agent-nonce]");
+    });
+
+    it("says the summons was lost rather than silently running the briefing", async () => {
+      runRows = [claimedRow()];
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      loadMentionSummons.mockResolvedValue(null);
+      const sink: { user?: string } = {};
+      nextModel = () =>
+        new MockLanguageModelV4({
+          doGenerate: async ({ prompt }) => {
+            const user = (prompt as { role: string; content: unknown }[]).find(
+              (m) => m.role === "user",
+            );
+            sink.user = JSON.stringify(user?.content);
+            return {
+              content: [{ type: "text", text: "ok" }],
+              finishReason: { unified: "stop", raw: undefined },
+              usage: USAGE,
+              warnings: [],
+            };
+          },
+        });
+
+      await POST(post({ run_id: RUN, item_id: ITEM, update_id: UPDATE }));
+
+      expect(sink.user).toContain("could not be read");
+      expect(sink.user).not.toContain(DEFAULT_RUN_TASK);
+    });
+
+    it("still asks a SCHEDULED run to do its daily work", async () => {
+      getUserAgentById.mockResolvedValue(enabledAgent());
+      const sink: { user?: string } = {};
+      nextModel = () =>
+        new MockLanguageModelV4({
+          doGenerate: async ({ prompt }) => {
+            const user = (prompt as { role: string; content: unknown }[]).find(
+              (m) => m.role === "user",
+            );
+            sink.user = JSON.stringify(user?.content);
+            return {
+              content: [{ type: "text", text: "ok" }],
+              finishReason: { unified: "stop", raw: undefined },
+              usage: USAGE,
+              warnings: [],
+            };
+          },
+        });
+
+      await POST(post(slot));
+
+      expect(sink.user).toContain(DEFAULT_RUN_TASK);
+      expect(loadMentionSummons).not.toHaveBeenCalled();
     });
 
     // ── the defect this task exists for ─────────────────────────────────
