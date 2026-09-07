@@ -59,6 +59,10 @@ const applyAskProposal = vi.fn<ProposalCall>(async () => ({
     // Transient rows the write produced — folded into the board cache, never
     // persisted into tool_trace.
     effects: [{ kind: "item_moved" as const, boardId: "b1" }],
+    // WHO the server stamped on the persisted outcome row. The client renders
+    // this and nothing else — a second, client-side attribution rule is what
+    // made a reload relabel the turn.
+    agentId: null,
   },
 }));
 const cancelAskProposal = vi.fn<ProposalCall>(async () => ({
@@ -68,6 +72,7 @@ const cancelAskProposal = vi.fn<ProposalCall>(async () => ({
     content: "Cancelled — nothing was changed.",
     trace: { resolvesProposal: "a1", outcome: "cancelled" as const },
     effects: [],
+    agentId: null,
   },
 }));
 vi.mock("@/lib/ai/ask/proposal-actions", () => ({
@@ -232,11 +237,14 @@ describe("AskChat", () => {
     expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
   });
 
-  // Regression, same class as the `done` handler bug: `ProposalOutcome` (the
-  // Server Action's return shape) carries no `agentId` at all, so a naive
-  // append leaves the outcome turn permanently unattributed. `resolve()` must
-  // stamp it with the conversation's known persona instead of leaving it null.
-  it("attributes the proposal outcome turn to the thread's agent, not the plain assistant", async () => {
+  // The outcome turn used to be attributed TWICE by two different rules: the
+  // server stamped the persisted row, and `resolve()` stamped its own copy
+  // from whatever persona the client happened to be holding. They disagree the
+  // moment the header switches between the proposal and the approval, and the
+  // reload relabelled the turn. The SERVER is the single source — here the
+  // client's own persona is null and the server's is Ops, so only a client
+  // reading `res.data.agentId` can render "Ops".
+  it("attributes the proposal outcome turn to the agent the SERVER stamped", async () => {
     const RESOLVE_OPS_ID = "55555555-5555-4555-8555-555555555555";
     const RESOLVE_OPS = {
       kind: "agent" as const,
@@ -262,6 +270,20 @@ describe("AskChat", () => {
     (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       data: { messageId: "m2", agentId: RESOLVE_OPS_ID },
+    });
+    applyAskProposal.mockResolvedValueOnce({
+      ok: true as const,
+      data: {
+        messageId: "o1",
+        content: 'Done — Create task "Ship v2" in Backlog.',
+        trace: {
+          resolvesProposal: "a1",
+          outcome: "applied" as const,
+          results: [{ ok: true as const, itemId: "i1" }],
+        },
+        effects: [],
+        agentId: RESOLVE_OPS_ID,
+      },
     });
     render(
       <AskChat
@@ -966,5 +988,57 @@ describe("AskChat — the header agent switcher", () => {
         agentId: SWITCH_OPS_ID,
       }),
     );
+  });
+});
+
+// A thread shared to a board renders on /ask/<id> for every member of that
+// board, not only its owner (`ai_conversations_select_board_shared`). Every
+// write on this surface — the switch, the send, the approval — is scoped to
+// the owner by RLS, so a viewer must be offered none of them: the switcher
+// used to report success on an update that matched zero rows.
+describe("AskChat — a viewer of someone else's shared thread", () => {
+  const OPS = {
+    kind: "agent" as const,
+    agentId: "88888888-8888-4888-8888-888888888888",
+    handle: "ops",
+    name: "Ops",
+  };
+
+  it("reads the transcript but offers no composer and no switcher", () => {
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[
+          { id: "m1", role: "user", content: "what slipped?" },
+          { id: "m2", role: "assistant", content: "Three items." },
+        ]}
+        agents={[OPS]}
+        initialAgentId={OPS.agentId}
+        title="Q3 slippage"
+        readOnly
+      />,
+    );
+
+    expect(screen.getByText("Three items.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Your question")).toBeNull();
+    expect(screen.getByText(/only its owner can reply/i)).toBeInTheDocument();
+    // The chip names who is answering; it is not a control any more.
+    expect(screen.getByText("Ops")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ops" })).toBeNull();
+  });
+
+  it("keeps the owner's composer and switcher untouched", () => {
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[{ id: "m1", role: "user", content: "what slipped?" }]}
+        agents={[OPS]}
+        initialAgentId={OPS.agentId}
+        title="Q3 slippage"
+      />,
+    );
+    expect(screen.getByLabelText("Your question")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ops" })).toBeInTheDocument();
+    expect(screen.queryByText(/only its owner can reply/i)).toBeNull();
   });
 });

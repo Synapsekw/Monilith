@@ -30,6 +30,12 @@ export type ProposalOutcome = {
   content: string;
   trace: AskToolTrace;
   effects: BoardEffect[];
+  /** WHO the persisted outcome row was attributed to. Returned — not left for
+   *  the client to guess — because the client's own idea of the current
+   *  persona and the server's resolution can disagree (a header switch between
+   *  the proposal and the approval), and then a reload would relabel the turn.
+   *  ONE rule, resolved once, server-side. */
+  agentId: string | null;
 };
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -81,8 +87,9 @@ async function loadProposal(
 
 /**
  * WHO ANSWERS the outcome turn — the identical resolution the streaming route
- * uses for a live turn (`src/app/api/ask/route.ts`, "WHO ANSWERS": the last
- * user turn's `agent_id` wins over `ai_conversations.agent_id`). Reusing
+ * uses for a live turn (`src/app/api/ask/route.ts`, "WHO ANSWERS":
+ * `ai_conversations.agent_id` wins, with the newest user turn as the fallback
+ * for a lost column write). Reusing
  * `currentPersonaFrom` here — not a second algorithm — is what keeps an
  * approve/cancel outcome from ever disagreeing with a live turn about whose
  * thread this is. Without this, `insertOutcome` wrote no `agent_id` at all:
@@ -134,7 +141,7 @@ async function insertOutcome(
   if (ins.error || !ins.data) return fail("Couldn't record the result.");
   return {
     ok: true,
-    data: { messageId: ins.data.id, content, trace, effects },
+    data: { messageId: ins.data.id, content, trace, effects, agentId },
   };
 }
 

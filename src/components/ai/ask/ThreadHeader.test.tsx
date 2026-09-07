@@ -52,6 +52,24 @@ describe("ThreadHeader", () => {
     expect(onAgentChange).toHaveBeenCalledWith("a-fin");
   });
 
+  // A thread shared to a board renders for every member of that board, and
+  // `setConversationAgent` is scoped to its OWNER by RLS — so for a viewer the
+  // menu could only ever move the chip and change nothing.
+  it("offers no switch to a viewer who does not own the thread", () => {
+    render(
+      <ThreadHeader
+        title="Q3 slippage"
+        agents={agents}
+        agentId="a-ops"
+        onAgentChange={vi.fn()}
+        readOnly
+      />,
+    );
+    // The name still reads — knowing who answered is the useful half.
+    expect(screen.getByText("Ops")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ops/i })).toBeNull();
+  });
+
   it("hands back the plain assistant", async () => {
     const onAgentChange = vi.fn();
     render(

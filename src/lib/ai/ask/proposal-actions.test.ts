@@ -8,8 +8,9 @@ const mockInsert = vi.fn(() => ({
 }));
 const mockExecuteAction = vi.fn();
 const mockGetAiEntitlement = vi.fn();
-// `ai_conversations.agent_id` — the fallback `currentPersonaFrom` reads when
-// no user turn in the thread carries one.
+// `ai_conversations.agent_id` — what `currentPersonaFrom` reads FIRST (the
+// header switcher writes only this column); the thread's newest user turn is
+// the fallback for a lost column write.
 const mockConvMaybeSingle = vi.fn();
 // The thread's rows, as `resolvePersonaAgentId` reads them via the REAL
 // `getMessages` (only ITS supabase call is mocked — see below).
@@ -301,7 +302,9 @@ describe("applyAskProposal / cancelAskProposal — persist who answered", () => 
     );
   });
 
-  it("falls back to the conversation's own agent_id when no user turn carries one", async () => {
+  // Retitled deliberately (2026-09-07): the column no longer wins only "when
+  // no user turn carries one" — it wins, full stop. The assertion is unchanged.
+  it("writes the conversation's own agent_id — the column the switcher sets", async () => {
     const AGENT_ID = "44444444-4444-4444-8444-444444444444";
     mockConvMaybeSingle.mockResolvedValue({
       data: { agent_id: AGENT_ID },
@@ -326,5 +329,54 @@ describe("applyAskProposal / cancelAskProposal — persist who answered", () => 
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({ agent_id: null }),
     );
+  });
+
+  it("takes the conversation column over a stamped user turn", async () => {
+    const SWITCHED_IN = "55555555-5555-4555-8555-555555555555";
+    mockConvMaybeSingle.mockResolvedValue({
+      data: { agent_id: SWITCHED_IN },
+      error: null,
+    });
+    mockGetMessages.mockResolvedValue([
+      {
+        id: "u1",
+        role: "user",
+        content: "@ops go",
+        tool_trace: null,
+        created_at: "t",
+        agent_id: "66666666-6666-4666-8666-666666666666",
+      },
+    ]);
+    const res = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(res.ok).toBe(true);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ agent_id: SWITCHED_IN }),
+    );
+  });
+
+  // The outcome turn was attributed TWICE by two different rules — the server
+  // stamped the persisted row, the client stamped its own copy from whatever
+  // persona it happened to be holding. They disagree after a switch, and the
+  // reload relabelled the turn. The server's answer is now returned, so the
+  // client has one to use instead of a guess of its own.
+  it("returns the agent it stamped, so the client never has to guess", async () => {
+    const AGENT_ID = "77777777-7777-4777-8777-777777777777";
+    mockConvMaybeSingle.mockResolvedValue({
+      data: { agent_id: AGENT_ID },
+      error: null,
+    });
+    const applied = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    const cancelled = await cancelAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(applied.ok && applied.data.agentId).toBe(AGENT_ID);
+    expect(cancelled.ok && cancelled.data.agentId).toBe(AGENT_ID);
   });
 });

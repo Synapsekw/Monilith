@@ -163,6 +163,57 @@ const agents: MentionTarget[] = [
   { kind: "agent", agentId: "a-ops", handle: "ops", name: "Ops" },
 ];
 
+// A thread shared to a board opens for every member of that board. RLS scopes
+// `applyAskProposal` to the owner, so Approve on a viewer's screen can only
+// produce a refusal — the card still says WHAT was proposed and that it is
+// undecided.
+describe("MessageList — a viewer of someone else's shared thread", () => {
+  it("shows the proposal but offers no decision", () => {
+    renderList(
+      [
+        {
+          id: "p1",
+          role: "assistant",
+          content: "I'll create that —",
+          trace: { proposedActions: [ACTION] },
+        },
+      ],
+      { readOnly: true },
+    );
+    expect(screen.getByText(ACTION.summary)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /cancel/i })).toBeNull();
+    expect(
+      screen.getByText("Only this thread's owner can decide this."),
+    ).toBeInTheDocument();
+  });
+
+  it("still shows an ALREADY-resolved proposal's real outcome", () => {
+    renderList(
+      [
+        {
+          id: "p1",
+          role: "assistant",
+          content: "I'll create that —",
+          trace: { proposedActions: [ACTION] },
+        },
+        {
+          id: "o1",
+          role: "assistant",
+          content: "Cancelled — nothing was changed.",
+          trace: { resolvesProposal: "p1", outcome: "cancelled" },
+        },
+      ],
+      { readOnly: true },
+    );
+    expect(
+      screen.getByText("Cancelled — nothing was changed.", {
+        selector: "p",
+      }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("MessageList — per-turn attribution", () => {
   it("names the agent that answered a turn", () => {
     render(
@@ -198,6 +249,55 @@ describe("MessageList — per-turn attribution", () => {
           { id: "m1", role: "assistant", content: "Hi", agentId: null },
         ]}
         agents={agents}
+        streamingText={null}
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Monolith")).toBeInTheDocument();
+  });
+
+  // Disabling an agent stops it answering (spec §1 — routing now agrees with
+  // the enabled-only roster), but it must not rewrite what it already said:
+  // the roster no longer contains it, so without the historical name map every
+  // answer it ever gave would silently become "Monolith".
+  it("keeps naming a turn answered by an agent that has since been disabled", () => {
+    render(
+      <MessageList
+        messages={[
+          {
+            id: "m1",
+            role: "assistant",
+            content: "Three items.",
+            agentId: "a-gone",
+          },
+        ]}
+        agents={agents}
+        agentNames={{ "a-gone": "Retired Ops" }}
+        streamingText={null}
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Retired Ops")).toBeInTheDocument();
+    expect(screen.queryByText("Monolith")).toBeNull();
+  });
+
+  it("still says Monolith for a turn no name can be found for", () => {
+    render(
+      <MessageList
+        messages={[
+          {
+            id: "m1",
+            role: "assistant",
+            content: "Three items.",
+            agentId: "a-gone",
+          },
+        ]}
+        agents={agents}
+        agentNames={{}}
         streamingText={null}
         status={null}
         onApprove={vi.fn()}

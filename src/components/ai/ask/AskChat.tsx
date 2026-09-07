@@ -73,7 +73,9 @@ export function AskChat({
   initialAgentId,
   title,
   agents = NO_AGENTS,
+  agentNames,
   agentProposals = [],
+  readOnly = false,
   onStarted,
   onTurnComplete,
 }: {
@@ -108,6 +110,16 @@ export function AskChat({
    *  round-trip (working agreement #5). A handle that leads the first message
    *  wins over the current persona: it is the more explicit of the two. */
   agents?: readonly MentionTarget[];
+  /** Names for agents that already answered in this thread, including ones
+   *  since DISABLED. Kept separate from `agents` on purpose: the roster is
+   *  enabled-only (it drives the switcher and `@handle` addressing), but
+   *  disabling an agent must not relabel the answers it already gave. */
+  agentNames?: Readonly<Record<string, string>>;
+  /** This thread was shared to a board and the viewer does not own it. The
+   *  transcript reads; every write affordance — the switcher, the composer,
+   *  Approve/Cancel — is withheld, because RLS scopes all three to the owner
+   *  and a control that can only fail is worse than no control. */
+  readOnly?: boolean;
   /** Called with the new id instead of rewriting the URL to /ask/<id>. */
   onStarted?: (conversationId: string) => void;
   /** Called instead of router.refresh() when a turn completes. The dock uses
@@ -340,12 +352,11 @@ export function AskChat({
           role: "assistant",
           content: res.data.content,
           trace: res.data.trace,
-          // The Server Action's `ProposalOutcome` carries no `agentId` (the
-          // outcome row is inserted without one) — `personaId` is the
-          // conversation's current known persona, and the correct stand-in:
-          // this turn is answering AS whoever is on duty for the thread the
-          // proposal belongs to.
-          agentId: personaId,
+          // WHO the server actually stamped on the persisted row — never a
+          // second, client-side guess. `personaId` and the server's resolution
+          // disagree the moment the header switches between the proposal and
+          // the approval, and then a reload would silently relabel the turn.
+          agentId: res.data.agentId,
         },
       ]);
     });
@@ -368,6 +379,7 @@ export function AskChat({
           agents={agents}
           agentId={personaId}
           onAgentChange={handleAgentChange}
+          readOnly={readOnly}
         />
       ) : null}
       <MessageList
@@ -382,7 +394,9 @@ export function AskChat({
           if (activeId) void recoverAfterDrop(activeId);
         }}
         agents={agents}
+        agentNames={agentNames}
         streamingAgentId={personaId}
+        readOnly={readOnly}
       />
       {/* The run's queued approvals, between the report and the composer: the
           owner reads what the agent did, then decides what it could not. */}
@@ -395,13 +409,24 @@ export function AskChat({
       ) : null}
       {/* Never stranded: the composer is dead only while a turn or a recovery
           check is genuinely in flight — but for ALL of a turn, `turnBusy`
-          covering the pre-stream round-trips that `streaming` misses. */}
-      <Composer
-        disabled={turnBusy || streaming || dropState === "checking"}
-        agents={agents}
-        agentId={personaId}
-        onSubmit={onSubmit}
-      />
+          covering the pre-stream round-trips that `streaming` misses. A viewer
+          of someone else's shared thread gets no composer at all: /api/ask
+          answers 403 for a turn on a thread the caller does not own, so a
+          field that only produces a refusal is a lie about what they can do
+          (the board dock says the same sentence, for the same reason). */}
+      {readOnly ? (
+        <p className="text-muted-foreground border-t px-4 py-3 text-sm">
+          This thread was shared with the board. You can read it, but only its
+          owner can reply.
+        </p>
+      ) : (
+        <Composer
+          disabled={turnBusy || streaming || dropState === "checking"}
+          agents={agents}
+          agentId={personaId}
+          onSubmit={onSubmit}
+        />
+      )}
     </div>
   );
 }
