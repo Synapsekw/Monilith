@@ -9,7 +9,9 @@ import {
   listConversations,
   getMessages,
   getConversationRunId,
+  getConversationPersona,
   toThreadMessages,
+  currentPersonaFrom,
 } from "./conversations";
 
 beforeEach(() => from.mockReset());
@@ -159,8 +161,6 @@ describe("toThreadMessages", () => {
   });
 });
 
-import { currentPersonaFrom } from "./conversations";
-
 describe("currentPersonaFrom", () => {
   const row = (
     role: "user" | "assistant",
@@ -190,6 +190,18 @@ describe("currentPersonaFrom", () => {
 
   it("is null when neither has one", () => {
     expect(currentPersonaFrom([], null)).toBeNull();
+  });
+
+  it("skips a null-agent user turn and keeps scanning back to an earlier one", () => {
+    // Intentional: a null on the LAST user turn does not mean "no persona" —
+    // it means "this particular turn didn't carry one" (e.g. written before
+    // per-message routing existed). The scan keeps going back rather than
+    // stopping at the first user row it sees.
+    const rows = [
+      row("user", "a-ops", "2026-09-07T10:00:00Z"),
+      row("user", null, "2026-09-07T10:01:00Z"),
+    ];
+    expect(currentPersonaFrom(rows, null)).toBe("a-ops");
   });
 });
 
@@ -233,5 +245,30 @@ describe("getConversationRunId", () => {
     // page. A failure here must never take the thread down with it.
     clientReturning(null, { message: "boom" });
     expect(await getConversationRunId("c1")).toBeNull();
+  });
+});
+
+describe("getConversationPersona", () => {
+  function clientReturning(data: unknown, error: unknown = null) {
+    const maybeSingle = vi.fn().mockResolvedValue({ data, error });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+    return { eq, maybeSingle };
+  }
+
+  it("returns the row's agent_id", async () => {
+    const { eq } = clientReturning({ agent_id: "a-ops" });
+    expect(await getConversationPersona("c1")).toBe("a-ops");
+    expect(eq).toHaveBeenCalledWith("id", "c1");
+  });
+
+  it("returns null when the row has no agent_id", async () => {
+    clientReturning({ agent_id: null });
+    expect(await getConversationPersona("c1")).toBeNull();
+  });
+
+  it("degrades to null on a query error rather than throwing", async () => {
+    clientReturning(null, { message: "boom" });
+    expect(await getConversationPersona("c1")).toBeNull();
   });
 });
