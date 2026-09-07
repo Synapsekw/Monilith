@@ -37,7 +37,7 @@ related:
   `tools/list` returns exactly `ALL_TOOL_DESCRIPTORS`.
 - Merged to `develop` (`f73e24ae`), **CI green** (run 34138976762). All four dependabot PRs closed as
   superseded with the reason written into each. Orphan dependabot branches pruned; origin now carries
-  only `vercel/install-and-configure-vercel-s-cz9g1t`. **Nothing announced on `/updates`** — none of
+  only `vercel/install-and-configure-vercel-s-cz9g1t`, since deleted too. **Nothing announced on `/updates`** — none of
   this is user-observable. (The coverage check flags 2026-08-24, which is a false positive of the
   by-date heuristic: that document work is announced under a later ship date.)
 
@@ -70,8 +70,14 @@ touches that path.
   documents, but no actual Claude Desktop/claude.ai session has run against it. Do the walkthrough
   above before promoting.
 - `develop` is now ahead of `main` by the dependency work — the first unpromoted delta since PR #115.
-- `origin/vercel/install-and-configure-vercel-s-cz9g1t` still exists; PR #33 is closed, so the branch
-  can go whenever the owner is happy to lose easy access to it.
+- **CLOSED in the same session:** `origin/vercel/install-and-configure-vercel-s-cz9g1t` deleted (PR
+  #33 is closed and GitHub keeps the commits restorable from it), so **origin now carries exactly
+  `develop` and `main` and nothing else**. And the `.obsidian` churn is fixed at the cause rather
+  than discarded again: `app.json` and `community-plugins.json` are written by the Obsidian app in
+  its own format, lint-staged ran prettier over them on commit, and the two formats fought — so both
+  files sat permanently modified. `.prettierignore` already exempts `vault/` for exactly this
+  reason; `.obsidian` is its sibling and was missed. Added it and committed the files as Obsidian
+  writes them (`e2ab5f35`); the tree is clean and stays clean.
 
 ## Next session entry point
 
