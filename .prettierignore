@@ -22,6 +22,14 @@ src/components/ui
 # eslint already ignores vault/** for the same reason.
 vault
 
+# The vault's Obsidian config, for the same reason one layer down. These files
+# are written by the Obsidian app, not by hand, and it rewrites them in its own
+# format every time it loads the vault. Prettier reformatting them on commit
+# made app.json and community-plugins.json permanently dirty in `git status`:
+# prettier normalises, Obsidian rewrites, forever. They stay TRACKED (see
+# .gitignore) — we just store them exactly as Obsidian writes them.
+.obsidian
+
 # Transactional auth emails, pushed to prod via scripts/push-auth-emails.ts.
 # Prettier's HTML formatter rewrites the inline `style` attributes these rely
 # on — notably escaping the font stack's 'Segoe UI' to &quot;Segoe UI&quot; and
