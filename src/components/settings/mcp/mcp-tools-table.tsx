@@ -59,6 +59,28 @@ export const TOOL_PROSE: Record<ToolName, string> = {
     "List the saved reports that include a board — its own, plus any multi-board or portfolio roll-up covering it.",
   get_report:
     "Read a report's structure and which boards it spans (not the underlying data).",
+  describe_schema:
+    "Read-only lookup of your settings shape — column kinds, view types, widget kinds, and report shapes — with a worked example for each. Reads no data.",
+  manage_board:
+    "Create, rename, duplicate, archive, or restore a board. No delete: archive moves it to Trash and can be reversed with restore.",
+  manage_group:
+    "Create (up to 50 at once), rename, reorder, recolor, archive, or restore a board group. No delete: archive moves it to Trash and can be reversed with restore.",
+  manage_column:
+    "Create (up to 50 at once), rename, configure, reorder, resize, or delete a column, and remove a single status/dropdown option. Deleting a column also deletes its cell values and cannot be undone; removing an option clears it from every cell that used it.",
+  manage_item:
+    "Archive, restore, move, or reorder an item, and add a subitem. No delete: archive moves it to Trash and can be reversed with restore. Moving an item carries its subitems with it.",
+  manage_view:
+    "Create, update, or delete a board view (table, kanban, calendar, timeline). Deleting a view cannot be undone.",
+  manage_dashboard:
+    "Create, rename, duplicate, or delete a dashboard, and save its widget layout. Deleting a dashboard cannot be undone.",
+  manage_widget:
+    "Create, update, or delete a dashboard widget. Deleting a widget cannot be undone.",
+  manage_goal:
+    "Create, update, or delete a goal, and set which boards or columns it links to. Deleting a goal cannot be undone.",
+  manage_portfolio:
+    "Create a portfolio, add or remove a board from it, and update a board's placement within it.",
+  manage_report:
+    "Create, save, or delete a report, and change which boards or portfolio it covers. Deleting a report cannot be undone.",
 };
 
 export const MCP_TOOLS_TABLE_ROWS = ALL_TOOL_DESCRIPTORS.map((d) => ({
