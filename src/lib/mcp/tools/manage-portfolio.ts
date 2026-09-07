@@ -107,6 +107,13 @@ export async function managePortfolioHandler(
   if (args.action === "create") {
     // Refuses an org the caller is not a member of rather than substituting
     // one — see the note in `manage-goal.ts`.
+    //
+    // NOTE this is a MEMBERSHIP CHECK, not a destination: `create_portfolio`
+    // (supabase/migrations/20260621071929_portfolios.sql:102-103) derives the
+    // row's org_id itself via `select org_id from org_members where user_id =
+    // v_uid limit 1` — no ORDER BY, so for a caller in >1 org the result is
+    // arbitrary and `orgId` here does not steer it. Don't "fix" this by
+    // threading `scope.orgId` into `createPortfolioCore`; the RPC ignores it.
     const scope = await resolveOrgForTool(supabase, args.orgId);
     if ("error" in scope)
       return { content: [{ type: "text", text: scope.error }], isError: true };
@@ -201,7 +208,7 @@ export const managePortfolioDescriptor: ToolDescriptor = {
   name: "manage_portfolio",
   title: "Manage portfolio",
   description:
-    "Create a portfolio, add or remove a board from it, or set a board's roll-up metadata inside it. `create` needs a `name` (plus `orgId` if you belong to more than one organization — an org you are not a member of is refused, never substituted). `add_board` takes `portfolioId` (list_portfolios) and `boardId` (list_boards), optionally with the status column and option ids that count as done, which is what makes the portfolio's completion column meaningful. `remove_board` and `update_placement` address the board by `portfolioId` + `boardId`. `update_placement` sets owner, priority, budget, health override and status note — send only the fields you are changing; an explicit null clears one.",
+    "Create a portfolio, add or remove a board from it, or set a board's roll-up metadata inside it. `create` needs a `name`; the portfolio is created in your default organization — `orgId` only confirms membership (list_organizations) and does NOT choose the destination, and an org you are not a member of is refused, never substituted — the response's `orgId` is the org it actually landed in. `add_board` takes `portfolioId` (list_portfolios) and `boardId` (list_boards), optionally with the status column and option ids that count as done, which is what makes the portfolio's completion column meaningful. `remove_board` and `update_placement` address the board by `portfolioId` + `boardId`. `update_placement` sets owner, priority, budget, health override and status note — send only the fields you are changing; an explicit null clears one.",
   inputSchema: managePortfolioInput,
   capability: {
     create: "board.structure",

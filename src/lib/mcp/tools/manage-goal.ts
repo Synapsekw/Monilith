@@ -100,6 +100,13 @@ export async function manageGoalHandler(
     // The MCP analogue of the active-org cookie. `resolveToolOrg` differs from
     // `pickActiveOrg` on purpose: an explicitly requested org that is not a
     // membership is REFUSED, never silently swapped for another tenant's org.
+    //
+    // NOTE this is a MEMBERSHIP CHECK, not a destination: `create_goal`
+    // (supabase/migrations/20260621160000_goals.sql:159) derives the row's
+    // org_id itself via `select org_id from org_members where user_id = v_uid
+    // limit 1` — no ORDER BY, so for a caller in >1 org the result is
+    // arbitrary and `orgId` here does not steer it. Don't "fix" this by
+    // threading `scope.orgId` into `createGoalCore`; the RPC ignores it.
     const scope = await resolveOrgForTool(supabase, args.orgId);
     if ("error" in scope)
       return { content: [{ type: "text", text: scope.error }], isError: true };
@@ -164,7 +171,7 @@ export const manageGoalDescriptor: ToolDescriptor = {
   name: "manage_goal",
   title: "Manage goal",
   description:
-    "Create, update or delete a goal, or set the boards a goal's progress is computed from. `create` needs a `name`; `progressMode` defaults to manual_percent (the others are manual_number, auto_subgoals and auto_boards). Pass `orgId` if you belong to more than one organization (list_organizations) — an org you are not a member of is refused, never substituted. Every other action takes a `goalId` from list_goals. `set_links` REPLACES the whole link set: send every board the goal should follow, each with the status column and the option ids that count as done (get_board lists them). Auto-computed progress needs progressMode auto_boards.",
+    "Create, update or delete a goal, or set the boards a goal's progress is computed from. `create` needs a `name`; `progressMode` defaults to manual_percent (the others are manual_number, auto_subgoals and auto_boards). The goal is created in your default organization; pass `orgId` only to confirm you belong to the org you expect (list_organizations) — it does NOT choose the destination, and an org you are not a member of is refused, never substituted — the response's `orgId` is the org it actually landed in. Every other action takes a `goalId` from list_goals. `set_links` REPLACES the whole link set: send every board the goal should follow, each with the status column and the option ids that count as done (get_board lists them). Auto-computed progress needs progressMode auto_boards.",
   inputSchema: manageGoalInput,
   capability: {
     create: "board.structure",
