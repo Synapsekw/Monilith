@@ -11,14 +11,10 @@ import {
   resolveProposalStates,
   type AskToolTrace,
 } from "@/lib/ai/ask/tool-trace";
-import type {
-  AgentMentionTarget,
-  MentionTarget,
+import {
+  isAgentMention,
+  type MentionTarget,
 } from "@/lib/collaboration/mentions";
-
-function isAgent(t: MentionTarget): t is AgentMentionTarget {
-  return t.kind === "agent";
-}
 
 /** What an assistant turn is called when it has no agent on record — a legacy
  *  row, or a thread never handed to a persona. Distinct from `ThreadHeader`'s
@@ -124,12 +120,11 @@ export function MessageList({
   // Pure derivation over the thread — a proposal is resolved by a LATER message
   // naming it, so reload and live-update render identically.
   const proposalStates = resolveProposalStates(messages);
-  // Pure lookup, once per render — no fetch, no per-message work beyond an
-  // array scan over a roster that's small by construction (an org's agents).
+  // Filtered ONCE per render; `nameOf` and the empty-state list both scan
+  // this array rather than re-filtering `agents` on every call.
+  const agentHandles = agents.filter(isAgentMention);
   const nameOf = (id?: string | null) =>
-    agents.filter(isAgent).find((a) => a.agentId === id)?.name ??
-    PLAIN_ASSISTANT_NAME;
-  const agentHandles = agents.filter(isAgent);
+    agentHandles.find((a) => a.agentId === id)?.name ?? PLAIN_ASSISTANT_NAME;
   // Unlike `nameOf`, no "Monolith" fallback: the thinking indicator's own
   // generic label already covers "no agent on record" — this is only truthy
   // when there is a real name to announce.

@@ -231,6 +231,63 @@ describe("AskChat", () => {
     );
     expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
   });
+
+  // Regression, same class as the `done` handler bug: `ProposalOutcome` (the
+  // Server Action's return shape) carries no `agentId` at all, so a naive
+  // append leaves the outcome turn permanently unattributed. `resolve()` must
+  // stamp it with the conversation's known persona instead of leaving it null.
+  it("attributes the proposal outcome turn to the thread's agent, not the plain assistant", async () => {
+    const RESOLVE_OPS_ID = "55555555-5555-4555-8555-555555555555";
+    const RESOLVE_OPS = {
+      kind: "agent" as const,
+      agentId: RESOLVE_OPS_ID,
+      handle: "ops",
+      name: "Ops",
+    };
+    send.mockImplementation(
+      async (_id: string, onEvent: (e: Record<string, unknown>) => void) => {
+        onEvent({ type: "token", text: "I'll create that — " });
+        onEvent({ type: "proposal", actions: [ACTION] });
+        onEvent({
+          type: "done",
+          conversationId: "c1",
+          assistantMessageId: "a1",
+          boardsConsulted: ["b1"],
+        });
+      },
+    );
+    // The thread already belongs to Ops (sticky routing) — this plain
+    // follow-up addresses nobody, so the real `appendUserMessage` echoes back
+    // the SAME persona rather than resetting it.
+    (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      data: { messageId: "m2", agentId: RESOLVE_OPS_ID },
+    });
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[]}
+        agents={[RESOLVE_OPS]}
+        initialAgentId={RESOLVE_OPS_ID}
+      />,
+    );
+    ask("create Ship v2 in Backlog");
+    await waitFor(() =>
+      expect(screen.getByText(ACTION.summary)).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Done — Create task "Ship v2" in Backlog.'),
+      ).toBeInTheDocument(),
+    );
+    // The outcome turn's label reads "Ops" (same as the header and the
+    // proposal turn before it) — never "Monolith".
+    expect(screen.getAllByText("Ops").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Monolith")).not.toBeInTheDocument();
+  });
 });
 
 /** Drive a turn that ends at a confirm card, then hand back the rendered card. */
@@ -736,6 +793,27 @@ describe("AskChat — @handle picks the persona", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument(),
     );
+  });
+
+  // Regression: the streaming bubble named the addressed agent correctly, but
+  // the row pushed on `done` carried no `agentId`, so the transcript flipped
+  // to "Monolith" the instant the answer landed and stayed wrong for the rest
+  // of the session (`messages` never resyncs from the server). This drives
+  // AskChat's REAL send → done path — not a MessageList render with
+  // hand-built props — because that gap is exactly why the bug shipped.
+  it("keeps the landed turn attributed to the agent once the turn is done, not the plain assistant", async () => {
+    render(
+      <AskChat conversationId={null} initialMessages={[]} agents={[OPS]} />,
+    );
+    ask("@ops what is late?");
+
+    // The turn lands (persisted assistant content from the `done` event).
+    await waitFor(() => expect(screen.getByText("Answer")).toBeInTheDocument());
+
+    // Both the header chip and the transcript's per-turn label read "Ops
+    // Chaser" — neither one has fallen back to "Monolith".
+    expect(screen.getAllByText("Ops Chaser").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("Monolith")).not.toBeInTheDocument();
   });
 
   it("keeps naming the addressed agent across a follow-up that addresses nobody (sticky routing)", async () => {

@@ -21,6 +21,14 @@ export type AgentMentionTarget = {
 };
 export type MentionTarget = UserMentionTarget | AgentMentionTarget;
 
+/** Narrows a `MentionTarget` to its agent variant — the one shared type guard
+ *  for the union, so callers (`ThreadHeader`, `MessageList`, …) get real
+ *  narrowing from `.filter()`/`.find()` without each re-declaring the same
+ *  one-line predicate. */
+export function isAgentMention(t: MentionTarget): t is AgentMentionTarget {
+  return t.kind === "agent";
+}
+
 /** The text a mention writes into the body — and the token `renderBody`
  *  accents back out of it. Includes the leading `@`. */
 export function mentionLabel(target: MentionTarget): string {

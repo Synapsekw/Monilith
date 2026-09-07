@@ -220,4 +220,49 @@ describe("MessageList — per-turn attribution", () => {
     );
     expect(screen.getByText(/@ops/)).toBeInTheDocument();
   });
+
+  it("names the answering agent on the live streaming bubble", () => {
+    render(
+      <MessageList
+        messages={[]}
+        agents={agents}
+        streamingText="Working on it"
+        streamingAgentId="a-ops"
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Ops")).toBeInTheDocument();
+  });
+
+  it("names the agent in the thinking indicator once one is known", () => {
+    render(
+      <MessageList
+        messages={[]}
+        agents={agents}
+        streamingText=""
+        streamingAgentId="a-ops"
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Ops is working…");
+  });
+
+  it("falls back to the generic thinking label with no agent on the turn", () => {
+    render(
+      <MessageList
+        messages={[]}
+        agents={agents}
+        streamingText=""
+        streamingAgentId={null}
+        status={null}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Thinking…");
+  });
 });

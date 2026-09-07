@@ -202,6 +202,13 @@ export function AskChat({
       setStreamText("");
       setStatus(null);
 
+      // The turn's resolved persona — set from whichever branch below actually
+      // ran, so the `done` handler can stamp the assistant row with WHO
+      // answered instead of leaving `agentId` unset (which reads as
+      // "Monolith" the instant the turn lands, even when a real agent
+      // answered live — the streaming bubble already showed the right name).
+      let turnAgentId: string | null = null;
+
       if (!convId) {
         // The typed handle beats the surface's default persona — chosen either
         // from the dock's `agentId` prop or from the header switcher, both
@@ -219,6 +226,7 @@ export function AskChat({
           return;
         }
         convId = res.data.conversationId;
+        turnAgentId = res.data.agentId;
         setActiveId(convId);
         setPersonaId(res.data.agentId);
         if (onStarted) onStarted(convId);
@@ -234,6 +242,7 @@ export function AskChat({
           setStatus(res.error);
           return;
         }
+        turnAgentId = res.data.agentId;
         setPersonaId(res.data.agentId);
       }
 
@@ -265,6 +274,7 @@ export function AskChat({
                     proposedActions: proposed,
                   }
                 : null,
+              agentId: turnAgentId,
             },
           ]);
           setStreamText(null);
@@ -330,6 +340,12 @@ export function AskChat({
           role: "assistant",
           content: res.data.content,
           trace: res.data.trace,
+          // The Server Action's `ProposalOutcome` carries no `agentId` (the
+          // outcome row is inserted without one) — `personaId` is the
+          // conversation's current known persona, and the correct stand-in:
+          // this turn is answering AS whoever is on duty for the thread the
+          // proposal belongs to.
+          agentId: personaId,
         },
       ]);
     });

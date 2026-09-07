@@ -9,9 +9,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type {
-  AgentMentionTarget,
-  MentionTarget,
+import {
+  isAgentMention,
+  type MentionTarget,
 } from "@/lib/collaboration/mentions";
 
 /** The name shown, and offered in the menu, for "nobody in particular". There
@@ -19,10 +19,6 @@ import type {
  *  reserved handles (see `agents/handle.ts` · RESERVED_HANDLES) precisely so
  *  they can never collide with a real agent's. */
 const PLAIN_ASSISTANT = "Monolith assistant";
-
-function isAgent(t: MentionTarget): t is AgentMentionTarget {
-  return t.kind === "agent";
-}
 
 /**
  * Thread header: the thread's title on the left, and on the right a chip
@@ -50,7 +46,7 @@ export function ThreadHeader({
   agentId: string | null;
   onAgentChange: (agentId: string | null) => void;
 }) {
-  const roster = agents.filter(isAgent);
+  const roster = agents.filter(isAgentMention);
   const current = roster.find((a) => a.agentId === agentId);
   const currentName = current?.name ?? PLAIN_ASSISTANT;
 
