@@ -124,10 +124,13 @@ export function McpToolsTable() {
         ))}
       </ul>
       <p className="text-muted-foreground text-sm">
-        The only thing a connected client can erase is your logged time —
-        setting a day&rsquo;s entry to 0 seconds clears it. Nothing else can be
-        deleted: no other delete tool exists on the server. Every call runs as
-        you and is subject to the same permissions you have in the app.
+        Setting a day&rsquo;s logged time to 0 seconds clears it. Columns
+        (including a single status or dropdown option), views, widgets, goals,
+        reports, and dashboards can also be deleted outright, and that cannot be
+        undone. Boards, groups, and items are different: a connected client can
+        only archive them to Trash and restore them — never delete them
+        permanently. Every call runs as you and is subject to the same
+        permissions you have in the app.
       </p>
     </div>
   );

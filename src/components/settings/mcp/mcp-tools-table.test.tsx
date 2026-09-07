@@ -143,15 +143,7 @@ describe("McpToolsTable", () => {
     // `delete from public.time_allocations` (migration 20260806060855), and
     // log_time_allocation's Zod accepts `secs: 0`. The consent screen is the
     // user's only account of what they are granting, so it must name that.
-    expect(
-      screen.getByText(
-        /only thing a connected client can erase is your logged time/i,
-      ),
-    ).toBeInTheDocument();
     expect(screen.getByText(/0 seconds clears it/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/no other delete tool exists on the server/i),
-    ).toBeInTheDocument();
     expect(screen.queryByText(/cannot delete anything/i)).toBeNull();
 
     // …and it must agree with the row two lines above it, which already says
@@ -160,5 +152,25 @@ describe("McpToolsTable", () => {
       (r) => r.name === "log_time_allocation",
     );
     expect(row?.what).toMatch(/0 clears it/);
+  });
+
+  // The "only thing that can be deleted is logged time" claim this replaced
+  // (F2, final whole-branch review) was ALSO false the moment manage_column,
+  // manage_view, manage_widget, manage_goal, manage_report, and
+  // manage_dashboard shipped their delete/remove_option actions. The trailer
+  // must name what those six tools can do, and preserve the actual safety
+  // story: boards/groups/items can only be archived to Trash and restored.
+  it("discloses that six more tools can delete outright, and preserves the archive/restore contrast for boards, groups, and items", () => {
+    render(<McpToolsTable />);
+
+    expect(
+      screen.getByText(/can also be deleted outright/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/only archive them to Trash and restore them/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/no other delete tool exists on the server/i),
+    ).toBeNull();
   });
 });

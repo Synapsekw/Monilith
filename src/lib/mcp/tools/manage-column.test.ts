@@ -163,3 +163,89 @@ describe("manage_column create: per-kind settings validation", () => {
     }
   });
 });
+
+// F1 (final whole-branch review): `createColumnsCore` returns `{ ok: true }`
+// even when EVERY entry in the batch failed — `toToolResult` only inspects
+// `ActionResult.ok`, so that shape alone would report a total failure to the
+// model as an ordinary success. `manage-column.ts`'s `create` branch adds the
+// `isError` check on top; these tests exercise it through the real descriptor
+// `invoke`, matching `create_item`'s semantics exactly (see create-item.ts).
+function fakeColumnCreateInsertClient(
+  opts: { failAt?: number[]; failAll?: boolean } = {},
+) {
+  let insertCount = 0;
+  return {
+    from(_table: string) {
+      return {
+        select: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+            maybeSingle: async () => ({ data: { org_id: "o1" }, error: null }),
+          }),
+        }),
+        insert: () => ({
+          select: () => ({
+            single: async () => {
+              const index = insertCount++;
+              if (opts.failAll || opts.failAt?.includes(index)) {
+                return {
+                  data: null,
+                  error: { message: `entry ${index} failed` },
+                };
+              }
+              return {
+                data: { id: `c${index}`, kind: "text" },
+                error: null,
+              };
+            },
+          }),
+        }),
+      };
+    },
+  } as never;
+}
+
+describe("manage_column create: batch isError semantics (F1)", () => {
+  it("sets isError when every entry in the batch fails", async () => {
+    const client = fakeColumnCreateInsertClient({ failAll: true });
+    const r = await manageColumnDescriptor.invoke(
+      { getClient: async () => client, actorId: "u1" },
+      {
+        action: "create",
+        boardId: BOARD_ID,
+        columns: [{ kind: "text" }, { kind: "text" }],
+      },
+    );
+    expect(r.isError).toBe(true);
+  });
+
+  it("leaves isError undefined when only some entries fail", async () => {
+    const client = fakeColumnCreateInsertClient({ failAt: [0] });
+    const r = await manageColumnDescriptor.invoke(
+      { getClient: async () => client, actorId: "u1" },
+      {
+        action: "create",
+        boardId: BOARD_ID,
+        columns: [{ kind: "text" }, { kind: "text" }],
+      },
+    );
+    expect(r.isError).toBeUndefined();
+  });
+
+  it("leaves isError undefined when every entry succeeds", async () => {
+    const client = fakeColumnCreateInsertClient({});
+    const r = await manageColumnDescriptor.invoke(
+      { getClient: async () => client, actorId: "u1" },
+      {
+        action: "create",
+        boardId: BOARD_ID,
+        columns: [{ kind: "text" }],
+      },
+    );
+    expect(r.isError).toBeUndefined();
+  });
+});

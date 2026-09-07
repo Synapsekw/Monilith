@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { ALL_TOOL_DESCRIPTORS } from "./catalog";
 import {
   TOOL_SCOPES,
@@ -101,6 +102,44 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
     for (const d of ALL_TOOL_DESCRIPTORS) {
       if (d.capability !== null && typeof d.capability === "object") {
         expect(Object.keys(d.capability).length, d.name).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  // F3 (final whole-branch review, spec §13): an action present in the
+  // handler's discriminated union but ABSENT from the descriptor's scope map
+  // resolves through `scopeFor` to `"none"` — RLS still holds, but the
+  // action silently escapes the owner's "only these boards" board-scope
+  // narrowing. Missing from the capability map is the same class of bug one
+  // layer up: `capabilityFor`'s `mostRestrictive` fallback masks it rather
+  // than surfacing it. Every dispatch tool is correct today; this is what
+  // stops the next one from shipping wrong. Reads the real `action` enum off
+  // each descriptor's `inputSchema` — the single source of truth the handler
+  // itself validates against — rather than a hand-maintained action list
+  // that could itself drift from the union.
+  it("gives every action in a dispatch tool's action enum an entry in both its capability map and its scope map", () => {
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      // Only grouped-dispatch tools (Record capability) have an `action`
+      // input at all; single-purpose tools carry a scalar capability/scope
+      // and are out of scope for this check.
+      if (d.capability === null || typeof d.capability !== "object") continue;
+
+      const actionSchema = d.inputSchema.action;
+      if (!(actionSchema instanceof z.ZodEnum)) continue;
+      const actions = actionSchema.options as readonly string[];
+
+      const capabilityMap = d.capability;
+      const scopeMap = typeof d.scope === "string" ? null : d.scope;
+
+      for (const action of actions) {
+        expect(
+          action in capabilityMap,
+          `${d.name}: action "${action}" is missing from the capability map`,
+        ).toBe(true);
+        expect(
+          scopeMap !== null && action in scopeMap,
+          `${d.name}: action "${action}" is missing from the scope map`,
+        ).toBe(true);
       }
     }
   });
