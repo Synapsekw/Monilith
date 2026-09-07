@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { columnKindSchema } from "@/lib/validations/boards";
 import { widgetKindSchema } from "@/lib/validations/dashboards";
+import { viewKindSchema } from "@/lib/validations/view-actions";
+import { REPORT_SCOPES } from "@/lib/reports/queries";
 import {
   describeSchemaDescriptor,
   SCHEMA_TOPICS,
   COLUMN_KIND_SCHEMA,
+  VIEW_TYPE_SCHEMA,
   WIDGET_KIND_SCHEMA,
   REPORT_SHAPE_SCHEMA,
 } from "./describe-schema";
@@ -49,8 +52,19 @@ describe("describe_schema", () => {
     }
   });
 
+  it("describes every view type", () => {
+    for (const kind of viewKindSchema.options) {
+      expect(VIEW_TYPE_SCHEMA[kind], kind).toBeDefined();
+      expect(VIEW_TYPE_SCHEMA[kind]!.settings, kind).toBeTruthy();
+    }
+  });
+
+  // Enumerated from `REPORT_SCOPES` — the same array `toScope`'s runtime
+  // narrowing in `src/lib/reports/queries.ts` checks against — never a
+  // hand-copied literal. `ReportScope` itself is a TS union with no `.options`
+  // to enumerate, so `REPORT_SCOPES` is the single source of truth.
   it("describes every report scope", () => {
-    for (const scope of ["board", "boards", "portfolio", "template"]) {
+    for (const scope of REPORT_SCOPES) {
       expect(REPORT_SHAPE_SCHEMA[scope], scope).toBeDefined();
     }
   });

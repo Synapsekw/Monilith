@@ -130,9 +130,10 @@ export const VIEW_TYPE_SCHEMA: Record<string, SchemaEntry> = {
  *  test fails until all six are here. */
 export const WIDGET_KIND_SCHEMA: Record<string, SchemaEntry> = {
   number: {
-    settings: '{ agg: "count" | "sum" | "avg", valueColumnId?: string }',
+    settings:
+      '{ agg: "count" | "sum" | "avg", valueColumnId?: string, display?: "plain" | "gauge", target?: number }',
     example: { agg: "count" },
-    note: "valueColumnId is required for sum and avg, and must be a numbers column.",
+    note: 'valueColumnId is required for sum and avg, and must be a numbers column. display defaults to "plain"; target is a positive number, meaningful mainly with "gauge".',
   },
   chart: {
     settings:
@@ -143,7 +144,7 @@ export const WIDGET_KIND_SCHEMA: Record<string, SchemaEntry> = {
       'comboMap?: { [seriesValue: string]: "bar" | "line" } }',
     example: {
       chartType: "bar",
-      primary: { kind: "status" },
+      primary: { kind: "status", columnId: "<a status column id>" },
       measure: { agg: "count" },
     },
     note: 'primary.columnId (and series.columnId) is required except when kind is "date", which defaults to created_at; bucket only applies to "date". measure.valueColumnId is required for sum/avg and defaults to { agg: "count" }. comboMap only applies when chartType is "combo".',
@@ -179,7 +180,7 @@ export const REPORT_SHAPE_SCHEMA: Record<string, SchemaEntry> = {
   },
   boards: {
     settings: '{ scope: "boards", boardIds: string[] }',
-    note: "Every board must be one you can read.",
+    note: "boardIds must have 1-50 entries (REPORT_BOARDS_LIMIT); every board must be one you can read.",
   },
   portfolio: {
     settings: '{ scope: "portfolio", portfolioId: string }',
