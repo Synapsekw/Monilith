@@ -8,6 +8,13 @@ const mockInsert = vi.fn(() => ({
 }));
 const mockExecuteAction = vi.fn();
 const mockGetAiEntitlement = vi.fn();
+// `ai_conversations.agent_id` — what `currentPersonaFrom` reads FIRST (the
+// header switcher writes only this column); the thread's newest user turn is
+// the fallback for a lost column write.
+const mockConvMaybeSingle = vi.fn();
+// The thread's rows, as `resolvePersonaAgentId` reads them via the REAL
+// `getMessages` (only ITS supabase call is mocked — see below).
+const mockGetMessages = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({
   requireUser: vi.fn(async () => ({ id: "u1" })),
@@ -21,18 +28,36 @@ vi.mock("@/lib/ai/entitlement", () => ({
 vi.mock("@/lib/ai/write/execute", () => ({
   executeAction: (...a: unknown[]) => mockExecuteAction(...a),
 }));
-// select→eq→eq→(maybeSingle | limit) covers BOTH reads: the proposal row and
-// the idempotency probe.
+// `currentPersonaFrom` is kept REAL (not mocked) — this is a regression test
+// for `resolvePersonaAgentId` correctly threading that real resolution into
+// the insert, not for the algorithm itself (that's `conversations.test.ts`).
+// Only `getMessages` is stubbed, since it does its own DB round-trip.
+vi.mock("@/lib/ai/ask/conversations", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/ai/ask/conversations")>();
+  return { ...actual, getMessages: (...a: unknown[]) => mockGetMessages(...a) };
+});
+// `from("ai_messages")`: select→eq→eq→(maybeSingle | limit) covers BOTH reads
+// the proposal itself needs — the proposal row and the idempotency probe.
+// `from("ai_conversations")`: select→eq→maybeSingle is the persona fallback
+// read `resolvePersonaAgentId` added.
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          eq: () => ({ maybeSingle: mockMaybeSingle, limit: mockPriorLimit }),
+    from: (table: string) => {
+      if (table === "ai_conversations") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: mockConvMaybeSingle }) }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ maybeSingle: mockMaybeSingle, limit: mockPriorLimit }),
+          }),
         }),
-      }),
-      insert: mockInsert,
-    }),
+        insert: mockInsert,
+      };
+    },
   }),
 }));
 
@@ -58,6 +83,13 @@ beforeEach(() => {
   });
   mockPriorLimit.mockResolvedValue({ data: [], error: null });
   mockInsertSingle.mockResolvedValue({ data: { id: "o1" }, error: null });
+  // Default: no persona anywhere in the thread — matches the pre-fix behavior
+  // for every test below that doesn't care about attribution.
+  mockConvMaybeSingle.mockResolvedValue({
+    data: { agent_id: null },
+    error: null,
+  });
+  mockGetMessages.mockResolvedValue([]);
   mockExecuteAction.mockResolvedValue({
     result: { ok: true, itemId: "i1" },
     effect: {
@@ -239,5 +271,112 @@ describe("cancelAskProposal", () => {
       messageId: MSG,
     });
     expect(res.ok).toBe(false);
+  });
+});
+
+// Regression: the outcome row used to be inserted with NO `agent_id` column
+// at all, so it landed NULL regardless of who actually answered. The client's
+// optimistic label (AskChat's `personaId` stamp) kept the SESSION looking
+// right, but a reload reads this row straight off the DB — so the row itself,
+// not just the rendered label, is what these tests pin.
+describe("applyAskProposal / cancelAskProposal — persist who answered", () => {
+  it("writes the last user turn's agent_id on the outcome row", async () => {
+    const AGENT_ID = "33333333-3333-4333-8333-333333333333";
+    mockGetMessages.mockResolvedValue([
+      {
+        id: "u1",
+        role: "user",
+        content: "@ops go",
+        tool_trace: null,
+        created_at: "t",
+        agent_id: AGENT_ID,
+      },
+    ]);
+    const res = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(res.ok).toBe(true);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ agent_id: AGENT_ID }),
+    );
+  });
+
+  // Retitled deliberately (2026-09-07): the column no longer wins only "when
+  // no user turn carries one" — it wins, full stop. The assertion is unchanged.
+  it("writes the conversation's own agent_id — the column the switcher sets", async () => {
+    const AGENT_ID = "44444444-4444-4444-8444-444444444444";
+    mockConvMaybeSingle.mockResolvedValue({
+      data: { agent_id: AGENT_ID },
+      error: null,
+    });
+    const res = await cancelAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(res.ok).toBe(true);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ agent_id: AGENT_ID }),
+    );
+  });
+
+  it("writes null — not undefined, not omitted — when the thread has no persona at all", async () => {
+    const res = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(res.ok).toBe(true);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ agent_id: null }),
+    );
+  });
+
+  it("takes the conversation column over a stamped user turn", async () => {
+    const SWITCHED_IN = "55555555-5555-4555-8555-555555555555";
+    mockConvMaybeSingle.mockResolvedValue({
+      data: { agent_id: SWITCHED_IN },
+      error: null,
+    });
+    mockGetMessages.mockResolvedValue([
+      {
+        id: "u1",
+        role: "user",
+        content: "@ops go",
+        tool_trace: null,
+        created_at: "t",
+        agent_id: "66666666-6666-4666-8666-666666666666",
+      },
+    ]);
+    const res = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(res.ok).toBe(true);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ agent_id: SWITCHED_IN }),
+    );
+  });
+
+  // The outcome turn was attributed TWICE by two different rules — the server
+  // stamped the persisted row, the client stamped its own copy from whatever
+  // persona it happened to be holding. They disagree after a switch, and the
+  // reload relabelled the turn. The server's answer is now returned, so the
+  // client has one to use instead of a guess of its own.
+  it("returns the agent it stamped, so the client never has to guess", async () => {
+    const AGENT_ID = "77777777-7777-4777-8777-777777777777";
+    mockConvMaybeSingle.mockResolvedValue({
+      data: { agent_id: AGENT_ID },
+      error: null,
+    });
+    const applied = await applyAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    const cancelled = await cancelAskProposal({
+      conversationId: CONV,
+      messageId: MSG,
+    });
+    expect(applied.ok && applied.data.agentId).toBe(AGENT_ID);
+    expect(cancelled.ok && cancelled.data.agentId).toBe(AGENT_ID);
   });
 });

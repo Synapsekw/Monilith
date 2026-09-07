@@ -11,6 +11,24 @@ import {
   resolveProposalStates,
   type AskToolTrace,
 } from "@/lib/ai/ask/tool-trace";
+import {
+  isAgentMention,
+  type MentionTarget,
+} from "@/lib/collaboration/mentions";
+
+/** What an assistant turn is called when it has no agent on record — a legacy
+ *  row, or a thread never handed to a persona. Distinct from `ThreadHeader`'s
+ *  "Monolith assistant" chip on purpose: that names WHO is on duty going
+ *  forward, this names WHO already answered — shorter reads better inline,
+ *  once per turn, than repeated in a transcript. */
+const PLAIN_ASSISTANT_NAME = "Monolith";
+
+/** Stable empty default — a fresh `{}` would give the prop a new identity on
+ *  every render of the surfaces that carry no historical names. */
+const EMPTY_NAMES: Readonly<Record<string, string>> = {};
+
+/** What an undecided proposal says to someone who cannot decide it. */
+const OWNER_DECIDES_NOTE = "Only this thread's owner can decide this.";
 
 export type UIMessage = {
   id: string;
@@ -19,16 +37,24 @@ export type UIMessage = {
   /** Parsed `ai_messages.tool_trace`. Carries a turn's proposed actions, or —
    *  on an outcome turn — which proposal it resolved. */
   trace?: AskToolTrace | null;
+  /** The agent this turn belongs to — rendered as the assistant turn's kicker
+   *  (`nameOf` below). Optional because the client appends turns of its own
+   *  mid-stream; absent and null both read as the plain assistant. */
+  agentId?: string | null;
 };
 
 /** A single chat turn. User turns sit right in a muted bubble; assistant turns
- *  sit left, full-width, chrome-neutral. */
+ *  sit left, full-width, chrome-neutral — named by a `Kicker` above the text
+ *  so the mark (gutter) and the name (label) each do one job. */
 function Bubble({
   role,
   content,
+  agentName,
 }: {
   role: UIMessage["role"];
   content: string;
+  /** Assistant turns only — who answered. Ignored for user turns. */
+  agentName?: string;
 }) {
   if (role === "user") {
     return (
@@ -44,8 +70,11 @@ function Bubble({
       <span className="bg-surface text-brand mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border">
         <AskAiMark className="size-3.5" />
       </span>
-      <div className="min-w-0 flex-1 pt-0.5 text-sm leading-relaxed whitespace-pre-wrap">
-        {content}
+      <div className="min-w-0 flex-1 pt-0.5">
+        {agentName ? <Kicker className="mb-1 block">{agentName}</Kicker> : null}
+        <div className="text-sm leading-relaxed whitespace-pre-wrap">
+          {content}
+        </div>
       </div>
     </div>
   );
@@ -69,6 +98,10 @@ export function MessageList({
   busyMessageId,
   dropState = "none",
   onRetryDrop,
+  agents = [],
+  agentNames = EMPTY_NAMES,
+  streamingAgentId = null,
+  readOnly = false,
 }: {
   messages: UIMessage[];
   streamingText: string | null;
@@ -78,6 +111,25 @@ export function MessageList({
   busyMessageId?: string | null;
   dropState?: DropState;
   onRetryDrop?: () => void;
+  /** The owner's agents — a pure lookup table for turn attribution, not a
+   *  fetch trigger. Also doubles as the empty state's "who you can ask"
+   *  list, so an owner with no agents yet gets the same empty state as
+   *  before rather than an offer to address nobody. */
+  agents?: readonly MentionTarget[];
+  /** Names for agents that already ANSWERED in this thread, including ones
+   *  since disabled. `agents` is the enabled-only roster (it is also what the
+   *  empty state offers to address), so on its own it re-labels every answer a
+   *  disabled agent ever gave as "Monolith" — rewriting history to reflect a
+   *  setting changed today. Consulted only after the roster misses. */
+  agentNames?: Readonly<Record<string, string>>;
+  /** Who is answering the LIVE turn (streaming bubble / thinking indicator).
+   *  Distinct from any message's `agentId` because the live turn has no
+   *  message row yet. */
+  streamingAgentId?: string | null;
+  /** A thread shared to a board, opened by someone who does not own it. The
+   *  transcript still reads; the decisions belong to the owner, and their RLS
+   *  scope is what would refuse them anyway. */
+  readOnly?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -88,6 +140,19 @@ export function MessageList({
   // Pure derivation over the thread — a proposal is resolved by a LATER message
   // naming it, so reload and live-update render identically.
   const proposalStates = resolveProposalStates(messages);
+  // Filtered ONCE per render; `nameOf` and the empty-state list both scan
+  // this array rather than re-filtering `agents` on every call.
+  const agentHandles = agents.filter(isAgentMention);
+  const nameOf = (id?: string | null) =>
+    agentHandles.find((a) => a.agentId === id)?.name ??
+    (id ? agentNames[id] : undefined) ??
+    PLAIN_ASSISTANT_NAME;
+  // Unlike `nameOf`, no "Monolith" fallback: the thinking indicator's own
+  // generic label already covers "no agent on record" — this is only truthy
+  // when there is a real name to announce.
+  const streamingAgent = agentHandles.find(
+    (a) => a.agentId === streamingAgentId,
+  )?.name;
 
   return (
     <div data-scroll-container className="min-h-0 flex-1 overflow-y-auto">
@@ -97,11 +162,28 @@ export function MessageList({
             <span className="bg-surface text-brand flex size-11 items-center justify-center rounded-lg border">
               <AskAiMark className="size-5" />
             </span>
-            <Kicker>Ask AI</Kicker>
+            <Kicker>Agents</Kicker>
             <p className="text-muted-foreground max-w-sm text-sm">
-              Ask a question about your boards — what&apos;s overdue, who&apos;s
-              overloaded, what shipped this week. Answers are grounded in your
-              real data.
+              {agentHandles.length > 0 ? (
+                <>
+                  Start with{" "}
+                  {agentHandles.map((a, i) => (
+                    <span key={a.agentId}>
+                      <span className="text-foreground font-mono">
+                        @{a.handle}
+                      </span>
+                      {i < agentHandles.length - 1 ? ", " : ""}
+                    </span>
+                  ))}{" "}
+                  — or just ask.
+                </>
+              ) : (
+                <>
+                  Ask a question about your boards — what&apos;s overdue,
+                  who&apos;s overloaded, what shipped this week. Answers are
+                  grounded in your real data.
+                </>
+              )}
             </p>
           </div>
         ) : null}
@@ -109,10 +191,24 @@ export function MessageList({
         {messages.map((m) => {
           const actions = m.trace?.proposedActions ?? [];
           // NOT named `status` — that is the streaming status-line prop.
-          const proposalStatus = proposalStates.get(m.id);
+          // A viewer sees WHAT was proposed and that it is still open, but no
+          // Approve/Cancel: the write is the owner's to make (and RLS would
+          // refuse it anyway — a button whose only outcome is failure is
+          // worse than no button).
+          const resolvedStatus = proposalStates.get(m.id);
+          const proposalStatus =
+            readOnly && resolvedStatus?.state === "idle"
+              ? { state: "done" as const, note: OWNER_DECIDES_NOTE }
+              : resolvedStatus;
           return (
             <div key={m.id} className="flex flex-col gap-3">
-              <Bubble role={m.role} content={m.content} />
+              <Bubble
+                role={m.role}
+                content={m.content}
+                agentName={
+                  m.role === "assistant" ? nameOf(m.agentId) : undefined
+                }
+              />
               {actions.length > 0 && proposalStatus ? (
                 // Indented to the assistant gutter (size-7 mark + gap-3), so the
                 // card hangs off the turn it belongs to.
@@ -143,11 +239,25 @@ export function MessageList({
 
         {/* Open, no tokens: the 25–42s stretch that used to render a static "…"
             and read as a hung page (gotcha-62). One live region, carrying the
-            freshest status — so the status is NOT also drawn below. */}
-        {streamingText === "" ? <ThinkingIndicator label={status} /> : null}
+            freshest status — so the status is NOT also drawn below. The label
+            names the answering agent once one is known; with no agent on the
+            turn, `ThinkingIndicator` falls back to its own generic label
+            rather than a hollow "Monolith is working…". */}
+        {streamingText === "" ? (
+          <ThinkingIndicator
+            label={
+              status ??
+              (streamingAgent ? `${streamingAgent} is working…` : null)
+            }
+          />
+        ) : null}
 
         {streamingText ? (
-          <Bubble role="assistant" content={streamingText} />
+          <Bubble
+            role="assistant"
+            content={streamingText}
+            agentName={nameOf(streamingAgentId)}
+          />
         ) : null}
 
         {status && streamingText !== "" ? (

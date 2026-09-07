@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 import type { ToolDescriptor } from "@/lib/mcp/tools/descriptor";
 import type { ToolResult } from "@/lib/mcp/tools/shared";
+import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 import type { AgentCapability } from "./capabilities";
 import { getUserAgentById, type UserAgentRow } from "./agents-db";
 import {
@@ -38,15 +39,6 @@ export type DelegateRosterEntry = {
   name: string;
   instructions: string;
 };
-
-/** Neutralise owner-authored text bound for a single line of a tool
- *  DESCRIPTION: strip newlines (which could start a line the model reads as a
- *  new rule) and angle brackets (which could open or close a delimiter). The
- *  same function `persona.ts` applies to an agent name — kept identical on
- *  purpose; if one hardens, both should. */
-function sanitizeInline(text: string): string {
-  return text.replace(/[\r\n]+/g, " ").replace(/[<>]/g, "");
-}
 
 function ok(text: string): ToolResult {
   return { content: [{ type: "text", text }] };

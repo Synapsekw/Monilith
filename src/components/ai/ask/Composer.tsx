@@ -7,10 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   activeMentionQuery,
   applyMention,
+  isAgentMention,
   mentionLabel,
   type AgentMentionTarget,
   type MentionTarget,
 } from "@/lib/collaboration/mentions";
+import { resolveAddressedAgent } from "@/lib/ai/ask/persona-routing";
 
 const MIN = 1;
 const MAX = 4000;
@@ -19,30 +21,6 @@ const SUGGESTIONS = 6;
 /** Stable empty default — a fresh `[]` literal would give every render a new
  *  identity for a list that is almost always absent (the board dock). */
 const NO_AGENTS: readonly MentionTarget[] = [];
-
-/**
- * The agent a message is ADDRESSED to: an `@handle` that LEADS the text.
- *
- * Leading, not anywhere: "@ops what is late?" picks the persona, while "ask
- * @ops later" is a sentence that happens to name one. A handle nobody owns
- * resolves to null — the question is still a perfectly good question, and
- * silently dropping it (or erroring) would be worse than answering it as the
- * default assistant.
- */
-function leadingAgent(
-  text: string,
-  agents: readonly MentionTarget[],
-): AgentMentionTarget | null {
-  const match = /^@(\S+)/.exec(text.trim());
-  if (!match) return null;
-  const handle = match[1]!.toLowerCase();
-  return (
-    agents.find(
-      (a): a is AgentMentionTarget =>
-        a.kind === "agent" && a.handle.toLowerCase() === handle,
-    ) ?? null
-  );
-}
 
 /**
  * Chat composer: a growing textarea + submit. ⌘/Ctrl+Enter sends (mirrors the
@@ -61,13 +39,20 @@ function leadingAgent(
 export function Composer({
   disabled,
   agents = NO_AGENTS,
+  agentId = null,
   onSubmit,
 }: {
   disabled: boolean;
   /** The owner's agents, addressable by `@handle`. Absent on surfaces that
-   *  don't offer a persona (the board dock), where the picker never opens. */
+   *  don't offer a persona (the board dock), where the picker and the chip
+   *  row never appear. */
   agents?: readonly MentionTarget[];
-  /** `agentId` is the persona a LEADING handle addressed, or null. */
+  /** The thread's current persona (sticky), or null for the plain assistant.
+   *  Named in the helper line when nothing typed overrides it — the same
+   *  `resolveAddressedAgent` the server uses, so the two can never disagree. */
+  agentId?: string | null;
+  /** `agentId` is the persona a LEADING typed handle addressed, or null — the
+   *  server re-resolves (and applies the sticky fallback) regardless. */
   onSubmit: (text: string, agentId: string | null) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -77,7 +62,16 @@ export function Composer({
   );
   const trimmed = value.trim();
   const canSend = trimmed.length >= MIN && trimmed.length <= MAX && !disabled;
-  const addressed = leadingAgent(value, agents);
+  const roster = agents.filter(isAgentMention);
+  // Who answers if sent right now: a leading typed handle wins, otherwise the
+  // thread's sticky persona. Same helper the server calls post-send, so the
+  // helper line can never promise a different agent than the one who shows up.
+  const { agentId: answeringId } = resolveAddressedAgent({
+    text: value,
+    roster,
+    currentAgentId: agentId,
+  });
+  const answering = roster.find((a) => a.agentId === answeringId);
 
   const suggestions =
     query && agents.length > 0
@@ -105,9 +99,26 @@ export function Composer({
     queueMicrotask(() => ta?.focus());
   }
 
+  /** One-tap chip insertion: append `@handle ` to the end of the draft (there
+   *  is no active `@` query to splice into, unlike the picker's `choose`) and
+   *  hand focus back to the textarea. Goes through `applyMention` rather than
+   *  string surgery so a chip and a typed mention produce identical text. */
+  function addChip(target: AgentMentionTarget) {
+    setValue((current) => applyMention(current, current.length, target).text);
+    setQuery(null);
+    queueMicrotask(() => ref.current?.focus());
+  }
+
   function send() {
     if (!canSend) return;
-    onSubmit(trimmed, leadingAgent(trimmed, agents)?.agentId ?? null);
+    // The TYPED handle only — never the sticky persona. The server resolves
+    // the sticky fallback itself; sending it here would just be a stale
+    // second opinion the moment the thread's persona changes mid-draft.
+    onSubmit(
+      trimmed,
+      resolveAddressedAgent({ text: trimmed, roster, currentAgentId: null })
+        .agentId,
+    );
     setValue("");
     setQuery(null);
   }
@@ -154,7 +165,9 @@ export function Composer({
             rows={1}
             value={value}
             disabled={disabled}
-            placeholder="Ask about your boards…"
+            placeholder={
+              agents.length > 0 ? "Ask your agents…" : "Ask about your boards…"
+            }
             aria-label="Your question"
             className="max-h-40 min-h-9 resize-none border-0 bg-transparent px-1.5 py-1.5 shadow-none focus-visible:border-0 focus-visible:ring-0"
             onChange={(e) => {
@@ -191,15 +204,37 @@ export function Composer({
             <ArrowUp className="size-4" />
           </Button>
         </form>
+        {/* One-tap addressing: a chip per agent inserts its handle exactly the
+            way typing it would (`applyMention`), so this is a shortcut for the
+            picker above, not a second interaction model. Hidden with the
+            picker on surfaces with no agents to offer (the board dock), and
+            while the picker itself is open — the two would otherwise offer
+            the same agent's name twice in one screen. */}
+        {roster.length > 0 && suggestions.length === 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {roster.map((a) => (
+              <Button
+                key={a.agentId}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => addChip(a)}
+              >
+                {mentionLabel(a)}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
       {/* Says WHY it's shut. A dead composer with no explanation is what makes
-          a slow turn look broken — and WHO it will reach, so a typed handle is
-          confirmed before the question is spent on the wrong persona. */}
+          a slow turn look broken — and WHO it will reach, so both a typed
+          handle and the thread's sticky persona are confirmed before the
+          question is spent on the wrong agent. */}
       <p className="text-kicker text-2xs mx-auto mt-1.5 max-w-3xl px-1 font-mono tracking-[0.12em] uppercase">
         {disabled
           ? "Working — one question at a time"
-          : addressed
-            ? `Asking ${addressed.name} — ⌘↵ to send`
+          : answering
+            ? `Asking ${answering.name} — ⌘↵ to send`
             : "⌘↵ to send"}
       </p>
     </div>

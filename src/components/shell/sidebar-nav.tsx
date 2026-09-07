@@ -41,7 +41,7 @@ type NavLink = {
 
 const HOME: NavLink = { label: "My Work", href: "/my-work", icon: ListTodo };
 const ASK: NavLink = {
-  label: "Ask AI",
+  label: "Agents",
   href: "/ask",
   icon: AskAiMark,
 };

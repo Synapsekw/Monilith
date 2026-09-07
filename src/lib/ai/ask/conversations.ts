@@ -9,19 +9,36 @@ export type ConversationRow = Pick<
 >;
 export type MessageRow = Pick<
   Database["public"]["Tables"]["ai_messages"]["Row"],
-  "id" | "role" | "content" | "tool_trace" | "created_at"
+  "id" | "role" | "content" | "tool_trace" | "created_at" | "agent_id"
 >;
 
 /** Bounded hot-path reads (working agreement #5): the conversation list and a
  *  thread's messages are capped over indexed columns — never an unbounded scan
  *  on a growing table. */
-const CONVERSATIONS_LIMIT = 100;
 const MESSAGES_LIMIT = 200;
 
-/** List the user's conversations newest-first, bounded. RLS also scopes this to
- *  the caller; the explicit `user_id` filter keeps the read on the
- *  `(user_id, updated_at desc)` index. */
-export async function listConversations(
+/** Each rail section is bounded on its own. Two reads, not one shared cap: a
+ *  week of daily briefings would otherwise push every chat past a single limit,
+ *  which is the bug this split exists to fix. Both are served index-only by the
+ *  partial indexes added with `ai_messages.agent_id`. */
+export const RAIL_LIMIT = 50;
+
+/** The user's own chats — threads no agent run wrote. */
+export async function listChats(userId: string): Promise<ConversationRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_conversations")
+    .select("id, title, updated_at")
+    .eq("user_id", userId)
+    .is("run_id", null)
+    .order("updated_at", { ascending: false })
+    .limit(RAIL_LIMIT);
+  if (error) throw new Error(`listChats: ${error.message}`);
+  return data ?? [];
+}
+
+/** Briefings — one per agent run (`writeBriefingThread` sets `run_id`). */
+export async function listBriefings(
   userId: string,
 ): Promise<ConversationRow[]> {
   const supabase = await createClient();
@@ -29,9 +46,10 @@ export async function listConversations(
     .from("ai_conversations")
     .select("id, title, updated_at")
     .eq("user_id", userId)
+    .not("run_id", "is", null)
     .order("updated_at", { ascending: false })
-    .limit(CONVERSATIONS_LIMIT);
-  if (error) throw new Error(`listConversations: ${error.message}`);
+    .limit(RAIL_LIMIT);
+  if (error) throw new Error(`listBriefings: ${error.message}`);
   return data ?? [];
 }
 
@@ -70,7 +88,7 @@ export async function getMessages(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ai_messages")
-    .select("id, role, content, tool_trace, created_at")
+    .select("id, role, content, tool_trace, created_at, agent_id")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(MESSAGES_LIMIT);
@@ -86,6 +104,10 @@ export type ThreadMessage = {
   role: "user" | "assistant";
   content: string;
   trace: AskToolTrace | null;
+  /** The agent this turn belongs to — who it was addressed to (user turn) or
+   *  who answered it (assistant turn). Null is the plain assistant, which is
+   *  every row written before per-message routing existed. */
+  agentId: string | null;
 };
 
 /**
@@ -102,5 +124,71 @@ export function toThreadMessages(rows: MessageRow[]): ThreadMessage[] {
     role: r.role as "user" | "assistant",
     content: r.content,
     trace: parseToolTrace(r.tool_trace),
+    agentId: r.agent_id,
   }));
+}
+
+/**
+ * Who is on duty in this thread.
+ *
+ * `ai_conversations.agent_id` is AUTHORITATIVE; the newest user turn is the
+ * FALLBACK. The column is the only thing the header switcher writes
+ * (`setConversationAgent`), so any rule that let a stamped message outrank it
+ * made the switcher a no-op: the chip moved, every following turn kept routing
+ * to the agent the last question happened to address, and — worse — handing a
+ * thread back to the plain Monolith assistant became impossible, because the
+ * old agent's id was still sitting on a message. The escape hatch the spec
+ * requires only exists if the column wins.
+ *
+ * The fallback is a REPAIR, not a second opinion: `appendUserMessage` stamps the
+ * message and only then best-effort-writes the column, so a lost write must not
+ * lose the agent the turn actually addressed. It reads the NEWEST user turn and
+ * stops there — including when that turn's `agent_id` is null. A null on the
+ * newest user turn is now meaningful ("this thread was handed back to the plain
+ * assistant"); scanning past it to an older stamped turn would resurrect the
+ * agent the owner just dismissed. Threads written before per-message routing
+ * carry null on every turn AND on the column, so they answer null either way.
+ */
+export function currentPersonaFrom(
+  rows: MessageRow[],
+  conversationAgentId: string | null,
+): string | null {
+  if (conversationAgentId) return conversationAgentId;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i]!;
+    if (r.role === "user") return r.agent_id;
+  }
+  return null;
+}
+
+/** The thread's title, persona and OWNER, for a surface that has the id but not
+ *  the rows — the existing-conversation page's header, which needs all three
+ *  without a second round-trip. `ownerId` rides along on the same single-row
+ *  read because `ai_conversations_select_board_shared` lets any member of the
+ *  board READ a shared thread: "the page rendered" no longer implies "this is
+ *  my thread", and only the owner may be offered the switcher and the composer.
+ *  One indexed single-row read; degrades to nulls rather than throwing — a
+ *  thread that renders with a placeholder title and the plain assistant beats a
+ *  500, and a null `ownerId` matches no user, so the degraded page is
+ *  read-only rather than falsely writable. */
+export async function getConversationHeader(conversationId: string): Promise<{
+  title: string | null;
+  agentId: string | null;
+  ownerId: string | null;
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("ai_conversations")
+    .select("title, agent_id, user_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (error) {
+    console.error(`[ask] header read failed for ${conversationId}`, error);
+    return { title: null, agentId: null, ownerId: null };
+  }
+  return {
+    title: data?.title ?? null,
+    agentId: data?.agent_id ?? null,
+    ownerId: data?.user_id ?? null,
+  };
 }

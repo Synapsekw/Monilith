@@ -255,6 +255,7 @@ export type Database = {
       };
       ai_messages: {
         Row: {
+          agent_id: string | null;
           content: string;
           conversation_id: string;
           created_at: string;
@@ -263,6 +264,7 @@ export type Database = {
           tool_trace: Json | null;
         };
         Insert: {
+          agent_id?: string | null;
           content: string;
           conversation_id: string;
           created_at?: string;
@@ -271,6 +273,7 @@ export type Database = {
           tool_trace?: Json | null;
         };
         Update: {
+          agent_id?: string | null;
           content?: string;
           conversation_id?: string;
           created_at?: string;
@@ -279,6 +282,13 @@ export type Database = {
           tool_trace?: Json | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "ai_messages_agent_id_fkey";
+            columns: ["agent_id"];
+            isOneToOne: false;
+            referencedRelation: "user_agents";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "ai_messages_conversation_id_fkey";
             columns: ["conversation_id"];
