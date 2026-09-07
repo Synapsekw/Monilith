@@ -160,11 +160,20 @@ describe("SmartFillDialog", () => {
     await user.click(screen.getByRole("radio", { name: "Status" }));
     await user.click(screen.getByRole("button", { name: /^classify$/i }));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Smart Fill needs an Anthropic key.");
-    expect(
-      screen.getByRole("button", { name: /^classify$/i }),
-    ).toBeInTheDocument();
+    // A rejected classify settles across TWO React commits: `setClassifyError`
+    // runs inside the async transition, so the alert paints first, and
+    // `isClassifying` only clears when the transition's action promise settles
+    // a turn later. Waiting on the alert therefore hands back a DOM that can
+    // still show the pending, disabled "Classifying…" button. Wait on the
+    // restored Classify button instead — the *last* of the two commits, and the
+    // settled state this test is actually about.
+    const classifyBtn = await screen.findByRole("button", {
+      name: /^classify$/i,
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Smart Fill needs an Anthropic key.",
+    );
+    expect(classifyBtn).toBeEnabled();
   });
 
   it("applies only the accepted rows via applyColumnFill and closes on success", async () => {
