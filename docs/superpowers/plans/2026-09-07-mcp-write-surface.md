@@ -330,6 +330,35 @@ describe("capabilityFor", () => {
     expect(capabilityFor(mapped, { action: "nonsense" })).toBe("board.destroy");
     expect(capabilityFor(mapped, {})).toBe("board.destroy");
   });
+
+  // An empty or all-null map must NOT resolve to null — that would classify
+  // every unnamed action as a capability-free read.
+  it("fails closed on an all-null capability map", () => {
+    const allNull = {
+      ...mapped,
+      capability: { a: null, b: null },
+    } as ToolDescriptor;
+    expect(capabilityFor(allNull, { action: "nonsense" })).not.toBeNull();
+  });
+
+  it("fails closed on an empty capability map", () => {
+    const empty = { ...mapped, capability: {} } as ToolDescriptor;
+    expect(capabilityFor(empty, { action: "nonsense" })).not.toBeNull();
+  });
+
+  // The map hardening must not gate a GENUINE capability-free read.
+  it("passes a scalar null capability through as null", () => {
+    const read = { ...mapped, capability: null } as ToolDescriptor;
+    expect(capabilityFor(read, { action: "anything" })).toBeNull();
+  });
+
+  it("declares no empty capability map in the catalog", () => {
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      if (d.capability !== null && typeof d.capability === "object") {
+        expect(Object.keys(d.capability).length, d.name).toBeGreaterThan(0);
+      }
+    }
+  });
 });
 
 describe("scopeFor", () => {
@@ -393,15 +422,21 @@ Add the two resolvers below the type:
 ```ts
 /** The most restrictive capability in a map — the fail-closed answer for an
  *  action the map does not name. `board.destroy` outranks `board.structure`
- *  outranks everything else; a map with no non-null value yields the tool's
- *  most restrictive stated grant, never `null`. */
+ *  outranks everything else.
+ *
+ *  RETURNS A CAPABILITY, NEVER `null`. An empty or all-null map is a
+ *  DECLARATION BUG, not a read: returning `null` would make `capabilityFor`
+ *  report a capability-free read, and `grant-gate.ts` would execute the call
+ *  ungated. The realistic trigger is not a read-only dispatch tool — it is an
+ *  action added to a handler's union without being added to its capability
+ *  map, which nothing else enforces. */
 function mostRestrictive(
   map: Record<string, AgentCapability | null>,
-): AgentCapability | null {
+): AgentCapability {
   const values = Object.values(map).filter(
     (v): v is AgentCapability => v !== null,
   );
-  if (values.length === 0) return null;
+  if (values.length === 0) return "board.destroy";
   if (values.includes("board.destroy")) return "board.destroy";
   if (values.includes("board.structure")) return "board.structure";
   return values[0]!;
