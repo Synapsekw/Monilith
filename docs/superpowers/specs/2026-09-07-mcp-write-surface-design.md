@@ -36,9 +36,17 @@ portfolio. Everything it can break is recoverable from Trash.
 
 ## Non-goals
 
-- **No new database schema.** Every operation here already exists as a server
-  action against existing tables. This spec exposes them; it does not extend
-  the model.
+- **No new tables, columns or RPCs.** Every operation here already exists as a
+  server action against existing tables. This spec exposes them; it does not
+  extend the model.
+
+  It does need **one DDL-only migration**, because the capability vocabulary is
+  not merely a TypeScript array: `user_agents_capabilities_known` and
+  `org_ai_settings_ceiling_known` are CHECK constraints that enumerate it
+  literally. Both must be widened or no agent can be granted the new
+  capabilities and no admin can tick them. Not one row of user data is read or
+  written — see §3.
+
 - **No hard delete or purge from any agent-reachable path.** See §5.
 - **No change to RLS.** RLS remains the security boundary and is untouched.
   Every new tool runs on the same RLS-scoped client the existing ones use.
@@ -218,6 +226,24 @@ the feature lands dark and an admin turns it on.
 when the ceiling refuses — unchanged, and it means a structure call in an org
 that has not opted in produces a clean denial rather than an approval card
 nobody can approve.
+
+Three rules the migration must follow, all precedent from
+`20260905045106_agent_delegate_and_usage_run_id.sql` (the `agent.delegate`
+ship) and `20260827095748_agent_memory.sql` before it:
+
+1. **Widen both CHECK constraints** so an admin _can_ tick the new
+   capabilities.
+2. **Do not backfill existing ceilings.** The DEV database holds real,
+   user-facing data (decision-32); a data-modifying statement against it is
+   reviewed and run on its own, never as a side effect of a feature branch. The
+   exact `update` is recorded verbatim in the migration's header comment,
+   unexecuted, so it is reviewable in the diff and runnable later.
+3. **Do not touch the column DEFAULT**, and do not touch
+   `DEFAULT_ORG_AI_SETTINGS.agentCapabilityCeiling` in
+   `src/lib/ai/org-settings.ts` — a frozen five-string literal that is
+   deliberately _not_ derived from `AGENT_CAPABILITIES`. Widening either hands
+   structure writes to every future org silently. The two must stay
+   byte-identical; `org-settings.test.ts` pins it.
 
 ## 4. Board scope and the create hole
 
