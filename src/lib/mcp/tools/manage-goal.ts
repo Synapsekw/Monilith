@@ -171,7 +171,7 @@ export const manageGoalDescriptor: ToolDescriptor = {
   name: "manage_goal",
   title: "Manage goal",
   description:
-    "Create, update or delete a goal, or set the boards a goal's progress is computed from. `create` needs a `name`; `progressMode` defaults to manual_percent (the others are manual_number, auto_subgoals and auto_boards). The goal is created in your default organization; pass `orgId` only to confirm you belong to the org you expect (list_organizations) — it does NOT choose the destination, and an org you are not a member of is refused, never substituted — the response's `orgId` is the org it actually landed in. Every other action takes a `goalId` from list_goals. `set_links` REPLACES the whole link set: send every board the goal should follow, each with the status column and the option ids that count as done (get_board lists them). Auto-computed progress needs progressMode auto_boards.",
+    "Create, update or delete a goal, or set the boards a goal's progress is computed from. `create` needs a `name`; `progressMode` defaults to manual_percent (the others are manual_number, auto_subgoals and auto_boards). `orgId` only confirms membership (list_organizations); it does not choose the destination — the goal lands in your default org, echoed in the response's `orgId`. A non-member org is refused, never substituted. Every other action takes a `goalId` from list_goals. `set_links` REPLACES the whole link set: send every board the goal should follow, each with the status column and the option ids that count as done (get_board lists them). Auto-computed progress needs progressMode auto_boards.",
   inputSchema: manageGoalInput,
   capability: {
     create: "board.structure",
