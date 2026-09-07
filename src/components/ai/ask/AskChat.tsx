@@ -93,12 +93,14 @@ export function AskChat({
    *  the header switcher, where one is rendered) is what decides. */
   agentId?: string;
   /** The thread's persona as of first paint, for an EXISTING conversation
-   *  (`getConversationPersona`). Absent for a brand-new thread. */
+   *  (`getConversationHeader`). Absent for a brand-new thread. */
   initialAgentId?: string | null;
-  /** The thread's title, set by the `/ask` surfaces. The existing-conversation
-   *  page does not (yet) fetch the real one, so `ThreadHeader` falls back to a
-   *  neutral placeholder rather than going titleless — the switcher it hosts
-   *  is the point of this prop existing at all, not the title text. */
+  /** The thread's title. `/ask` (new chat) passes the static "New chat"; the
+   *  existing-conversation page passes the real `ai_conversations.title` (also
+   *  via `getConversationHeader`). Absent only for a row whose title read came
+   *  back null (never true in practice — every row is created with a title —
+   *  but the read degrades rather than throwing), in which case `ThreadHeader`
+   *  falls back to a neutral placeholder rather than going titleless. */
   title?: string;
   /** The owner's agents, so a message can ADDRESS one by `@handle`, and so the
    *  header switcher (when rendered) has something to switch to. Loaded on

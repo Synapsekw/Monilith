@@ -802,11 +802,18 @@ describe("AskChat — the header agent switcher", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("reverts the chip when the switch fails", async () => {
-    setConversationAgent.mockResolvedValueOnce({
-      ok: false,
-      error: "Couldn't switch agent.",
-    } as never);
+  it("reverts the chip when the switch fails, after showing the optimistic pick", async () => {
+    // Held open deliberately (not `mockResolvedValueOnce`): a promise that
+    // resolves before the assertions run would make "the chip ends up back
+    // at Monolith assistant" indistinguishable from an entirely unwired
+    // `onSelect` — the initial render already reads "Monolith assistant", so
+    // that alone proves nothing changed, let alone reverted.
+    let settle!: (v: { ok: false; error: string }) => void;
+    setConversationAgent.mockReturnValueOnce(
+      new Promise((resolve) => {
+        settle = resolve;
+      }) as never,
+    );
     const user = userEvent.setup();
     render(
       <AskChat
@@ -821,6 +828,20 @@ describe("AskChat — the header agent switcher", () => {
     );
     await user.click(screen.getByRole("menuitem", { name: /^ops$/i }));
 
+    // The Server Action really was called, with the picked agent...
+    expect(setConversationAgent).toHaveBeenCalledWith({
+      conversationId: "c1",
+      agentId: SWITCH_OPS_ID,
+    });
+    // ...and the chip already reads "Ops" while that call is still in
+    // flight — the optimistic update this test exists to prove happened.
+    expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument();
+
+    await act(async () => {
+      settle({ ok: false, error: "Couldn't switch agent." });
+    });
+
+    // Only NOW, after the failure lands, does it revert.
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: /monolith assistant/i }),

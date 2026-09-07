@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import {
-  getConversationPersona,
+  getConversationHeader,
   getConversationRunId,
   getMessages,
   toThreadMessages,
@@ -28,10 +28,12 @@ import { AskChat } from "@/components/ai/ask/AskChat";
  * `listPendingProposalsForRun` already excludes expired rows — an Approve
  * button whose only outcome is failure is worse than no button.
  *
- * `agents` and `initialAgentId` seed the thread header's persona switcher —
- * the owner's roster (for the dropdown) and who is currently on duty (for the
- * chip), both read once here on first paint; AskChat owns the live state and
- * the header's Server Action from there.
+ * `agents` and `header` seed the thread header: the owner's roster (for the
+ * switcher dropdown) and the thread's real title + who is currently on duty
+ * (for the title and the chip), both read once here — `getConversationHeader`
+ * is a single indexed row read, not a second round-trip per field — on first
+ * paint; AskChat owns the live state and the header's Server Action from
+ * there.
  */
 export default async function AskConversationPage({
   params,
@@ -40,11 +42,11 @@ export default async function AskConversationPage({
 }) {
   const { conversationId } = await params;
   const user = await requireUser();
-  const [rows, runId, agents, persona] = await Promise.all([
+  const [rows, runId, agents, header] = await Promise.all([
     getMessages(conversationId),
     getConversationRunId(conversationId),
     listOwnerAgentTargets(user.id),
-    getConversationPersona(conversationId),
+    getConversationHeader(conversationId),
   ]);
   if (rows.length === 0) notFound();
 
@@ -72,7 +74,8 @@ export default async function AskConversationPage({
       initialMessages={toThreadMessages(rows)}
       agentProposals={proposals}
       agents={agents}
-      initialAgentId={persona}
+      initialAgentId={header.agentId}
+      title={header.title ?? undefined}
     />
   );
 }

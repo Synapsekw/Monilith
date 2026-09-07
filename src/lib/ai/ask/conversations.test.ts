@@ -10,7 +10,7 @@ import {
   listBriefings,
   getMessages,
   getConversationRunId,
-  getConversationPersona,
+  getConversationHeader,
   toThreadMessages,
   currentPersonaFrom,
 } from "./conversations";
@@ -224,7 +224,7 @@ describe("getConversationRunId", () => {
   });
 });
 
-describe("getConversationPersona", () => {
+describe("getConversationHeader", () => {
   function clientReturning(data: unknown, error: unknown = null) {
     const maybeSingle = vi.fn().mockResolvedValue({ data, error });
     const eq = vi.fn().mockReturnValue({ maybeSingle });
@@ -232,19 +232,28 @@ describe("getConversationPersona", () => {
     return { eq, maybeSingle };
   }
 
-  it("returns the row's agent_id", async () => {
-    const { eq } = clientReturning({ agent_id: "a-ops" });
-    expect(await getConversationPersona("c1")).toBe("a-ops");
+  it("returns the row's title and agent_id", async () => {
+    const { eq } = clientReturning({ title: "Q3 slippage", agent_id: "a-ops" });
+    expect(await getConversationHeader("c1")).toEqual({
+      title: "Q3 slippage",
+      agentId: "a-ops",
+    });
     expect(eq).toHaveBeenCalledWith("id", "c1");
   });
 
-  it("returns null when the row has no agent_id", async () => {
-    clientReturning({ agent_id: null });
-    expect(await getConversationPersona("c1")).toBeNull();
+  it("returns nulls when the row has no title or agent_id", async () => {
+    clientReturning({ title: null, agent_id: null });
+    expect(await getConversationHeader("c1")).toEqual({
+      title: null,
+      agentId: null,
+    });
   });
 
-  it("degrades to null on a query error rather than throwing", async () => {
+  it("degrades to nulls on a query error rather than throwing", async () => {
     clientReturning(null, { message: "boom" });
-    expect(await getConversationPersona("c1")).toBeNull();
+    expect(await getConversationHeader("c1")).toEqual({
+      title: null,
+      agentId: null,
+    });
   });
 });

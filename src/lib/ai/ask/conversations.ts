@@ -149,21 +149,23 @@ export function currentPersonaFrom(
   return conversationAgentId;
 }
 
-/** The thread's persona column, for a surface that has the id but not the
- *  rows. One indexed single-row read; degrades to null rather than throwing —
- *  a thread that renders as the plain assistant beats a 500. */
-export async function getConversationPersona(
+/** The thread's title and persona, for a surface that has the id but not the
+ *  rows — the existing-conversation page's header, which needs both without a
+ *  second round-trip. One indexed single-row read; degrades to nulls rather
+ *  than throwing — a thread that renders with a placeholder title and the
+ *  plain assistant beats a 500. */
+export async function getConversationHeader(
   conversationId: string,
-): Promise<string | null> {
+): Promise<{ title: string | null; agentId: string | null }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("ai_conversations")
-    .select("agent_id")
+    .select("title, agent_id")
     .eq("id", conversationId)
     .maybeSingle();
   if (error) {
-    console.error(`[ask] persona read failed for ${conversationId}`, error);
-    return null;
+    console.error(`[ask] header read failed for ${conversationId}`, error);
+    return { title: null, agentId: null };
   }
-  return data?.agent_id ?? null;
+  return { title: data?.title ?? null, agentId: data?.agent_id ?? null };
 }
