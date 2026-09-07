@@ -16,5 +16,12 @@ import { AskChat } from "@/components/ai/ask/AskChat";
 export default async function NewAskPage() {
   const user = await requireUser();
   const agents = await listOwnerAgentTargets(user.id);
-  return <AskChat conversationId={null} initialMessages={[]} agents={agents} />;
+  return (
+    <AskChat
+      conversationId={null}
+      initialMessages={[]}
+      agents={agents}
+      title="New chat"
+    />
+  );
 }

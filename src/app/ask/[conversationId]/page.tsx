@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth/session";
 import {
+  getConversationPersona,
   getConversationRunId,
   getMessages,
   toThreadMessages,
 } from "@/lib/ai/ask/conversations";
+import { listOwnerAgentTargets } from "@/lib/ai/ask/owner-agents";
 import { createClient } from "@/lib/supabase/server";
 import {
   listPendingProposalsForRun,
@@ -24,6 +27,11 @@ import { AskChat } from "@/components/ai/ask/AskChat";
  * The read costs a round trip only for threads that HAVE a `run_id`, and
  * `listPendingProposalsForRun` already excludes expired rows — an Approve
  * button whose only outcome is failure is worse than no button.
+ *
+ * `agents` and `initialAgentId` seed the thread header's persona switcher —
+ * the owner's roster (for the dropdown) and who is currently on duty (for the
+ * chip), both read once here on first paint; AskChat owns the live state and
+ * the header's Server Action from there.
  */
 export default async function AskConversationPage({
   params,
@@ -31,9 +39,12 @@ export default async function AskConversationPage({
   params: Promise<{ conversationId: string }>;
 }) {
   const { conversationId } = await params;
-  const [rows, runId] = await Promise.all([
+  const user = await requireUser();
+  const [rows, runId, agents, persona] = await Promise.all([
     getMessages(conversationId),
     getConversationRunId(conversationId),
+    listOwnerAgentTargets(user.id),
+    getConversationPersona(conversationId),
   ]);
   if (rows.length === 0) notFound();
 
@@ -60,6 +71,8 @@ export default async function AskConversationPage({
       conversationId={conversationId}
       initialMessages={toThreadMessages(rows)}
       agentProposals={proposals}
+      agents={agents}
+      initialAgentId={persona}
     />
   );
 }

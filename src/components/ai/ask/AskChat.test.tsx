@@ -5,6 +5,7 @@ import {
   waitFor,
   act,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const refresh = vi.fn();
@@ -12,16 +13,35 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh }),
 }));
 const recoverConversation = vi.fn();
+// Typed as taking the ids argument (the impl ignores it), matching the
+// `applyAskProposal`/`cancelAskProposal` spies below.
+type SwitchAgentCall = (
+  input: unknown,
+) => Promise<{ ok: true; data: { agentId: string | null } }>;
+const setConversationAgent = vi.fn<SwitchAgentCall>(async () => ({
+  ok: true as const,
+  data: { agentId: null },
+}));
 vi.mock("@/lib/ai/ask/conversation-actions", () => ({
-  createConversation: vi.fn(async () => ({
-    ok: true,
-    data: { conversationId: "c1" },
-  })),
+  // Echoes back whichever `agentId` the caller asked to start the thread
+  // with (or null) — realistic enough that `AskChat`'s header reflects the
+  // real persona after a send, without re-implementing server routing here.
+  createConversation: vi.fn(
+    async (input: {
+      firstMessage: string;
+      boardId?: string;
+      agentId?: string;
+    }) => ({
+      ok: true,
+      data: { conversationId: "c1", agentId: input.agentId ?? null },
+    }),
+  ),
   appendUserMessage: vi.fn(async () => ({
     ok: true,
-    data: { messageId: "m2" },
+    data: { messageId: "m2", agentId: null },
   })),
   recoverConversation: (i: unknown) => recoverConversation(i),
+  setConversationAgent: (i: unknown) => setConversationAgent(i as never),
 }));
 // Typed as taking the ids argument (the impl ignores it) so the spy can be
 // asserted with `toHaveBeenCalledWith` without an unused-parameter binding.
@@ -76,7 +96,10 @@ vi.mock("@/lib/agents/proposal-actions", () => ({
 }));
 
 import { AskChat } from "./AskChat";
-import { createConversation } from "@/lib/ai/ask/conversation-actions";
+import {
+  appendUserMessage,
+  createConversation,
+} from "@/lib/ai/ask/conversation-actions";
 
 const ACTION = {
   kind: "create_item" as const,
@@ -684,33 +707,152 @@ describe("AskChat — @handle picks the persona", () => {
     );
   });
 
-  it("ignores the handle in an existing thread and says why", async () => {
+  // Plan removal: a handle addressed inside an EXISTING thread used to be
+  // refused outright ("Start a new chat to ask a different agent."), because
+  // the thread could not be re-personified. Now it just answers as the
+  // addressed agent (the server resolves and persists the switch — see
+  // `resolveAddressedAgent`/`appendUserMessage`) and the header names them.
+  it("answers as the addressed agent in an existing thread, with no refusal notice", async () => {
+    (appendUserMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      data: { messageId: "m2", agentId: OPS_ID },
+    });
     render(<AskChat conversationId="c1" initialMessages={[]} agents={[OPS]} />);
     ask("@ops what is late?");
 
     await waitFor(() =>
-      expect(
-        screen.getByText(/start a new chat to ask a different agent/i),
-      ).toBeInTheDocument(),
+      expect(appendUserMessage).toHaveBeenCalledWith({
+        conversationId: "c1",
+        content: "@ops what is late?",
+      }),
     );
+    // Never minted a second thread — the existing one is re-personified.
     expect(createConversation).not.toHaveBeenCalled();
+    // The old refusal is gone…
+    expect(
+      screen.queryByText(/start a new chat to ask a different agent/i),
+    ).not.toBeInTheDocument();
+    // …and the header chip names who actually answered.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument(),
+    );
   });
 
-  it("clears the hint on the next message that addresses nobody", async () => {
+  it("keeps naming the addressed agent across a follow-up that addresses nobody (sticky routing)", async () => {
+    (appendUserMessage as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { messageId: "m2", agentId: OPS_ID },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { messageId: "m3", agentId: OPS_ID },
+      });
     render(<AskChat conversationId="c1" initialMessages={[]} agents={[OPS]} />);
     ask("@ops what is late?");
     await waitFor(() =>
+      expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument(),
+    );
+
+    ask("what about tomorrow?");
+
+    await waitFor(() => expect(appendUserMessage).toHaveBeenCalledTimes(2));
+    // Still Ops: a plain follow-up inherits the thread's persona — the header
+    // reflects what the server resolved, not a client guess.
+    expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument();
+  });
+});
+
+// The header switcher itself: AskChat owns the live persona state and is the
+// only thing that ever calls `setConversationAgent` — the ONE targeted
+// Server Action working agreement #5 requires, never a navigation.
+describe("AskChat — the header agent switcher", () => {
+  const SWITCH_OPS_ID = "44444444-4444-4444-8444-444444444444";
+  const SWITCH_AGENTS = [
+    {
+      kind: "agent" as const,
+      agentId: SWITCH_OPS_ID,
+      handle: "ops",
+      name: "Ops",
+    },
+  ];
+
+  it("switches an existing thread's persona with one Server Action and no navigation", async () => {
+    const user = userEvent.setup();
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[]}
+        agents={SWITCH_AGENTS}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /monolith assistant/i }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: /^ops$/i }));
+
+    expect(setConversationAgent).toHaveBeenCalledWith({
+      conversationId: "c1",
+      agentId: SWITCH_OPS_ID,
+    });
+    // Reads as instant — the chip updates without waiting on the action.
+    expect(screen.getByRole("button", { name: /ops/i })).toBeInTheDocument();
+    // No RSC navigation for an in-page switch (working agreement #5).
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("reverts the chip when the switch fails", async () => {
+    setConversationAgent.mockResolvedValueOnce({
+      ok: false,
+      error: "Couldn't switch agent.",
+    } as never);
+    const user = userEvent.setup();
+    render(
+      <AskChat
+        conversationId="c1"
+        initialMessages={[]}
+        agents={SWITCH_AGENTS}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /monolith assistant/i }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: /^ops$/i }));
+
+    await waitFor(() =>
       expect(
-        screen.getByText(/start a new chat to ask a different agent/i),
+        screen.getByRole("button", { name: /monolith assistant/i }),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("on a not-yet-minted chat, hands the chosen agent to createConversation instead of writing anywhere", async () => {
+    const user = userEvent.setup();
+    render(
+      <AskChat
+        conversationId={null}
+        initialMessages={[]}
+        agents={SWITCH_AGENTS}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /monolith assistant/i }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: /^ops$/i }));
+
+    // Nothing to write to yet — the choice is client state only.
+    expect(setConversationAgent).not.toHaveBeenCalled();
 
     ask("what is late?");
 
     await waitFor(() =>
-      expect(
-        screen.queryByText(/start a new chat to ask a different agent/i),
-      ).toBeNull(),
+      expect(createConversation).toHaveBeenCalledWith({
+        firstMessage: "what is late?",
+        agentId: SWITCH_OPS_ID,
+      }),
     );
   });
 });
