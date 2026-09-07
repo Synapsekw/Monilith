@@ -12,7 +12,12 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   it("covers every tool exactly once", () => {
     const names = ALL_TOOL_DESCRIPTORS.map((d) => d.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(names.length).toBe(24);
+    // Deliberately loosened from an exact `toBe(24)` for the duration of the
+    // MCP write-surface plan (docs/superpowers/plans/2026-09-07-mcp-write-surface.md),
+    // whose tasks add tools to this catalog across several concurrent
+    // branches. Only a floor is asserted here so those branches don't all
+    // collide on this one line; the plan's Task 11 re-pins the exact count.
+    expect(names.length).toBeGreaterThanOrEqual(24);
   });
 
   it("classifies every tool with a legal capability and scope", () => {
@@ -36,17 +41,38 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   });
 
   // The classification the consent screen and the grant gate both depend on.
-  it("marks exactly the five write tools with a capability", () => {
-    const writes = ALL_TOOL_DESCRIPTORS.filter((d) => d.capability !== null)
-      .map((d) => d.name)
-      .sort();
-    expect(writes).toEqual([
+  it("classifies the original read tools as reads", () => {
+    // Deliberately loosened from an exact write-list assertion for the
+    // duration of the MCP write-surface plan
+    // (docs/superpowers/plans/2026-09-07-mcp-write-surface.md), whose tasks
+    // add tools to this catalog across several concurrent branches. Instead
+    // of pinning the full write list, this checks the property that
+    // actually matters: the five pre-existing write tools still carry a
+    // capability, and a sample of pre-existing read tools still carry none.
+    // The plan's Task 11 re-pins the full, exact write list.
+    const byName = new Map(ALL_TOOL_DESCRIPTORS.map((d) => [d.name, d]));
+
+    const preExistingWrites = [
       "attach_file",
       "create_attachment_upload",
       "create_item",
       "log_time_allocation",
       "update_item",
-    ]);
+    ];
+    for (const name of preExistingWrites) {
+      expect(byName.get(name)?.capability).not.toBeNull();
+    }
+
+    const preExistingReads = [
+      "list_boards",
+      "get_board",
+      "list_items",
+      "search_items",
+      "get_item",
+    ];
+    for (const name of preExistingReads) {
+      expect(byName.get(name)?.capability).toBeNull();
+    }
   });
 
   it("excludes create_attachment_upload from the agent surface", () => {
