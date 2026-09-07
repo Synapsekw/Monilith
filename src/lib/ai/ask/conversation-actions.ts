@@ -9,8 +9,11 @@ import { getActiveWorkspaceId } from "@/lib/workspaces/active";
 import {
   getMessages,
   toThreadMessages,
+  currentPersonaFrom,
   type ThreadMessage,
 } from "@/lib/ai/ask/conversations";
+import { resolveAddressedAgent } from "@/lib/ai/ask/persona-routing";
+import { listOwnerAgentTargets } from "@/lib/ai/ask/owner-agents";
 // Canonical shared result type — never re-declare locally (AGENTS.md invariant).
 import { type ActionResult, fail } from "@/lib/actions/result";
 
@@ -86,7 +89,7 @@ export async function createConversation(input: {
   firstMessage: string;
   boardId?: string;
   agentId?: string;
-}): Promise<ActionResult<{ conversationId: string }>> {
+}): Promise<ActionResult<{ conversationId: string; agentId: string | null }>> {
   const parsed = messageSchema.safeParse(input.firstMessage);
   if (!parsed.success) return fail("Message must be 1–4000 characters.");
 
@@ -100,6 +103,8 @@ export async function createConversation(input: {
     if (!board) return fail("Board not found.");
   }
 
+  const user = await requireUser();
+
   let agentId: string | null = null;
   if (input.agentId !== undefined) {
     const a = idSchema.safeParse(input.agentId);
@@ -110,7 +115,18 @@ export async function createConversation(input: {
     if (!agentId) return fail("Agent not found.");
   }
 
-  const user = await requireUser();
+  // An explicit `agentId` (the board dock, or a surface with a chosen persona)
+  // wins; otherwise a handle LEADING the first message picks the persona, which
+  // is what makes "@ops what slipped?" open a thread with Ops.
+  if (!agentId) {
+    const roster = await listOwnerAgentTargets(user.id);
+    agentId = resolveAddressedAgent({
+      text: parsed.data,
+      roster,
+      currentAgentId: null,
+    }).agentId;
+  }
+
   const org = await resolveActiveOrg();
   if (!org) return fail("No organization.");
 
@@ -154,6 +170,7 @@ export async function createConversation(input: {
     conversation_id: conv.data.id,
     role: "user",
     content: parsed.data,
+    agent_id: agentId,
   });
   if (msg.error) return fail("Couldn't save your message.");
 
@@ -161,7 +178,7 @@ export async function createConversation(input: {
   // flow, and revalidating the BOARD path would re-run getBoardPayload on every
   // send — the exact refetch working agreement #5 forbids (gotcha-09).
   if (!board) revalidatePath("/ask");
-  return { ok: true, data: { conversationId: conv.data.id } };
+  return { ok: true, data: { conversationId: conv.data.id, agentId } };
 }
 
 /**
@@ -211,22 +228,102 @@ export async function setThreadVisibility(input: {
   return { ok: true, data: { visibility: vis.data } };
 }
 
-/** Append a follow-up user message to an existing conversation. */
+/**
+ * Append a follow-up user message, and decide who answers it.
+ *
+ * The persona is re-derived HERE, server-side, from the message text and an
+ * RLS-scoped roster — the client's belief about which agent it addressed is
+ * never an input. A leading handle switches the thread; anything else inherits
+ * (see persona-routing.ts). The switch is written to the conversation row only
+ * when it IS a switch, so a habitual "@ops …" costs one insert, not two writes.
+ */
 export async function appendUserMessage(input: {
   conversationId: string;
   content: string;
-}): Promise<ActionResult<{ messageId: string }>> {
+}): Promise<ActionResult<{ messageId: string; agentId: string | null }>> {
   const content = messageSchema.safeParse(input.content);
   const id = idSchema.safeParse(input.conversationId);
   if (!content.success || !id.success) return fail("Invalid message.");
+
+  const user = await requireUser();
   const supabase = await createClient();
+
+  // Both reads are RLS-scoped: a thread that is not the caller's returns no
+  // rows, and the insert below would fail anyway.
+  const [roster, rows] = await Promise.all([
+    listOwnerAgentTargets(user.id),
+    getMessages(id.data),
+  ]);
+  const conv = await supabase
+    .from("ai_conversations")
+    .select("agent_id")
+    .eq("id", id.data)
+    .maybeSingle();
+
+  const { agentId, switched } = resolveAddressedAgent({
+    text: content.data,
+    roster,
+    currentAgentId: currentPersonaFrom(rows, conv.data?.agent_id ?? null),
+  });
+
   const { data, error } = await supabase
     .from("ai_messages")
-    .insert({ conversation_id: id.data, role: "user", content: content.data })
+    .insert({
+      conversation_id: id.data,
+      role: "user",
+      content: content.data,
+      agent_id: agentId,
+    })
     .select("id")
     .single();
   if (error || !data) return fail("Couldn't save your message.");
-  return { ok: true, data: { messageId: data.id } };
+
+  if (switched) {
+    // Best-effort: the message already records who was addressed, and
+    // `currentPersonaFrom` prefers it — so a failed column write costs the
+    // header chip a beat, never the routing.
+    await supabase
+      .from("ai_conversations")
+      .update({ agent_id: agentId })
+      .eq("id", id.data);
+  }
+
+  return { ok: true, data: { messageId: data.id, agentId } };
+}
+
+/**
+ * Put a different agent on duty for the rest of the thread — the header
+ * switcher, and the ONLY way back to the plain Monolith assistant (`null`).
+ * There is no magic handle for that: "monolith" and "none" are reserved and
+ * can never be an agent's handle (see agents/handle.ts · RESERVED_HANDLES).
+ *
+ * One targeted write, no revalidation: the rail does not render personas, and
+ * revalidating `/ask` here would re-run the page's reads for a chip
+ * (working agreement #5).
+ */
+export async function setConversationAgent(input: {
+  conversationId: string;
+  agentId: string | null;
+}): Promise<ActionResult<{ agentId: string | null }>> {
+  const id = idSchema.safeParse(input.conversationId);
+  if (!id.success) return fail("Invalid conversation.");
+
+  let agentId: string | null = null;
+  if (input.agentId !== null) {
+    const a = idSchema.safeParse(input.agentId);
+    if (!a.success) return fail("Invalid agent.");
+    agentId = await ownedAgentId(a.data);
+    // Fails CLOSED, with one message for "not yours" and "not there" alike.
+    if (!agentId) return fail("Agent not found.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("ai_conversations")
+    .update({ agent_id: agentId })
+    .eq("id", id.data);
+  if (error) return fail("Couldn't switch agent.");
+  return { ok: true, data: { agentId } };
 }
 
 /**
