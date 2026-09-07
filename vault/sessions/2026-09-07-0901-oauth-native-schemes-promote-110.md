@@ -67,10 +67,15 @@ Confirmed by the owner on 2026-09-07: Grok bot connected end-to-end.
 
 ## Open threads
 
-- Three `_draft-*.md` stubs from other sessions remain in `vault/sessions/`
-  (`2026-09-04-0904`, `2026-09-05-0919`, `2026-09-05-1119`) — the Spec 3 build sessions never
-  wrapped up. Fold or delete them when those sessions' work is written up; this wrapup left them
-  untouched rather than claiming work it did not do.
+- **Closed after the wrapup:** the four `_draft-*.md` stubs (`2026-09-04-0904`, `2026-09-05-0919`,
+  `2026-09-05-1119`, `2026-09-07-0433`) were deleted. Each was a pure Stop-hook stub — a `git diff
+--stat` and `(fill in)` placeholders, no human prose — and the work they stubbed is committed and,
+  for Spec 3, written up here.
+- **Also committed after the wrapup** (`ce3c14c3`): the 2026-08-27 correction to
+  `supabase/fixtures/tier2-fixture-users.dev-only.sql` and decision-31, which had sat uncommitted in
+  the working tree. It records that `/sync-prod`'s **data** phase carries the fixture accounts into
+  PROD regardless of the `fixtures/` vs `migrations/` placement the files used to claim protected
+  them — the accounts were found live in PROD and deleted that day.
 - `/updates` coverage still flags **2026-08-24** (the agent reference-documents build day). Its
   announcements ride a later date, so this is the known date-bucket noise, not a gap.
 - The `http:` non-loopback redirect case (plaintext remote callback) is still accepted — out of
