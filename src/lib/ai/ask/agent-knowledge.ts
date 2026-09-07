@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
+import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 import { listDocumentsForAgent } from "@/lib/agents/documents-db";
 import { listMemoryForAgent } from "@/lib/agents/memory-db";
 import {
@@ -15,13 +16,6 @@ import {
   buildMemoryBlock,
   composeSystemPrompt,
 } from "@/lib/agents/document-inject";
-
-/** Neutralise a name interpolated inline: no newlines to start a fresh
- *  instruction line, no angle brackets to open or close a block. Same stance as
- *  `persona.ts` · sanitizeInline, which this replaces for agent turns. */
-function sanitizeInline(text: string): string {
-  return text.replace(/[\r\n]+/g, " ").replace(/[<>]/g, "");
-}
 
 /**
  * The system prompt for a chat turn answered BY AN AGENT.

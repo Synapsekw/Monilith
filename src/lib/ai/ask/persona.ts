@@ -1,13 +1,4 @@
-/**
- * Neutralise a string bound for a single line of the system prompt: strip
- * newlines (which would let the text start a fresh line the model could read
- * as a new instruction) and angle brackets (which would let it open or close
- * a delimiter block). Used for any user-authored `name` field interpolated
- * inline.
- */
-function sanitizeInline(text: string): string {
-  return text.replace(/[\r\n]+/g, " ").replace(/[<>]/g, "");
-}
+import { sanitizeInline } from "@/lib/ai/prompt-sanitize";
 
 /**
  * Tell the model which board the user is looking at.
