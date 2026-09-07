@@ -15,6 +15,7 @@ const BOARD_1 = "11111111-1111-4111-8111-111111111111";
 const BOARD_2 = "22222222-2222-4222-8222-222222222222";
 const ITEM = "33333333-3333-4333-8333-333333333333";
 const GROUP = "44444444-4444-4444-8444-444444444444";
+const COLUMN = "55555555-5555-4555-8555-555555555555";
 
 function descriptor(scope: ToolScope): ToolDescriptor {
   return {
@@ -156,12 +157,14 @@ describe("resolveTargetBoardId", () => {
       const c = client({
         items: { org_id: "o1", board_id: BOARD_1 },
         groups: { board_id: BOARD_1 },
+        columns: { board_id: BOARD_1 },
       });
       await expect(
         resolveTargetBoardId(c, descriptor(scope), {
           boardId: BOARD_1,
           itemId: ITEM,
           groupId: GROUP,
+          columnId: COLUMN,
         }),
       ).resolves.toBe(scope === "none" ? null : BOARD_1);
     }
