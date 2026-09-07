@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-07 17:26",
+  "updated": "2026-09-07 19:04",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -120,8 +120,8 @@
     {
       "name": "AI & agents",
       "pct": 99,
-      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, a personal reference-document library and agent memory — and now Spec 3: agents delegate to agents with depth and fan-out enforced in the claim RPC, @handle addresses an agent from an item update, from mentions and in Ask, run history shows a nested run tree with subtree token totals, and the bot label is a per-org assistant name.",
-      "left": "E6 Stripe, blocked on a test-mode key. Agent memory (2c) and delegation (Spec 3) are both shipped but inert until an admin opens the org ceiling — verified 2026-09-07: 0 of 9 orgs carry either capability."
+      "have": "Ask + item assist, four write verbs reachable in production, a board thread dock, the provider & model layer, an agent runtime with capability grants and durable proposals, a personal reference-document library, agent memory, agent-to-agent delegation with depth and fan-out enforced in the claim RPC — and now the Agents page: a leading @handle routes a turn and sticks, a header chip switches who is answering, every answer is attributed, and an agent brings its own documents and memory into a chat answer.",
+      "left": "E6 Stripe, blocked on a test-mode key. Agent memory (2c), delegation (Spec 3) and the MCP write surface are all shipped but inert until an admin opens the org ceiling — verified 2026-09-07: 0 of 9 orgs carry any of those capabilities. The Agents page is the exception: it is live for every user."
     },
     {
       "name": "Platform & craft",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "1a5073eb",
+        "value": "9cc71045",
         "tone": "ok",
-        "note": "Even with main. 1a5073eb is the -s ours heal commit recording main as an ancestor; unpromoted delta 0. task/agents-page is the only live worktree, on a separate track."
+        "note": "Even with main. 9cc71045 is the -s ours heal commit recording main as an ancestor; unpromoted delta 0. No live worktrees — task/agents-page and task/rail-buckets both merged and deleted."
       },
       {
         "name": "main",
-        "value": "7556df77",
+        "value": "4dba7aaa",
         "tone": "ok",
-        "note": "PR #114 merged 2026-09-07 — the MCP write surface, 39 commits, catalog 24 to 35 tools. Preceded by PR #113 (Smart Fill de-flake), PR #111 (docs/changelog only) and PR #110 (Spec 3 plus the native-client OAuth fix)."
+        "note": "PR #115 merged 2026-09-07 — the Agents page, 25 commits: sticky @handle routing, an agent switcher, per-turn attribution, agent documents and memory in chat, and a rail split into chats and briefings with collapsible age buckets. Preceded by PR #114 (the MCP write surface, 39 commits)."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving 7556df77. Verified live: Vercel state=success, main CI green (run 34125939429). The new write surface is deployed but INERT — board.structure and board.destroy are in 0 of 9 org ceilings, so every structure write is denied until an admin opens it."
+        "note": "Serving 4dba7aaa. Verified live: Vercel state=success, www.monolith.works 200, /updates 200. Unlike the three promotions before it, this one is reachable by every user on arrival — no org ceiling gates it — so /updates carries six entries for it."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "Green on develop, on PR #113 and on main. One flaky test (SmartFillDialog classify-error) turned main red after PR #111 and is now fixed at the source of the race: 15/15 consecutive passes under CPU load, mutation-checked against four component regressions.",
+        "note": "6976 tests green on develop and on PR #115. The Agents page added 23 tests in its final fix wave alone, each proven to fail against the reverted source.",
         "label": "test"
       },
       {
@@ -180,9 +180,9 @@
       },
       {
         "name": "ledger",
-        "value": "156/156",
+        "value": "158/158",
         "tone": "ok",
-        "note": "Verified by db:ledger-check at promotion time. The Spec 3 run-graph migrations were already applied to DEV, which the production deployment reads.",
+        "note": "Verified by db:ledger-check at promotion time. Includes ai_messages.agent_id plus the two partial rail indexes the split chats/briefings reads are served by.",
         "label": "ledger"
       }
     ]
