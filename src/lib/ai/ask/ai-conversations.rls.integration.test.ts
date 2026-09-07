@@ -189,5 +189,54 @@ describe.skipIf(!integrationTargetReady())(
       });
       expect(error).not.toBeNull();
     });
+
+    // ── ai_messages.agent_id rides on the same conversation-ownership check ──
+    // The column carries no policy of its own (see the migration comment), so
+    // this pins down that the inherited `ai_messages` policy actually covers
+    // it: a non-owner can neither read nor stamp it on someone else's turn.
+    it("a non-owner cannot read or stamp agent_id on someone else's turn", async () => {
+      const { owner, stranger, orgId } = await proposalPair();
+      const conversationId = await createConversationFor(owner, orgId);
+
+      const agentIns = await owner.anon
+        .from("user_agents")
+        .insert({
+          org_id: orgId,
+          owner_id: owner.id,
+          name: `rls-ask-agent-${randomUUID().slice(0, 8)}`,
+          template_id: "custom",
+          instructions: "Answer questions about the roadmap.",
+        })
+        .select("id")
+        .single();
+      expect(agentIns.error).toBeNull();
+      const agentId = agentIns.data!.id;
+
+      // Owner can stamp their own agent onto their own turn.
+      const ownerMsg = await owner.anon.from("ai_messages").insert({
+        conversation_id: conversationId,
+        role: "user",
+        content: "hello",
+        agent_id: agentId,
+      });
+      expect(ownerMsg.error).toBeNull();
+
+      // Stranger cannot SEE agent_id (or the row at all) on owner's thread.
+      const { data: read } = await stranger.anon
+        .from("ai_messages")
+        .select("id, agent_id")
+        .eq("conversation_id", conversationId);
+      expect(read ?? []).toEqual([]);
+
+      // Stranger cannot INSERT a turn stamped with owner's agent into owner's
+      // conversation.
+      const { error } = await stranger.anon.from("ai_messages").insert({
+        conversation_id: conversationId,
+        role: "user",
+        content: "hijack",
+        agent_id: agentId,
+      });
+      expect(error).not.toBeNull();
+    });
   },
 );
