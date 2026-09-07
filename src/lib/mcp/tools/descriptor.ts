@@ -77,11 +77,14 @@ export type ToolDescriptor = {
  *  most restrictive stated grant, never `null`. */
 function mostRestrictive(
   map: Record<string, AgentCapability | null>,
-): AgentCapability | null {
+): AgentCapability {
   const values = Object.values(map).filter(
     (v): v is AgentCapability => v !== null,
   );
-  if (values.length === 0) return null;
+  // An empty or all-null map is a DECLARATION BUG, not a read. Fail closed to
+  // the most restrictive grant an owner can withhold, so an action nobody
+  // named is denied rather than executed ungated.
+  if (values.length === 0) return "board.destroy";
   if (values.includes("board.destroy")) return "board.destroy";
   if (values.includes("board.structure")) return "board.structure";
   return values[0]!;

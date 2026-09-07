@@ -69,6 +69,17 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
     expect(byName.get("create_item")?.scope).toBe("groupId");
     expect(byName.get("list_boards")?.scope).toBe("none");
   });
+
+  // Guards the fail-closed property in `mostRestrictive`: an empty map would
+  // make EVERY action on that tool resolve to its fallback rather than a
+  // declared grant, silently. A future descriptor must not ship one.
+  it("declares no empty capability map", () => {
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      if (d.capability !== null && typeof d.capability === "object") {
+        expect(Object.keys(d.capability).length, d.name).toBeGreaterThan(0);
+      }
+    }
+  });
 });
 
 const mapped: ToolDescriptor = {
@@ -92,11 +103,34 @@ describe("capabilityFor", () => {
     expect(capabilityFor(scalar, { action: "whatever" })).toBe("board.write");
   });
 
+  // A genuine capability-free read (e.g. describe_schema) must still pass
+  // through as null — only the MAP path is hardened to fail closed.
+  it("passes a scalar null capability through unchanged", () => {
+    const scalar = { ...mapped, capability: null } as ToolDescriptor;
+    expect(capabilityFor(scalar, { action: "whatever" })).toBeNull();
+  });
+
   // THE safety property. Returning null for an unknown action would classify
   // it as a capability-free READ and let it execute ungated.
   it("fails closed on an action absent from the map", () => {
     expect(capabilityFor(mapped, { action: "nonsense" })).toBe("board.destroy");
     expect(capabilityFor(mapped, {})).toBe("board.destroy");
+  });
+
+  // An empty or all-null map is a DECLARATION BUG (an action added to a
+  // handler's union without a matching capability entry), not a read. It
+  // must fail closed rather than let an unnamed action execute ungated.
+  it("fails closed on an all-null capability map", () => {
+    const allNull = {
+      ...mapped,
+      capability: { a: null, b: null },
+    } as ToolDescriptor;
+    expect(capabilityFor(allNull, { action: "nonsense" })).not.toBeNull();
+  });
+
+  it("fails closed on an empty capability map", () => {
+    const empty = { ...mapped, capability: {} } as ToolDescriptor;
+    expect(capabilityFor(empty, { action: "nonsense" })).not.toBeNull();
   });
 });
 
