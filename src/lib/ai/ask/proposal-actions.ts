@@ -10,6 +10,7 @@ import type { ValidatedAction, ExecutionResult } from "@/lib/ai/write/schema";
 // only at `pnpm build`. BoardEffect lives in a plain module both sides import.
 import type { BoardEffect } from "@/lib/ai/write/effects";
 import { parseToolTrace, type AskToolTrace } from "./tool-trace";
+import { getMessages, currentPersonaFrom } from "@/lib/ai/ask/conversations";
 // Canonical shared result type — never re-declare locally (AGENTS.md invariant).
 import { fail, type ActionResult } from "@/lib/actions/result";
 import type { Json } from "@/types/database.types";
@@ -34,8 +35,7 @@ export type ProposalOutcome = {
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 type Loaded =
-  | { ok: true; actions: ValidatedAction[] }
-  | { ok: false; error: string };
+  { ok: true; actions: ValidatedAction[] } | { ok: false; error: string };
 
 /**
  * Read a proposal turn back through RLS and refuse anything already resolved.
@@ -80,6 +80,29 @@ async function loadProposal(
 }
 
 /**
+ * WHO ANSWERS the outcome turn — the identical resolution the streaming route
+ * uses for a live turn (`src/app/api/ask/route.ts`, "WHO ANSWERS": the last
+ * user turn's `agent_id` wins over `ai_conversations.agent_id`). Reusing
+ * `currentPersonaFrom` here — not a second algorithm — is what keeps an
+ * approve/cancel outcome from ever disagreeing with a live turn about whose
+ * thread this is. Without this, `insertOutcome` wrote no `agent_id` at all:
+ * the row landed NULL, so a reload re-labelled the turn "Monolith" even
+ * though the UI had shown the right agent all session.
+ */
+async function resolvePersonaAgentId(
+  supabase: SupabaseClient,
+  conversationId: string,
+): Promise<string | null> {
+  const conv = await supabase
+    .from("ai_conversations")
+    .select("agent_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  const allRows = await getMessages(conversationId);
+  return currentPersonaFrom(allRows, conv.data?.agent_id ?? null);
+}
+
+/**
  * Append the outcome as a real assistant turn rather than updating the proposal
  * row. Two independent reasons: `ai_messages` has no UPDATE policy (RLS
  * default-deny, and this is user-owned content so the service client is the
@@ -92,6 +115,7 @@ async function insertOutcome(
   content: string,
   trace: AskToolTrace,
   effects: BoardEffect[],
+  agentId: string | null,
 ): Promise<ActionResult<ProposalOutcome>> {
   const ins = await supabase
     .from("ai_messages")
@@ -103,6 +127,7 @@ async function insertOutcome(
       // by askToolTraceSchema, so this cast is a serialization detail, not a
       // loosening of types. `effects` is NOT part of it, by design.
       tool_trace: trace as unknown as Json,
+      agent_id: agentId,
     })
     .select("id")
     .single();
@@ -156,6 +181,10 @@ export async function applyAskProposal(input: {
     const supabase = await createClient();
     const loaded = await loadProposal(supabase, conversationId, messageId);
     if (!loaded.ok) return fail(loaded.error);
+    const personaAgentId = await resolvePersonaAgentId(
+      supabase,
+      conversationId,
+    );
 
     // `results` is persisted in the trace; `effects` are the rows the writes
     // produced, returned transiently so the client can render them with NO
@@ -174,6 +203,7 @@ export async function applyAskProposal(input: {
       outcomeContent(loaded.actions, results),
       { resolvesProposal: messageId, outcome: "applied", results },
       effects,
+      personaAgentId,
     );
   } catch {
     return fail("Couldn't apply that action. Please try again.");
@@ -199,6 +229,10 @@ export async function cancelAskProposal(input: {
     const supabase = await createClient();
     const loaded = await loadProposal(supabase, conversationId, messageId);
     if (!loaded.ok) return fail(loaded.error);
+    const personaAgentId = await resolvePersonaAgentId(
+      supabase,
+      conversationId,
+    );
 
     return await insertOutcome(
       supabase,
@@ -207,6 +241,7 @@ export async function cancelAskProposal(input: {
       { resolvesProposal: messageId, outcome: "cancelled" },
       // A cancel changes nothing, so it carries no effects.
       [],
+      personaAgentId,
     );
   } catch {
     return fail("Couldn't cancel that. Please try again.");
