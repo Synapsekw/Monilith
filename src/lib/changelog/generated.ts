@@ -5,6 +5,20 @@ import type { ChangelogEntry } from "./types";
 export const GENERATED: ChangelogEntry[] = [
   {
     date: "2026-09-05",
+    kind: "new",
+    title: "Ask a specific agent by name",
+    description:
+      "Type @ followed by an agent's handle at the start of a question in Ask, and that agent answers in its own voice with its own instructions.",
+  },
+  {
+    date: "2026-09-05",
+    kind: "new",
+    title: "Name your organisation's assistant",
+    description:
+      "Admins can rename the built-in assistant in Settings, AI. The new name is what it posts under everywhere, including Autopilot.",
+  },
+  {
+    date: "2026-09-05",
     kind: "fixed",
     title: "Connect Monolith to your desktop AI tools",
     description:
