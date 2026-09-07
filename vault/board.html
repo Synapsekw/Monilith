@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-07 09:31",
+  "updated": "2026-09-07 11:05",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,21 +134,21 @@
     "stages": [
       {
         "name": "develop",
-        "value": "b5aca95c",
+        "value": "ddd2754c",
         "tone": "ok",
-        "note": "Even with main. b5aca95c is the -s ours heal commit that records main as an ancestor; unpromoted delta 0, no live worktrees."
+        "note": "Even with main. ddd2754c is the -s ours heal commit recording main as an ancestor; unpromoted delta 0, no live worktrees, no task/* branches."
       },
       {
         "name": "main",
-        "value": "dd11b086",
+        "value": "9066abdf",
         "tone": "ok",
-        "note": "PR #110 merged 2026-09-07, 33 commits — Spec 3 (agent delegation, @handle addressing, nested run tree, per-org assistant name) plus the native-client OAuth fix. Preceded by PR #109 (Settings hotfix) on 2026-09-05."
+        "note": "PR #113 merged 2026-09-07 — the Smart Fill de-flake, which took main CI from red back to green. Preceded by PR #111 (docs/changelog only, publishing Spec 3's /updates entries) and PR #110 (Spec 3 itself plus the native-client OAuth fix)."
       },
       {
         "name": "production",
         "value": "www.monolith.works",
         "tone": "ok",
-        "note": "Serving dd11b086. Verified live: Vercel state=success, main CI green, and POST /api/oauth/register returning the post-fix error string the old build could not produce. Owner then connected a native client (Grok bot) end to end."
+        "note": "Serving 9066abdf. Verified live: Vercel state=success, main CI green (run 34092721617), www.monolith.works 200 and /updates 200 serving “Ask a specific agent by name” dated September 5."
       }
     ],
     "gates": [
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "6437 unit tests green in the task worktree; finish-task re-ran all four gates against the rebased state, and PR #110 plus main CI were green.",
+        "note": "Green on develop, on PR #113 and on main. One flaky test (SmartFillDialog classify-error) turned main red after PR #111 and is now fixed at the source of the race: 15/15 consecutive passes under CPU load, mutation-checked against four component regressions.",
         "label": "test"
       },
       {
@@ -308,15 +308,15 @@
   ],
   "worktrees": [],
   "session": {
-    "id": "2026-09-07-0931-spec3-orchestration-eleven-task-build",
-    "when": "2026-09-07 09:31",
-    "title": "Spec 3 — orchestration and @handle addressing, scoped and built in eleven tasks",
+    "id": "2026-09-07-1105-promote-111-113-and-smartfill-deflake",
+    "when": "2026-09-07 11:05",
+    "title": "Two promotions and a de-flaked Smart Fill test",
     "bullets": [
-      "Scoped from /whats-next triage to a spec + plan, then built as 11 tasks across 4 worktree batches, each branch gated and merged one at a time.",
-      "Containment lives in the database: agent_run_claim is a SECURITY DEFINER RPC enforcing depth ≤1, fan-out ≤3, a 5-minute mention cooldown, the org daily cap and ownership under a row lock — the only path that may create a non-scheduled run.",
-      "One delegate tool taking {handle, task}, not one tool per agent: descriptorsFor throws on duplicate names, so per-agent tools would make the tool namespace a function of user text.",
-      "Four pre-existing defects fixed: handle NOT NULL with no default broke createAgent in the released code; the seed trigger granted EXECUTE to PUBLIC; finalizeRun updated two rows once runs shared a NULL hour; countRunsToday counted nested runs.",
-      "A supabase-dev MCP that was never approved for the project looked exactly like an agent stuck in a retry loop — the tool simply did not exist in the session."
+      "PR #111 published Spec 3's three /updates entries (9 commits, no source); /updates verified serving them live.",
+      "main CI then went red on ONE test with 732 files passing, on a tree that had gone green twice — no source in the delta, so a regression was ruled out by construction.",
+      "Root cause: a rejected async-transition action settles across TWO React commits. The alert paints first; isPending clears a turn later. The test read the first commit and found a still-pending “Classifying…” button.",
+      "Two false leads recorded: the component was fine (alerts are conditional), and an “empty” alert in a roles dump is an artifact — prettyRoles shallow-clones every node, so emptiness there is never evidence.",
+      "PR #113 promoted the fix; main CI green again, production live on 9066abdf."
     ]
   }
 }
