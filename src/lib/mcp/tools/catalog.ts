@@ -29,6 +29,11 @@ import { manageBoardDescriptor } from "./manage-board";
 import { manageGroupDescriptor } from "./manage-group";
 import { manageColumnDescriptor } from "./manage-column";
 import { manageViewDescriptor } from "./manage-view";
+import { manageDashboardDescriptor } from "./manage-dashboard";
+import { manageWidgetDescriptor } from "./manage-widget";
+import { manageGoalDescriptor } from "./manage-goal";
+import { managePortfolioDescriptor } from "./manage-portfolio";
+import { manageReportDescriptor } from "./manage-report";
 
 /**
  * Every MCP tool's descriptor, deliberately kept OUT of `register.ts`:
@@ -72,4 +77,11 @@ export const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
   manageGroupDescriptor,
   manageColumnDescriptor,
   manageViewDescriptor,
+  // The planning layer's write half — appended so the read tools keep their
+  // existing positions in the listing a connected client sees.
+  manageDashboardDescriptor,
+  manageWidgetDescriptor,
+  manageGoalDescriptor,
+  managePortfolioDescriptor,
+  manageReportDescriptor,
 ];

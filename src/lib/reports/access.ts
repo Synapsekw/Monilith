@@ -2,8 +2,10 @@ import "server-only";
 import { getBoardAccess, deriveBoardAccess } from "@/lib/boards/queries";
 import { getUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database.types";
 import {
-  resolveReportBoardIds,
+  resolveReportBoardIdsCore,
   type ReportRow,
   type ReportScope,
 } from "@/lib/reports/queries";
@@ -118,10 +120,29 @@ export async function resolveReportAccess(
   }
 
   const supabase = await createClient();
+  return resolveReportAccessCore(supabase, report, user.id);
+}
+
+/**
+ * Client-injected core of {@link resolveReportAccess}.
+ *
+ * The cookie wrapper above resolves the caller from `getUser()` and the client
+ * from `createClient()`; an MCP request has neither — it carries an OAuth
+ * bearer token resolved to a bridged client and an actor id already known from
+ * the token. Both are parameters here, so `manage_report` gates its writes on
+ * exactly the predicate the Server Actions gate on, rather than a second
+ * implementation that could drift permissive.
+ */
+export async function resolveReportAccessCore(
+  supabase: SupabaseClient<Database>,
+  report: ReportRow & { createdBy?: string | null },
+  userId: string,
+): Promise<ReportAccess> {
+  const user = { id: userId };
 
   // Round trip 1: membership + creator + org role, all independent.
   const [boardIds, createdBy, isOrgAdmin] = await Promise.all([
-    resolveReportBoardIds(report),
+    resolveReportBoardIdsCore(supabase, report),
     report.createdBy !== undefined
       ? Promise.resolve(report.createdBy)
       : supabase

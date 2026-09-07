@@ -4,125 +4,71 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { typedRpc } from "@/lib/supabase/typed-rpc";
 import { getBoardStatusColumns, type StatusColumn } from "@/lib/goals/queries";
 import {
+  createGoalCore,
+  deleteGoalCore,
+  setGoalLinksCore,
+  updateGoalCore,
+} from "@/lib/goals/core";
+import type {
   createGoalSchema,
   deleteGoalSchema,
   setGoalLinksSchema,
   updateGoalSchema,
 } from "@/lib/validations/goals";
-import type { Tables, TablesUpdate } from "@/types/database.types";
+import type { Tables } from "@/types/database.types";
 import { fail, type ActionResult } from "@/lib/actions/result";
+
+/**
+ * Cookie-bound wrappers. Each supplies the request's RLS client to its core in
+ * `./core` and then does the one thing a core must not: revalidate this
+ * deployment's routes. `manage_goal` over MCP calls the same cores with a
+ * bridged client.
+ */
 
 export async function createGoal(
   input: z.input<typeof createGoalSchema>,
 ): Promise<ActionResult<{ goal: Tables<"goals"> }>> {
-  const parsed = createGoalSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const d = parsed.data;
-
   const supabase = await createClient();
-  const { data, error } = await typedRpc(supabase, "create_goal", {
-    p_name: d.name,
-    p_progress_mode: d.progressMode,
-    p_owner_id: d.ownerId ?? null,
-    p_parent_goal_id: d.parentGoalId ?? null,
-    p_workspace_id: d.workspaceId ?? null,
-    p_status: d.status ?? null,
-    p_start_value: d.startValue ?? null,
-    p_current_value: d.currentValue ?? null,
-    p_target_value: d.targetValue ?? null,
-    p_unit: d.unit ?? null,
-    p_percent: d.percent ?? null,
-    p_start_date: d.startDate ?? null,
-    p_due_date: d.dueDate ?? null,
-  });
-  if (error || !data) return fail(error?.message ?? "Could not create goal.");
+  const res = await createGoalCore(supabase, input);
+  if (!res.ok) return res;
 
   revalidatePath("/goals");
-  return { ok: true, data: { goal: data as Tables<"goals"> } };
+  return res;
 }
 
 export async function updateGoal(
   input: z.input<typeof updateGoalSchema>,
 ): Promise<ActionResult<{ goal: Tables<"goals"> }>> {
-  const parsed = updateGoalSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-  const d = parsed.data;
-
-  const patch: TablesUpdate<"goals"> = {};
-  if ("name" in input) patch.name = d.name;
-  if ("description" in input) patch.description = d.description;
-  if ("ownerId" in input) patch.owner_id = d.ownerId;
-  if ("parentGoalId" in input) patch.parent_goal_id = d.parentGoalId;
-  if ("workspaceId" in input) patch.workspace_id = d.workspaceId;
-  if ("progressMode" in input) patch.progress_mode = d.progressMode;
-  if ("status" in input) patch.status = d.status;
-  if ("startValue" in input) patch.start_value = d.startValue;
-  if ("currentValue" in input) patch.current_value = d.currentValue;
-  if ("targetValue" in input) patch.target_value = d.targetValue;
-  if ("unit" in input) patch.unit = d.unit;
-  if ("percent" in input) patch.percent = d.percent;
-  if ("startDate" in input) patch.start_date = d.startDate;
-  if ("dueDate" in input) patch.due_date = d.dueDate;
-
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("goals")
-    .update(patch)
-    .eq("id", d.goalId)
-    .select()
-    .single();
-  if (error || !data) return fail(error?.message ?? "Could not update goal.");
-
   // NO revalidatePath("/goals"): a field blur reconciles the returned row into
   // the client tree (GoalsView.applyGoalPatch) for 0 refetches. Structural
   // edits (links/delete/reorder) still revalidate — auto_boards rollups and
   // tree shape can't be patched client-side.
-  return { ok: true, data: { goal: data as Tables<"goals"> } };
+  return updateGoalCore(supabase, input);
 }
 
 export async function deleteGoal(
   input: z.input<typeof deleteGoalSchema>,
 ): Promise<ActionResult<null>> {
-  const parsed = deleteGoalSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("goals")
-    .delete()
-    .eq("id", parsed.data.goalId);
-  if (error) return fail(error.message);
+  const res = await deleteGoalCore(supabase, input);
+  if (!res.ok) return res;
 
   revalidatePath("/goals");
-  return { ok: true, data: null };
+  return res;
 }
 
 export async function setGoalLinks(
   input: z.input<typeof setGoalLinksSchema>,
 ): Promise<ActionResult<null>> {
-  const parsed = setGoalLinksSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
   const supabase = await createClient();
-  const { error } = await typedRpc(supabase, "set_goal_links", {
-    p_goal_id: parsed.data.goalId,
-    p_links: parsed.data.links.map((l) => ({
-      board_id: l.boardId,
-      done_column_id: l.doneColumnId,
-      done_option_ids: l.doneOptionIds,
-    })),
-  });
-  if (error) return fail(error.message);
+  const res = await setGoalLinksCore(supabase, input);
+  if (!res.ok) return res;
 
   revalidatePath("/goals");
-  return { ok: true, data: null };
+  return res;
 }
 
 export async function getStatusColumnsForBoard(
