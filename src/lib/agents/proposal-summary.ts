@@ -153,6 +153,32 @@ const TYPE_TOKEN = /^[a-z][a-z0-9_]{0,31}$/;
  *  "the card conceals what it does" failure this branch exists to fix. */
 const MAX_LISTED_ACTIONS = 6;
 
+/**
+ * Fixed enum vocabularies from the dispatch tools' own schemas
+ * (`manage-view.ts`'s `viewKind`, `manage-widget.ts`'s `widgetKindSchema`,
+ * `manage-report.ts`'s `reportScope`). Each is a closed, short, lowercase
+ * token set, so — exactly like `TYPE_TOKEN` above — a value that matches is
+ * admitted by SHAPE and interpolated unquoted; anything else cannot describe
+ * the call and is dropped rather than rendered.
+ */
+const VIEW_KINDS = new Set(["table", "kanban", "calendar", "timeline"]);
+const WIDGET_KINDS = new Set([
+  "number",
+  "chart",
+  "battery",
+  "list",
+  "completion",
+  "health",
+]);
+const REPORT_SCOPES = new Set(["board", "boards", "portfolio", "template"]);
+
+function enumToken(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+): string | undefined {
+  return typeof value === "string" && allowed.has(value) ? value : undefined;
+}
+
 function typeToken(value: unknown): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const type = (value as { type?: unknown }).type;
@@ -196,6 +222,67 @@ function webhookTargets(value: unknown): string[] {
     urls.push(url ? quoted(url) : "an unnamed address");
   }
   return urls;
+}
+
+/**
+ * The sentence for an automation's `create` — shared by the legacy
+ * `create_automation` tool name and `manage_automation`'s `action: "create"`
+ * dispatch, which replaced it in Wave 2. Kept as one function so the two
+ * call sites cannot render different wording for the same effect; see the
+ * `create_automation` case's own comment for why the old name still needs a
+ * branch at all.
+ */
+function automationCreateSentence(input: Record<string, unknown>): string {
+  const name = str(input, "name");
+  const opening = name
+    ? `Create the automation ${quoted(name)} on a board`
+    : "Create an automation on a board";
+  const trigger = typeToken(input.trigger);
+  const actions = actionTypes(input.actions);
+  // Degrade to the shape-only sentence rather than describe a rule this
+  // function could not read. Naming a trigger it is guessing at would be
+  // worse than naming none.
+  if (!trigger || !actions) return `${opening}.`;
+  const egress = webhookTargets(input.actions);
+  const sends =
+    egress.length > 0
+      ? ` It sends board and item data to ${egress.join(", ")}.`
+      : "";
+  return `${opening}: on ${trigger}, run ${actionsPhrase(actions)}.${sends}`;
+}
+
+/** The `manage_automation` `update` action mutates whichever of trigger /
+ *  actions / enabled / name the caller sent — never all of them — so the
+ *  sentence lists only the parts that are actually present in the input,
+ *  the same "state only what changed" shape `update_item` already uses. */
+function automationUpdateSentence(input: Record<string, unknown>): string {
+  const name = str(input, "name");
+  const opening = name
+    ? `Update the automation ${quoted(name)}`
+    : "Update an automation";
+  const trigger = typeToken(input.trigger);
+  const actions = actionTypes(input.actions);
+  const enabled =
+    typeof input.enabled === "boolean" ? input.enabled : undefined;
+  const parts: string[] = [];
+  if (trigger) parts.push(`its trigger to ${trigger}`);
+  if (actions) parts.push(`its actions to ${actionsPhrase(actions)}`);
+  if (enabled !== undefined)
+    parts.push(enabled ? "enabling it" : "disabling it");
+  if (parts.length === 0) return `${opening}.`;
+  const egress = webhookTargets(input.actions);
+  const sends =
+    egress.length > 0
+      ? ` It sends board and item data to ${egress.join(", ")}.`
+      : "";
+  return `${opening}, setting ${parts.join(", ")}.${sends}`;
+}
+
+/** `n` present things, or a fixed generic sentence when the input carries
+ *  none — the same "batch says how many" rule as `fieldsPhrase`, applied
+ *  where the sentence still has to hold up with zero of them. */
+function countPhrase(n: number, singular: string, plural: string): string {
+  return `${n} ${n === 1 ? singular : plural}`;
 }
 
 function str(input: Record<string, unknown>, key: string): string | undefined {
@@ -344,23 +431,323 @@ function sentenceFor(
     // everyone on the board, on every matching change, from now on. A card that
     // said only `Create the automation "X" on a board.` told the owner nothing
     // about what they were signing off — which is the whole job of this module.
-    case "create_automation": {
-      const name = str(input, "name");
-      const opening = name
-        ? `Create the automation ${quoted(name)} on a board`
-        : "Create an automation on a board";
-      const trigger = typeToken(input.trigger);
-      const actions = actionTypes(input.actions);
-      // Degrade to the shape-only sentence rather than describe a rule this
-      // function could not read. Naming a trigger it is guessing at would be
-      // worse than naming none.
-      if (!trigger || !actions) return `${opening}.`;
-      const egress = webhookTargets(input.actions);
-      const sends =
-        egress.length > 0
-          ? ` It sends board and item data to ${egress.join(", ")}.`
-          : "";
-      return `${opening}: on ${trigger}, run ${actionsPhrase(actions)}.${sends}`;
+    //
+    // `create_automation` was the tool's name before Wave 2 renamed it to
+    // `manage_automation` (an `action: "create"` dispatch call). A proposal row
+    // outlives the tool that produced it, so historical rows stored under the
+    // old name must still render — this branch stays, unchanged, for them —
+    // while `manage_automation`'s own "create" branch below calls the same
+    // helper so the two can never drift apart.
+    case "create_automation":
+      return automationCreateSentence(input);
+
+    // ---------------------------------------------------------------------
+    // Grouped-dispatch tools (Task 10). Each switches again on the
+    // validated `action` string; a shape it does not read falls through to
+    // the tool-level `Run <tool>.` fallback via `sentenceFor`'s own
+    // undefined return, exactly like every branch above.
+    // ---------------------------------------------------------------------
+
+    case "manage_board": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const name = str(input, "name");
+          return name
+            ? `Create a board called ${quoted(name)}.`
+            : "Create a board.";
+        }
+        case "rename": {
+          const name = str(input, "name");
+          return name
+            ? `Rename a board to ${quoted(name)}.`
+            : "Rename a board.";
+        }
+        case "duplicate":
+          return "Duplicate a board, with all of its groups, columns and items.";
+        case "archive":
+          return "Archive a board, moving it to Trash. You can restore it from there.";
+        case "restore":
+          return "Restore a board from Trash.";
+      }
+      break;
+    }
+
+    case "manage_group": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const n = count(input, "groups");
+          return n > 0
+            ? `Add ${countPhrase(n, "group", "groups")} to a board.`
+            : "Add one or more groups to a board.";
+        }
+        case "rename": {
+          const name = str(input, "name");
+          return name
+            ? `Rename a board group to ${quoted(name)}.`
+            : "Rename a board group.";
+        }
+        case "reorder":
+          return "Reorder a board group.";
+        case "recolor": {
+          const color = str(input, "color");
+          return color
+            ? `Recolor a board group to ${quoted(color)}.`
+            : "Recolor a board group.";
+        }
+        case "archive":
+          return (
+            "Archive a board group, moving it and its items to Trash. " +
+            "You can restore it from there."
+          );
+        case "restore":
+          return "Restore a board group from Trash.";
+      }
+      break;
+    }
+
+    case "manage_column": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const n = count(input, "columns");
+          return n > 0
+            ? `Add ${countPhrase(n, "column", "columns")} to a board.`
+            : "Add one or more columns to a board.";
+        }
+        case "rename": {
+          const name = str(input, "name");
+          return name
+            ? `Rename a column to ${quoted(name)}.`
+            : "Rename a column.";
+        }
+        case "configure":
+          return "Change a column's settings.";
+        case "reorder":
+          return "Reorder a column.";
+        case "resize": {
+          const width =
+            typeof input.width === "number" ? input.width : undefined;
+          return width !== undefined
+            ? `Resize a column to ${width}px.`
+            : "Resize a column.";
+        }
+        case "delete":
+          return (
+            "Delete a column. Its cell values go with it and this cannot " +
+            "be undone."
+          );
+        case "remove_option":
+          return (
+            "Remove an option from a column. Cells set to it lose that " +
+            "value and this cannot be undone."
+          );
+      }
+      break;
+    }
+
+    case "manage_item": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "archive":
+          return "Archive an item, moving it to Trash. You can restore it from there.";
+        case "restore":
+          return "Restore an item from Trash.";
+        case "move":
+          return "Move an item to another board group, along with its subitems.";
+        case "reorder":
+          return "Reorder an item within its group.";
+        case "add_subitem": {
+          const name = str(input, "name");
+          return name
+            ? `Add ${quoted(name)} as a subitem of an item.`
+            : "Add a subitem to an item.";
+        }
+      }
+      break;
+    }
+
+    case "manage_view": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const kind = enumToken(input.kind, VIEW_KINDS);
+          const name = str(input, "name");
+          if (kind && name)
+            return `Create a ${kind} view called ${quoted(name)} on a board.`;
+          if (kind) return `Create a ${kind} view on a board.`;
+          if (name) return `Create a view called ${quoted(name)} on a board.`;
+          return "Create a view on a board.";
+        }
+        case "update": {
+          const name = str(input, "name");
+          const hasConfig =
+            typeof input.config === "object" && input.config !== null;
+          if (name && hasConfig)
+            return `Rename a view to ${quoted(name)} and update its configuration.`;
+          if (name) return `Rename a view to ${quoted(name)}.`;
+          if (hasConfig) return "Update a view's configuration.";
+          return "Update a view.";
+        }
+        case "delete":
+          return "Delete a board view. This cannot be undone.";
+      }
+      break;
+    }
+
+    case "manage_dashboard": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const name = str(input, "name");
+          return name
+            ? `Create a dashboard called ${quoted(name)}.`
+            : "Create a dashboard.";
+        }
+        case "rename": {
+          const name = str(input, "name");
+          return name
+            ? `Rename a dashboard to ${quoted(name)}.`
+            : "Rename a dashboard.";
+        }
+        case "duplicate":
+          return "Duplicate a dashboard, copying its widgets into a new dashboard.";
+        case "delete":
+          return "Delete a dashboard and all of its widgets. This cannot be undone.";
+        case "save_layout": {
+          const n = count(input, "layout");
+          return n > 0
+            ? `Reposition ${countPhrase(n, "widget", "widgets")} on a dashboard.`
+            : "Reposition the widgets on a dashboard.";
+        }
+      }
+      break;
+    }
+
+    case "manage_widget": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const kind = enumToken(input.kind, WIDGET_KINDS);
+          const title = str(input, "title");
+          if (kind && title)
+            return `Add a ${kind} widget called ${quoted(title)} to a dashboard.`;
+          if (kind) return `Add a ${kind} widget to a dashboard.`;
+          return "Add a widget to a dashboard.";
+        }
+        case "update_config": {
+          const title = str(input, "title");
+          return title
+            ? `Rename a widget to ${quoted(title)}.`
+            : "Update a widget's configuration.";
+        }
+        case "delete":
+          return "Delete a widget from a dashboard. This cannot be undone.";
+      }
+      break;
+    }
+
+    case "manage_goal": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const name = str(input, "name");
+          return name
+            ? `Create a goal called ${quoted(name)}.`
+            : "Create a goal.";
+        }
+        case "update": {
+          const name = str(input, "name");
+          return name ? `Rename a goal to ${quoted(name)}.` : "Update a goal.";
+        }
+        case "set_links": {
+          const n = count(input, "links");
+          return n === 0
+            ? "Clear all board links from a goal."
+            : `Set the boards a goal's progress is tracked from, replacing ` +
+                `any existing links with ${countPhrase(n, "link", "links")}.`;
+        }
+        case "delete":
+          return "Delete a goal. This cannot be undone.";
+      }
+      break;
+    }
+
+    case "manage_portfolio": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const name = str(input, "name");
+          return name
+            ? `Create a portfolio called ${quoted(name)}.`
+            : "Create a portfolio.";
+        }
+        case "add_board":
+          return "Add a board to a portfolio.";
+        case "remove_board":
+          return (
+            "Remove a board from a portfolio. Its placement data in this " +
+            "portfolio (owner, priority, budget, health, notes) is deleted " +
+            "with it."
+          );
+        case "update_placement": {
+          const keys = [
+            "ownerUserId",
+            "priority",
+            "budget",
+            "healthOverride",
+            "statusNote",
+          ] as const;
+          const n = keys.filter((k) => input[k] !== undefined).length;
+          return n > 0
+            ? `Update ${fieldsPhrase(n)} on a board's placement in a portfolio.`
+            : "Update a board's placement in a portfolio.";
+        }
+      }
+      break;
+    }
+
+    case "manage_report": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create": {
+          const name = str(input, "name");
+          const scope = enumToken(input.scope, REPORT_SCOPES);
+          if (name && scope)
+            return `Create a ${scope} report called ${quoted(name)}.`;
+          if (name) return `Create a report called ${quoted(name)}.`;
+          return "Create a report.";
+        }
+        case "save": {
+          const name = str(input, "name");
+          return name
+            ? `Save a report as ${quoted(name)}, replacing its entire configuration.`
+            : "Save a report, replacing its entire configuration.";
+        }
+        case "set_scope": {
+          const scope = enumToken(input.scope, REPORT_SCOPES);
+          return scope
+            ? `Change a report's scope to ${scope}.`
+            : "Change what a report is bound to.";
+        }
+        case "delete":
+          return "Delete a report. This cannot be undone.";
+      }
+      break;
+    }
+
+    case "manage_automation": {
+      const action = typeof input.action === "string" ? input.action : "";
+      switch (action) {
+        case "create":
+          return automationCreateSentence(input);
+        case "update":
+          return automationUpdateSentence(input);
+        case "delete":
+          return "Delete the automation. It stops running immediately and cannot be undone.";
+      }
+      break;
     }
 
     // Memory proposals are what an UNGRANTED agent's `remember` call becomes,
