@@ -3,17 +3,16 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import {
-  updateAutomationSchema,
-  deleteAutomationSchema,
-} from "@/lib/validations/automations";
 import { listAutomations, type Automation } from "@/lib/boards/queries";
-import type { Json, Tables } from "@/types/database.types";
-import { actionsContainWebhook } from "@/lib/boards/automation-action-helpers";
+import type { Tables } from "@/types/database.types";
 import {
   createAutomationCore,
+  updateAutomationCore,
+  deleteAutomationCore,
   isOrgAdmin as isOrgAdminCore,
   type CreateAutomationCoreInput,
+  type UpdateAutomationCoreInput,
+  type DeleteAutomationCoreInput,
 } from "@/lib/boards/automation-core";
 import { fail, type ActionResult } from "@/lib/actions/result";
 
@@ -101,77 +100,37 @@ export async function createAutomation(
   return result;
 }
 
-export async function updateAutomation(input: {
-  id: string;
-  name?: string;
-  enabled?: boolean;
-  trigger?: unknown;
-  actions?: unknown;
-  condition?: unknown;
-}): Promise<ActionResult> {
-  const parsed = updateAutomationSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
+/**
+ * Thin cookie-bound wrapper over {@link updateAutomationCore}. Every rule —
+ * the webhook admin-gate included — lives in the core so `manage_automation`
+ * (the agent-only tool) cannot diverge from this action. Only `revalidatePath`
+ * stays here, same split as `createAutomation` above.
+ */
+export async function updateAutomation(
+  input: UpdateAutomationCoreInput,
+): Promise<ActionResult> {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (
-    parsed.data.actions !== undefined &&
-    actionsContainWebhook(parsed.data.actions)
-  ) {
-    const { data: row } = await supabase
-      .from("automations")
-      .select("org_id")
-      .eq("id", parsed.data.id)
-      .maybeSingle();
-    if (!row) return fail("Automation not found.");
-    if (!(await isOrgAdmin(supabase, row.org_id))) {
-      return fail("Webhook actions require an organization admin");
-    }
+  const result = await updateAutomationCore(supabase, input, user?.id ?? null);
+  if (result.ok) {
+    if (result.data.boardId) revalidatePath(`/boards/${result.data.boardId}`);
+    return { ok: true, data: undefined };
   }
-
-  const patch = {
-    ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-    ...(parsed.data.enabled !== undefined
-      ? { enabled: parsed.data.enabled }
-      : {}),
-    ...(parsed.data.trigger !== undefined
-      ? { trigger: parsed.data.trigger as unknown as Json }
-      : {}),
-    ...(parsed.data.actions !== undefined
-      ? { actions: parsed.data.actions as unknown as Json }
-      : {}),
-    ...(parsed.data.condition !== undefined
-      ? { condition: parsed.data.condition as unknown as Json }
-      : {}),
-  };
-
-  const { data, error } = await supabase
-    .from("automations")
-    .update(patch)
-    .eq("id", parsed.data.id)
-    .select("board_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (data?.board_id) revalidatePath(`/boards/${data.board_id}`);
-  return { ok: true, data: undefined };
+  return result;
 }
 
-export async function deleteAutomation(input: {
-  id: string;
-}): Promise<ActionResult> {
-  const parsed = deleteAutomationSchema.safeParse(input);
-  if (!parsed.success)
-    return fail(parsed.error.issues[0]?.message ?? "Invalid");
-
+/** Thin cookie-bound wrapper over {@link deleteAutomationCore}. */
+export async function deleteAutomation(
+  input: DeleteAutomationCoreInput,
+): Promise<ActionResult> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("automations")
-    .delete()
-    .eq("id", parsed.data.id)
-    .select("board_id")
-    .maybeSingle();
-  if (error) return fail(error.message);
-  if (data?.board_id) revalidatePath(`/boards/${data.board_id}`);
-  return { ok: true, data: undefined };
+  const result = await deleteAutomationCore(supabase, input);
+  if (result.ok) {
+    if (result.data.boardId) revalidatePath(`/boards/${result.data.boardId}`);
+    return { ok: true, data: undefined };
+  }
+  return result;
 }

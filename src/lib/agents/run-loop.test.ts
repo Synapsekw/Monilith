@@ -512,13 +512,13 @@ describe("buildAgentRuntime", () => {
   });
 
   // The AI SDK converts each tool's Zod schema to JSON Schema LAZILY, at the
-  // first model call — so `create_automation`'s schema (which is
-  // `createAutomationSchema.shape`, a discriminated-union-bearing shape nothing
-  // had ever converted) first gets exercised HERE, in the run loop, not when
+  // first model call — so `manage_automation`'s schema (which is built from
+  // `agentCreateAutomationSchema.shape`, a discriminated-union-bearing shape
+  // nothing had ever converted) first gets exercised HERE, in the run loop, not when
   // the descriptor is defined. A throw would otherwise surface for the first
   // time at 07:00 in production. This drives the REAL assembled tool set
   // through a real `generateText` and asserts every tool crossed the wire.
-  it("converts every assembled tool's schema for the model — including create_automation", async () => {
+  it("converts every assembled tool's schema for the model — including manage_automation", async () => {
     const { tools: assembled, gate } = runtime({});
     let offered: string[] = [];
     const model = new MockLanguageModelV4({
@@ -543,7 +543,7 @@ describe("buildAgentRuntime", () => {
     });
 
     expect(r.text).toBe("Nothing to do.");
-    expect(offered).toContain("create_automation");
+    expect(offered).toContain("manage_automation");
     expect(offered).toContain("create_file");
     // Every tool converted — no silent drop, no warning-only omission.
     expect(offered.sort()).toEqual(Object.keys(assembled).sort());

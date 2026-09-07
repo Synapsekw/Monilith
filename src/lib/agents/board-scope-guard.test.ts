@@ -16,6 +16,8 @@ const BOARD_2 = "22222222-2222-4222-8222-222222222222";
 const ITEM = "33333333-3333-4333-8333-333333333333";
 const GROUP = "44444444-4444-4444-8444-444444444444";
 const COLUMN = "55555555-5555-4555-8555-555555555555";
+const VIEW = "77777777-7777-4777-8777-777777777777";
+const AUTOMATION = "66666666-6666-4666-8666-666666666666";
 
 function descriptor(scope: ToolScope): ToolDescriptor {
   return {
@@ -144,7 +146,7 @@ describe("resolveTargetBoardId", () => {
 
   // Every catalog scope must be handled: a new ToolScope value would otherwise
   // fall through to `null` and silently opt its tools out of board scope. All
-  // 24 catalog descriptors carry a scalar `scope` today, but the field is
+  // catalog descriptors carry a scalar `scope` today, but the field is
   // typed to also allow a per-action `Record` (Task 2), so this collects
   // every LEAF value rather than assuming a scalar.
   const scopes = new Set(
@@ -158,6 +160,8 @@ describe("resolveTargetBoardId", () => {
         items: { org_id: "o1", board_id: BOARD_1 },
         groups: { board_id: BOARD_1 },
         columns: { board_id: BOARD_1 },
+        board_views: { board_id: BOARD_1 },
+        automations: { board_id: BOARD_1 },
       });
       await expect(
         resolveTargetBoardId(c, descriptor(scope), {
@@ -165,6 +169,8 @@ describe("resolveTargetBoardId", () => {
           itemId: ITEM,
           groupId: GROUP,
           columnId: COLUMN,
+          viewId: VIEW,
+          automationId: AUTOMATION,
         }),
       ).resolves.toBe(scope === "none" ? null : BOARD_1);
     }

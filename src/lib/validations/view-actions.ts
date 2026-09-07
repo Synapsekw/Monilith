@@ -19,10 +19,14 @@ export const viewKindSchema = z.enum([
   "timeline",
 ]);
 
-// Kanban config: a grouping column id (uuid) or null/absent.
-export const kanbanConfigSchema = z.object({
-  group_column_id: uuid.nullable().optional(),
-});
+// Kanban config: a grouping column id (uuid) or null/absent. `.strict()` so an
+// unrecognised key (e.g. a calendar/timeline field applied to the wrong kind)
+// is rejected rather than silently stripped — see `updateBoardViewCore`.
+export const kanbanConfigSchema = z
+  .object({
+    group_column_id: uuid.nullable().optional(),
+  })
+  .strict();
 
 // Calendar config: the date column id to use (uuid) or null/absent.
 export const calendarConfigSchema = z
@@ -33,12 +37,15 @@ export const calendarConfigSchema = z
 
 // Timeline config: start date column id, optional end date column id,
 // optional color-by column id (status/dropdown), and optional zoom level.
-export const timelineConfigSchema = z.object({
-  date_column_id: dateSourceId.nullable().optional(),
-  end_column_id: dateSourceId.nullable().optional(),
-  color_column_id: z.string().uuid().nullable().optional(),
-  zoom: z.enum(["week", "month", "quarter", "year"]).optional(),
-});
+// `.strict()` for the same reason as kanbanConfigSchema above.
+export const timelineConfigSchema = z
+  .object({
+    date_column_id: dateSourceId.nullable().optional(),
+    end_column_id: dateSourceId.nullable().optional(),
+    color_column_id: z.string().uuid().nullable().optional(),
+    zoom: z.enum(["week", "month", "quarter", "year"]).optional(),
+  })
+  .strict();
 
 /** Return the Zod schema for the per-kind config object. */
 export function configSchemaForKind(kind: string): z.ZodTypeAny {

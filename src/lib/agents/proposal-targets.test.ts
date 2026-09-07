@@ -89,9 +89,12 @@ describe("withResolvedTargets", () => {
     });
     const [p] = await withResolvedTargets(client, [
       row({
-        toolName: "create_automation",
+        toolName: "manage_automation",
         capability: "automation.create",
-        input: { boardId: BOARD },
+        // `manage_automation` is a grouped-dispatch tool: its `scope` is a
+        // per-action Record, so `scopeFor` needs the row's own `action` to
+        // resolve `create` → `boardId`.
+        input: { action: "create", boardId: BOARD },
       }),
     ]);
     expect(p!.target).toEqual({ kind: "board", name: "Marketing" });
@@ -119,7 +122,10 @@ describe("withResolvedTargets", () => {
       row({ toolName: "update_item", input: { itemId: ITEM } }),
       row({ toolName: "attach_file", input: { itemId: OTHER_ITEM } }),
       row({ toolName: "create_file", input: { itemId: ITEM } }),
-      row({ toolName: "create_automation", input: { boardId: BOARD } }),
+      row({
+        toolName: "manage_automation",
+        input: { action: "create", boardId: BOARD },
+      }),
     ]);
     expect(reads).toHaveLength(2);
     expect(reads.map((r) => r.table).sort()).toEqual(["boards", "items"]);
