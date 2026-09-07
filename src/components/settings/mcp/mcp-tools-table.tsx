@@ -85,7 +85,15 @@ export const TOOL_PROSE: Record<ToolName, string> = {
 
 export const MCP_TOOLS_TABLE_ROWS = ALL_TOOL_DESCRIPTORS.map((d) => ({
   name: d.name,
-  access: d.capability === null ? ("read" as const) : ("write" as const),
+  // A dispatch tool's `capability` is a Record. `=== null` would be false for
+  // it and the ternary would read "write" by luck rather than by rule — and
+  // would read "read" by luck if the field were ever `{}`. Be explicit.
+  access:
+    d.capability === null ||
+    (typeof d.capability === "object" &&
+      Object.values(d.capability).every((c) => c === null))
+      ? ("read" as const)
+      : ("write" as const),
   what: TOOL_PROSE[d.name],
 }));
 

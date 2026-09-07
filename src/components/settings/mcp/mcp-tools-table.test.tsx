@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { McpToolsTable, MCP_TOOLS_TABLE_ROWS } from "./mcp-tools-table";
+import {
+  McpToolsTable,
+  MCP_TOOLS_TABLE_ROWS,
+  TOOL_PROSE,
+} from "./mcp-tools-table";
 import { registerTools } from "@/lib/mcp/tools/register";
 import { ALL_TOOL_DESCRIPTORS } from "@/lib/mcp/tools/catalog";
 
@@ -53,36 +57,29 @@ function deriveRegisteredToolNames(): string[] {
 
 describe("McpToolsTable", () => {
   it("carries consent prose for every registered tool", () => {
-    // Deliberately loosened from an exact key-set comparison between
-    // `TOOL_PROSE` and `ALL_TOOL_DESCRIPTORS` for the duration of the MCP
-    // write-surface plan (docs/superpowers/plans/2026-09-07-mcp-write-surface.md),
-    // whose tasks add tools to `ALL_TOOL_DESCRIPTORS` across several
-    // concurrent branches. Instead of pinning the frozen key set, this
-    // checks the property that actually matters: no registered tool renders
-    // with empty prose. A newly added tool with no `TOOL_PROSE` entry still
-    // fails this — it is a stronger check than set-equality, not weaker — it
-    // just no longer requires every branch to touch this exact key set in
-    // lockstep. The plan's Task 11 re-pins the exact key-set comparison.
+    // Exact key-set comparison: `TOOL_PROSE` must have exactly one entry per
+    // descriptor in `ALL_TOOL_DESCRIPTORS` — no missing entry (which the type
+    // annotation alone cannot catch, see the comment on `TOOL_PROSE`) and no
+    // stale entry left behind for a tool that no longer exists.
+    const proseNames = Object.keys(TOOL_PROSE).sort();
+    const descriptorNames = ALL_TOOL_DESCRIPTORS.map((d) => d.name).sort();
+    expect(proseNames).toEqual(descriptorNames);
+
     for (const row of MCP_TOOLS_TABLE_ROWS)
       expect((row.what ?? "").length).toBeGreaterThan(0);
   });
 
   it("derives every tool's access from its capability, in both directions", () => {
-    // The exact write LIST is no longer pinned here — that would collide on
-    // every branch of the MCP write-surface plan
-    // (docs/superpowers/plans/2026-09-07-mcp-write-surface.md), whose tasks
-    // add tools to this catalog across several concurrent branches. Instead
-    // of freezing the list, this derives the expected classification
-    // independently from each descriptor's `capability` (`access` in
-    // `mcp-tools-table.tsx` is computed FROM `capability`, not hand-written)
-    // and asserts every row agrees: a descriptor whose capability is `null`,
-    // or whose capability map (a grouped-dispatch tool, keyed by action) has
-    // `null` for every action, must render as "read"; every other descriptor
-    // must render as "write". Looping over `ALL_TOOL_DESCRIPTORS` means this
-    // covers all 24 existing tools AND every tool the plan adds, needs no
-    // update when a tool is added, and catches misclassification in EITHER
-    // direction — which a frozen list only ever could for the tools already
-    // on it. Task 11 need only re-pin the tool count, not the list.
+    // Independent of the frozen write-list check below: this derives the
+    // expected classification directly from each descriptor's `capability`
+    // (`access` in `mcp-tools-table.tsx` is computed FROM `capability`, not
+    // hand-written) and asserts every row agrees: a descriptor whose
+    // capability is `null`, or whose capability map (a grouped-dispatch tool,
+    // keyed by action) has `null` for every action, must render as "read";
+    // every other descriptor must render as "write". Looping over
+    // `ALL_TOOL_DESCRIPTORS` means this needs no update when a tool is added
+    // and catches misclassification in EITHER direction — strictly stronger
+    // than the frozen list, which only ever pins the tools already on it.
     const byName = new Map(MCP_TOOLS_TABLE_ROWS.map((r) => [r.name, r]));
     for (const d of ALL_TOOL_DESCRIPTORS) {
       const isAlwaysRead =

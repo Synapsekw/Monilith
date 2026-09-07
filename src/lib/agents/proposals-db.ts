@@ -67,7 +67,8 @@ export type ProposalRow = {
 
 /** The kinds of object a proposal can address — one per non-`"none"`
  *  `ToolScope`. See `proposal-targets.ts`. */
-export type ProposalTargetKind = "item" | "board" | "group";
+export type ProposalTargetKind =
+  "item" | "board" | "group" | "column" | "view" | "automation";
 
 /**
  * WHICH object the stored call names, resolved for display.
