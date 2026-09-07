@@ -12,7 +12,7 @@
 <script type="application/json" id="board-data">
 {
   "schema": 2,
-  "updated": "2026-09-07 19:04",
+  "updated": "2026-09-07 19:42",
   "product": {
     "kicker": "MONOLITH · WORK OS",
     "thesis": "One Work OS with Monday's colour-coded board experience as the foundation, ClickUp's depth underneath it, and Asana's planning layer on top — multi-tenant from the first migration, dark-first, and now agent-operable end to end.",
@@ -134,15 +134,15 @@
     "stages": [
       {
         "name": "develop",
-        "value": "9cc71045",
-        "tone": "ok",
-        "note": "Even with main. 9cc71045 is the -s ours heal commit recording main as an ancestor; unpromoted delta 0. No live worktrees — task/agents-page and task/rail-buckets both merged and deleted."
+        "value": "f73e24ae",
+        "tone": "warn",
+        "note": "AHEAD of main by the dependency sweep — the first unpromoted delta since PR #115. Five dependabot PRs closed or merged, three majors (openai 7, framer-motion 13, jsdom 30) landed under gates, and mcp-handler went 1.1 to 2.1, which is a transport rewrite rather than a bump. No live worktrees."
       },
       {
         "name": "main",
         "value": "4dba7aaa",
         "tone": "ok",
-        "note": "PR #115 merged 2026-09-07 — the Agents page, 25 commits: sticky @handle routing, an agent switcher, per-turn attribution, agent documents and memory in chat, and a rail split into chats and briefings with collapsible age buckets. Preceded by PR #114 (the MCP write surface, 39 commits)."
+        "note": "PR #115 merged 2026-09-07 — the Agents page, 25 commits: sticky @handle routing, an agent switcher, per-turn attribution, agent documents and memory in chat, and a rail split into chats and briefings with collapsible age buckets. Nothing has been promoted since; the dependency sweep is waiting on an MCP client walkthrough."
       },
       {
         "name": "production",
@@ -169,7 +169,7 @@
         "name": "test",
         "value": "pass",
         "tone": "ok",
-        "note": "6976 tests green on develop and on PR #115. The Agents page added 23 tests in its final fix wave alone, each proven to fail against the reverted source.",
+        "note": "Green on develop after the dependency sweep (CI run 34138976762). /api/mcp had no test at all before this session — the new route test drives the real JSON-RPC transport: auth challenge, initialize handshake, and tools/list returning exactly the catalog.",
         "label": "test"
       },
       {
@@ -195,6 +195,15 @@
         "owner",
         "critical",
         "billing"
+      ]
+    },
+    {
+      "title": "Walk an MCP client against v2, then promote",
+      "why": "The mcp-handler 1.1 to 2.1 migration sits unpromoted on develop. All four gates pass, a new route test drives the real JSON-RPC transport, and a dev-server smoke test confirmed the 401 challenge and both .well-known documents — but no actual Claude Desktop or claude.ai session has run against it, and that is the surface external clients connect through. Reconnect the connector, confirm 35 tools, run one read and one write, then promote.",
+      "tags": [
+        "mcp",
+        "owner",
+        "promote"
       ]
     },
     {
@@ -238,6 +247,11 @@
     }
   ],
   "risks": [
+    {
+      "sev": "amber",
+      "title": "The MCP transport was swapped and no client has connected",
+      "text": "mcp-handler v2 rewrites the transport /api/mcp serves: no basePath, no SSE, a new server package, and a different registerTool contract. Gates and a new route test pass, and the OAuth challenge plus both .well-known documents were smoke-tested against a dev server, but a real Claude Desktop or claude.ai handshake is the one thing that has not happened. It is on develop only, so production is unaffected until promotion."
+    },
     {
       "sev": "amber",
       "title": "Three features are shipped, live, and completely inert",
@@ -324,22 +338,16 @@
       "text": "The personal-agent route now runs up to 1 root plus 3 delegated loops in one invocation — 48 model round-trips worst case — against a 300s limit that is the most a non-Enterprise Vercel function may ask for. There is no headroom left to grant, so the next fix is a smaller fan-out, not a longer timeout. Never yet verified against a real delegating run on the deployment, because delegation is inert."
     }
   ],
-  "worktrees": [
-    {
-      "branch": "task/agents-page",
-      "head": "ed735c6b",
-      "note": "separate track, unmerged; its migration 20260907073911 is applied to DEV with no file on develop"
-    }
-  ],
+  "worktrees": [],
   "session": {
-    "id": "2026-09-07-1726-mcp-write-surface-35-tools",
-    "when": "2026-09-07 17:26",
-    "title": "MCP write surface — 35 tools, agents can build boards",
+    "id": "2026-09-07-1942-dependency-sweep-mcp-handler-v2",
+    "when": "2026-09-07 19:42",
+    "title": "Dependency sweep and the mcp-handler v2 transport migration",
     "bullets": [
-      "Spec, 13-task plan, three-wave build and promotion in one session: PR #114, main @ 7556df77, Vercel success, main CI green.",
-      "Catalog 24 to 35 tools. Ten grouped-dispatch manage_* tools plus describe_schema; six tool calls now build a whole board where forty-five were needed.",
-      "capability and scope resolve PER ACTION, so renaming a board and archiving one no longer cost the same grant. Containers are archive-only; purge stays human-only on both transports.",
-      "Ships installable-but-inert: board.structure and board.destroy joined both CHECK constraints with no ceiling backfill and no DEFAULT change. Nothing an agent can do changed on deploy."
+      "Backlog cleared: PRs #104/#105/#106/#107 closed as superseded, #112 squash-merged, #33 closed as stale. No dependabot branches left on origin.",
+      "Three majors (openai 6 to 7, framer-motion 12 to 13, jsdom 29 to 30) landed together under all four gates rather than merged on their individually-green stale CI.",
+      "mcp-handler v2 is why #107 was red: server types moved to @modelcontextprotocol/server, createMcpHandler lost its third options argument, and registerTool no longer accepts zod 4 ZodRawShape.",
+      "The /api/mcp transport had never been tested. A route test now covers the auth challenge, the initialize handshake and tools/list; no real MCP client has connected against v2 yet."
     ]
   }
 }
