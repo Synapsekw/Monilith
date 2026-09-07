@@ -80,3 +80,94 @@ describe("manage_group classification", () => {
     expect(r.isError).toBe(true);
   });
 });
+
+// F1 (final whole-branch review): `createGroupsCore` returns `{ ok: true }`
+// even when EVERY entry in the batch failed — `toToolResult` only inspects
+// `ActionResult.ok`, so that shape alone would report a total failure to the
+// model as an ordinary success. `manage-group.ts`'s `create` branch adds the
+// `isError` check on top; these tests exercise it through the real descriptor
+// `invoke`, matching `create_item`'s semantics exactly (see create-item.ts).
+// A version-4-shaped UUID: zod's bare `.uuid()` only special-cases the
+// all-zeros/all-f's sentinels, so an arbitrary literal like
+// "…-000000000001" fails validation and the batch never reaches the core.
+const BOARD_ID = "11111111-1111-4111-8111-111111111111";
+
+function fakeGroupCreateInsertClient(
+  opts: { failAt?: number[]; failAll?: boolean } = {},
+) {
+  let insertCount = 0;
+  return {
+    from(_table: string) {
+      return {
+        select: () => ({
+          eq: () => ({
+            order: () => ({
+              limit: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+            }),
+            maybeSingle: async () => ({ data: { org_id: "o1" }, error: null }),
+          }),
+        }),
+        insert: () => ({
+          select: () => ({
+            single: async () => {
+              const index = insertCount++;
+              if (opts.failAll || opts.failAt?.includes(index)) {
+                return {
+                  data: null,
+                  error: { message: `entry ${index} failed` },
+                };
+              }
+              return {
+                data: { id: `g${index}`, name: `G${index}` },
+                error: null,
+              };
+            },
+          }),
+        }),
+      };
+    },
+  } as never;
+}
+
+describe("manage_group create: batch isError semantics (F1)", () => {
+  it("sets isError when every entry in the batch fails", async () => {
+    const client = fakeGroupCreateInsertClient({ failAll: true });
+    const r = await manageGroupDescriptor.invoke(
+      { getClient: async () => client, actorId: "u1" },
+      {
+        action: "create",
+        boardId: BOARD_ID,
+        groups: [{ name: "A" }, { name: "B" }],
+      },
+    );
+    expect(r.isError).toBe(true);
+  });
+
+  it("leaves isError undefined when only some entries fail", async () => {
+    const client = fakeGroupCreateInsertClient({ failAt: [0] });
+    const r = await manageGroupDescriptor.invoke(
+      { getClient: async () => client, actorId: "u1" },
+      {
+        action: "create",
+        boardId: BOARD_ID,
+        groups: [{ name: "A" }, { name: "B" }],
+      },
+    );
+    expect(r.isError).toBeUndefined();
+  });
+
+  it("leaves isError undefined when every entry succeeds", async () => {
+    const client = fakeGroupCreateInsertClient({});
+    const r = await manageGroupDescriptor.invoke(
+      { getClient: async () => client, actorId: "u1" },
+      {
+        action: "create",
+        boardId: BOARD_ID,
+        groups: [{ name: "A" }],
+      },
+    );
+    expect(r.isError).toBeUndefined();
+  });
+});

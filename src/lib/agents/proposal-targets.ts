@@ -49,16 +49,24 @@ const KIND_BY_SCOPE: Partial<Record<ToolScope, ProposalTargetKind>> = {
   itemId: "item",
   boardId: "board",
   groupId: "group",
+  columnId: "column",
+  viewId: "view",
+  automationId: "automation",
 };
 
 /** The table each kind lives in. Both columns are on the primary key / a
  *  covering select, so every read below is an indexed `id IN (…)`. */
-const TABLE_BY_KIND: Record<ProposalTargetKind, "items" | "boards" | "groups"> =
-  {
-    item: "items",
-    board: "boards",
-    group: "groups",
-  };
+const TABLE_BY_KIND: Record<
+  ProposalTargetKind,
+  "items" | "boards" | "groups" | "columns" | "board_views" | "automations"
+> = {
+  item: "items",
+  board: "boards",
+  group: "groups",
+  column: "columns",
+  view: "board_views",
+  automation: "automations",
+};
 
 /**
  * The descriptor of every tool a proposal can name, keyed by tool name.
@@ -115,7 +123,11 @@ async function readNames(
     console.error(`[agents] proposal ${kind} name read failed`, error);
     return null;
   }
-  return new Map((data ?? []).map((r) => [r.id, r.name]));
+  // Every kind's `name` is NOT NULL except `automations.name`, which is
+  // optional at creation (see `manage-automation-tool.ts`) — an unnamed
+  // automation still needs a label, not a `null` that this module reserves
+  // for "the read succeeded and the row was not in it."
+  return new Map((data ?? []).map((r) => [r.id, r.name ?? "Untitled"]));
 }
 
 /**

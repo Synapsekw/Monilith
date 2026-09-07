@@ -85,7 +85,15 @@ export const TOOL_PROSE: Record<ToolName, string> = {
 
 export const MCP_TOOLS_TABLE_ROWS = ALL_TOOL_DESCRIPTORS.map((d) => ({
   name: d.name,
-  access: d.capability === null ? ("read" as const) : ("write" as const),
+  // A dispatch tool's `capability` is a Record. `=== null` would be false for
+  // it and the ternary would read "write" by luck rather than by rule — and
+  // would read "read" by luck if the field were ever `{}`. Be explicit.
+  access:
+    d.capability === null ||
+    (typeof d.capability === "object" &&
+      Object.values(d.capability).every((c) => c === null))
+      ? ("read" as const)
+      : ("write" as const),
   what: TOOL_PROSE[d.name],
 }));
 
@@ -116,10 +124,13 @@ export function McpToolsTable() {
         ))}
       </ul>
       <p className="text-muted-foreground text-sm">
-        The only thing a connected client can erase is your logged time —
-        setting a day&rsquo;s entry to 0 seconds clears it. Nothing else can be
-        deleted: no other delete tool exists on the server. Every call runs as
-        you and is subject to the same permissions you have in the app.
+        Setting a day&rsquo;s logged time to 0 seconds clears it. Columns
+        (including a single status or dropdown option), views, widgets, goals,
+        reports, and dashboards can also be deleted outright, and that cannot be
+        undone. Boards, groups, and items are different: a connected client can
+        only archive them to Trash and restore them — never delete them
+        permanently. Every call runs as you and is subject to the same
+        permissions you have in the app.
       </p>
     </div>
   );

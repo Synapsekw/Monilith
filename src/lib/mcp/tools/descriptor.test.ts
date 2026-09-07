@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { ALL_TOOL_DESCRIPTORS } from "./catalog";
 import {
   TOOL_SCOPES,
@@ -12,18 +13,13 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   it("covers every tool exactly once", () => {
     const names = ALL_TOOL_DESCRIPTORS.map((d) => d.name);
     expect(new Set(names).size).toBe(names.length);
-    // Deliberately loosened from an exact `toBe(24)` for the duration of the
-    // MCP write-surface plan (docs/superpowers/plans/2026-09-07-mcp-write-surface.md),
-    // whose tasks add tools to this catalog across several concurrent
-    // branches. Only a floor is asserted here so those branches don't all
-    // collide on this one line; the plan's Task 11 re-pins the exact count.
-    expect(names.length).toBeGreaterThanOrEqual(24);
+    expect(names.length).toBe(35);
   });
 
   it("classifies every tool with a legal capability and scope", () => {
-    // All 24 catalog descriptors carry scalar `capability`/`scope` today, but
-    // the fields are typed to also allow a per-action `Record` (Task 2), so
-    // this checks every LEAF value rather than assuming a scalar.
+    // A single-purpose descriptor carries scalar `capability`/`scope`; a
+    // grouped-dispatch tool carries a per-action `Record`. This checks every
+    // LEAF value rather than assuming a scalar, so it covers both shapes.
     for (const d of ALL_TOOL_DESCRIPTORS) {
       const capabilities =
         d.capability === null || typeof d.capability === "string"
@@ -41,38 +37,41 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
   });
 
   // The classification the consent screen and the grant gate both depend on.
-  it("classifies the original read tools as reads", () => {
-    // Deliberately loosened from an exact write-list assertion for the
-    // duration of the MCP write-surface plan
-    // (docs/superpowers/plans/2026-09-07-mcp-write-surface.md), whose tasks
-    // add tools to this catalog across several concurrent branches. Instead
-    // of pinning the full write list, this checks the property that
-    // actually matters: the five pre-existing write tools still carry a
-    // capability, and a sample of pre-existing read tools still carry none.
-    // The plan's Task 11 re-pins the full, exact write list.
-    const byName = new Map(ALL_TOOL_DESCRIPTORS.map((d) => [d.name, d]));
-
-    const preExistingWrites = [
+  it("classifies exactly the write tools as writes", () => {
+    const writeTools = [
       "attach_file",
       "create_attachment_upload",
       "create_item",
       "log_time_allocation",
+      "manage_board",
+      "manage_column",
+      "manage_dashboard",
+      "manage_goal",
+      "manage_group",
+      "manage_item",
+      "manage_portfolio",
+      "manage_report",
+      "manage_view",
+      "manage_widget",
       "update_item",
-    ];
-    for (const name of preExistingWrites) {
-      expect(byName.get(name)?.capability).not.toBeNull();
-    }
+    ].sort();
 
-    const preExistingReads = [
-      "list_boards",
-      "get_board",
-      "list_items",
-      "search_items",
-      "get_item",
-    ];
-    for (const name of preExistingReads) {
-      expect(byName.get(name)?.capability).toBeNull();
-    }
+    const actualWrites = ALL_TOOL_DESCRIPTORS.filter((d) => {
+      const isAlwaysRead =
+        d.capability === null ||
+        (typeof d.capability === "object" &&
+          Object.values(d.capability).every((c) => c === null));
+      return !isAlwaysRead;
+    })
+      .map((d) => d.name)
+      .sort();
+
+    expect(actualWrites).toEqual(writeTools);
+  });
+
+  it("classifies describe_schema as a read", () => {
+    const byName = new Map(ALL_TOOL_DESCRIPTORS.map((d) => [d.name, d]));
+    expect(byName.get("describe_schema")?.capability).toBeNull();
   });
 
   it("excludes create_attachment_upload from the agent surface", () => {
@@ -103,6 +102,44 @@ describe("ALL_TOOL_DESCRIPTORS", () => {
     for (const d of ALL_TOOL_DESCRIPTORS) {
       if (d.capability !== null && typeof d.capability === "object") {
         expect(Object.keys(d.capability).length, d.name).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  // F3 (final whole-branch review, spec §13): an action present in the
+  // handler's discriminated union but ABSENT from the descriptor's scope map
+  // resolves through `scopeFor` to `"none"` — RLS still holds, but the
+  // action silently escapes the owner's "only these boards" board-scope
+  // narrowing. Missing from the capability map is the same class of bug one
+  // layer up: `capabilityFor`'s `mostRestrictive` fallback masks it rather
+  // than surfacing it. Every dispatch tool is correct today; this is what
+  // stops the next one from shipping wrong. Reads the real `action` enum off
+  // each descriptor's `inputSchema` — the single source of truth the handler
+  // itself validates against — rather than a hand-maintained action list
+  // that could itself drift from the union.
+  it("gives every action in a dispatch tool's action enum an entry in both its capability map and its scope map", () => {
+    for (const d of ALL_TOOL_DESCRIPTORS) {
+      // Only grouped-dispatch tools (Record capability) have an `action`
+      // input at all; single-purpose tools carry a scalar capability/scope
+      // and are out of scope for this check.
+      if (d.capability === null || typeof d.capability !== "object") continue;
+
+      const actionSchema = d.inputSchema.action;
+      if (!(actionSchema instanceof z.ZodEnum)) continue;
+      const actions = actionSchema.options as readonly string[];
+
+      const capabilityMap = d.capability;
+      const scopeMap = typeof d.scope === "string" ? null : d.scope;
+
+      for (const action of actions) {
+        expect(
+          action in capabilityMap,
+          `${d.name}: action "${action}" is missing from the capability map`,
+        ).toBe(true);
+        expect(
+          scopeMap !== null && action in scopeMap,
+          `${d.name}: action "${action}" is missing from the scope map`,
+        ).toBe(true);
       }
     }
   });

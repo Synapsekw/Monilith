@@ -103,8 +103,25 @@ export const manageGroupDescriptor: ToolDescriptor = {
     const supabase = await ctx.getClient();
 
     switch (args.action) {
-      case "create":
-        return toToolResult(await createGroupsCore(supabase, args));
+      case "create": {
+        const result = await createGroupsCore(supabase, args);
+        const out = toToolResult(result);
+        // Batch semantics: a total failure (every entry errored) must be
+        // reported as an error, not an ordinary success — `toToolResult`
+        // only inspects `ActionResult.ok`, which is `true` here because the
+        // BATCH call itself succeeded even though every entry inside it
+        // failed. Match `create_item`'s rule exactly (`create-item.ts`,
+        // "isError only when EVERY entry failed" — partial success stays a
+        // success with a report attached). Keep the three in lockstep.
+        if (
+          result.ok &&
+          result.data.created.length === 0 &&
+          result.data.errors.length > 0
+        ) {
+          out.isError = true;
+        }
+        return out;
+      }
       case "rename":
         return toToolResult(await renameGroupCore(supabase, args));
       case "reorder":
