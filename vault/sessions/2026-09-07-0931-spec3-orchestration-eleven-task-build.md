@@ -8,6 +8,7 @@ tags: [session]
 related:
   - "[[2026-09-07-0901-oauth-native-schemes-promote-110]]"
   - "[[2026-09-04-1253-close-three-stalled-worktrees]]"
+  - "[[2026-09-07-gotcha-101-a-test-outside-the-default-gate-can-merge-having-never-run]]"
 ---
 
 # Spec 3 — orchestration and @handle addressing, scoped and built in eleven tasks
@@ -67,6 +68,8 @@ production over from the DEV database to the idle PROD project.
   a longer prompt, no behaviour change.
 - An ungranted `delegate` call becomes a proposal the approval path cannot rebuild, so it degrades
   to "delegate is no longer available". Honest, but worth suppressing.
+- An integration test merged having never executed — `pnpm test` excludes that project, and it
+  first ran in a sibling task's gate, two merges later ([[2026-09-07-gotcha-101-a-test-outside-the-default-gate-can-merge-having-never-run]]).
 - `maxDuration = 300` is the non-Enterprise platform ceiling; the next fix is a smaller fan-out,
   not a longer timeout. Not yet verified against a real delegating run on the deployment.
 
