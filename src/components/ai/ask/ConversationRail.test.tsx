@@ -88,9 +88,48 @@ describe("ConversationRail surface model", () => {
     expect(screen.getByText("Hiring plan")).toBeInTheDocument();
   });
 
-  it("groups today's chats under Today", () => {
+  it("groups chats into age buckets", () => {
     render(<ConversationRail chats={chats} briefings={briefings} />);
     expect(screen.getByText(/^today$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^earlier$/i)).toBeInTheDocument();
+    // `c2` is dated 2026-08-01, well past a fortnight before any run of this
+    // suite, so it lands in the tail bucket.
+    expect(screen.getByText(/^older$/i)).toBeInTheDocument();
+  });
+
+  /** `<details open>` is the real state — jsdom does not hide a closed
+   *  section's children, so asserting on the attribute is what actually pins
+   *  the fold. */
+  function sectionFor(label: RegExp): HTMLDetailsElement {
+    return screen.getByText(label).closest("details")!;
+  }
+
+  it("opens Today and folds the older buckets on first paint", () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    expect(sectionFor(/^today$/i).open).toBe(true);
+    expect(sectionFor(/^older$/i).open).toBe(false);
+    expect(
+      screen.getByRole("group", { name: /briefings/i }),
+    ).not.toHaveAttribute("open");
+  });
+
+  it("shows how many chats a folded bucket is hiding", () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    expect(sectionFor(/^older$/i).textContent).toMatch(/1/);
+  });
+
+  it("opens a folded bucket when its heading is clicked", async () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    await userEvent.click(screen.getByText(/^older$/i));
+    expect(sectionFor(/^older$/i).open).toBe(true);
+  });
+
+  it("unfolds every section while searching, so a match cannot hide", async () => {
+    render(<ConversationRail chats={chats} briefings={briefings} />);
+    expect(sectionFor(/^older$/i).open).toBe(false);
+    await userEvent.type(
+      screen.getByLabelText(/search conversations/i),
+      "hiring",
+    );
+    expect(sectionFor(/^older$/i).open).toBe(true);
   });
 });
