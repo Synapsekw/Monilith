@@ -23,6 +23,7 @@ import { getWidgetDataDescriptor } from "./get-widget-data";
 import { getWorkloadDescriptor } from "./get-workload";
 import { listReportsDescriptor } from "./list-reports";
 import { getReportDescriptor } from "./get-report";
+import { describeSchemaDescriptor } from "./describe-schema";
 
 /**
  * Every MCP tool's descriptor, deliberately kept OUT of `register.ts`:
@@ -60,4 +61,5 @@ export const ALL_TOOL_DESCRIPTORS: readonly ToolDescriptor[] = [
   getWorkloadDescriptor,
   listReportsDescriptor,
   getReportDescriptor,
+  describeSchemaDescriptor,
 ];
